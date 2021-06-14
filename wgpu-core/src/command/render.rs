@@ -24,7 +24,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{CommandBuffer as _, Device as _};
+use hal::{CommandBuffer as _, CommandPool as _};
 use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage,
@@ -846,12 +846,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (cmd_buf_raw, trackers, query_reset_state) = {
+        let (pass_raw, trackers, query_reset_state) = {
             // read-only lock guard
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
                 CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
+            // close everything while the new command encoder is filled
+            cmd_buf.encoder.close();
             // will be reset to true if recording is done without errors
             cmd_buf.status = CommandEncoderStatus::Error;
 
@@ -866,9 +868,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &device_guard[cmd_buf.device_id.value];
             let mut raw = unsafe {
-                device
-                    .raw
-                    .create_command_buffer(&hal::CommandBufferDescriptor { label: base.label })
+                cmd_buf
+                    .encoder
+                    .pool
+                    .allocate(&hal::CommandBufferDescriptor { label: base.label })
                     .unwrap() //TODO: handle this better
             };
 
@@ -1736,6 +1739,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             log::trace!("Merging {:?} with the render pass", encoder_id);
             let (trackers, used_swapchain) =
                 info.finish(&mut raw, &*texture_guard).map_pass_err(scope)?;
+            unsafe {
+                raw.finish();
+            }
             cmd_buf.status = CommandEncoderStatus::Recording;
             cmd_buf.used_swap_chains.extend(used_swapchain);
             (raw, trackers, query_reset_state)
@@ -1748,29 +1754,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
-        let last_cmd_buf = cmd_buf.raw.last_mut().unwrap();
+        {
+            let transit = cmd_buf.encoder.open();
+            query_reset_state
+                .reset_queries(
+                    transit,
+                    &query_set_guard,
+                    cmd_buf.device_id.value.0.backend(),
+                )
+                .map_err(RenderCommandError::InvalidQuerySet)
+                .map_pass_err(PassErrorScope::QueryReset)?;
 
-        query_reset_state
-            .reset_queries(
-                last_cmd_buf,
-                &query_set_guard,
-                cmd_buf.device_id.value.0.backend(),
-            )
-            .map_err(RenderCommandError::InvalidQuerySet)
-            .map_pass_err(PassErrorScope::QueryReset)?;
-
-        super::CommandBuffer::insert_barriers(
-            last_cmd_buf,
-            &mut cmd_buf.trackers,
-            &trackers.buffers,
-            &trackers.textures,
-            &*buffer_guard,
-            &*texture_guard,
-        );
-        unsafe {
-            last_cmd_buf.finish();
+            super::CommandBuffer::insert_barriers(
+                transit,
+                &mut cmd_buf.trackers,
+                &trackers.buffers,
+                &trackers.textures,
+                &*buffer_guard,
+                &*texture_guard,
+            );
         }
-        cmd_buf.raw.push(cmd_buf_raw);
+        cmd_buf.encoder.close();
+        cmd_buf.encoder.list.push(pass_raw);
 
         Ok(())
     }

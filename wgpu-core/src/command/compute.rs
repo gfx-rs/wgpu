@@ -270,7 +270,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
         // will be reset to true if recording is done without errors
         cmd_buf.status = CommandEncoderStatus::Error;
-        let raw = cmd_buf.raw.last_mut().unwrap();
+        let raw = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {

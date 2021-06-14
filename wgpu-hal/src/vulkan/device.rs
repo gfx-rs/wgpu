@@ -341,7 +341,7 @@ impl super::Device {
     }
 }
 
-use super::{DeviceResult, Encoder, Resource}; //temporary
+use super::{DeviceResult, Resource}; //temporary
 
 impl crate::Device<super::Api> for super::Device {
     unsafe fn create_buffer(
@@ -604,13 +604,13 @@ impl crate::Device<super::Api> for super::Device {
         self.shared.raw.destroy_sampler(sampler.raw, None);
     }
 
-    unsafe fn create_command_buffer(
+    unsafe fn create_command_pool(
         &self,
-        desc: &crate::CommandBufferDescriptor,
-    ) -> DeviceResult<Encoder> {
-        Ok(Encoder)
+        desc: &crate::CommandPoolDescriptor<super::Api>,
+    ) -> DeviceResult<super::CommandPool> {
+        Ok(super::CommandPool {})
     }
-    unsafe fn destroy_command_buffer(&self, cmd_buf: Encoder) {}
+    unsafe fn destroy_command_pool(&self, cmd_pool: super::CommandPool) {}
 
     unsafe fn create_bind_group_layout(
         &self,

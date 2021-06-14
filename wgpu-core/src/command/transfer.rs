@@ -431,7 +431,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_offset: destination_offset,
             size: wgt::BufferSize::new(size).unwrap(),
         };
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(src_barrier.into_iter().chain(dst_barrier));
             cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, iter::once(region));
@@ -450,6 +450,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let mut token = Token::root();
+
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
@@ -554,7 +555,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_or_array_layers: copy_size.depth_or_array_layers,
             },
         };
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(src_barriers);
             cmd_buf_raw.transition_textures(dst_barriers);
@@ -574,6 +575,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let mut token = Token::root();
+
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
@@ -682,7 +684,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_or_array_layers: copy_size.depth_or_array_layers,
             },
         };
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barriers);
             cmd_buf_raw.transition_textures(src_barriers);
@@ -805,7 +807,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_or_array_layers: copy_size.depth_or_array_layers,
             },
         };
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(barriers.into_iter());
             cmd_buf_raw.copy_texture_to_texture(

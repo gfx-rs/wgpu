@@ -343,35 +343,16 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_sampler(&self, _sampler: super::Sampler) {}
 
-    unsafe fn create_command_buffer(
+    unsafe fn create_command_pool(
         &self,
-        desc: &crate::CommandBufferDescriptor,
-    ) -> DeviceResult<super::CommandBuffer> {
-        let raw = self.shared.create_command_buffer();
-        if let Some(label) = desc.label {
-            raw.set_label(label);
-        }
-
-        Ok(super::CommandBuffer {
-            raw,
-            blit: None,
-            render: None,
-            compute: None,
-            disabilities: self.shared.disabilities.clone(),
-            max_buffers_per_stage: self.shared.private_caps.max_buffers_per_stage,
-            state: super::CommandState {
-                raw_primitive_type: mtl::MTLPrimitiveType::Point,
-                index: None,
-                raw_wg_size: mtl::MTLSize::new(0, 0, 0),
-                stage_infos: Default::default(),
-                storage_buffer_length_map: Default::default(),
-            },
-            temp: super::Temp::default(),
+        desc: &crate::CommandPoolDescriptor<super::Api>,
+    ) -> Result<super::CommandPool, crate::DeviceError> {
+        Ok(super::CommandPool {
+            shared: Arc::clone(&self.shared),
+            raw_queue: Arc::clone(&desc.queue.raw),
         })
     }
-    unsafe fn destroy_command_buffer(&self, mut cmd_buf: super::CommandBuffer) {
-        cmd_buf.leave_blit();
-    }
+    unsafe fn destroy_command_pool(&self, _pool: super::CommandPool) {}
 
     unsafe fn create_bind_group_layout(
         &self,

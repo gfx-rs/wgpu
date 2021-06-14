@@ -1,6 +1,9 @@
 extern crate wgpu_hal as hal;
 
-use hal::{Adapter as _, CommandBuffer as _, Device as _, Instance as _, Queue as _, Surface as _};
+use hal::{
+    Adapter as _, CommandBuffer as _, CommandPool as _, Device as _, Instance as _, Queue as _,
+    Surface as _,
+};
 
 use std::{borrow::Borrow, iter, mem, num::NonZeroU32, ptr, time::Instant};
 
@@ -26,6 +29,11 @@ struct Locals {
     _pad: u32,
 }
 
+struct UsedResources<A: hal::Api> {
+    view: A::TextureView,
+    cmd_buf: A::CommandBuffer,
+}
+
 #[allow(dead_code)]
 struct Example<A: hal::Api> {
     instance: A::Instance,
@@ -45,7 +53,8 @@ struct Example<A: hal::Api> {
     view: A::TextureView,
     fence: A::Fence,
     fence_value: hal::FenceValue,
-    old_views: Vec<(hal::FenceValue, A::TextureView)>,
+    cmd_pool: A::CommandPool,
+    old_resources: Vec<(hal::FenceValue, UsedResources<A>)>,
     extent: [u32; 2],
     start: Instant,
 }
@@ -237,10 +246,15 @@ impl<A: hal::Api> Example<A> {
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
+        let cmd_pool_desc = hal::CommandPoolDescriptor {
+            label: None,
+            queue: &queue,
+        };
+        let mut cmd_pool = unsafe { device.create_command_pool(&cmd_pool_desc).unwrap() };
         let init_cmd_desc = hal::CommandBufferDescriptor {
             label: Some("init"),
         };
-        let mut init_cmd = unsafe { device.create_command_buffer(&init_cmd_desc).unwrap() };
+        let mut init_cmd = unsafe { cmd_pool.allocate(&init_cmd_desc).unwrap() };
         {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: &staging_buffer,
@@ -397,11 +411,10 @@ impl<A: hal::Api> Example<A> {
         let fence = unsafe {
             let mut fence = device.create_fence().unwrap();
             init_cmd.finish();
-            queue
-                .submit(iter::once(init_cmd), Some((&mut fence, 1)))
-                .unwrap();
+            queue.submit(&[&init_cmd], Some((&mut fence, 1))).unwrap();
             device.wait(&fence, 1, !0).unwrap();
             device.destroy_buffer(staging_buffer);
+            cmd_pool.free(init_cmd);
             fence
         };
 
@@ -421,7 +434,8 @@ impl<A: hal::Api> Example<A> {
             sampler,
             texture,
             view,
-            old_views: Vec::new(),
+            old_resources: Vec::new(),
+            cmd_pool,
             fence,
             fence_value: 1,
             extent: [window_size.0, window_size.1],
@@ -494,8 +508,8 @@ impl<A: hal::Api> Example<A> {
         }
 
         let mut cmd_buf = unsafe {
-            self.device
-                .create_command_buffer(&hal::CommandBufferDescriptor {
+            self.cmd_pool
+                .allocate(&hal::CommandBufferDescriptor {
                     label: Some("frame"),
                 })
                 .unwrap()
@@ -550,20 +564,33 @@ impl<A: hal::Api> Example<A> {
 
         self.fence_value += 1;
         let last_done = unsafe { self.device.get_fence_value(&self.fence).unwrap() };
-        self.old_views.retain(|&(value, _)| value <= last_done);
-        self.old_views.push((self.fence_value, surface_tex_view));
+        for i in (0..self.old_resources.len()).rev() {
+            if self.old_resources[i].0 <= last_done {
+                let (_, old) = self.old_resources.swap_remove(i);
+                unsafe {
+                    self.device.destroy_texture_view(old.view);
+                    self.cmd_pool.free(old.cmd_buf);
+                }
+                //TODO: clear the pool from time to time
+            }
+        }
 
         unsafe {
             cmd_buf.end_render_pass();
             cmd_buf.finish();
             self.queue
-                .submit(
-                    iter::once(cmd_buf),
-                    Some((&mut self.fence, self.fence_value)),
-                )
+                .submit(&[&cmd_buf], Some((&mut self.fence, self.fence_value)))
                 .unwrap();
             self.queue.present(&mut self.surface, surface_tex).unwrap();
         }
+
+        self.old_resources.push((
+            self.fence_value,
+            UsedResources {
+                view: surface_tex_view,
+                cmd_buf,
+            },
+        ));
     }
 }
 

@@ -15,9 +15,10 @@ impl crate::Api for Api {
     type Instance = Context;
     type Surface = Context;
     type Adapter = Context;
-    type Queue = Context;
     type Device = Context;
 
+    type Queue = Context;
+    type CommandPool = Context;
     type CommandBuffer = Encoder;
 
     type Buffer = Resource;
@@ -89,9 +90,9 @@ impl crate::Adapter<Api> for Context {
 }
 
 impl crate::Queue<Api> for Context {
-    unsafe fn submit<I>(
+    unsafe fn submit(
         &mut self,
-        command_buffers: I,
+        command_buffers: &[&Encoder],
         signal_fence: Option<(&mut Resource, crate::FenceValue)>,
     ) -> DeviceResult<()> {
         Ok(())
@@ -103,6 +104,14 @@ impl crate::Queue<Api> for Context {
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
+}
+
+impl crate::CommandPool<Api> for Context {
+    unsafe fn allocate(&mut self, desc: &crate::CommandBufferDescriptor) -> DeviceResult<Encoder> {
+        Ok(Encoder)
+    }
+    unsafe fn free(&mut self, cmd_buf: Encoder) {}
+    unsafe fn clear(&mut self) {}
 }
 
 impl crate::Device<Api> for Context {
@@ -140,13 +149,13 @@ impl crate::Device<Api> for Context {
     }
     unsafe fn destroy_sampler(&self, sampler: Resource) {}
 
-    unsafe fn create_command_buffer(
+    unsafe fn create_command_pool(
         &self,
-        desc: &crate::CommandBufferDescriptor,
-    ) -> DeviceResult<Encoder> {
-        Ok(Encoder)
+        desc: &crate::CommandPoolDescriptor<Api>,
+    ) -> DeviceResult<Context> {
+        Ok(Context)
     }
-    unsafe fn destroy_command_buffer(&self, cmd_buf: Encoder) {}
+    unsafe fn destroy_command_pool(&self, pool: Context) {}
 
     unsafe fn create_bind_group_layout(
         &self,

@@ -28,9 +28,10 @@ impl crate::Api for Api {
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
-    type Queue = Queue;
     type Device = Device;
 
+    type Queue = Queue;
+    type CommandPool = CommandPool;
     type CommandBuffer = Encoder;
 
     type Buffer = Buffer;
@@ -198,10 +199,15 @@ pub struct BindGroup {
     raw: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
+#[derive(Debug)]
+pub struct CommandPool {
+    //TODO
+}
+
 impl crate::Queue<Api> for Queue {
-    unsafe fn submit<I>(
+    unsafe fn submit(
         &mut self,
-        command_buffers: I,
+        command_buffers: &[&Encoder],
         signal_fence: Option<(&mut Resource, crate::FenceValue)>,
     ) -> DeviceResult<()> {
         Ok(())
@@ -213,6 +219,14 @@ impl crate::Queue<Api> for Queue {
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
+}
+
+impl crate::CommandPool<Api> for CommandPool {
+    unsafe fn allocate(&mut self, desc: &crate::CommandBufferDescriptor) -> DeviceResult<Encoder> {
+        Ok(Encoder)
+    }
+    unsafe fn free(&mut self, cmd_buf: Encoder) {}
+    unsafe fn clear(&mut self) {}
 }
 
 impl From<vk::Result> for crate::DeviceError {

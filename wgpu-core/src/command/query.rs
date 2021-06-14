@@ -288,7 +288,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -329,7 +329,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {

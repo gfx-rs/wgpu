@@ -126,7 +126,9 @@ pub trait Api: Clone + Sized {
     type Surface: Surface<Self>;
     type Adapter: Adapter<Self>;
     type Device: Device<Self>;
+
     type Queue: Queue<Self>;
+    type CommandPool: CommandPool<Self>;
     type CommandBuffer: CommandBuffer<Self>;
 
     type Buffer: fmt::Debug + Send + Sync + 'static;
@@ -221,12 +223,11 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, DeviceError>;
     unsafe fn destroy_sampler(&self, sampler: A::Sampler);
 
-    //TODO: consider making DX12-style command pools
-    unsafe fn create_command_buffer(
+    unsafe fn create_command_pool(
         &self,
-        desc: &CommandBufferDescriptor,
-    ) -> Result<A::CommandBuffer, DeviceError>;
-    unsafe fn destroy_command_buffer(&self, cmd_buf: A::CommandBuffer);
+        desc: &CommandPoolDescriptor<A>,
+    ) -> Result<A::CommandPool, DeviceError>;
+    unsafe fn destroy_command_pool(&self, pool: A::CommandPool);
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -281,18 +282,35 @@ pub trait Device<A: Api>: Send + Sync {
 }
 
 pub trait Queue<A: Api>: Send + Sync {
-    unsafe fn submit<I>(
+    /// Submits the command buffers for execution on GPU.
+    ///
+    /// Valid usage:
+    /// - all of the command buffers were created from command pools
+    ///   that are associated with this queue.
+    /// - all of the command buffers had `CommadBuffer::finish()` called.
+    unsafe fn submit(
         &mut self,
-        command_buffers: I,
+        command_buffers: &[&A::CommandBuffer],
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
-    ) -> Result<(), DeviceError>
-    where
-        I: Iterator<Item = A::CommandBuffer>;
+    ) -> Result<(), DeviceError>;
     unsafe fn present(
         &mut self,
         surface: &mut A::Surface,
         texture: A::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
+}
+
+pub trait CommandPool<A: Api>: Send + Sync {
+    unsafe fn allocate(
+        &mut self,
+        desc: &CommandBufferDescriptor,
+    ) -> Result<A::CommandBuffer, DeviceError>;
+    unsafe fn free(&mut self, cmd_buf: A::CommandBuffer);
+    /// Reclaims all resources that are allocated for this pool.
+    ///
+    /// Valid usage:
+    /// - there are no allocated command buffers created from this pool.
+    unsafe fn clear(&mut self);
 }
 
 pub trait CommandBuffer<A: Api>: Send + Sync {
@@ -797,6 +815,12 @@ pub struct BindGroupDescriptor<'a, A: Api> {
 }
 
 #[derive(Clone, Debug)]
+pub struct CommandPoolDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    pub queue: &'a A::Queue,
+}
+
+#[derive(Debug)]
 pub struct CommandBufferDescriptor<'a> {
     pub label: Label<'a>,
 }

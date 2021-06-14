@@ -144,7 +144,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier);
             cmd_buf_raw.fill_buffer(dst_raw, offset..end, 0);
@@ -246,7 +246,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(dst_barrier);
             /*TODO: image clears

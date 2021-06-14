@@ -18,10 +18,18 @@ use crate::{
     FastHashMap, FastHashSet,
 };
 
-use hal::{CommandBuffer as _, Device as _, Queue as _};
+use hal::{CommandBuffer as _, CommandPool as _, Device as _, Queue as _};
+use parking_lot::Mutex;
 use smallvec::SmallVec;
-use std::{iter, num::NonZeroU32, ops::Range, ptr};
+use std::{iter, mem, num::NonZeroU32, ops::Range, ptr};
 use thiserror::Error;
+
+/// Number of command buffers that we generate from the same pool
+/// for the write_xxx commands, before the pool is recycled.
+///
+/// If we don't stop at some point, the pool will grow forever,
+/// without a concrete moment of when it can be cleared.
+const WRITE_COMMAND_BUFFERS_PER_POOL: usize = 64;
 
 struct StagingData<A: hal::Api> {
     buffer: A::Buffer,
@@ -52,30 +60,52 @@ pub enum TempResource<A: hal::Api> {
     Texture(A::Texture),
 }
 
+/// A queue execution for a particular command pool.
+pub(super) struct PoolExecution<A: hal::Api> {
+    cmd_pool: A::CommandPool,
+    cmd_buffers: Vec<A::CommandBuffer>,
+}
+
+impl<A: hal::Api> PoolExecution<A> {
+    pub(super) unsafe fn finish(mut self) -> A::CommandPool {
+        for cmd_buf in self.cmd_buffers {
+            self.cmd_pool.free(cmd_buf);
+        }
+        self.cmd_pool
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PendingWrites<A: hal::Api> {
+    pub command_pool: A::CommandPool,
     pub command_buffer: Option<A::CommandBuffer>,
     pub temp_resources: Vec<TempResource<A>>,
     pub dst_buffers: FastHashSet<id::BufferId>,
     pub dst_textures: FastHashSet<id::TextureId>,
+    pub executing_command_buffers: Vec<A::CommandBuffer>,
 }
 
 impl<A: hal::Api> PendingWrites<A> {
-    pub fn new() -> Self {
+    pub fn new(command_pool: A::CommandPool) -> Self {
         Self {
+            command_pool,
             command_buffer: None,
             temp_resources: Vec::new(),
             dst_buffers: FastHashSet::default(),
             dst_textures: FastHashSet::default(),
+            executing_command_buffers: Vec::new(),
         }
     }
 
-    pub fn dispose(self, device: &A::Device) {
-        if let Some(cmd_buf) = self.command_buffer {
-            unsafe {
-                device.destroy_command_buffer(cmd_buf);
-            }
+    pub fn dispose(mut self, device: &A::Device) {
+        if let Some(raw) = self.command_buffer {
+            unsafe { self.command_pool.free(raw) };
         }
+        for raw in self.executing_command_buffers {
+            unsafe { self.command_pool.free(raw) };
+        }
+        unsafe { device.destroy_command_pool(self.command_pool) };
+
         for resource in self.temp_resources {
             match resource {
                 TempResource::Buffer(buffer) => unsafe {
@@ -99,28 +129,48 @@ impl<A: hal::Api> PendingWrites<A> {
     }
 
     #[must_use]
-    fn finish(&mut self) -> Option<A::CommandBuffer> {
+    fn pre_submit(&mut self) -> Option<&A::CommandBuffer> {
         self.dst_buffers.clear();
         self.dst_textures.clear();
-        self.command_buffer.take().map(|mut cmd_buf| unsafe {
-            cmd_buf.finish();
-            cmd_buf
-        })
+        let mut cmd_buf = self.command_buffer.take()?;
+        unsafe { cmd_buf.finish() };
+        self.executing_command_buffers.push(cmd_buf);
+        self.executing_command_buffers.last()
     }
 
-    fn create_cmd_buf(device: &A::Device) -> A::CommandBuffer {
+    #[must_use]
+    fn post_submit(
+        &mut self,
+        pool_alloc: &Mutex<super::PoolAllocator<A>>,
+        device: &A::Device,
+        queue: &A::Queue,
+    ) -> Option<PoolExecution<A>> {
+        assert!(self.command_buffer.is_none());
+        if self.executing_command_buffers.len() >= WRITE_COMMAND_BUFFERS_PER_POOL {
+            let new_pool = pool_alloc.lock().acquire_pool(device, queue).unwrap();
+            Some(PoolExecution {
+                cmd_pool: mem::replace(&mut self.command_pool, new_pool),
+                cmd_buffers: mem::take(&mut self.executing_command_buffers),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn create_cmd_buf(&mut self) -> A::CommandBuffer {
         unsafe {
-            device
-                .create_command_buffer(&hal::CommandBufferDescriptor {
+            self.command_pool
+                .allocate(&hal::CommandBufferDescriptor {
                     label: Some("_PendingWrites"),
                 })
                 .unwrap()
         }
     }
 
-    fn borrow_cmd_buf(&mut self, device: &A::Device) -> &mut A::CommandBuffer {
+    fn borrow_cmd_buf(&mut self) -> &mut A::CommandBuffer {
         if self.command_buffer.is_none() {
-            self.command_buffer = Some(Self::create_cmd_buf(device));
+            let raw = self.create_cmd_buf();
+            self.command_buffer = Some(raw);
         }
         self.command_buffer.as_mut().unwrap()
     }
@@ -161,7 +211,7 @@ impl RequiredBufferInits {
 
 impl<A: hal::Api> super::Device<A> {
     pub fn borrow_pending_writes(&mut self) -> &mut A::CommandBuffer {
-        self.pending_writes.borrow_cmd_buf(&self.raw)
+        self.pending_writes.borrow_cmd_buf()
     }
 
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
@@ -176,7 +226,7 @@ impl<A: hal::Api> super::Device<A> {
 
         let cmdbuf = match self.pending_writes.command_buffer.take() {
             Some(cmdbuf) => cmdbuf,
-            None => PendingWrites::<A>::create_cmd_buf(&self.raw),
+            None => self.pending_writes.create_cmd_buf(),
         };
         Ok(StagingData { buffer, cmdbuf })
     }
@@ -190,7 +240,7 @@ impl<A: hal::Api> super::Device<A> {
             .dst_buffers
             .extend(required_buffer_inits.map.keys());
 
-        let cmd_buf = self.pending_writes.borrow_cmd_buf(&self.raw);
+        let cmd_buf = self.pending_writes.borrow_cmd_buf();
         let mut trackers = self.trackers.lock();
 
         for (buffer_id, mut ranges) in required_buffer_inits.map.drain() {
@@ -566,10 +616,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let device = device_guard
                 .get_mut(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
-            let pending_write_command_buffer = device.pending_writes.finish();
             device.temp_suspected.clear();
             device.active_submission_index += 1;
             let submit_index = device.active_submission_index;
+            let mut active_executions = Vec::new();
 
             {
                 let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
@@ -599,9 +649,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
-                        let cmdbuf = match command_buffer_guard.get_mut(cmb_id) {
-                            Ok(cmdbuf) => cmdbuf,
-                            Err(_) => continue,
+                        let mut cmdbuf = match hub
+                            .command_buffers
+                            .unregister_locked(cmb_id, &mut *command_buffer_guard)
+                        {
+                            Some(cmdbuf) => cmdbuf,
+                            None => continue,
                         };
                         #[cfg(feature = "trace")]
                         if let Some(ref trace) = device.trace {
@@ -611,6 +664,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ));
                         }
                         if !cmdbuf.is_finished() {
+                            device.destroy_command_buffer(cmdbuf);
                             continue;
                         }
 
@@ -695,33 +749,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
 
-                        unsafe {
-                            // the last buffer was open, closing now
-                            cmdbuf.raw.last_mut().unwrap().finish();
-                        }
+                        let mut baked = cmdbuf.into_baked();
+
                         // execute resource transitions
+                        let transit_desc = hal::CommandBufferDescriptor {
+                            label: Some("_Transit"),
+                        };
                         let mut transit = unsafe {
-                            device
-                                .raw
-                                .create_command_buffer(&hal::CommandBufferDescriptor {
-                                    label: Some("_Transit"),
-                                })
+                            baked
+                                .pool
+                                .allocate(&transit_desc)
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
-                        trackers.merge_extend_stateless(&cmdbuf.trackers);
+                        trackers.merge_extend_stateless(&baked.trackers);
                         CommandBuffer::insert_barriers(
                             &mut transit,
                             &mut *trackers,
-                            &cmdbuf.trackers.buffers,
-                            &cmdbuf.trackers.textures,
+                            &baked.trackers.buffers,
+                            &baked.trackers.textures,
                             &*buffer_guard,
                             &*texture_guard,
                         );
                         unsafe {
                             transit.finish();
                         }
-                        cmdbuf.raw.insert(0, transit);
+                        baked.list.insert(0, transit);
+                        active_executions.push(PoolExecution {
+                            cmd_pool: baked.pool,
+                            cmd_buffers: baked.list,
+                        });
                     }
 
                     log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
@@ -732,25 +789,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                //Note: we could technically avoid the heap Vec here
-                let mut command_buffers = Vec::new();
-                command_buffers.extend(pending_write_command_buffer);
-                for &cmd_buf_id in command_buffer_ids.iter() {
-                    match command_buffer_guard.get_mut(cmd_buf_id) {
-                        Ok(cmd_buf) if cmd_buf.is_finished() => {
-                            command_buffers.extend(cmd_buf.raw.drain(..));
-                        }
-                        _ => {}
-                    }
-                }
-
+                let super::Device {
+                    ref mut pending_writes,
+                    ref mut queue,
+                    ref mut fence,
+                    ..
+                } = *device;
+                let refs = pending_writes
+                    .pre_submit()
+                    .into_iter()
+                    .chain(
+                        active_executions
+                            .iter()
+                            .flat_map(|pool_execution| pool_execution.cmd_buffers.iter()),
+                    )
+                    .collect::<Vec<_>>();
                 unsafe {
-                    device
-                        .queue
-                        .submit(
-                            command_buffers.into_iter(),
-                            Some((&mut device.fence, submit_index)),
-                        )
+                    queue
+                        .submit(&refs, Some((fence, submit_index)))
                         .map_err(DeviceError::from)?;
                 }
             }
@@ -762,10 +818,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             profiling::scope!("cleanup");
+            if let Some(pending_execution) = device.pending_writes.post_submit(
+                &device.pool_allocator,
+                &device.raw,
+                &device.queue,
+            ) {
+                active_executions.push(pending_execution);
+            }
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 &device.temp_suspected,
                 device.pending_writes.temp_resources.drain(..),
+                active_executions,
             );
 
             callbacks

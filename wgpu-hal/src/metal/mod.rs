@@ -24,9 +24,10 @@ impl crate::Api for Api {
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
-    type Queue = Queue;
     type Device = Device;
 
+    type Queue = Queue;
+    type CommandPool = CommandPool;
     type CommandBuffer = CommandBuffer;
 
     type Buffer = Buffer;
@@ -208,7 +209,6 @@ struct Settings {
 
 struct AdapterShared {
     device: Mutex<mtl::Device>,
-    queue: Mutex<mtl::CommandQueue>,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
@@ -225,22 +225,9 @@ impl AdapterShared {
         Self {
             disabilities: PrivateDisabilities::new(&device),
             private_caps: PrivateCapabilities::new(&device),
-            queue: Mutex::new(device.new_command_queue()),
             device: Mutex::new(device),
             settings: Settings::default(),
         }
-    }
-
-    fn create_command_buffer(&self) -> mtl::CommandBuffer {
-        let queue = self.queue.lock();
-        objc::rc::autoreleasepool(move || {
-            let cmd_buf_ref = if self.settings.retain_command_buffer_references {
-                queue.new_command_buffer()
-            } else {
-                queue.new_command_buffer_with_unretained_references()
-            };
-            cmd_buf_ref.to_owned()
-        })
     }
 }
 
@@ -249,8 +236,11 @@ pub struct Adapter {
 }
 
 pub struct Queue {
-    shared: Arc<AdapterShared>,
+    raw: Arc<Mutex<mtl::CommandQueue>>,
 }
+
+unsafe impl Send for Queue {}
+unsafe impl Sync for Queue {}
 
 pub struct Device {
     shared: Arc<AdapterShared>,
@@ -287,35 +277,49 @@ unsafe impl Send for SurfaceTexture {}
 unsafe impl Sync for SurfaceTexture {}
 
 impl crate::Queue<Api> for Queue {
-    unsafe fn submit<I>(
+    unsafe fn submit(
         &mut self,
-        command_buffers: I,
+        command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
-    ) -> Result<(), crate::DeviceError>
-    where
-        I: Iterator<Item = CommandBuffer>,
-    {
+    ) -> Result<(), crate::DeviceError> {
         objc::rc::autoreleasepool(|| {
+            let extra_command_buffer = match signal_fence {
+                Some((fence, value)) => {
+                    let completed_value = Arc::clone(&fence.completed_value);
+                    let block = block::ConcreteBlock::new(move |_cmd_buf| {
+                        completed_value.store(value, atomic::Ordering::Release);
+                    })
+                    .copy();
+
+                    let raw = match command_buffers.last() {
+                        Some(&cmd_buf) => cmd_buf.raw.to_owned(),
+                        None => {
+                            let queue = self.raw.lock();
+                            queue
+                                .new_command_buffer_with_unretained_references()
+                                .to_owned()
+                        }
+                    };
+                    raw.set_label("_Signal");
+                    raw.add_completed_handler(&block);
+
+                    fence.update();
+                    fence.pending_command_buffers.push((value, raw.to_owned()));
+                    // only return an extra one if it's extra
+                    match command_buffers.last() {
+                        Some(_) => None,
+                        None => Some(raw),
+                    }
+                }
+                None => None,
+            };
+
             for cmd_buffer in command_buffers {
                 cmd_buffer.raw.commit();
             }
 
-            //TODO: add the handler to the last command buffer in the list
-            // instead of committing an extra one
-            if let Some((fence, value)) = signal_fence {
-                let completed_value = Arc::clone(&fence.completed_value);
-                let block = block::ConcreteBlock::new(move |_cmd_buf| {
-                    completed_value.store(value, atomic::Ordering::Release);
-                })
-                .copy();
-
-                let raw = self.shared.create_command_buffer();
-                raw.set_label("_Signal");
-                raw.add_completed_handler(&block);
+            if let Some(raw) = extra_command_buffer {
                 raw.commit();
-
-                fence.update();
-                fence.pending_command_buffers.push((value, raw));
             }
         });
         Ok(())
@@ -325,7 +329,7 @@ impl crate::Queue<Api> for Queue {
         _surface: &mut Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
-        let queue = self.shared.queue.lock();
+        let queue = &self.raw.lock();
         objc::rc::autoreleasepool(|| {
             let command_buffer = queue.new_command_buffer();
             command_buffer.set_label("_Present");
@@ -344,6 +348,49 @@ impl crate::Queue<Api> for Queue {
         });
         Ok(())
     }
+}
+
+impl crate::CommandPool<Api> for CommandPool {
+    unsafe fn allocate(
+        &mut self,
+        desc: &crate::CommandBufferDescriptor,
+    ) -> Result<CommandBuffer, crate::DeviceError> {
+        let queue = &self.raw_queue.lock();
+        let retain_references = self.shared.settings.retain_command_buffer_references;
+        let raw = objc::rc::autoreleasepool(move || {
+            let cmd_buf_ref = if retain_references {
+                queue.new_command_buffer()
+            } else {
+                queue.new_command_buffer_with_unretained_references()
+            };
+            cmd_buf_ref.to_owned()
+        });
+
+        if let Some(label) = desc.label {
+            raw.set_label(label);
+        }
+
+        Ok(CommandBuffer {
+            raw,
+            blit: None,
+            render: None,
+            compute: None,
+            disabilities: self.shared.disabilities.clone(),
+            max_buffers_per_stage: self.shared.private_caps.max_buffers_per_stage,
+            state: CommandState {
+                raw_primitive_type: mtl::MTLPrimitiveType::Point,
+                index: None,
+                raw_wg_size: mtl::MTLSize::new(0, 0, 0),
+                stage_infos: Default::default(),
+                storage_buffer_length_map: Default::default(),
+            },
+            temp: Temp::default(),
+        })
+    }
+    unsafe fn free(&mut self, mut cmd_buf: CommandBuffer) {
+        cmd_buf.leave_blit();
+    }
+    unsafe fn clear(&mut self) {}
 }
 
 #[derive(Debug)]
@@ -638,6 +685,14 @@ impl Fence {
             .retain(|&(value, _)| value > latest);
     }
 }
+
+pub struct CommandPool {
+    shared: Arc<AdapterShared>,
+    raw_queue: Arc<Mutex<mtl::CommandQueue>>,
+}
+
+unsafe impl Send for CommandPool {}
+unsafe impl Sync for CommandPool {}
 
 struct IndexState {
     buffer_ptr: BufferPtr,

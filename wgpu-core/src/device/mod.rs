@@ -16,7 +16,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
-use hal::{CommandBuffer as _, Device as _};
+use hal::{CommandBuffer as _, CommandPool as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
@@ -180,6 +180,30 @@ fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callback
     }
 }
 
+struct PoolAllocator<A: hal::Api> {
+    free_pools: Vec<A::CommandPool>,
+}
+
+impl<A: hal::Api> PoolAllocator<A> {
+    fn acquire_pool(
+        &mut self,
+        device: &A::Device,
+        queue: &A::Queue,
+    ) -> Result<A::CommandPool, hal::DeviceError> {
+        match self.free_pools.pop() {
+            Some(pool) => Ok(pool),
+            None => unsafe {
+                let hal_desc = hal::CommandPoolDescriptor { label: None, queue };
+                device.create_command_pool(&hal_desc)
+            },
+        }
+    }
+
+    fn release_pool(&mut self, pool: A::CommandPool) {
+        self.free_pools.push(pool);
+    }
+}
+
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 /// TODO: establish clear order of locking for these:
@@ -199,6 +223,7 @@ pub struct Device<A: hal::Api> {
     //desc_allocator: Mutex<descriptor::DescriptorAllocator<A>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) life_guard: LifeGuard,
+    pool_allocator: Mutex<PoolAllocator<A>>,
     pub(crate) active_submission_index: SubmissionIndex,
     fence: A::Fence,
     /// Has to be locked temporarily only (locked last)
@@ -240,11 +265,20 @@ impl<A: HalApi> Device<A> {
         let fence =
             unsafe { open.device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
 
+        let mut palloc = PoolAllocator {
+            free_pools: Vec::new(),
+        };
+        let pending_pool = palloc
+            .acquire_pool(&open.device, &open.queue)
+            .map_err(|_| CreateDeviceError::OutOfMemory)?;
+        let pending_writes = queue::PendingWrites::new(pending_pool);
+
         Ok(Self {
             raw: open.device,
             adapter_id,
             queue: open.queue,
             life_guard: LifeGuard::new("<device>"),
+            pool_allocator: Mutex::new(palloc),
             active_submission_index: 0,
             fence,
             trackers: Mutex::new(TrackerSet::new(A::VARIANT)),
@@ -268,7 +302,7 @@ impl<A: HalApi> Device<A> {
             limits: desc.limits.clone(),
             features: desc.features,
             downlevel,
-            pending_writes: queue::PendingWrites::new(),
+            pending_writes,
         })
     }
 
@@ -329,7 +363,7 @@ impl<A: HalApi> Device<A> {
             }
         };
 
-        life_tracker.triage_submissions(last_done_index);
+        life_tracker.triage_submissions(last_done_index, &self.pool_allocator);
         let callbacks = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw);
 
@@ -2179,7 +2213,8 @@ impl<A: HalApi> Device<A> {
                     .wait(&self.fence, submission_index, !0)
                     .map_err(DeviceError::from)?
             };
-            self.lock_life(token).triage_submissions(submission_index);
+            self.lock_life(token)
+                .triage_submissions(submission_index, &self.pool_allocator);
         }
         Ok(())
     }
@@ -2241,6 +2276,18 @@ impl<A: hal::Api> Device<A> {
         }
     }
 
+    pub(crate) fn destroy_command_buffer(&self, cmd_buf: command::CommandBuffer<A>) {
+        let mut baked = cmd_buf.into_baked();
+        for raw in baked.list {
+            unsafe {
+                baked.pool.free(raw);
+            }
+        }
+        unsafe {
+            self.raw.destroy_command_pool(baked.pool);
+        }
+    }
+
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&mut self) {
         let mut life_tracker = self.life_tracker.lock();
@@ -2248,7 +2295,7 @@ impl<A: hal::Api> Device<A> {
         if let Err(error) = unsafe { self.raw.wait(&self.fence, current_index, CLEANUP_WAIT_MS) } {
             log::error!("failed to wait for the device: {:?}", error);
         }
-        life_tracker.triage_submissions(current_index);
+        life_tracker.triage_submissions(current_index, &self.pool_allocator);
         life_tracker.cleanup(&self.raw);
     }
 
@@ -3430,33 +3477,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid,
             };
-
             let dev_stored = Stored {
                 value: id::Valid(device_id),
                 ref_count: device.life_guard.add_ref(),
             };
 
-            let cmd_buf_result = unsafe {
-                device
-                    .raw
-                    .create_command_buffer(&hal::CommandBufferDescriptor {
-                        label: desc.label.borrow_option(),
-                    })
+            let hal_desc = hal::CommandPoolDescriptor {
+                label: None,
+                queue: &device.queue,
             };
-            let raw = match cmd_buf_result {
-                Ok(raw) => raw,
-                Err(error) => break DeviceError::from(error),
+            let pool = match unsafe { device.raw.create_command_pool(&hal_desc) } {
+                Ok(pool) => pool,
+                Err(_) => break DeviceError::OutOfMemory,
             };
 
             let command_buffer = command::CommandBuffer::new(
-                raw,
+                pool,
                 dev_stored,
                 device.limits.clone(),
                 device.downlevel,
                 device.features,
                 #[cfg(feature = "trace")]
                 device.trace.is_some(),
-                #[cfg(debug_assertions)]
                 &desc.label,
             );
 

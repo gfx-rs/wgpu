@@ -27,11 +27,9 @@ use crate::{
     Label, Stored,
 };
 
-use hal::CommandBuffer as _;
+use hal::{CommandBuffer as _, CommandPool as _};
 use smallvec::SmallVec;
 use thiserror::Error;
-
-use std::thread;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
@@ -42,11 +40,43 @@ enum CommandEncoderStatus {
     Error,
 }
 
-#[derive(Debug)]
+struct CommandEncoder<A: hal::Api> {
+    pool: A::CommandPool,
+    list: Vec<A::CommandBuffer>,
+    is_open: bool,
+    label: String,
+}
+
+impl<A: hal::Api> CommandEncoder<A> {
+    fn close(&mut self) {
+        if self.is_open {
+            self.is_open = false;
+            unsafe { self.list.last_mut().unwrap().finish() };
+        }
+    }
+
+    fn open(&mut self) -> &mut A::CommandBuffer {
+        if !self.is_open {
+            self.is_open = true;
+            let hal_desc = hal::CommandBufferDescriptor {
+                label: Some(&self.label),
+            };
+            let raw = unsafe { self.pool.allocate(&hal_desc).unwrap() }; //TODO: handle this better
+            self.list.push(raw);
+        }
+        self.list.last_mut().unwrap()
+    }
+}
+
+pub struct BackedCommands<A: hal::Api> {
+    pub(crate) pool: A::CommandPool,
+    pub(crate) list: Vec<A::CommandBuffer>,
+    pub(crate) trackers: TrackerSet,
+}
+
 pub struct CommandBuffer<A: hal::Api> {
-    pub(crate) raw: Vec<A::CommandBuffer>,
+    encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
-    recorded_thread_id: thread::ThreadId,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
@@ -56,24 +86,26 @@ pub struct CommandBuffer<A: hal::Api> {
     support_fill_buffer_texture: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
-    #[cfg(debug_assertions)]
-    pub(crate) label: String,
 }
 
 impl<A: HalApi> CommandBuffer<A> {
     pub(crate) fn new(
-        raw: A::CommandBuffer,
+        pool: A::CommandPool,
         device_id: Stored<id::DeviceId>,
         limits: wgt::Limits,
         downlevel: wgt::DownlevelCapabilities,
         features: wgt::Features,
         #[cfg(feature = "trace")] enable_tracing: bool,
-        #[cfg(debug_assertions)] label: &Label,
+        label: &Label,
     ) -> Self {
         CommandBuffer {
-            raw: vec![raw],
+            encoder: CommandEncoder {
+                pool,
+                is_open: false,
+                list: Vec::new(),
+                label: crate::LabelHelpers::borrow_or_default(label).to_string(),
+            },
             status: CommandEncoderStatus::Recording,
-            recorded_thread_id: thread::current().id(),
             device_id,
             trackers: TrackerSet::new(A::VARIANT),
             used_swap_chains: Default::default(),
@@ -87,29 +119,6 @@ impl<A: HalApi> CommandBuffer<A> {
             } else {
                 None
             },
-            #[cfg(debug_assertions)]
-            label: crate::LabelHelpers::borrow_or_default(label).to_string(),
-        }
-    }
-
-    fn get_encoder_mut(
-        storage: &mut Storage<Self, id::CommandEncoderId>,
-        id: id::CommandEncoderId,
-    ) -> Result<&mut Self, CommandEncoderError> {
-        match storage.get_mut(id) {
-            Ok(cmd_buf) => match cmd_buf.status {
-                CommandEncoderStatus::Recording => Ok(cmd_buf),
-                CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
-                CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
-            },
-            Err(_) => Err(CommandEncoderError::Invalid),
-        }
-    }
-
-    pub fn is_finished(&self) -> bool {
-        match self.status {
-            CommandEncoderStatus::Finished => true,
-            _ => false,
         }
     }
 
@@ -140,6 +149,37 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 }
 
+impl<A: hal::Api> CommandBuffer<A> {
+    fn get_encoder_mut(
+        storage: &mut Storage<Self, id::CommandEncoderId>,
+        id: id::CommandEncoderId,
+    ) -> Result<&mut Self, CommandEncoderError> {
+        match storage.get_mut(id) {
+            Ok(cmd_buf) => match cmd_buf.status {
+                CommandEncoderStatus::Recording => Ok(cmd_buf),
+                CommandEncoderStatus::Finished => Err(CommandEncoderError::NotRecording),
+                CommandEncoderStatus::Error => Err(CommandEncoderError::Invalid),
+            },
+            Err(_) => Err(CommandEncoderError::Invalid),
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        match self.status {
+            CommandEncoderStatus::Finished => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn into_baked(self) -> BackedCommands<A> {
+        BackedCommands {
+            pool: self.encoder.pool,
+            list: self.encoder.list,
+            trackers: self.trackers,
+        }
+    }
+}
+
 impl<A: hal::Api> crate::hub::Resource for CommandBuffer<A> {
     const TYPE: &'static str = "CommandBuffer";
 
@@ -148,10 +188,7 @@ impl<A: hal::Api> crate::hub::Resource for CommandBuffer<A> {
     }
 
     fn label(&self) -> &str {
-        #[cfg(debug_assertions)]
-        return &self.label;
-        #[cfg(not(debug_assertions))]
-        return "";
+        &self.encoder.label
     }
 }
 
@@ -239,6 +276,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let error = match CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id) {
             Ok(cmd_buf) => {
+                cmd_buf.encoder.close();
                 cmd_buf.status = CommandEncoderStatus::Finished;
                 // stop tracking the swapchain image, if used
                 for sc_id in cmd_buf.used_swap_chains.iter() {
@@ -269,7 +307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
 
         unsafe {
             cmd_buf_raw.begin_debug_marker(label);
@@ -289,7 +327,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
 
         unsafe {
             cmd_buf_raw.insert_debug_marker(label);
@@ -308,7 +346,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
 
         unsafe {
             cmd_buf_raw.end_debug_marker();

@@ -1,5 +1,6 @@
 use mtl::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion};
 use objc::{class, msg_send, sel, sel_impl};
+use parking_lot::Mutex;
 
 use std::{sync::Arc, thread};
 
@@ -17,13 +18,18 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         features: wgt::Features,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        let queue = self
+            .shared
+            .device
+            .lock()
+            .new_command_queue_with_max_command_buffer_count(5);
         Ok(crate::OpenDevice {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 features,
             },
             queue: super::Queue {
-                shared: Arc::clone(&self.shared),
+                raw: Arc::new(Mutex::new(queue)),
             },
         })
     }
