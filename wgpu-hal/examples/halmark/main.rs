@@ -1,8 +1,7 @@
 extern crate wgpu_hal as hal;
 
 use hal::{
-    Adapter as _, CommandBuffer as _, CommandPool as _, Device as _, Instance as _, Queue as _,
-    Surface as _,
+    Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
 };
 
 use std::{borrow::Borrow, iter, mem, num::NonZeroU32, ptr, time::Instant};
@@ -53,7 +52,7 @@ struct Example<A: hal::Api> {
     view: A::TextureView,
     fence: A::Fence,
     fence_value: hal::FenceValue,
-    cmd_pool: A::CommandPool,
+    cmd_encoder: A::CommandEncoder,
     old_resources: Vec<(hal::FenceValue, UsedResources<A>)>,
     extent: [u32; 2],
     start: Instant,
@@ -246,15 +245,12 @@ impl<A: hal::Api> Example<A> {
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
-        let cmd_pool_desc = hal::CommandPoolDescriptor {
+        let cmd_encoder_desc = hal::CommandEncoderDescriptor {
             label: None,
             queue: &queue,
         };
-        let mut cmd_pool = unsafe { device.create_command_pool(&cmd_pool_desc).unwrap() };
-        let init_cmd_desc = hal::CommandBufferDescriptor {
-            label: Some("init"),
-        };
-        let mut init_cmd = unsafe { cmd_pool.allocate(&init_cmd_desc).unwrap() };
+        let mut cmd_encoder = unsafe { device.create_command_encoder(&cmd_encoder_desc).unwrap() };
+        unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
         {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: &staging_buffer,
@@ -284,10 +280,10 @@ impl<A: hal::Api> Example<A> {
                 size: texture_desc.size,
             };
             unsafe {
-                init_cmd.transition_buffers(iter::once(buffer_barrier));
-                init_cmd.transition_textures(iter::once(texture_barrier1));
-                init_cmd.copy_buffer_to_texture(&staging_buffer, &texture, iter::once(copy));
-                init_cmd.transition_textures(iter::once(texture_barrier2));
+                cmd_encoder.transition_buffers(iter::once(buffer_barrier));
+                cmd_encoder.transition_textures(iter::once(texture_barrier1));
+                cmd_encoder.copy_buffer_to_texture(&staging_buffer, &texture, iter::once(copy));
+                cmd_encoder.transition_textures(iter::once(texture_barrier2));
             }
         }
 
@@ -410,11 +406,11 @@ impl<A: hal::Api> Example<A> {
 
         let fence = unsafe {
             let mut fence = device.create_fence().unwrap();
-            init_cmd.finish();
+            let init_cmd = cmd_encoder.end_encoding().unwrap();
             queue.submit(&[&init_cmd], Some((&mut fence, 1))).unwrap();
             device.wait(&fence, 1, !0).unwrap();
             device.destroy_buffer(staging_buffer);
-            cmd_pool.free(init_cmd);
+            cmd_encoder.reset_all(iter::once(init_cmd));
             fence
         };
 
@@ -435,7 +431,7 @@ impl<A: hal::Api> Example<A> {
             texture,
             view,
             old_resources: Vec::new(),
-            cmd_pool,
+            cmd_encoder,
             fence,
             fence_value: 1,
             extent: [window_size.0, window_size.1],
@@ -507,13 +503,9 @@ impl<A: hal::Api> Example<A> {
             self.device.unmap_buffer(&self.local_buffer).unwrap();
         }
 
-        let mut cmd_buf = unsafe {
-            self.cmd_pool
-                .allocate(&hal::CommandBufferDescriptor {
-                    label: Some("frame"),
-                })
-                .unwrap()
-        };
+        unsafe {
+            self.cmd_encoder.begin_encoding(Some("frame")).unwrap();
+        }
 
         let surface_tex = unsafe { self.surface.acquire_texture(!0).unwrap().unwrap().texture };
         let surface_view_desc = hal::TextureViewDescriptor {
@@ -548,17 +540,23 @@ impl<A: hal::Api> Example<A> {
             depth_stencil_attachment: None,
         };
         unsafe {
-            cmd_buf.begin_render_pass(&pass_desc);
-            cmd_buf.set_render_pipeline(&self.pipeline);
-            cmd_buf.set_bind_group(&self.pipeline_layout, 0, &self.global_group, &[]);
+            self.cmd_encoder.begin_render_pass(&pass_desc);
+            self.cmd_encoder.set_render_pipeline(&self.pipeline);
+            self.cmd_encoder
+                .set_bind_group(&self.pipeline_layout, 0, &self.global_group, &[]);
         }
 
         for i in 0..self.bunnies.len() {
             let offset =
                 (i as wgt::DynamicOffset) * (wgt::BIND_BUFFER_ALIGNMENT as wgt::DynamicOffset);
             unsafe {
-                cmd_buf.set_bind_group(&self.pipeline_layout, 1, &self.local_group, &[offset]);
-                cmd_buf.draw(0, 4, 0, 1);
+                self.cmd_encoder.set_bind_group(
+                    &self.pipeline_layout,
+                    1,
+                    &self.local_group,
+                    &[offset],
+                );
+                self.cmd_encoder.draw(0, 4, 0, 1);
             }
         }
 
@@ -569,20 +567,20 @@ impl<A: hal::Api> Example<A> {
                 let (_, old) = self.old_resources.swap_remove(i);
                 unsafe {
                     self.device.destroy_texture_view(old.view);
-                    self.cmd_pool.free(old.cmd_buf);
+                    //TODO: destroy the command buffer
                 }
-                //TODO: clear the pool from time to time
             }
         }
 
-        unsafe {
-            cmd_buf.end_render_pass();
-            cmd_buf.finish();
+        let cmd_buf = unsafe {
+            self.cmd_encoder.end_render_pass();
+            let cmd_buf = self.cmd_encoder.end_encoding().unwrap();
             self.queue
                 .submit(&[&cmd_buf], Some((&mut self.fence, self.fence_value)))
                 .unwrap();
             self.queue.present(&mut self.surface, surface_tex).unwrap();
-        }
+            cmd_buf
+        };
 
         self.old_resources.push((
             self.fence_value,

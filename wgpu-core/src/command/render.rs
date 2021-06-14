@@ -24,7 +24,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{CommandBuffer as _, CommandPool as _};
+use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage,
@@ -519,7 +519,6 @@ struct RenderPassInfo<'a, A: hal::Api> {
 
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     fn start(
-        raw: &mut A::CommandBuffer,
         label: Option<&str>,
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
@@ -754,7 +753,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             depth_stencil_attachment: depth_stencil,
         };
         unsafe {
-            raw.begin_render_pass(&hal_desc);
+            cmd_buf.encoder.raw.begin_render_pass(&hal_desc);
         };
 
         Ok(Self {
@@ -770,7 +769,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
     fn finish(
         mut self,
-        raw: &mut A::CommandBuffer,
+        raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) -> Result<(StatefulTrackerSubset, Option<Stored<id::SwapChainId>>), RenderPassErrorInner>
     {
@@ -867,12 +866,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let device = &device_guard[cmd_buf.device_id.value];
-            let mut raw = unsafe {
-                cmd_buf
-                    .encoder
-                    .pool
-                    .allocate(&hal::CommandBufferDescriptor { label: base.label })
-                    .unwrap() //TODO: handle this better
+            unsafe {
+                cmd_buf.encoder.raw.begin_encoding(base.label).unwrap() //TODO: handle this better
             };
 
             let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
@@ -890,7 +885,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
 
             let mut info = RenderPassInfo::start(
-                &mut raw,
                 base.label,
                 color_attachments,
                 depth_stencil_attachment,
@@ -898,6 +892,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*view_guard,
             )
             .map_pass_err(scope)?;
+
+            let raw = &mut cmd_buf.encoder.raw;
 
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),
@@ -1633,7 +1629,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         query_set
                             .validate_and_write_timestamp(
-                                &mut raw,
+                                raw,
                                 query_set_id,
                                 query_index,
                                 Some(&mut query_reset_state),
@@ -1660,7 +1656,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         query_set
                             .validate_and_begin_pipeline_statistics_query(
-                                &mut raw,
+                                raw,
                                 query_set_id,
                                 query_index,
                                 Some(&mut query_reset_state),
@@ -1671,12 +1667,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     RenderCommand::EndPipelineStatisticsQuery => {
                         let scope = PassErrorScope::EndPipelineStatisticsQuery;
 
-                        end_pipeline_statistics_query(
-                            &mut raw,
-                            &*query_set_guard,
-                            &mut active_query,
-                        )
-                        .map_pass_err(scope)?;
+                        end_pipeline_statistics_query(raw, &*query_set_guard, &mut active_query)
+                            .map_pass_err(scope)?;
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
                         let scope = PassErrorScope::ExecuteBundle;
@@ -1711,7 +1703,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         unsafe {
                             bundle.execute(
-                                &mut raw,
+                                raw,
                                 &*pipeline_layout_guard,
                                 &*bind_group_guard,
                                 &*pipeline_guard,
@@ -1738,13 +1730,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Merging {:?} with the render pass", encoder_id);
             let (trackers, used_swapchain) =
-                info.finish(&mut raw, &*texture_guard).map_pass_err(scope)?;
-            unsafe {
-                raw.finish();
-            }
+                info.finish(raw, &*texture_guard).map_pass_err(scope)?;
+            let raw_cmd_buf = unsafe {
+                raw.end_encoding()
+                    .map_err(|_| RenderPassErrorInner::OutOfMemory)
+                    .map_pass_err(scope)?
+            };
             cmd_buf.status = CommandEncoderStatus::Recording;
             cmd_buf.used_swap_chains.extend(used_swapchain);
-            (raw, trackers, query_reset_state)
+            (raw_cmd_buf, trackers, query_reset_state)
         };
 
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);

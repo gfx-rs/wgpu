@@ -343,16 +343,19 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_sampler(&self, _sampler: super::Sampler) {}
 
-    unsafe fn create_command_pool(
+    unsafe fn create_command_encoder(
         &self,
-        desc: &crate::CommandPoolDescriptor<super::Api>,
-    ) -> Result<super::CommandPool, crate::DeviceError> {
-        Ok(super::CommandPool {
+        desc: &crate::CommandEncoderDescriptor<super::Api>,
+    ) -> Result<super::CommandEncoder, crate::DeviceError> {
+        Ok(super::CommandEncoder {
             shared: Arc::clone(&self.shared),
             raw_queue: Arc::clone(&desc.queue.raw),
+            raw_cmd_buf: None,
+            state: super::CommandState::default(),
+            temp: super::Temp::default(),
         })
     }
-    unsafe fn destroy_command_pool(&self, _pool: super::CommandPool) {}
+    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,

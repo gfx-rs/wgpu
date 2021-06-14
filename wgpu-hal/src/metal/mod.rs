@@ -27,7 +27,7 @@ impl crate::Api for Api {
     type Device = Device;
 
     type Queue = Queue;
-    type CommandPool = CommandPool;
+    type CommandEncoder = CommandEncoder;
     type CommandBuffer = CommandBuffer;
 
     type Buffer = Buffer;
@@ -350,49 +350,6 @@ impl crate::Queue<Api> for Queue {
     }
 }
 
-impl crate::CommandPool<Api> for CommandPool {
-    unsafe fn allocate(
-        &mut self,
-        desc: &crate::CommandBufferDescriptor,
-    ) -> Result<CommandBuffer, crate::DeviceError> {
-        let queue = &self.raw_queue.lock();
-        let retain_references = self.shared.settings.retain_command_buffer_references;
-        let raw = objc::rc::autoreleasepool(move || {
-            let cmd_buf_ref = if retain_references {
-                queue.new_command_buffer()
-            } else {
-                queue.new_command_buffer_with_unretained_references()
-            };
-            cmd_buf_ref.to_owned()
-        });
-
-        if let Some(label) = desc.label {
-            raw.set_label(label);
-        }
-
-        Ok(CommandBuffer {
-            raw,
-            blit: None,
-            render: None,
-            compute: None,
-            disabilities: self.shared.disabilities.clone(),
-            max_buffers_per_stage: self.shared.private_caps.max_buffers_per_stage,
-            state: CommandState {
-                raw_primitive_type: mtl::MTLPrimitiveType::Point,
-                index: None,
-                raw_wg_size: mtl::MTLSize::new(0, 0, 0),
-                stage_infos: Default::default(),
-                storage_buffer_length_map: Default::default(),
-            },
-            temp: Temp::default(),
-        })
-    }
-    unsafe fn free(&mut self, mut cmd_buf: CommandBuffer) {
-        cmd_buf.leave_blit();
-    }
-    unsafe fn clear(&mut self) {}
-}
-
 #[derive(Debug)]
 pub struct Buffer {
     raw: mtl::Buffer,
@@ -686,14 +643,6 @@ impl Fence {
     }
 }
 
-pub struct CommandPool {
-    shared: Arc<AdapterShared>,
-    raw_queue: Arc<Mutex<mtl::CommandQueue>>,
-}
-
-unsafe impl Send for CommandPool {}
-unsafe impl Sync for CommandPool {}
-
 struct IndexState {
     buffer_ptr: BufferPtr,
     offset: wgt::BufferAddress,
@@ -707,6 +656,9 @@ struct Temp {
 }
 
 struct CommandState {
+    blit: Option<mtl::BlitCommandEncoder>,
+    render: Option<mtl::RenderCommandEncoder>,
+    compute: Option<mtl::ComputeCommandEncoder>,
     raw_primitive_type: mtl::MTLPrimitiveType,
     index: Option<IndexState>,
     raw_wg_size: mtl::MTLSize,
@@ -715,15 +667,19 @@ struct CommandState {
     storage_buffer_length_map: fxhash::FxHashMap<(u32, u32), wgt::BufferSize>,
 }
 
-pub struct CommandBuffer {
-    raw: mtl::CommandBuffer,
-    blit: Option<mtl::BlitCommandEncoder>,
-    render: Option<mtl::RenderCommandEncoder>,
-    compute: Option<mtl::ComputeCommandEncoder>,
-    max_buffers_per_stage: u32,
-    disabilities: PrivateDisabilities,
+pub struct CommandEncoder {
+    shared: Arc<AdapterShared>,
+    raw_queue: Arc<Mutex<mtl::CommandQueue>>,
+    raw_cmd_buf: Option<mtl::CommandBuffer>,
     state: CommandState,
     temp: Temp,
+}
+
+unsafe impl Send for CommandEncoder {}
+unsafe impl Sync for CommandEncoder {}
+
+pub struct CommandBuffer {
+    raw: mtl::CommandBuffer,
 }
 
 unsafe impl Send for CommandBuffer {}

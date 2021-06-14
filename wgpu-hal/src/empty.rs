@@ -18,8 +18,8 @@ impl crate::Api for Api {
     type Device = Context;
 
     type Queue = Context;
-    type CommandPool = Context;
-    type CommandBuffer = Encoder;
+    type CommandEncoder = Encoder;
+    type CommandBuffer = Resource;
 
     type Buffer = Resource;
     type Texture = Resource;
@@ -92,7 +92,7 @@ impl crate::Adapter<Api> for Context {
 impl crate::Queue<Api> for Context {
     unsafe fn submit(
         &mut self,
-        command_buffers: &[&Encoder],
+        command_buffers: &[&Resource],
         signal_fence: Option<(&mut Resource, crate::FenceValue)>,
     ) -> DeviceResult<()> {
         Ok(())
@@ -104,14 +104,6 @@ impl crate::Queue<Api> for Context {
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
-}
-
-impl crate::CommandPool<Api> for Context {
-    unsafe fn allocate(&mut self, desc: &crate::CommandBufferDescriptor) -> DeviceResult<Encoder> {
-        Ok(Encoder)
-    }
-    unsafe fn free(&mut self, cmd_buf: Encoder) {}
-    unsafe fn clear(&mut self) {}
 }
 
 impl crate::Device<Api> for Context {
@@ -149,13 +141,13 @@ impl crate::Device<Api> for Context {
     }
     unsafe fn destroy_sampler(&self, sampler: Resource) {}
 
-    unsafe fn create_command_pool(
+    unsafe fn create_command_encoder(
         &self,
-        desc: &crate::CommandPoolDescriptor<Api>,
-    ) -> DeviceResult<Context> {
-        Ok(Context)
+        desc: &crate::CommandEncoderDescriptor<Api>,
+    ) -> DeviceResult<Encoder> {
+        Ok(Encoder)
     }
-    unsafe fn destroy_command_pool(&self, pool: Context) {}
+    unsafe fn destroy_command_encoder(&self, encoder: Encoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -228,8 +220,15 @@ impl crate::Device<Api> for Context {
     unsafe fn stop_capture(&self) {}
 }
 
-impl crate::CommandBuffer<Api> for Encoder {
-    unsafe fn finish(&mut self) {}
+impl crate::CommandEncoder<Api> for Encoder {
+    unsafe fn begin_encoding(&mut self, label: crate::Label) -> DeviceResult<()> {
+        Ok(())
+    }
+    unsafe fn discard_encoding(&mut self) {}
+    unsafe fn end_encoding(&mut self) -> DeviceResult<Resource> {
+        Ok(Resource)
+    }
+    unsafe fn reset_all<I>(&mut self, command_buffers: I) {}
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where

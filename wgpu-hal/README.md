@@ -20,4 +20,4 @@ For this reason, we recommend that iterators don't do any mutating work.
 
 # Debugging
 
-Most of the information in https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications still applies to this API, with an exception of API tracing infrastructure.
+Most of the information in https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications still applies to this API, with an exception of API tracing/replay functionality, which is only available in *wgpu-core*.

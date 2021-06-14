@@ -132,8 +132,8 @@ pub trait Api: Clone + Sized {
     type Device: Device<Self>;
 
     type Queue: Queue<Self>;
-    type CommandPool: CommandPool<Self>;
-    type CommandBuffer: CommandBuffer<Self>;
+    type CommandEncoder: CommandEncoder<Self>;
+    type CommandBuffer: Send + Sync;
 
     type Buffer: fmt::Debug + Send + Sync + 'static;
     type Texture: fmt::Debug + Send + Sync + 'static;
@@ -227,11 +227,11 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, DeviceError>;
     unsafe fn destroy_sampler(&self, sampler: A::Sampler);
 
-    unsafe fn create_command_pool(
+    unsafe fn create_command_encoder(
         &self,
-        desc: &CommandPoolDescriptor<A>,
-    ) -> Result<A::CommandPool, DeviceError>;
-    unsafe fn destroy_command_pool(&self, pool: A::CommandPool);
+        desc: &CommandEncoderDescriptor<A>,
+    ) -> Result<A::CommandEncoder, DeviceError>;
+    unsafe fn destroy_command_encoder(&self, pool: A::CommandEncoder);
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -304,26 +304,22 @@ pub trait Queue<A: Api>: Send + Sync {
     ) -> Result<(), SurfaceError>;
 }
 
-/// Allocator for commands, encoded by command buffers.
-/// Has the semantics close to DX12:
-///  - unlimited allocation
-///  - only one command buffer can be recording at a time
-///  - clears are needed when nothing is recording or in flight
-pub trait CommandPool<A: Api>: Send + Sync {
-    unsafe fn allocate(
-        &mut self,
-        desc: &CommandBufferDescriptor,
-    ) -> Result<A::CommandBuffer, DeviceError>;
-    unsafe fn free(&mut self, cmd_buf: A::CommandBuffer);
-    /// Reclaims all resources that are allocated for this pool.
-    ///
-    /// Valid usage:
-    /// - there are no allocated command buffers created from this pool.
-    unsafe fn clear(&mut self);
-}
-
-pub trait CommandBuffer<A: Api>: Send + Sync {
-    unsafe fn finish(&mut self);
+/// Encoder for commands in a command buffers.
+/// Serves as a parent for all the encoded command buffers.
+/// Works in bursts of action: one or more command buffers are recorded,
+/// then submitted to a queue, and then it needs to be `reset_all()`.
+pub trait CommandEncoder<A: Api>: Send + Sync {
+    /// Begin encoding a new command buffer.
+    unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
+    /// Discard currently recorded list, if any.
+    unsafe fn discard_encoding(&mut self);
+    unsafe fn end_encoding(&mut self) -> Result<A::CommandBuffer, DeviceError>;
+    /// Reclaims all resources that are allocated for this encoder.
+    /// Must be passed back all of the command buffers,
+    /// and they must not be used by GPU at this moment.
+    unsafe fn reset_all<I>(&mut self, command_buffers: I)
+    where
+        I: Iterator<Item = A::CommandBuffer>;
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
@@ -824,14 +820,9 @@ pub struct BindGroupDescriptor<'a, A: Api> {
 }
 
 #[derive(Clone, Debug)]
-pub struct CommandPoolDescriptor<'a, A: Api> {
+pub struct CommandEncoderDescriptor<'a, A: Api> {
     pub label: Label<'a>,
     pub queue: &'a A::Queue,
-}
-
-#[derive(Debug)]
-pub struct CommandBufferDescriptor<'a> {
-    pub label: Label<'a>,
 }
 
 /// Naga shader module.

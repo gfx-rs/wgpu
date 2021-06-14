@@ -14,7 +14,7 @@ use crate::{
     track::TextureSelector,
 };
 
-use hal::CommandBuffer as _;
+use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, Extent3d, TextureUsage};
 

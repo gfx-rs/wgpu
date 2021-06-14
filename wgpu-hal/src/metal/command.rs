@@ -3,25 +3,41 @@ use std::{mem, ops::Range};
 
 const WORD_SIZE: usize = 4;
 
-impl super::CommandBuffer {
-    fn enter_blit(&mut self) -> &mtl::BlitCommandEncoderRef {
-        if self.blit.is_none() {
-            debug_assert!(self.render.is_none() && self.compute.is_none());
-            self.blit = Some(self.raw.new_blit_command_encoder().to_owned());
+impl Default for super::CommandState {
+    fn default() -> Self {
+        Self {
+            blit: None,
+            render: None,
+            compute: None,
+            raw_primitive_type: mtl::MTLPrimitiveType::Point,
+            index: None,
+            raw_wg_size: mtl::MTLSize::new(0, 0, 0),
+            stage_infos: Default::default(),
+            storage_buffer_length_map: Default::default(),
         }
-        self.blit.as_ref().unwrap()
+    }
+}
+
+impl super::CommandEncoder {
+    fn enter_blit(&mut self) -> &mtl::BlitCommandEncoderRef {
+        if self.state.blit.is_none() {
+            debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
+            let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
+            self.state.blit = Some(cmd_buf.new_blit_command_encoder().to_owned());
+        }
+        self.state.blit.as_ref().unwrap()
     }
 
     pub(super) fn leave_blit(&mut self) {
-        if let Some(encoder) = self.blit.take() {
+        if let Some(encoder) = self.state.blit.take() {
             encoder.end_encoding();
         }
     }
 
     fn enter_any(&mut self) -> &mtl::CommandEncoderRef {
-        if let Some(ref encoder) = self.render {
+        if let Some(ref encoder) = self.state.render {
             encoder
-        } else if let Some(ref encoder) = self.compute {
+        } else if let Some(ref encoder) = self.state.compute {
             encoder
         } else {
             self.enter_blit()
@@ -57,9 +73,41 @@ impl super::CommandState {
     }
 }
 
-impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
-    unsafe fn finish(&mut self) {
+impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
+    unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
+        let queue = &self.raw_queue.lock();
+        let retain_references = self.shared.settings.retain_command_buffer_references;
+        let raw = objc::rc::autoreleasepool(move || {
+            let cmd_buf_ref = if retain_references {
+                queue.new_command_buffer()
+            } else {
+                queue.new_command_buffer_with_unretained_references()
+            };
+            cmd_buf_ref.to_owned()
+        });
+
+        if let Some(label) = label {
+            raw.set_label(label);
+        }
+        self.raw_cmd_buf = Some(raw);
+
+        Ok(())
+    }
+    unsafe fn discard_encoding(&mut self) {
         self.leave_blit();
+        self.raw_cmd_buf = None;
+    }
+    unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
+        self.leave_blit();
+        Ok(super::CommandBuffer {
+            raw: self.raw_cmd_buf.take().unwrap(),
+        })
+    }
+    unsafe fn reset_all<I>(&mut self, _cmd_bufs: I)
+    where
+        I: Iterator<Item = super::CommandBuffer>,
+    {
+        //do nothing
     }
 
     unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
@@ -209,10 +257,14 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
         match set.ty {
             wgt::QueryType::Occlusion => {
-                self.render.as_ref().unwrap().set_visibility_result_mode(
-                    mtl::MTLVisibilityResultMode::Boolean,
-                    index as u64 * crate::QUERY_SIZE,
-                );
+                self.state
+                    .render
+                    .as_ref()
+                    .unwrap()
+                    .set_visibility_result_mode(
+                        mtl::MTLVisibilityResultMode::Boolean,
+                        index as u64 * crate::QUERY_SIZE,
+                    );
             }
             _ => {}
         }
@@ -220,7 +272,8 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     unsafe fn end_query(&mut self, set: &super::QuerySet, _index: u32) {
         match set.ty {
             wgt::QueryType::Occlusion => {
-                self.render
+                self.state
+                    .render
                     .as_ref()
                     .unwrap()
                     .set_visibility_result_mode(mtl::MTLVisibilityResultMode::Disabled, 0);
@@ -329,15 +382,16 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
             }
         }
 
-        let encoder = self.raw.new_render_command_encoder(descriptor);
+        let raw = self.raw_cmd_buf.as_ref().unwrap();
+        let encoder = raw.new_render_command_encoder(descriptor);
         if let Some(label) = desc.label {
             encoder.set_label(label);
         }
-        self.render = Some(encoder.to_owned());
+        self.state.render = Some(encoder.to_owned());
     }
 
     unsafe fn end_render_pass(&mut self) {
-        self.render.take().unwrap().end_encoding();
+        self.state.render.take().unwrap().end_encoding();
     }
 
     unsafe fn set_bind_group(
@@ -349,7 +403,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     ) {
         let bg_info = &layout.bind_group_infos[group_index as usize];
 
-        if let Some(ref encoder) = self.render {
+        if let Some(ref encoder) = self.state.render {
             let mut changes_sizes_buffer = false;
             for index in 0..group.counters.vs.buffers {
                 let buf = &group.buffers[index as usize];
@@ -445,7 +499,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
             }
         }
 
-        if let Some(ref encoder) = self.compute {
+        if let Some(ref encoder) = self.state.compute {
             let index_base = super::ResourceData {
                 buffers: group.counters.vs.buffers + group.counters.fs.buffers,
                 samplers: group.counters.vs.samplers + group.counters.fs.samplers,
@@ -526,7 +580,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         self.state.stage_infos.vs.assign_from(&pipeline.vs_info);
         self.state.stage_infos.fs.assign_from(&pipeline.fs_info);
 
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         encoder.set_render_pipeline_state(&pipeline.raw);
         encoder.set_front_facing_winding(pipeline.raw_front_winding);
         encoder.set_cull_mode(pipeline.raw_cull_mode);
@@ -586,18 +640,18 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         index: u32,
         binding: crate::BufferBinding<'a, super::Api>,
     ) {
-        let buffer_index = self.max_buffers_per_stage as u64 - 1 - index as u64;
-        let encoder = self.render.as_ref().unwrap();
+        let buffer_index = self.shared.private_caps.max_buffers_per_stage as u64 - 1 - index as u64;
+        let encoder = self.state.render.as_ref().unwrap();
         encoder.set_vertex_buffer(buffer_index, Some(&binding.buffer.raw), binding.offset);
     }
 
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
-        let zfar = if self.disabilities.broken_viewport_near_depth {
+        let zfar = if self.shared.disabilities.broken_viewport_near_depth {
             depth_range.end - depth_range.start
         } else {
             depth_range.end
         };
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         encoder.set_viewport(mtl::MTLViewport {
             originX: rect.x as _,
             originY: rect.y as _,
@@ -615,15 +669,15 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
             width: rect.w as _,
             height: rect.h as _,
         };
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         encoder.set_scissor_rect(scissor);
     }
     unsafe fn set_stencil_reference(&mut self, value: u32) {
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         encoder.set_stencil_front_back_reference_value(value, value);
     }
     unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         encoder.set_blend_color(
             color.r as f32,
             color.g as f32,
@@ -639,7 +693,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         start_instance: u32,
         instance_count: u32,
     ) {
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         if start_instance != 0 {
             encoder.draw_primitives_instanced_base_instance(
                 self.state.raw_primitive_type,
@@ -672,7 +726,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         start_instance: u32,
         instance_count: u32,
     ) {
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         let index = self.state.index.as_ref().unwrap();
         let offset = index.offset + index.stride * start_index as wgt::BufferAddress;
         if base_vertex != 0 || start_instance != 0 {
@@ -712,7 +766,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
             encoder.draw_primitives_indirect(self.state.raw_primitive_type, &buffer.raw, offset);
             offset += mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
@@ -725,7 +779,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
         mut offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        let encoder = self.render.as_ref().unwrap();
+        let encoder = self.state.render.as_ref().unwrap();
         let index = self.state.index.as_ref().unwrap();
         for _ in 0..draw_count {
             encoder.draw_indexed_primitives_indirect(
@@ -766,21 +820,22 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
         self.begin_pass();
 
-        let encoder = self.raw.new_compute_command_encoder();
+        let raw = self.raw_cmd_buf.as_ref().unwrap();
+        let encoder = raw.new_compute_command_encoder();
         if let Some(label) = desc.label {
             encoder.set_label(label);
         }
-        self.compute = Some(encoder.to_owned());
+        self.state.compute = Some(encoder.to_owned());
     }
     unsafe fn end_compute_pass(&mut self) {
-        self.compute.take().unwrap().end_encoding();
+        self.state.compute.take().unwrap().end_encoding();
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
         self.state.raw_wg_size = pipeline.work_group_size;
         self.state.stage_infos.cs.assign_from(&pipeline.cs_info);
 
-        let encoder = self.compute.as_ref().unwrap();
+        let encoder = self.state.compute.as_ref().unwrap();
         encoder.set_compute_pipeline_state(&pipeline.raw);
 
         if let Some((index, sizes)) = self
@@ -796,7 +851,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
-        let encoder = self.compute.as_ref().unwrap();
+        let encoder = self.state.compute.as_ref().unwrap();
         let raw_count = mtl::MTLSize {
             width: count[0] as u64,
             height: count[1] as u64,
@@ -806,7 +861,7 @@ impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
-        let encoder = self.compute.as_ref().unwrap();
+        let encoder = self.state.compute.as_ref().unwrap();
         encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
     }
 }

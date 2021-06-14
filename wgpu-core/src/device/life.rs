@@ -6,7 +6,7 @@
 use crate::device::trace;
 use crate::{
     device::{
-        queue::{PoolExecution, TempResource},
+        queue::{EncoderInFlight, TempResource},
         DeviceError,
     },
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
@@ -168,7 +168,7 @@ struct ActiveSubmission<A: hal::Api> {
     index: SubmissionIndex,
     last_resources: NonReferencedResources<A>,
     mapped: Vec<id::Valid<id::BufferId>>,
-    pool_executions: Vec<PoolExecution<A>>,
+    encoders: Vec<EncoderInFlight<A>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -225,7 +225,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
         index: SubmissionIndex,
         new_suspects: &SuspectedResources,
         temp_resources: impl Iterator<Item = TempResource<A>>,
-        pool_executions: Vec<PoolExecution<A>>,
+        encoders: Vec<EncoderInFlight<A>>,
     ) {
         let mut last_resources = NonReferencedResources::new();
         for res in temp_resources {
@@ -251,7 +251,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
             index,
             last_resources,
             mapped: Vec::new(),
-            pool_executions,
+            encoders,
         });
     }
 
@@ -263,7 +263,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
     pub fn triage_submissions(
         &mut self,
         last_done: SubmissionIndex,
-        pool_allocator: &Mutex<super::PoolAllocator<A>>,
+        command_allocator: &Mutex<super::CommandAllocator<A>>,
     ) {
         profiling::scope!("triage_submissions");
 
@@ -279,9 +279,9 @@ impl<A: hal::Api> LifetimeTracker<A> {
             log::trace!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
-            for pool_exec in a.pool_executions {
-                let cmd_pool = unsafe { pool_exec.finish() };
-                pool_allocator.lock().release_pool(cmd_pool);
+            for encoder in a.encoders {
+                let raw = unsafe { encoder.land() };
+                command_allocator.lock().release_encoder(raw);
             }
         }
     }

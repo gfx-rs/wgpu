@@ -18,7 +18,7 @@ use crate::{
     FastHashMap, FastHashSet,
 };
 
-use hal::{CommandBuffer as _, CommandPool as _, Device as _, Queue as _};
+use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 use std::{iter, mem, num::NonZeroU32, ops::Range, ptr};
@@ -33,7 +33,6 @@ const WRITE_COMMAND_BUFFERS_PER_POOL: usize = 64;
 
 struct StagingData<A: hal::Api> {
     buffer: A::Buffer,
-    cmdbuf: A::CommandBuffer,
 }
 
 impl<A: hal::Api> StagingData<A> {
@@ -60,25 +59,23 @@ pub enum TempResource<A: hal::Api> {
     Texture(A::Texture),
 }
 
-/// A queue execution for a particular command pool.
-pub(super) struct PoolExecution<A: hal::Api> {
-    cmd_pool: A::CommandPool,
+/// A queue execution for a particular command encoder.
+pub(super) struct EncoderInFlight<A: hal::Api> {
+    raw: A::CommandEncoder,
     cmd_buffers: Vec<A::CommandBuffer>,
 }
 
-impl<A: hal::Api> PoolExecution<A> {
-    pub(super) unsafe fn finish(mut self) -> A::CommandPool {
-        for cmd_buf in self.cmd_buffers {
-            self.cmd_pool.free(cmd_buf);
-        }
-        self.cmd_pool
+impl<A: hal::Api> EncoderInFlight<A> {
+    pub(super) unsafe fn land(mut self) -> A::CommandEncoder {
+        self.raw.reset_all(self.cmd_buffers.into_iter());
+        self.raw
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct PendingWrites<A: hal::Api> {
-    pub command_pool: A::CommandPool,
-    pub command_buffer: Option<A::CommandBuffer>,
+    pub command_encoder: A::CommandEncoder,
+    pub is_active: bool,
     pub temp_resources: Vec<TempResource<A>>,
     pub dst_buffers: FastHashSet<id::BufferId>,
     pub dst_textures: FastHashSet<id::TextureId>,
@@ -86,10 +83,10 @@ pub(crate) struct PendingWrites<A: hal::Api> {
 }
 
 impl<A: hal::Api> PendingWrites<A> {
-    pub fn new(command_pool: A::CommandPool) -> Self {
+    pub fn new(command_encoder: A::CommandEncoder) -> Self {
         Self {
-            command_pool,
-            command_buffer: None,
+            command_encoder,
+            is_active: false,
             temp_resources: Vec::new(),
             dst_buffers: FastHashSet::default(),
             dst_textures: FastHashSet::default(),
@@ -98,13 +95,14 @@ impl<A: hal::Api> PendingWrites<A> {
     }
 
     pub fn dispose(mut self, device: &A::Device) {
-        if let Some(raw) = self.command_buffer {
-            unsafe { self.command_pool.free(raw) };
+        unsafe {
+            if self.is_active {
+                self.command_encoder.discard_encoding();
+            }
+            self.command_encoder
+                .reset_all(self.executing_command_buffers.into_iter());
+            device.destroy_command_encoder(self.command_encoder);
         }
-        for raw in self.executing_command_buffers {
-            unsafe { self.command_pool.free(raw) };
-        }
-        unsafe { device.destroy_command_pool(self.command_pool) };
 
         for resource in self.temp_resources {
             match resource {
@@ -124,32 +122,36 @@ impl<A: hal::Api> PendingWrites<A> {
 
     fn consume(&mut self, stage: StagingData<A>) {
         self.temp_resources.push(TempResource::Buffer(stage.buffer));
-        assert!(self.command_buffer.is_none());
-        self.command_buffer = Some(stage.cmdbuf);
     }
 
     #[must_use]
     fn pre_submit(&mut self) -> Option<&A::CommandBuffer> {
         self.dst_buffers.clear();
         self.dst_textures.clear();
-        let mut cmd_buf = self.command_buffer.take()?;
-        unsafe { cmd_buf.finish() };
-        self.executing_command_buffers.push(cmd_buf);
-        self.executing_command_buffers.last()
+        if self.is_active {
+            let cmd_buf = unsafe { self.command_encoder.end_encoding().unwrap() };
+            self.is_active = false;
+            self.executing_command_buffers.push(cmd_buf);
+            self.executing_command_buffers.last()
+        } else {
+            None
+        }
     }
 
     #[must_use]
     fn post_submit(
         &mut self,
-        pool_alloc: &Mutex<super::PoolAllocator<A>>,
+        command_allocator: &Mutex<super::CommandAllocator<A>>,
         device: &A::Device,
         queue: &A::Queue,
-    ) -> Option<PoolExecution<A>> {
-        assert!(self.command_buffer.is_none());
+    ) -> Option<EncoderInFlight<A>> {
         if self.executing_command_buffers.len() >= WRITE_COMMAND_BUFFERS_PER_POOL {
-            let new_pool = pool_alloc.lock().acquire_pool(device, queue).unwrap();
-            Some(PoolExecution {
-                cmd_pool: mem::replace(&mut self.command_pool, new_pool),
+            let new_encoder = command_allocator
+                .lock()
+                .acquire_encoder(device, queue)
+                .unwrap();
+            Some(EncoderInFlight {
+                raw: mem::replace(&mut self.command_encoder, new_encoder),
                 cmd_buffers: mem::take(&mut self.executing_command_buffers),
             })
         } else {
@@ -157,22 +159,16 @@ impl<A: hal::Api> PendingWrites<A> {
         }
     }
 
-    fn create_cmd_buf(&mut self) -> A::CommandBuffer {
-        unsafe {
-            self.command_pool
-                .allocate(&hal::CommandBufferDescriptor {
-                    label: Some("_PendingWrites"),
-                })
-                .unwrap()
+    pub fn activate(&mut self) -> &mut A::CommandEncoder {
+        if !self.is_active {
+            unsafe {
+                self.command_encoder
+                    .begin_encoding(Some("_PendingWrites"))
+                    .unwrap();
+            }
+            self.is_active = true;
         }
-    }
-
-    fn borrow_cmd_buf(&mut self) -> &mut A::CommandBuffer {
-        if self.command_buffer.is_none() {
-            let raw = self.create_cmd_buf();
-            self.command_buffer = Some(raw);
-        }
-        self.command_buffer.as_mut().unwrap()
+        &mut self.command_encoder
     }
 }
 
@@ -210,10 +206,6 @@ impl RequiredBufferInits {
 }
 
 impl<A: hal::Api> super::Device<A> {
-    pub fn borrow_pending_writes(&mut self) -> &mut A::CommandBuffer {
-        self.pending_writes.borrow_cmd_buf()
-    }
-
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
         profiling::scope!("prepare_stage");
         let stage_desc = hal::BufferDescriptor {
@@ -223,12 +215,7 @@ impl<A: hal::Api> super::Device<A> {
             memory_flags: hal::MemoryFlag::TRANSIENT,
         };
         let buffer = unsafe { self.raw.create_buffer(&stage_desc)? };
-
-        let cmdbuf = match self.pending_writes.command_buffer.take() {
-            Some(cmdbuf) => cmdbuf,
-            None => self.pending_writes.create_cmd_buf(),
-        };
-        Ok(StagingData { buffer, cmdbuf })
+        Ok(StagingData { buffer })
     }
 
     fn initialize_buffer_memory(
@@ -240,7 +227,7 @@ impl<A: hal::Api> super::Device<A> {
             .dst_buffers
             .extend(required_buffer_inits.map.keys());
 
-        let cmd_buf = self.pending_writes.borrow_cmd_buf();
+        let encoder = self.pending_writes.activate();
         let mut trackers = self.trackers.lock();
 
         for (buffer_id, mut ranges) in required_buffer_inits.map.drain() {
@@ -267,7 +254,7 @@ impl<A: hal::Api> super::Device<A> {
                 .as_ref()
                 .ok_or(QueueSubmitError::DestroyedBuffer(buffer_id))?;
             unsafe {
-                cmd_buf.transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
+                encoder.transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
             }
 
             for range in ranges {
@@ -275,7 +262,7 @@ impl<A: hal::Api> super::Device<A> {
                 assert!(range.end % 4 == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
 
                 unsafe {
-                    cmd_buf.fill_buffer(raw_buf, range, 0);
+                    encoder.fill_buffer(raw_buf, range, 0);
                 }
             }
         }
@@ -350,7 +337,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let mut stage = device.prepare_stage(data_size)?;
+        let stage = device.prepare_stage(data_size)?;
         unsafe { stage.write(&device.raw, 0, data) }.map_err(DeviceError::from)?;
 
         let mut trackers = device.trackers.lock();
@@ -393,11 +380,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
         })
         .chain(transition.map(|pending| pending.into_hal(dst)));
+        let encoder = device.pending_writes.activate();
         unsafe {
-            stage.cmdbuf.transition_buffers(barriers);
-            stage
-                .cmdbuf
-                .copy_buffer_to_buffer(&stage.buffer, dst_raw, region.into_iter());
+            encoder.transition_buffers(barriers);
+            encoder.copy_buffer_to_buffer(&stage.buffer, dst_raw, region.into_iter());
         }
 
         device.pending_writes.consume(stage);
@@ -491,7 +477,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
-        let mut stage = device.prepare_stage(stage_size)?;
+        let stage = device.prepare_stage(stage_size)?;
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
@@ -582,14 +568,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer: &stage.buffer,
             usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
         };
+        let encoder = device.pending_writes.activate();
         unsafe {
-            stage.cmdbuf.transition_buffers(iter::once(barrier));
-            stage
-                .cmdbuf
-                .transition_textures(transition.map(|pending| pending.into_hal(dst)));
-            stage
-                .cmdbuf
-                .copy_buffer_to_texture(&stage.buffer, dst_raw, iter::once(region));
+            encoder.transition_buffers(iter::once(barrier));
+            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
+            encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, iter::once(region));
         }
 
         device.pending_writes.consume(stage);
@@ -752,31 +735,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let mut baked = cmdbuf.into_baked();
 
                         // execute resource transitions
-                        let transit_desc = hal::CommandBufferDescriptor {
-                            label: Some("_Transit"),
-                        };
-                        let mut transit = unsafe {
+                        unsafe {
                             baked
-                                .pool
-                                .allocate(&transit_desc)
+                                .encoder
+                                .begin_encoding(Some("_Transit"))
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
                         trackers.merge_extend_stateless(&baked.trackers);
                         CommandBuffer::insert_barriers(
-                            &mut transit,
+                            &mut baked.encoder,
                             &mut *trackers,
                             &baked.trackers.buffers,
                             &baked.trackers.textures,
                             &*buffer_guard,
                             &*texture_guard,
                         );
-                        unsafe {
-                            transit.finish();
-                        }
+                        let transit = unsafe { baked.encoder.end_encoding().unwrap() };
                         baked.list.insert(0, transit);
-                        active_executions.push(PoolExecution {
-                            cmd_pool: baked.pool,
+                        active_executions.push(EncoderInFlight {
+                            raw: baked.encoder,
                             cmd_buffers: baked.list,
                         });
                     }
@@ -819,7 +797,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             profiling::scope!("cleanup");
             if let Some(pending_execution) = device.pending_writes.post_submit(
-                &device.pool_allocator,
+                &device.command_allocator,
                 &device.raw,
                 &device.queue,
             ) {

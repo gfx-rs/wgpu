@@ -30,7 +30,7 @@ impl crate::Api for Api {
     type Device = Device;
 
     type Queue = Queue;
-    type CommandPool = CommandPool;
+    type CommandEncoder = CommandEncoder;
     type CommandBuffer = CommandBuffer;
 
     type Buffer = Buffer;
@@ -199,15 +199,16 @@ pub struct BindGroup {
     raw: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
-pub struct CommandPool {
+pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
+    active: vk::CommandBuffer,
     free: Vec<vk::CommandBuffer>,
+    discarded: Vec<vk::CommandBuffer>,
 }
 
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
-    device: Arc<DeviceShared>,
 }
 
 impl crate::Queue<Api> for Queue {

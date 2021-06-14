@@ -55,7 +55,7 @@ use arrayvec::ArrayVec;
 use std::{borrow::Cow, mem, ops::Range};
 use thiserror::Error;
 
-use hal::CommandBuffer as _;
+use hal::CommandEncoder as _;
 
 /// Describes a [`RenderBundleEncoder`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -567,7 +567,7 @@ impl RenderBundle {
     /// The only failure condition is if some of the used buffers are destroyed.
     pub(crate) unsafe fn execute<A: HalApi>(
         &self,
-        cmd_buf: &mut A::CommandBuffer,
+        raw: &mut A::CommandEncoder,
         pipeline_layout_guard: &Storage<
             crate::binding_model::PipelineLayout<A>,
             id::PipelineLayoutId,
@@ -579,7 +579,7 @@ impl RenderBundle {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
         if let Some(ref label) = self.base.label {
-            cmd_buf.begin_debug_marker(label);
+            raw.begin_debug_marker(label);
         }
 
         for command in self.base.commands.iter() {
@@ -590,7 +590,7 @@ impl RenderBundle {
                     bind_group_id,
                 } => {
                     let bind_group = bind_group_guard.get(bind_group_id).unwrap();
-                    cmd_buf.set_bind_group(
+                    raw.set_bind_group(
                         &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
                         index as u32,
                         &bind_group.raw,
@@ -600,7 +600,7 @@ impl RenderBundle {
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let pipeline = pipeline_guard.get(pipeline_id).unwrap();
-                    cmd_buf.set_render_pipeline(&pipeline.raw);
+                    raw.set_render_pipeline(&pipeline.raw);
 
                     pipeline_layout_id = Some(pipeline.layout_id.value);
                 }
@@ -621,7 +621,7 @@ impl RenderBundle {
                         offset,
                         size,
                     };
-                    cmd_buf.set_index_buffer(bb, index_format);
+                    raw.set_index_buffer(bb, index_format);
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -640,7 +640,7 @@ impl RenderBundle {
                         offset,
                         size,
                     };
-                    cmd_buf.set_vertex_buffer(slot, bb);
+                    raw.set_vertex_buffer(slot, bb);
                 }
                 RenderCommand::SetPushConstant {
                     stages,
@@ -657,13 +657,13 @@ impl RenderBundle {
                         let data_slice = &self.base.push_constant_data
                             [(values_offset as usize)..values_end_offset];
 
-                        cmd_buf.set_push_constants(&pipeline_layout.raw, stages, offset, data_slice)
+                        raw.set_push_constants(&pipeline_layout.raw, stages, offset, data_slice)
                     } else {
                         super::push_constant_clear(
                             offset,
                             size_bytes,
                             |clear_offset, clear_data| {
-                                cmd_buf.set_push_constants(
+                                raw.set_push_constants(
                                     &pipeline_layout.raw,
                                     stages,
                                     clear_offset,
@@ -679,7 +679,7 @@ impl RenderBundle {
                     first_vertex,
                     first_instance,
                 } => {
-                    cmd_buf.draw(first_vertex, vertex_count, first_instance, instance_count);
+                    raw.draw(first_vertex, vertex_count, first_instance, instance_count);
                 }
                 RenderCommand::DrawIndexed {
                     index_count,
@@ -688,7 +688,7 @@ impl RenderBundle {
                     base_vertex,
                     first_instance,
                 } => {
-                    cmd_buf.draw_indexed(
+                    raw.draw_indexed(
                         first_index,
                         index_count,
                         base_vertex,
@@ -708,7 +708,7 @@ impl RenderBundle {
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
-                    cmd_buf.draw_indirect(buffer, offset, 1);
+                    raw.draw_indirect(buffer, offset, 1);
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -722,7 +722,7 @@ impl RenderBundle {
                         .raw
                         .as_ref()
                         .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
-                    cmd_buf.draw_indexed_indirect(buffer, offset, 1);
+                    raw.draw_indexed_indirect(buffer, offset, 1);
                 }
                 RenderCommand::MultiDrawIndirect { .. }
                 | RenderCommand::MultiDrawIndirectCount { .. } => {
@@ -747,7 +747,7 @@ impl RenderBundle {
         }
 
         if let Some(_) = self.base.label {
-            cmd_buf.end_debug_marker();
+            raw.end_debug_marker();
         }
 
         Ok(())

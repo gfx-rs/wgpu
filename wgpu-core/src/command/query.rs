@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use hal::CommandBuffer as _;
+use hal::CommandEncoder as _;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
@@ -48,7 +48,7 @@ impl<A: hal::Api> QueryResetMap<A> {
 
     pub fn reset_queries(
         self,
-        cmd_buf_raw: &mut A::CommandBuffer,
+        raw_encoder: &mut A::CommandEncoder,
         query_set_storage: &Storage<QuerySet<A>, id::QuerySetId>,
         backend: wgt::Backend,
     ) -> Result<(), id::QuerySetId> {
@@ -69,7 +69,7 @@ impl<A: hal::Api> QueryResetMap<A> {
                     // We've hit the end of a run, dispatch a reset
                     (Some(start), false) => {
                         run_start = None;
-                        unsafe { cmd_buf_raw.reset_queries(&query_set.raw, start..idx as u32) };
+                        unsafe { raw_encoder.reset_queries(&query_set.raw, start..idx as u32) };
                     }
                     // We're starting a run
                     (None, true) => {
@@ -198,7 +198,7 @@ impl<A: HalApi> QuerySet<A> {
 
     pub(super) fn validate_and_write_timestamp(
         &self,
-        cmd_buf_raw: &mut A::CommandBuffer,
+        raw_encoder: &mut A::CommandEncoder,
         query_set_id: id::QuerySetId,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
@@ -214,9 +214,9 @@ impl<A: HalApi> QuerySet<A> {
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
-                cmd_buf_raw.reset_queries(&self.raw, query_index..(query_index + 1));
+                raw_encoder.reset_queries(&self.raw, query_index..(query_index + 1));
             }
-            cmd_buf_raw.write_timestamp(query_set, query_index);
+            raw_encoder.write_timestamp(query_set, query_index);
         }
 
         Ok(())
@@ -224,7 +224,7 @@ impl<A: HalApi> QuerySet<A> {
 
     pub(super) fn validate_and_begin_pipeline_statistics_query(
         &self,
-        cmd_buf_raw: &mut A::CommandBuffer,
+        raw_encoder: &mut A::CommandEncoder,
         query_set_id: id::QuerySetId,
         query_index: u32,
         reset_state: Option<&mut QueryResetMap<A>>,
@@ -248,9 +248,9 @@ impl<A: HalApi> QuerySet<A> {
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
-                cmd_buf_raw.reset_queries(&self.raw, query_index..(query_index + 1));
+                raw_encoder.reset_queries(&self.raw, query_index..(query_index + 1));
             }
-            cmd_buf_raw.begin_query(query_set, query_index);
+            raw_encoder.begin_query(query_set, query_index);
         }
 
         Ok(())
@@ -258,7 +258,7 @@ impl<A: HalApi> QuerySet<A> {
 }
 
 pub(super) fn end_pipeline_statistics_query<A: HalApi>(
-    cmd_buf_raw: &mut A::CommandBuffer,
+    raw_encoder: &mut A::CommandEncoder,
     storage: &Storage<QuerySet<A>, id::QuerySetId>,
     active_query: &mut Option<(id::QuerySetId, u32)>,
 ) -> Result<(), QueryUseError> {
@@ -266,7 +266,7 @@ pub(super) fn end_pipeline_statistics_query<A: HalApi>(
         // We can unwrap here as the validity was validated when the active query was set
         let query_set = storage.get(query_set_id).unwrap();
 
-        unsafe { cmd_buf_raw.end_query(&query_set.raw, query_index) };
+        unsafe { raw_encoder.end_query(&query_set.raw, query_index) };
 
         Ok(())
     } else {
@@ -288,7 +288,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let raw_encoder = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -307,7 +307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 _ => unreachable!(),
             })?;
 
-        query_set.validate_and_write_timestamp(cmd_buf_raw, query_set_id, query_index, None)?;
+        query_set.validate_and_write_timestamp(raw_encoder, query_set_id, query_index, None)?;
 
         Ok(())
     }
@@ -329,7 +329,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let raw_encoder = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -389,8 +389,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier);
-            cmd_buf_raw.copy_query_results(
+            raw_encoder.transition_buffers(dst_barrier);
+            raw_encoder.copy_query_results(
                 &query_set.raw,
                 start_query..end_query,
                 dst_buffer.raw.as_ref().unwrap(),

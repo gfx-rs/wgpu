@@ -16,7 +16,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
-use hal::{CommandBuffer as _, CommandPool as _, Device as _};
+use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
@@ -180,27 +180,27 @@ fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callback
     }
 }
 
-struct PoolAllocator<A: hal::Api> {
-    free_pools: Vec<A::CommandPool>,
+struct CommandAllocator<A: hal::Api> {
+    free_encoders: Vec<A::CommandEncoder>,
 }
 
-impl<A: hal::Api> PoolAllocator<A> {
-    fn acquire_pool(
+impl<A: hal::Api> CommandAllocator<A> {
+    fn acquire_encoder(
         &mut self,
         device: &A::Device,
         queue: &A::Queue,
-    ) -> Result<A::CommandPool, hal::DeviceError> {
-        match self.free_pools.pop() {
-            Some(pool) => Ok(pool),
+    ) -> Result<A::CommandEncoder, hal::DeviceError> {
+        match self.free_encoders.pop() {
+            Some(encoder) => Ok(encoder),
             None => unsafe {
-                let hal_desc = hal::CommandPoolDescriptor { label: None, queue };
-                device.create_command_pool(&hal_desc)
+                let hal_desc = hal::CommandEncoderDescriptor { label: None, queue };
+                device.create_command_encoder(&hal_desc)
             },
         }
     }
 
-    fn release_pool(&mut self, pool: A::CommandPool) {
-        self.free_pools.push(pool);
+    fn release_encoder(&mut self, encoder: A::CommandEncoder) {
+        self.free_encoders.push(encoder);
     }
 }
 
@@ -223,7 +223,7 @@ pub struct Device<A: hal::Api> {
     //desc_allocator: Mutex<descriptor::DescriptorAllocator<A>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) life_guard: LifeGuard,
-    pool_allocator: Mutex<PoolAllocator<A>>,
+    command_allocator: Mutex<CommandAllocator<A>>,
     pub(crate) active_submission_index: SubmissionIndex,
     fence: A::Fence,
     /// Has to be locked temporarily only (locked last)
@@ -265,20 +265,20 @@ impl<A: HalApi> Device<A> {
         let fence =
             unsafe { open.device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
 
-        let mut palloc = PoolAllocator {
-            free_pools: Vec::new(),
+        let mut com_alloc = CommandAllocator {
+            free_encoders: Vec::new(),
         };
-        let pending_pool = palloc
-            .acquire_pool(&open.device, &open.queue)
+        let pending_encoder = com_alloc
+            .acquire_encoder(&open.device, &open.queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
-        let pending_writes = queue::PendingWrites::new(pending_pool);
+        let pending_writes = queue::PendingWrites::new(pending_encoder);
 
         Ok(Self {
             raw: open.device,
             adapter_id,
             queue: open.queue,
             life_guard: LifeGuard::new("<device>"),
-            pool_allocator: Mutex::new(palloc),
+            command_allocator: Mutex::new(com_alloc),
             active_submission_index: 0,
             fence,
             trackers: Mutex::new(TrackerSet::new(A::VARIANT)),
@@ -363,7 +363,7 @@ impl<A: HalApi> Device<A> {
             }
         };
 
-        life_tracker.triage_submissions(last_done_index, &self.pool_allocator);
+        life_tracker.triage_submissions(last_done_index, &self.command_allocator);
         let callbacks = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw);
 
@@ -2214,7 +2214,7 @@ impl<A: HalApi> Device<A> {
                     .map_err(DeviceError::from)?
             };
             self.lock_life(token)
-                .triage_submissions(submission_index, &self.pool_allocator);
+                .triage_submissions(submission_index, &self.command_allocator);
         }
         Ok(())
     }
@@ -2278,13 +2278,11 @@ impl<A: hal::Api> Device<A> {
 
     pub(crate) fn destroy_command_buffer(&self, cmd_buf: command::CommandBuffer<A>) {
         let mut baked = cmd_buf.into_baked();
-        for raw in baked.list {
-            unsafe {
-                baked.pool.free(raw);
-            }
+        unsafe {
+            baked.encoder.reset_all(baked.list.into_iter());
         }
         unsafe {
-            self.raw.destroy_command_pool(baked.pool);
+            self.raw.destroy_command_encoder(baked.encoder);
         }
     }
 
@@ -2295,7 +2293,7 @@ impl<A: hal::Api> Device<A> {
         if let Err(error) = unsafe { self.raw.wait(&self.fence, current_index, CLEANUP_WAIT_MS) } {
             log::error!("failed to wait for the device: {:?}", error);
         }
-        life_tracker.triage_submissions(current_index, &self.pool_allocator);
+        life_tracker.triage_submissions(current_index, &self.command_allocator);
         life_tracker.cleanup(&self.raw);
     }
 
@@ -3482,17 +3480,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ref_count: device.life_guard.add_ref(),
             };
 
-            let hal_desc = hal::CommandPoolDescriptor {
+            let hal_desc = hal::CommandEncoderDescriptor {
                 label: None,
                 queue: &device.queue,
             };
-            let pool = match unsafe { device.raw.create_command_pool(&hal_desc) } {
-                Ok(pool) => pool,
+            let encoder = match unsafe { device.raw.create_command_encoder(&hal_desc) } {
+                Ok(raw) => raw,
                 Err(_) => break DeviceError::OutOfMemory,
             };
 
             let command_buffer = command::CommandBuffer::new(
-                pool,
+                encoder,
                 dev_stored,
                 device.limits.clone(),
                 device.downlevel,
@@ -4438,13 +4436,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     buffer: raw_buf,
                     usage: hal::BufferUse::empty()..hal::BufferUse::COPY_DST,
                 };
+                let encoder = device.pending_writes.activate();
                 unsafe {
-                    let cmd_buf = device.borrow_pending_writes();
-                    cmd_buf.transition_buffers(
+                    encoder.transition_buffers(
                         iter::once(transition_src).chain(iter::once(transition_dst)),
                     );
                     if buffer.size > 0 {
-                        cmd_buf.copy_buffer_to_buffer(&stage_buffer, raw_buf, region.into_iter());
+                        encoder.copy_buffer_to_buffer(&stage_buffer, raw_buf, region.into_iter());
                     }
                 }
                 device

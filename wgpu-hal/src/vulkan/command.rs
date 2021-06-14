@@ -1,4 +1,4 @@
-use std::{ops::Range, sync::Arc};
+use std::ops::Range;
 
 use ash::{version::DeviceV1_0, vk};
 
@@ -6,11 +6,8 @@ use super::Resource; // TEMP
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 
-impl crate::CommandPool<super::Api> for super::CommandPool {
-    unsafe fn allocate(
-        &mut self,
-        desc: &crate::CommandBufferDescriptor,
-    ) -> Result<super::CommandBuffer, crate::DeviceError> {
+impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
+    unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         if self.free.is_empty() {
             let vk_info = vk::CommandBufferAllocateInfo::builder()
                 .command_buffer_count(ALLOCATION_GRANULARITY)
@@ -24,33 +21,34 @@ impl crate::CommandPool<super::Api> for super::CommandPool {
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
             .build();
         self.device.raw.begin_command_buffer(raw, &vk_info)?;
+        self.active = raw;
 
-        Ok(super::CommandBuffer {
-            raw,
-            device: Arc::clone(&self.device),
-        })
+        Ok(())
     }
 
-    unsafe fn free(&mut self, cmd_buf: super::CommandBuffer) {
-        let raw = cmd_buf.raw;
-        let _ = self
-            .device
-            .raw
-            .reset_command_buffer(raw, vk::CommandBufferResetFlags::empty());
-        self.free.push(raw);
+    unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
+        let raw = self.active;
+        self.active = vk::CommandBuffer::null();
+        self.device.raw.end_command_buffer(raw)?;
+        Ok(super::CommandBuffer { raw })
     }
 
-    unsafe fn clear(&mut self) {
+    unsafe fn discard_encoding(&mut self) {
+        self.discarded.push(self.active);
+        self.active = vk::CommandBuffer::null();
+    }
+
+    unsafe fn reset_all<I>(&mut self, cmd_bufs: I)
+    where
+        I: Iterator<Item = super::CommandBuffer>,
+    {
+        self.free
+            .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
+        self.free.extend(self.discarded.drain(..));
         let _ = self
             .device
             .raw
             .reset_command_pool(self.raw, vk::CommandPoolResetFlags::RELEASE_RESOURCES);
-    }
-}
-
-impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
-    unsafe fn finish(&mut self) {
-        self.device.raw.end_command_buffer(self.raw).unwrap();
     }
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)

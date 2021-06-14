@@ -27,7 +27,7 @@ use crate::{
     Label, Stored,
 };
 
-use hal::{CommandBuffer as _, CommandPool as _};
+use hal::CommandEncoder as _;
 use smallvec::SmallVec;
 use thiserror::Error;
 
@@ -41,35 +41,34 @@ enum CommandEncoderStatus {
 }
 
 struct CommandEncoder<A: hal::Api> {
-    pool: A::CommandPool,
+    raw: A::CommandEncoder,
     list: Vec<A::CommandBuffer>,
     is_open: bool,
-    label: String,
+    label: Option<String>,
 }
 
+//TODO: handle errors better
 impl<A: hal::Api> CommandEncoder<A> {
     fn close(&mut self) {
         if self.is_open {
             self.is_open = false;
-            unsafe { self.list.last_mut().unwrap().finish() };
+            let cmd_buf = unsafe { self.raw.end_encoding().unwrap() };
+            self.list.push(cmd_buf);
         }
     }
 
-    fn open(&mut self) -> &mut A::CommandBuffer {
+    fn open(&mut self) -> &mut A::CommandEncoder {
         if !self.is_open {
             self.is_open = true;
-            let hal_desc = hal::CommandBufferDescriptor {
-                label: Some(&self.label),
-            };
-            let raw = unsafe { self.pool.allocate(&hal_desc).unwrap() }; //TODO: handle this better
-            self.list.push(raw);
+            let label = self.label.as_ref().map(|s| s.as_str());
+            unsafe { self.raw.begin_encoding(label).unwrap() };
         }
-        self.list.last_mut().unwrap()
+        &mut self.raw
     }
 }
 
 pub struct BackedCommands<A: hal::Api> {
-    pub(crate) pool: A::CommandPool,
+    pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: TrackerSet,
 }
@@ -90,7 +89,7 @@ pub struct CommandBuffer<A: hal::Api> {
 
 impl<A: HalApi> CommandBuffer<A> {
     pub(crate) fn new(
-        pool: A::CommandPool,
+        encoder: A::CommandEncoder,
         device_id: Stored<id::DeviceId>,
         limits: wgt::Limits,
         downlevel: wgt::DownlevelCapabilities,
@@ -100,10 +99,10 @@ impl<A: HalApi> CommandBuffer<A> {
     ) -> Self {
         CommandBuffer {
             encoder: CommandEncoder {
-                pool,
+                raw: encoder,
                 is_open: false,
                 list: Vec::new(),
-                label: crate::LabelHelpers::borrow_or_default(label).to_string(),
+                label: crate::LabelHelpers::borrow_option(label).map(|s| s.to_string()),
             },
             status: CommandEncoderStatus::Recording,
             device_id,
@@ -123,7 +122,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn insert_barriers(
-        raw: &mut A::CommandBuffer,
+        raw: &mut A::CommandEncoder,
         base: &mut TrackerSet,
         head_buffers: &ResourceTracker<BufferState>,
         head_textures: &ResourceTracker<TextureState>,
@@ -173,7 +172,7 @@ impl<A: hal::Api> CommandBuffer<A> {
 
     pub(crate) fn into_baked(self) -> BackedCommands<A> {
         BackedCommands {
-            pool: self.encoder.pool,
+            encoder: self.encoder.raw,
             list: self.encoder.list,
             trackers: self.trackers,
         }
@@ -188,7 +187,7 @@ impl<A: hal::Api> crate::hub::Resource for CommandBuffer<A> {
     }
 
     fn label(&self) -> &str {
-        &self.encoder.label
+        self.encoder.label.as_ref().map_or("", |s| s.as_str())
     }
 }
 

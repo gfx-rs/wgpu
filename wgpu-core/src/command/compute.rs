@@ -18,7 +18,7 @@ use crate::{
     Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
 
-use hal::CommandBuffer as _;
+use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
@@ -215,7 +215,7 @@ impl State {
 
     fn flush_states<A: HalApi>(
         &mut self,
-        raw_cmd_buf: &mut A::CommandBuffer,
+        raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut TrackerSet,
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
@@ -229,7 +229,7 @@ impl State {
         log::trace!("Encoding dispatch barriers");
 
         CommandBuffer::insert_barriers(
-            raw_cmd_buf,
+            raw_encoder,
             base_trackers,
             &self.trackers.buffers,
             &self.trackers.textures,
