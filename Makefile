@@ -65,7 +65,15 @@ validate-wgsl: $(SNAPSHOTS_OUT)/*.wgsl
 	done
 
 validate-hlsl: $(SNAPSHOTS_OUT)/*.hlsl
-	@set -e && for file in $(SNAPSHOTS_OUT)/*.Compute.hlsl ; do \
-		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"};\
-		dxc $${file} -T cs_5_0;\
+	@set -e && for file in $^ ; do \
+		echo "Validating" $${file#"$(SNAPSHOTS_OUT)/"}; \
+		config="$$(dirname $${file})/$$(basename $${file}).config"; \
+		vertex=""\
+		fragment="" \
+		compute="" \
+		. $${config}; \
+		[ ! -z "$${vertex}" ] && echo "Vertex Stage:" && dxc $${file} -T $${vertex} -E $${vertex_name} -Wno-parentheses-equality  -Zi -Qembed_debug > /dev/null; \
+		[ ! -z "$${fragment}" ] && echo "Fragment Stage:" && dxc $${file} -T $${fragment} -E $${fragment_name} -Wno-parentheses-equality  -Zi -Qembed_debug > /dev/null; \
+		[ ! -z "$${compute}" ] && echo "Compute Stage:" && dxc $${file} -T $${compute} -E $${compute_name} -Wno-parentheses-equality  -Zi -Qembed_debug > /dev/null; \
+		echo "======================"; \
 	done

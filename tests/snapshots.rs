@@ -107,9 +107,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "hlsl-out")]
     {
         if targets.contains(Targets::HLSL) {
-            for ep in module.entry_points.iter() {
-                check_output_hlsl(module, &info, &dest, ep.stage);
-            }
+            check_output_hlsl(module, &info, &dest);
         }
     }
     #[cfg(feature = "wgsl-out")]
@@ -221,18 +219,28 @@ fn check_output_glsl(
 }
 
 #[cfg(feature = "hlsl-out")]
-fn check_output_hlsl(
-    module: &naga::Module,
-    info: &naga::valid::ModuleInfo,
-    destination: &PathBuf,
-    stage: naga::ShaderStage,
-) {
+fn check_output_hlsl(module: &naga::Module, info: &naga::valid::ModuleInfo, destination: &PathBuf) {
     use naga::back::hlsl;
+    let options = hlsl::Options::default();
+    let string = hlsl::write_string(module, info, &options).unwrap();
 
-    let string = hlsl::write_string(module, info, hlsl::ShaderModel::default()).unwrap();
+    fs::write(destination.with_extension("hlsl"), string).unwrap();
 
-    let ext = format!("{:?}.hlsl", stage);
-    fs::write(destination.with_extension(&ext), string).unwrap();
+    // We need a config file for validation script
+    // This file contains an info about profiles (shader stages) contains inside generated shader
+    // This info will be passed to dxc
+    let mut config_str = String::from("");
+    for ep in module.entry_points.iter() {
+        let (stage_str, profile, ep_name) = match ep.stage {
+            naga::ShaderStage::Vertex => ("vertex", "vs_5_0", &options.vertex_entry_point_name),
+            naga::ShaderStage::Fragment => {
+                ("fragment", "ps_5_0", &options.fragment_entry_point_name)
+            }
+            naga::ShaderStage::Compute => ("compute", "cs_5_0", &options.compute_entry_point_name),
+        };
+        config_str = format!("{}{}={}\n{}_name={}\n", config_str, stage_str, profile, stage_str, ep_name);
+    }
+    fs::write(destination.with_extension("hlsl.config"), config_str).unwrap();
 }
 
 #[cfg(feature = "wgsl-out")]
@@ -255,7 +263,12 @@ fn convert_wgsl() {
         ),
         (
             "quad",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::DOT | Targets::WGSL,
+            Targets::SPIRV
+                | Targets::METAL
+                | Targets::GLSL
+                | Targets::DOT
+                | Targets::HLSL
+                | Targets::WGSL,
         ),
         (
             "boids",

@@ -40,7 +40,7 @@ impl crate::Expression {
 
 /// Helper function that returns the string corresponding to the [`BinaryOperator`](crate::BinaryOperator)
 /// # Notes
-/// Used by `glsl-out`, `msl-out`, `wgsl-out`.
+/// Used by `glsl-out`, `msl-out`, `wgsl-out`, `hlsl-out`.
 #[allow(dead_code)]
 fn binary_operation_str(op: crate::BinaryOperator) -> &'static str {
     use crate::BinaryOperator as Bo;
@@ -68,7 +68,7 @@ fn binary_operation_str(op: crate::BinaryOperator) -> &'static str {
 
 /// Helper function that returns the string corresponding to the [`VectorSize`](crate::VectorSize)
 /// # Notes
-/// Used by `msl-out`, `wgsl-out`.
+/// Used by `msl-out`, `wgsl-out`, `hlsl-out`.
 #[allow(dead_code)]
 fn vector_size_str(size: crate::VectorSize) -> &'static str {
     match size {

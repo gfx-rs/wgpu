@@ -11,6 +11,7 @@ struct Parameters {
     spv: naga::back::spv::Options,
     msl: naga::back::msl::Options,
     glsl: naga::back::glsl::Options,
+    hlsl: naga::back::hlsl::Options,
 }
 
 trait PrettyResult {
@@ -74,6 +75,12 @@ fn main() {
                     } else {
                         panic!("Unknown profile: {}", string)
                     };
+                }
+                "shader-model" => {
+                    use naga::back::hlsl::{ShaderModel, DEFAULT_SHADER_MODEL};
+                    let string = args.next().unwrap();
+                    params.hlsl.shader_model =
+                        ShaderModel::new(string.parse().unwrap_or(DEFAULT_SHADER_MODEL));
                 }
                 other => log::warn!("Unknown parameter: {}", other),
             }
@@ -251,13 +258,8 @@ fn main() {
             }
             "hlsl" => {
                 use naga::back::hlsl;
-                // TODO: Get `ShaderModel` from user
-                let hlsl = hlsl::write_string(
-                    &module,
-                    info.as_ref().unwrap(),
-                    hlsl::ShaderModel::default(),
-                )
-                .unwrap_pretty();
+                let hlsl = hlsl::write_string(&module, info.as_ref().unwrap(), &params.hlsl)
+                    .unwrap_pretty();
                 fs::write(output_path, hlsl).unwrap();
             }
             "wgsl" => {
