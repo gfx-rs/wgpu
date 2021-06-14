@@ -31,6 +31,8 @@
     clippy::new_without_default,
     // Matches are good and extendable, no need to make an exception here.
     clippy::single_match,
+    // Push commands are more regular than macros.
+    clippy::vec_init_then_push,
     // TODO!
     clippy::missing_safety_doc,
 )]
@@ -54,6 +56,8 @@ pub mod api {
     pub use super::empty::Api as Empty;
     #[cfg(feature = "metal")]
     pub use super::metal::Api as Metal;
+    #[cfg(feature = "vulkan")]
+    pub use super::vulkan::Api as Vulkan;
 }
 
 use std::{
@@ -300,6 +304,11 @@ pub trait Queue<A: Api>: Send + Sync {
     ) -> Result<(), SurfaceError>;
 }
 
+/// Allocator for commands, encoded by command buffers.
+/// Has the semantics close to DX12:
+///  - unlimited allocation
+///  - only one command buffer can be recording at a time
+///  - clears are needed when nothing is recording or in flight
 pub trait CommandPool<A: Api>: Send + Sync {
     unsafe fn allocate(
         &mut self,

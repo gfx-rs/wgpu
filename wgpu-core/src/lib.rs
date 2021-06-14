@@ -235,7 +235,7 @@ macro_rules! gfx_select {
         // macro so we must specify their equivalents manually
         match $id.backend() {
             #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
-            wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
+            wgt::Backend::Vulkan => $global.$method::<$crate::api::Vulkan>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
             wgt::Backend::Metal => $global.$method::<$crate::api::Metal>( $($param),* ),
             /*

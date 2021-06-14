@@ -307,7 +307,7 @@ impl crate::Instance<super::Api> for super::Instance {
         };
         let driver_api_version = match entry.try_enumerate_instance_version() {
             // Vulkan 1.1+
-            Ok(Some(version)) => version.into(),
+            Ok(Some(version)) => version,
             Ok(None) => vk::API_VERSION_1_0,
             Err(err) => {
                 log::warn!("try_enumerate_instance_version: {:?}", err);
@@ -334,7 +334,6 @@ impl crate::Instance<super::Api> for super::Instance {
                     //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
                     vk::HEADER_VERSION_COMPLETE
                 })
-                .into()
             });
 
         let instance_extensions = entry

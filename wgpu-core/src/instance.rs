@@ -22,15 +22,15 @@ pub struct Instance {
     #[allow(dead_code)]
     name: String,
     #[cfg(vulkan)]
-    pub vulkan: Option<gfx_backend_vulkan::Instance>,
+    pub vulkan: Option<HalInstance<hal::api::Vulkan>>,
     #[cfg(metal)]
     pub metal: Option<HalInstance<hal::api::Metal>>,
     #[cfg(dx12)]
-    pub dx12: Option<gfx_backend_dx12::Instance>,
+    pub dx12: Option<HalInstance<hal::api::Dx12>>,
     #[cfg(dx11)]
-    pub dx11: Option<gfx_backend_dx11::Instance>,
+    pub dx11: Option<HalInstance<hal::api::Dx11>>,
     #[cfg(gl)]
-    pub gl: Option<gfx_backend_gl::Instance>,
+    pub gl: Option<HalInstance<hal::api::Gles>>,
 }
 
 impl Instance {
@@ -55,15 +55,15 @@ impl Instance {
         Self {
             name: name.to_string(),
             #[cfg(vulkan)]
-            vulkan: map((Backend::Vulkan)),
+            vulkan: map(Backend::Vulkan),
             #[cfg(metal)]
             metal: map(Backend::Metal),
             #[cfg(dx12)]
-            dx12: map((Backend::Dx12)),
+            dx12: map(Backend::Dx12),
             #[cfg(dx11)]
-            dx11: map((Backend::Dx11)),
+            dx11: map(Backend::Dx11),
             #[cfg(gl)]
-            gl: map((Backend::Gl)),
+            gl: map(Backend::Gl),
         }
     }
 
@@ -101,7 +101,7 @@ pub struct Surface {
     #[cfg(dx11)]
     pub dx11: Option<HalSurface<hal::api::Dx11>>,
     #[cfg(gl)]
-    pub gl: Option<HalSurface<hal::api::Gl>>,
+    pub gl: Option<HalSurface<hal::api::Gles>>,
 }
 
 impl crate::hub::Resource for Surface {
@@ -489,7 +489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // being weird with lifetimes for closure literals...
             #[cfg(vulkan)]
             let adapters_vk = map((&instance.vulkan, &id_vulkan, {
-                fn surface_vulkan(surf: &Surface) -> Option<&HalSurface<backend::Vulkan>> {
+                fn surface_vulkan(surf: &Surface) -> Option<&HalSurface<hal::api::Vulkan>> {
                     surf.vulkan.as_ref()
                 }
                 surface_vulkan
@@ -503,21 +503,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }));
             #[cfg(dx12)]
             let adapters_dx12 = map((&instance.dx12, &id_dx12, {
-                fn surface_dx12(surf: &Surface) -> Option<&HalSurface<backend::Dx12>> {
+                fn surface_dx12(surf: &Surface) -> Option<&HalSurface<hal::api::Dx12>> {
                     surf.dx12.as_ref()
                 }
                 surface_dx12
             }));
             #[cfg(dx11)]
             let adapters_dx11 = map((&instance.dx11, &id_dx11, {
-                fn surface_dx11(surf: &Surface) -> Option<&HalSurface<backend::Dx11>> {
+                fn surface_dx11(surf: &Surface) -> Option<&HalSurface<hal::api::Dx11>> {
                     surf.dx11.as_ref()
                 }
                 surface_dx11
             }));
             #[cfg(gl)]
             let adapters_gl = map((&instance.gl, &id_gl, {
-                fn surface_gl(surf: &Surface) -> Option<&HalSurface<backend::Gl>> {
+                fn surface_gl(surf: &Surface) -> Option<&HalSurface<hal::api::Gles>> {
                     surf.gl.as_ref()
                 }
                 surface_gl

@@ -716,15 +716,15 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
     #[cfg(vulkan)]
-    vulkan: Hub<backend::Vulkan, F>,
+    vulkan: Hub<hal::api::Vulkan, F>,
     #[cfg(metal)]
     metal: Hub<hal::api::Metal, F>,
     #[cfg(dx12)]
-    dx12: Hub<backend::Dx12, F>,
+    dx12: Hub<hal::api::Dx12, F>,
     #[cfg(dx11)]
-    dx11: Hub<backend::Dx11, F>,
+    dx11: Hub<hal::api::Dx11, F>,
     #[cfg(gl)]
-    gl: Hub<backend::Gl, F>,
+    gl: Hub<hal::api::Gles, F>,
 }
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
@@ -811,9 +811,8 @@ pub trait HalApi: hal::Api {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
-/*
 #[cfg(vulkan)]
-impl HalApi for backend::Vulkan {
+impl HalApi for hal::api::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.vulkan
@@ -821,7 +820,7 @@ impl HalApi for backend::Vulkan {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.vulkan.as_mut().unwrap()
     }
-}*/
+}
 
 #[cfg(metal)]
 impl HalApi for hal::api::Metal {
@@ -836,7 +835,7 @@ impl HalApi for hal::api::Metal {
 
 /*
 #[cfg(dx12)]
-impl HalApi for backend::Dx12 {
+impl HalApi for hal::api::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx12
@@ -847,7 +846,7 @@ impl HalApi for backend::Dx12 {
 }
 
 #[cfg(dx11)]
-impl HalApi for backend::Dx11 {
+impl HalApi for hal::api::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
@@ -858,7 +857,7 @@ impl HalApi for backend::Dx11 {
 }
 
 #[cfg(gl)]
-impl HalApi for backend::Gl {
+impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.gl

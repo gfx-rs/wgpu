@@ -1,8 +1,57 @@
-use super::Resource;
-use std::ops::Range; //TEMP
+use std::{ops::Range, sync::Arc};
 
-impl crate::CommandBuffer<super::Api> for super::Encoder {
-    unsafe fn finish(&mut self) {}
+use ash::{version::DeviceV1_0, vk};
+
+use super::Resource; // TEMP
+
+const ALLOCATION_GRANULARITY: u32 = 16;
+
+impl crate::CommandPool<super::Api> for super::CommandPool {
+    unsafe fn allocate(
+        &mut self,
+        desc: &crate::CommandBufferDescriptor,
+    ) -> Result<super::CommandBuffer, crate::DeviceError> {
+        if self.free.is_empty() {
+            let vk_info = vk::CommandBufferAllocateInfo::builder()
+                .command_buffer_count(ALLOCATION_GRANULARITY)
+                .build();
+            let cmd_buf_vec = self.device.raw.allocate_command_buffers(&vk_info)?;
+            self.free.extend(cmd_buf_vec);
+        }
+        let raw = self.free.pop().unwrap();
+
+        let vk_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+            .build();
+        self.device.raw.begin_command_buffer(raw, &vk_info)?;
+
+        Ok(super::CommandBuffer {
+            raw,
+            device: Arc::clone(&self.device),
+        })
+    }
+
+    unsafe fn free(&mut self, cmd_buf: super::CommandBuffer) {
+        let raw = cmd_buf.raw;
+        let _ = self
+            .device
+            .raw
+            .reset_command_buffer(raw, vk::CommandBufferResetFlags::empty());
+        self.free.push(raw);
+    }
+
+    unsafe fn clear(&mut self) {
+        let _ = self
+            .device
+            .raw
+            .reset_command_pool(self.raw, vk::CommandPoolResetFlags::RELEASE_RESOURCES);
+    }
+}
+
+impl crate::CommandBuffer<super::Api> for super::CommandBuffer {
+    unsafe fn finish(&mut self) {
+        self.device.raw.end_command_buffer(self.raw).unwrap();
+    }
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where

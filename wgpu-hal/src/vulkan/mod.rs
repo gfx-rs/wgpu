@@ -18,7 +18,6 @@ const MILLIS_TO_NANOS: u64 = 1_000_000;
 
 #[derive(Clone)]
 pub struct Api;
-pub struct Encoder;
 #[derive(Debug)]
 pub struct Resource;
 
@@ -32,7 +31,7 @@ impl crate::Api for Api {
 
     type Queue = Queue;
     type CommandPool = CommandPool;
-    type CommandBuffer = Encoder;
+    type CommandBuffer = CommandBuffer;
 
     type Buffer = Buffer;
     type Texture = Texture;
@@ -157,6 +156,7 @@ pub struct Device {
 pub struct Queue {
     raw: vk::Queue,
     swapchain_fn: khr::Swapchain,
+    family_index: u32,
     //device: Arc<DeviceShared>,
 }
 
@@ -199,15 +199,21 @@ pub struct BindGroup {
     raw: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
-#[derive(Debug)]
 pub struct CommandPool {
-    //TODO
+    raw: vk::CommandPool,
+    device: Arc<DeviceShared>,
+    free: Vec<vk::CommandBuffer>,
+}
+
+pub struct CommandBuffer {
+    raw: vk::CommandBuffer,
+    device: Arc<DeviceShared>,
 }
 
 impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &mut self,
-        command_buffers: &[&Encoder],
+        command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Resource, crate::FenceValue)>,
     ) -> DeviceResult<()> {
         Ok(())
@@ -219,14 +225,6 @@ impl crate::Queue<Api> for Queue {
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
-}
-
-impl crate::CommandPool<Api> for CommandPool {
-    unsafe fn allocate(&mut self, desc: &crate::CommandBufferDescriptor) -> DeviceResult<Encoder> {
-        Ok(Encoder)
-    }
-    unsafe fn free(&mut self, cmd_buf: Encoder) {}
-    unsafe fn clear(&mut self) {}
 }
 
 impl From<vk::Result> for crate::DeviceError {

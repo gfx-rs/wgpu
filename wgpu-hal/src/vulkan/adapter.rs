@@ -463,9 +463,9 @@ impl super::InstanceShared {
         /// # Safety
         /// `T` must be a struct bigger than `vk::BaseOutStructure`.
         unsafe fn null_p_next<T>(features: &mut Option<T>) {
-            if let Some(features) = features {
+            if let Some(ref mut features) = *features {
                 // This is technically invalid since `vk::BaseOutStructure` and `T` will probably never have the same size.
-                mem::transmute::<_, &mut vk::BaseOutStructure>(features).p_next = ptr::null_mut();
+                (*(features as *mut T as *mut vk::BaseOutStructure)).p_next = ptr::null_mut();
             }
         }
 
@@ -706,10 +706,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
         };
 
+        let family_index = 0; //TODO
         let queue = super::Queue {
-            //TODO: make this nicer
-            raw: raw_device.get_device_queue(0, 0),
+            raw: raw_device.get_device_queue(family_index, 0),
             swapchain_fn,
+            family_index,
         };
 
         log::info!("Private capabilities: {:?}", self.private_caps);

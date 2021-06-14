@@ -608,9 +608,21 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::CommandPoolDescriptor<super::Api>,
     ) -> DeviceResult<super::CommandPool> {
-        Ok(super::CommandPool {})
+        let vk_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(desc.queue.family_index)
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .build();
+        let raw = self.shared.raw.create_command_pool(&vk_info, None)?;
+
+        Ok(super::CommandPool {
+            raw,
+            device: Arc::clone(&self.shared),
+            free: Vec::new(),
+        })
     }
-    unsafe fn destroy_command_pool(&self, cmd_pool: super::CommandPool) {}
+    unsafe fn destroy_command_pool(&self, cmd_pool: super::CommandPool) {
+        self.shared.raw.destroy_command_pool(cmd_pool.raw, None);
+    }
 
     unsafe fn create_bind_group_layout(
         &self,
