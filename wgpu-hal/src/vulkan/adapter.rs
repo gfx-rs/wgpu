@@ -756,6 +756,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 downlevel_flags: self.downlevel_flags,
                 private_caps: self.private_caps.clone(),
                 timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
+                render_passes: Mutex::new(Default::default()),
             }),
             mem_allocator: Mutex::new(mem_allocator),
             desc_allocator: Mutex::new(desc_allocator),
@@ -767,6 +768,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
     }
 
     unsafe fn close(&self, device: super::Device) {
+        for &raw in device.shared.render_passes.lock().values() {
+            device.shared.raw.destroy_render_pass(raw, None);
+        }
         device.shared.raw.destroy_device(None);
     }
 

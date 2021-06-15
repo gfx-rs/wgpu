@@ -592,8 +592,12 @@ impl<A: hal::Api> Example<A> {
     }
 }
 
-#[cfg(feature = "metal")]
+#[cfg(all(feature = "metal"))]
 type Api = hal::api::Metal;
+#[cfg(all(feature = "vulkan", not(feature = "metal")))]
+type Api = hal::api::Vulkan;
+#[cfg(all(not(feature = "vulkan"), not(feature = "metal")))]
+type Api = hal::api::Empty;
 
 fn main() {
     let event_loop = winit::event_loop::EventLoop::new();

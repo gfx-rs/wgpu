@@ -60,7 +60,7 @@ impl<A: hal::Api> CommandEncoder<A> {
     fn open(&mut self) -> &mut A::CommandEncoder {
         if !self.is_open {
             self.is_open = true;
-            let label = self.label.as_ref().map(|s| s.as_str());
+            let label = self.label.as_deref();
             unsafe { self.raw.begin_encoding(label).unwrap() };
         }
         &mut self.raw

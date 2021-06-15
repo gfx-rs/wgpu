@@ -139,7 +139,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_debug_marker(&mut self, group_label: &str) {}
     unsafe fn end_debug_marker(&mut self) {}
 
-    unsafe fn set_render_pipeline(&mut self, pipeline: &Resource) {}
+    unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
+        self.device.raw.cmd_bind_pipeline(
+            self.active,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.raw,
+        );
+    }
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
@@ -213,7 +219,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {}
     unsafe fn end_compute_pass(&mut self) {}
 
-    unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
+        self.device.raw.cmd_bind_pipeline(
+            self.active,
+            vk::PipelineBindPoint::COMPUTE,
+            pipeline.raw,
+        );
+    }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {}

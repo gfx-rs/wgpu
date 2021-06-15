@@ -8,6 +8,7 @@ mod instance;
 
 use std::{borrow::Borrow, ffi::CStr, sync::Arc};
 
+use arrayvec::ArrayVec;
 use ash::{
     extensions::{ext, khr},
     vk,
@@ -44,9 +45,9 @@ impl crate::Api for Api {
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
     type PipelineLayout = PipelineLayout;
-    type ShaderModule = Resource;
-    type RenderPipeline = Resource;
-    type ComputePipeline = Resource;
+    type ShaderModule = ShaderModule;
+    type RenderPipeline = RenderPipeline;
+    type ComputePipeline = ComputePipeline;
 }
 
 struct DebugUtils {
@@ -133,6 +134,47 @@ struct PrivateCapabilities {
     texture_d24_s8: bool,
 }
 
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct AttachmentKey {
+    format: vk::Format,
+    layout_pre: vk::ImageLayout,
+    layout_in: vk::ImageLayout,
+    layout_post: vk::ImageLayout,
+    ops: crate::AttachmentOp,
+}
+
+impl AttachmentKey {
+    /// Returns an attachment key for a compatible attachment.
+    fn compatible(format: vk::Format) -> Self {
+        Self {
+            format,
+            layout_pre: vk::ImageLayout::UNDEFINED,
+            layout_in: vk::ImageLayout::UNDEFINED,
+            layout_post: vk::ImageLayout::UNDEFINED,
+            ops: crate::AttachmentOp::empty(),
+        }
+    }
+}
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct ColorAttachmentKey {
+    base: AttachmentKey,
+    resolve: Option<AttachmentKey>,
+}
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct DepthStencilAttachmentKey {
+    base: AttachmentKey,
+    stencil_ops: crate::AttachmentOp,
+}
+
+#[derive(Clone, Eq, Default, Hash, PartialEq)]
+struct RenderPassKey {
+    colors: ArrayVec<[ColorAttachmentKey; crate::MAX_COLOR_TARGETS]>,
+    depth_stencil: Option<DepthStencilAttachmentKey>,
+    sample_count: u32,
+}
+
 struct DeviceShared {
     raw: ash::Device,
     instance: Arc<InstanceShared>,
@@ -142,6 +184,7 @@ struct DeviceShared {
     timestamp_period: f32,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
+    render_passes: Mutex<fxhash::FxHashMap<RenderPassKey, vk::RenderPass>>,
 }
 
 pub struct Device {
@@ -187,6 +230,7 @@ pub struct Sampler {
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
     desc_count: gpu_descriptor::DescriptorTotalCount,
+    types: Vec<vk::DescriptorType>,
 }
 
 #[derive(Debug)]
@@ -209,6 +253,21 @@ pub struct CommandEncoder {
 
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
+}
+
+#[derive(Debug)]
+pub struct ShaderModule {
+    raw: vk::ShaderModule,
+}
+
+#[derive(Debug)]
+pub struct RenderPipeline {
+    raw: vk::Pipeline,
+}
+
+#[derive(Debug)]
+pub struct ComputePipeline {
+    raw: vk::Pipeline,
 }
 
 impl crate::Queue<Api> for Queue {

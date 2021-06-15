@@ -110,6 +110,23 @@ impl super::PrivateCapabilities {
     }
 }
 
+pub fn derive_image_layout(usage: crate::TextureUse) -> vk::ImageLayout {
+    match usage {
+        crate::TextureUse::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+        crate::TextureUse::COPY_DST => vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        crate::TextureUse::SAMPLED => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        crate::TextureUse::COLOR_TARGET => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        crate::TextureUse::DEPTH_STENCIL_WRITE => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        _ => {
+            if usage.contains(crate::TextureUse::DEPTH_STENCIL_READ) {
+                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            } else {
+                vk::ImageLayout::GENERAL
+            }
+        }
+    }
+}
+
 pub fn map_texture_usage(usage: crate::TextureUse) -> vk::ImageUsageFlags {
     let mut flags = vk::ImageUsageFlags::empty();
     if usage.contains(crate::TextureUse::COPY_SRC) {
@@ -170,6 +187,46 @@ pub fn map_index_format(index_format: wgt::IndexFormat) -> vk::IndexType {
     match index_format {
         wgt::IndexFormat::Uint16 => vk::IndexType::UINT16,
         wgt::IndexFormat::Uint32 => vk::IndexType::UINT32,
+    }
+}
+
+pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
+    use wgt::VertexFormat as Vf;
+    match vertex_format {
+        Vf::Uint8x2 => vk::Format::R8G8_UINT,
+        Vf::Uint8x4 => vk::Format::R8G8B8A8_UINT,
+        Vf::Sint8x2 => vk::Format::R8G8_SINT,
+        Vf::Sint8x4 => vk::Format::R8G8B8A8_SINT,
+        Vf::Unorm8x2 => vk::Format::R8G8_UNORM,
+        Vf::Unorm8x4 => vk::Format::R8G8B8A8_UNORM,
+        Vf::Snorm8x2 => vk::Format::R8G8_SNORM,
+        Vf::Snorm8x4 => vk::Format::R8G8B8A8_SNORM,
+        Vf::Uint16x2 => vk::Format::R16G16_UINT,
+        Vf::Uint16x4 => vk::Format::R16G16B16A16_UINT,
+        Vf::Sint16x2 => vk::Format::R16G16_SINT,
+        Vf::Sint16x4 => vk::Format::R16G16B16A16_SINT,
+        Vf::Unorm16x2 => vk::Format::R16G16_UNORM,
+        Vf::Unorm16x4 => vk::Format::R16G16B16A16_UNORM,
+        Vf::Snorm16x2 => vk::Format::R16G16_SNORM,
+        Vf::Snorm16x4 => vk::Format::R16G16B16A16_SNORM,
+        Vf::Float16x2 => vk::Format::R16G16_SFLOAT,
+        Vf::Float16x4 => vk::Format::R16G16B16A16_SFLOAT,
+        Vf::Float32 => vk::Format::R32_SFLOAT,
+        Vf::Float32x2 => vk::Format::R32G32_SFLOAT,
+        Vf::Float32x3 => vk::Format::R32G32B32_SFLOAT,
+        Vf::Float32x4 => vk::Format::R32G32B32A32_SFLOAT,
+        Vf::Uint32 => vk::Format::R32_UINT,
+        Vf::Uint32x2 => vk::Format::R32G32_UINT,
+        Vf::Uint32x3 => vk::Format::R32G32B32_UINT,
+        Vf::Uint32x4 => vk::Format::R32G32B32A32_UINT,
+        Vf::Sint32 => vk::Format::R32_SINT,
+        Vf::Sint32x2 => vk::Format::R32G32_SINT,
+        Vf::Sint32x3 => vk::Format::R32G32B32_SINT,
+        Vf::Sint32x4 => vk::Format::R32G32B32A32_SINT,
+        Vf::Float64 => vk::Format::R64_SFLOAT,
+        Vf::Float64x2 => vk::Format::R64G64_SFLOAT,
+        Vf::Float64x3 => vk::Format::R64G64B64_SFLOAT,
+        Vf::Float64x4 => vk::Format::R64G64B64A64_SFLOAT,
     }
 }
 
@@ -413,4 +470,94 @@ pub fn map_binding_type(ty: wgt::BindingType) -> vk::DescriptorType {
         wgt::BindingType::Texture { .. } => vk::DescriptorType::SAMPLED_IMAGE,
         wgt::BindingType::StorageTexture { .. } => vk::DescriptorType::STORAGE_IMAGE,
     }
+}
+
+pub fn map_topology(topology: wgt::PrimitiveTopology) -> vk::PrimitiveTopology {
+    use wgt::PrimitiveTopology as Pt;
+    match topology {
+        Pt::PointList => vk::PrimitiveTopology::POINT_LIST,
+        Pt::LineList => vk::PrimitiveTopology::LINE_LIST,
+        Pt::LineStrip => vk::PrimitiveTopology::LINE_STRIP,
+        Pt::TriangleList => vk::PrimitiveTopology::TRIANGLE_LIST,
+        Pt::TriangleStrip => vk::PrimitiveTopology::TRIANGLE_STRIP,
+    }
+}
+
+pub fn map_front_face(front_face: wgt::FrontFace) -> vk::FrontFace {
+    match front_face {
+        wgt::FrontFace::Cw => vk::FrontFace::CLOCKWISE,
+        wgt::FrontFace::Ccw => vk::FrontFace::COUNTER_CLOCKWISE,
+    }
+}
+
+pub fn map_cull_face(face: wgt::Face) -> vk::CullModeFlags {
+    match face {
+        wgt::Face::Front => vk::CullModeFlags::FRONT,
+        wgt::Face::Back => vk::CullModeFlags::BACK,
+    }
+}
+
+pub fn map_stencil_op(op: wgt::StencilOperation) -> vk::StencilOp {
+    use wgt::StencilOperation as So;
+    match op {
+        So::Keep => vk::StencilOp::KEEP,
+        So::Zero => vk::StencilOp::ZERO,
+        So::Replace => vk::StencilOp::REPLACE,
+        So::Invert => vk::StencilOp::INVERT,
+        So::IncrementClamp => vk::StencilOp::INCREMENT_AND_CLAMP,
+        So::IncrementWrap => vk::StencilOp::INCREMENT_AND_WRAP,
+        So::DecrementClamp => vk::StencilOp::DECREMENT_AND_CLAMP,
+        So::DecrementWrap => vk::StencilOp::DECREMENT_AND_WRAP,
+    }
+}
+
+pub fn map_stencil_face(face: &wgt::StencilFaceState) -> vk::StencilOpState {
+    vk::StencilOpState {
+        fail_op: map_stencil_op(face.fail_op),
+        pass_op: map_stencil_op(face.pass_op),
+        depth_fail_op: map_stencil_op(face.depth_fail_op),
+        compare_op: map_comparison(face.compare),
+        compare_mask: !0,
+        write_mask: !0,
+        reference: 0,
+    }
+}
+
+fn map_blend_factor(factor: wgt::BlendFactor) -> vk::BlendFactor {
+    use wgt::BlendFactor as Bf;
+    match factor {
+        Bf::Zero => vk::BlendFactor::ZERO,
+        Bf::One => vk::BlendFactor::ONE,
+        Bf::Src => vk::BlendFactor::SRC_COLOR,
+        Bf::OneMinusSrc => vk::BlendFactor::ONE_MINUS_SRC_COLOR,
+        Bf::SrcAlpha => vk::BlendFactor::SRC_ALPHA,
+        Bf::OneMinusSrcAlpha => vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+        Bf::Dst => vk::BlendFactor::DST_COLOR,
+        Bf::OneMinusDst => vk::BlendFactor::ONE_MINUS_DST_COLOR,
+        Bf::DstAlpha => vk::BlendFactor::DST_ALPHA,
+        Bf::OneMinusDstAlpha => vk::BlendFactor::ONE_MINUS_DST_ALPHA,
+        Bf::SrcAlphaSaturated => vk::BlendFactor::SRC_ALPHA_SATURATE,
+        Bf::Constant => vk::BlendFactor::CONSTANT_COLOR,
+        Bf::OneMinusConstant => vk::BlendFactor::ONE_MINUS_CONSTANT_COLOR,
+    }
+}
+
+fn map_blend_op(operation: wgt::BlendOperation) -> vk::BlendOp {
+    use wgt::BlendOperation as Bo;
+    match operation {
+        Bo::Add => vk::BlendOp::ADD,
+        Bo::Subtract => vk::BlendOp::SUBTRACT,
+        Bo::ReverseSubtract => vk::BlendOp::REVERSE_SUBTRACT,
+        Bo::Min => vk::BlendOp::MIN,
+        Bo::Max => vk::BlendOp::MAX,
+    }
+}
+
+pub fn map_blend_component(
+    component: &wgt::BlendComponent,
+) -> (vk::BlendOp, vk::BlendFactor, vk::BlendFactor) {
+    let op = map_blend_op(component.operation);
+    let src = map_blend_factor(component.src_factor);
+    let dst = map_blend_factor(component.dst_factor);
+    (op, src, dst)
 }
