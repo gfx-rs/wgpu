@@ -20,6 +20,8 @@ pub enum ErrorKind {
     NotImplemented(&'static str),
     #[error("Unknown variable: {1}")]
     UnknownVariable(SourceMetadata, String),
+    #[error("Unknown type: {1}")]
+    UnknownType(SourceMetadata, String),
     #[error("Unknown field: {1}")]
     UnknownField(SourceMetadata, String),
     #[error("Unknown layout qualifier: {1}")]

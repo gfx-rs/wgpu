@@ -468,3 +468,43 @@ fn implicit_conversions() {
     )
     .unwrap();
 }
+
+#[test]
+fn structs() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Fragment);
+
+    parse_program(
+        r#"
+        #  version 450
+        Test {
+            vec4 pos;
+          } xx;
+        "#,
+        &entry_points,
+    )
+    .unwrap_err();
+
+    parse_program(
+        r#"
+        #  version 450
+        struct Test {
+            vec4 pos;
+        };
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
+        const int NUM_VECS = 42;
+        struct Test {
+            vec4 vecs[NUM_VECS];
+        };
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+}
