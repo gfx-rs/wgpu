@@ -16,6 +16,11 @@ pub struct VarDeclaration<'a> {
     pub meta: SourceMetadata,
 }
 
+pub enum GlobalOrConstant {
+    Global(Handle<GlobalVariable>),
+    Constant(Handle<Constant>),
+}
+
 impl Program<'_> {
     pub fn lookup_variable(
         &mut self,
@@ -232,7 +237,7 @@ impl Program<'_> {
             init,
             meta,
         }: VarDeclaration,
-    ) -> Result<Handle<GlobalVariable>, ErrorKind> {
+    ) -> Result<GlobalOrConstant, ErrorKind> {
         let mut storage = StorageQualifier::StorageClass(StorageClass::Private);
         let mut interpolation = None;
         let mut binding = None;
@@ -384,29 +389,27 @@ impl Program<'_> {
                 ));
             }
 
-            return Ok(handle);
+            return Ok(GlobalOrConstant::Global(handle));
         } else if let StorageQualifier::Const = storage {
-            let handle = self.module.global_variables.append(GlobalVariable {
-                name: name.clone(),
-                class: StorageClass::Private,
-                binding: None,
-                ty,
-                init,
-                storage_access: StorageAccess::empty(),
-            });
+            if let Some(init) = init {
+                if let Some(name) = name {
+                    self.global_variables.push((
+                        name,
+                        GlobalLookup {
+                            kind: GlobalLookupKind::Constant(init),
+                            entry_arg: None,
+                            mutable: false,
+                        },
+                    ));
+                }
 
-            if let Some(name) = name {
-                self.global_variables.push((
-                    name,
-                    GlobalLookup {
-                        kind: GlobalLookupKind::Variable(handle),
-                        entry_arg: None,
-                        mutable: false,
-                    },
+                return Ok(GlobalOrConstant::Constant(init));
+            } else {
+                return Err(ErrorKind::SemanticError(
+                    meta,
+                    "const values must have an initializer".into(),
                 ));
             }
-
-            return Ok(handle);
         }
 
         let (class, storage_access) = match self.module.types[ty].inner {
@@ -456,7 +459,7 @@ impl Program<'_> {
             ));
         }
 
-        Ok(handle)
+        Ok(GlobalOrConstant::Global(handle))
     }
 
     pub fn add_local_var(

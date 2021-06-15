@@ -14,6 +14,7 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub enum GlobalLookupKind {
     Variable(Handle<GlobalVariable>),
+    Constant(Handle<Constant>),
     BlockSelect(Handle<GlobalVariable>, u32),
 }
 
@@ -279,6 +280,11 @@ impl<'function> Context<'function> {
                         }
                     })
                 }
+                GlobalLookupKind::Constant(v) => {
+                    let res = (this.expressions.append(Expression::Constant(v)), false);
+                    this.emit_start();
+                    res
+                }
             };
 
             let var = VariableReference {
@@ -485,7 +491,7 @@ impl<'function> Context<'function> {
 
         let handle = match kind {
             HirExprKind::Access { base, index } => {
-                let base = self.lower_expect(program, base, lhs, body)?.0;
+                let base = self.lower_expect(program, base, true, body)?.0;
                 let index = self.lower_expect(program, index, false, body)?.0;
 
                 let pointer = self.add_expression(Expression::Access { base, index }, body);

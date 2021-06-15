@@ -7,7 +7,7 @@ use super::{
     error::ErrorKind,
     lex::Lexer,
     token::{SourceMetadata, Token, TokenValue},
-    variables::VarDeclaration,
+    variables::{GlobalOrConstant, VarDeclaration},
     Program,
 };
 use crate::{
@@ -115,13 +115,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     /// Parses an optional array_specifier returning `Ok(None)` if there is no
     /// LeftBracket
     fn parse_array_specifier(&mut self) -> Result<Option<ArraySize>> {
-        // TODO: expressions
-        if let Some(&TokenValue::LeftBracket) = self.lexer.peek().map(|t| &t.value) {
-            self.bump()?;
+        if self.bump_if(TokenValue::LeftBracket).is_some() {
+            if self.bump_if(TokenValue::RightBracket).is_some() {
+                return Ok(Some(ArraySize::Dynamic));
+            }
 
+            let (constant, _) = self.parse_constant_expression()?;
             self.expect(TokenValue::RightBracket)?;
-
-            Ok(Some(ArraySize::Dynamic))
+            Ok(Some(ArraySize::Constant(constant)))
         } else {
             Ok(None)
         }
@@ -801,7 +802,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         };
         meta = meta.union(&token.meta);
 
-        let handle = self.program.add_global_var(VarDeclaration {
+        let global = self.program.add_global_var(VarDeclaration {
             qualifiers,
             ty,
             name,
@@ -817,7 +818,12 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             self.program.global_variables.push((
                 k,
                 GlobalLookup {
-                    kind: GlobalLookupKind::BlockSelect(handle, i),
+                    kind: match global {
+                        GlobalOrConstant::Global(handle) => {
+                            GlobalLookupKind::BlockSelect(handle, i)
+                        }
+                        GlobalOrConstant::Constant(handle) => GlobalLookupKind::Constant(handle),
+                    },
                     entry_arg: None,
                     mutable: true,
                 },
@@ -832,13 +838,18 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let mut span = 0;
 
         loop {
-            // TODO: type_qualifier
-            if !self.peek_type_name() {
+            if let TokenValue::RightBrace = self.expect_peek()?.value {
                 break;
             }
 
+            // TODO: type_qualifier
+
             let ty = self.parse_type_non_void()?.0;
             let name = self.expect_ident()?.0;
+
+            let array_specifier = self.parse_array_specifier()?;
+            let ty = self.maybe_array(ty, array_specifier);
+
             self.expect(TokenValue::Semicolon)?;
 
             members.push(StructMember {
@@ -848,7 +859,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 offset: span,
             });
 
-            span = self.program.module.types[ty]
+            span += self.program.module.types[ty]
                 .inner
                 .span(&self.program.module.constants);
         }
@@ -1691,10 +1702,12 @@ impl<'ctx, 'fun> DeclarationContext<'ctx, 'fun> {
 
         match self.external {
             true => {
-                let handle = program.add_global_var(decl)?;
-                Ok(self
-                    .ctx
-                    .add_expression(Expression::GlobalVariable(handle), self.body))
+                let global = program.add_global_var(decl)?;
+                let expr = match global {
+                    GlobalOrConstant::Global(handle) => Expression::GlobalVariable(handle),
+                    GlobalOrConstant::Constant(handle) => Expression::Constant(handle),
+                };
+                Ok(self.ctx.add_expression(expr, self.body))
             }
             false => program.add_local_var(self.ctx, self.body, decl),
         }
