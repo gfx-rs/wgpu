@@ -3,6 +3,7 @@
 mod belt;
 mod device;
 mod encoder;
+mod init;
 
 use std::future::Future;
 #[cfg(feature = "spirv")]
@@ -15,6 +16,7 @@ use std::{
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
+pub use init::{backend_bits_from_env, initialize_adapter_from_env, power_preference_from_env};
 
 /// Treat the given byte slice as a SPIR-V module.
 ///

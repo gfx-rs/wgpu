@@ -1,6 +1,8 @@
 use std::num::NonZeroU64;
 
-use crate::core_tests::common::init::{initialize_test, TestParameters};
+use wgpu::test::TestParameters;
+
+use super::initialize_test;
 
 #[test]
 fn draw() {
@@ -43,27 +45,33 @@ fn draw() {
                 }],
             });
 
-            let ppl = ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[&bgl],
-                push_constant_ranges: &[]
-            });
+            let ppl = ctx
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: None,
+                    bind_group_layouts: &[&bgl],
+                    push_constant_ranges: &[],
+                });
 
-            let pipeline = ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: Some(&ppl),
-                vertex: wgpu::VertexState {
-                    buffers: &[],
-                    entry_point: "vs_main",
-                    module: &shader,
-                },
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: None,
-            });
+            let pipeline = ctx
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: None,
+                    layout: Some(&ppl),
+                    vertex: wgpu::VertexState {
+                        buffers: &[],
+                        entry_point: "vs_main",
+                        module: &shader,
+                    },
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: None,
+                });
 
-            let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            let mut encoder = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor::default());
 
@@ -75,7 +83,7 @@ fn draw() {
 
             ctx.queue.submit(Some(encoder.finish()));
             let slice = buffer.slice(..);
-            slice.map_async(wgpu::MapMode::Read);
+            let _ = slice.map_async(wgpu::MapMode::Read);
             ctx.device.poll(wgpu::Maintain::Wait);
             let data: Vec<u32> = bytemuck::cast_slice(&*slice.get_mapped_range()).to_vec();
 

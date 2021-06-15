@@ -1,69 +1,47 @@
+//! This module contains common test-only code that needs to be shared between the examples and the tests.
+
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-// Initialize the instance, obeying the WGPU_BACKEND environment variables.
-pub fn get_backend_bits() -> wgpu::BackendBit {
-    match std::env::var("WGPU_BACKEND")
-        .as_deref()
-        .map(str::to_lowercase)
-        .as_deref()
-    {
-        Ok("vulkan") => wgpu::BackendBit::VULKAN,
-        Ok("dx12") => wgpu::BackendBit::DX12,
-        Ok("dx11") => wgpu::BackendBit::DX11,
-        Ok("metal") => wgpu::BackendBit::METAL,
-        Ok("gl") => wgpu::BackendBit::GL,
-        Ok("webgpu") => wgpu::BackendBit::BROWSER_WEBGPU,
-        Ok(_) => panic!("unknown wgpu backend"),
-        Err(_) => wgpu::BackendBit::all(),
-    }
-}
+use wgt::{
+    BackendBit, DeviceDescriptor, DownlevelProperties, Features, Limits, PowerPreference,
+    RequestAdapterOptions,
+};
 
-// Initialize the adapter, obeying the WGPU_ADAPTER_NAME environment variable.
-pub fn initialize_adapter(
-    instance: &wgpu::Instance,
-    backend_bits: wgpu::BackendBit,
-) -> wgpu::Adapter {
-    let adapters = instance.enumerate_adapters(backend_bits);
+use crate::{util, Adapter, Device, Instance, Queue};
 
-    let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
-        .as_deref()
-        .map(str::to_lowercase)
-        .ok();
-
-    let mut chosen_adapter = None;
-    for adapter in adapters {
-        let info = adapter.get_info();
-
-        if chosen_adapter.is_none() {
-            if let Some(ref adapter_name) = desired_adapter_name {
-                if info.name.to_lowercase().contains(adapter_name) {
-                    chosen_adapter = Some(adapter);
-                    continue; // Skip adapter drop
-                }
-            } else {
-                // Just choose first adapter if there's no preference
-                chosen_adapter = Some(adapter);
-                continue; // Skip adapter drop
-            }
+pub async fn initialize_adapter_from_env_or_default(
+    instance: &Instance,
+    backend_bits: BackendBit,
+) -> Option<Adapter> {
+    match util::initialize_adapter_from_env(&instance, backend_bits) {
+        Some(a) => Some(a),
+        None => {
+            instance
+                .request_adapter(&RequestAdapterOptions {
+                    power_preference: util::power_preference_from_env()
+                        .unwrap_or_else(PowerPreference::default),
+                    compatible_surface: None,
+                })
+                .await
         }
     }
-
-    chosen_adapter.expect("Could not find an adapter")
 }
 
-pub fn initialize_device(
-    adapter: &wgpu::Adapter,
-    features: wgpu::Features,
-    limits: wgpu::Limits,
-) -> (wgpu::Device, wgpu::Queue) {
-    let bundle = pollster::block_on(adapter.request_device(
-        &wgpu::DeviceDescriptor {
-            label: None,
-            features,
-            limits,
-        },
-        None,
-    ));
+async fn initialize_device(
+    adapter: &Adapter,
+    features: Features,
+    limits: Limits,
+) -> (Device, Queue) {
+    let bundle = adapter
+        .request_device(
+            &DeviceDescriptor {
+                label: None,
+                features,
+                limits,
+            },
+            None,
+        )
+        .await;
 
     match bundle {
         Ok(b) => b,
@@ -72,16 +50,24 @@ pub fn initialize_device(
 }
 
 pub struct TestingContext<'a> {
-    pub adapter: &'a wgpu::Adapter,
+    pub adapter: &'a Adapter,
     pub adapter_info: wgt::AdapterInfo,
-    pub device: &'a wgpu::Device,
-    pub queue: &'a wgpu::Queue,
+    pub device: &'a Device,
+    pub queue: &'a Queue,
+}
+
+impl<'a> std::ops::Deref for TestingContext<'a> {
+    type Target = &'a Adapter;
+
+    fn deref(&self) -> &Self::Target {
+        &self.adapter
+    }
 }
 
 // A rather arbitrary set of limits which should be lower than all devices wgpu reasonably expects to run on and provides enough resources for most tests to run.
 // Adjust as needed if they are too low/high.
-fn lowest_reasonable_limits() -> wgpu::Limits {
-    wgpu::Limits {
+fn lowest_reasonable_limits() -> Limits {
+    Limits {
         max_texture_dimension_1d: 512,
         max_texture_dimension_2d: 512,
         max_texture_dimension_3d: 32,
@@ -103,8 +89,8 @@ fn lowest_reasonable_limits() -> wgpu::Limits {
     }
 }
 
-fn lowest_downlevel_properties() -> wgpu::DownlevelProperties {
-    wgpu::DownlevelProperties {
+fn lowest_downlevel_properties() -> DownlevelProperties {
+    DownlevelProperties {
         flags: wgt::DownlevelFlags::empty(),
         shader_model: wgt::ShaderModel::Sm2,
     }
@@ -112,13 +98,13 @@ fn lowest_downlevel_properties() -> wgpu::DownlevelProperties {
 
 // This information determines if a test should run.
 pub struct TestParameters {
-    pub required_features: wgpu::Features,
-    pub required_limits: wgpu::Limits,
-    pub required_downlevel_properties: wgpu::DownlevelProperties,
+    pub required_features: Features,
+    pub required_limits: Limits,
+    pub required_downlevel_properties: DownlevelProperties,
     // Test should always fail
     pub always_failure: bool,
     // Backends where test should fail.
-    pub backend_failures: wgpu::BackendBit,
+    pub backend_failures: BackendBit,
     // Vendors where test should fail.
     pub vendor_failures: &'static [usize],
     // Device names where test should fail.
@@ -128,11 +114,11 @@ pub struct TestParameters {
 impl Default for TestParameters {
     fn default() -> Self {
         Self {
-            required_features: wgpu::Features::empty(),
+            required_features: Features::empty(),
             required_limits: lowest_reasonable_limits(),
             required_downlevel_properties: lowest_downlevel_properties(),
             always_failure: false,
-            backend_failures: wgpu::BackendBit::empty(),
+            backend_failures: BackendBit::empty(),
             vendor_failures: &[],
             device_failures: &[],
         }
@@ -141,27 +127,26 @@ impl Default for TestParameters {
 
 // Builder pattern to make it easier
 impl TestParameters {
-    pub fn features(mut self, features: wgpu::Features) -> Self {
+    pub fn features(mut self, features: Features) -> Self {
         self.required_features &= features;
         self
     }
-    
+
     pub fn failure(mut self) -> Self {
         self.always_failure = true;
         self
     }
 }
 
-pub fn initialize_test(
+pub async fn initialize_test_core(
     parameters: TestParameters,
     test_function: impl FnOnce(&mut TestingContext<'_>),
 ) {
-    // We don't actually care if it fails
-    let _ = env_logger::try_init();
-
-    let backend_bits = get_backend_bits();
-    let instance = wgpu::Instance::new(backend_bits);
-    let adapter = initialize_adapter(&instance, backend_bits);
+    let backend_bits = util::backend_bits_from_env().unwrap_or(BackendBit::all());
+    let instance = Instance::new(backend_bits);
+    let adapter = initialize_adapter_from_env_or_default(&instance, backend_bits)
+        .await
+        .expect("could not find sutable adapter on the system");
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
@@ -204,7 +189,8 @@ pub fn initialize_test(
         &adapter,
         parameters.required_features,
         parameters.required_limits,
-    );
+    )
+    .await;
 
     let mut context = TestingContext {
         adapter: &adapter,

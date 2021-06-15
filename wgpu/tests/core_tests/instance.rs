@@ -1,14 +1,16 @@
-use crate::core_tests::common;
-
 #[test]
 fn initialize() {
-    let _ = wgpu::Instance::new(common::init::get_backend_bits());
+    let _ = wgpu::Instance::new(
+        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::BackendBit::all),
+    );
 }
 
 fn request_adapter_inner(power: wgt::PowerPreference) {
-    let instance = wgpu::Instance::new(common::init::get_backend_bits());
+    let instance = wgpu::Instance::new(
+        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::BackendBit::all),
+    );
 
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+    let _adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: power,
         compatible_surface: None,
     }))

@@ -106,39 +106,15 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let backend = if let Ok(backend) = std::env::var("WGPU_BACKEND") {
-        match backend.to_lowercase().as_str() {
-            "vulkan" => wgpu::BackendBit::VULKAN,
-            "metal" => wgpu::BackendBit::METAL,
-            "dx12" => wgpu::BackendBit::DX12,
-            "dx11" => wgpu::BackendBit::DX11,
-            "gl" => wgpu::BackendBit::GL,
-            "webgpu" => wgpu::BackendBit::BROWSER_WEBGPU,
-            other => panic!("Unknown backend: {}", other),
-        }
-    } else {
-        wgpu::BackendBit::PRIMARY
-    };
-    let power_preference = if let Ok(power_preference) = std::env::var("WGPU_POWER_PREF") {
-        match power_preference.to_lowercase().as_str() {
-            "low" => wgpu::PowerPreference::LowPower,
-            "high" => wgpu::PowerPreference::HighPerformance,
-            other => panic!("Unknown power preference: {}", other),
-        }
-    } else {
-        wgpu::PowerPreference::default()
-    };
+    let backend = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::BackendBit::PRIMARY);
+
     let instance = wgpu::Instance::new(backend);
     let (size, surface) = unsafe {
         let size = window.inner_size();
         let surface = instance.create_surface(&window);
         (size, surface)
     };
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference,
-            compatible_surface: Some(&surface),
-        })
+    let adapter = wgpu::test::initialize_adapter_from_env_or_default(&instance, backend)
         .await
         .expect("No suitable GPU adapters found on the system!");
 
