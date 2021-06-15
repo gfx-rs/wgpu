@@ -29,7 +29,7 @@ impl super::DeviceShared {
         // Append a null terminator to the string
         let name_bytes = if name.len() < buffer.len() {
             // Common case, string is very small. Allocate a copy on the stack.
-            buffer.copy_from_slice(name.as_bytes());
+            buffer[..name.len()].copy_from_slice(name.as_bytes());
             // Add null terminator
             buffer[name.len()] = 0;
             &buffer[..name.len() + 1]

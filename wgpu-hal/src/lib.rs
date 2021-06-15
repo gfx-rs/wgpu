@@ -45,13 +45,13 @@
     clippy::pattern_type_mismatch,
 )]
 
-pub mod aux;
 mod empty;
 #[cfg(feature = "metal")]
 mod metal;
 #[cfg(feature = "vulkan")]
 mod vulkan;
 
+pub mod util;
 pub mod api {
     pub use super::empty::Api as Empty;
     #[cfg(feature = "metal")]

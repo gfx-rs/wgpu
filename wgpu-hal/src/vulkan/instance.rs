@@ -529,7 +529,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 not(target_os = "ios")
             ))]
             RawWindowHandle::Xcb(handle) if self.extensions.contains(&khr::XcbSurface::name()) => {
-                Ok(self.create_surface_from_xcb(handle.connection as *mut _, handle.window))
+                Ok(self.create_surface_from_xcb(handle.connection, handle.window))
             }
             #[cfg(target_os = "android")]
             RawWindowHandle::Android(handle) => {
@@ -621,7 +621,7 @@ impl crate::Surface<super::Api> for super::Surface {
             };
 
         // special case for Intel Vulkan returning bizzare values (ugh)
-        if sc.device.vendor_id == crate::aux::db::intel::VENDOR && index > 0x100 {
+        if sc.device.vendor_id == crate::util::db::intel::VENDOR && index > 0x100 {
             return Err(crate::SurfaceError::Outdated);
         }
 

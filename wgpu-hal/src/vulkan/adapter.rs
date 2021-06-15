@@ -508,7 +508,7 @@ impl super::Instance {
 
         let (available_features, downlevel_flags) = phd_features.to_wgpu(&phd_capabilities);
         {
-            use crate::aux::db;
+            use crate::util::db;
             // see https://github.com/gfx-rs/gfx/issues/1930
             let _is_windows_intel_dual_src_bug = cfg!(windows)
                 && phd_capabilities.properties.vendor_id == db::intel::VENDOR
