@@ -134,13 +134,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::Void => None,
             TokenValue::TypeName(ty) => Some(self.program.module.types.fetch_or_append(ty)),
             TokenValue::Struct => todo!(),
-            TokenValue::Identifier(ident) => {
-                let ty = self.program.lookup_type.get(&ident).cloned();
-                if ty.is_none() {
-                    return Err(ErrorKind::UnknownType(token.meta, ident));
-                }
-                ty
-            }
+            TokenValue::Identifier(ident) => match self.program.lookup_type.get(&ident) {
+                Some(ty) => Some(*ty),
+                None => return Err(ErrorKind::UnknownType(token.meta, ident)),
+            },
             _ => return Err(ErrorKind::InvalidToken(token)),
         };
 
