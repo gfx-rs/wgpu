@@ -3,8 +3,8 @@
 // FIX: #933
 #version 450
 
-const int constant = 10;
+const float constant = 10.0;
 
 float function() {
-    return 0.0;
+    return constant;
 }
