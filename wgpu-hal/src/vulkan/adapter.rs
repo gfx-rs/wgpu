@@ -199,7 +199,7 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::SAMPLED_TEXTURE_BINDING_ARRAY
             | F::BUFFER_BINDING_ARRAY;
-        let mut dl_flags = Df::COMPARISON_SAMPLERS;
+        let mut dl_flags = Df::all();
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);

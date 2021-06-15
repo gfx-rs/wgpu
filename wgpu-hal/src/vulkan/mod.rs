@@ -71,8 +71,8 @@ struct Swapchain {
     functor: khr::Swapchain,
     device: Arc<DeviceShared>,
     fence: vk::Fence,
-    //semaphore: vk::Semaphore,
     images: Vec<vk::Image>,
+    format: wgt::TextureFormat,
 }
 
 pub struct Surface {
@@ -210,7 +210,9 @@ pub struct Buffer {
 pub struct Texture {
     raw: vk::Image,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    dim: wgt::TextureDimension,
     aspects: crate::FormatAspect,
+    format_info: wgt::TextureFormatInfo,
 }
 
 #[derive(Debug)]

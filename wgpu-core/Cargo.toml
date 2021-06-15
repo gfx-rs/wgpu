@@ -56,6 +56,9 @@ hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["metal"] }
 [target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan"] }
 
+[target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
+hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan"] }
+
 [dev-dependencies]
 loom = "0.3"
 

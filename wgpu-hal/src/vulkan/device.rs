@@ -432,6 +432,7 @@ impl super::Device {
             device: Arc::clone(&self.shared),
             fence,
             images,
+            format: config.format,
         })
     }
 }
@@ -604,7 +605,9 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Texture {
             raw,
             block: Some(block),
+            dim: desc.dimension,
             aspects: crate::FormatAspect::from(desc.format),
+            format_info: desc.format.describe(),
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {

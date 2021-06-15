@@ -574,8 +574,6 @@ impl crate::Surface<super::Api> for super::Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        let usage = config.usage;
-        let format = config.format;
         let old = self
             .swapchain
             .take()
@@ -641,7 +639,9 @@ impl crate::Surface<super::Api> for super::Surface {
             texture: super::Texture {
                 raw: sc.images[index as usize],
                 block: None,
+                dim: wgt::TextureDimension::D2,
                 aspects: crate::FormatAspect::COLOR,
+                format_info: sc.format.describe(),
             },
         };
         Ok(Some(crate::AcquiredSurfaceTexture {

@@ -152,6 +152,54 @@ pub fn map_texture_usage(usage: crate::TextureUse) -> vk::ImageUsageFlags {
     flags
 }
 
+pub fn map_texture_usage_to_barrier(
+    usage: crate::TextureUse,
+) -> (vk::PipelineStageFlags, vk::AccessFlags) {
+    let mut stages = vk::PipelineStageFlags::empty();
+    let mut access = vk::AccessFlags::empty();
+    let shader_stages = vk::PipelineStageFlags::VERTEX_SHADER
+        | vk::PipelineStageFlags::FRAGMENT_SHADER
+        | vk::PipelineStageFlags::COMPUTE_SHADER;
+
+    if usage.contains(crate::TextureUse::COPY_SRC) {
+        stages |= vk::PipelineStageFlags::TRANSFER;
+        access |= vk::AccessFlags::TRANSFER_READ;
+    }
+    if usage.contains(crate::TextureUse::COPY_DST) {
+        stages |= vk::PipelineStageFlags::TRANSFER;
+        access |= vk::AccessFlags::TRANSFER_WRITE;
+    }
+    if usage.contains(crate::TextureUse::SAMPLED) {
+        stages |= shader_stages;
+        access |= vk::AccessFlags::SHADER_READ;
+    }
+    if usage.contains(crate::TextureUse::COLOR_TARGET) {
+        stages |= vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
+        access |= vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE;
+    }
+    if usage.intersects(crate::TextureUse::DEPTH_STENCIL_READ) {
+        stages |= vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+            | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS;
+        access |= vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ;
+    }
+    if usage.intersects(crate::TextureUse::DEPTH_STENCIL_WRITE) {
+        stages |= vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+            | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS;
+        access |= vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+            | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE;
+    }
+    if usage.contains(crate::TextureUse::STORAGE_LOAD) {
+        stages |= shader_stages;
+        access |= vk::AccessFlags::SHADER_READ;
+    }
+    if usage.contains(crate::TextureUse::STORAGE_STORE) {
+        stages |= shader_stages;
+        access |= vk::AccessFlags::SHADER_WRITE;
+    }
+
+    (stages, access)
+}
+
 pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUse {
     let mut bits = crate::TextureUse::empty();
     if usage.contains(vk::ImageUsageFlags::TRANSFER_SRC) {
@@ -244,15 +292,22 @@ pub fn map_aspects(aspects: crate::FormatAspect) -> vk::ImageAspectFlags {
     flags
 }
 
-pub fn map_origin(origin: wgt::Origin3d, texture_dim: wgt::TextureDimension) -> vk::Offset3D {
-    vk::Offset3D {
-        x: origin.x as i32,
-        y: origin.y as i32,
-        z: match texture_dim {
-            wgt::TextureDimension::D3 => origin.z as i32,
-            _ => 0,
+pub fn map_origin(
+    origin: wgt::Origin3d,
+    texture_dim: wgt::TextureDimension,
+) -> (u32, vk::Offset3D) {
+    let (z, array_layer) = match texture_dim {
+        wgt::TextureDimension::D3 => (origin.z as i32, 0),
+        _ => (0, origin.z),
+    };
+    (
+        array_layer,
+        vk::Offset3D {
+            x: origin.x as i32,
+            y: origin.y as i32,
+            z,
         },
-    }
+    )
 }
 
 pub fn map_extent(
@@ -362,6 +417,59 @@ pub fn map_buffer_usage(usage: crate::BufferUse) -> vk::BufferUsageFlags {
     flags
 }
 
+pub fn map_buffer_usage_to_barrier(
+    usage: crate::BufferUse,
+) -> (vk::PipelineStageFlags, vk::AccessFlags) {
+    let mut stages = vk::PipelineStageFlags::empty();
+    let mut access = vk::AccessFlags::empty();
+    let shader_stages = vk::PipelineStageFlags::VERTEX_SHADER
+        | vk::PipelineStageFlags::FRAGMENT_SHADER
+        | vk::PipelineStageFlags::COMPUTE_SHADER;
+
+    if usage.contains(crate::BufferUse::MAP_READ) {
+        stages |= vk::PipelineStageFlags::HOST;
+        access |= vk::AccessFlags::HOST_READ;
+    }
+    if usage.contains(crate::BufferUse::MAP_WRITE) {
+        stages |= vk::PipelineStageFlags::HOST;
+        access |= vk::AccessFlags::HOST_WRITE;
+    }
+    if usage.contains(crate::BufferUse::COPY_SRC) {
+        stages |= vk::PipelineStageFlags::TRANSFER;
+        access |= vk::AccessFlags::TRANSFER_READ;
+    }
+    if usage.contains(crate::BufferUse::COPY_DST) {
+        stages |= vk::PipelineStageFlags::TRANSFER;
+        access |= vk::AccessFlags::TRANSFER_WRITE;
+    }
+    if usage.contains(crate::BufferUse::UNIFORM) {
+        stages |= shader_stages;
+        access |= vk::AccessFlags::UNIFORM_READ;
+    }
+    if usage.intersects(crate::BufferUse::STORAGE_LOAD) {
+        stages |= shader_stages;
+        access |= vk::AccessFlags::SHADER_READ;
+    }
+    if usage.intersects(crate::BufferUse::STORAGE_STORE) {
+        stages |= shader_stages;
+        access |= vk::AccessFlags::SHADER_WRITE;
+    }
+    if usage.contains(crate::BufferUse::INDEX) {
+        stages |= vk::PipelineStageFlags::VERTEX_INPUT;
+        access |= vk::AccessFlags::INDEX_READ;
+    }
+    if usage.contains(crate::BufferUse::VERTEX) {
+        stages |= vk::PipelineStageFlags::VERTEX_INPUT;
+        access |= vk::AccessFlags::VERTEX_ATTRIBUTE_READ;
+    }
+    if usage.contains(crate::BufferUse::INDIRECT) {
+        stages |= vk::PipelineStageFlags::VERTEX_INPUT;
+        access |= vk::AccessFlags::INDIRECT_COMMAND_READ;
+    }
+
+    (stages, access)
+}
+
 pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> vk::ImageViewType {
     match dim {
         wgt::TextureViewDimension::D1 => vk::ImageViewType::TYPE_1D,
@@ -388,6 +496,22 @@ pub fn map_subresource_range(
             .array_layer_count
             .map_or(vk::REMAINING_ARRAY_LAYERS, NonZeroU32::get),
     }
+}
+
+pub fn map_subresource_layers(
+    base: &crate::TextureCopyBase,
+    texture_dim: wgt::TextureDimension,
+    texture_aspect: crate::FormatAspect,
+    layer_count: u32,
+) -> (vk::ImageSubresourceLayers, vk::Offset3D) {
+    let (base_array_layer, offset) = map_origin(base.origin, texture_dim);
+    let subresource = vk::ImageSubresourceLayers {
+        aspect_mask: map_aspects(crate::FormatAspect::from(base.aspect) & texture_aspect),
+        mip_level: base.mip_level,
+        base_array_layer,
+        layer_count,
+    };
+    (subresource, offset)
 }
 
 pub fn map_filter_mode(mode: wgt::FilterMode) -> vk::Filter {
