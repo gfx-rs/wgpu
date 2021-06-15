@@ -115,6 +115,15 @@ impl Program<'_> {
                 false,
                 PrologueStage::COMPUTE,
             ),
+            "gl_FrontFacing" => add_builtin(
+                TypeInner::Scalar {
+                    kind: ScalarKind::Bool,
+                    width: 1,
+                },
+                BuiltIn::FrontFacing,
+                false,
+                PrologueStage::FRAGMENT,
+            ),
             _ => Ok(None),
         }
     }

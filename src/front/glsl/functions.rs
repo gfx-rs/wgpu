@@ -270,7 +270,7 @@ impl Program<'_> {
 
                         Ok(Some(ctx.add_expression(expr, body)))
                     }
-                    "pow" | "dot" | "max" => {
+                    "pow" | "dot" | "max" | "min" | "reflect" | "cross" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
@@ -280,6 +280,9 @@ impl Program<'_> {
                                     "pow" => MathFunction::Pow,
                                     "dot" => MathFunction::Dot,
                                     "max" => MathFunction::Max,
+                                    "min" => MathFunction::Min,
+                                    "reflect" => MathFunction::Reflect,
+                                    "cross" => MathFunction::Cross,
                                     _ => unreachable!(),
                                 },
                                 arg: args[0].0,
