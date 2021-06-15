@@ -860,10 +860,6 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let mut span = 0;
 
         loop {
-            if let TokenValue::RightBrace = self.expect_peek()?.value {
-                break;
-            }
-
             // TODO: type_qualifier
 
             let ty = self.parse_type_non_void()?.0;
@@ -884,6 +880,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             span += self.program.module.types[ty]
                 .inner
                 .span(&self.program.module.constants);
+
+            if let TokenValue::RightBrace = self.expect_peek()?.value {
+                break;
+            }
         }
 
         Ok(span)

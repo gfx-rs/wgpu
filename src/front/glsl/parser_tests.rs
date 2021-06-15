@@ -507,4 +507,13 @@ fn structs() {
         &entry_points,
     )
     .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
+        struct Test {};
+        "#,
+        &entry_points,
+    )
+    .unwrap_err();
 }
