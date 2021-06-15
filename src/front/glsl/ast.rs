@@ -8,7 +8,7 @@ use crate::{
     proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant, Expression, FastHashMap,
     Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
     RelationalFunction, ResourceBinding, Sampling, ScalarKind, ShaderStage, Statement,
-    StorageClass, Type, TypeInner, UnaryOperator,
+    StorageClass, SwizzleComponent, Type, TypeInner, UnaryOperator, VectorSize,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -625,10 +625,56 @@ impl<'function> Context<'function> {
                     self.implicit_conversion(program, &mut value, value_meta, kind)?;
                 }
 
-                self.emit_flush(body);
-                self.emit_start();
+                if let Expression::Swizzle {
+                    size,
+                    vector,
+                    pattern,
+                } = self.expressions[pointer]
+                {
+                    // Stores to swizzled values are not directly supported,
+                    // lower them as series of per-component stores.
+                    let size = match size {
+                        VectorSize::Bi => 2,
+                        VectorSize::Tri => 3,
+                        VectorSize::Quad => 4,
+                    };
 
-                body.push(Statement::Store { pointer, value });
+                    #[allow(clippy::needless_range_loop)]
+                    for index in 0..size {
+                        let dst = self.add_expression(
+                            Expression::AccessIndex {
+                                base: vector,
+                                index: match pattern[index] {
+                                    SwizzleComponent::X => 0,
+                                    SwizzleComponent::Y => 1,
+                                    SwizzleComponent::Z => 2,
+                                    SwizzleComponent::W => 3,
+                                },
+                            },
+                            body,
+                        );
+                        let src = self.add_expression(
+                            Expression::AccessIndex {
+                                base: value,
+                                index: index as u32,
+                            },
+                            body,
+                        );
+
+                        self.emit_flush(body);
+                        self.emit_start();
+
+                        body.push(Statement::Store {
+                            pointer: dst,
+                            value: src,
+                        });
+                    }
+                } else {
+                    self.emit_flush(body);
+                    self.emit_start();
+
+                    body.push(Statement::Store { pointer, value });
+                }
 
                 value
             }

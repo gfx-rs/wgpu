@@ -1,7 +1,7 @@
 use crate::{
     Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, ImageClass,
-    Interpolation, LocalVariable, ScalarKind, StorageAccess, StorageClass, Type, TypeInner,
-    VectorSize,
+    Interpolation, LocalVariable, ScalarKind, StorageAccess, StorageClass, SwizzleComponent, Type,
+    TypeInner, VectorSize,
 };
 
 use super::ast::*;
@@ -146,67 +146,60 @@ impl Program<'_> {
                 ))
             }
             // swizzles (xyzw, rgba, stpq)
-            TypeInner::Vector { size, kind, width } => {
+            TypeInner::Vector { size, .. } => {
                 let check_swizzle_components = |comps: &str| {
                     name.chars()
-                        .map(|c| {
-                            comps
-                                .find(c)
-                                .and_then(|i| if i < size as usize { Some(i) } else { None })
-                        })
-                        .fold(Some(Vec::<usize>::new()), |acc, cur| {
-                            cur.and_then(|i| {
-                                acc.map(|mut v| {
-                                    v.push(i);
-                                    v
-                                })
-                            })
-                        })
+                        .map(|c| comps.find(c).filter(|i| *i < size as usize))
+                        .collect::<Option<Vec<usize>>>()
                 };
 
                 let indices = check_swizzle_components("xyzw")
                     .or_else(|| check_swizzle_components("rgba"))
                     .or_else(|| check_swizzle_components("stpq"));
 
-                if let Some(v) = indices {
-                    let components: Vec<Handle<Expression>> = v
-                        .iter()
-                        .map(|idx| {
-                            ctx.add_expression(
-                                Expression::AccessIndex {
-                                    base: expression,
-                                    index: *idx as u32,
-                                },
-                                body,
-                            )
-                        })
-                        .collect();
+                if let Some(components) = indices {
                     if components.len() == 1 {
                         // only single element swizzle, like pos.y, just return that component
-                        Ok(components[0])
-                    } else {
-                        let size = match components.len() {
-                            2 => VectorSize::Bi,
-                            3 => VectorSize::Tri,
-                            4 => VectorSize::Quad,
-                            _ => {
-                                return Err(ErrorKind::SemanticError(
-                                    meta,
-                                    format!("Bad swizzle size for \"{:?}\": {:?}", name, v).into(),
-                                ));
-                            }
-                        };
-                        Ok(ctx.add_expression(
-                            Expression::Compose {
-                                ty: self.module.types.fetch_or_append(Type {
-                                    name: None,
-                                    inner: TypeInner::Vector { kind, width, size },
-                                }),
-                                components,
+                        return Ok(ctx.add_expression(
+                            Expression::AccessIndex {
+                                base: expression,
+                                index: components[0] as u32,
                             },
                             body,
-                        ))
+                        ));
                     }
+
+                    let size = match components.len() {
+                        2 => VectorSize::Bi,
+                        3 => VectorSize::Tri,
+                        4 => VectorSize::Quad,
+                        _ => {
+                            return Err(ErrorKind::SemanticError(
+                                meta,
+                                format!("Bad swizzle size for \"{:?}\": {:?}", name, components)
+                                    .into(),
+                            ));
+                        }
+                    };
+
+                    let mut pattern = [SwizzleComponent::X; 4];
+                    for (pat, index) in pattern.iter_mut().zip(components) {
+                        *pat = match index {
+                            0 => SwizzleComponent::X,
+                            1 => SwizzleComponent::Y,
+                            2 => SwizzleComponent::Z,
+                            _ => SwizzleComponent::W,
+                        };
+                    }
+
+                    Ok(ctx.add_expression(
+                        Expression::Swizzle {
+                            size,
+                            vector: expression,
+                            pattern,
+                        },
+                        body,
+                    ))
                 } else {
                     Err(ErrorKind::SemanticError(
                         meta,

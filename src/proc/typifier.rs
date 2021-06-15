@@ -322,6 +322,17 @@ impl<'a> ResolveContext<'a> {
                     kind,
                     width,
                 } => TypeResolution::Value(Ti::Vector { size, kind, width }),
+                Ti::Pointer { base, .. } => match types[base].inner {
+                    Ti::Vector {
+                        size: _,
+                        kind,
+                        width,
+                    } => TypeResolution::Value(Ti::Vector { size, kind, width }),
+                    ref other => {
+                        log::error!("Vector pointer type {:?}", other);
+                        return Err(ResolveError::InvalidVector(vector));
+                    }
+                },
                 ref other => {
                     log::error!("Vector type {:?}", other);
                     return Err(ResolveError::InvalidVector(vector));
