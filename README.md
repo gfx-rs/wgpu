@@ -37,10 +37,10 @@ DOT (GraphViz)  | :ok:               | dot-out  | Not a shading language |
 
 Naga includes a default binary target, which allows to test the conversion of different code paths.
 ```bash
-cargo run --features wgsl-in -- my_shader.wgsl # validate only
-cargo run --features spv-in -- my_shader.spv my_shader.txt # dump the IR module into a file
-cargo run --features spv-in,msl-out -- my_shader.spv my_shader.metal --flow-dir flow-dir # convert the SPV to Metal, also dump the SPIR-V flow graph to `flow-dir`
-cargo run --features wgsl-in,glsl-out -- my_shader.wgsl my_shader.vert --profile es310 # convert the WGSL to GLSL vertex stage under ES 3.20 profile
+cargo run my_shader.wgsl # validate only
+cargo run my_shader.spv my_shader.txt # dump the IR module into a file
+cargo run my_shader.spv my_shader.metal --flow-dir flow-dir # convert the SPV to Metal, also dump the SPIR-V flow graph to `flow-dir`
+cargo run my_shader.wgsl my_shader.vert --profile es310 # convert the WGSL to GLSL vertex stage under ES 3.20 profile
 ```
 
 ## Development workflow
