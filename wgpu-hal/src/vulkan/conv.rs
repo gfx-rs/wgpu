@@ -561,3 +561,26 @@ pub fn map_blend_component(
     let dst = map_blend_factor(component.dst_factor);
     (op, src, dst)
 }
+
+pub fn map_pipeline_statistics(
+    types: wgt::PipelineStatisticsTypes,
+) -> vk::QueryPipelineStatisticFlags {
+    use wgt::PipelineStatisticsTypes as Pst;
+    let mut flags = vk::QueryPipelineStatisticFlags::empty();
+    if types.contains(Pst::VERTEX_SHADER_INVOCATIONS) {
+        flags |= vk::QueryPipelineStatisticFlags::VERTEX_SHADER_INVOCATIONS;
+    }
+    if types.contains(Pst::CLIPPER_INVOCATIONS) {
+        flags |= vk::QueryPipelineStatisticFlags::CLIPPING_INVOCATIONS;
+    }
+    if types.contains(Pst::CLIPPER_PRIMITIVES_OUT) {
+        flags |= vk::QueryPipelineStatisticFlags::CLIPPING_PRIMITIVES;
+    }
+    if types.contains(Pst::FRAGMENT_SHADER_INVOCATIONS) {
+        flags |= vk::QueryPipelineStatisticFlags::FRAGMENT_SHADER_INVOCATIONS;
+    }
+    if types.contains(Pst::COMPUTE_SHADER_INVOCATIONS) {
+        flags |= vk::QueryPipelineStatisticFlags::COMPUTE_SHADER_INVOCATIONS;
+    }
+    flags
+}

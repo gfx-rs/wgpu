@@ -303,7 +303,7 @@ impl crate::Queue<Api> for Queue {
                     raw.set_label("_Signal");
                     raw.add_completed_handler(&block);
 
-                    fence.update();
+                    fence.maintain();
                     fence.pending_command_buffers.push((value, raw.to_owned()));
                     // only return an extra one if it's extra
                     match command_buffers.last() {
@@ -619,6 +619,7 @@ unsafe impl Sync for QuerySet {}
 #[derive(Debug)]
 pub struct Fence {
     completed_value: Arc<atomic::AtomicU64>,
+    /// The pending fence values have to be ascending.
     pending_command_buffers: Vec<(crate::FenceValue, mtl::CommandBuffer)>,
 }
 
@@ -636,7 +637,7 @@ impl Fence {
         max_value
     }
 
-    fn update(&mut self) {
+    fn maintain(&mut self) {
         let latest = self.get_latest();
         self.pending_command_buffers
             .retain(|&(value, _)| value > latest);

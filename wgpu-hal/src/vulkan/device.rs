@@ -436,8 +436,6 @@ impl super::Device {
     }
 }
 
-use super::{DeviceResult, Resource}; //temporary
-
 impl crate::Device<super::Api> for super::Device {
     unsafe fn create_buffer(
         &self,
@@ -1173,24 +1171,82 @@ impl crate::Device<super::Api> for super::Device {
         self.shared.raw.destroy_pipeline(pipeline.raw, None);
     }
 
-    unsafe fn create_query_set(&self, desc: &wgt::QuerySetDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
+    unsafe fn create_query_set(
+        &self,
+        desc: &wgt::QuerySetDescriptor,
+    ) -> Result<super::QuerySet, crate::DeviceError> {
+        let (vk_type, pipeline_statistics) = match desc.ty {
+            wgt::QueryType::Occlusion => (
+                vk::QueryType::OCCLUSION,
+                vk::QueryPipelineStatisticFlags::empty(),
+            ),
+            wgt::QueryType::PipelineStatistics(statistics) => (
+                vk::QueryType::PIPELINE_STATISTICS,
+                conv::map_pipeline_statistics(statistics),
+            ),
+            wgt::QueryType::Timestamp => (
+                vk::QueryType::TIMESTAMP,
+                vk::QueryPipelineStatisticFlags::empty(),
+            ),
+        };
+
+        let vk_info = vk::QueryPoolCreateInfo::builder()
+            .query_type(vk_type)
+            .query_count(desc.count)
+            .pipeline_statistics(pipeline_statistics)
+            .build();
+
+        let raw = self.shared.raw.create_query_pool(&vk_info, None)?;
+        Ok(super::QuerySet { raw })
     }
-    unsafe fn destroy_query_set(&self, set: Resource) {}
-    unsafe fn create_fence(&self) -> DeviceResult<Resource> {
-        Ok(Resource)
+    unsafe fn destroy_query_set(&self, set: super::QuerySet) {
+        self.shared.raw.destroy_query_pool(set.raw, None);
     }
-    unsafe fn destroy_fence(&self, fence: Resource) {}
-    unsafe fn get_fence_value(&self, fence: &Resource) -> DeviceResult<crate::FenceValue> {
-        Ok(0)
+    unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
+        Ok(super::Fence {
+            last_completed: 0,
+            active: Vec::new(),
+            free: Vec::new(),
+        })
+    }
+    unsafe fn destroy_fence(&self, fence: super::Fence) {
+        for (_, raw) in fence.active {
+            self.shared.raw.destroy_fence(raw, None);
+        }
+        for raw in fence.free {
+            self.shared.raw.destroy_fence(raw, None);
+        }
+    }
+    unsafe fn get_fence_value(
+        &self,
+        fence: &super::Fence,
+    ) -> Result<crate::FenceValue, crate::DeviceError> {
+        fence.get_latest(&self.shared.raw)
     }
     unsafe fn wait(
         &self,
-        fence: &Resource,
-        value: crate::FenceValue,
+        fence: &super::Fence,
+        wait_value: crate::FenceValue,
         timeout_ms: u32,
-    ) -> DeviceResult<bool> {
-        Ok(true)
+    ) -> Result<bool, crate::DeviceError> {
+        if wait_value <= fence.last_completed {
+            Ok(true)
+        } else {
+            match fence.active.iter().find(|&&(value, _)| value >= wait_value) {
+                Some(&(_, raw)) => {
+                    let timeout_us = timeout_ms as u64 * super::MILLIS_TO_NANOS;
+                    match self.shared.raw.wait_for_fences(&[raw], true, timeout_us) {
+                        Ok(()) => Ok(true),
+                        Err(vk::Result::TIMEOUT) => Ok(false),
+                        Err(other) => Err(other.into()),
+                    }
+                }
+                None => {
+                    log::error!("No signals reached value {}", wait_value);
+                    Err(crate::DeviceError::Lost)
+                }
+            }
+        }
     }
 
     unsafe fn start_capture(&self) -> bool {

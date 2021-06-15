@@ -541,6 +541,11 @@ impl super::Instance {
                 .raw
                 .get_physical_device_queue_family_properties(phd)
         };
+        let queue_flags = queue_families.first()?.queue_flags;
+        if !queue_flags.contains(vk::QueueFlags::GRAPHICS) {
+            log::warn!("The first queue only exposes {:?}", queue_flags);
+            return None;
+        }
 
         let private_caps = super::PrivateCapabilities {
             flip_y_requires_shift: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
@@ -579,14 +584,14 @@ impl super::Instance {
         let adapter = super::Adapter {
             raw: phd,
             instance: Arc::clone(&self.shared),
-            queue_families,
+            //queue_families,
             known_memory_flags: vk::MemoryPropertyFlags::DEVICE_LOCAL
                 | vk::MemoryPropertyFlags::HOST_VISIBLE
                 | vk::MemoryPropertyFlags::HOST_COHERENT
                 | vk::MemoryPropertyFlags::HOST_CACHED
                 | vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
             phd_capabilities,
-            phd_features,
+            //phd_features,
             downlevel_flags,
             private_caps,
         };
@@ -706,14 +711,29 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
         };
 
+        log::info!("Private capabilities: {:?}", self.private_caps);
+
         let family_index = 0; //TODO
+        let raw_queue = raw_device.get_device_queue(family_index, 0);
+        let shared = Arc::new(super::DeviceShared {
+            raw: raw_device,
+            instance: Arc::clone(&self.instance),
+            extension_fns: super::DeviceExtensionFunctions {
+                draw_indirect_count: indirect_count_fn,
+            },
+            features,
+            vendor_id: self.phd_capabilities.properties.vendor_id,
+            downlevel_flags: self.downlevel_flags,
+            private_caps: self.private_caps.clone(),
+            _timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
+            render_passes: Mutex::new(Default::default()),
+        });
         let queue = super::Queue {
-            raw: raw_device.get_device_queue(family_index, 0),
+            raw: raw_queue,
             swapchain_fn,
+            device: Arc::clone(&shared),
             family_index,
         };
-
-        log::info!("Private capabilities: {:?}", self.private_caps);
 
         let mem_allocator = {
             let limits = self.phd_capabilities.properties.limits;
@@ -745,19 +765,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let desc_allocator = gpu_descriptor::DescriptorAllocator::new(0);
 
         let device = super::Device {
-            shared: Arc::new(super::DeviceShared {
-                raw: raw_device,
-                instance: Arc::clone(&self.instance),
-                extension_fns: super::DeviceExtensionFunctions {
-                    draw_indirect_count: indirect_count_fn,
-                },
-                features,
-                vendor_id: self.phd_capabilities.properties.vendor_id,
-                downlevel_flags: self.downlevel_flags,
-                private_caps: self.private_caps.clone(),
-                timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
-                render_passes: Mutex::new(Default::default()),
-            }),
+            shared,
             mem_allocator: Mutex::new(mem_allocator),
             desc_allocator: Mutex::new(desc_allocator),
             valid_ash_memory_types,

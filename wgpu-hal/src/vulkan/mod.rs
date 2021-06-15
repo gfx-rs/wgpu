@@ -11,6 +11,7 @@ use std::{borrow::Borrow, ffi::CStr, sync::Arc};
 use arrayvec::ArrayVec;
 use ash::{
     extensions::{ext, khr},
+    version::DeviceV1_0,
     vk,
 };
 use parking_lot::Mutex;
@@ -19,10 +20,6 @@ const MILLIS_TO_NANOS: u64 = 1_000_000;
 
 #[derive(Clone)]
 pub struct Api;
-#[derive(Debug)]
-pub struct Resource;
-
-type DeviceResult<T> = Result<T, crate::DeviceError>;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -39,8 +36,8 @@ impl crate::Api for Api {
     type SurfaceTexture = SurfaceTexture;
     type TextureView = TextureView;
     type Sampler = Sampler;
-    type QuerySet = Resource;
-    type Fence = Resource;
+    type QuerySet = QuerySet;
+    type Fence = Fence;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -100,10 +97,10 @@ impl Borrow<Texture> for SurfaceTexture {
 pub struct Adapter {
     raw: vk::PhysicalDevice,
     instance: Arc<InstanceShared>,
-    queue_families: Vec<vk::QueueFamilyProperties>,
+    //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceCapabilities,
-    phd_features: adapter::PhysicalDeviceFeatures,
+    //phd_features: adapter::PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
 }
@@ -181,7 +178,7 @@ struct DeviceShared {
     extension_fns: DeviceExtensionFunctions,
     features: wgt::Features,
     vendor_id: u32,
-    timestamp_period: f32,
+    _timestamp_period: f32,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     render_passes: Mutex<fxhash::FxHashMap<RenderPassKey, vk::RenderPass>>,
@@ -199,8 +196,8 @@ pub struct Device {
 pub struct Queue {
     raw: vk::Queue,
     swapchain_fn: khr::Swapchain,
+    device: Arc<DeviceShared>,
     family_index: u32,
-    //device: Arc<DeviceShared>,
 }
 
 #[derive(Debug)]
@@ -270,19 +267,110 @@ pub struct ComputePipeline {
     raw: vk::Pipeline,
 }
 
+#[derive(Debug)]
+pub struct QuerySet {
+    raw: vk::QueryPool,
+}
+
+#[derive(Debug)]
+pub struct Fence {
+    last_completed: crate::FenceValue,
+    /// The pending fence values have to be ascending.
+    active: Vec<(crate::FenceValue, vk::Fence)>,
+    free: Vec<vk::Fence>,
+}
+
+impl Fence {
+    fn get_latest(&self, device: &ash::Device) -> Result<crate::FenceValue, crate::DeviceError> {
+        let mut max_value = self.last_completed;
+        for &(value, raw) in self.active.iter() {
+            unsafe {
+                if value > max_value && device.get_fence_status(raw)? {
+                    max_value = value;
+                }
+            }
+        }
+        Ok(max_value)
+    }
+
+    fn maintain(&mut self, device: &ash::Device) -> Result<(), crate::DeviceError> {
+        let latest = self.get_latest(device)?;
+        let base_free = self.free.len();
+        for &(value, raw) in self.active.iter() {
+            if value <= latest {
+                self.free.push(raw);
+            }
+        }
+        self.active.retain(|&(value, _)| value > latest);
+        unsafe {
+            device.reset_fences(&self.free[base_free..])?;
+        }
+        Ok(())
+    }
+}
+
 impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &mut self,
         command_buffers: &[&CommandBuffer],
-        signal_fence: Option<(&mut Resource, crate::FenceValue)>,
-    ) -> DeviceResult<()> {
+        signal_fence: Option<(&mut Fence, crate::FenceValue)>,
+    ) -> Result<(), crate::DeviceError> {
+        let fence_raw = match signal_fence {
+            Some((fence, value)) => {
+                fence.maintain(&self.device.raw)?;
+                let raw = match fence.free.pop() {
+                    Some(raw) => raw,
+                    None => {
+                        let vk_info = vk::FenceCreateInfo::builder().build();
+                        self.device.raw.create_fence(&vk_info, None)?
+                    }
+                };
+                fence.active.push((value, raw));
+                raw
+            }
+            None => vk::Fence::null(),
+        };
+
+        let vk_cmd_buffers = command_buffers
+            .iter()
+            .map(|cmd| cmd.raw)
+            .collect::<Vec<_>>();
+        //TODO: semaphores
+
+        let vk_info = vk::SubmitInfo::builder()
+            .command_buffers(&vk_cmd_buffers)
+            .build();
+
+        self.device
+            .raw
+            .queue_submit(self.raw, &[vk_info], fence_raw)?;
         Ok(())
     }
+
     unsafe fn present(
         &mut self,
         surface: &mut Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
+        let ssc = surface.swapchain.as_ref().unwrap();
+
+        let swapchains = [ssc.raw];
+        let image_indices = [texture.index];
+        let vk_info = vk::PresentInfoKHR::builder()
+            .swapchains(&swapchains)
+            .image_indices(&image_indices);
+
+        let suboptimal = self
+            .swapchain_fn
+            .queue_present(self.raw, &vk_info)
+            .map_err(|error| match error {
+                vk::Result::ERROR_OUT_OF_DATE_KHR => crate::SurfaceError::Outdated,
+                vk::Result::ERROR_SURFACE_LOST_KHR => crate::SurfaceError::Lost,
+                _ => crate::DeviceError::from(error).into(),
+            })?;
+        if suboptimal {
+            log::warn!("Suboptimal present of frame {}", texture.index);
+        }
         Ok(())
     }
 }

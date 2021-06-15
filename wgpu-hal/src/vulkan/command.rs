@@ -2,8 +2,6 @@ use std::ops::Range;
 
 use ash::{version::DeviceV1_0, vk};
 
-use super::Resource; // TEMP
-
 const ALLOCATION_GRANULARITY: u32 = 16;
 
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
@@ -100,13 +98,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
     }
 
-    unsafe fn begin_query(&mut self, set: &Resource, index: u32) {}
-    unsafe fn end_query(&mut self, set: &Resource, index: u32) {}
-    unsafe fn write_timestamp(&mut self, set: &Resource, index: u32) {}
-    unsafe fn reset_queries(&mut self, set: &Resource, range: Range<u32>) {}
+    unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {}
+    unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {}
+    unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {}
+    unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {}
     unsafe fn copy_query_results(
         &mut self,
-        set: &Resource,
+        set: &super::QuerySet,
         range: Range<u32>,
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
