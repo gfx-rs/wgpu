@@ -586,7 +586,7 @@ impl Program<'_> {
                 let idx = arguments.len() as u32;
 
                 arguments.push(FunctionArgument {
-                    name: None,
+                    name: arg.name.clone(),
                     ty,
                     binding: Some(arg.binding.clone()),
                 });

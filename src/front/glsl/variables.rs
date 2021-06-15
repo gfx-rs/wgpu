@@ -52,6 +52,7 @@ impl Program<'_> {
 
             let idx = self.entry_args.len();
             self.entry_args.push(EntryArg {
+                name: None,
                 binding: Binding::BuiltIn(builtin),
                 handle,
                 prologue,
@@ -359,7 +360,7 @@ impl Program<'_> {
             });
 
             let handle = self.module.global_variables.append(GlobalVariable {
-                name: name.clone(),
+                name: name.as_ref().map(|n| format!("gen_entry_{}", n)),
                 class: StorageClass::Private,
                 binding: None,
                 ty,
@@ -369,6 +370,7 @@ impl Program<'_> {
 
             let idx = self.entry_args.len();
             self.entry_args.push(EntryArg {
+                name: name.clone(),
                 binding: Binding::Location {
                     location,
                     interpolation,

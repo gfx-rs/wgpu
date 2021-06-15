@@ -68,6 +68,7 @@ impl From<ShaderStage> for PrologueStage {
 
 #[derive(Debug)]
 pub struct EntryArg {
+    pub name: Option<String>,
     pub binding: Binding,
     pub handle: Handle<GlobalVariable>,
     pub prologue: PrologueStage,
