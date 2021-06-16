@@ -511,7 +511,31 @@ fn structs() {
     parse_program(
         r#"
         #  version 450
+        struct Hello {
+            vec4 test;
+        } test() {
+            return Hello( vec4(1.0) );
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
         struct Test {};
+        "#,
+        &entry_points,
+    )
+    .unwrap_err();
+
+    parse_program(
+        r#"
+        #  version 450
+        inout struct Test {
+            vec4 x;
+        };
         "#,
         &entry_points,
     )

@@ -133,7 +133,24 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let handle = match token.value {
             TokenValue::Void => None,
             TokenValue::TypeName(ty) => Some(self.program.module.types.fetch_or_append(ty)),
-            TokenValue::Struct => todo!(),
+            TokenValue::Struct => {
+                let ty_name = self.expect_ident()?.0;
+                self.expect(TokenValue::LeftBrace)?;
+                let mut members = Vec::new();
+                let span = self.parse_struct_declaration_list(&mut members)?;
+                self.expect(TokenValue::RightBrace)?;
+
+                let ty = self.program.module.types.append(Type {
+                    name: Some(ty_name.clone()),
+                    inner: TypeInner::Struct {
+                        top_level: false,
+                        members,
+                        span,
+                    },
+                });
+                self.program.lookup_type.insert(ty_name, ty);
+                Some(ty)
+            }
             TokenValue::Identifier(ident) => match self.program.lookup_type.get(&ident) {
                 Some(ty) => Some(*ty),
                 None => return Err(ErrorKind::UnknownType(token.meta, ident)),
@@ -399,6 +416,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         let program = &self.program;
         self.lexer.peek().map_or(false, |t| match t.value {
             TokenValue::TypeName(_) | TokenValue::Void => true,
+            TokenValue::Struct => true,
             TokenValue::Identifier(ref ident) => program.lookup_type.contains_key(ident),
             _ => false,
         })
@@ -589,191 +607,176 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         //    type_qualifier SEMICOLON type_qualifier IDENTIFIER SEMICOLON
         //    type_qualifier IDENTIFIER identifier_list SEMICOLON
 
-        let qualifiers = self.parse_type_qualifiers()?;
+        if self.peek_type_qualifier() || self.peek_type_name() {
+            let qualifiers = self.parse_type_qualifiers()?;
 
-        if self.peek_type_name() {
-            // This branch handles variables and function prototypes and if
-            // external is true also function definitions
-            let (ty, mut meta) = self.parse_type()?;
+            if self.peek_type_name() {
+                // This branch handles variables and function prototypes and if
+                // external is true also function definitions
+                let (ty, mut meta) = self.parse_type()?;
 
-            let token = self.bump()?;
-            let token_fallthrough = match token.value {
-                TokenValue::Identifier(name) => match self.expect_peek()?.value {
-                    TokenValue::LeftParen => {
-                        // This branch handles function definition and prototypes
-                        self.bump()?;
+                let token = self.bump()?;
+                let token_fallthrough = match token.value {
+                    TokenValue::Identifier(name) => match self.expect_peek()?.value {
+                        TokenValue::LeftParen => {
+                            // This branch handles function definition and prototypes
+                            self.bump()?;
 
-                        let result = ty.map(|ty| FunctionResult { ty, binding: None });
-                        let mut expressions = Arena::new();
-                        let mut local_variables = Arena::new();
-                        let mut arguments = Vec::new();
-                        let mut parameters = Vec::new();
-                        let mut body = Block::new();
-                        let mut sig = FunctionSignature {
-                            name: name.clone(),
-                            parameters: Vec::new(),
-                        };
+                            let result = ty.map(|ty| FunctionResult { ty, binding: None });
+                            let mut expressions = Arena::new();
+                            let mut local_variables = Arena::new();
+                            let mut arguments = Vec::new();
+                            let mut parameters = Vec::new();
+                            let mut body = Block::new();
+                            let mut sig = FunctionSignature {
+                                name: name.clone(),
+                                parameters: Vec::new(),
+                            };
 
-                        let mut context = Context::new(
-                            self.program,
-                            &mut body,
-                            &mut expressions,
-                            &mut local_variables,
-                            &mut arguments,
-                        );
+                            let mut context = Context::new(
+                                self.program,
+                                &mut body,
+                                &mut expressions,
+                                &mut local_variables,
+                                &mut arguments,
+                            );
 
-                        self.parse_function_args(
-                            &mut context,
-                            &mut body,
-                            &mut parameters,
-                            &mut sig,
-                        )?;
+                            self.parse_function_args(
+                                &mut context,
+                                &mut body,
+                                &mut parameters,
+                                &mut sig,
+                            )?;
 
-                        let end_meta = self.expect(TokenValue::RightParen)?.meta;
-                        meta = meta.union(&end_meta);
+                            let end_meta = self.expect(TokenValue::RightParen)?.meta;
+                            meta = meta.union(&end_meta);
 
-                        let token = self.bump()?;
-                        return match token.value {
-                            TokenValue::Semicolon => {
-                                // This branch handles function prototypes
-                                self.program.add_prototype(
-                                    Function {
-                                        name: Some(name),
-                                        result,
-                                        arguments,
-                                        ..Default::default()
-                                    },
-                                    sig,
-                                    parameters,
-                                    meta,
-                                )?;
+                            let token = self.bump()?;
+                            return match token.value {
+                                TokenValue::Semicolon => {
+                                    // This branch handles function prototypes
+                                    self.program.add_prototype(
+                                        Function {
+                                            name: Some(name),
+                                            result,
+                                            arguments,
+                                            ..Default::default()
+                                        },
+                                        sig,
+                                        parameters,
+                                        meta,
+                                    )?;
 
-                                Ok(true)
-                            }
-                            TokenValue::LeftBrace if external => {
-                                // This branch handles function definitions
-                                // as you can see by the guard this branch
-                                // only happens if external is also true
+                                    Ok(true)
+                                }
+                                TokenValue::LeftBrace if external => {
+                                    // This branch handles function definitions
+                                    // as you can see by the guard this branch
+                                    // only happens if external is also true
 
-                                // parse the body
-                                self.parse_compound_statement(&mut context, &mut body)?;
+                                    // parse the body
+                                    self.parse_compound_statement(&mut context, &mut body)?;
 
-                                let Context { arg_use, .. } = context;
-                                let handle = self.program.add_function(
-                                    Function {
-                                        name: Some(name),
-                                        result,
-                                        expressions,
-                                        named_expressions: crate::FastHashMap::default(),
-                                        local_variables,
-                                        arguments,
-                                        body,
-                                    },
-                                    sig,
-                                    parameters,
-                                    meta,
-                                )?;
+                                    let Context { arg_use, .. } = context;
+                                    let handle = self.program.add_function(
+                                        Function {
+                                            name: Some(name),
+                                            result,
+                                            expressions,
+                                            named_expressions: crate::FastHashMap::default(),
+                                            local_variables,
+                                            arguments,
+                                            body,
+                                        },
+                                        sig,
+                                        parameters,
+                                        meta,
+                                    )?;
 
-                                self.program.function_arg_use[handle.index()] = arg_use;
+                                    self.program.function_arg_use[handle.index()] = arg_use;
 
-                                Ok(true)
-                            }
-                            _ => Err(ErrorKind::InvalidToken(token)),
-                        };
-                    }
-                    // Pass the token to the init_declator_list parser
-                    _ => Token {
-                        value: TokenValue::Identifier(name),
-                        meta: token.meta,
+                                    Ok(true)
+                                }
+                                _ => Err(ErrorKind::InvalidToken(token)),
+                            };
+                        }
+                        // Pass the token to the init_declator_list parser
+                        _ => Token {
+                            value: TokenValue::Identifier(name),
+                            meta: token.meta,
+                        },
                     },
-                },
-                // Pass the token to the init_declator_list parser
-                _ => token,
-            };
-
-            // If program execution has reached here then this will be a
-            // init_declarator_list
-            // token_falltrough will have a token that was already bumped
-            if let Some(ty) = ty {
-                let mut ctx = DeclarationContext {
-                    qualifiers,
-                    external,
-                    ctx,
-                    body,
+                    // Pass the token to the init_declator_list parser
+                    _ => token,
                 };
 
-                self.parse_init_declarator_list(ty, Some(token_fallthrough), &mut ctx)?;
-            } else {
-                return Err(ErrorKind::SemanticError(
-                    meta,
-                    "Declaration cannot have void type".into(),
-                ));
-            }
+                // If program execution has reached here then this will be a
+                // init_declarator_list
+                // token_falltrough will have a token that was already bumped
+                if let Some(ty) = ty {
+                    let mut ctx = DeclarationContext {
+                        qualifiers,
+                        external,
+                        ctx,
+                        body,
+                    };
 
-            Ok(true)
-        } else {
-            // This branch handles struct definitions and modifiers like
-            // ```glsl
-            // layout(early_fragment_tests);
-            // ```
-            let token = self.bump()?;
-            match token.value {
-                TokenValue::Identifier(ty_name) => {
-                    if self.bump_if(TokenValue::LeftBrace).is_some() {
-                        self.parse_block_declaration(&qualifiers, ty_name, token.meta)
-                    } else {
-                        //TODO: declaration
-                        // type_qualifier IDENTIFIER SEMICOLON
-                        // type_qualifier IDENTIFIER identifier_list SEMICOLON
-                        todo!()
-                    }
+                    self.parse_init_declarator_list(ty, Some(token_fallthrough), &mut ctx)?;
+                } else {
+                    return Err(ErrorKind::SemanticError(
+                        meta,
+                        "Declaration cannot have void type".into(),
+                    ));
                 }
-                TokenValue::Semicolon => {
-                    for &(ref qualifier, meta) in qualifiers.iter() {
-                        match *qualifier {
-                            TypeQualifier::WorkGroupSize(i, value) => {
-                                self.program.workgroup_size[i] = value
-                            }
-                            TypeQualifier::EarlyFragmentTests => {
-                                self.program.early_fragment_tests = true;
-                            }
-                            TypeQualifier::StorageQualifier(_) => {
-                                // TODO: Maybe add some checks here
-                                // This is needed because of cases like
-                                // layout(early_fragment_tests) in;
-                            }
-                            _ => {
-                                return Err(ErrorKind::SemanticError(
-                                    meta,
-                                    "Qualifier not supported as standalone".into(),
-                                ));
-                            }
+
+                Ok(true)
+            } else {
+                // This branch handles struct definitions and modifiers like
+                // ```glsl
+                // layout(early_fragment_tests);
+                // ```
+                let token = self.bump()?;
+                match token.value {
+                    TokenValue::Identifier(ty_name) => {
+                        if self.bump_if(TokenValue::LeftBrace).is_some() {
+                            self.parse_block_declaration(&qualifiers, ty_name, token.meta)
+                        } else {
+                            //TODO: declaration
+                            // type_qualifier IDENTIFIER SEMICOLON
+                            // type_qualifier IDENTIFIER identifier_list SEMICOLON
+                            todo!()
                         }
                     }
+                    TokenValue::Semicolon => {
+                        for &(ref qualifier, meta) in qualifiers.iter() {
+                            match *qualifier {
+                                TypeQualifier::WorkGroupSize(i, value) => {
+                                    self.program.workgroup_size[i] = value
+                                }
+                                TypeQualifier::EarlyFragmentTests => {
+                                    self.program.early_fragment_tests = true;
+                                }
+                                TypeQualifier::StorageQualifier(_) => {
+                                    // TODO: Maybe add some checks here
+                                    // This is needed because of cases like
+                                    // layout(early_fragment_tests) in;
+                                }
+                                _ => {
+                                    return Err(ErrorKind::SemanticError(
+                                        meta,
+                                        "Qualifier not supported as standalone".into(),
+                                    ));
+                                }
+                            }
+                        }
 
-                    Ok(true)
+                        Ok(true)
+                    }
+                    _ => Err(ErrorKind::InvalidToken(token)),
                 }
-                TokenValue::Struct => {
-                    let ty_name = self.expect_ident()?.0;
-                    self.expect(TokenValue::LeftBrace)?;
-                    let mut members = Vec::new();
-                    let span = self.parse_struct_declaration_list(&mut members)?;
-                    self.expect(TokenValue::RightBrace)?;
-                    self.expect(TokenValue::Semicolon)?;
-
-                    let ty = self.program.module.types.append(Type {
-                        name: Some(ty_name.clone()),
-                        inner: TypeInner::Struct {
-                            top_level: false,
-                            members,
-                            span,
-                        },
-                    });
-                    self.program.lookup_type.insert(ty_name, ty);
-                    Ok(true)
-                }
-                _ => Err(ErrorKind::InvalidToken(token)),
             }
+        } else {
+            Ok(false)
         }
     }
 
@@ -962,11 +965,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 let expr = if self.bump_if(TokenValue::LeftParen).is_some() {
                     let args = self.parse_function_call_args(ctx, body, &mut meta)?;
 
+                    let kind = match self.program.lookup_type.get(&name) {
+                        Some(ty) => FunctionCallKind::TypeConstructor(*ty),
+                        None => FunctionCallKind::Function(name),
+                    };
+
                     HirExpr {
-                        kind: HirExprKind::Call(FunctionCall {
-                            kind: FunctionCallKind::Function(name),
-                            args,
-                        }),
+                        kind: HirExprKind::Call(FunctionCall { kind, args }),
                         meta,
                     }
                 } else {

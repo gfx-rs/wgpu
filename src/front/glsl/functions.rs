@@ -117,6 +117,13 @@ impl Program<'_> {
                                 body,
                             )
                         }
+                        TypeInner::Struct { .. } => ctx.add_expression(
+                            Expression::Compose {
+                                ty,
+                                components: args.into_iter().map(|arg| arg.0).collect(),
+                            },
+                            body,
+                        ),
                         _ => return Err(ErrorKind::SemanticError(meta, "Bad cast".into())),
                     }
                 } else {
