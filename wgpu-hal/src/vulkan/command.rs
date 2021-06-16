@@ -1,7 +1,11 @@
 use super::conv;
 
 use arrayvec::ArrayVec;
-use ash::{extensions::ext, version::DeviceV1_0, vk};
+use ash::{
+    extensions::ext,
+    version::{DeviceV1_0, DeviceV1_2},
+    vk,
+};
 use inplace_it::inplace_or_alloc_from_iter;
 
 use std::{ffi::CStr, mem, ops::Range, slice};
@@ -55,6 +59,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.free.extend(cmd_buf_vec);
         }
         let raw = self.free.pop().unwrap();
+
+        // Set the name unconditionally, since there might be a
+        // previous name assigned to this.
+        self.device.set_object_name(
+            vk::ObjectType::COMMAND_BUFFER,
+            raw,
+            label.unwrap_or_default(),
+        );
 
         let vk_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
@@ -567,6 +579,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_instance: u32,
         instance_count: u32,
     ) {
+        self.device.raw.cmd_draw(
+            self.active,
+            vertex_count,
+            instance_count,
+            start_vertex,
+            start_instance,
+        );
     }
     unsafe fn draw_indexed(
         &mut self,
@@ -576,6 +595,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_instance: u32,
         instance_count: u32,
     ) {
+        self.device.raw.cmd_draw_indexed(
+            self.active,
+            index_count,
+            instance_count,
+            start_index,
+            base_vertex,
+            start_instance,
+        );
     }
     unsafe fn draw_indirect(
         &mut self,
@@ -583,6 +610,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        self.device
+            .raw
+            .cmd_draw_indirect(self.active, buffer.raw, offset, draw_count, 0);
     }
     unsafe fn draw_indexed_indirect(
         &mut self,
@@ -590,6 +620,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        self.device
+            .raw
+            .cmd_draw_indexed_indirect(self.active, buffer.raw, offset, draw_count, 0);
     }
     unsafe fn draw_indirect_count(
         &mut self,
@@ -599,6 +632,36 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
+        match self
+            .device
+            .extension_fns
+            .draw_indirect_count
+            .as_ref()
+            .expect("Feature `DRAW_INDIRECT_COUNT` must be enabled")
+        {
+            super::ExtensionFn::Extension(t) => {
+                t.cmd_draw_indirect_count(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    count_buffer.raw,
+                    count_offset,
+                    max_count,
+                    0,
+                );
+            }
+            super::ExtensionFn::Promoted => {
+                self.device.raw.cmd_draw_indirect_count(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    count_buffer.raw,
+                    count_offset,
+                    max_count,
+                    0,
+                );
+            }
+        }
     }
     unsafe fn draw_indexed_indirect_count(
         &mut self,
@@ -608,14 +671,47 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
+        match self
+            .device
+            .extension_fns
+            .draw_indirect_count
+            .as_ref()
+            .expect("Feature `DRAW_INDIRECT_COUNT` must be enabled")
+        {
+            super::ExtensionFn::Extension(t) => {
+                t.cmd_draw_indexed_indirect_count(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    count_buffer.raw,
+                    count_offset,
+                    max_count,
+                    0,
+                );
+            }
+            super::ExtensionFn::Promoted => {
+                self.device.raw.cmd_draw_indexed_indirect_count(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    count_buffer.raw,
+                    count_offset,
+                    max_count,
+                    0,
+                );
+            }
+        }
     }
 
     // compute
 
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
         self.bind_point = vk::PipelineBindPoint::COMPUTE;
+        self.begin_debug_marker(desc.label.unwrap_or_default());
     }
-    unsafe fn end_compute_pass(&mut self) {}
+    unsafe fn end_compute_pass(&mut self) {
+        self.end_debug_marker();
+    }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
         self.device.raw.cmd_bind_pipeline(
@@ -625,8 +721,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         );
     }
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {}
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {}
+    unsafe fn dispatch(&mut self, count: [u32; 3]) {
+        self.device
+            .raw
+            .cmd_dispatch(self.active, count[0], count[1], count[2]);
+    }
+    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+        self.device
+            .raw
+            .cmd_dispatch_indirect(self.active, buffer.raw, offset)
+    }
 }
 
 #[test]

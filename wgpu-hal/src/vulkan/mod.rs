@@ -1,5 +1,3 @@
-#![allow(unused_variables)]
-
 mod adapter;
 mod command;
 mod conv;

@@ -426,12 +426,14 @@ pub enum CreateQuerySetError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
+pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
+
 #[derive(Debug)]
 pub struct QuerySet<A: hal::Api> {
     pub(crate) raw: A::QuerySet,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) desc: wgt::QuerySetDescriptor,
+    pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
 impl<A: hal::Api> Resource for QuerySet<A> {

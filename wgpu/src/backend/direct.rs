@@ -1207,12 +1207,12 @@ impl crate::Context for Context {
     fn device_create_query_set(
         &self,
         device: &Self::DeviceId,
-        desc: &wgt::QuerySetDescriptor,
+        desc: &wgt::QuerySetDescriptor<Label>,
     ) -> Self::QuerySetId {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device.id => global.device_create_query_set(
             device.id,
-            &desc,
+            &desc.map_label(|l| l.map(Borrowed)),
             PhantomData
         ));
         if let Some(cause) = error {

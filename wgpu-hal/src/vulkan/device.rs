@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use std::{cmp, collections::hash_map::Entry, ffi::CString, ptr, sync::Arc};
 
 impl super::DeviceShared {
-    unsafe fn set_object_name(
+    pub(super) unsafe fn set_object_name(
         &self,
         object_type: vk::ObjectType,
         object: impl vk::Handle,
@@ -121,6 +121,8 @@ impl super::DeviceShared {
                         .samples(samples)
                         .load_op(load_op)
                         .store_op(store_op)
+                        .stencil_load_op(stencil_load_op)
+                        .stencil_store_op(stencil_store_op)
                         .initial_layout(ds.base.layout_pre)
                         .final_layout(ds.base.layout_post)
                         .build();
@@ -215,6 +217,16 @@ impl super::DeviceShared {
                 })
             }
         })
+    }
+
+    pub(super) unsafe fn free_resources(&self) {
+        for &raw in self.render_passes.lock().values() {
+            self.raw.destroy_render_pass(raw, None);
+        }
+        for &raw in self.framebuffers.lock().values() {
+            self.raw.destroy_framebuffer(raw, None);
+        }
+        self.raw.destroy_device(None);
     }
 }
 
@@ -741,6 +753,15 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
+        if !self.shared.private_caps.imageless_framebuffers {
+            let mut fbuf_lock = self.shared.framebuffers.lock();
+            for (key, &raw_fbuf) in fbuf_lock.iter() {
+                if key.attachments.iter().any(|at| at.raw == view.raw) {
+                    self.shared.raw.destroy_framebuffer(raw_fbuf, None);
+                }
+            }
+            fbuf_lock.retain(|key, _| !key.attachments.iter().any(|at| at.raw == view.raw));
+        }
         self.shared.raw.destroy_image_view(view.raw, None);
     }
 
@@ -963,6 +984,11 @@ impl crate::Device<super::Api> for super::Device {
         )?;
 
         let set = vk_sets.pop().unwrap();
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::DESCRIPTOR_SET, *set.raw(), label);
+        }
+
         let mut writes = Vec::with_capacity(desc.entries.len());
         let mut buffer_infos = Vec::with_capacity(desc.buffers.len());
         let mut sampler_infos = Vec::with_capacity(desc.samplers.len());
@@ -1036,6 +1062,11 @@ impl crate::Device<super::Api> for super::Device {
             .raw
             .create_shader_module(&vk_info, None)
             .map_err(crate::DeviceError::from)?;
+
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::SHADER_MODULE, raw, label);
+        }
 
         Ok(super::ShaderModule { raw })
     }
@@ -1188,8 +1219,8 @@ impl crate::Device<super::Api> for super::Device {
                     .src_color_blend_factor(color_src)
                     .dst_color_blend_factor(color_dst)
                     .alpha_blend_op(alpha_op)
-                    .src_alpha_blend_factor(color_src)
-                    .dst_alpha_blend_factor(color_dst);
+                    .src_alpha_blend_factor(alpha_src)
+                    .dst_alpha_blend_factor(alpha_dst);
             }
             vk_attachments.push(vk_attachment.build());
         }
@@ -1229,9 +1260,13 @@ impl crate::Device<super::Api> for super::Device {
             .create_graphics_pipelines(vk::PipelineCache::null(), &vk_infos, None)
             .map_err(|(_, e)| crate::DeviceError::from(e))?;
 
-        Ok(super::RenderPipeline {
-            raw: raw_vec.pop().unwrap(),
-        })
+        let raw = raw_vec.pop().unwrap();
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::PIPELINE, raw, label);
+        }
+
+        Ok(super::RenderPipeline { raw })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
         self.shared.raw.destroy_pipeline(pipeline.raw, None);
@@ -1261,9 +1296,13 @@ impl crate::Device<super::Api> for super::Device {
             .create_compute_pipelines(vk::PipelineCache::null(), &vk_infos, None)
             .map_err(|(_, e)| crate::DeviceError::from(e))?;
 
-        Ok(super::ComputePipeline {
-            raw: raw_vec.pop().unwrap(),
-        })
+        let raw = raw_vec.pop().unwrap();
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::PIPELINE, raw, label);
+        }
+
+        Ok(super::ComputePipeline { raw })
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
         self.shared.raw.destroy_pipeline(pipeline.raw, None);
@@ -1271,7 +1310,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_query_set(
         &self,
-        desc: &wgt::QuerySetDescriptor,
+        desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Result<super::QuerySet, crate::DeviceError> {
         let (vk_type, pipeline_statistics) = match desc.ty {
             wgt::QueryType::Occlusion => (
@@ -1295,6 +1334,11 @@ impl crate::Device<super::Api> for super::Device {
             .build();
 
         let raw = self.shared.raw.create_query_pool(&vk_info, None)?;
+        if let Some(label) = desc.label {
+            self.shared
+                .set_object_name(vk::ObjectType::QUERY_POOL, raw, label);
+        }
+
         Ok(super::QuerySet { raw })
     }
     unsafe fn destroy_query_set(&self, set: super::QuerySet) {

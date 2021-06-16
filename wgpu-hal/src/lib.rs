@@ -268,7 +268,7 @@ pub trait Device<A: Api>: Send + Sync {
 
     unsafe fn create_query_set(
         &self,
-        desc: &wgt::QuerySetDescriptor,
+        desc: &wgt::QuerySetDescriptor<Label>,
     ) -> Result<A::QuerySet, DeviceError>;
     unsafe fn destroy_query_set(&self, set: A::QuerySet);
     unsafe fn create_fence(&self) -> Result<A::Fence, DeviceError>;

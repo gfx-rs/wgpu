@@ -98,7 +98,7 @@ pub enum Action<'a> {
     DestroyRenderBundle(id::RenderBundleId),
     CreateQuerySet {
         id: id::QuerySetId,
-        desc: wgt::QuerySetDescriptor,
+        desc: crate::resource::QuerySetDescriptor<'a>,
     },
     DestroyQuerySet(id::QuerySetId),
     WriteBuffer {

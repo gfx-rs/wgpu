@@ -777,17 +777,67 @@ impl crate::Adapter<super::Api> for super::Adapter {
     }
 
     unsafe fn close(&self, device: super::Device) {
-        for &raw in device.shared.render_passes.lock().values() {
-            device.shared.raw.destroy_render_pass(raw, None);
-        }
-        device.shared.raw.destroy_device(None);
+        device.shared.free_resources();
     }
 
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
     ) -> crate::TextureFormatCapability {
-        crate::TextureFormatCapability::empty()
+        use crate::TextureFormatCapability as Tfc;
+        let vk_format = self.private_caps.map_texture_format(format);
+        let properties = self
+            .instance
+            .raw
+            .get_physical_device_format_properties(self.raw, vk_format);
+        let features = properties.linear_tiling_features;
+
+        let mut flags = Tfc::empty();
+        flags.set(
+            Tfc::SAMPLED,
+            features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE),
+        );
+        flags.set(
+            Tfc::SAMPLED_LINEAR,
+            features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR),
+        );
+        flags.set(
+            Tfc::SAMPLED_MINMAX,
+            features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
+        );
+        flags.set(
+            Tfc::STORAGE | Tfc::STORAGE_READ_WRITE,
+            features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
+        );
+        flags.set(
+            Tfc::STORAGE_ATOMIC,
+            features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
+        );
+        flags.set(
+            Tfc::COLOR_ATTACHMENT,
+            features.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT),
+        );
+        flags.set(
+            Tfc::COLOR_ATTACHMENT_BLEND,
+            features.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND),
+        );
+        flags.set(
+            Tfc::DEPTH_STENCIL_ATTACHMENT,
+            features.contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT),
+        );
+        flags.set(
+            Tfc::COPY_SRC,
+            features.intersects(
+                vk::FormatFeatureFlags::TRANSFER_SRC | vk::FormatFeatureFlags::BLIT_SRC,
+            ),
+        );
+        flags.set(
+            Tfc::COPY_DST,
+            features.intersects(
+                vk::FormatFeatureFlags::TRANSFER_DST | vk::FormatFeatureFlags::BLIT_DST,
+            ),
+        );
+        flags
     }
 
     unsafe fn surface_capabilities(

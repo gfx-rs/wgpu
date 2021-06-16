@@ -850,7 +850,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_query_set(
         &self,
-        desc: &wgt::QuerySetDescriptor,
+        desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> DeviceResult<super::QuerySet> {
         match desc.ty {
             wgt::QueryType::Occlusion => {
@@ -858,7 +858,9 @@ impl crate::Device<super::Api> for super::Device {
                 let options = mtl::MTLResourceOptions::empty();
                 //TODO: HazardTrackingModeUntracked
                 let raw_buffer = self.shared.device.lock().new_buffer(size, options);
-                raw_buffer.set_label("_QuerySet");
+                if let Some(label) = desc.label {
+                    raw_buffer.set_label(label);
+                }
                 Ok(super::QuerySet {
                     raw_buffer,
                     ty: desc.ty,
@@ -900,7 +902,7 @@ impl crate::Device<super::Api> for super::Device {
         let cmd_buf = match fence
             .pending_command_buffers
             .iter()
-            .find(|&&(value, _)| value == wait_value)
+            .find(|&&(value, _)| value >= wait_value)
         {
             Some(&(_, ref cmd_buf)) => cmd_buf,
             None => {

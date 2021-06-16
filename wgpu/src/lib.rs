@@ -32,8 +32,8 @@ pub use wgt::{
     DownlevelFlags, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     ImageDataLayout, IndexFormat, InputStepMode, Limits, MultisampleState, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType, SamplerBorderColor,
-    ShaderLocation, ShaderModel, ShaderStage, StencilFaceState, StencilOperation, StencilState,
+    PrimitiveTopology, PushConstantRange, QueryType, SamplerBorderColor, ShaderLocation,
+    ShaderModel, ShaderStage, StencilFaceState, StencilOperation, StencilState,
     StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDimension,
     TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
     TextureUsage, TextureViewDimension, VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT,
@@ -1078,6 +1078,8 @@ pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 /// Describes a [`Texture`].
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+/// Describes a [`QuerySet`].
+pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 /// Describes a [`TextureView`].
 #[derive(Clone, Debug, Default, PartialEq)]

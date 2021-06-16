@@ -194,7 +194,10 @@ impl crate::Device<Api> for Context {
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
 
-    unsafe fn create_query_set(&self, desc: &wgt::QuerySetDescriptor) -> DeviceResult<Resource> {
+    unsafe fn create_query_set(
+        &self,
+        desc: &wgt::QuerySetDescriptor<crate::Label>,
+    ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
     unsafe fn destroy_query_set(&self, set: Resource) {}

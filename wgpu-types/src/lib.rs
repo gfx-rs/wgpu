@@ -3052,12 +3052,25 @@ pub enum SamplerBorderColor {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct QuerySetDescriptor {
+pub struct QuerySetDescriptor<L> {
+    /// Debug label for the query set.
+    pub label: L,
     /// Kind of query that this query set should contain.
     pub ty: QueryType,
     /// Total count of queries the set contains. Must not be zero.
     /// Must not be greater than [`QUERY_SET_MAX_QUERIES`].
     pub count: u32,
+}
+
+impl<L> QuerySetDescriptor<L> {
+    ///
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> QuerySetDescriptor<K> {
+        QuerySetDescriptor {
+            label: fun(&self.label),
+            ty: self.ty,
+            count: self.count,
+        }
+    }
 }
 
 /// Type of query contained in a QuerySet.

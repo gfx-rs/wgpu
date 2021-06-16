@@ -2222,7 +2222,7 @@ impl<A: HalApi> Device<A> {
     fn create_query_set(
         &self,
         self_id: id::DeviceId,
-        desc: &wgt::QuerySetDescriptor,
+        desc: &resource::QuerySetDescriptor,
     ) -> Result<resource::QuerySet<A>, resource::CreateQuerySetError> {
         use resource::CreateQuerySetError as Error;
 
@@ -2247,14 +2247,15 @@ impl<A: HalApi> Device<A> {
             });
         }
 
+        let hal_desc = desc.map_label(super::LabelHelpers::borrow_option);
         Ok(resource::QuerySet {
-            raw: unsafe { self.raw.create_query_set(desc).unwrap() },
+            raw: unsafe { self.raw.create_query_set(&hal_desc).unwrap() },
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
             },
             life_guard: LifeGuard::new(""),
-            desc: desc.clone(),
+            desc: desc.map_label(|_| ()),
         })
     }
 }
@@ -3636,7 +3637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_query_set<A: HalApi>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::QuerySetDescriptor,
+        desc: &resource::QuerySetDescriptor,
         id_in: Input<G, id::QuerySetId>,
     ) -> (id::QuerySetId, Option<resource::CreateQuerySetError>) {
         profiling::scope!("create_query_set", "Device");

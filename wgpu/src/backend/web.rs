@@ -1490,7 +1490,7 @@ impl crate::Context for Context {
     fn device_create_query_set(
         &self,
         _device: &Self::DeviceId,
-        _desc: &wgt::QuerySetDescriptor,
+        _desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Self::QuerySetId {
         ()
     }
