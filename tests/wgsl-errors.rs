@@ -606,6 +606,15 @@ fn invalid_arrays() {
             ..
         })
     }
+
+    check_validation_error! {
+        "type Bad = array<f32, 0>;",
+        "type Bad = array<f32, -1>;":
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::NonPositiveArrayLength(_),
+            ..
+        })
+    }
 }
 
 #[test]
