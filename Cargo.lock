@@ -968,12 +968,11 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c12e48c737ee9a55e8bb2352bcde588f79ae308d3529ee888f7cc0f469b5777"
+source = "git+https://github.com/kvark/metal-rs?branch=core-graphics-types#457518722ac2ca51cf1e668a2d2be57b751c8071"
 dependencies = [
  "bitflags",
  "block",
- "cocoa-foundation",
+ "core-graphics-types",
  "foreign-types",
  "log",
  "objc",
@@ -1997,6 +1996,7 @@ dependencies = [
  "ash",
  "bitflags",
  "block",
+ "core-graphics-types",
  "foreign-types",
  "fxhash",
  "gpu-alloc",
@@ -2012,6 +2012,7 @@ dependencies = [
  "renderdoc-sys",
  "thiserror",
  "wgpu-types",
+ "winapi 0.3.9",
  "winit",
 ]
 

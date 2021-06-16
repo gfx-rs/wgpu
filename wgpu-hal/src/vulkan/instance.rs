@@ -230,14 +230,23 @@ impl super::Instance {
         self.create_surface_from_vk_surface_khr(surface)
     }
 
-    #[cfg(feature = "disabled")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     fn create_surface_from_ns_view(&self, view: *mut c_void) -> super::Surface {
-        use ash::extensions::mvk;
         use core_graphics_types::{base::CGFloat, geometry::CGRect};
-        use objc::runtime::{Object, BOOL, YES};
+        use objc::{
+            class, msg_send,
+            runtime::{Object, BOOL, YES},
+            sel, sel_impl,
+        };
 
-        // TODO: this logic is duplicated from gfx-backend-metal, refactor?
-        unsafe {
+        if !self.extensions.contains(&ext::MetalSurface::name()) {
+            panic!(
+                "Vulkan Portability driver does not support {:?}",
+                ext::MetalSurface::name()
+            );
+        }
+
+        let layer = unsafe {
             let view = view as *mut Object;
             let existing: *mut Object = msg_send![view, layer];
             let class = class!(CAMetalLayer);
@@ -249,7 +258,9 @@ impl super::Instance {
                 result == YES
             };
 
-            if !use_current {
+            if use_current {
+                existing
+            } else {
                 let layer: *mut Object = msg_send![class, new];
                 let () = msg_send![view, setLayer: layer];
                 let bounds: CGRect = msg_send![view, bounds];
@@ -260,26 +271,18 @@ impl super::Instance {
                     let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
                     let () = msg_send![layer, setContentsScale: scale_factor];
                 }
+                layer
             }
-        }
-
-        if !self.extensions.contains(&mvk::MacOSSurface::name()) {
-            panic!("Vulkan driver does not support VK_MVK_MACOS_SURFACE");
-        }
+        };
 
         let surface = {
-            let mac_os_loader = mvk::MacOSSurface::new(&self.entry, &self.shared.raw);
-            let mut info = vk::MacOSSurfaceCreateInfoMVK::builder()
-                .flags(vk::MacOSSurfaceCreateFlagsMVK::empty());
-            if let Some(view) = unsafe { view.as_ref() } {
-                info = info.view(view);
-            }
+            let metal_loader = ext::MetalSurface::new(&self.entry, &self.shared.raw);
+            let vk_info = vk::MetalSurfaceCreateInfoEXT::builder()
+                .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
+                .layer(layer as *mut _)
+                .build();
 
-            unsafe {
-                mac_os_loader
-                    .create_mac_os_surface_mvk(&info, None)
-                    .expect("Unable to create macOS surface")
-            }
+            unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
 
         self.create_surface_from_vk_surface_khr(surface)
@@ -542,7 +545,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 let hinstance = GetModuleHandleW(std::ptr::null());
                 Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
             }
-            #[cfg(target_os = "macos_disabled")]
+            #[cfg(target_os = "macos")]
             RawWindowHandle::MacOS(handle) => Ok(self.create_surface_from_ns_view(handle.ns_view)),
             _ => Err(crate::InstanceError),
         }

@@ -1,5 +1,9 @@
 use std::{mem, os::raw::c_void, ptr::NonNull, thread};
 
+use core_graphics_types::{
+    base::CGFloat,
+    geometry::{CGRect, CGSize},
+};
 use objc::{
     class, msg_send,
     rc::autoreleasepool,
@@ -12,22 +16,6 @@ use parking_lot::Mutex;
 extern "C" {
     #[allow(non_upper_case_globals)]
     static kCAGravityTopLeft: *mut Object;
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
-#[allow(clippy::upper_case_acronyms)]
-pub struct CGPoint {
-    pub x: mtl::CGFloat,
-    pub y: mtl::CGFloat,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
-#[allow(clippy::upper_case_acronyms)]
-pub struct CGRect {
-    pub origin: CGPoint,
-    pub size: mtl::CGSize,
 }
 
 impl super::Surface {
@@ -117,7 +105,7 @@ impl super::Surface {
 
             let window: *mut Object = msg_send![view, window];
             if !window.is_null() {
-                let scale_factor: mtl::CGFloat = msg_send![window, backingScaleFactor];
+                let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
                 let () = msg_send![layer, setContentsScale: scale_factor];
             }
             //let () = msg_send![layer, setDelegate: self.gfx_managed_metal_layer_delegate.0];
@@ -138,7 +126,7 @@ impl super::Surface {
     }
 
     pub(super) fn dimensions(&self) -> wgt::Extent3d {
-        let (size, scale): (mtl::CGSize, mtl::CGFloat) = match self.view {
+        let (size, scale): (CGSize, CGFloat) = match self.view {
             Some(view) if !cfg!(target_os = "macos") => unsafe {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
                 let window: Option<NonNull<Object>> = msg_send![view.as_ptr(), window];
@@ -149,7 +137,7 @@ impl super::Surface {
                     Some(screen) => {
                         let screen_space: *mut Object = msg_send![screen.as_ptr(), coordinateSpace];
                         let rect: CGRect = msg_send![view.as_ptr(), convertRect:bounds toCoordinateSpace:screen_space];
-                        let scale_factor: mtl::CGFloat = msg_send![screen.as_ptr(), nativeScale];
+                        let scale_factor: CGFloat = msg_send![screen.as_ptr(), nativeScale];
                         (rect.size, scale_factor)
                     }
                     None => (bounds.size, 1.0),
@@ -159,7 +147,7 @@ impl super::Surface {
                 let render_layer_borrow = self.render_layer.lock();
                 let render_layer = render_layer_borrow.as_ref();
                 let bounds: CGRect = msg_send![render_layer, bounds];
-                let contents_scale: mtl::CGFloat = msg_send![render_layer, contentsScale];
+                let contents_scale: CGFloat = msg_send![render_layer, contentsScale];
                 (bounds.size, contents_scale)
             },
         };
@@ -186,8 +174,7 @@ impl crate::Surface<super::Api> for super::Surface {
         let render_layer = self.render_layer.lock();
         let framebuffer_only = config.usage == crate::TextureUse::COLOR_TARGET;
         let display_sync = config.present_mode != wgt::PresentMode::Immediate;
-        let drawable_size =
-            mtl::CGSize::new(config.extent.width as f64, config.extent.height as f64);
+        let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 
         match config.composite_alpha_mode {
             crate::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),

@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = []
-metal = ["naga/msl-out", "block", "foreign-types", "mtl", "objc"]
+metal = ["naga/msl-out", "block", "foreign-types"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "inplace_it", "renderdoc-sys"]
 
 [dependencies]
@@ -31,14 +31,20 @@ log = "0.4"
 # backend: Metal
 block = { version = "0.1", optional = true }
 foreign-types = { version = "0.3", optional = true }
-mtl = { package = "metal", version = "0.22", optional = true }
-objc = { version = "0.2.5", optional = true }
 # backend: Vulkan
 ash = { version = "0.32", optional = true }
 gpu-alloc = { version = "0.4", optional = true }
 gpu-descriptor = { version = "0.1", optional = true }
 inplace_it = { version ="0.3.3", optional = true }
 renderdoc-sys = { version = "0.7.1", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
+
+[target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
+mtl = { package = "metal", version = "0.22", git="https://github.com/kvark/metal-rs", branch="core-graphics-types" }
+objc = "0.2.5"
+core-graphics-types = "0.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
