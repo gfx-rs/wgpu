@@ -233,13 +233,6 @@ impl super::Validator {
             } => {
                 let vec_size = match *resolver.resolve(vector)? {
                     Ti::Vector { size: vec_size, .. } => vec_size,
-                    Ti::Pointer { base, .. } => match module.types[base].inner {
-                        Ti::Vector { size: vec_size, .. } => vec_size,
-                        ref other => {
-                            log::error!("Swizzle vector pointer type {:?}", other);
-                            return Err(ExpressionError::InvalidVectorType(vector));
-                        }
-                    },
                     ref other => {
                         log::error!("Swizzle vector type {:?}", other);
                         return Err(ExpressionError::InvalidVectorType(vector));

@@ -634,7 +634,7 @@ impl<'function> Context<'function> {
 
                 if let Expression::Swizzle {
                     size,
-                    vector,
+                    mut vector,
                     pattern,
                 } = self.expressions[pointer]
                 {
@@ -645,6 +645,10 @@ impl<'function> Context<'function> {
                         VectorSize::Tri => 3,
                         VectorSize::Quad => 4,
                     };
+
+                    if let Expression::Load { pointer } = self.expressions[vector] {
+                        vector = pointer;
+                    }
 
                     #[allow(clippy::needless_range_loop)]
                     for index in 0..size {
@@ -800,7 +804,7 @@ impl<'function> Context<'function> {
             .and_then(type_power))
     }
 
-    pub fn expr(&self, expr: Handle<Expression>) -> &Expression {
+    pub fn get_expression(&self, expr: Handle<Expression>) -> &Expression {
         &self.expressions[expr]
     }
 

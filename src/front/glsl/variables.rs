@@ -143,9 +143,9 @@ impl Program<'_> {
         name: &str,
         meta: SourceMetadata,
     ) -> Result<Handle<Expression>, ErrorKind> {
-        let ty = match *self.resolve_type(ctx, expression, meta)? {
-            TypeInner::Pointer { base, .. } => &self.module.types[base].inner,
-            ref ty => ty,
+        let (ty, is_pointer) = match *self.resolve_type(ctx, expression, meta)? {
+            TypeInner::Pointer { base, .. } => (&self.module.types[base].inner, true),
+            ref ty => (ty, false),
         };
         match *ty {
             TypeInner::Struct { ref members, .. } => {
@@ -203,11 +203,11 @@ impl Program<'_> {
                     let mut expression = expression;
                     if let Expression::Swizzle {
                         size: _,
-                        ref vector,
+                        vector,
                         pattern: ref src_pattern,
-                    } = *ctx.expr(expression)
+                    } = *ctx.get_expression(expression)
                     {
-                        expression = *vector;
+                        expression = vector;
                         for pat in &mut pattern {
                             *pat = src_pattern[pat.index() as usize];
                         }
@@ -215,7 +215,15 @@ impl Program<'_> {
 
                     let size = match components.len() {
                         1 => {
-                            // only single element swizzle, like pos.y, just return that component
+                            // only single element swizzle, like pos.y, just return that component.
+                            if lhs {
+                                // Because of possible nested swizzles, like pos.xy.x, we have to unwrap the potential load expr.
+                                if let Expression::Load { ref pointer } =
+                                    *ctx.get_expression(expression)
+                                {
+                                    expression = *pointer;
+                                }
+                            }
                             return Ok(ctx.add_expression(
                                 Expression::AccessIndex {
                                     base: expression,
@@ -234,6 +242,18 @@ impl Program<'_> {
                             ));
                         }
                     };
+
+                    if is_pointer {
+                        // NOTE: for lhs expression, this extra load ends up as an unused expr, because the
+                        // assignment will extract the pointer and use it directly anyway. Unfortunately we
+                        // need it for validation to pass, as swizzles cannot operate on pointer values.
+                        expression = ctx.add_expression(
+                            Expression::Load {
+                                pointer: expression,
+                            },
+                            body,
+                        );
+                    }
 
                     Ok(ctx.add_expression(
                         Expression::Swizzle {
