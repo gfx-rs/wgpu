@@ -331,6 +331,7 @@ impl framework::Example for Example {
             // Create the timestamp query set. We need twice as many queries as we have passes,
             // as we need a query at the beginning and at the end of the operation.
             let timestamp = device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: None,
                 count: mip_passes * 2,
                 ty: wgpu::QueryType::Timestamp,
             });
@@ -340,6 +341,7 @@ impl framework::Example for Example {
 
             // We only need one pipeline statistics query per pass.
             let pipeline_statistics = device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: None,
                 count: mip_passes,
                 ty: wgpu::QueryType::PipelineStatistics(
                     wgpu::PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS,

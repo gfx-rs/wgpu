@@ -8,7 +8,7 @@ use ash::{
 };
 use inplace_it::inplace_or_alloc_from_iter;
 
-use std::{ffi::CStr, mem, ops::Range, slice};
+use std::{mem, ops::Range, slice};
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -53,6 +53,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         if self.free.is_empty() {
             let vk_info = vk::CommandBufferAllocateInfo::builder()
+                .command_pool(self.raw)
                 .command_buffer_count(ALLOCATION_GRANULARITY)
                 .build();
             let cmd_buf_vec = self.device.raw.allocate_command_buffers(&vk_info)?;
@@ -93,7 +94,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     where
         I: Iterator<Item = super::CommandBuffer>,
     {
-        self.marker.clear();
+        self.temp.clear();
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
         self.free.extend(self.discarded.drain(..));
@@ -109,21 +110,29 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let mut src_stages = vk::PipelineStageFlags::empty();
         let mut dst_stages = vk::PipelineStageFlags::empty();
-        let vk_barrier_iter = barriers.map(move |bar| {
+        let vk_barriers = &mut self.temp.buffer_barriers;
+        vk_barriers.clear();
+
+        for bar in barriers {
             let (src_stage, src_access) = conv::map_buffer_usage_to_barrier(bar.usage.start);
             src_stages |= src_stage;
             let (dst_stage, dst_access) = conv::map_buffer_usage_to_barrier(bar.usage.end);
             dst_stages |= dst_stage;
 
-            vk::BufferMemoryBarrier::builder()
-                .buffer(bar.buffer.raw)
-                .size(vk::WHOLE_SIZE)
-                .src_access_mask(src_access)
-                .dst_access_mask(dst_access)
-                .build()
-        });
+            vk_barriers.push(
+                vk::BufferMemoryBarrier::builder()
+                    .buffer(bar.buffer.raw)
+                    .size(vk::WHOLE_SIZE)
+                    .src_access_mask(src_access)
+                    .dst_access_mask(dst_access)
+                    .build(),
+            )
+        }
 
-        inplace_or_alloc_from_iter(vk_barrier_iter, |vk_barriers| {
+        if !vk_barriers.is_empty() {
+            if src_stages.is_empty() {
+                src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
+            }
             self.device.raw.cmd_pipeline_barrier(
                 self.active,
                 src_stages,
@@ -133,7 +142,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 vk_barriers,
                 &[],
             );
-        });
+        }
     }
 
     unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
@@ -142,7 +151,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let mut src_stages = vk::PipelineStageFlags::empty();
         let mut dst_stages = vk::PipelineStageFlags::empty();
-        let vk_barrier_iter = barriers.map(move |bar| {
+        let vk_barriers = &mut self.temp.image_barriers;
+        vk_barriers.clear();
+
+        for bar in barriers {
             let range = conv::map_subresource_range(&bar.range, bar.texture.aspects);
             let (src_stage, src_access) = conv::map_texture_usage_to_barrier(bar.usage.start);
             let src_layout = conv::derive_image_layout(bar.usage.start);
@@ -151,17 +163,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             let dst_layout = conv::derive_image_layout(bar.usage.end);
             dst_stages |= dst_stage;
 
-            vk::ImageMemoryBarrier::builder()
-                .image(bar.texture.raw)
-                .subresource_range(range)
-                .src_access_mask(src_access)
-                .dst_access_mask(dst_access)
-                .old_layout(src_layout)
-                .new_layout(dst_layout)
-                .build()
-        });
+            vk_barriers.push(
+                vk::ImageMemoryBarrier::builder()
+                    .image(bar.texture.raw)
+                    .subresource_range(range)
+                    .src_access_mask(src_access)
+                    .dst_access_mask(dst_access)
+                    .old_layout(src_layout)
+                    .new_layout(dst_layout)
+                    .build(),
+            );
+        }
 
-        inplace_or_alloc_from_iter(vk_barrier_iter, |vk_barriers| {
+        if !vk_barriers.is_empty() {
             self.device.raw.cmd_pipeline_barrier(
                 self.active,
                 src_stages,
@@ -171,7 +185,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 &[],
                 vk_barriers,
             );
-        });
+        }
     }
 
     unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {
@@ -468,21 +482,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {
         if let Some(ext) = self.device.debug_messenger() {
-            self.marker.clear();
-            self.marker.extend_from_slice(label.as_bytes());
-            self.marker.push(0);
-            let cstr = CStr::from_bytes_with_nul_unchecked(&self.marker);
+            let cstr = self.temp.make_c_str(label);
             let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(&cstr).build();
             ext.cmd_insert_debug_utils_label(self.active, &vk_label);
         }
     }
     unsafe fn begin_debug_marker(&mut self, group_label: &str) {
         if let Some(ext) = self.device.debug_messenger() {
-            self.marker.clear();
-            self.marker.extend_from_slice(group_label.as_bytes());
-            self.marker.push(0);
-            let cstr = CStr::from_bytes_with_nul_unchecked(&self.marker);
-            let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(&cstr).build();
+            let cstr = self.temp.make_c_str(group_label);
+            let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(cstr).build();
             ext.cmd_begin_debug_utils_label(self.active, &vk_label);
         }
     }

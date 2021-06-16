@@ -154,6 +154,7 @@ impl crate::ColorAttachment<'_, super::Api> {
 
 pub fn derive_image_layout(usage: crate::TextureUse) -> vk::ImageLayout {
     match usage {
+        crate::TextureUse::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUse::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
         crate::TextureUse::COPY_DST => vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         crate::TextureUse::SAMPLED => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
@@ -162,6 +163,8 @@ pub fn derive_image_layout(usage: crate::TextureUse) -> vk::ImageLayout {
         _ => {
             if usage.contains(crate::TextureUse::DEPTH_STENCIL_READ) {
                 vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            } else if usage.is_empty() {
+                vk::ImageLayout::PRESENT_SRC_KHR
             } else {
                 vk::ImageLayout::GENERAL
             }
@@ -239,7 +242,14 @@ pub fn map_texture_usage_to_barrier(
         access |= vk::AccessFlags::SHADER_WRITE;
     }
 
-    (stages, access)
+    if usage == crate::TextureUse::UNINITIALIZED {
+        (
+            vk::PipelineStageFlags::TOP_OF_PIPE,
+            vk::AccessFlags::empty(),
+        )
+    } else {
+        (stages, access)
+    }
 }
 
 pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUse {

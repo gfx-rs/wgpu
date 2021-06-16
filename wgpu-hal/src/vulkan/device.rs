@@ -828,7 +828,7 @@ impl crate::Device<super::Api> for super::Device {
             device: Arc::clone(&self.shared),
             active: vk::CommandBuffer::null(),
             bind_point: vk::PipelineBindPoint::default(),
-            marker: Vec::new(),
+            temp: super::Temp::default(),
             free: Vec::new(),
             discarded: Vec::new(),
         })
@@ -1003,33 +1003,32 @@ impl crate::Device<super::Api> for super::Device {
                 vk::DescriptorType::SAMPLER => {
                     let index = sampler_infos.len();
                     let binding = desc.samplers[index];
-                    let info = vk::DescriptorImageInfo::builder()
+                    let vk_info = vk::DescriptorImageInfo::builder()
                         .sampler(binding.raw)
                         .build();
-                    sampler_infos.push(info);
+                    sampler_infos.push(vk_info);
                     write.image_info(&sampler_infos[index..])
                 }
                 vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
                     let index = image_infos.len();
                     let binding = &desc.textures[index];
                     let layout = conv::derive_image_layout(binding.usage);
-                    let info = vk::DescriptorImageInfo::builder()
+                    let vk_info = vk::DescriptorImageInfo::builder()
                         .image_view(binding.view.raw)
                         .image_layout(layout)
                         .build();
-                    image_infos.push(info);
+                    image_infos.push(vk_info);
                     write.image_info(&image_infos[index..])
                 }
                 _ => {
                     let index = buffer_infos.len();
                     let binding = &desc.buffers[index];
-                    let mut info = vk::DescriptorBufferInfo::builder()
+                    let vk_info = vk::DescriptorBufferInfo::builder()
                         .buffer(binding.buffer.raw)
-                        .offset(binding.offset);
-                    if let Some(size) = binding.size {
-                        info = info.range(size.get());
-                    }
-                    buffer_infos.push(info.build());
+                        .offset(binding.offset)
+                        .range(binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get))
+                        .build();
+                    buffer_infos.push(vk_info);
                     write.buffer_info(&buffer_infos[index..])
                 }
             };
@@ -1148,7 +1147,8 @@ impl crate::Device<super::Api> for super::Device {
         let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(desc.primitive.clamp_depth)
             .polygon_mode(vk::PolygonMode::FILL)
-            .front_face(conv::map_front_face(desc.primitive.front_face));
+            .front_face(conv::map_front_face(desc.primitive.front_face))
+            .line_width(1.0);
         if let Some(face) = desc.primitive.cull_mode {
             vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
         }
@@ -1156,8 +1156,13 @@ impl crate::Device<super::Api> for super::Device {
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::builder();
         if let Some(ref ds) = desc.depth_stencil {
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
+            let vk_layout = if ds.is_read_only() {
+                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            } else {
+                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            };
             compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
-                base: super::AttachmentKey::compatible(vk_format),
+                base: super::AttachmentKey::compatible(vk_format, vk_layout),
                 stencil_ops: crate::AttachmentOp::empty(),
             });
 
@@ -1205,7 +1210,10 @@ impl crate::Device<super::Api> for super::Device {
         for cat in desc.color_targets {
             let vk_format = self.shared.private_caps.map_texture_format(cat.format);
             compatible_rp_key.colors.push(super::ColorAttachmentKey {
-                base: super::AttachmentKey::compatible(vk_format),
+                base: super::AttachmentKey::compatible(
+                    vk_format,
+                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                ),
                 resolve: None,
             });
 
@@ -1215,6 +1223,7 @@ impl crate::Device<super::Api> for super::Device {
                 let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
                 let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
                 vk_attachment = vk_attachment
+                    .blend_enable(true)
                     .color_blend_op(color_op)
                     .src_color_blend_factor(color_src)
                     .dst_color_blend_factor(color_dst)

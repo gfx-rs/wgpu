@@ -1997,6 +1997,7 @@ dependencies = [
  "bitflags",
  "block",
  "core-graphics-types",
+ "env_logger",
  "foreign-types",
  "fxhash",
  "gpu-alloc",

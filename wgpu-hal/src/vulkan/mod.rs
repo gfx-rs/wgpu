@@ -141,12 +141,12 @@ struct AttachmentKey {
 
 impl AttachmentKey {
     /// Returns an attachment key for a compatible attachment.
-    fn compatible(format: vk::Format) -> Self {
+    fn compatible(format: vk::Format, layout_in: vk::ImageLayout) -> Self {
         Self {
             format,
-            layout_pre: vk::ImageLayout::UNDEFINED,
-            layout_in: vk::ImageLayout::UNDEFINED,
-            layout_post: vk::ImageLayout::UNDEFINED,
+            layout_pre: vk::ImageLayout::GENERAL,
+            layout_in,
+            layout_post: vk::ImageLayout::GENERAL,
             ops: crate::AttachmentOp::empty(),
         }
     }
@@ -277,12 +277,38 @@ pub struct BindGroup {
     set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
+#[derive(Default)]
+struct Temp {
+    marker: Vec<u8>,
+    buffer_barriers: Vec<vk::BufferMemoryBarrier>,
+    image_barriers: Vec<vk::ImageMemoryBarrier>,
+}
+
+unsafe impl Send for Temp {}
+unsafe impl Sync for Temp {}
+
+impl Temp {
+    fn clear(&mut self) {
+        self.marker.clear();
+        self.buffer_barriers.clear();
+        self.image_barriers.clear();
+        //see also - https://github.com/NotIntMan/inplace_it/issues/8
+    }
+
+    fn make_c_str(&mut self, name: &str) -> &CStr {
+        self.marker.clear();
+        self.marker.extend_from_slice(name.as_bytes());
+        self.marker.push(0);
+        unsafe { CStr::from_bytes_with_nul_unchecked(&self.marker) }
+    }
+}
+
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
     active: vk::CommandBuffer,
     bind_point: vk::PipelineBindPoint,
-    marker: Vec<u8>,
+    temp: Temp,
     free: Vec<vk::CommandBuffer>,
     discarded: Vec<vk::CommandBuffer>,
 }
@@ -340,9 +366,11 @@ impl Fence {
                 self.free.push(raw);
             }
         }
-        self.active.retain(|&(value, _)| value > latest);
-        unsafe {
-            device.reset_fences(&self.free[base_free..])?;
+        if self.free.len() != base_free {
+            self.active.retain(|&(value, _)| value > latest);
+            unsafe {
+                device.reset_fences(&self.free[base_free..])?;
+            }
         }
         Ok(())
     }

@@ -38,7 +38,6 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     } else {
         CStr::from_ptr(cd.p_message_id_name).to_string_lossy()
     };
-
     let message = if cd.p_message.is_null() {
         Cow::from("")
     } else {
@@ -47,11 +46,11 @@ unsafe extern "system" fn debug_utils_messenger_callback(
 
     log::log!(
         message_severity,
-        "{:?} [{} (0x{:x})] : {}\n",
+        "{:?} [{} (0x{:x})]\n\t{}",
         message_type,
         message_id_name,
         cd.message_id_number,
-        message
+        message,
     );
 
     if cd.queue_label_count != 0 {
@@ -65,7 +64,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                     .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
             })
             .collect::<Vec<_>>();
-        log::log!(message_severity, "\tqueues: {}\n", names.join(", "));
+        log::log!(message_severity, "\tqueues: {}", names.join(", "));
     }
 
     if cd.cmd_buf_label_count != 0 {
@@ -79,11 +78,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                     .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
             })
             .collect::<Vec<_>>();
-        log::log!(
-            message_severity,
-            "\tcommand buffers: {}\n",
-            names.join(", ")
-        );
+        log::log!(message_severity, "\tcommand buffers: {}", names.join(", "));
     }
 
     if cd.object_count != 0 {
@@ -104,7 +99,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                 )
             })
             .collect::<Vec<_>>();
-        log::log!(message_severity, "\tobjects: {}\n", names.join(", "));
+        log::log!(message_severity, "\tobjects: {}", names.join(", "));
     }
 
     vk::FALSE
@@ -239,13 +234,6 @@ impl super::Instance {
             sel, sel_impl,
         };
 
-        if !self.extensions.contains(&ext::MetalSurface::name()) {
-            panic!(
-                "Vulkan Portability driver does not support {:?}",
-                ext::MetalSurface::name()
-            );
-        }
-
         let layer = unsafe {
             let view = view as *mut Object;
             let existing: *mut Object = msg_send![view, layer];
@@ -373,7 +361,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 extensions.push(khr::Win32Surface::name());
             }
             if cfg!(target_os = "macos") {
-                extensions.push(ash::extensions::mvk::MacOSSurface::name());
+                extensions.push(ext::MetalSurface::name());
             }
 
             if desc.flags.contains(crate::InstanceFlag::DEBUG) {
@@ -546,7 +534,11 @@ impl crate::Instance<super::Api> for super::Instance {
                 Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
             }
             #[cfg(target_os = "macos")]
-            RawWindowHandle::MacOS(handle) => Ok(self.create_surface_from_ns_view(handle.ns_view)),
+            RawWindowHandle::MacOS(handle)
+                if self.extensions.contains(&ext::MetalSurface::name()) =>
+            {
+                Ok(self.create_surface_from_ns_view(handle.ns_view))
+            }
             _ => Err(crate::InstanceError),
         }
     }

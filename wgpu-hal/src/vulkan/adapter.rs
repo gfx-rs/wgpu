@@ -58,12 +58,13 @@ impl PhysicalDeviceFeatures {
         downlevel_flags: wgt::DownlevelFlags,
         private_caps: &super::PrivateCapabilities,
     ) -> Self {
-        // This must follow the "Valid Usage" requirements of [`VkDeviceCreateInfo`](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkDeviceCreateInfo.html).
+        //TODO: make configurable
+        let rba = !(cfg!(target_os = "macos") || cfg!(target_os = "ios"));
         Self {
             // vk::PhysicalDeviceFeatures is a struct composed of Bool32's while
             // Features is a bitfield so we need to map everything manually
             core: vk::PhysicalDeviceFeatures::builder()
-                .robust_buffer_access(true) //TODO: make configurable
+                .robust_buffer_access(rba)
                 .independent_blend(true)
                 .sample_rate_shading(true)
                 .image_cube_array(
@@ -642,9 +643,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         });
 
         // Create device
+        let family_index = 0; //TODO
         let raw_device = {
             let family_info = vk::DeviceQueueCreateInfo::builder()
-                .flags(vk::DeviceQueueCreateFlags::empty())
+                .queue_family_index(family_index)
+                .queue_priorities(&[1.0])
                 .build();
             let family_infos = [family_info];
 
@@ -690,11 +693,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             let capabilities = [
                 spv::Capability::Shader,
                 spv::Capability::Matrix,
-                spv::Capability::InputAttachment,
                 spv::Capability::Sampled1D,
                 spv::Capability::Image1D,
-                spv::Capability::SampledBuffer,
-                spv::Capability::ImageBuffer,
                 spv::Capability::ImageQuery,
                 spv::Capability::DerivativeControl,
                 //TODO: fill out the rest
@@ -712,8 +712,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
         };
 
         log::info!("Private capabilities: {:?}", self.private_caps);
-
-        let family_index = 0; //TODO
         let raw_queue = raw_device.get_device_queue(family_index, 0);
 
         let shared = Arc::new(super::DeviceShared {
@@ -777,6 +775,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
     }
 
     unsafe fn close(&self, device: super::Device) {
+        device.mem_allocator.lock().cleanup(&*device.shared);
+        device.desc_allocator.lock().cleanup(&*device.shared);
         device.shared.free_resources();
     }
 

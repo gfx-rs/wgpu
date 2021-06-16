@@ -36,13 +36,17 @@ struct UsedResources<A: hal::Api> {
 #[allow(dead_code)]
 struct Example<A: hal::Api> {
     instance: A::Instance,
+    adapter: A::Adapter,
     surface: A::Surface,
     surface_format: wgt::TextureFormat,
     device: A::Device,
     queue: A::Queue,
     global_group: A::BindGroup,
     local_group: A::BindGroup,
+    global_group_layout: A::BindGroupLayout,
+    local_group_layout: A::BindGroupLayout,
     pipeline_layout: A::PipelineLayout,
+    shader: A::ShaderModule,
     pipeline: A::RenderPipeline,
     bunnies: Vec<Locals>,
     local_buffer: A::Buffer,
@@ -67,15 +71,20 @@ impl<A: hal::Api> Example<A> {
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe { instance.create_surface(window).unwrap() };
 
-        let hal::OpenDevice { device, mut queue } = unsafe {
-            let adapters = instance.enumerate_adapters();
-            let exposed = adapters.get(0).ok_or(hal::InstanceError)?;
+        let adapter = unsafe {
+            let mut adapters = instance.enumerate_adapters();
+            if adapters.is_empty() {
+                return Err(hal::InstanceError);
+            }
+            let exposed = adapters.swap_remove(0);
             println!(
                 "Surface caps: {:?}",
                 exposed.adapter.surface_capabilities(&surface)
             );
-            exposed.adapter.open(wgt::Features::empty()).unwrap()
+            exposed.adapter
         };
+        let hal::OpenDevice { device, mut queue } =
+            unsafe { adapter.open(wgt::Features::empty()).unwrap() };
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
@@ -151,7 +160,7 @@ impl<A: hal::Api> Example<A> {
             ],
         };
 
-        let global_bind_group_layout =
+        let global_group_layout =
             unsafe { device.create_bind_group_layout(&global_bgl_desc).unwrap() };
 
         let local_bgl_desc = hal::BindGroupLayoutDescriptor {
@@ -167,12 +176,12 @@ impl<A: hal::Api> Example<A> {
             }],
             label: None,
         };
-        let local_bind_group_layout =
+        let local_group_layout =
             unsafe { device.create_bind_group_layout(&local_bgl_desc).unwrap() };
 
         let pipeline_layout_desc = hal::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&global_bind_group_layout, &local_bind_group_layout],
+            bind_group_layouts: &[&global_group_layout, &local_group_layout],
             push_constant_ranges: &[],
         };
         let pipeline_layout = unsafe {
@@ -362,7 +371,7 @@ impl<A: hal::Api> Example<A> {
             };
             let global_group_desc = hal::BindGroupDescriptor {
                 label: Some("global"),
-                layout: &global_bind_group_layout,
+                layout: &global_group_layout,
                 buffers: &[global_buffer_binding],
                 samplers: &[&sampler],
                 textures: &[texture_binding],
@@ -392,7 +401,7 @@ impl<A: hal::Api> Example<A> {
             };
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),
-                layout: &local_bind_group_layout,
+                layout: &local_group_layout,
                 buffers: &[local_buffer_binding],
                 samplers: &[],
                 textures: &[],
@@ -418,12 +427,16 @@ impl<A: hal::Api> Example<A> {
             instance,
             surface,
             surface_format: surface_config.format,
+            adapter,
             device,
             queue,
             pipeline_layout,
+            shader,
             pipeline,
             global_group,
             local_group,
+            global_group_layout,
+            local_group_layout,
             bunnies: Vec::new(),
             local_buffer,
             global_buffer,
@@ -437,6 +450,39 @@ impl<A: hal::Api> Example<A> {
             extent: [window_size.0, window_size.1],
             start: Instant::now(),
         })
+    }
+
+    fn exit(mut self) {
+        unsafe {
+            self.device.wait(&self.fence, self.fence_value, !0).unwrap();
+            let mut cmd_buffers = Vec::new();
+            for (_, old) in self.old_resources {
+                self.device.destroy_texture_view(old.view);
+                cmd_buffers.push(old.cmd_buf);
+            }
+            self.cmd_encoder.reset_all(cmd_buffers.into_iter());
+            self.surface.unconfigure(&self.device);
+
+            self.device.destroy_bind_group(self.local_group);
+            self.device.destroy_bind_group(self.global_group);
+            self.device.destroy_buffer(self.local_buffer);
+            self.device.destroy_buffer(self.global_buffer);
+            self.device.destroy_texture_view(self.view);
+            self.device.destroy_command_encoder(self.cmd_encoder);
+            self.device.destroy_fence(self.fence);
+            self.device.destroy_texture(self.texture);
+            self.device.destroy_sampler(self.sampler);
+            self.device.destroy_shader_module(self.shader);
+            self.device.destroy_render_pipeline(self.pipeline);
+            self.device
+                .destroy_bind_group_layout(self.local_group_layout);
+            self.device
+                .destroy_bind_group_layout(self.global_group_layout);
+            self.device.destroy_pipeline_layout(self.pipeline_layout);
+
+            self.adapter.close(self.device);
+            self.instance.destroy_surface(self.surface);
+        }
     }
 
     fn update(&mut self, event: winit::event::WindowEvent) {
@@ -488,19 +534,21 @@ impl<A: hal::Api> Example<A> {
             }
         }
 
-        unsafe {
+        if !self.bunnies.is_empty() {
             let size = self.bunnies.len() * wgt::BIND_BUFFER_ALIGNMENT as usize;
-            let mapping = self
-                .device
-                .map_buffer(&self.local_buffer, 0..size as wgt::BufferAddress)
-                .unwrap();
-            ptr::copy_nonoverlapping(
-                self.bunnies.as_ptr() as *const u8,
-                mapping.ptr.as_ptr(),
-                size,
-            );
-            assert!(mapping.is_coherent);
-            self.device.unmap_buffer(&self.local_buffer).unwrap();
+            unsafe {
+                let mapping = self
+                    .device
+                    .map_buffer(&self.local_buffer, 0..size as wgt::BufferAddress)
+                    .unwrap();
+                ptr::copy_nonoverlapping(
+                    self.bunnies.as_ptr() as *const u8,
+                    mapping.ptr.as_ptr(),
+                    size,
+                );
+                assert!(mapping.is_coherent);
+                self.device.unmap_buffer(&self.local_buffer).unwrap();
+            }
         }
 
         unsafe {
@@ -600,6 +648,8 @@ type Api = hal::api::Vulkan;
 type Api = hal::api::Empty;
 
 fn main() {
+    env_logger::init();
+
     let event_loop = winit::event_loop::EventLoop::new();
     let window = winit::window::WindowBuilder::new()
         .with_title("hal-bunnymark")
@@ -607,7 +657,7 @@ fn main() {
         .unwrap();
 
     let example_result = Example::<Api>::init(&window);
-    let mut example = example_result.expect("Selected backend is not supported");
+    let mut example = Some(example_result.expect("Selected backend is not supported"));
 
     let mut last_frame_inst = Instant::now();
     let (mut frame_count, mut accum_time) = (0, 0.0);
@@ -633,7 +683,7 @@ fn main() {
                     *control_flow = winit::event_loop::ControlFlow::Exit;
                 }
                 _ => {
-                    example.update(event);
+                    example.as_mut().unwrap().update(event);
                 }
             },
             winit::event::Event::RedrawRequested(_) => {
@@ -650,7 +700,10 @@ fn main() {
                         frame_count = 0;
                     }
                 }
-                example.render();
+                example.as_mut().unwrap().render();
+            }
+            winit::event::Event::LoopDestroyed => {
+                example.take().unwrap().exit();
             }
             _ => {}
         }
