@@ -50,6 +50,7 @@ impl crate::Api for Api {
 
 struct DebugUtils {
     extension: ext::DebugUtils,
+    #[allow(dead_code)]
     messenger: vk::DebugUtilsMessengerEXT,
 }
 
@@ -58,7 +59,6 @@ struct InstanceShared {
     flags: crate::InstanceFlag,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
-    //debug_messenger: Option<DebugMessenger>,
 }
 
 pub struct Instance {
@@ -206,7 +206,6 @@ struct DeviceShared {
     raw: ash::Device,
     instance: Arc<InstanceShared>,
     extension_fns: DeviceExtensionFunctions,
-    features: wgt::Features,
     vendor_id: u32,
     _timestamp_period: f32,
     downlevel_flags: wgt::DownlevelFlags,
@@ -277,13 +276,15 @@ pub struct PipelineLayout {
 
 #[derive(Debug)]
 pub struct BindGroup {
-    raw: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
+    set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
     active: vk::CommandBuffer,
+    bind_point: vk::PipelineBindPoint,
+    marker: Vec<u8>,
     free: Vec<vk::CommandBuffer>,
     discarded: Vec<vk::CommandBuffer>,
 }

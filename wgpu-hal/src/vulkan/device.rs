@@ -806,6 +806,8 @@ impl crate::Device<super::Api> for super::Device {
             raw,
             device: Arc::clone(&self.shared),
             active: vk::CommandBuffer::null(),
+            bind_point: vk::PipelineBindPoint::default(),
+            marker: Vec::new(),
             free: Vec::new(),
             discarded: Vec::new(),
         })
@@ -1009,12 +1011,12 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         self.shared.raw.update_descriptor_sets(&writes, &[]);
-        Ok(super::BindGroup { raw: set })
+        Ok(super::BindGroup { set })
     }
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
         self.desc_allocator
             .lock()
-            .free(&*self.shared, Some(group.raw));
+            .free(&*self.shared, Some(group.set));
     }
 
     unsafe fn create_shader_module(

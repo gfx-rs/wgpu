@@ -722,7 +722,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
             },
-            features,
             vendor_id: self.phd_capabilities.properties.vendor_id,
             downlevel_flags: self.downlevel_flags,
             private_caps: self.private_caps.clone(),

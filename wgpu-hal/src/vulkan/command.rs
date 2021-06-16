@@ -1,10 +1,10 @@
 use super::conv;
 
 use arrayvec::ArrayVec;
-use ash::{version::DeviceV1_0, vk};
+use ash::{extensions::ext, version::DeviceV1_0, vk};
 use inplace_it::inplace_or_alloc_from_iter;
 
-use std::{mem, ops::Range};
+use std::{ffi::CStr, mem, ops::Range, slice};
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -36,6 +36,12 @@ impl super::Texture {
                 image_extent,
             }
         })
+    }
+}
+
+impl super::DeviceShared {
+    fn debug_messenger(&self) -> Option<&ext::DebugUtils> {
+        Some(&self.instance.debug_utils.as_ref()?.extension)
     }
 }
 
@@ -75,6 +81,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     where
         I: Iterator<Item = super::CommandBuffer>,
     {
+        self.marker.clear();
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
         self.free.extend(self.discarded.drain(..));
@@ -365,6 +372,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 height: fb_key.extent.height,
             },
         };
+        let vk_viewports = [vk::Viewport {
+            x: 0.0,
+            y: if self.device.private_caps.flip_y_requires_shift {
+                fb_key.extent.height as f32
+            } else {
+                0.0
+            },
+            width: fb_key.extent.width as f32,
+            height: -(fb_key.extent.height as f32),
+            min_depth: 0.0,
+            max_depth: 1.0,
+        }];
+        let vk_scissors = [render_area];
 
         let raw_pass = self.device.make_render_pass(rp_key).unwrap();
 
@@ -387,7 +407,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         self.device
             .raw
+            .cmd_set_viewport(self.active, 0, &vk_viewports);
+        self.device
+            .raw
+            .cmd_set_scissor(self.active, 0, &vk_scissors);
+        self.device
+            .raw
             .cmd_begin_render_pass(self.active, &vk_info, vk::SubpassContents::INLINE);
+
+        self.bind_point = vk::PipelineBindPoint::GRAPHICS;
     }
     unsafe fn end_render_pass(&mut self) {
         self.device.raw.cmd_end_render_pass(self.active);
@@ -400,6 +428,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
+        let sets = [*group.set.raw()];
+        self.device.raw.cmd_bind_descriptor_sets(
+            self.active,
+            self.bind_point,
+            layout.raw,
+            index,
+            &sets,
+            dynamic_offsets,
+        );
     }
     unsafe fn set_push_constants(
         &mut self,
@@ -408,11 +445,40 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: u32,
         data: &[u32],
     ) {
+        self.device.raw.cmd_push_constants(
+            self.active,
+            layout.raw,
+            conv::map_shader_stage(stages),
+            offset,
+            slice::from_raw_parts(data.as_ptr() as _, data.len() * 4),
+        );
     }
 
-    unsafe fn insert_debug_marker(&mut self, label: &str) {}
-    unsafe fn begin_debug_marker(&mut self, group_label: &str) {}
-    unsafe fn end_debug_marker(&mut self) {}
+    unsafe fn insert_debug_marker(&mut self, label: &str) {
+        if let Some(ext) = self.device.debug_messenger() {
+            self.marker.clear();
+            self.marker.extend_from_slice(label.as_bytes());
+            self.marker.push(0);
+            let cstr = CStr::from_bytes_with_nul_unchecked(&self.marker);
+            let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(&cstr).build();
+            ext.cmd_insert_debug_utils_label(self.active, &vk_label);
+        }
+    }
+    unsafe fn begin_debug_marker(&mut self, group_label: &str) {
+        if let Some(ext) = self.device.debug_messenger() {
+            self.marker.clear();
+            self.marker.extend_from_slice(group_label.as_bytes());
+            self.marker.push(0);
+            let cstr = CStr::from_bytes_with_nul_unchecked(&self.marker);
+            let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(&cstr).build();
+            ext.cmd_begin_debug_utils_label(self.active, &vk_label);
+        }
+    }
+    unsafe fn end_debug_marker(&mut self) {
+        if let Some(ext) = self.device.debug_messenger() {
+            ext.cmd_end_debug_utils_label(self.active);
+        }
+    }
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.device.raw.cmd_bind_pipeline(
@@ -427,17 +493,72 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         binding: crate::BufferBinding<'a, super::Api>,
         format: wgt::IndexFormat,
     ) {
+        self.device.raw.cmd_bind_index_buffer(
+            self.active,
+            binding.buffer.raw,
+            binding.offset,
+            conv::map_index_format(format),
+        );
     }
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
         binding: crate::BufferBinding<'a, super::Api>,
     ) {
+        let vk_buffers = [binding.buffer.raw];
+        let vk_offsets = [binding.offset];
+        self.device
+            .raw
+            .cmd_bind_vertex_buffers(self.active, index, &vk_buffers, &vk_offsets);
     }
-    unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}
-    unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {}
-    unsafe fn set_stencil_reference(&mut self, value: u32) {}
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {}
+    unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
+        let vk_viewports = [vk::Viewport {
+            x: rect.x,
+            y: if self.device.private_caps.flip_y_requires_shift {
+                rect.y + rect.h
+            } else {
+                rect.y
+            },
+            width: rect.w,
+            height: -rect.h, // flip Y
+            min_depth: depth_range.start,
+            max_depth: depth_range.end,
+        }];
+        self.device
+            .raw
+            .cmd_set_viewport(self.active, 0, &vk_viewports);
+    }
+    unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {
+        let vk_scissors = [vk::Rect2D {
+            offset: vk::Offset2D {
+                x: rect.x as i32,
+                y: rect.y as i32,
+            },
+            extent: vk::Extent2D {
+                width: rect.w,
+                height: rect.h,
+            },
+        }];
+        self.device
+            .raw
+            .cmd_set_scissor(self.active, 0, &vk_scissors);
+    }
+    unsafe fn set_stencil_reference(&mut self, value: u32) {
+        self.device
+            .raw
+            .cmd_set_stencil_reference(self.active, vk::StencilFaceFlags::all(), value);
+    }
+    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {
+        let vk_constants = [
+            color.r as f32,
+            color.g as f32,
+            color.b as f32,
+            color.a as f32,
+        ];
+        self.device
+            .raw
+            .cmd_set_blend_constants(self.active, &vk_constants);
+    }
 
     unsafe fn draw(
         &mut self,
@@ -491,7 +612,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {}
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+        self.bind_point = vk::PipelineBindPoint::COMPUTE;
+    }
     unsafe fn end_compute_pass(&mut self) {}
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {

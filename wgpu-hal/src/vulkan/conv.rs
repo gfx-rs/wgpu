@@ -548,7 +548,7 @@ pub fn map_subresource_layers(
 ) -> (vk::ImageSubresourceLayers, vk::Offset3D) {
     let (base_array_layer, offset) = map_origin(base.origin, texture_dim);
     let subresource = vk::ImageSubresourceLayers {
-        aspect_mask: map_aspects(crate::FormatAspect::from(base.aspect) & texture_aspect),
+        aspect_mask: map_aspects(base.aspect & texture_aspect),
         mip_level: base.mip_level,
         base_array_layer,
         layer_count,
