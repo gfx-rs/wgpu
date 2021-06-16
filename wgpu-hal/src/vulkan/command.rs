@@ -1,9 +1,10 @@
 use super::conv;
 
+use arrayvec::ArrayVec;
 use ash::{version::DeviceV1_0, vk};
 use inplace_it::inplace_or_alloc_from_iter;
 
-use std::ops::Range;
+use std::{mem, ops::Range};
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -267,10 +268,33 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         });
     }
 
-    unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {}
-    unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {}
-    unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {}
-    unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {}
+    unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
+        self.device.raw.cmd_begin_query(
+            self.active,
+            set.raw,
+            index,
+            vk::QueryControlFlags::empty(),
+        );
+    }
+    unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {
+        self.device.raw.cmd_end_query(self.active, set.raw, index);
+    }
+    unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {
+        self.device.raw.cmd_write_timestamp(
+            self.active,
+            vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+            set.raw,
+            index,
+        );
+    }
+    unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {
+        self.device.raw.cmd_reset_query_pool(
+            self.active,
+            set.raw,
+            range.start,
+            range.end - range.start,
+        );
+    }
     unsafe fn copy_query_results(
         &mut self,
         set: &super::QuerySet,
@@ -278,12 +302,96 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
     ) {
+        self.device.raw.cmd_copy_query_pool_results(
+            self.active,
+            set.raw,
+            range.start,
+            range.end - range.start,
+            buffer.raw,
+            offset,
+            0,
+            vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
+        );
     }
 
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {}
-    unsafe fn end_render_pass(&mut self) {}
+    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+        let mut vk_clear_values = ArrayVec::<[vk::ClearValue; super::MAX_TOTAL_ATTACHMENTS]>::new();
+        let mut vk_image_views = ArrayVec::<[vk::ImageView; super::MAX_TOTAL_ATTACHMENTS]>::new();
+        let mut rp_key = super::RenderPassKey::default();
+        let mut fb_key = super::FramebufferKey::default();
+        let caps = &self.device.private_caps;
+
+        for cat in desc.color_attachments {
+            vk_clear_values.push(vk::ClearValue {
+                color: cat.make_vk_clear_color(),
+            });
+            vk_image_views.push(cat.target.view.raw);
+            rp_key.colors.push(super::ColorAttachmentKey {
+                base: cat.target.make_attachment_key(cat.ops, caps),
+                resolve: cat
+                    .resolve_target
+                    .as_ref()
+                    .map(|target| target.make_attachment_key(crate::AttachmentOp::STORE, caps)),
+            });
+            fb_key.add(cat.target.view);
+            if let Some(ref at) = cat.resolve_target {
+                vk_clear_values.push(mem::zeroed());
+                vk_image_views.push(at.view.raw);
+                fb_key.add(at.view);
+            }
+        }
+        if let Some(ref ds) = desc.depth_stencil_attachment {
+            vk_clear_values.push(vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: ds.clear_value.0,
+                    stencil: ds.clear_value.1,
+                },
+            });
+            vk_image_views.push(ds.target.view.raw);
+            rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
+                base: ds.target.make_attachment_key(ds.depth_ops, caps),
+                stencil_ops: ds.stencil_ops,
+            });
+            fb_key.add(ds.target.view);
+        }
+        rp_key.sample_count = fb_key.sample_count;
+
+        let render_area = vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: vk::Extent2D {
+                width: fb_key.extent.width,
+                height: fb_key.extent.height,
+            },
+        };
+
+        let raw_pass = self.device.make_render_pass(rp_key).unwrap();
+
+        let raw_framebuffer = self
+            .device
+            .make_framebuffer(fb_key, raw_pass, desc.label)
+            .unwrap();
+
+        let mut vk_attachment_info = vk::RenderPassAttachmentBeginInfo::builder()
+            .attachments(&vk_image_views)
+            .build();
+        let mut vk_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(raw_pass)
+            .render_area(render_area)
+            .clear_values(&vk_clear_values)
+            .framebuffer(raw_framebuffer);
+        if caps.imageless_framebuffers {
+            vk_info = vk_info.push_next(&mut vk_attachment_info);
+        }
+
+        self.device
+            .raw
+            .cmd_begin_render_pass(self.active, &vk_info, vk::SubpassContents::INLINE);
+    }
+    unsafe fn end_render_pass(&mut self) {
+        self.device.raw.cmd_end_render_pass(self.active);
+    }
 
     unsafe fn set_bind_group(
         &mut self,

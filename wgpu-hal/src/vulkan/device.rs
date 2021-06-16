@@ -5,7 +5,7 @@ use ash::{extensions::khr, version::DeviceV1_0, vk};
 use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
 
-use std::{collections::hash_map::Entry, ffi::CString, ptr, sync::Arc};
+use std::{cmp, collections::hash_map::Entry, ffi::CString, ptr, sync::Arc};
 
 impl super::DeviceShared {
     unsafe fn set_object_name(
@@ -145,6 +145,74 @@ impl super::DeviceShared {
                 let raw = unsafe { self.raw.create_render_pass(&vk_info, None)? };
 
                 *e.insert(raw)
+            }
+        })
+    }
+
+    pub fn make_framebuffer(
+        &self,
+        key: super::FramebufferKey,
+        raw_pass: vk::RenderPass,
+        pass_label: crate::Label,
+    ) -> Result<vk::Framebuffer, crate::DeviceError> {
+        Ok(match self.framebuffers.lock().entry(key) {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let vk_views = e
+                    .key()
+                    .attachments
+                    .iter()
+                    .map(|at| at.raw)
+                    .collect::<ArrayVec<[_; super::MAX_TOTAL_ATTACHMENTS]>>();
+                let vk_view_formats = e
+                    .key()
+                    .attachments
+                    .iter()
+                    .map(|at| self.private_caps.map_texture_format(at.view_format))
+                    .collect::<ArrayVec<[_; super::MAX_TOTAL_ATTACHMENTS]>>();
+                let vk_image_infos = e
+                    .key()
+                    .attachments
+                    .iter()
+                    .enumerate()
+                    .map(|(i, at)| {
+                        vk::FramebufferAttachmentImageInfo::builder()
+                            .usage(conv::map_texture_usage(at.texture_usage))
+                            .flags(at.raw_image_flags)
+                            .width(e.key().extent.width)
+                            .height(e.key().extent.height)
+                            .layer_count(e.key().extent.depth_or_array_layers)
+                            .view_formats(&vk_view_formats[i..i + 1])
+                            .build()
+                    })
+                    .collect::<ArrayVec<[_; super::MAX_TOTAL_ATTACHMENTS]>>();
+
+                let mut vk_attachment_info = vk::FramebufferAttachmentsCreateInfo::builder()
+                    .attachment_image_infos(&vk_image_infos)
+                    .build();
+                let mut vk_info = vk::FramebufferCreateInfo::builder()
+                    .render_pass(raw_pass)
+                    .width(e.key().extent.width)
+                    .height(e.key().extent.height)
+                    .layers(e.key().extent.depth_or_array_layers);
+
+                if self.private_caps.imageless_framebuffers {
+                    //TODO: https://github.com/MaikKlein/ash/issues/450
+                    vk_info = vk_info
+                        .flags(vk::FramebufferCreateFlags::IMAGELESS_KHR)
+                        .push_next(&mut vk_attachment_info);
+                    vk_info.attachment_count = e.key().attachments.len() as u32;
+                } else {
+                    vk_info = vk_info.attachments(&vk_views);
+                }
+
+                *e.insert(unsafe {
+                    let raw = self.raw.create_framebuffer(&vk_info, None).unwrap();
+                    if let Some(label) = pass_label {
+                        self.set_object_name(vk::ObjectType::FRAMEBUFFER, raw, label);
+                    }
+                    raw
+                })
             }
         })
     }
@@ -432,7 +500,7 @@ impl super::Device {
             device: Arc::clone(&self.shared),
             fence,
             images,
-            format: config.format,
+            config: config.clone(),
         })
     }
 }
@@ -562,13 +630,13 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
         let (array_layer_count, vk_extent) = conv::map_extent(desc.size, desc.dimension);
-        let mut flags = vk::ImageCreateFlags::empty();
+        let mut raw_flags = vk::ImageCreateFlags::empty();
         if desc.dimension == wgt::TextureDimension::D2 && desc.size.depth_or_array_layers % 6 == 0 {
-            flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
+            raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
         }
 
         let vk_info = vk::ImageCreateInfo::builder()
-            .flags(flags)
+            .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
             .format(self.shared.private_caps.map_texture_format(desc.format))
             .extent(vk_extent)
@@ -605,9 +673,13 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Texture {
             raw,
             block: Some(block),
+            usage: desc.usage,
             dim: desc.dimension,
             aspects: crate::FormatAspect::from(desc.format),
             format_info: desc.format.describe(),
+            sample_count: desc.sample_count,
+            size: desc.size,
+            raw_flags,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
@@ -627,7 +699,6 @@ impl crate::Device<super::Api> for super::Device {
             .image(texture.raw)
             .view_type(conv::map_view_dimension(desc.dimension))
             .format(self.shared.private_caps.map_texture_format(desc.format))
-            //.components(conv::map_swizzle(swizzle))
             .subresource_range(conv::map_subresource_range(&desc.range, texture.aspects));
 
         let mut image_view_info;
@@ -645,7 +716,29 @@ impl crate::Device<super::Api> for super::Device {
                 .set_object_name(vk::ObjectType::IMAGE_VIEW, raw, label);
         }
 
-        Ok(super::TextureView { raw })
+        let attachment = super::FramebufferAttachment {
+            raw: if self.shared.private_caps.imageless_framebuffers {
+                vk::ImageView::null()
+            } else {
+                raw
+            },
+            texture_usage: texture.usage,
+            raw_image_flags: texture.raw_flags,
+            view_format: desc.format,
+        };
+        let sample_count = texture.sample_count;
+        let render_size = wgt::Extent3d {
+            width: cmp::max(1, texture.size.width >> desc.range.base_mip_level),
+            height: cmp::max(1, texture.size.height >> desc.range.base_mip_level),
+            depth_or_array_layers: 1,
+        };
+
+        Ok(super::TextureView {
+            raw,
+            attachment,
+            sample_count,
+            render_size,
+        })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
         self.shared.raw.destroy_image_view(view.raw, None);
@@ -735,7 +828,7 @@ impl crate::Device<super::Api> for super::Device {
         let mut types = Vec::new();
         for entry in desc.entries {
             let count = entry.count.map_or(1, |c| c.get());
-            if entry.binding as usize > types.len() {
+            if entry.binding as usize >= types.len() {
                 types.resize(
                     entry.binding as usize + 1,
                     vk::DescriptorType::INPUT_ATTACHMENT,

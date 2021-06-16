@@ -715,6 +715,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let family_index = 0; //TODO
         let raw_queue = raw_device.get_device_queue(family_index, 0);
+
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
             instance: Arc::clone(&self.instance),
@@ -727,6 +728,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             private_caps: self.private_caps.clone(),
             _timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             render_passes: Mutex::new(Default::default()),
+            framebuffers: Mutex::new(Default::default()),
         });
         let queue = super::Queue {
             raw: raw_queue,

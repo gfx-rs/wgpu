@@ -17,6 +17,7 @@ use ash::{
 use parking_lot::Mutex;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
+const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_TARGETS * 2 + 1;
 
 #[derive(Clone)]
 pub struct Api;
@@ -72,7 +73,7 @@ struct Swapchain {
     device: Arc<DeviceShared>,
     fence: vk::Fence,
     images: Vec<vk::Image>,
-    format: wgt::TextureFormat,
+    config: crate::SurfaceConfiguration,
 }
 
 pub struct Surface {
@@ -172,6 +173,35 @@ struct RenderPassKey {
     sample_count: u32,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct FramebufferAttachment {
+    /// Can be NULL if the framebuffer is image-less
+    raw: vk::ImageView,
+    texture_usage: crate::TextureUse,
+    raw_image_flags: vk::ImageCreateFlags,
+    view_format: wgt::TextureFormat,
+}
+
+#[derive(Clone, Eq, Default, Hash, PartialEq)]
+struct FramebufferKey {
+    attachments: ArrayVec<[FramebufferAttachment; MAX_TOTAL_ATTACHMENTS]>,
+    extent: wgt::Extent3d,
+    sample_count: u32,
+}
+
+impl FramebufferKey {
+    fn add(&mut self, view: &TextureView) {
+        self.extent.width = self.extent.width.max(view.render_size.width);
+        self.extent.height = self.extent.height.max(view.render_size.height);
+        self.extent.depth_or_array_layers = self
+            .extent
+            .depth_or_array_layers
+            .max(view.render_size.depth_or_array_layers);
+        self.sample_count = self.sample_count.max(view.sample_count);
+        self.attachments.push(view.attachment.clone());
+    }
+}
+
 struct DeviceShared {
     raw: ash::Device,
     instance: Arc<InstanceShared>,
@@ -182,6 +212,7 @@ struct DeviceShared {
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     render_passes: Mutex<fxhash::FxHashMap<RenderPassKey, vk::RenderPass>>,
+    framebuffers: Mutex<fxhash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
 }
 
 pub struct Device {
@@ -210,14 +241,21 @@ pub struct Buffer {
 pub struct Texture {
     raw: vk::Image,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    usage: crate::TextureUse,
     dim: wgt::TextureDimension,
     aspects: crate::FormatAspect,
     format_info: wgt::TextureFormatInfo,
+    sample_count: u32,
+    size: wgt::Extent3d,
+    raw_flags: vk::ImageCreateFlags,
 }
 
 #[derive(Debug)]
 pub struct TextureView {
     raw: vk::ImageView,
+    attachment: FramebufferAttachment,
+    sample_count: u32,
+    render_size: wgt::Extent3d,
 }
 
 #[derive(Debug)]

@@ -110,6 +110,48 @@ impl super::PrivateCapabilities {
     }
 }
 
+impl crate::Attachment<'_, super::Api> {
+    pub(super) fn make_attachment_key(
+        &self,
+        ops: crate::AttachmentOp,
+        caps: &super::PrivateCapabilities,
+    ) -> super::AttachmentKey {
+        super::AttachmentKey {
+            format: caps.map_texture_format(self.view.attachment.view_format),
+            layout_pre: derive_image_layout(self.boundary_usage.start),
+            layout_in: derive_image_layout(self.usage),
+            layout_post: derive_image_layout(self.boundary_usage.end),
+            ops,
+        }
+    }
+}
+
+impl crate::ColorAttachment<'_, super::Api> {
+    pub(super) unsafe fn make_vk_clear_color(&self) -> vk::ClearColorValue {
+        let cv = &self.clear_value;
+        match self
+            .target
+            .view
+            .attachment
+            .view_format
+            .describe()
+            .sample_type
+        {
+            wgt::TextureSampleType::Float { .. } | wgt::TextureSampleType::Depth => {
+                vk::ClearColorValue {
+                    float32: [cv.r as f32, cv.g as f32, cv.b as f32, cv.a as f32],
+                }
+            }
+            wgt::TextureSampleType::Sint => vk::ClearColorValue {
+                int32: [cv.r as i32, cv.g as i32, cv.b as i32, cv.a as i32],
+            },
+            wgt::TextureSampleType::Uint => vk::ClearColorValue {
+                uint32: [cv.r as u32, cv.g as u32, cv.b as u32, cv.a as u32],
+            },
+        }
+    }
+}
+
 pub fn derive_image_layout(usage: crate::TextureUse) -> vk::ImageLayout {
     match usage {
         crate::TextureUse::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
