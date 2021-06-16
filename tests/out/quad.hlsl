@@ -19,7 +19,7 @@ struct FragmentInput {
 
 VertexOutput vert_main(VertexInput vertexinput)
 {
-    const VertexOutput vertexoutput1 = { vertexinput.uv3, float4((1.2 * vertexinput.pos1), 0.0, 1.0) };
+    const VertexOutput vertexoutput1 = { vertexinput.uv3, float4((c_scale * vertexinput.pos1), 0.0, 1.0) };
     return vertexoutput1;
 }
 

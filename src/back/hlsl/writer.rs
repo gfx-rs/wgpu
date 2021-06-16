@@ -100,6 +100,19 @@ impl<'a, W: Write> Writer<'a, W> {
         self.reset(module);
 
         // Write all constants
+        // For example, input wgsl shader:
+        // ```wgsl
+        // let c_scale: f32 = 1.2;
+        // return VertexOutput(uv, vec4<f32>(c_scale * pos, 0.0, 1.0));
+        // ```
+        //
+        // Output shader:
+        // ```hlsl
+        // static const float c_scale = 1.2;
+        // const VertexOutput vertexoutput1 = { vertexinput.uv3, float4((c_scale * vertexinput.pos1), 0.0, 1.0) };
+        // ```
+        //
+        // If we remove `write_global_constant` `c_scale` will be inlined.
         for (handle, constant) in module.constants.iter() {
             if constant.name.is_some() {
                 self.write_global_constant(module, &constant.inner, handle)?;
@@ -304,18 +317,29 @@ impl<'a, W: Write> Writer<'a, W> {
                 width: _,
                 ref value,
             } => {
+                write!(self.out, "static const ")?;
+                // Write type
+                match *value {
+                    crate::ScalarValue::Sint(_) => write!(self.out, "int")?,
+                    crate::ScalarValue::Uint(_) => write!(self.out, "uint")?,
+                    crate::ScalarValue::Float(_) => write!(self.out, "float")?,
+                    crate::ScalarValue::Bool(_) => write!(self.out, "bool")?,
+                };
                 let name = &self.names[&NameKey::Constant(handle)];
-                let (ty, value) = match *value {
-                    crate::ScalarValue::Sint(value) => ("int", format!("{}", value)),
-                    crate::ScalarValue::Uint(value) => ("uint", format!("{}", value)),
+                write!(self.out, " {} = ", name)?;
+
+                // Second match required to avoid heap allocation by `format!()`
+                match *value {
+                    crate::ScalarValue::Sint(value) => write!(self.out, "{}", value)?,
+                    crate::ScalarValue::Uint(value) => write!(self.out, "{}", value)?,
                     crate::ScalarValue::Float(value) => {
                         // Floats are written using `Debug` instead of `Display` because it always appends the
                         // decimal part even it's zero
-                        ("float", format!("{:?}", value))
+                        write!(self.out, "{:?}", value)?
                     }
-                    crate::ScalarValue::Bool(value) => ("bool", format!("{}", value)),
+                    crate::ScalarValue::Bool(value) => write!(self.out, "{}", value)?,
                 };
-                writeln!(self.out, "static const {} {} = {};", ty, name, value)?;
+                writeln!(self.out, ";")?;
             }
             ConstantInner::Composite { .. } => {
                 return Err(Error::Unimplemented(format!(
@@ -773,19 +797,24 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
             Expression::FunctionArgument(pos) => {
-                let name = match func_ctx.ty {
+                match func_ctx.ty {
                     FunctionType::Function(handle) => {
-                        self.names[&NameKey::FunctionArgument(handle, pos)].clone()
+                        let name = &self.names[&NameKey::FunctionArgument(handle, pos)];
+                        write!(self.out, "{}", name)?;
                     }
                     FunctionType::EntryPoint(index) => {
                         // EntryPoint arguments wrapped into structure
                         // We can safery unwrap here, because if we write function arguments it means, that ep_input struct already exists
                         let ep_input = self.ep_inputs[index as usize].as_ref().unwrap();
                         let member_name = &ep_input.members[pos as usize].name;
-                        format!("{}.{}", &ep_input.name.to_lowercase(), member_name)
+                        write!(
+                            self.out,
+                            "{}.{}",
+                            &ep_input.name.to_lowercase(),
+                            member_name
+                        )?
                     }
                 };
-                write!(self.out, "{}", name)?;
             }
             Expression::ImageSample {
                 image,
@@ -826,7 +855,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 width: _,
                 ref value,
             } => {
-                self.write_scalar_value(*value)?;
+                if constant.name.is_some() {
+                    write!(self.out, "{}", &self.names[&NameKey::Constant(handle)])?;
+                } else {
+                    self.write_scalar_value(*value)?;
+                }
             }
             _ => {
                 return Err(Error::Unimplemented(format!(

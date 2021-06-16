@@ -238,7 +238,10 @@ fn check_output_hlsl(module: &naga::Module, info: &naga::valid::ModuleInfo, dest
             }
             naga::ShaderStage::Compute => ("compute", "cs_5_0", &options.compute_entry_point_name),
         };
-        config_str = format!("{}{}={}\n{}_name={}\n", config_str, stage_str, profile, stage_str, ep_name);
+        config_str = format!(
+            "{}{}={}\n{}_name={}\n",
+            config_str, stage_str, profile, stage_str, ep_name
+        );
     }
     fs::write(destination.with_extension("hlsl.config"), config_str).unwrap();
 }
