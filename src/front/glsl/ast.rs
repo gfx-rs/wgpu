@@ -805,6 +805,13 @@ impl<'function> Context<'function> {
             .and_then(type_power))
     }
 
+    pub fn expr_is_swizzle(&mut self, expr: Handle<Expression>) -> bool {
+        match self.expressions[expr] {
+            Expression::Swizzle { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn implicit_conversion(
         &mut self,
         program: &mut Program,

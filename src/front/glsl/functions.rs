@@ -1,7 +1,7 @@
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, EntryPoint, Expression, Function,
-    FunctionArgument, FunctionResult, Handle, MathFunction, RelationalFunction, SampleLevel,
-    ScalarKind, Statement, StructMember, SwizzleComponent, Type, TypeInner,
+    FunctionArgument, FunctionResult, Handle, LocalVariable, MathFunction, RelationalFunction,
+    SampleLevel, ScalarKind, Statement, StructMember, SwizzleComponent, Type, TypeInner,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -369,9 +369,30 @@ impl Program<'_> {
                             .clone();
 
                         let mut arguments = Vec::with_capacity(raw_args.len());
+                        let mut proxy_writes = Vec::new();
                         for (qualifier, expr) in fun.qualifiers.iter().zip(raw_args.iter()) {
                             let handle = ctx.lower_expect(self, *expr, qualifier.is_lhs(), body)?.0;
-                            arguments.push(handle)
+                            if qualifier.is_lhs() && ctx.expr_is_swizzle(handle) {
+                                let meta = ctx.hir_exprs[*expr].meta;
+                                let ty = self.resolve_handle(ctx, handle, meta)?;
+                                let temp_var = ctx.locals.append(LocalVariable {
+                                    name: None,
+                                    ty,
+                                    init: None,
+                                });
+                                let temp_expr =
+                                    ctx.add_expression(Expression::LocalVariable(temp_var), body);
+
+                                body.push(Statement::Store {
+                                    pointer: temp_expr,
+                                    value: handle,
+                                });
+
+                                arguments.push(temp_expr);
+                                proxy_writes.push((*expr, temp_expr));
+                            } else {
+                                arguments.push(handle);
+                            }
                         }
 
                         ctx.emit_flush(body);
@@ -388,6 +409,29 @@ impl Program<'_> {
                             result,
                         });
 
+                        ctx.emit_start();
+                        for (tgt, pointer) in proxy_writes {
+                            let load = ctx.add_expression(Expression::Load { pointer }, body);
+                            let temp_ref = ctx.hir_exprs.append(HirExpr {
+                                kind: HirExprKind::Variable(VariableReference {
+                                    expr: pointer,
+                                    load: Some(load),
+                                    mutable: true,
+                                    entry_arg: None,
+                                }),
+                                meta,
+                            });
+                            let assign = ctx.hir_exprs.append(HirExpr {
+                                kind: HirExprKind::Assign {
+                                    tgt,
+                                    value: temp_ref,
+                                },
+                                meta,
+                            });
+
+                            let _ = ctx.lower_expect(self, assign, false, body)?;
+                        }
+                        ctx.emit_flush(body);
                         ctx.emit_start();
 
                         Ok(result)
