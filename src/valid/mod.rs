@@ -264,7 +264,6 @@ impl Validator {
             }
         }
 
-        // doing after the globals, so that `type_flags` is ready
         for (handle, ty) in module.types.iter() {
             let ty_info = self
                 .validate_type(handle, &module.types, &module.constants)
