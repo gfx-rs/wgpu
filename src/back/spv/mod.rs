@@ -127,14 +127,26 @@ impl Function {
     }
 }
 
+/// A SPIR-V type constructed during code generation.
+///
+/// In the process of writing SPIR-V, we need to synthesize various types for
+/// intermediate results and such. However, it's inconvenient to use
+/// `crate::Type` or `crate::TypeInner` for these, as the IR module is immutable
+/// so we can't ever create a `Handle<Type>` to refer to them. So for local use
+/// in the SPIR-V writer, we have this home-grown type enum that covers only the
+/// cases we need (for example, it doesn't cover structs).
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LocalType {
+    /// A scalar, vector, or pointer to one of those.
     Value {
+        /// If `None`, this represents a scalar type. If `Some`, this represents
+        /// a vector type of the given size.
         vector_size: Option<crate::VectorSize>,
         kind: crate::ScalarKind,
         width: crate::Bytes,
         pointer_class: Option<spirv::StorageClass>,
     },
+    /// A matrix of floating-point values.
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,

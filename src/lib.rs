@@ -476,6 +476,26 @@ pub enum TypeInner {
         width: Bytes,
     },
     /// Pointer to another type.
+    ///
+    /// ## Pointers to non-`SIZED` types
+    ///
+    /// The `base` type of a pointer may be a non-[`SIZED`] type like a
+    /// dynamically-sized [`Array`], or a [`Struct`] whose last member is a
+    /// dynamically sized array. Such pointers occur as the types of
+    /// [`GlobalVariable`] or [`AccessIndex`] expressions referring to
+    /// dynamically-sized arrays.
+    ///
+    /// However, among pointers to non-`SIZED` types, only pointers to `Struct`s
+    /// are [`DATA`]. Pointers to dynamically sized `Array`s cannot be passed as
+    /// arguments, stored in variables, or held in arrays or structures. Their
+    /// only use is as the types of `AccessIndex` expressions.
+    ///
+    /// [`SIZED`]: valid::TypeFlags::SIZED
+    /// [`DATA`]: valid::TypeFlags::DATA
+    /// [`Array`]: TypeInner::Array
+    /// [`Struct`]: TypeInner::Struct
+    /// [`GlobalVariable`]: Expression::GlobalVariable
+    /// [`AccessIndex`]: Expression::AccessIndex
     Pointer {
         base: Handle<Type>,
         class: StorageClass,
@@ -487,14 +507,57 @@ pub enum TypeInner {
         width: Bytes,
         class: StorageClass,
     },
+
     /// Homogenous list of elements.
+    ///
+    /// The `base` type must be a [`SIZED`], [`DATA`] type.
+    ///
+    /// ## Dynamically sized arrays
+    ///
+    /// An `Array` is [`SIZED`] unless its `size` is [`Dynamic`].
+    /// Dynamically-sized arrays may only appear in a few situations:
+    ///
+    /// -   They may appear as the last member of a [`Struct`] whose `top_level`
+    ///     flag is set.
+    ///
+    /// -   They may appear as the base type of a [`Pointer`]. An
+    ///     [`AccessIndex`] expression referring to a top-level struct's final
+    ///     unsized array member would have such a pointer type. However, such
+    ///     pointer types may only appear as the types of such intermediate
+    ///     expressions. They are not [`DATA`], and cannot be stored in
+    ///     variables, held in arrays or structs, or passed as parameters.
+    ///
+    /// [`SIZED`]: crate::valid::TypeFlags::SIZED
+    /// [`DATA`]: crate::valid::TypeFlags::DATA
+    /// [`Dynamic`]: ArraySize::Dynamic
+    /// [`Struct`]: TypeInner::Struct
+    /// [`Pointer`]: TypeInner::Pointer
+    /// [`AccessIndex`]: Expression::AccessIndex
     Array {
         base: Handle<Type>,
         size: ArraySize,
         stride: u32,
     },
+
     /// User-defined structure.
+    ///
+    /// A `Struct` type is [`DATA`], and the types of its members must be
+    /// `DATA` as well.
+    ///
+    /// Member types must be [`SIZED`], except for the final member of a
+    /// top-level struct, which may be a dynamically sized [`Array`]. The
+    /// `Struct` type itself is `SIZED` when all its members are `SIZED`.
+    ///
+    /// When `top_level` is true, this `Struct` represents the contents of a
+    /// buffer resource occupying a single binding slot in a shader's resource
+    /// interface. Top-level `Struct`s may not be used as members of any other
+    /// struct, or as array elements.
+    ///
+    /// [`DATA`]: crate::valid::TypeFlags::DATA
+    /// [`SIZED`]: crate::valid::TypeFlags::SIZED
+    /// [`Array`]: TypeInner::Array
     Struct {
+        /// This struct serves as the type of a binding slot in a shader's resource interface.
         top_level: bool,
         members: Vec<StructMember>,
         //TODO: should this be unaligned?

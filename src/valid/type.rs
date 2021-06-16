@@ -5,16 +5,45 @@ use crate::{
 };
 
 bitflags::bitflags! {
+    /// Flags associated with [`Type`]s by [`Validator`].
+    ///
+    /// [`Type`]: crate::Type
+    /// [`Validator`]: crate::valid::Validator
     #[repr(transparent)]
     pub struct TypeFlags: u8 {
         /// Can be used for data variables.
+        ///
+        /// This flag is required on types of local variables, function
+        /// arguments, array elements, and struct members.
+        ///
+        /// This includes all types except `Image`, `Sampler`, `ValuePointer`,
+        /// and some `Pointer` types.
         const DATA = 0x1;
-        /// The data type has known size.
+
+        /// The data type has a size known by pipeline creation time.
+        ///
+        /// Unsized types are quite restricted. The only unsized types permitted
+        /// by Naga, other than the non-[`DATA`] types like [`Image`] and
+        /// [`Sampler`], are dynamically-sized [`Array`s], and [`Struct`s] whose
+        /// last members are such arrays. See the documentation for those types
+        /// for details.
+        ///
+        /// [`DATA`]: TypeFlags::DATA
+        /// [`Image`]: crate::Type::Image
+        /// [`Sampler`]: crate::Type::Sampler
+        /// [`Array`]: crate::Type::Array
+        /// [`Struct`]: crate::Type::struct
         const SIZED = 0x2;
+
         /// Can be be used for interfacing between pipeline stages.
+        ///
+        /// This includes non-bool scalars and vectors, matrices, and structs
+        /// and arrays containing only interface types.
         const INTERFACE = 0x4;
+
         /// Can be used for host-shareable structures.
         const HOST_SHARED = 0x8;
+
         /// This is a top-level host-shareable type.
         const TOP_LEVEL = 0x10;
     }
