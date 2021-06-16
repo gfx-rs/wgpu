@@ -137,6 +137,7 @@ impl Program<'_> {
     pub fn field_selection(
         &mut self,
         ctx: &mut Context,
+        lhs: bool,
         body: &mut Block,
         expression: Handle<Expression>,
         name: &str,
@@ -164,48 +165,75 @@ impl Program<'_> {
             TypeInner::Vector { size, .. } => {
                 let check_swizzle_components = |comps: &str| {
                     name.chars()
-                        .map(|c| comps.find(c).filter(|i| *i < size as usize))
-                        .collect::<Option<Vec<usize>>>()
+                        .map(|c| {
+                            comps
+                                .find(c)
+                                .filter(|i| *i < size as usize)
+                                .map(|i| SwizzleComponent::from_index(i as u32))
+                        })
+                        .collect::<Option<Vec<SwizzleComponent>>>()
                 };
 
-                let indices = check_swizzle_components("xyzw")
+                let components = check_swizzle_components("xyzw")
                     .or_else(|| check_swizzle_components("rgba"))
                     .or_else(|| check_swizzle_components("stpq"));
 
-                if let Some(components) = indices {
-                    if components.len() == 1 {
-                        // only single element swizzle, like pos.y, just return that component
-                        return Ok(ctx.add_expression(
-                            Expression::AccessIndex {
-                                base: expression,
-                                index: components[0] as u32,
-                            },
-                            body,
-                        ));
+                if let Some(components) = components {
+                    if lhs {
+                        let not_unique = (1..components.len())
+                            .any(|i| components[i..].contains(&components[i - 1]));
+                        if not_unique {
+                            return Err(ErrorKind::SemanticError(
+                                meta,
+                                format!(
+                                    "swizzle cannot have duplicate components in left-hand-side expression for \"{:?}\"",
+                                    name
+                                )
+                                .into(),
+                            ));
+                        }
+                    }
+
+                    let mut pattern = [SwizzleComponent::X; 4];
+                    for (pat, component) in pattern.iter_mut().zip(&components) {
+                        *pat = *component;
+                    }
+
+                    // flatten nested swizzles (vec.zyx.xy.x => vec.z)
+                    let mut expression = expression;
+                    if let Expression::Swizzle {
+                        size: _,
+                        ref vector,
+                        pattern: ref src_pattern,
+                    } = *ctx.expr(expression)
+                    {
+                        expression = *vector;
+                        for pat in &mut pattern {
+                            *pat = src_pattern[pat.index() as usize];
+                        }
                     }
 
                     let size = match components.len() {
+                        1 => {
+                            // only single element swizzle, like pos.y, just return that component
+                            return Ok(ctx.add_expression(
+                                Expression::AccessIndex {
+                                    base: expression,
+                                    index: pattern[0].index(),
+                                },
+                                body,
+                            ));
+                        }
                         2 => VectorSize::Bi,
                         3 => VectorSize::Tri,
                         4 => VectorSize::Quad,
                         _ => {
                             return Err(ErrorKind::SemanticError(
                                 meta,
-                                format!("Bad swizzle size for \"{:?}\": {:?}", name, components)
-                                    .into(),
+                                format!("Bad swizzle size for \"{:?}\"", name).into(),
                             ));
                         }
                     };
-
-                    let mut pattern = [SwizzleComponent::X; 4];
-                    for (pat, index) in pattern.iter_mut().zip(components) {
-                        *pat = match index {
-                            0 => SwizzleComponent::X,
-                            1 => SwizzleComponent::Y,
-                            2 => SwizzleComponent::Z,
-                            _ => SwizzleComponent::W,
-                        };
-                    }
 
                     Ok(ctx.add_expression(
                         Expression::Swizzle {
@@ -393,25 +421,20 @@ impl Program<'_> {
 
             return Ok(GlobalOrConstant::Global(handle));
         } else if let StorageQualifier::Const = storage {
-            if let Some(init) = init {
-                if let Some(name) = name {
-                    self.global_variables.push((
-                        name,
-                        GlobalLookup {
-                            kind: GlobalLookupKind::Constant(init),
-                            entry_arg: None,
-                            mutable: false,
-                        },
-                    ));
-                }
-
-                return Ok(GlobalOrConstant::Constant(init));
-            } else {
-                return Err(ErrorKind::SemanticError(
-                    meta,
-                    "const values must have an initializer".into(),
+            let init = init.ok_or_else(|| {
+                ErrorKind::SemanticError(meta, "const values must have an initializer".into())
+            })?;
+            if let Some(name) = name {
+                self.global_variables.push((
+                    name,
+                    GlobalLookup {
+                        kind: GlobalLookupKind::Constant(init),
+                        entry_arg: None,
+                        mutable: false,
+                    },
                 ));
             }
+            return Ok(GlobalOrConstant::Constant(init));
         }
 
         let (class, storage_access) = match self.module.types[ty].inner {

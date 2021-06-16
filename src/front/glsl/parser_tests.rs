@@ -517,3 +517,47 @@ fn structs() {
     )
     .unwrap_err();
 }
+
+#[test]
+fn swizzles() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Fragment);
+
+    parse_program(
+        r#"
+        #  version 450
+        void main() {
+            vec4 v = vec4(1);
+            v.xyz = vec3(2);
+            v.x = 5.0;
+            v.xyz.zxy.yx.xy = vec2(5.0, 1.0);
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+
+    parse_program(
+        r#"
+        #  version 450
+        void main() {
+            vec4 v = vec4(1);
+            v.xx = vec2(5.0);
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap_err();
+
+    parse_program(
+        r#"
+        #  version 450
+        void main() {
+            vec3 v = vec3(1);
+            v.w = 2.0;
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap_err();
+}

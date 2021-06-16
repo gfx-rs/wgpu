@@ -48,12 +48,7 @@ impl Program<'_> {
                                 Expression::Swizzle {
                                     size,
                                     vector: args[0].0,
-                                    pattern: [
-                                        SwizzleComponent::X,
-                                        SwizzleComponent::Y,
-                                        SwizzleComponent::Z,
-                                        SwizzleComponent::W,
-                                    ],
+                                    pattern: SwizzleComponent::XYZW,
                                 },
                                 body,
                             );
@@ -93,12 +88,7 @@ impl Program<'_> {
                                             Expression::Swizzle {
                                                 size: rows,
                                                 vector,
-                                                pattern: [
-                                                    SwizzleComponent::X,
-                                                    SwizzleComponent::Y,
-                                                    SwizzleComponent::Z,
-                                                    SwizzleComponent::W,
-                                                ],
+                                                pattern: SwizzleComponent::XYZW,
                                             },
                                             body,
                                         );
@@ -372,7 +362,9 @@ impl Program<'_> {
                         let mut proxy_writes = Vec::new();
                         for (qualifier, expr) in fun.qualifiers.iter().zip(raw_args.iter()) {
                             let handle = ctx.lower_expect(self, *expr, qualifier.is_lhs(), body)?.0;
-                            if qualifier.is_lhs() && ctx.expr_is_swizzle(handle) {
+                            if qualifier.is_lhs()
+                                && matches! { ctx.expr(handle), &Expression::Swizzle { .. } }
+                            {
                                 let meta = ctx.hir_exprs[*expr].meta;
                                 let ty = self.resolve_handle(ctx, handle, meta)?;
                                 let temp_var = ctx.locals.append(LocalVariable {

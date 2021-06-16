@@ -8,7 +8,7 @@ use crate::{
     proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant, Expression, FastHashMap,
     Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
     RelationalFunction, ResourceBinding, Sampling, ScalarKind, ShaderStage, Statement,
-    StorageClass, SwizzleComponent, Type, TypeInner, UnaryOperator, VectorSize,
+    StorageClass, Type, TypeInner, UnaryOperator, VectorSize,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -511,7 +511,7 @@ impl<'function> Context<'function> {
             HirExprKind::Select { base, field } => {
                 let base = self.lower_expect(program, base, lhs, body)?.0;
 
-                program.field_selection(self, body, base, &field, meta)?
+                program.field_selection(self, lhs, body, base, &field, meta)?
             }
             HirExprKind::Constant(constant) if !lhs => {
                 self.add_expression(Expression::Constant(constant), body)
@@ -651,12 +651,7 @@ impl<'function> Context<'function> {
                         let dst = self.add_expression(
                             Expression::AccessIndex {
                                 base: vector,
-                                index: match pattern[index] {
-                                    SwizzleComponent::X => 0,
-                                    SwizzleComponent::Y => 1,
-                                    SwizzleComponent::Z => 2,
-                                    SwizzleComponent::W => 3,
-                                },
+                                index: pattern[index].index(),
                             },
                             body,
                         );
@@ -805,11 +800,8 @@ impl<'function> Context<'function> {
             .and_then(type_power))
     }
 
-    pub fn expr_is_swizzle(&mut self, expr: Handle<Expression>) -> bool {
-        match self.expressions[expr] {
-            Expression::Swizzle { .. } => true,
-            _ => false,
-        }
+    pub fn expr(&self, expr: Handle<Expression>) -> &Expression {
+        &self.expressions[expr]
     }
 
     pub fn implicit_conversion(
