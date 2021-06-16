@@ -41,7 +41,7 @@ jobs:
       - name: Unpack shaders
         run: cd data && unzip all.zip
       - name: Build Naga
-        run: cargo build --release --features spv-in,msl-out --bin naga
+        run: cargo build --release --bin naga
       - name: Convert shaders
         run: for file in data/*.spv ; do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
   parse-vulkan-tutorial-shaders:
@@ -56,7 +56,7 @@ jobs:
       - name: Download shaders
         run: git clone https://github.com/SaschaWillems/Vulkan.git
       - name: Build Naga
-        run: cargo build --release --features spv-in,msl-out --bin naga
+        run: cargo build --release --bin naga
       - name: Convert metal shaders
         run: |
           # No needed to stop workflow if we can't validate one file
