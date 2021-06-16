@@ -19,7 +19,13 @@ jobs:
       - uses: actions-rs/cargo@v1
         name: Default test
         with:
+          # Our intention here is to test `naga` with no features enabled. But
+          # since `cli` is the default package, a plain `cargo test` will build
+          # `naga` with the features requested in `cli/Cargo.toml`. Passing
+          # `--package naga` causes us to use the default features in the
+          # top-level `Cargo.toml` instead.
           command: test
+          args: --package naga
       - uses: actions-rs/cargo@v1
         name: Test all features
         with:

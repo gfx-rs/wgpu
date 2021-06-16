@@ -52,4 +52,8 @@ rspirv = "0.7"
 
 [workspace]
 members = [".", "cli"]
-default-members = ["cli"]
+
+# Include "cli", so that `cargo run` runs the CLI by default. Include ".", so
+# that `cargo test` includes naga's own tests by default (but note, using the
+# features that `cli/Cargo.toml` requests).
+default-members = [".", "cli"]
