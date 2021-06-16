@@ -9,11 +9,16 @@ repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 exclude = ["etc/**/*", "examples/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
+autotests = false
 
 [package.metadata.docs.rs]
 all-features = true
 
 [lib]
+
+[[test]]
+name = "wgpu-tests"
+path = "tests/root.rs"
 
 [features]
 default = []

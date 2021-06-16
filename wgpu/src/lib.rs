@@ -6,8 +6,6 @@
 #![warn(missing_docs)]
 
 mod backend;
-#[doc(hidden)]
-pub mod test;
 pub mod util;
 #[macro_use]
 mod macros;

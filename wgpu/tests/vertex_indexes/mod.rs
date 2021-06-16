@@ -1,13 +1,13 @@
 use std::num::NonZeroU64;
 
-use wgpu::test::TestParameters;
-
-use super::initialize_test;
+use crate::common::{initialize_test, TestParameters};
 
 #[test]
 fn draw() {
     initialize_test(
-        TestParameters::default().features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+        TestParameters::default()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
+            .failure(),
         |ctx| {
             let shader = ctx
                 .device

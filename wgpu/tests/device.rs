@@ -1,6 +1,4 @@
-use wgpu::test::{TestParameters};
-
-use super::initialize_test;
+use crate::common::{initialize_test, TestParameters};
 
 #[test]
 fn device_initialization() {

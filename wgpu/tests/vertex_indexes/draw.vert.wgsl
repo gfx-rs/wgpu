@@ -11,3 +11,6 @@ fn vs_main([[builtin(vertex_index)]] instance: u32, [[builtin(vertex_index)]] in
     indices.arr[index] = instance;
     return vec4<f32>(0.0, 0.0, 0.0, 1.0);
 }
+
+[[stage(fragment)]]
+fn fs_main() -> [[location(0)]] vec4<f32>

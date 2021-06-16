@@ -3,29 +3,10 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use wgt::{
-    BackendBit, DeviceDescriptor, DownlevelProperties, Features, Limits, PowerPreference,
-    RequestAdapterOptions,
+    BackendBit, DeviceDescriptor, DownlevelProperties, Features, Limits,
 };
 
-use crate::{util, Adapter, Device, Instance, Queue};
-
-pub async fn initialize_adapter_from_env_or_default(
-    instance: &Instance,
-    backend_bits: BackendBit,
-) -> Option<Adapter> {
-    match util::initialize_adapter_from_env(&instance, backend_bits) {
-        Some(a) => Some(a),
-        None => {
-            instance
-                .request_adapter(&RequestAdapterOptions {
-                    power_preference: util::power_preference_from_env()
-                        .unwrap_or_else(PowerPreference::default),
-                    compatible_surface: None,
-                })
-                .await
-        }
-    }
-}
+use wgpu::{util, Adapter, Device, Instance, Queue};
 
 async fn initialize_device(
     adapter: &Adapter,
@@ -49,19 +30,11 @@ async fn initialize_device(
     }
 }
 
-pub struct TestingContext<'a> {
-    pub adapter: &'a Adapter,
+pub struct TestingContext {
+    pub adapter: Adapter,
     pub adapter_info: wgt::AdapterInfo,
-    pub device: &'a Device,
-    pub queue: &'a Queue,
-}
-
-impl<'a> std::ops::Deref for TestingContext<'a> {
-    type Target = &'a Adapter;
-
-    fn deref(&self) -> &Self::Target {
-        &self.adapter
-    }
+    pub device: Device,
+    pub queue: Queue,
 }
 
 // A rather arbitrary set of limits which should be lower than all devices wgpu reasonably expects to run on and provides enough resources for most tests to run.
@@ -126,9 +99,10 @@ impl Default for TestParameters {
 }
 
 // Builder pattern to make it easier
+#[allow(dead_code)]
 impl TestParameters {
     pub fn features(mut self, features: Features) -> Self {
-        self.required_features &= features;
+        self.required_features |= features;
         self
     }
 
@@ -138,14 +112,16 @@ impl TestParameters {
     }
 }
 
-pub async fn initialize_test_core(
+pub fn initialize_test(
     parameters: TestParameters,
-    test_function: impl FnOnce(&mut TestingContext<'_>),
+    test_function: impl FnOnce(TestingContext),
 ) {
+        // We don't actually care if it fails
+        let _ = env_logger::try_init();
+
     let backend_bits = util::backend_bits_from_env().unwrap_or(BackendBit::all());
     let instance = Instance::new(backend_bits);
-    let adapter = initialize_adapter_from_env_or_default(&instance, backend_bits)
-        .await
+    let adapter = pollster::block_on(util::initialize_adapter_from_env_or_default(&instance, backend_bits))
         .expect("could not find sutable adapter on the system");
 
     let adapter_info = adapter.get_info();
@@ -185,21 +161,20 @@ pub async fn initialize_test_core(
         return;
     }
 
-    let (device, queue) = initialize_device(
+    let (device, queue) = pollster::block_on(initialize_device(
         &adapter,
         parameters.required_features,
         parameters.required_limits,
-    )
-    .await;
+    ));
 
-    let mut context = TestingContext {
-        adapter: &adapter,
+    let context = TestingContext {
+        adapter,
         adapter_info: adapter_info.clone(),
-        device: &device,
-        queue: &queue,
+        device,
+        queue,
     };
 
-    let panicked = catch_unwind(AssertUnwindSafe(|| test_function(&mut context))).is_err();
+    let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
 
     let expect_failure_backend = parameters
         .backend_failures

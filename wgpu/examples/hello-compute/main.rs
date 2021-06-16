@@ -54,6 +54,20 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         .await
         .unwrap();
 
+    let info = adapter.get_info();
+    // skip this on LavaPipe temporarily
+    if info.vendor == 0x10005 {
+        return None;
+    }
+
+    execute_gpu_inner(&device, &queue, numbers).await
+}
+
+async fn execute_gpu_inner(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    numbers: &[u32],
+) -> Option<Vec<u32>> {
     // Loads the shader from WGSL
     let cs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
         label: None,
@@ -183,50 +197,94 @@ fn main() {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
+    #[path = "../../../tests/common/mod.rs"]
+    mod common;
+
+    use std::sync::Arc;
+
     use super::*;
+    use common::{initialize_test, TestParameters};
 
     #[test]
     fn test_compute_1() {
-        let input = &[1, 2, 3, 4];
-        pollster::block_on(assert_execute_gpu(input, &[0, 1, 7, 2]));
+        initialize_test(TestParameters::default(), |ctx| {
+            let input = &[1, 2, 3, 4];
+
+            pollster::block_on(assert_execute_gpu(
+                &ctx.device,
+                &ctx.queue,
+                input,
+                &[0, 1, 7, 2],
+            ));
+        });
     }
 
     #[test]
     fn test_compute_2() {
-        let input = &[5, 23, 10, 9];
-        pollster::block_on(assert_execute_gpu(input, &[5, 15, 6, 19]));
+        initialize_test(TestParameters::default(), |ctx| {
+            let input = &[5, 23, 10, 9];
+
+            pollster::block_on(assert_execute_gpu(
+                &ctx.device,
+                &ctx.queue,
+                input,
+                &[5, 15, 6, 19],
+            ));
+        });
     }
 
     #[test]
     fn test_compute_overflow() {
-        let input = &[77031, 837799, 8400511, 63728127];
-        pollster::block_on(assert_execute_gpu(input, &[350, 524, OVERFLOW, OVERFLOW]));
+        initialize_test(TestParameters::default(), |ctx| {
+            let input = &[77031, 837799, 8400511, 63728127];
+            pollster::block_on(assert_execute_gpu(
+                &ctx.device,
+                &ctx.queue,
+                input,
+                &[350, 524, OVERFLOW, OVERFLOW],
+            ));
+        });
     }
 
     #[test]
     fn test_multithreaded_compute() {
-        use std::{sync::mpsc, thread, time::Duration};
+        initialize_test(TestParameters::default(), |ctx| {
+            use std::{sync::mpsc, thread, time::Duration};
 
-        let thread_count = 8;
+            let ctx = Arc::new(ctx);
 
-        let (tx, rx) = mpsc::channel();
-        for _ in 0..thread_count {
-            let tx = tx.clone();
-            thread::spawn(move || {
-                let input = &[100, 100, 100];
-                pollster::block_on(assert_execute_gpu(input, &[25, 25, 25]));
-                tx.send(true).unwrap();
-            });
-        }
+            let thread_count = 8;
 
-        for _ in 0..thread_count {
-            rx.recv_timeout(Duration::from_secs(10))
-                .expect("A thread never completed.");
-        }
+            let (tx, rx) = mpsc::channel();
+            for _ in 0..thread_count {
+                let tx = tx.clone();
+                let ctx = Arc::clone(&ctx);
+                thread::spawn(move || {
+                    let input = &[100, 100, 100];
+                    pollster::block_on(assert_execute_gpu(
+                        &ctx.device,
+                        &ctx.queue,
+                        input,
+                        &[25, 25, 25],
+                    ));
+                    tx.send(true).unwrap();
+                });
+            }
+
+            for _ in 0..thread_count {
+                rx.recv_timeout(Duration::from_secs(10))
+                    .expect("A thread never completed.");
+            }
+        });
     }
 
-    async fn assert_execute_gpu(input: &[u32], expected: &[u32]) {
-        if let Some(produced) = execute_gpu(input).await {
+    async fn assert_execute_gpu(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        input: &[u32],
+        expected: &[u32],
+    ) {
+        if let Some(produced) = execute_gpu_inner(device, queue, input).await {
             assert_eq!(produced, expected);
         }
     }
