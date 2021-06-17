@@ -5,7 +5,7 @@ use crate::{
     back::{hlsl::keywords::RESERVED, vector_size_str},
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
-    Arena, BuiltIn, Bytes, Constant, ConstantInner, Expression, FastHashMap, Function,
+    Arena, ArraySize, BuiltIn, Bytes, Constant, ConstantInner, Expression, FastHashMap, Function,
     GlobalVariable, Handle, ImageDimension, LocalVariable, Module, ScalarKind, ScalarValue,
     ShaderStage, Statement, StructMember, Type, TypeInner,
 };
@@ -14,6 +14,7 @@ use std::fmt::Write;
 const INDENT: &str = "    ";
 const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 const LOCATION_SEMANTIC: &str = "LOC";
+const BAKE_PREFIX: &str = "_e";
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
@@ -119,16 +120,6 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        // Write all globals
-        for (ty, _) in module.global_variables.iter() {
-            self.write_global(module, ty)?;
-        }
-
-        if !module.global_variables.is_empty() {
-            // Add extra newline for readability
-            writeln!(self.out)?;
-        }
-
         // Write all structs
         for (handle, ty) in module.types.iter() {
             if let TypeInner::Struct {
@@ -140,6 +131,16 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_struct(module, handle, top_level, members)?;
                 writeln!(self.out)?;
             }
+        }
+
+        // Write all globals
+        for (ty, _) in module.global_variables.iter() {
+            self.write_global(module, ty)?;
+        }
+
+        if !module.global_variables.is_empty() {
+            // Add extra newline for readability
+            writeln!(self.out)?;
         }
 
         // Write all entry points wrapped structs
@@ -276,27 +277,33 @@ impl<'a, W: Write> Writer<'a, W> {
         let global = &module.global_variables[handle];
         let inner = &module.types[global.ty].inner;
 
-        let register_ty = match *inner {
-            TypeInner::Image { .. } => "t",
-            TypeInner::Sampler { .. } => "s",
+        let (storage_class, register_ty) = match *inner {
+            TypeInner::Image { .. } => ("", "t"),
+            TypeInner::Sampler { .. } => ("", "s"),
+            TypeInner::Struct { .. } | TypeInner::Vector { .. } => ("static ", ""),
             // TODO: other register ty https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
             _ => return Err(Error::Unimplemented(format!("register_ty {:?}", inner))),
         };
 
-        let register = if let Some(ref binding) = global.binding {
-            format!("register({}{})", register_ty, binding.binding)
-        } else {
-            String::from("")
-        };
-
-        let name = self.names[&NameKey::GlobalVariable(handle)].clone();
+        write!(self.out, "{}", storage_class)?;
         self.write_type(module, global.ty)?;
-        write!(self.out, " {}", name)?;
+        if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
+            self.write_array_size(module, size)?;
+        }
+        write!(
+            self.out,
+            " {}",
+            &self.names[&NameKey::GlobalVariable(handle)]
+        )?;
 
-        if register.is_empty() {
-            writeln!(self.out, ";")?;
+        if let Some(ref binding) = global.binding {
+            writeln!(self.out, " : register({}{});", register_ty, binding.binding)?;
         } else {
-            writeln!(self.out, " : {};", register)?;
+            if let Some(init) = global.init {
+                write!(self.out, " = ")?;
+                self.write_constant(module, init)?;
+            }
+            writeln!(self.out, ";")?;
         }
 
         Ok(())
@@ -353,6 +360,28 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    // copy-paste from glsl-out
+    fn write_array_size(&mut self, module: &Module, size: ArraySize) -> BackendResult {
+        write!(self.out, "[")?;
+
+        // Write the array size
+        // Writes nothing if `ArraySize::Dynamic`
+        // Panics if `ArraySize::Constant` has a constant that isn't an uint
+        match size {
+            ArraySize::Constant(const_handle) => match module.constants[const_handle].inner {
+                ConstantInner::Scalar {
+                    width: _,
+                    value: ScalarValue::Uint(size),
+                } => write!(self.out, "{}", size)?,
+                _ => unreachable!(),
+            },
+            ArraySize::Dynamic => (),
+        }
+
+        write!(self.out, "]")?;
+        Ok(())
+    }
+
     /// Helper method used to write structs
     ///
     /// # Notes
@@ -371,10 +400,42 @@ impl<'a, W: Write> Writer<'a, W> {
         for (index, member) in members.iter().enumerate() {
             // The indentation is only for readability
             write!(self.out, "{}", INDENT)?;
-            // Write struct member type and name
-            self.write_type(module, member.ty)?;
-            let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
-            write!(self.out, " {}", member_name)?;
+
+            match module.types[member.ty].inner {
+                TypeInner::Array {
+                    base,
+                    size,
+                    stride: _,
+                } => {
+                    // HLSL arrays are written as `type name[size]`
+                    let ty_name = match module.types[base].inner {
+                        // Write scalar type by backend so as not to depend on the front-end implementation
+                        // Name returned from frontend can be generated (type1, float1, etc.)
+                        TypeInner::Scalar { kind, width } => scalar_kind_str(kind, width)?,
+                        _ => &self.names[&NameKey::Type(base)],
+                    };
+
+                    // Write `type` and `name`
+                    write!(self.out, "{}", ty_name)?;
+                    write!(
+                        self.out,
+                        " {}",
+                        &self.names[&NameKey::StructMember(handle, index as u32)]
+                    )?;
+                    // Write [size]
+                    self.write_array_size(module, size)?;
+                }
+                _ => {
+                    // Write the member type and name
+                    self.write_type(module, member.ty)?;
+                    write!(
+                        self.out,
+                        " {}",
+                        &self.names[&NameKey::StructMember(handle, index as u32)]
+                    )?;
+                }
+            }
+
             if let Some(ref binding) = member.binding {
                 self.write_binding(binding)?;
             };
@@ -394,6 +455,8 @@ impl<'a, W: Write> Writer<'a, W> {
         let inner = &module.types[ty].inner;
         match *inner {
             TypeInner::Struct { .. } => write!(self.out, "{}", self.names[&NameKey::Type(ty)])?,
+            // hlsl array has the size separated from the base type
+            TypeInner::Array { base, .. } => self.write_type(module, base)?,
             ref other => self.write_value_type(module, other)?,
         }
 
@@ -404,7 +467,7 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Adds no trailing or leading whitespace
-    fn write_value_type(&mut self, _module: &Module, inner: &TypeInner) -> BackendResult {
+    fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
         match *inner {
             TypeInner::Scalar { kind, width } => {
                 write!(self.out, "{}", scalar_kind_str(kind, width)?)?;
@@ -422,7 +485,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 rows,
                 width,
             } => {
-                //TODO: int matrix ?
+                // The IR supports only float matrix
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-matrix
                 write!(
                     self.out,
@@ -454,6 +517,12 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             TypeInner::Sampler { comparison: false } => {
                 write!(self.out, "SamplerState")?;
+            }
+            // HLSL arrays are written as `type name[size]`
+            // Current code is written arrays only as `[size]`
+            // Base `type` and `name` should be written outside
+            TypeInner::Array { size, .. } => {
+                self.write_array_size(module, size)?;
             }
             _ => {
                 return Err(Error::Unimplemented(format!(
@@ -701,6 +770,38 @@ impl<'a, W: Write> Writer<'a, W> {
                     writeln!(self.out, ";")?
                 }
             }
+            Statement::Store { pointer, value } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                self.write_expr(module, pointer, func_ctx)?;
+                write!(self.out, " = ")?;
+                self.write_expr(module, value, func_ctx)?;
+                writeln!(self.out, ";")?
+            }
+            Statement::Call {
+                function,
+                ref arguments,
+                result,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                if let Some(expr) = result {
+                    let name = format!("{}{}", BAKE_PREFIX, expr.index());
+                    write!(self.out, "const {} = ", name)?;
+                    self.write_expr(module, expr, func_ctx)?;
+                    self.named_expressions.insert(expr, name);
+                    writeln!(self.out, ";")?
+                }
+                let func_name = &self.names[&NameKey::Function(function)];
+                write!(self.out, "{}(", func_name)?;
+                for (index, argument) in arguments.iter().enumerate() {
+                    self.write_expr(module, *argument, func_ctx)?;
+                    // Only write a comma if isn't the last element
+                    if index != arguments.len().saturating_sub(1) {
+                        // The leading space is for readability only
+                        write!(self.out, ", ")?;
+                    }
+                }
+                writeln!(self.out, ");")?
+            }
             _ => return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt))),
         }
 
@@ -838,6 +939,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
                 write!(self.out, "{}", name)?;
             }
+            Expression::Load { pointer } => self.write_expr(module, pointer, func_ctx)?,
             _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 
@@ -861,11 +963,25 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_scalar_value(*value)?;
                 }
             }
-            _ => {
-                return Err(Error::Unimplemented(format!(
-                    "write_constant {:?}",
-                    constant
-                )))
+            crate::ConstantInner::Composite { ty, ref components } => {
+                let (open_b, close_b) = match module.types[ty].inner {
+                    TypeInner::Struct { .. } => ("{ ", " }"),
+                    _ => {
+                        // We should write type only for non struct constants
+                        self.write_type(module, ty)?;
+                        ("(", ")")
+                    }
+                };
+                write!(self.out, "{}", open_b)?;
+                for (index, constant) in components.iter().enumerate() {
+                    self.write_constant(module, *constant)?;
+                    // Only write a comma if isn't the last element
+                    if index != components.len().saturating_sub(1) {
+                        // The leading space is for readability only
+                        write!(self.out, ", ")?;
+                    }
+                }
+                write!(self.out, "{}", close_b)?;
             }
         }
 
@@ -914,14 +1030,12 @@ impl<'a, W: Write> Writer<'a, W> {
         let base_ty_res = &ctx.info[handle].ty;
         let resolved = base_ty_res.inner_with(&module.types);
 
-        // If rhs is a array type, we should write temp variable as a dynamic array
-        let array_str = if let TypeInner::Array { .. } = *resolved {
-            "[]"
-        } else {
-            ""
-        };
-
-        write!(self.out, " {}{} = ", name, array_str)?;
+        write!(self.out, " {}", name)?;
+        // If rhs is a array type, we should write array size
+        if let TypeInner::Array { size, .. } = *resolved {
+            self.write_array_size(module, size)?;
+        }
+        write!(self.out, " = ")?;
         self.write_expr(module, handle, ctx)?;
         writeln!(self.out, ";")?;
         self.named_expressions.insert(handle, name);

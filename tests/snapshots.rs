@@ -358,7 +358,7 @@ fn convert_spv_quad_vert() {
     convert_spv(
         "quad-vert",
         false,
-        Targets::METAL | Targets::GLSL | Targets::WGSL,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
 }
 

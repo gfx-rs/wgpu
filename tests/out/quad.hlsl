@@ -1,12 +1,12 @@
 static const float c_scale = 1.2;
 
-Texture2D<float4> u_texture : register(t0);
-SamplerState u_sampler : register(s1);
-
 struct VertexOutput {
     float2 uv : LOC0;
     float4 position : SV_Position;
 };
+
+Texture2D<float4> u_texture : register(t0);
+SamplerState u_sampler : register(s1);
 
 struct VertexInput {
     float2 pos1 : LOC0;
