@@ -571,6 +571,7 @@ impl super::Instance {
                     .optimal_tiling_features
                     .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
             },
+            non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
         };
 
         let capabilities = crate::Capabilities {

@@ -42,7 +42,7 @@ renderdoc-sys = { version = "0.7.1", optional = true }
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
-mtl = { package = "metal", version = "0.22", git="https://github.com/kvark/metal-rs", branch="core-graphics-types" }
+mtl = { package = "metal", version = "0.22", git="https://github.com/gfx-rs/metal-rs", rev="08cc15a3be5a57fc07bb27091eff3569dd60cfd3" }
 objc = "0.2.5"
 core-graphics-types = "0.1"
 

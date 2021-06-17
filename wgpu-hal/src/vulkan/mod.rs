@@ -128,6 +128,7 @@ struct PrivateCapabilities {
     image_view_usage: bool,
     texture_d24: bool,
     texture_d24_s8: bool,
+    non_coherent_map_mask: wgt::BufferAddress,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

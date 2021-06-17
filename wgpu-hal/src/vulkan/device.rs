@@ -219,6 +219,22 @@ impl super::DeviceShared {
         })
     }
 
+    fn make_memory_ranges<'a, I: 'a + Iterator<Item = crate::MemoryRange>>(
+        &self,
+        buffer: &'a super::Buffer,
+        ranges: I,
+    ) -> impl 'a + Iterator<Item = vk::MappedMemoryRange> {
+        let block = buffer.block.lock();
+        let mask = self.private_caps.non_coherent_map_mask;
+        ranges.map(move |range| {
+            vk::MappedMemoryRange::builder()
+                .memory(*block.memory())
+                .offset((block.offset() + range.start) & !mask)
+                .size((range.end - range.start + mask) & !mask)
+                .build()
+        })
+    }
+
     unsafe fn free_resources(&self) {
         for &raw in self.render_passes.lock().values() {
             self.raw.destroy_render_pass(raw, None);
@@ -611,14 +627,7 @@ impl crate::Device<super::Api> for super::Device {
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        let block = buffer.block.lock();
-        let vk_ranges = ranges.map(|range| {
-            vk::MappedMemoryRange::builder()
-                .memory(*block.memory())
-                .offset(block.offset() + range.start)
-                .size(range.end - range.start)
-                .build()
-        });
+        let vk_ranges = self.shared.make_memory_ranges(buffer, ranges);
         inplace_or_alloc_from_iter(vk_ranges, |array| {
             self.shared.raw.flush_mapped_memory_ranges(array).unwrap()
         });
@@ -627,14 +636,7 @@ impl crate::Device<super::Api> for super::Device {
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        let block = buffer.block.lock();
-        let vk_ranges = ranges.map(|range| {
-            vk::MappedMemoryRange::builder()
-                .memory(*block.memory())
-                .offset(block.offset() + range.start)
-                .size(range.end - range.start)
-                .build()
-        });
+        let vk_ranges = self.shared.make_memory_ranges(buffer, ranges);
         inplace_or_alloc_from_iter(vk_ranges, |array| {
             self.shared
                 .raw
