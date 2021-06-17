@@ -12,7 +12,7 @@ use crate::{
     proc::{
         ensure_block_returns, Alignment, Layouter, ResolveContext, ResolveError, TypeResolution,
     },
-    FastHashMap,
+    ConstantInner, FastHashMap, ScalarValue,
 };
 
 use self::lexer::Lexer;
@@ -26,6 +26,7 @@ use codespan_reporting::{
 };
 use std::{
     borrow::Cow,
+    convert::TryFrom,
     io::{self, Write},
     iter,
     num::{NonZeroU32, ParseFloatError, ParseIntError},
@@ -97,6 +98,8 @@ pub enum Error<'a> {
     BadI32(Span, ParseIntError),
     #[error("")]
     BadFloat(Span, ParseFloatError),
+    #[error("")]
+    BadU32Constant(Span),
     #[error("")]
     BadScalarWidth(Span, &'a str),
     #[error("")]
@@ -250,6 +253,15 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span.clone(), "expected floating-point literal".into())],
                 notes: vec![err.to_string()],
             },
+            Error::BadU32Constant(ref bad_span) => ParseError {
+                message: format!(
+                    "expected non-negative integer constant expression, found `{}`",
+                    &source[bad_span.clone()],
+                ),
+                labels: vec![(bad_span.clone(), "expected non-negative integer".into())],
+                notes: vec![],
+            },
+
             Error::BadScalarWidth(ref bad_span, width) => ParseError {
                 message: format!("invalid width of `{}` for literal", width,),
                 labels: vec![(bad_span.clone(), "invalid width".into())],
@@ -1023,7 +1035,7 @@ impl Parser {
         ty: char,
         width: &'a str,
         token: TokenSpan<'a>,
-    ) -> Result<crate::ConstantInner, Error<'a>> {
+    ) -> Result<ConstantInner, Error<'a>> {
         let span = token.1;
         let value = match ty {
             'i' => word
@@ -1737,12 +1749,34 @@ impl Parser {
                     }
                 }
                 Token::Paren('[') => {
-                    let _ = lexer.next();
+                    let (_, open_brace_span) = lexer.next();
                     let index = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    lexer.expect(Token::Paren(']'))?;
-                    crate::Expression::Access {
-                        base: handle,
-                        index,
+                    let close_brace_span = lexer.expect_span(Token::Paren(']'))?;
+
+                    if let crate::Expression::Constant(constant) = ctx.expressions[index] {
+                        let expr_span = open_brace_span.end..close_brace_span.start;
+
+                        let index = match ctx.constants[constant].inner {
+                            ConstantInner::Scalar {
+                                value: ScalarValue::Uint(int),
+                                ..
+                            } => u32::try_from(int).map_err(|_| Error::BadU32Constant(expr_span)),
+                            ConstantInner::Scalar {
+                                value: ScalarValue::Sint(int),
+                                ..
+                            } => u32::try_from(int).map_err(|_| Error::BadU32Constant(expr_span)),
+                            _ => Err(Error::BadU32Constant(expr_span)),
+                        }?;
+
+                        crate::Expression::AccessIndex {
+                            base: handle,
+                            index,
+                        }
+                    } else {
+                        crate::Expression::Access {
+                            base: handle,
+                            index,
+                        }
                     }
                 }
                 _ => {

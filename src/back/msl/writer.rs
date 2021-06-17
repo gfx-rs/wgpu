@@ -765,7 +765,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "[{}]", index)?;
                     }
                     crate::TypeInner::Array { .. } => {
-                        write!(self.out, "[{}]", index)?;
+                        write!(self.out, ".{}[{}]", WRAPPED_ARRAY_FIELD, index)?;
                     }
                     _ => {
                         // unexpected indexing, should fail validation

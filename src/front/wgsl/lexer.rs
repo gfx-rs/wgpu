@@ -233,13 +233,21 @@ impl<'a> Lexer<'a> {
         token
     }
 
-    pub(super) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
+    pub(super) fn expect_span(
+        &mut self,
+        expected: Token<'a>,
+    ) -> Result<std::ops::Range<usize>, Error<'a>> {
         let next = self.next();
         if next.0 == expected {
-            Ok(())
+            Ok(next.1)
         } else {
             Err(Error::Unexpected(next, ExpectedToken::Token(expected)))
         }
+    }
+
+    pub(super) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
+        self.expect_span(expected)?;
+        Ok(())
     }
 
     pub(super) fn expect_generic_paren(&mut self, expected: char) -> Result<(), Error<'a>> {
