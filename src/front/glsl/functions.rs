@@ -410,11 +410,10 @@ impl Program<'_> {
 
                         ctx.emit_start();
                         for (tgt, pointer) in proxy_writes {
-                            let load = ctx.add_expression(Expression::Load { pointer }, body);
                             let temp_ref = ctx.hir_exprs.append(HirExpr {
                                 kind: HirExprKind::Variable(VariableReference {
                                     expr: pointer,
-                                    load: Some(load),
+                                    load: true,
                                     mutable: true,
                                     entry_arg: None,
                                 }),

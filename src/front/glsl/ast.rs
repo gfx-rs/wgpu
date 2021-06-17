@@ -290,11 +290,7 @@ impl<'function> Context<'function> {
 
             let var = VariableReference {
                 expr,
-                load: if load {
-                    Some(this.add_expression(Expression::Load { pointer: expr }, body))
-                } else {
-                    None
-                },
+                load,
                 mutable,
                 entry_arg,
             };
@@ -349,13 +345,11 @@ impl<'function> Context<'function> {
     /// Add variable to current scope
     pub fn add_local_var(&mut self, name: String, expr: Handle<Expression>, mutable: bool) {
         if let Some(current) = self.scopes.last_mut() {
-            let load = self.expressions.append(Expression::Load { pointer: expr });
-
             (*current).insert(
                 name,
                 VariableReference {
                     expr,
-                    load: Some(load),
+                    load: true,
                     mutable,
                     entry_arg: None,
                 },
@@ -396,13 +390,9 @@ impl<'function> Context<'function> {
         if let Some(name) = name {
             let expr = self.add_expression(Expression::FunctionArgument(index as u32), body);
             let mutable = qualifier != ParameterQualifier::Const;
-            let load = if qualifier.is_lhs() {
-                Some(self.add_expression(Expression::Load { pointer: expr }, body))
-            } else {
-                None
-            };
+            let load = qualifier.is_lhs();
 
-            if mutable && load.is_none() {
+            if mutable && !load {
                 let handle = self.locals.append(LocalVariable {
                     name: Some(name.clone()),
                     ty,
@@ -418,19 +408,12 @@ impl<'function> Context<'function> {
                     value: expr,
                 });
 
-                let local_load = self.add_expression(
-                    Expression::Load {
-                        pointer: local_expr,
-                    },
-                    body,
-                );
-
                 if let Some(current) = self.scopes.last_mut() {
                     (*current).insert(
                         name,
                         VariableReference {
                             expr: local_expr,
-                            load: Some(local_load),
+                            load: true,
                             mutable,
                             entry_arg: None,
                         },
@@ -584,7 +567,11 @@ impl<'function> Context<'function> {
                         self.arg_use[idx] |= EntryArgUse::READ
                     }
 
-                    var.load.unwrap_or(var.expr)
+                    if var.load {
+                        self.add_expression(Expression::Load { pointer: var.expr }, body)
+                    } else {
+                        var.expr
+                    }
                 }
             }
             HirExprKind::Call(call) if !lhs => {
@@ -880,7 +867,7 @@ fn type_power(kind: ScalarKind) -> Option<u32> {
 #[derive(Debug, Clone)]
 pub struct VariableReference {
     pub expr: Handle<Expression>,
-    pub load: Option<Handle<Expression>>,
+    pub load: bool,
     pub mutable: bool,
     pub entry_arg: Option<usize>,
 }

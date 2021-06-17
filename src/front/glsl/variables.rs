@@ -69,12 +69,11 @@ impl Program<'_> {
             ctx.arg_use.push(EntryArgUse::empty());
 
             let expr = ctx.add_expression(Expression::GlobalVariable(handle), body);
-            let load = ctx.add_expression(Expression::Load { pointer: expr }, body);
             ctx.lookup_global_var_exps.insert(
                 name.into(),
                 VariableReference {
                     expr,
-                    load: Some(load),
+                    load: true,
                     mutable,
                     entry_arg: Some(idx),
                 },

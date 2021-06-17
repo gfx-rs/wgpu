@@ -15,10 +15,10 @@ var<private> gen_entry_v_uv1: vec2<f32>;
 var<private> gen_entry_o_color: vec4<f32>;
 
 fn vert_main() {
-    let _e2: vec2<f32> = gen_entry_a_pos;
     let _e4: vec2<f32> = gen_entry_a_uv;
     gen_entry_v_uv = _e4;
-    gl_Position = vec4<f32>((1.2000000476837158 * _e2), 0.0, 1.0);
+    let _e6: vec2<f32> = gen_entry_a_pos;
+    gl_Position = vec4<f32>((1.2000000476837158 * _e6), 0.0, 1.0);
     return;
 }
 
