@@ -306,7 +306,7 @@ pub trait Queue<A: Api>: Send + Sync {
     ) -> Result<(), SurfaceError>;
 }
 
-/// Encoder for commands in a command buffers.
+/// Encoder for commands in command buffers.
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
@@ -317,7 +317,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     unsafe fn discard_encoding(&mut self);
     unsafe fn end_encoding(&mut self) -> Result<A::CommandBuffer, DeviceError>;
     /// Reclaims all resources that are allocated for this encoder.
-    /// Must be passed back all of the command buffers,
+    /// Must get all of the produced command buffers back,
     /// and they must not be used by GPU at this moment.
     unsafe fn reset_all<I>(&mut self, command_buffers: I)
     where

@@ -3,7 +3,7 @@ It's a spiritual successor to [gfx-hal](https://github.com/gfx-rs/gfx),
 but with reduced scope, and oriented towards WebGPU implementation goals.
 
 It has no overhead for validation or tracking, and the API translation overhead is kept to the bare minimum by the design of WebGPU.
-This API can be used for resource-demaninging applications and engines.
+This API can be used for resource-demanding applications and engines.
 
 # Usage notes
 

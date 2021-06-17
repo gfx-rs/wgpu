@@ -615,9 +615,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        self.device
-            .raw
-            .cmd_draw_indirect(self.active, buffer.raw, offset, draw_count, 0);
+        self.device.raw.cmd_draw_indirect(
+            self.active,
+            buffer.raw,
+            offset,
+            draw_count,
+            mem::size_of::<wgt::DrawIndirectArgs>() as u32,
+        );
     }
     unsafe fn draw_indexed_indirect(
         &mut self,
@@ -625,9 +629,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        self.device
-            .raw
-            .cmd_draw_indexed_indirect(self.active, buffer.raw, offset, draw_count, 0);
+        self.device.raw.cmd_draw_indexed_indirect(
+            self.active,
+            buffer.raw,
+            offset,
+            draw_count,
+            mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+        );
     }
     unsafe fn draw_indirect_count(
         &mut self,
@@ -637,6 +645,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
+        let stride = mem::size_of::<wgt::DrawIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
             Some(super::ExtensionFn::Extension(ref t)) => {
                 t.cmd_draw_indirect_count(
@@ -646,7 +655,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     count_buffer.raw,
                     count_offset,
                     max_count,
-                    0,
+                    stride,
                 );
             }
             Some(super::ExtensionFn::Promoted) => {
@@ -657,7 +666,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     count_buffer.raw,
                     count_offset,
                     max_count,
-                    0,
+                    stride,
                 );
             }
             None => panic!("Feature `DRAW_INDIRECT_COUNT` not enabled"),
@@ -671,6 +680,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
+        let stride = mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
             Some(super::ExtensionFn::Extension(ref t)) => {
                 t.cmd_draw_indexed_indirect_count(
@@ -680,7 +690,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     count_buffer.raw,
                     count_offset,
                     max_count,
-                    0,
+                    stride,
                 );
             }
             Some(super::ExtensionFn::Promoted) => {
@@ -691,7 +701,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     count_buffer.raw,
                     count_offset,
                     max_count,
-                    0,
+                    stride,
                 );
             }
             None => panic!("Feature `DRAW_INDIRECT_COUNT` not enabled"),
