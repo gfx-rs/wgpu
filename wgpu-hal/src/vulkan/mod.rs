@@ -379,6 +379,7 @@ impl Fence {
                 device.reset_fences(&self.free[base_free..])?;
             }
         }
+        self.last_completed = latest;
         Ok(())
     }
 }
