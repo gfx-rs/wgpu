@@ -430,9 +430,8 @@ fn convert_glsl_folder() {
             .join(DIR_OUT)
             .join(&file_name.replace(".", "-"));
 
-        // FIXME: https://github.com/gfx-rs/naga/issues/945
-        // #[cfg(feature = "wgsl-out")]
-        // check_output_wgsl(&module, &info, &dest);
+        #[cfg(feature = "wgsl-out")]
+        check_output_wgsl(&module, &info, &dest);
     }
 }
 
