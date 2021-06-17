@@ -269,22 +269,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
-        //TODO: actually close the last recorded command buffer
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
 
         let error = match CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id) {
             Ok(cmd_buf) => {
                 cmd_buf.encoder.close();
                 cmd_buf.status = CommandEncoderStatus::Finished;
-                // stop tracking the swapchain image, if used
-                for sc_id in cmd_buf.used_swap_chains.iter() {
-                    let &(ref view_id, _) = swap_chain_guard[sc_id.value]
-                        .acquired_texture
-                        .as_ref()
-                        .expect("Used swap chain frame has already presented");
-                    cmd_buf.trackers.views.remove(view_id.value);
-                }
+                //Note: if we want to stop tracking the swapchain texture view,
+                // this is the place to do it.
                 log::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
                 None
             }

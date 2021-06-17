@@ -116,11 +116,12 @@ impl crate::Attachment<'_, super::Api> {
         ops: crate::AttachmentOp,
         caps: &super::PrivateCapabilities,
     ) -> super::AttachmentKey {
+        let aspects = self.view.aspects();
         super::AttachmentKey {
             format: caps.map_texture_format(self.view.attachment.view_format),
-            layout_pre: derive_image_layout(self.boundary_usage.start),
-            layout_in: derive_image_layout(self.usage),
-            layout_post: derive_image_layout(self.boundary_usage.end),
+            layout_pre: derive_image_layout(self.boundary_usage.start, aspects),
+            layout_in: derive_image_layout(self.usage, aspects),
+            layout_post: derive_image_layout(self.boundary_usage.end, aspects),
             ops,
         }
     }
@@ -152,21 +153,26 @@ impl crate::ColorAttachment<'_, super::Api> {
     }
 }
 
-pub fn derive_image_layout(usage: crate::TextureUse) -> vk::ImageLayout {
+pub fn derive_image_layout(
+    usage: crate::TextureUse,
+    aspects: crate::FormatAspect,
+) -> vk::ImageLayout {
+    //Note: depth textures are always sampled with RODS layout
+    let is_color = aspects.contains(crate::FormatAspect::COLOR);
     match usage {
         crate::TextureUse::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUse::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
         crate::TextureUse::COPY_DST => vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        crate::TextureUse::SAMPLED => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        crate::TextureUse::SAMPLED if is_color => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
         crate::TextureUse::COLOR_TARGET => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         crate::TextureUse::DEPTH_STENCIL_WRITE => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         _ => {
-            if usage.contains(crate::TextureUse::DEPTH_STENCIL_READ) {
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
-            } else if usage.is_empty() {
+            if usage.is_empty() {
                 vk::ImageLayout::PRESENT_SRC_KHR
-            } else {
+            } else if is_color {
                 vk::ImageLayout::GENERAL
+            } else {
+                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
             }
         }
     }
@@ -656,6 +662,14 @@ pub fn map_topology(topology: wgt::PrimitiveTopology) -> vk::PrimitiveTopology {
         Pt::LineStrip => vk::PrimitiveTopology::LINE_STRIP,
         Pt::TriangleList => vk::PrimitiveTopology::TRIANGLE_LIST,
         Pt::TriangleStrip => vk::PrimitiveTopology::TRIANGLE_STRIP,
+    }
+}
+
+pub fn map_polygon_mode(mode: wgt::PolygonMode) -> vk::PolygonMode {
+    match mode {
+        wgt::PolygonMode::Fill => vk::PolygonMode::FILL,
+        wgt::PolygonMode::Line => vk::PolygonMode::LINE,
+        wgt::PolygonMode::Point => vk::PolygonMode::POINT,
     }
 }
 

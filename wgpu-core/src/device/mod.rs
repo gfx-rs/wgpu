@@ -202,6 +202,15 @@ impl<A: hal::Api> CommandAllocator<A> {
     fn release_encoder(&mut self, encoder: A::CommandEncoder) {
         self.free_encoders.push(encoder);
     }
+
+    fn dispose(self, device: &A::Device) {
+        log::info!("Destroying {} command encoders", self.free_encoders.len());
+        for cmd_encoder in self.free_encoders {
+            unsafe {
+                device.destroy_command_encoder(cmd_encoder);
+            }
+        }
+    }
 }
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -327,6 +336,17 @@ impl<A: HalApi> Device<A> {
         token: &mut Token<'token, Self>,
     ) -> MutexGuard<'this, life::LifetimeTracker<A>> {
         Self::lock_life_internal(&self.life_tracker, token)
+    }
+
+    pub(crate) fn suspect_texture_view_for_destruction<'this, 'token: 'this>(
+        &'this self,
+        view_id: id::Valid<id::TextureViewId>,
+        token: &mut Token<'token, Self>,
+    ) {
+        self.lock_life(token)
+            .suspected_resources
+            .texture_views
+            .push(view_id);
     }
 
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
@@ -2299,10 +2319,12 @@ impl<A: hal::Api> Device<A> {
     }
 
     pub(crate) fn dispose(self) {
+        self.pending_writes.dispose(&self.raw);
+        self.command_allocator.into_inner().dispose(&self.raw);
         unsafe {
             self.raw.destroy_fence(self.fence);
+            self.raw.exit();
         }
-        self.pending_writes.dispose(&self.raw);
     }
 }
 
@@ -4239,7 +4261,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // Adapter is only referenced by the device and itself.
             // This isn't a robust way to destroy them, we should find a better one.
             if device.adapter_id.ref_count.load() == 1 {
-                let (_adapter, _) = hub
+                let _ = hub
                     .adapters
                     .unregister(device.adapter_id.value.0, &mut token);
             }

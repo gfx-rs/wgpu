@@ -480,7 +480,7 @@ impl<A: hal::Api> Example<A> {
                 .destroy_bind_group_layout(self.global_group_layout);
             self.device.destroy_pipeline_layout(self.pipeline_layout);
 
-            self.adapter.close(self.device);
+            self.device.exit();
             self.instance.destroy_surface(self.surface);
         }
     }

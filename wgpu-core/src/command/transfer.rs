@@ -235,7 +235,7 @@ pub(crate) fn validate_linear_texture_data(
 }
 
 /// Function copied with minor modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#valid-texture-copy-range>
-/// Returns the mip level extent.
+/// Returns the (virtual) mip level extent.
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &ImageCopyTexture,
     desc: &wgt::TextureDescriptor<()>,
@@ -299,7 +299,7 @@ pub(crate) fn validate_texture_copy_range(
         return Err(TransferError::UnalignedCopyHeight);
     }
 
-    Ok(extent)
+    Ok(extent_virtual)
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {

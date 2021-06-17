@@ -130,7 +130,7 @@ struct PrivateCapabilities {
     texture_d24_s8: bool,
 }
 
-#[derive(Clone, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct AttachmentKey {
     format: vk::Format,
     layout_pre: vk::ImageLayout,
@@ -147,7 +147,7 @@ impl AttachmentKey {
             layout_pre: vk::ImageLayout::GENERAL,
             layout_in,
             layout_post: vk::ImageLayout::GENERAL,
-            ops: crate::AttachmentOp::empty(),
+            ops: crate::AttachmentOp::all(),
         }
     }
 }
@@ -253,6 +253,12 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
     sample_count: u32,
     render_size: wgt::Extent3d,
+}
+
+impl TextureView {
+    fn aspects(&self) -> crate::FormatAspect {
+        self.attachment.view_format.into()
+    }
 }
 
 #[derive(Debug)]

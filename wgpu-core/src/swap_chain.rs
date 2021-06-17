@@ -253,7 +253,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get_mut(swap_chain_id.to_surface_id())
             .map_err(|_| SwapChainError::InvalidSurface)?;
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
+        let (mut swap_chain_guard, _) = hub.swap_chains.write(&mut token);
         let sc = swap_chain_guard
             .get_mut(swap_chain_id)
             .map_err(|_| SwapChainError::Invalid)?;
@@ -269,12 +269,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .acquired_texture
                 .take()
                 .ok_or(SwapChainError::AlreadyAcquired)?;
+
+            drop(swap_chain_guard);
+            device.suspect_texture_view_for_destruction(view_id.value, &mut token);
+
+            let (mut view_guard, _) = hub.texture_views.write(&mut token);
+            let view = &mut view_guard[view_id.value];
+            let _ = view.life_guard.ref_count.take();
+
+            /*
             let (view_maybe, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
             drop(view_id); // contains the ref count
             let view = view_maybe.ok_or(SwapChainError::Invalid)?;
             if view.life_guard.ref_count.unwrap().load() != 1 {
                 return Err(SwapChainError::StillReferenced);
-            }
+            }*/
             suf_texture
         };
 

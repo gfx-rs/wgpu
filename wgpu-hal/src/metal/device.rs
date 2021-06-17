@@ -132,6 +132,8 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
+    unsafe fn exit(self) {}
+
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
         let map_read = desc.usage.contains(crate::BufferUse::MAP_READ);
         let map_write = desc.usage.contains(crate::BufferUse::MAP_WRITE);

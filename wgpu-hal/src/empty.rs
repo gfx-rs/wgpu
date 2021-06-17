@@ -77,7 +77,6 @@ impl crate::Adapter<Api> for Context {
     unsafe fn open(&self, features: wgt::Features) -> DeviceResult<crate::OpenDevice<Api>> {
         Err(crate::DeviceError::Lost)
     }
-    unsafe fn close(&self, device: Context) {}
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
@@ -107,6 +106,7 @@ impl crate::Queue<Api> for Context {
 }
 
 impl crate::Device<Api> for Context {
+    unsafe fn exit(self) {}
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }

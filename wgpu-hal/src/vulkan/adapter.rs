@@ -774,12 +774,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
         Ok(crate::OpenDevice { device, queue })
     }
 
-    unsafe fn close(&self, device: super::Device) {
-        device.mem_allocator.lock().cleanup(&*device.shared);
-        device.desc_allocator.lock().cleanup(&*device.shared);
-        device.shared.free_resources();
-    }
-
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,

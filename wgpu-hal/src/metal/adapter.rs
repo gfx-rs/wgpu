@@ -30,8 +30,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
         })
     }
 
-    unsafe fn close(&self, _device: super::Device) {}
-
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,

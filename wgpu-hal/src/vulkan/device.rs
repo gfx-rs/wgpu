@@ -219,7 +219,7 @@ impl super::DeviceShared {
         })
     }
 
-    pub(super) unsafe fn free_resources(&self) {
+    unsafe fn free_resources(&self) {
         for &raw in self.render_passes.lock().values() {
             self.raw.destroy_render_pass(raw, None);
         }
@@ -518,6 +518,12 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
+    unsafe fn exit(self) {
+        self.mem_allocator.into_inner().cleanup(&*self.shared);
+        self.desc_allocator.into_inner().cleanup(&*self.shared);
+        self.shared.free_resources();
+    }
+
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
@@ -834,12 +840,16 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_command_encoder(&self, cmd_encoder: super::CommandEncoder) {
-        self.shared
-            .raw
-            .free_command_buffers(cmd_encoder.raw, &cmd_encoder.free);
-        self.shared
-            .raw
-            .free_command_buffers(cmd_encoder.raw, &cmd_encoder.discarded);
+        if !cmd_encoder.free.is_empty() {
+            self.shared
+                .raw
+                .free_command_buffers(cmd_encoder.raw, &cmd_encoder.free);
+        }
+        if !cmd_encoder.discarded.is_empty() {
+            self.shared
+                .raw
+                .free_command_buffers(cmd_encoder.raw, &cmd_encoder.discarded);
+        }
         self.shared.raw.destroy_command_pool(cmd_encoder.raw, None);
     }
 
@@ -1012,7 +1022,7 @@ impl crate::Device<super::Api> for super::Device {
                 vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
                     let index = image_infos.len();
                     let binding = &desc.textures[index];
-                    let layout = conv::derive_image_layout(binding.usage);
+                    let layout = conv::derive_image_layout(binding.usage, binding.view.aspects());
                     let vk_info = vk::DescriptorImageInfo::builder()
                         .image_view(binding.view.raw)
                         .image_layout(layout)
@@ -1146,7 +1156,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(desc.primitive.clamp_depth)
-            .polygon_mode(vk::PolygonMode::FILL)
+            .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
             .front_face(conv::map_front_face(desc.primitive.front_face))
             .line_width(1.0);
         if let Some(face) = desc.primitive.cull_mode {
@@ -1163,7 +1173,7 @@ impl crate::Device<super::Api> for super::Device {
             };
             compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
                 base: super::AttachmentKey::compatible(vk_format, vk_layout),
-                stencil_ops: crate::AttachmentOp::empty(),
+                stencil_ops: crate::AttachmentOp::all(),
             });
 
             if ds.is_depth_enabled() {

@@ -380,7 +380,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                             resource::TextureViewSource::Native(source_id) => {
                                 self.suspected_resources.textures.push(source_id.value);
                             }
-                            resource::TextureViewSource::SwapChain { .. } => unreachable!(),
+                            resource::TextureViewSource::SwapChain { .. } => {}
                         };
 
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);

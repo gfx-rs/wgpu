@@ -230,7 +230,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Remove an id from the tracked map.
-    pub(crate) fn remove(&mut self, id: Valid<S::Id>) -> bool {
+    pub(crate) fn _remove(&mut self, id: Valid<S::Id>) -> bool {
         let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.remove(&index) {

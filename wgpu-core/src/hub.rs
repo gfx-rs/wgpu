@@ -254,7 +254,7 @@ impl<A: hal::Api> Access<BindGroup<A>> for PipelineLayout<A> {}
 impl<A: hal::Api> Access<BindGroup<A>> for CommandBuffer<A> {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for Root {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for Device<A> {}
-impl<A: hal::Api> Access<CommandBuffer<A>> for SwapChain<A> {}
+impl<A: hal::Api> Access<CommandBuffer<A>> for SwapChain<A> {} //TODO: remove this (only used in `submit()`)
 impl<A: hal::Api> Access<RenderBundle> for Device<A> {}
 impl<A: hal::Api> Access<RenderBundle> for CommandBuffer<A> {}
 impl<A: hal::Api> Access<ComputePipeline<A>> for Device<A> {}
@@ -281,7 +281,7 @@ impl<A: hal::Api> Access<Texture<A>> for Root {}
 impl<A: hal::Api> Access<Texture<A>> for Device<A> {}
 impl<A: hal::Api> Access<Texture<A>> for Buffer<A> {}
 impl<A: hal::Api> Access<TextureView<A>> for Root {}
-impl<A: hal::Api> Access<TextureView<A>> for SwapChain<A> {}
+impl<A: hal::Api> Access<TextureView<A>> for SwapChain<A> {} //TODO: remove this (only used in `get_next_texture()`)
 impl<A: hal::Api> Access<TextureView<A>> for Device<A> {}
 impl<A: hal::Api> Access<TextureView<A>> for Texture<A> {}
 impl<A: hal::Api> Access<Sampler<A>> for Root {}
@@ -708,7 +708,9 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                 device.dispose();
             }
         }
+
         if with_adapters {
+            drop(devices);
             self.adapters.data.write().map.clear();
         }
     }

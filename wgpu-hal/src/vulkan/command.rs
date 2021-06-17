@@ -27,10 +27,9 @@ impl super::Texture {
                 conv::map_subresource_layers(&r.texture_base, dim, aspects, layer_count);
             vk::BufferImageCopy {
                 buffer_offset: r.buffer_layout.offset,
-                buffer_row_length: r
-                    .buffer_layout
-                    .bytes_per_row
-                    .map_or(0, |bpr| bpr.get() / fi.block_size as u32),
+                buffer_row_length: r.buffer_layout.bytes_per_row.map_or(0, |bpr| {
+                    fi.block_dimensions.0 as u32 * (bpr.get() / fi.block_size as u32)
+                }),
                 buffer_image_height: r
                     .buffer_layout
                     .rows_per_image
@@ -108,8 +107,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     where
         T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
     {
-        let mut src_stages = vk::PipelineStageFlags::empty();
-        let mut dst_stages = vk::PipelineStageFlags::empty();
+        //Note: this is done so that we never end up with empty stage flags
+        let mut src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
+        let mut dst_stages = vk::PipelineStageFlags::BOTTOM_OF_PIPE;
         let vk_barriers = &mut self.temp.buffer_barriers;
         vk_barriers.clear();
 
@@ -130,9 +130,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
 
         if !vk_barriers.is_empty() {
-            if src_stages.is_empty() {
-                src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
-            }
             self.device.raw.cmd_pipeline_barrier(
                 self.active,
                 src_stages,
@@ -157,10 +154,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for bar in barriers {
             let range = conv::map_subresource_range(&bar.range, bar.texture.aspects);
             let (src_stage, src_access) = conv::map_texture_usage_to_barrier(bar.usage.start);
-            let src_layout = conv::derive_image_layout(bar.usage.start);
+            let src_layout = conv::derive_image_layout(bar.usage.start, bar.texture.aspects);
             src_stages |= src_stage;
             let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(bar.usage.end);
-            let dst_layout = conv::derive_image_layout(bar.usage.end);
+            let dst_layout = conv::derive_image_layout(bar.usage.end, bar.texture.aspects);
             dst_stages |= dst_stage;
 
             vk_barriers.push(
@@ -228,7 +225,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
-        let src_layout = conv::derive_image_layout(src_usage);
+        let src_layout = conv::derive_image_layout(src_usage, src.aspects);
 
         let vk_regions_iter = regions.map(|r| {
             let (layer_count, extent) = conv::map_extent(r.size, src.dim);
@@ -287,7 +284,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let src_layout = conv::derive_image_layout(src_usage);
+        let src_layout = conv::derive_image_layout(src_usage, src.aspects);
         let vk_regions_iter = src.map_buffer_copies(regions);
 
         inplace_or_alloc_from_iter(vk_regions_iter, |vk_regions| {
@@ -734,7 +731,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 #[test]
 fn check_dst_image_layout() {
     assert_eq!(
-        conv::derive_image_layout(crate::TextureUse::COPY_DST),
+        conv::derive_image_layout(crate::TextureUse::COPY_DST, crate::FormatAspect::empty()),
         DST_IMAGE_LAYOUT
     );
 }

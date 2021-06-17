@@ -180,7 +180,6 @@ pub trait Surface<A: Api>: Send + Sync {
 
 pub trait Adapter<A: Api>: Send + Sync {
     unsafe fn open(&self, features: wgt::Features) -> Result<OpenDevice<A>, DeviceError>;
-    unsafe fn close(&self, device: A::Device);
 
     /// Return the set of supported capabilities for a texture format.
     unsafe fn texture_format_capabilities(
@@ -195,6 +194,8 @@ pub trait Adapter<A: Api>: Send + Sync {
 }
 
 pub trait Device<A: Api>: Send + Sync {
+    /// Exit connection to this logical device.
+    unsafe fn exit(self);
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUse::empty()`.
