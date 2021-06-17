@@ -267,3 +267,24 @@ impl std::hash::Hash for crate::ScalarValue {
         }
     }
 }
+
+impl super::SwizzleComponent {
+    pub const XYZW: [Self; 4] = [Self::X, Self::Y, Self::Z, Self::W];
+
+    pub fn index(&self) -> u32 {
+        match *self {
+            Self::X => 0,
+            Self::Y => 1,
+            Self::Z => 2,
+            Self::W => 3,
+        }
+    }
+    pub fn from_index(idx: u32) -> Self {
+        match idx {
+            0 => Self::X,
+            1 => Self::Y,
+            2 => Self::Z,
+            _ => Self::W,
+        }
+    }
+}

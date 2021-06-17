@@ -773,32 +773,6 @@ pub enum SwizzleComponent {
     W = 3,
 }
 
-impl SwizzleComponent {
-    pub const XYZW: [SwizzleComponent; 4] = [
-        SwizzleComponent::X,
-        SwizzleComponent::Y,
-        SwizzleComponent::Z,
-        SwizzleComponent::W,
-    ];
-
-    pub fn index(&self) -> u32 {
-        match *self {
-            SwizzleComponent::X => 0,
-            SwizzleComponent::Y => 1,
-            SwizzleComponent::Z => 2,
-            SwizzleComponent::W => 3,
-        }
-    }
-    pub fn from_index(idx: u32) -> Self {
-        match idx {
-            0 => SwizzleComponent::X,
-            1 => SwizzleComponent::Y,
-            2 => SwizzleComponent::Z,
-            _ => SwizzleComponent::W,
-        }
-    }
-}
-
 bitflags::bitflags! {
     /// Memory barrier flags.
     #[cfg_attr(feature = "serialize", derive(Serialize))]
