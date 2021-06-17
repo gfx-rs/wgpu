@@ -7,9 +7,10 @@ use super::{
 use crate::{
     proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant, Expression, FastHashMap,
     Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
-    RelationalFunction, ResourceBinding, Sampling, ScalarKind, ShaderStage, Statement,
+    RelationalFunction, ResourceBinding, Sampling, ScalarKind, ScalarValue, ShaderStage, Statement,
     StorageClass, Type, TypeInner, UnaryOperator, VectorSize,
 };
+use core::convert::TryFrom;
 
 #[derive(Debug, Clone, Copy)]
 pub enum GlobalLookupKind {
@@ -476,9 +477,33 @@ impl<'function> Context<'function> {
         let handle = match kind {
             HirExprKind::Access { base, index } => {
                 let base = self.lower_expect(program, base, true, body)?.0;
-                let index = self.lower_expect(program, index, false, body)?.0;
+                let (index, index_meta) = self.lower_expect(program, index, false, body)?;
 
-                let pointer = self.add_expression(Expression::Access { base, index }, body);
+                let pointer = program
+                    .solve_constant(self, index, index_meta)
+                    .ok()
+                    .and_then(|constant| {
+                        Some(self.add_expression(
+                            Expression::AccessIndex {
+                                base,
+                                index: match program.module.constants[constant].inner {
+                                    crate::ConstantInner::Scalar {
+                                        value: ScalarValue::Uint(i),
+                                        ..
+                                    } => u32::try_from(i).ok()?,
+                                    crate::ConstantInner::Scalar {
+                                        value: ScalarValue::Sint(i),
+                                        ..
+                                    } => u32::try_from(i).ok()?,
+                                    _ => return None,
+                                },
+                            },
+                            body,
+                        ))
+                    })
+                    .unwrap_or_else(|| {
+                        self.add_expression(Expression::Access { base, index }, body)
+                    });
 
                 if let TypeInner::Pointer { .. } = *program.resolve_type(self, pointer, meta)? {
                     if !lhs {
