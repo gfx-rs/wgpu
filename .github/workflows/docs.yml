@@ -29,10 +29,10 @@ jobs:
 
       - name: Build the docs (nightly)
         run: |
-          cargo +nightly doc --lib --all-features
+          cargo +nightly doc --lib
 
       - name: Build the docs (stable)
-        run: cargo +stable doc --lib --all-features
+        run: cargo +stable doc --lib
         if: ${{ failure() }}
 
       - name: Deploy the docs

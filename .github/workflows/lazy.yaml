@@ -14,7 +14,7 @@ jobs:
         with:
           toolchain: stable
       - run: sudo apt-get update -y -qq
-      - run: sudo add-apt-repository ppa:kisak/kisak-mesa -y
+      - run: sudo add-apt-repository ppa:ubuntu-x-swat/updates -y
       - run: sudo apt-get update
       - run: sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
       - name: Generate report
