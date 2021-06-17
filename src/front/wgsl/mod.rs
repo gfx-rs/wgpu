@@ -364,9 +364,9 @@ impl<'a> Error<'a> {
 }
 
 impl crate::StorageFormat {
-    pub fn to_wgsl(&self) -> &str {
+    pub fn to_wgsl(self) -> &'static str {
         use crate::StorageFormat as Sf;
-        match *self {
+        match self {
             Sf::R8Unorm => "r8unorm",
             Sf::R8Snorm => "r8snorm",
             Sf::R8Uint => "r8uint",
@@ -574,8 +574,8 @@ impl crate::ScalarKind {
     /// Format a scalar kind+width as a type is written in wgsl.
     ///
     /// Examples: `f32`, `u64`, `bool`.
-    fn to_wgsl(&self, width: u8) -> String {
-        let prefix = match *self {
+    fn to_wgsl(self, width: u8) -> String {
+        let prefix = match self {
             crate::ScalarKind::Sint => "i",
             crate::ScalarKind::Uint => "u",
             crate::ScalarKind::Float => "f",
