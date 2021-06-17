@@ -1080,9 +1080,12 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_downlevel_properties(&self, _adapter: &Self::AdapterId) -> wgt::DownlevelProperties {
+    fn adapter_downlevel_properties(
+        &self,
+        _adapter: &Self::AdapterId,
+    ) -> wgt::DownlevelCapabilities {
         // WebGPU is assumed to be fully compliant
-        wgt::DownlevelProperties::default()
+        wgt::DownlevelCapabilities::default()
     }
 
     fn adapter_get_info(&self, _adapter: &Self::AdapterId) -> wgt::AdapterInfo {
@@ -1114,9 +1117,9 @@ impl crate::Context for Context {
         wgt::Limits::default()
     }
 
-    fn device_downlevel_properties(&self, _device: &Self::DeviceId) -> wgt::DownlevelProperties {
+    fn device_downlevel_properties(&self, _device: &Self::DeviceId) -> wgt::DownlevelCapabilities {
         // WebGPU is assumed to be fully compliant
-        wgt::DownlevelProperties::default()
+        wgt::DownlevelCapabilities::default()
     }
 
     fn device_create_swap_chain(
@@ -1487,7 +1490,7 @@ impl crate::Context for Context {
     fn device_create_query_set(
         &self,
         _device: &Self::DeviceId,
-        _desc: &wgt::QuerySetDescriptor,
+        _desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Self::QuerySetId {
         ()
     }

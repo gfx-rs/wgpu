@@ -152,6 +152,8 @@ impl<S> Default for RequestAdapterOptions<S> {
     }
 }
 
+//TODO: make robust resource access configurable
+
 bitflags::bitflags! {
     /// Features that are not guaranteed to be supported.
     ///
@@ -650,16 +652,14 @@ impl Default for Limits {
 
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DownlevelProperties {
+pub struct DownlevelCapabilities {
     /// Combined boolean flags.
     pub flags: DownlevelFlags,
     /// Which collections of features shaders support. Defined in terms of D3D's shader models.
     pub shader_model: ShaderModel,
 }
 
-impl Default for DownlevelProperties {
-    // Note, this defaults to all on, as that is the default assumption in wgpu.
-    // gfx-hal's equivalent structure defaults to all off.
+impl Default for DownlevelCapabilities {
     fn default() -> Self {
         Self {
             flags: DownlevelFlags::COMPLIANT,
@@ -668,7 +668,7 @@ impl Default for DownlevelProperties {
     }
 }
 
-impl DownlevelProperties {
+impl DownlevelCapabilities {
     /// Returns true if the underlying platform offers complete support of the baseline WebGPU standard.
     ///
     /// If this returns false, some parts of the API will result in validation errors where they would not normally.
@@ -695,10 +695,12 @@ bitflags::bitflags! {
         const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
         /// Supports textures that are cube arrays.
         const CUBE_ARRAY_TEXTURES = 0x0000_0020;
+        /// Supports comparison samplers.
+        const COMPARISON_SAMPLERS = 0x0000_0040;
         /// Supports samplers with anisotropic filtering
         const ANISOTROPIC_FILTERING = 0x0001_0000;
         /// All flags are in their compliant state.
-        const COMPLIANT = 0x0000_003F;
+        const COMPLIANT = 0x0000_007F;
     }
 }
 
@@ -795,26 +797,6 @@ bitflags::bitflags! {
         const VERTEX_FRAGMENT = Self::VERTEX.bits | Self::FRAGMENT.bits;
         /// Binding is visible from the compute shader of a compute pipeline.
         const COMPUTE = 4;
-    }
-}
-
-bitflags::bitflags! {
-    /// Flags controlling the shader processing.
-    ///
-    /// Note: These flags are internal tweaks, they don't affect the API.
-    #[repr(transparent)]
-    #[derive(Default)]
-    #[cfg_attr(feature = "trace", derive(serde::Serialize))]
-    #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-    pub struct ShaderFlags: u32 {
-        /// If enabled, `wgpu` will parse the shader with `Naga`
-        /// and validate it both internally and with regards to
-        /// the given pipeline interface.
-        const VALIDATION = 1;
-        /// If enabled, `wgpu` will attempt to operate on `Naga`'s internal
-        /// representation of the shader module for both validation and translation
-        /// into the backend shader language, on backends where `gfx-hal` supports this.
-        const EXPERIMENTAL_TRANSLATION = 2;
     }
 }
 
@@ -1060,6 +1042,16 @@ pub enum PrimitiveTopology {
 impl Default for PrimitiveTopology {
     fn default() -> Self {
         PrimitiveTopology::TriangleList
+    }
+}
+
+impl PrimitiveTopology {
+    /// Returns true for strip topologies.
+    pub fn is_strip(&self) -> bool {
+        match *self {
+            Self::PointList | Self::LineList | Self::TriangleList => false,
+            Self::LineStrip | Self::TriangleStrip => true,
+        }
     }
 }
 
@@ -1446,12 +1438,12 @@ pub enum TextureFormat {
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    Etc2RgbA8Unorm = 56,
+    //Etc2RgbA8Unorm = 56,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    Etc2RgbA8UnormSrgb = 57,
+    //Etc2RgbA8UnormSrgb = 57,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer R.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
@@ -1716,8 +1708,8 @@ impl TextureFormat {
                 Self::Etc2RgbUnormSrgb => (etc2, float, srgb, (4, 4), 8, basic),
                 Self::Etc2RgbA1Unorm => (etc2, float, linear, (4, 4), 8, basic),
                 Self::Etc2RgbA1UnormSrgb => (etc2, float, srgb, (4, 4), 8, basic),
-                Self::Etc2RgbA8Unorm => (etc2, float, linear, (4, 4), 16, basic),
-                Self::Etc2RgbA8UnormSrgb => (etc2, float, srgb, (4, 4), 16, basic),
+                //Self::Etc2RgbA8Unorm => (etc2, float, linear, (4, 4), 16, basic),
+                //Self::Etc2RgbA8UnormSrgb => (etc2, float, srgb, (4, 4), 16, basic),
                 Self::EacRUnorm => (etc2, float, linear, (4, 4), 8, basic),
                 Self::EacRSnorm => (etc2, float, linear, (4, 4), 8, basic),
                 Self::EtcRgUnorm => (etc2, float, linear, (4, 4), 16, basic),
@@ -2498,45 +2490,9 @@ impl Extent3d {
     /// assert_eq!(wgpu::Extent3d { width: 60, height: 60, depth_or_array_layers: 1 }.max_mips(), 6);
     /// assert_eq!(wgpu::Extent3d { width: 240, height: 1, depth_or_array_layers: 1 }.max_mips(), 8);
     /// ```
-    pub fn max_mips(&self) -> u8 {
+    pub fn max_mips(&self) -> u32 {
         let max_dim = self.width.max(self.height.max(self.depth_or_array_layers));
-        let max_levels = 32 - max_dim.leading_zeros();
-
-        max_levels as u8
-    }
-
-    /// Calculates the extent at a given mip level.
-    ///
-    /// If the given mip level is larger than possible, returns None.
-    ///
-    /// Treats the depth as part of the mipmaps. If calculating
-    /// for a 2DArray texture, which does not mipmap depth, set depth to 1.
-    ///
-    /// ```rust
-    /// # use wgpu_types as wgpu;
-    /// let extent = wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 };
-    ///
-    /// assert_eq!(extent.at_mip_level(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(1), Some(wgpu::Extent3d { width: 50, height: 30, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(2), Some(wgpu::Extent3d { width: 25, height: 15, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(3), Some(wgpu::Extent3d { width: 12, height: 7, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(4), Some(wgpu::Extent3d { width: 6, height: 3, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(5), Some(wgpu::Extent3d { width: 3, height: 1, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(6), Some(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }));
-    /// assert_eq!(extent.at_mip_level(7), None);
-    /// ```
-    pub fn at_mip_level(&self, level: u8) -> Option<Self> {
-        let mip_count = self.max_mips();
-
-        if level >= mip_count {
-            return None;
-        }
-
-        Some(Self {
-            width: u32::max(1, self.width >> level as u32),
-            height: u32::max(1, self.height >> level as u32),
-            depth_or_array_layers: u32::max(1, self.depth_or_array_layers >> level as u32),
-        })
+        32 - max_dim.leading_zeros()
     }
 }
 
@@ -2574,6 +2530,57 @@ impl<L> TextureDescriptor<L> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
+        }
+    }
+
+    /// Calculates the extent at a given mip level.
+    ///
+    /// If the given mip level is larger than possible, returns None.
+    ///
+    /// Treats the depth as part of the mipmaps. If calculating
+    /// for a 2DArray texture, which does not mipmap depth, set depth to 1.
+    ///
+    /// ```rust
+    /// # use wgpu_types as wgpu;
+    /// let desc = wgpu::TextureDescriptor {
+    ///   label: (),
+    ///   size: Extent3d { width: 100, height: 60, depth_or_array_layers: 2 },
+    ///   mip_level_count: 7,
+    ///   sample_count: 1,
+    ///   dimension: wgpu::TextureDimension::D3,
+    ///   format: wgpu::TextureFormat::Rgba8Sint,
+    ///   usage: wgpu::TextureUsage::empty(),
+    /// };
+    ///
+    /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(1), Some(wgpu::Extent3d { width: 50, height: 30, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(2), Some(wgpu::Extent3d { width: 25, height: 15, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(3), Some(wgpu::Extent3d { width: 12, height: 7, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(4), Some(wgpu::Extent3d { width: 6, height: 3, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(5), Some(wgpu::Extent3d { width: 3, height: 1, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(6), Some(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(7), None);
+    /// ```
+    pub fn mip_level_size(&self, level: u32) -> Option<Extent3d> {
+        if level >= self.mip_level_count {
+            return None;
+        }
+
+        Some(Extent3d {
+            width: u32::max(1, self.size.width >> level),
+            height: u32::max(1, self.size.height >> level),
+            depth_or_array_layers: match self.dimension {
+                TextureDimension::D1 | TextureDimension::D2 => self.size.depth_or_array_layers,
+                TextureDimension::D3 => u32::max(1, self.size.depth_or_array_layers >> level),
+            },
+        })
+    }
+
+    /// Returns the number of array layers.
+    pub fn array_layer_count(&self) -> u32 {
+        match self.dimension {
+            TextureDimension::D1 | TextureDimension::D2 => self.size.depth_or_array_layers,
+            TextureDimension::D3 => 1,
         }
     }
 }
@@ -3000,6 +3007,9 @@ pub struct ImageCopyTexture<T> {
     /// The base texel of the texture in the selected `mip_level`.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
     pub origin: Origin3d,
+    /// The copy aspect.
+    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    pub aspect: TextureAspect,
 }
 
 /// Subresource range within an image
@@ -3042,7 +3052,9 @@ pub enum SamplerBorderColor {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct QuerySetDescriptor {
+pub struct QuerySetDescriptor<L> {
+    /// Debug label for the query set.
+    pub label: L,
     /// Kind of query that this query set should contain.
     pub ty: QueryType,
     /// Total count of queries the set contains. Must not be zero.
@@ -3050,11 +3062,24 @@ pub struct QuerySetDescriptor {
     pub count: u32,
 }
 
+impl<L> QuerySetDescriptor<L> {
+    ///
+    pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> QuerySetDescriptor<K> {
+        QuerySetDescriptor {
+            label: fun(&self.label),
+            ty: self.ty,
+            count: self.count,
+        }
+    }
+}
+
 /// Type of query contained in a QuerySet.
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum QueryType {
+    /// Query returns a single 64-bit number, serving as an occlusion boolean.
+    Occlusion,
     /// Query returns up to 5 64-bit numbers based on the given flags.
     ///
     /// See [`PipelineStatisticsTypes`]'s documentation for more information

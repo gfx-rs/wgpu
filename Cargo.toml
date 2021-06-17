@@ -1,12 +1,14 @@
 [workspace]
+resolver = "2"
 members = [
     "dummy",
     "player",
     "wgpu",
     "wgpu-core",
+    "wgpu-hal",
     "wgpu-types",
 ]
-default-members = ["wgpu"]
+default-members = ["wgpu", "player", "wgpu-hal"]
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
@@ -16,15 +18,6 @@ default-members = ["wgpu"]
 
 [patch."https://github.com/zakarumych/gpu-alloc"]
 #gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
-
-[patch."https://github.com/gfx-rs/gfx"]
-#gfx-hal = { path = "../gfx/src/hal" }
-#gfx-backend-empty = { path = "../gfx/src/backend/empty" }
-#gfx-backend-vulkan = { path = "../gfx/src/backend/vulkan" }
-#gfx-backend-gl = { path = "../gfx/src/backend/gl" }
-#gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
-#gfx-backend-dx11 = { path = "../gfx/src/backend/dx11" }
-#gfx-backend-metal = { path = "../gfx/src/backend/metal" }
 
 [patch.crates-io]
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }

@@ -9,20 +9,19 @@ use crate::{
         CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
         StateChange,
     },
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
-    resource::{Buffer, BufferUse, Texture},
-    track::{StatefulTrackerSubset, TrackerSet, UsageConflict},
+    resource::{Buffer, Texture},
+    track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
 
-use hal::command::CommandBuffer as _;
+use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
-use crate::track::UseExtendError;
 use std::{fmt, mem, str};
 
 #[doc(hidden)]
@@ -214,13 +213,13 @@ impl State {
         Ok(())
     }
 
-    fn flush_states<B: GfxBackend>(
+    fn flush_states<A: HalApi>(
         &mut self,
-        raw_cmd_buf: &mut B::CommandBuffer,
+        raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut TrackerSet,
-        bind_group_guard: &Storage<BindGroup<B>, id::BindGroupId>,
-        buffer_guard: &Storage<Buffer<B>, id::BufferId>,
-        texture_guard: &Storage<Texture<B>, id::TextureId>,
+        bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             self.trackers.merge_extend(&bind_group_guard[id].used)?;
@@ -230,7 +229,7 @@ impl State {
         log::trace!("Encoding dispatch barriers");
 
         CommandBuffer::insert_barriers(
-            raw_cmd_buf,
+            raw_encoder,
             base_trackers,
             &self.trackers.buffers,
             &self.trackers.textures,
@@ -246,16 +245,16 @@ impl State {
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_run_compute_pass<B: GfxBackend>(
+    pub fn command_encoder_run_compute_pass<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         pass: &ComputePass,
     ) -> Result<(), ComputePassError> {
-        self.command_encoder_run_compute_pass_impl::<B>(encoder_id, pass.base.as_ref())
+        self.command_encoder_run_compute_pass_impl::<A>(encoder_id, pass.base.as_ref())
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_compute_pass_impl<B: GfxBackend>(
+    pub fn command_encoder_run_compute_pass_impl<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
@@ -263,7 +262,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("run_compute_pass", "CommandEncoder");
         let scope = PassErrorScope::Pass(encoder_id);
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -271,7 +270,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
         // will be reset to true if recording is done without errors
         cmd_buf.status = CommandEncoderStatus::Error;
-        let raw = cmd_buf.raw.last_mut().unwrap();
+        let raw = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -291,12 +290,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if let Some(ref label) = base.label {
-            unsafe {
-                raw.begin_debug_marker(label, 0);
-            }
-        }
-
         let (_, mut token) = hub.render_bundles.read(&mut token);
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -308,13 +301,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut state = State {
             binder: Binder::new(),
             pipeline: StateChange::new(),
-            trackers: StatefulTrackerSubset::new(B::VARIANT),
+            trackers: StatefulTrackerSubset::new(A::VARIANT),
             debug_scope_depth: 0,
         };
         let mut temp_offsets = Vec::new();
         let mut dynamic_offset_count = 0;
         let mut string_offset = 0;
         let mut active_query = None;
+
+        let hal_desc = hal::ComputePassDescriptor { label: base.label };
+        unsafe {
+            raw.begin_compute_pass(&hal_desc);
+        }
 
         for command in base.commands {
             match *command {
@@ -377,19 +375,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if !entries.is_empty() {
                         let pipeline_layout =
                             &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
-                        let desc_sets = entries.iter().map(|e| {
-                            bind_group_guard[e.group_id.as_ref().unwrap().value]
-                                .raw
-                                .raw()
-                        });
-                        let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
-                        unsafe {
-                            raw.bind_compute_descriptor_sets(
-                                pipeline_layout,
-                                index as usize,
-                                desc_sets,
-                                offsets,
-                            );
+                        for (i, e) in entries.iter().enumerate() {
+                            let raw_bg = &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+                            unsafe {
+                                raw.set_bind_group(
+                                    pipeline_layout,
+                                    index as u32 + i as u32,
+                                    raw_bg,
+                                    &e.dynamic_offsets,
+                                );
+                            }
                         }
                     }
                 }
@@ -408,7 +403,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
 
                     unsafe {
-                        raw.bind_compute_pipeline(&pipeline.raw);
+                        raw.set_compute_pipeline(&pipeline.raw);
                     }
 
                     // Rebind resources
@@ -420,19 +415,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             pipeline.layout_id.value,
                         );
                         if !entries.is_empty() {
-                            let desc_sets = entries.iter().map(|e| {
-                                bind_group_guard[e.group_id.as_ref().unwrap().value]
-                                    .raw
-                                    .raw()
-                            });
-                            let offsets = entries.iter().flat_map(|e| &e.dynamic_offsets).cloned();
-                            unsafe {
-                                raw.bind_compute_descriptor_sets(
-                                    &pipeline_layout.raw,
-                                    start_index,
-                                    desc_sets,
-                                    offsets,
-                                );
+                            for (i, e) in entries.iter().enumerate() {
+                                let raw_bg =
+                                    &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+                                unsafe {
+                                    raw.set_bind_group(
+                                        &pipeline_layout.raw,
+                                        start_index as u32 + i as u32,
+                                        raw_bg,
+                                        &e.dynamic_offsets,
+                                    );
+                                }
                             }
                         }
 
@@ -447,8 +440,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 offset,
                                 size_bytes,
                                 |clear_offset, clear_data| unsafe {
-                                    raw.push_compute_constants(
+                                    raw.set_push_constants(
                                         &pipeline_layout.raw,
+                                        wgt::ShaderStage::COMPUTE,
                                         clear_offset,
                                         clear_data,
                                     );
@@ -488,7 +482,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         )
                         .map_pass_err(scope)?;
 
-                    unsafe { raw.push_compute_constants(&pipeline_layout.raw, offset, data_slice) }
+                    unsafe {
+                        raw.set_push_constants(
+                            &pipeline_layout.raw,
+                            wgt::ShaderStage::COMPUTE,
+                            offset,
+                            data_slice,
+                        );
+                    }
                 }
                 ComputeCommand::Dispatch(groups) => {
                     let scope = PassErrorScope::Dispatch {
@@ -521,7 +522,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let indirect_buffer = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
+                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDIRECT)
                         .map_err(|_| ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
                     check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)
@@ -537,7 +538,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope);
                     }
 
-                    let &(ref buf_raw, _) = indirect_buffer
+                    let buf_raw = indirect_buffer
                         .raw
                         .as_ref()
                         .ok_or(ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
@@ -569,14 +570,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.dispatch_indirect(buf_raw, offset);
                     }
                 }
-                ComputeCommand::PushDebugGroup { color, len } => {
+                ComputeCommand::PushDebugGroup { color: _, len } => {
                     state.debug_scope_depth += 1;
                     let label =
                         str::from_utf8(&base.string_data[string_offset..string_offset + len])
                             .unwrap();
                     string_offset += len;
                     unsafe {
-                        raw.begin_debug_marker(label, color);
+                        raw.begin_debug_marker(label);
                     }
                 }
                 ComputeCommand::PopDebugGroup => {
@@ -591,12 +592,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.end_debug_marker();
                     }
                 }
-                ComputeCommand::InsertDebugMarker { color, len } => {
+                ComputeCommand::InsertDebugMarker { color: _, len } => {
                     let label =
                         str::from_utf8(&base.string_data[string_offset..string_offset + len])
                             .unwrap();
                     string_offset += len;
-                    unsafe { raw.insert_debug_marker(label, color) }
+                    unsafe { raw.insert_debug_marker(label) }
                 }
                 ComputeCommand::WriteTimestamp {
                     query_set_id,
@@ -657,10 +658,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        if let Some(_) = base.label {
-            unsafe {
-                raw.end_debug_marker();
-            }
+        unsafe {
+            raw.end_compute_pass();
         }
         cmd_buf.status = CommandEncoderStatus::Recording;
 

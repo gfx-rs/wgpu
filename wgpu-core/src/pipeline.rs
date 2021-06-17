@@ -12,7 +12,6 @@ use crate::{
 use std::borrow::Cow;
 use thiserror::Error;
 
-#[derive(Debug)]
 pub enum ShaderModuleSource<'a> {
     SpirV(Cow<'a, [u32]>),
     Wgsl(Cow<'a, str>),
@@ -24,20 +23,18 @@ pub enum ShaderModuleSource<'a> {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
-    #[cfg_attr(any(feature = "replay", feature = "trace"), serde(default))]
-    pub flags: wgt::ShaderFlags,
 }
 
 #[derive(Debug)]
-pub struct ShaderModule<B: hal::Backend> {
-    pub(crate) raw: B::ShaderModule,
+pub struct ShaderModule<A: hal::Api> {
+    pub(crate) raw: A::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) interface: Option<validation::Interface>,
+    pub(crate) interface: validation::Interface,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
-impl<B: hal::Backend> Resource for ShaderModule<B> {
+impl<A: hal::Api> Resource for ShaderModule<A> {
     const TYPE: &'static str = "ShaderModule";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -54,7 +51,7 @@ impl<B: hal::Backend> Resource for ShaderModule<B> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateShaderModuleError {
-    #[error("Failed to parse WGSL")]
+    #[error("Failed to parse a shader")]
     Parsing,
     #[error("Failed to generate the backend-specific code")]
     Generation,
@@ -125,14 +122,14 @@ pub enum CreateComputePipelineError {
 }
 
 #[derive(Debug)]
-pub struct ComputePipeline<B: hal::Backend> {
-    pub(crate) raw: B::ComputePipeline,
+pub struct ComputePipeline<A: hal::Api> {
+    pub(crate) raw: A::ComputePipeline,
     pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Resource for ComputePipeline<B> {
+impl<A: hal::Api> Resource for ComputePipeline<A> {
     const TYPE: &'static str = "ComputePipeline";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -289,8 +286,8 @@ bitflags::bitflags! {
 }
 
 #[derive(Debug)]
-pub struct RenderPipeline<B: hal::Backend> {
-    pub(crate) raw: B::GraphicsPipeline,
+pub struct RenderPipeline<A: hal::Api> {
+    pub(crate) raw: A::RenderPipeline,
     pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) pass_context: RenderPassContext,
@@ -300,7 +297,7 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
-impl<B: hal::Backend> Resource for RenderPipeline<B> {
+impl<A: hal::Api> Resource for RenderPipeline<A> {
     const TYPE: &'static str = "RenderPipeline";
 
     fn life_guard(&self) -> &LifeGuard {

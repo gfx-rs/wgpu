@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{alloc::MemoryBlock, DeviceError, HostMap, MissingFeatures},
+    device::{DeviceError, HostMap, MissingFeatures},
     hub::Resource,
     id::{DeviceId, SwapChainId, TextureId},
     memory_init_tracker::MemoryInitTracker,
@@ -16,56 +16,6 @@ use thiserror::Error;
 
 use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
 
-bitflags::bitflags! {
-    /// The internal enum mirrored from `BufferUsage`. The values don't have to match!
-    pub struct BufferUse: u32 {
-        const EMPTY = 0;
-        const MAP_READ = 1;
-        const MAP_WRITE = 2;
-        const COPY_SRC = 4;
-        const COPY_DST = 8;
-        const INDEX = 16;
-        const VERTEX = 32;
-        const UNIFORM = 64;
-        const STORAGE_LOAD = 128;
-        const STORAGE_STORE = 256;
-        const INDIRECT = 512;
-        /// The combination of all read-only usages.
-        const READ_ALL = Self::MAP_READ.bits | Self::COPY_SRC.bits |
-            Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
-            Self::STORAGE_LOAD.bits | Self::INDIRECT.bits;
-        /// The combination of all write-only and read-write usages.
-        const WRITE_ALL = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_STORE.bits;
-        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
-        /// If a usage is not ordered, then even if it doesn't change between draw calls, there
-        /// still need to be pipeline barriers inserted for synchronization.
-        const ORDERED = Self::READ_ALL.bits | Self::MAP_WRITE.bits | Self::COPY_DST.bits;
-    }
-}
-
-bitflags::bitflags! {
-    /// The internal enum mirrored from `TextureUsage`. The values don't have to match!
-    pub struct TextureUse: u32 {
-        const EMPTY = 0;
-        const COPY_SRC = 1;
-        const COPY_DST = 2;
-        const SAMPLED = 4;
-        const ATTACHMENT_READ = 8;
-        const ATTACHMENT_WRITE = 16;
-        const STORAGE_LOAD = 32;
-        const STORAGE_STORE = 48;
-        /// The combination of all read-only usages.
-        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits | Self::ATTACHMENT_READ.bits | Self::STORAGE_LOAD.bits;
-        /// The combination of all write-only and read-write usages.
-        const WRITE_ALL = Self::COPY_DST.bits | Self::ATTACHMENT_WRITE.bits | Self::STORAGE_STORE.bits;
-        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
-        /// If a usage is not ordered, then even if it doesn't change between draw calls, there
-        /// still need to be pipeline barriers inserted for synchronization.
-        const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::ATTACHMENT_WRITE.bits;
-        const UNINITIALIZED = 0xFFFF;
-    }
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub enum BufferMapAsyncStatus {
@@ -77,12 +27,11 @@ pub enum BufferMapAsyncStatus {
 }
 
 #[derive(Debug)]
-pub(crate) enum BufferMapState<B: hal::Backend> {
+pub(crate) enum BufferMapState<A: hal::Api> {
     /// Mapped at creation.
     Init {
         ptr: NonNull<u8>,
-        stage_buffer: B::Buffer,
-        stage_memory: MemoryBlock<B>,
+        stage_buffer: A::Buffer,
         needs_flush: bool,
     },
     /// Waiting for GPU to be done before mapping
@@ -90,15 +39,15 @@ pub(crate) enum BufferMapState<B: hal::Backend> {
     /// Mapped
     Active {
         ptr: NonNull<u8>,
-        sub_range: hal::buffer::SubRange,
+        range: hal::MemoryRange,
         host: HostMap,
     },
     /// Not mapped
     Idle,
 }
 
-unsafe impl<B: hal::Backend> Send for BufferMapState<B> {}
-unsafe impl<B: hal::Backend> Sync for BufferMapState<B> {}
+unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
+unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
 
 pub type BufferMapCallback = unsafe extern "C" fn(status: BufferMapAsyncStatus, userdata: *mut u8);
 
@@ -170,15 +119,15 @@ pub(crate) struct BufferPendingMapping {
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct Buffer<B: hal::Backend> {
-    pub(crate) raw: Option<(B::Buffer, MemoryBlock<B>)>,
+pub struct Buffer<A: hal::Api> {
+    pub(crate) raw: Option<A::Buffer>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: wgt::BufferUsage,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: MemoryInitTracker,
-    pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
+    pub(crate) sync_mapped_writes: Option<hal::MemoryRange>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) map_state: BufferMapState<B>,
+    pub(crate) map_state: BufferMapState<A>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -195,7 +144,7 @@ pub enum CreateBufferError {
     UsageMismatch(wgt::BufferUsage),
 }
 
-impl<B: hal::Backend> Resource for Buffer<B> {
+impl<A: hal::Api> Resource for Buffer<A> {
     const TYPE: &'static str = "Buffer";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -203,7 +152,7 @@ impl<B: hal::Backend> Resource for Buffer<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for Buffer<B> {
+impl<A: hal::Api> Borrow<()> for Buffer<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
@@ -212,16 +161,12 @@ impl<B: hal::Backend> Borrow<()> for Buffer<B> {
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
-pub struct Texture<B: hal::Backend> {
-    pub(crate) raw: Option<(B::Image, MemoryBlock<B>)>,
+pub struct Texture<A: hal::Api> {
+    pub(crate) raw: Option<A::Texture>,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) usage: wgt::TextureUsage,
-    pub(crate) aspects: hal::format::Aspects,
-    pub(crate) dimension: wgt::TextureDimension,
-    pub(crate) kind: hal::image::Kind,
-    pub(crate) format: wgt::TextureFormat,
+    pub(crate) desc: wgt::TextureDescriptor<()>,
+    pub(crate) hal_usage: hal::TextureUse,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
@@ -265,7 +210,7 @@ pub enum CreateTextureError {
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
 }
 
-impl<B: hal::Backend> Resource for Texture<B> {
+impl<A: hal::Api> Resource for Texture<A> {
     const TYPE: &'static str = "Texture";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -273,7 +218,7 @@ impl<B: hal::Backend> Resource for Texture<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<TextureSelector> for Texture<B> {
+impl<A: hal::Api> Borrow<TextureSelector> for Texture<A> {
     fn borrow(&self) -> &TextureSelector {
         &self.full_range
     }
@@ -297,30 +242,35 @@ pub struct TextureViewDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) enum TextureViewInner<B: hal::Backend> {
-    Native {
-        raw: B::ImageView,
-        source_id: Stored<TextureId>,
-    },
-    SwapChain {
-        image: <B::Surface as hal::window::PresentationSurface<B>>::SwapchainImage,
-        source_id: Stored<SwapChainId>,
-    },
+pub(crate) enum TextureViewSource {
+    Native(Stored<TextureId>),
+    SwapChain(Stored<SwapChainId>),
 }
 
 #[derive(Debug)]
-pub struct TextureView<B: hal::Backend> {
-    pub(crate) inner: TextureViewInner<B>,
+pub(crate) struct HalTextureViewDescriptor {
+    pub format: wgt::TextureFormat,
+    pub dimension: wgt::TextureViewDimension,
+    pub range: wgt::ImageSubresourceRange,
+}
+
+impl HalTextureViewDescriptor {
+    pub fn aspects(&self) -> hal::FormatAspect {
+        hal::FormatAspect::from(self.format) & hal::FormatAspect::from(self.range.aspect)
+    }
+}
+
+#[derive(Debug)]
+pub struct TextureView<A: hal::Api> {
+    pub(crate) raw: A::TextureView,
+    pub(crate) source: TextureViewSource,
     //TODO: store device_id for quick access?
-    pub(crate) aspects: hal::format::Aspects,
-    pub(crate) format: wgt::TextureFormat,
+    pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    pub(crate) dimension: wgt::TextureViewDimension,
     pub(crate) extent: wgt::Extent3d,
-    pub(crate) samples: hal::image::NumSamples,
-    pub(crate) framebuffer_attachment: hal::image::FramebufferAttachment,
+    pub(crate) samples: u32,
     /// Internal use of this texture view when used as `BindingType::Texture`.
-    pub(crate) sampled_internal_use: TextureUse,
+    pub(crate) sampled_internal_use: hal::TextureUse,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
@@ -331,30 +281,35 @@ pub enum CreateTextureViewError {
     InvalidTexture,
     #[error("not enough memory left")]
     OutOfMemory,
-    #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{image:?}`")]
+    #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {
         view: wgt::TextureViewDimension,
-        image: wgt::TextureDimension,
+        texture: wgt::TextureDimension,
     },
     #[error("Invalid texture depth `{depth}` for texture view of dimension `Cubemap`. Cubemap views must use images of size 6.")]
-    InvalidCubemapTextureDepth { depth: u16 },
+    InvalidCubemapTextureDepth { depth: u32 },
     #[error("Invalid texture depth `{depth}` for texture view of dimension `CubemapArray`. Cubemap views must use images with sizes which are a multiple of 6.")]
-    InvalidCubemapArrayTextureDepth { depth: u16 },
+    InvalidCubemapArrayTextureDepth { depth: u32 },
     #[error(
         "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
     )]
-    TooManyMipLevels { requested: u32, total: u8 },
+    TooManyMipLevels { requested: u32, total: u32 },
     #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
-    TooManyArrayLayers { requested: u32, total: u16 },
+    TooManyArrayLayers { requested: u32, total: u32 },
     #[error("Requested array layer count {requested} is not valid for the target view dimension {dim:?}")]
     InvalidArrayLayerCount {
         requested: u32,
         dim: wgt::TextureViewDimension,
     },
-    #[error("Aspect {requested:?} is not in the source texture ({total:?})")]
+    #[error("Aspect {requested_aspect:?} is not in the source texture format {texture_format:?}")]
     InvalidAspect {
-        requested: hal::format::Aspects,
-        total: hal::format::Aspects,
+        texture_format: wgt::TextureFormat,
+        requested_aspect: wgt::TextureAspect,
+    },
+    #[error("Unable to view texture {texture:?} as {view:?}")]
+    FormatReinterpretation {
+        texture: wgt::TextureFormat,
+        view: wgt::TextureFormat,
     },
 }
 
@@ -364,7 +319,7 @@ pub enum TextureViewDestroyError {
     SwapChainImage,
 }
 
-impl<B: hal::Backend> Resource for TextureView<B> {
+impl<A: hal::Api> Resource for TextureView<A> {
     const TYPE: &'static str = "TextureView";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -372,7 +327,7 @@ impl<B: hal::Backend> Resource for TextureView<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for TextureView<B> {
+impl<A: hal::Api> Borrow<()> for TextureView<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
@@ -423,8 +378,8 @@ impl Default for SamplerDescriptor<'_> {
 }
 
 #[derive(Debug)]
-pub struct Sampler<B: hal::Backend> {
-    pub(crate) raw: B::Sampler,
+pub struct Sampler<A: hal::Api> {
+    pub(crate) raw: A::Sampler,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     /// `true` if this is a comparison sampler
@@ -446,7 +401,7 @@ pub enum CreateSamplerError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
-impl<B: hal::Backend> Resource for Sampler<B> {
+impl<A: hal::Api> Resource for Sampler<A> {
     const TYPE: &'static str = "Sampler";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -454,7 +409,7 @@ impl<B: hal::Backend> Resource for Sampler<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for Sampler<B> {
+impl<A: hal::Api> Borrow<()> for Sampler<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
@@ -471,18 +426,17 @@ pub enum CreateQuerySetError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
+pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
+
 #[derive(Debug)]
-pub struct QuerySet<B: hal::Backend> {
-    pub(crate) raw: B::QueryPool,
+pub struct QuerySet<A: hal::Api> {
+    pub(crate) raw: A::QuerySet,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    /// Amount of queries in the query set.
-    pub(crate) desc: wgt::QuerySetDescriptor,
-    /// Amount of numbers in each query (i.e. a pipeline statistics query for two attributes will have this number be two)
-    pub(crate) elements: u32,
+    pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
-impl<B: hal::Backend> Resource for QuerySet<B> {
+impl<A: hal::Api> Resource for QuerySet<A> {
     const TYPE: &'static str = "QuerySet";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -490,7 +444,7 @@ impl<B: hal::Backend> Resource for QuerySet<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<()> for QuerySet<B> {
+impl<A: hal::Api> Borrow<()> for QuerySet<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }

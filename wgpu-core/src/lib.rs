@@ -2,6 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/*! This library safely implements WebGPU on native platforms.
+ *  It is designed for integration into browsers, as well as wrapping
+ *  into other language-specific user-friendly libraries.
+ */
+
 #![allow(
     // We use loops for getting early-out of scope without closures.
     clippy::never_loop,
@@ -26,21 +31,6 @@
 #[macro_use]
 mod macros;
 
-pub mod backend {
-    pub use gfx_backend_empty::Backend as Empty;
-
-    #[cfg(dx11)]
-    pub use gfx_backend_dx11::Backend as Dx11;
-    #[cfg(dx12)]
-    pub use gfx_backend_dx12::Backend as Dx12;
-    #[cfg(gl)]
-    pub use gfx_backend_gl::Backend as Gl;
-    #[cfg(metal)]
-    pub use gfx_backend_metal::Backend as Metal;
-    #[cfg(vulkan)]
-    pub use gfx_backend_vulkan::Backend as Vulkan;
-}
-
 pub mod binding_model;
 pub mod command;
 mod conv;
@@ -55,18 +45,18 @@ pub mod swap_chain;
 mod track;
 mod validation;
 
+pub use hal::api;
+
 #[cfg(test)]
 use loom::sync::atomic;
 #[cfg(not(test))]
 use std::sync::atomic;
 
-use atomic::{AtomicUsize, Ordering};
+use atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use std::{borrow::Cow, os::raw::c_char, ptr};
 
-pub const MAX_BIND_GROUPS: usize = 8;
-
-type SubmissionIndex = usize;
+type SubmissionIndex = hal::FenceValue;
 type Index = u32;
 type Epoch = u32;
 
@@ -74,18 +64,15 @@ pub type RawString = *const c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;
 
 trait LabelHelpers<'a> {
-    fn to_string_or_default(&'a self) -> String;
+    fn borrow_option(&'a self) -> Option<&'a str>;
     fn borrow_or_default(&'a self) -> &'a str;
 }
 impl<'a> LabelHelpers<'a> for Label<'a> {
-    fn borrow_or_default(&'a self) -> &'a str {
-        self.as_ref().map(|cow| cow.as_ref()).unwrap_or("")
+    fn borrow_option(&'a self) -> Option<&'a str> {
+        self.as_ref().map(|cow| cow.as_ref())
     }
-    fn to_string_or_default(&'a self) -> String {
-        self.as_ref()
-            .map(|cow| cow.as_ref())
-            .unwrap_or("")
-            .to_string()
+    fn borrow_or_default(&'a self) -> &'a str {
+        self.borrow_option().unwrap_or_default()
     }
 }
 
@@ -196,7 +183,7 @@ impl Drop for MultiRefCount {
 #[derive(Debug)]
 pub struct LifeGuard {
     ref_count: Option<RefCount>,
-    submission_index: AtomicUsize,
+    submission_index: AtomicU64,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
@@ -207,7 +194,7 @@ impl LifeGuard {
         let bx = Box::new(AtomicUsize::new(1));
         Self {
             ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
-            submission_index: AtomicUsize::new(0),
+            submission_index: AtomicU64::new(0),
             #[cfg(debug_assertions)]
             label: label.to_string(),
         }
@@ -230,13 +217,6 @@ struct Stored<T> {
     ref_count: RefCount,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct PrivateFeatures {
-    anisotropic_filtering: bool,
-    texture_d24: bool,
-    texture_d24_s8: bool,
-}
-
 const DOWNLEVEL_WARNING_MESSAGE: &str = "The underlying API or device in use does not \
 support enough features to be a fully compliant implementation of WebGPU. A subset of the features can still be used. \
 If you are running this program on native and not in a browser and wish to limit the features you use to the supported subset, \
@@ -255,16 +235,19 @@ macro_rules! gfx_select {
         // macro so we must specify their equivalents manually
         match $id.backend() {
             #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
-            wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),* ),
+            wgt::Backend::Vulkan => $global.$method::<$crate::api::Vulkan>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
-            wgt::Backend::Metal => $global.$method::<$crate::backend::Metal>( $($param),* ),
+            wgt::Backend::Metal => $global.$method::<$crate::api::Metal>( $($param),* ),
+            /*
             #[cfg(all(not(target_arch = "wasm32"), windows))]
             wgt::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), windows))]
             wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),* ),
             #[cfg(any(target_arch = "wasm32", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
             wgt::Backend::Gl => $global.$method::<$crate::backend::Gl>( $($param),+ ),
+            */
             other => panic!("Unexpected backend {:?}", other),
+
         }
     };
 }
@@ -274,9 +257,3 @@ type FastHashMap<K, V> =
     std::collections::HashMap<K, V, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
 /// Fast hash set used internally.
 type FastHashSet<K> = std::collections::HashSet<K, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
-
-#[test]
-fn test_default_limits() {
-    let limits = wgt::Limits::default();
-    assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
-}

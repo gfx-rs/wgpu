@@ -46,8 +46,9 @@ impl framework::Example for Example {
     ) -> Self {
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            flags: wgpu::ShaderFlags::all(),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "../../../wgpu-hal/examples/halmark/shader.wgsl"
+            ))),
         });
 
         let global_bind_group_layout =
@@ -152,11 +153,7 @@ impl framework::Example for Example {
                 usage: wgpu::TextureUsage::COPY_DST | wgpu::TextureUsage::SAMPLED,
             });
             queue.write_texture(
-                wgpu::ImageCopyTexture {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                },
+                texture.as_image_copy(),
                 &buf,
                 wgpu::ImageDataLayout {
                     offset: 0,

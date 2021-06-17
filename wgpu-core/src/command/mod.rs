@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-mod allocator;
 mod bind;
 mod bundle;
 mod clear;
@@ -12,8 +11,6 @@ mod query;
 mod render;
 mod transfer;
 
-pub(crate) use self::allocator::CommandAllocator;
-pub use self::allocator::CommandAllocatorError;
 pub use self::bundle::*;
 pub use self::compute::*;
 pub use self::draw::*;
@@ -22,20 +19,17 @@ pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::{
-    device::{all_buffer_stages, all_image_stages},
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::MemoryInitTrackerAction,
     resource::{Buffer, Texture},
     track::{BufferState, ResourceTracker, TextureState, TrackerSet},
-    Label, PrivateFeatures, Stored,
+    Label, Stored,
 };
 
-use hal::command::CommandBuffer as _;
+use hal::CommandEncoder as _;
 use smallvec::SmallVec;
 use thiserror::Error;
-
-use std::thread::ThreadId;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
@@ -46,27 +40,115 @@ enum CommandEncoderStatus {
     Error,
 }
 
-#[derive(Debug)]
-pub struct CommandBuffer<B: hal::Backend> {
-    pub(crate) raw: Vec<B::CommandBuffer>,
+struct CommandEncoder<A: hal::Api> {
+    raw: A::CommandEncoder,
+    list: Vec<A::CommandBuffer>,
+    is_open: bool,
+    label: Option<String>,
+}
+
+//TODO: handle errors better
+impl<A: hal::Api> CommandEncoder<A> {
+    fn close(&mut self) {
+        if self.is_open {
+            self.is_open = false;
+            let cmd_buf = unsafe { self.raw.end_encoding().unwrap() };
+            self.list.push(cmd_buf);
+        }
+    }
+
+    fn open(&mut self) -> &mut A::CommandEncoder {
+        if !self.is_open {
+            self.is_open = true;
+            let label = self.label.as_deref();
+            unsafe { self.raw.begin_encoding(label).unwrap() };
+        }
+        &mut self.raw
+    }
+}
+
+pub struct BackedCommands<A: hal::Api> {
+    pub(crate) encoder: A::CommandEncoder,
+    pub(crate) list: Vec<A::CommandBuffer>,
+    pub(crate) trackers: TrackerSet,
+}
+
+pub struct CommandBuffer<A: hal::Api> {
+    encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
-    recorded_thread_id: ThreadId,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
     pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
-    downlevel: wgt::DownlevelProperties,
-    private_features: PrivateFeatures,
+    downlevel: wgt::DownlevelCapabilities,
     support_fill_buffer_texture: bool,
-    has_labels: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
-    #[cfg(debug_assertions)]
-    pub(crate) label: String,
 }
 
-impl<B: GfxBackend> CommandBuffer<B> {
+impl<A: HalApi> CommandBuffer<A> {
+    pub(crate) fn new(
+        encoder: A::CommandEncoder,
+        device_id: Stored<id::DeviceId>,
+        limits: wgt::Limits,
+        downlevel: wgt::DownlevelCapabilities,
+        features: wgt::Features,
+        #[cfg(feature = "trace")] enable_tracing: bool,
+        label: &Label,
+    ) -> Self {
+        CommandBuffer {
+            encoder: CommandEncoder {
+                raw: encoder,
+                is_open: false,
+                list: Vec::new(),
+                label: crate::LabelHelpers::borrow_option(label).map(|s| s.to_string()),
+            },
+            status: CommandEncoderStatus::Recording,
+            device_id,
+            trackers: TrackerSet::new(A::VARIANT),
+            used_swap_chains: Default::default(),
+            buffer_memory_init_actions: Default::default(),
+            limits,
+            downlevel,
+            support_fill_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
+            #[cfg(feature = "trace")]
+            commands: if enable_tracing {
+                Some(Vec::new())
+            } else {
+                None
+            },
+        }
+    }
+
+    pub(crate) fn insert_barriers(
+        raw: &mut A::CommandEncoder,
+        base: &mut TrackerSet,
+        head_buffers: &ResourceTracker<BufferState>,
+        head_textures: &ResourceTracker<TextureState>,
+        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
+    ) {
+        profiling::scope!("insert_barriers");
+        debug_assert_eq!(A::VARIANT, base.backend());
+
+        let buffer_barriers = base.buffers.merge_replace(head_buffers).map(|pending| {
+            let buf = &buffer_guard[pending.id];
+            pending.into_hal(buf)
+        });
+        let texture_barriers = base.textures.merge_replace(head_textures).map(|pending| {
+            let tex = &texture_guard[pending.id];
+            pending.into_hal(tex)
+        });
+
+        unsafe {
+            raw.transition_buffers(buffer_barriers);
+            raw.transition_textures(texture_barriers);
+        }
+    }
+}
+
+impl<A: hal::Api> CommandBuffer<A> {
     fn get_encoder_mut(
         storage: &mut Storage<Self, id::CommandEncoderId>,
         id: id::CommandEncoderId,
@@ -88,41 +170,16 @@ impl<B: GfxBackend> CommandBuffer<B> {
         }
     }
 
-    pub(crate) fn insert_barriers(
-        raw: &mut B::CommandBuffer,
-        base: &mut TrackerSet,
-        head_buffers: &ResourceTracker<BufferState>,
-        head_textures: &ResourceTracker<TextureState>,
-        buffer_guard: &Storage<Buffer<B>, id::BufferId>,
-        texture_guard: &Storage<Texture<B>, id::TextureId>,
-    ) {
-        use hal::command::CommandBuffer as _;
-
-        profiling::scope!("insert_barriers");
-        debug_assert_eq!(B::VARIANT, base.backend());
-
-        let buffer_barriers = base.buffers.merge_replace(head_buffers).map(|pending| {
-            let buf = &buffer_guard[pending.id];
-            pending.into_hal(buf)
-        });
-        let texture_barriers = base.textures.merge_replace(head_textures).map(|pending| {
-            let tex = &texture_guard[pending.id];
-            pending.into_hal(tex)
-        });
-
-        //TODO: be more deliberate about the stages
-        let stages = all_buffer_stages() | all_image_stages();
-        unsafe {
-            raw.pipeline_barrier(
-                stages..stages,
-                hal::memory::Dependencies::empty(),
-                buffer_barriers.chain(texture_barriers),
-            );
+    pub(crate) fn into_baked(self) -> BackedCommands<A> {
+        BackedCommands {
+            encoder: self.encoder.raw,
+            list: self.encoder.list,
+            trackers: self.trackers,
         }
     }
 }
 
-impl<B: hal::Backend> crate::hub::Resource for CommandBuffer<B> {
+impl<A: hal::Api> crate::hub::Resource for CommandBuffer<A> {
     const TYPE: &'static str = "CommandBuffer";
 
     fn life_guard(&self) -> &crate::LifeGuard {
@@ -130,10 +187,7 @@ impl<B: hal::Backend> crate::hub::Resource for CommandBuffer<B> {
     }
 
     fn label(&self) -> &str {
-        #[cfg(debug_assertions)]
-        return &self.label;
-        #[cfg(not(debug_assertions))]
-        return "";
+        self.encoder.label.as_ref().map_or("", |s| s.as_str())
     }
 }
 
@@ -206,30 +260,23 @@ pub enum CommandEncoderError {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_finish<B: GfxBackend>(
+    pub fn command_encoder_finish<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
     ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
         profiling::scope!("finish", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
-        let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
-        //TODO: actually close the last recorded command buffer
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
 
         let error = match CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id) {
             Ok(cmd_buf) => {
+                cmd_buf.encoder.close();
                 cmd_buf.status = CommandEncoderStatus::Finished;
-                // stop tracking the swapchain image, if used
-                for sc_id in cmd_buf.used_swap_chains.iter() {
-                    let view_id = swap_chain_guard[sc_id.value]
-                        .acquired_view_id
-                        .as_ref()
-                        .expect("Used swap chain frame has already presented");
-                    cmd_buf.trackers.views.remove(view_id.value);
-                }
+                //Note: if we want to stop tracking the swapchain texture view,
+                // this is the place to do it.
                 log::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
                 None
             }
@@ -239,58 +286,58 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (encoder_id, error)
     }
 
-    pub fn command_encoder_push_debug_group<B: GfxBackend>(
+    pub fn command_encoder_push_debug_group<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("push_debug_group", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
 
         unsafe {
-            cmd_buf_raw.begin_debug_marker(label, 0);
+            cmd_buf_raw.begin_debug_marker(label);
         }
         Ok(())
     }
 
-    pub fn command_encoder_insert_debug_marker<B: GfxBackend>(
+    pub fn command_encoder_insert_debug_marker<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("insert_debug_marker", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
 
         unsafe {
-            cmd_buf_raw.insert_debug_marker(label, 0);
+            cmd_buf_raw.insert_debug_marker(label);
         }
         Ok(())
     }
 
-    pub fn command_encoder_pop_debug_group<B: GfxBackend>(
+    pub fn command_encoder_pop_debug_group<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("pop_debug_marker", "CommandEncoder");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let cmd_buf_raw = cmd_buf.encoder.open();
 
         unsafe {
             cmd_buf_raw.end_debug_marker();

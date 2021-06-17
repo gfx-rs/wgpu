@@ -1,0 +1,60 @@
+[package]
+name = "wgpu-hal"
+version = "0.1.0"
+authors = ["wgpu developers"]
+edition = "2018"
+description = "WebGPU hardware abstraction layer"
+homepage = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MIT OR Apache-2.0"
+
+[lib]
+
+[features]
+default = []
+metal = ["naga/msl-out", "block", "foreign-types"]
+vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "inplace_it", "renderdoc-sys"]
+
+[dependencies]
+bitflags = "1.0"
+parking_lot = "0.11"
+raw-window-handle = "0.3"
+thiserror = "1"
+wgt = { package = "wgpu-types", path = "../wgpu-types" }
+
+# backends common
+arrayvec = "0.5"
+fxhash = "0.2.1"
+libloading = { version = "0.7", optional = true }
+log = "0.4"
+# backend: Metal
+block = { version = "0.1", optional = true }
+foreign-types = { version = "0.3", optional = true }
+# backend: Vulkan
+ash = { version = "0.32", optional = true }
+gpu-alloc = { version = "0.4", optional = true }
+gpu-descriptor = { version = "0.1", optional = true }
+inplace_it = { version ="0.3.3", optional = true }
+renderdoc-sys = { version = "0.7.1", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
+
+[target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
+mtl = { package = "metal", version = "0.22", git="https://github.com/gfx-rs/metal-rs", rev="08cc15a3be5a57fc07bb27091eff3569dd60cfd3" }
+objc = "0.2.5"
+core-graphics-types = "0.1"
+
+[dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-25"
+
+[dev-dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-25"
+features = ["wgsl-in"]
+
+[dev-dependencies]
+env_logger = "0.8"
+winit = "0.24"

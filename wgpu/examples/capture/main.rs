@@ -94,11 +94,7 @@ async fn create_red_image_with_dimensions(
 
         // Copy the data from the texture to the buffer
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-            },
+            texture.as_image_copy(),
             wgpu::ImageCopyBuffer {
                 buffer: &output_buffer,
                 layout: wgpu::ImageDataLayout {

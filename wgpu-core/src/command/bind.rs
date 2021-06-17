@@ -5,9 +5,9 @@
 use crate::{
     binding_model::{BindGroup, PipelineLayout},
     device::SHADER_STAGE_COUNT,
-    hub::{GfxBackend, Storage},
+    hub::{HalApi, Storage},
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
-    Stored, MAX_BIND_GROUPS,
+    Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -42,7 +42,7 @@ mod compat {
 
     #[derive(Debug)]
     pub struct Manager<T> {
-        entries: [Entry<T>; crate::MAX_BIND_GROUPS],
+        entries: [Entry<T>; hal::MAX_BIND_GROUPS],
     }
 
     impl<T: Copy + PartialEq> Manager<T> {
@@ -145,7 +145,7 @@ pub(super) struct EntryPayload {
 pub(super) struct Binder {
     pub(super) pipeline_layout_id: Option<Valid<PipelineLayoutId>>, //TODO: strongly `Stored`
     manager: compat::Manager<Valid<BindGroupLayoutId>>,
-    payloads: [EntryPayload; MAX_BIND_GROUPS],
+    payloads: [EntryPayload; hal::MAX_BIND_GROUPS],
 }
 
 impl Binder {
@@ -166,9 +166,9 @@ impl Binder {
         }
     }
 
-    pub(super) fn change_pipeline_layout<'a, B: GfxBackend>(
+    pub(super) fn change_pipeline_layout<'a, A: HalApi>(
         &'a mut self,
-        guard: &Storage<PipelineLayout<B>, PipelineLayoutId>,
+        guard: &Storage<PipelineLayout<A>, PipelineLayoutId>,
         new_id: Valid<PipelineLayoutId>,
     ) -> (usize, &'a [EntryPayload]) {
         let old_id_opt = self.pipeline_layout_id.replace(new_id);
@@ -187,15 +187,15 @@ impl Binder {
         (bind_range.start, &self.payloads[bind_range])
     }
 
-    pub(super) fn assign_group<'a, B: GfxBackend>(
+    pub(super) fn assign_group<'a, A: HalApi>(
         &'a mut self,
         index: usize,
         bind_group_id: Valid<BindGroupId>,
-        bind_group: &BindGroup<B>,
+        bind_group: &BindGroup<A>,
         offsets: &[wgt::DynamicOffset],
     ) -> &'a [EntryPayload] {
         log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
-        debug_assert_eq!(B::VARIANT, bind_group_id.0.backend());
+        debug_assert_eq!(A::VARIANT, bind_group_id.0.backend());
 
         let payload = &mut self.payloads[index];
         payload.group_id = Some(Stored {

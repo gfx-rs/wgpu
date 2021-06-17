@@ -6,104 +6,169 @@
 use crate::device::trace::Action;
 use crate::{
     command::{
-        texture_copy_view_to_hal, validate_linear_texture_data, validate_texture_copy_range,
-        CommandAllocator, CommandBuffer, CopySide, ImageCopyTexture, TransferError, BITS_PER_BYTE,
+        extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
+        CommandBuffer, CopySide, ImageCopyTexture, TransferError,
     },
     conv,
-    device::{alloc, DeviceError, WaitIdleError},
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    device::{DeviceError, WaitIdleError},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
-    resource::{Buffer, BufferAccessError, BufferMapState, BufferUse, TextureUse},
+    resource::{Buffer, BufferAccessError, BufferMapState},
     FastHashMap, FastHashSet,
 };
 
-use hal::{command::CommandBuffer as _, device::Device as _, queue::Queue as _};
+use hal::{CommandEncoder as _, Device as _, Queue as _};
+use parking_lot::Mutex;
 use smallvec::SmallVec;
-use std::{iter, ops::Range, ptr};
+use std::{iter, mem, num::NonZeroU32, ops::Range, ptr};
 use thiserror::Error;
 
-struct StagingData<B: hal::Backend> {
-    buffer: B::Buffer,
-    memory: alloc::MemoryBlock<B>,
-    cmdbuf: B::CommandBuffer,
+/// Number of command buffers that we generate from the same pool
+/// for the write_xxx commands, before the pool is recycled.
+///
+/// If we don't stop at some point, the pool will grow forever,
+/// without a concrete moment of when it can be cleared.
+const WRITE_COMMAND_BUFFERS_PER_POOL: usize = 64;
+
+struct StagingData<A: hal::Api> {
+    buffer: A::Buffer,
+}
+
+impl<A: hal::Api> StagingData<A> {
+    unsafe fn write(
+        &self,
+        device: &A::Device,
+        offset: wgt::BufferAddress,
+        data: &[u8],
+    ) -> Result<(), hal::DeviceError> {
+        let mapping = device.map_buffer(&self.buffer, offset..offset + data.len() as u64)?;
+        ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
+        if !mapping.is_coherent {
+            device
+                .flush_mapped_ranges(&self.buffer, iter::once(offset..offset + data.len() as u64));
+        }
+        device.unmap_buffer(&self.buffer)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
-pub enum TempResource<B: hal::Backend> {
-    Buffer(B::Buffer),
-    Image(B::Image),
+pub enum TempResource<A: hal::Api> {
+    Buffer(A::Buffer),
+    Texture(A::Texture),
+}
+
+/// A queue execution for a particular command encoder.
+pub(super) struct EncoderInFlight<A: hal::Api> {
+    raw: A::CommandEncoder,
+    cmd_buffers: Vec<A::CommandBuffer>,
+}
+
+impl<A: hal::Api> EncoderInFlight<A> {
+    pub(super) unsafe fn land(mut self) -> A::CommandEncoder {
+        self.raw.reset_all(self.cmd_buffers.into_iter());
+        self.raw
+    }
 }
 
 #[derive(Debug)]
-pub(crate) struct PendingWrites<B: hal::Backend> {
-    pub command_buffer: Option<B::CommandBuffer>,
-    pub temp_resources: Vec<(TempResource<B>, alloc::MemoryBlock<B>)>,
+pub(crate) struct PendingWrites<A: hal::Api> {
+    pub command_encoder: A::CommandEncoder,
+    pub is_active: bool,
+    pub temp_resources: Vec<TempResource<A>>,
     pub dst_buffers: FastHashSet<id::BufferId>,
     pub dst_textures: FastHashSet<id::TextureId>,
+    pub executing_command_buffers: Vec<A::CommandBuffer>,
 }
 
-impl<B: hal::Backend> PendingWrites<B> {
-    pub fn new() -> Self {
+impl<A: hal::Api> PendingWrites<A> {
+    pub fn new(command_encoder: A::CommandEncoder) -> Self {
         Self {
-            command_buffer: None,
+            command_encoder,
+            is_active: false,
             temp_resources: Vec::new(),
             dst_buffers: FastHashSet::default(),
             dst_textures: FastHashSet::default(),
+            executing_command_buffers: Vec::new(),
         }
     }
 
-    pub fn dispose(
-        self,
-        device: &B::Device,
-        cmd_allocator: &CommandAllocator<B>,
-        mem_allocator: &mut alloc::MemoryAllocator<B>,
-    ) {
-        if let Some(raw) = self.command_buffer {
-            cmd_allocator.discard_internal(raw);
+    pub fn dispose(mut self, device: &A::Device) {
+        unsafe {
+            if self.is_active {
+                self.command_encoder.discard_encoding();
+            }
+            self.command_encoder
+                .reset_all(self.executing_command_buffers.into_iter());
+            device.destroy_command_encoder(self.command_encoder);
         }
-        for (resource, memory) in self.temp_resources {
-            mem_allocator.free(device, memory);
+
+        for resource in self.temp_resources {
             match resource {
                 TempResource::Buffer(buffer) => unsafe {
                     device.destroy_buffer(buffer);
                 },
-                TempResource::Image(image) => unsafe {
-                    device.destroy_image(image);
+                TempResource::Texture(texture) => unsafe {
+                    device.destroy_texture(texture);
                 },
             }
         }
     }
 
-    pub fn consume_temp(&mut self, resource: TempResource<B>, memory: alloc::MemoryBlock<B>) {
-        self.temp_resources.push((resource, memory));
+    pub fn consume_temp(&mut self, resource: TempResource<A>) {
+        self.temp_resources.push(resource);
     }
 
-    fn consume(&mut self, stage: StagingData<B>) {
-        self.temp_resources
-            .push((TempResource::Buffer(stage.buffer), stage.memory));
-        self.command_buffer = Some(stage.cmdbuf);
+    fn consume(&mut self, stage: StagingData<A>) {
+        self.temp_resources.push(TempResource::Buffer(stage.buffer));
     }
 
     #[must_use]
-    fn finish(&mut self) -> Option<B::CommandBuffer> {
+    fn pre_submit(&mut self) -> Option<&A::CommandBuffer> {
         self.dst_buffers.clear();
         self.dst_textures.clear();
-        self.command_buffer.take().map(|mut cmd_buf| unsafe {
-            cmd_buf.finish();
-            cmd_buf
-        })
+        if self.is_active {
+            let cmd_buf = unsafe { self.command_encoder.end_encoding().unwrap() };
+            self.is_active = false;
+            self.executing_command_buffers.push(cmd_buf);
+            self.executing_command_buffers.last()
+        } else {
+            None
+        }
     }
 
-    fn borrow_cmd_buf(&mut self, cmd_allocator: &CommandAllocator<B>) -> &mut B::CommandBuffer {
-        if self.command_buffer.is_none() {
-            let mut cmdbuf = cmd_allocator.allocate_internal();
-            unsafe {
-                cmdbuf.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-            }
-            self.command_buffer = Some(cmdbuf);
+    #[must_use]
+    fn post_submit(
+        &mut self,
+        command_allocator: &Mutex<super::CommandAllocator<A>>,
+        device: &A::Device,
+        queue: &A::Queue,
+    ) -> Option<EncoderInFlight<A>> {
+        if self.executing_command_buffers.len() >= WRITE_COMMAND_BUFFERS_PER_POOL {
+            let new_encoder = command_allocator
+                .lock()
+                .acquire_encoder(device, queue)
+                .unwrap();
+            Some(EncoderInFlight {
+                raw: mem::replace(&mut self.command_encoder, new_encoder),
+                cmd_buffers: mem::take(&mut self.executing_command_buffers),
+            })
+        } else {
+            None
         }
-        self.command_buffer.as_mut().unwrap()
+    }
+
+    pub fn activate(&mut self) -> &mut A::CommandEncoder {
+        if !self.is_active {
+            unsafe {
+                self.command_encoder
+                    .begin_encoding(Some("_PendingWrites"))
+                    .unwrap();
+            }
+            self.is_active = true;
+        }
+        &mut self.command_encoder
     }
 }
 
@@ -113,10 +178,10 @@ struct RequiredBufferInits {
 }
 
 impl RequiredBufferInits {
-    fn add<B: hal::Backend>(
+    fn add<A: hal::Api>(
         &mut self,
         buffer_memory_init_actions: &[MemoryInitTrackerAction<id::BufferId>],
-        buffer_guard: &mut Storage<Buffer<B>, id::BufferId>,
+        buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
     ) -> Result<(), QueueSubmitError> {
         for buffer_use in buffer_memory_init_actions.iter() {
             let buffer = buffer_guard
@@ -140,65 +205,29 @@ impl RequiredBufferInits {
     }
 }
 
-impl<B: hal::Backend> super::Device<B> {
-    pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
-        self.pending_writes.borrow_cmd_buf(&self.cmd_allocator)
-    }
-
-    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<B>, DeviceError> {
+impl<A: hal::Api> super::Device<A> {
+    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
         profiling::scope!("prepare_stage");
-        let mut buffer = unsafe {
-            self.raw
-                .create_buffer(
-                    size,
-                    hal::buffer::Usage::TRANSFER_SRC,
-                    hal::memory::SparseFlags::empty(),
-                )
-                .map_err(|err| match err {
-                    hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to create staging buffer: {}", err),
-                })?
+        let stage_desc = hal::BufferDescriptor {
+            label: Some("_Staging"),
+            size,
+            usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::COPY_SRC,
+            memory_flags: hal::MemoryFlag::TRANSIENT,
         };
-        //TODO: do we need to transition into HOST_WRITE access first?
-        let requirements = unsafe {
-            self.raw.set_buffer_name(&mut buffer, "<write_buffer_temp>");
-            self.raw.get_buffer_requirements(&buffer)
-        };
-
-        let block = self.mem_allocator.lock().allocate(
-            &self.raw,
-            requirements,
-            gpu_alloc::UsageFlags::UPLOAD | gpu_alloc::UsageFlags::TRANSIENT,
-        )?;
-        block.bind_buffer(&self.raw, &mut buffer)?;
-
-        let cmdbuf = match self.pending_writes.command_buffer.take() {
-            Some(cmdbuf) => cmdbuf,
-            None => {
-                let mut cmdbuf = self.cmd_allocator.allocate_internal();
-                unsafe {
-                    cmdbuf.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-                }
-                cmdbuf
-            }
-        };
-        Ok(StagingData {
-            buffer,
-            memory: block,
-            cmdbuf,
-        })
+        let buffer = unsafe { self.raw.create_buffer(&stage_desc)? };
+        Ok(StagingData { buffer })
     }
 
     fn initialize_buffer_memory(
         &mut self,
         mut required_buffer_inits: RequiredBufferInits,
-        buffer_guard: &mut Storage<Buffer<B>, id::BufferId>,
+        buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
     ) -> Result<(), QueueSubmitError> {
         self.pending_writes
             .dst_buffers
             .extend(required_buffer_inits.map.keys());
 
-        let cmd_buf = self.pending_writes.borrow_cmd_buf(&self.cmd_allocator);
+        let encoder = self.pending_writes.activate();
         let mut trackers = self.trackers.lock();
 
         for (buffer_id, mut ranges) in required_buffer_inits.map.drain() {
@@ -217,35 +246,23 @@ impl<B: hal::Backend> super::Device<B> {
             let transition = trackers.buffers.change_replace_tracked(
                 id::Valid(buffer_id),
                 (),
-                BufferUse::COPY_DST,
+                hal::BufferUse::COPY_DST,
             );
             let buffer = buffer_guard.get(buffer_id).unwrap();
-            let &(ref buffer_raw, _) = buffer
+            let raw_buf = buffer
                 .raw
                 .as_ref()
                 .ok_or(QueueSubmitError::DestroyedBuffer(buffer_id))?;
             unsafe {
-                cmd_buf.pipeline_barrier(
-                    super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
-                    hal::memory::Dependencies::empty(),
-                    transition.map(|pending| pending.into_hal(buffer)),
-                );
+                encoder.transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
             }
-            for range in ranges {
-                let size = range.end - range.start;
 
-                assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", buffer, range.start);
-                assert!(size % 4 == 0, "Buffer {:?} has an uninitialized range with a size not aligned to 4 (size was {})", buffer, size);
+            for range in ranges {
+                assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", raw_buf, range.start);
+                assert!(range.end % 4 == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
 
                 unsafe {
-                    cmd_buf.fill_buffer(
-                        buffer_raw,
-                        hal::buffer::SubRange {
-                            offset: range.start,
-                            size: Some(size),
-                        },
-                        0,
-                    );
+                    encoder.fill_buffer(raw_buf, range, 0);
                 }
             }
         }
@@ -285,7 +302,7 @@ pub enum QueueSubmitError {
 //TODO: move out common parts of write_xxx.
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn queue_write_buffer<B: GfxBackend>(
+    pub fn queue_write_buffer<A: HalApi>(
         &self,
         queue_id: id::QueueId,
         buffer_id: id::BufferId,
@@ -294,7 +311,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("write_buffer", "Queue");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let device = device_guard
@@ -320,15 +337,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let mut stage = device.prepare_stage(data_size)?;
-        stage.memory.write_bytes(&device.raw, 0, data)?;
+        let stage = device.prepare_stage(data_size)?;
+        unsafe { stage.write(&device.raw, 0, data) }.map_err(DeviceError::from)?;
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
             .buffers
-            .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
+            .use_replace(&*buffer_guard, buffer_id, (), hal::BufferUse::COPY_DST)
             .map_err(TransferError::InvalidBuffer)?;
-        let &(ref dst_raw, _) = dst
+        let dst_raw = dst
             .raw
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
@@ -353,26 +370,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        let region = hal::command::BufferCopy {
-            src: 0,
-            dst: buffer_offset,
-            size: data.len() as _,
-        };
+        let region = wgt::BufferSize::new(data.len() as u64).map(|size| hal::BufferCopy {
+            src_offset: 0,
+            dst_offset: buffer_offset,
+            size,
+        });
+        let barriers = iter::once(hal::BufferBarrier {
+            buffer: &stage.buffer,
+            usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
+        })
+        .chain(transition.map(|pending| pending.into_hal(dst)));
+        let encoder = device.pending_writes.activate();
         unsafe {
-            stage.cmdbuf.pipeline_barrier(
-                super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
-                hal::memory::Dependencies::empty(),
-                iter::once(hal::memory::Barrier::Buffer {
-                    states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
-                    target: &stage.buffer,
-                    range: hal::buffer::SubRange::WHOLE,
-                    families: None,
-                })
-                .chain(transition.map(|pending| pending.into_hal(dst))),
-            );
-            stage
-                .cmdbuf
-                .copy_buffer(&stage.buffer, dst_raw, iter::once(region));
+            encoder.transition_buffers(barriers);
+            encoder.copy_buffer_to_buffer(&stage.buffer, dst_raw, region.into_iter());
         }
 
         device.pending_writes.consume(stage);
@@ -391,7 +402,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn queue_write_texture<B: GfxBackend>(
+    pub fn queue_write_texture<A: HalApi>(
         &self,
         queue_id: id::QueueId,
         destination: &ImageCopyTexture,
@@ -401,15 +412,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("write_texture", "Queue");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let device = device_guard
             .get_mut(queue_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let (texture_guard, _) = hub.textures.read(&mut token);
-        let (image_layers, image_range, image_offset) =
-            texture_copy_view_to_hal(destination, size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -428,49 +436,48 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let texture_format = texture_guard.get(destination.texture).unwrap().format;
-        let bytes_per_block = conv::map_texture_format(texture_format, device.private_features)
-            .surface_desc()
-            .bits as u32
-            / BITS_PER_BYTE;
+        let (texture_guard, _) = hub.textures.read(&mut token);
+        let (selector, texture_base, texture_format) =
+            extract_texture_selector(destination, size, &*texture_guard)?;
+        let format_desc = texture_format.describe();
         validate_linear_texture_data(
             data_layout,
             texture_format,
             data.len() as wgt::BufferAddress,
             CopySide::Source,
-            bytes_per_block as wgt::BufferAddress,
+            format_desc.block_size as wgt::BufferAddress,
             size,
             false,
         )?;
 
-        let (block_width, block_height) = texture_format.describe().block_dimensions;
-        let block_width = block_width as u32;
-        let block_height = block_height as u32;
-
         if !conv::is_valid_copy_dst_texture_format(texture_format) {
             return Err(TransferError::CopyToForbiddenTextureFormat(texture_format).into());
         }
-        let width_blocks = size.width / block_width;
-        let height_blocks = size.height / block_width;
+        let (block_width, block_height) = format_desc.block_dimensions;
+        let width_blocks = size.width / block_width as u32;
+        let height_blocks = size.height / block_height as u32;
 
-        let texel_rows_per_image = if let Some(rows_per_image) = data_layout.rows_per_image {
-            rows_per_image.get()
-        } else {
-            // doesn't really matter because we need this only if we copy more than one layer, and then we validate for this being not None
-            size.height
+        let block_rows_per_image = match data_layout.rows_per_image {
+            Some(rows_per_image) => rows_per_image.get(),
+            None => {
+                // doesn't really matter because we need this only if we copy more than one layer, and then we validate for this being not None
+                size.height
+            }
         };
-        let block_rows_per_image = texel_rows_per_image / block_height;
 
         let bytes_per_row_alignment = get_lowest_common_denom(
-            device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
-            bytes_per_block,
+            device.alignments.buffer_copy_pitch.get() as u32,
+            format_desc.block_size as u32,
         );
-        let stage_bytes_per_row = align_to(bytes_per_block * width_blocks, bytes_per_row_alignment);
+        let stage_bytes_per_row = align_to(
+            format_desc.block_size as u32 * width_blocks,
+            bytes_per_row_alignment,
+        );
 
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
-        let mut stage = device.prepare_stage(stage_size)?;
+        let stage = device.prepare_stage(stage_size)?;
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
@@ -478,42 +485,37 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .use_replace(
                 &*texture_guard,
                 destination.texture,
-                image_range,
-                TextureUse::COPY_DST,
+                selector,
+                hal::TextureUse::COPY_DST,
             )
             .unwrap();
-        let &(ref dst_raw, _) = dst
+        let dst_raw = dst
             .raw
             .as_ref()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
-        if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
+        if !dst.desc.usage.contains(wgt::TextureUsage::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
-        validate_texture_copy_range(
-            destination,
-            dst.format,
-            dst.kind,
-            CopySide::Destination,
-            size,
-        )?;
+        let max_image_extent =
+            validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
         dst.life_guard.use_at(device.active_submission_index + 1);
 
         let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
             bytes_per_row.get()
         } else {
-            width_blocks * bytes_per_block
+            width_blocks * format_desc.block_size as u32
         };
 
-        let ptr = stage.memory.map(&device.raw, 0, stage_size)?;
+        let mapping = unsafe { device.raw.map_buffer(&stage.buffer, 0..stage_size) }
+            .map_err(DeviceError::from)?;
         unsafe {
             profiling::scope!("copy");
-            //TODO: https://github.com/zakarumych/gpu-alloc/issues/13
             if stage_bytes_per_row == bytes_per_row {
                 // Fast path if the data isalready being aligned optimally.
-                ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), stage_size as usize);
+                ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), stage_size as usize);
             } else {
                 // Copy row by row into the optimal alignment.
                 let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
@@ -523,7 +525,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         ptr::copy_nonoverlapping(
                             data.as_ptr()
                                 .offset((rows_offset + row) as isize * bytes_per_row as isize),
-                            ptr.as_ptr().offset(
+                            mapping.ptr.as_ptr().offset(
                                 (rows_offset + row) as isize * stage_bytes_per_row as isize,
                             ),
                             copy_bytes_per_row,
@@ -532,49 +534,45 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
         }
-        stage.memory.unmap(&device.raw);
-        if !stage.memory.is_coherent() {
-            stage.memory.flush_range(&device.raw, 0, None)?;
+        unsafe {
+            if !mapping.is_coherent {
+                device
+                    .raw
+                    .flush_mapped_ranges(&stage.buffer, iter::once(0..stage_size));
+            }
+            device
+                .raw
+                .unmap_buffer(&stage.buffer)
+                .map_err(DeviceError::from)?;
         }
 
         // WebGPU uses the physical size of the texture for copies whereas vulkan uses
         // the virtual size. We have passed validation, so it's safe to use the
         // image extent data directly. We want the provided copy size to be no larger than
         // the virtual size.
-        let max_image_extent = dst.kind.level_extent(destination.mip_level as _);
-        let image_extent = wgt::Extent3d {
-            width: size.width.min(max_image_extent.width),
-            height: size.height.min(max_image_extent.height),
-            depth_or_array_layers: size.depth_or_array_layers,
+        let region = hal::BufferTextureCopy {
+            buffer_layout: wgt::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: NonZeroU32::new(stage_bytes_per_row),
+                rows_per_image: NonZeroU32::new(block_rows_per_image),
+            },
+            texture_base,
+            size: wgt::Extent3d {
+                width: size.width.min(max_image_extent.width),
+                height: size.height.min(max_image_extent.height),
+                depth_or_array_layers: size.depth_or_array_layers,
+            },
         };
 
-        let region = hal::command::BufferImageCopy {
-            buffer_offset: 0,
-            buffer_width: (stage_bytes_per_row / bytes_per_block) * block_width,
-            buffer_height: texel_rows_per_image,
-            image_layers,
-            image_offset,
-            image_extent: conv::map_extent(&image_extent, dst.dimension),
+        let barrier = hal::BufferBarrier {
+            buffer: &stage.buffer,
+            usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
         };
+        let encoder = device.pending_writes.activate();
         unsafe {
-            stage.cmdbuf.pipeline_barrier(
-                super::all_image_stages() | hal::pso::PipelineStage::HOST
-                    ..hal::pso::PipelineStage::TRANSFER,
-                hal::memory::Dependencies::empty(),
-                iter::once(hal::memory::Barrier::Buffer {
-                    states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
-                    target: &stage.buffer,
-                    range: hal::buffer::SubRange::WHOLE,
-                    families: None,
-                })
-                .chain(transition.map(|pending| pending.into_hal(dst))),
-            );
-            stage.cmdbuf.copy_buffer_to_image(
-                &stage.buffer,
-                dst_raw,
-                hal::image::Layout::TransferDstOptimal,
-                iter::once(region),
-            );
+            encoder.transition_buffers(iter::once(barrier));
+            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
+            encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, iter::once(region));
         }
 
         device.pending_writes.consume(stage);
@@ -586,14 +584,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn queue_submit<B: GfxBackend>(
+    pub fn queue_submit<A: HalApi>(
         &self,
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<(), QueueSubmitError> {
         profiling::scope!("submit", "Queue");
 
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let callbacks = {
@@ -601,12 +599,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let device = device_guard
                 .get_mut(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
-            let pending_write_command_buffer = device.pending_writes.finish();
             device.temp_suspected.clear();
             device.active_submission_index += 1;
             let submit_index = device.active_submission_index;
+            let mut active_executions = Vec::new();
 
-            let fence = {
+            {
                 let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
                 let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -634,9 +632,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
-                        let cmdbuf = match command_buffer_guard.get_mut(cmb_id) {
-                            Ok(cmdbuf) => cmdbuf,
-                            Err(_) => continue,
+                        let mut cmdbuf = match hub
+                            .command_buffers
+                            .unregister_locked(cmb_id, &mut *command_buffer_guard)
+                        {
+                            Some(cmdbuf) => cmdbuf,
+                            None => continue,
                         };
                         #[cfg(feature = "trace")]
                         if let Some(ref trace) = device.trace {
@@ -646,6 +647,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ));
                         }
                         if !cmdbuf.is_finished() {
+                            device.destroy_command_buffer(cmdbuf);
                             continue;
                         }
 
@@ -656,7 +658,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         for sc_id in cmdbuf.used_swap_chains.drain(..) {
                             let sc = &mut swap_chain_guard[sc_id.value];
-                            if sc.acquired_view_id.is_none() {
+                            if sc.acquired_texture.is_none() {
                                 return Err(QueueSubmitError::SwapChainOutputDropped);
                             }
                             if sc.active_submission_index != submit_index {
@@ -670,13 +672,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // update submission IDs
                         for id in cmdbuf.trackers.buffers.used() {
                             let buffer = &mut buffer_guard[id];
-                            if buffer.raw.is_none() {
-                                return Err(QueueSubmitError::DestroyedBuffer(id.0));
-                            }
+                            let raw_buf = match buffer.raw {
+                                Some(ref raw) => raw,
+                                None => {
+                                    return Err(QueueSubmitError::DestroyedBuffer(id.0));
+                                }
+                            };
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
                                     log::warn!("Dropped buffer has a pending mapping.");
-                                    super::unmap_buffer(&device.raw, buffer)?;
+                                    unsafe { device.raw.unmap_buffer(raw_buf) }
+                                        .map_err(DeviceError::from)?;
                                 }
                                 device.temp_suspected.buffers.push(id);
                             } else {
@@ -726,28 +732,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
 
+                        let mut baked = cmdbuf.into_baked();
+
                         // execute resource transitions
-                        let mut transit = device.cmd_allocator.extend(cmdbuf);
                         unsafe {
-                            // the last buffer was open, closing now
-                            cmdbuf.raw.last_mut().unwrap().finish();
-                            transit
-                                .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-                        }
+                            baked
+                                .encoder
+                                .begin_encoding(Some("_Transit"))
+                                .map_err(DeviceError::from)?
+                        };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
-                        trackers.merge_extend_stateless(&cmdbuf.trackers);
+                        trackers.merge_extend_stateless(&baked.trackers);
                         CommandBuffer::insert_barriers(
-                            &mut transit,
+                            &mut baked.encoder,
                             &mut *trackers,
-                            &cmdbuf.trackers.buffers,
-                            &cmdbuf.trackers.textures,
+                            &baked.trackers.buffers,
+                            &baked.trackers.textures,
                             &*buffer_guard,
                             &*texture_guard,
                         );
-                        unsafe {
-                            transit.finish();
-                        }
-                        cmdbuf.raw.insert(0, transit);
+                        let transit = unsafe { baked.encoder.end_encoding().unwrap() };
+                        baked.list.insert(0, transit);
+                        active_executions.push(EncoderInFlight {
+                            raw: baked.encoder,
+                            cmd_buffers: baked.list,
+                        });
                     }
 
                     log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
@@ -758,41 +767,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                // now prepare the GPU submission
-                let mut fence = device
-                    .raw
-                    .create_fence(false)
-                    .or(Err(DeviceError::OutOfMemory))?;
-                let signal_semaphores = signal_swapchain_semaphores
+                let super::Device {
+                    ref mut pending_writes,
+                    ref mut queue,
+                    ref mut fence,
+                    ..
+                } = *device;
+                let refs = pending_writes
+                    .pre_submit()
                     .into_iter()
-                    .map(|sc_id| &swap_chain_guard[sc_id].semaphore);
-                //Note: we could technically avoid the heap Vec here
-                let mut command_buffers = Vec::new();
-                command_buffers.extend(pending_write_command_buffer.as_ref());
-                for &cmd_buf_id in command_buffer_ids.iter() {
-                    match command_buffer_guard.get(cmd_buf_id) {
-                        Ok(cmd_buf) if cmd_buf.is_finished() => {
-                            command_buffers.extend(cmd_buf.raw.iter());
-                        }
-                        _ => {}
-                    }
-                }
-
+                    .chain(
+                        active_executions
+                            .iter()
+                            .flat_map(|pool_execution| pool_execution.cmd_buffers.iter()),
+                    )
+                    .collect::<Vec<_>>();
                 unsafe {
-                    device.queue_group.queues[0].submit(
-                        command_buffers.into_iter(),
-                        iter::empty(),
-                        signal_semaphores,
-                        Some(&mut fence),
-                    );
+                    queue
+                        .submit(&refs, Some((fence, submit_index)))
+                        .map_err(DeviceError::from)?;
                 }
-                fence
-            };
-
-            if let Some(comb_raw) = pending_write_command_buffer {
-                device
-                    .cmd_allocator
-                    .after_submit_internal(comb_raw, submit_index);
             }
 
             let callbacks = match device.maintain(&hub, false, &mut token) {
@@ -802,21 +796,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             profiling::scope!("cleanup");
+            if let Some(pending_execution) = device.pending_writes.post_submit(
+                &device.command_allocator,
+                &device.raw,
+                &device.queue,
+            ) {
+                active_executions.push(pending_execution);
+            }
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
-                fence,
                 &device.temp_suspected,
                 device.pending_writes.temp_resources.drain(..),
+                active_executions,
             );
-
-            // finally, return the command buffers to the allocator
-            for &cmb_id in command_buffer_ids {
-                if let (Some(cmd_buf), _) = hub.command_buffers.unregister(cmb_id, &mut token) {
-                    device
-                        .cmd_allocator
-                        .after_submit(cmd_buf, &device.raw, submit_index);
-                }
-            }
 
             callbacks
         };
@@ -828,15 +820,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn queue_get_timestamp_period<B: GfxBackend>(
+    pub fn queue_get_timestamp_period<A: HalApi>(
         &self,
         queue_id: id::QueueId,
     ) -> Result<f32, InvalidQueue> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         match device_guard.get(queue_id) {
-            Ok(device) => Ok(device.queue_group.queues[0].timestamp_period()),
+            Ok(_device) => Ok(1.0), //TODO?
             Err(_) => Err(InvalidQueue),
         }
     }

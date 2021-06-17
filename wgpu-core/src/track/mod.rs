@@ -7,12 +7,14 @@ mod range;
 mod texture;
 
 use crate::{
-    conv, hub,
+    hub,
     id::{self, TypedId, Valid},
     resource, Epoch, FastHashMap, Index, RefCount,
 };
 
-use std::{collections::hash_map::Entry, fmt, marker::PhantomData, ops, vec::Drain};
+use std::{
+    collections::hash_map::Entry, fmt, marker::PhantomData, num::NonZeroU32, ops, vec::Drain,
+};
 use thiserror::Error;
 
 pub(crate) use buffer::BufferState;
@@ -125,19 +127,16 @@ pub(crate) struct PendingTransition<S: ResourceState> {
 }
 
 impl PendingTransition<BufferState> {
-    /// Produce the gfx-hal barrier corresponding to the transition.
-    pub fn into_hal<'a, B: hal::Backend>(
+    /// Produce the hal barrier corresponding to the transition.
+    pub fn into_hal<'a, A: hal::Api>(
         self,
-        buf: &'a resource::Buffer<B>,
-    ) -> hal::memory::Barrier<'a, B> {
+        buf: &'a resource::Buffer<A>,
+    ) -> hal::BufferBarrier<'a, A> {
         log::trace!("\tbuffer -> {:?}", self);
-        let &(ref target, _) = buf.raw.as_ref().expect("Buffer is destroyed");
-        hal::memory::Barrier::Buffer {
-            states: conv::map_buffer_state(self.usage.start)
-                ..conv::map_buffer_state(self.usage.end),
-            target,
-            range: hal::buffer::SubRange::WHOLE,
-            families: None,
+        let buffer = buf.raw.as_ref().expect("Buffer is destroyed");
+        hal::BufferBarrier {
+            buffer,
+            usage: self.usage,
         }
     }
 }
@@ -152,26 +151,27 @@ impl From<PendingTransition<BufferState>> for UsageConflict {
 }
 
 impl PendingTransition<TextureState> {
-    /// Produce the gfx-hal barrier corresponding to the transition.
-    pub fn into_hal<'a, B: hal::Backend>(
+    /// Produce the hal barrier corresponding to the transition.
+    pub fn into_hal<'a, A: hal::Api>(
         self,
-        tex: &'a resource::Texture<B>,
-    ) -> hal::memory::Barrier<'a, B> {
+        tex: &'a resource::Texture<A>,
+    ) -> hal::TextureBarrier<'a, A> {
         log::trace!("\ttexture -> {:?}", self);
-        let &(ref target, _) = tex.raw.as_ref().expect("Texture is destroyed");
-        let aspects = tex.aspects;
-        hal::memory::Barrier::Image {
-            states: conv::map_texture_state(self.usage.start, aspects)
-                ..conv::map_texture_state(self.usage.end, aspects),
-            target,
-            range: hal::image::SubresourceRange {
-                aspects,
-                level_start: self.selector.levels.start,
-                level_count: Some(self.selector.levels.end - self.selector.levels.start),
-                layer_start: self.selector.layers.start,
-                layer_count: Some(self.selector.layers.end - self.selector.layers.start),
+        let texture = tex.raw.as_ref().expect("Texture is destroyed");
+        hal::TextureBarrier {
+            texture,
+            range: wgt::ImageSubresourceRange {
+                aspect: wgt::TextureAspect::All,
+                base_mip_level: self.selector.levels.start,
+                mip_level_count: NonZeroU32::new(
+                    self.selector.levels.end - self.selector.levels.start,
+                ),
+                base_array_layer: self.selector.layers.start,
+                array_layer_count: NonZeroU32::new(
+                    self.selector.layers.end - self.selector.layers.start,
+                ),
             },
-            families: None,
+            usage: self.usage,
         }
     }
 }
@@ -180,8 +180,8 @@ impl From<PendingTransition<TextureState>> for UsageConflict {
     fn from(e: PendingTransition<TextureState>) -> Self {
         Self::Texture {
             id: e.id.0,
-            mip_levels: e.selector.levels.start as u32..e.selector.levels.end as u32,
-            array_layers: e.selector.layers.start as u32..e.selector.layers.end as u32,
+            mip_levels: e.selector.levels.start..e.selector.levels.end,
+            array_layers: e.selector.layers.start..e.selector.layers.end,
             combined_use: e.usage.end,
         }
     }
@@ -230,7 +230,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Remove an id from the tracked map.
-    pub(crate) fn remove(&mut self, id: Valid<S::Id>) -> bool {
+    pub(crate) fn _remove(&mut self, id: Valid<S::Id>) -> bool {
         let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.remove(&index) {
@@ -557,14 +557,14 @@ pub enum UsageConflict {
     )]
     Buffer {
         id: id::BufferId,
-        combined_use: resource::BufferUse,
+        combined_use: hal::BufferUse,
     },
     #[error("Attempted to use texture {id:?} mips {mip_levels:?} layers {array_layers:?} as a combination of {combined_use:?} within a usage scope.")]
     Texture {
         id: id::TextureId,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
-        combined_use: resource::TextureUse,
+        combined_use: hal::TextureUse,
     },
 }
 
@@ -599,7 +599,7 @@ impl TrackerSet {
     }
 
     /// Clear all the trackers.
-    pub fn clear(&mut self) {
+    pub fn _clear(&mut self) {
         self.buffers.clear();
         self.textures.clear();
         self.views.clear();

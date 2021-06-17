@@ -28,17 +28,17 @@ pub use wgt::{
     AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType,
     BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType,
     BufferSize, BufferUsage, Color, ColorTargetState, ColorWrite, CommandBufferDescriptor,
-    CompareFunction, DepthBiasState, DepthStencilState, DeviceType, DownlevelFlags,
-    DownlevelProperties, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
+    CompareFunction, DepthBiasState, DepthStencilState, DeviceType, DownlevelCapabilities,
+    DownlevelFlags, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
     ImageDataLayout, IndexFormat, InputStepMode, Limits, MultisampleState, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, PushConstantRange, QuerySetDescriptor, QueryType, SamplerBorderColor,
-    ShaderFlags, ShaderLocation, ShaderModel, ShaderStage, StencilFaceState, StencilOperation,
-    StencilState, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect,
-    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
-    TextureSampleType, TextureUsage, TextureViewDimension, VertexAttribute, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    PrimitiveTopology, PushConstantRange, QueryType, SamplerBorderColor, ShaderLocation,
+    ShaderModel, ShaderStage, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsage, TextureViewDimension, VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -206,7 +206,7 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> Option<TextureFormat>;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
-    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelProperties;
+    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities;
     fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
     fn adapter_get_texture_format_features(
         &self,
@@ -216,7 +216,7 @@ trait Context: Debug + Send + Sized + Sync {
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
-    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelProperties;
+    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelCapabilities;
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
@@ -750,8 +750,6 @@ pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     /// Source code for the shader.
     pub source: ShaderSource<'a>,
-    /// Shader handling flags.
-    pub flags: ShaderFlags,
 }
 
 /// Handle to a pipeline layout.
@@ -1080,6 +1078,8 @@ pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 /// Describes a [`Texture`].
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
+/// Describes a [`QuerySet`].
+pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 /// Describes a [`TextureView`].
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -1420,6 +1420,7 @@ impl Instance {
         }
     }
 
+    /*TODO: raw CAL surface
     /// Creates a surface from `CoreAnimationLayer`.
     ///
     /// # Safety
@@ -1431,7 +1432,7 @@ impl Instance {
         layer: *mut std::ffi::c_void,
     ) -> Surface {
         self.context.create_surface_from_core_animation_layer(layer)
-    }
+    }*/
 
     /// Polls all devices.
     /// If `force_wait` is true and this is not running on the web,
@@ -1978,6 +1979,16 @@ impl Texture {
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
         Context::texture_destroy(&*self.context, &self.id);
+    }
+
+    /// Make an `ImageCopyTexture` representing the whole texture.
+    pub fn as_image_copy(&self) -> ImageCopyTexture {
+        ImageCopyTexture {
+            texture: self,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: TextureAspect::All,
+        }
     }
 }
 

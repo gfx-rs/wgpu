@@ -631,8 +631,6 @@ impl NumericType {
             | Tf::Bc7RgbaUnormSrgb
             | Tf::Etc2RgbA1Unorm
             | Tf::Etc2RgbA1UnormSrgb
-            | Tf::Etc2RgbA8Unorm
-            | Tf::Etc2RgbA8UnormSrgb
             | Tf::Astc4x4RgbaUnorm
             | Tf::Astc4x4RgbaUnormSrgb
             | Tf::Astc5x4RgbaUnorm

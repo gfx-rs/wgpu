@@ -13,8 +13,8 @@ fn main() {
         // Backends
         vulkan: { all(not(wasm), any(windows, unix_wo_apple)) },
         metal: { all(not(wasm), apple) },
-        dx12: { all(not(wasm), windows) },
-        dx11: { all(not(wasm), windows) },
-        gl: { any(wasm, unix_wo_apple) },
+        dx12: { all(false, not(wasm), windows) },
+        dx11: { all(false, not(wasm), windows) },
+        gl: { all(false, any(wasm, unix_wo_apple)) },
     }
 }

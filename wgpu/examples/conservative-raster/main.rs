@@ -90,7 +90,6 @@ impl framework::Example for Example {
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                     "triangle_and_lines.wgsl"
                 ))),
-                flags: wgpu::ShaderFlags::all(),
             });
 
         let pipeline_triangle_conservative =
@@ -200,7 +199,6 @@ impl framework::Example for Example {
             let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
-                flags: wgpu::ShaderFlags::all(),
             });
             (
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

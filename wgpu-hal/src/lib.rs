@@ -1,0 +1,1061 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/*! This library describes the internal unsafe graphics abstraction API.
+ *  It follows WebGPU for the most part, re-using wgpu-types,
+ *  with the following deviations:
+ *  - Fully unsafe: zero overhead, zero validation.
+ *  - Compile-time backend selection via traits.
+ *  - Objects are passed by references and returned by value. No IDs.
+ *  - Mapping is persistent, with explicit synchronization.
+ *  - Resource transitions are explicit.
+ *  - All layouts are explicit. Binding model has compatibility.
+ *
+ *  General design direction is to follow the majority by the following weights:
+ *  - wgpu-core: 1.5
+ *  - primary backends (Vulkan/Metal/DX12): 1.0 each
+ *  - secondary backends (DX11/GLES): 0.5 each
+ */
+
+#![allow(
+    // We use loops for getting early-out of scope without closures.
+    clippy::never_loop,
+    // We don't use syntax sugar where it's not necessary.
+    clippy::match_like_matches_macro,
+    // Redundant matching is more explicit.
+    clippy::redundant_pattern_matching,
+    // Explicit lifetimes are often easier to reason about.
+    clippy::needless_lifetimes,
+    // No need for defaults in the internal types.
+    clippy::new_without_default,
+    // Matches are good and extendable, no need to make an exception here.
+    clippy::single_match,
+    // Push commands are more regular than macros.
+    clippy::vec_init_then_push,
+    // TODO!
+    clippy::missing_safety_doc,
+)]
+#![warn(
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unused_qualifications,
+    // We don't match on a reference, unless required.
+    clippy::pattern_type_mismatch,
+)]
+
+mod empty;
+#[cfg(feature = "metal")]
+mod metal;
+#[cfg(feature = "vulkan")]
+mod vulkan;
+
+pub mod util;
+pub mod api {
+    pub use super::empty::Api as Empty;
+    #[cfg(feature = "metal")]
+    pub use super::metal::Api as Metal;
+    #[cfg(feature = "vulkan")]
+    pub use super::vulkan::Api as Vulkan;
+}
+
+use std::{
+    borrow::Borrow,
+    fmt,
+    num::NonZeroU8,
+    ops::{Range, RangeInclusive},
+    ptr::NonNull,
+};
+
+use bitflags::bitflags;
+use thiserror::Error;
+
+pub const MAX_ANISOTROPY: u8 = 16;
+pub const MAX_BIND_GROUPS: usize = 8;
+pub const MAX_VERTEX_BUFFERS: usize = 16;
+pub const MAX_COLOR_TARGETS: usize = 4;
+pub const MAX_MIP_LEVELS: u32 = 16;
+/// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
+pub const QUERY_SIZE: wgt::BufferAddress = 8;
+
+pub type Label<'a> = Option<&'a str>;
+pub type MemoryRange = Range<wgt::BufferAddress>;
+pub type FenceValue = u64;
+
+#[derive(Clone, Debug, PartialEq, Error)]
+pub enum DeviceError {
+    #[error("out of memory")]
+    OutOfMemory,
+    #[error("device is lost")]
+    Lost,
+}
+
+#[derive(Clone, Debug, PartialEq, Error)]
+pub enum ShaderError {
+    #[error("compilation failed: {0:?}")]
+    Compilation(String),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+}
+
+#[derive(Clone, Debug, PartialEq, Error)]
+pub enum PipelineError {
+    #[error("linkage failed for stage {0:?}: {1}")]
+    Linkage(wgt::ShaderStage, String),
+    #[error("entry point for stage {0:?} is invalid")]
+    EntryPoint(naga::ShaderStage),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+}
+
+#[derive(Clone, Debug, PartialEq, Error)]
+pub enum SurfaceError {
+    #[error("surface is lost")]
+    Lost,
+    #[error("surface is outdated, needs to be re-created")]
+    Outdated,
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("other reason: {0}")]
+    Other(&'static str),
+}
+
+#[derive(Clone, Debug, PartialEq, Error)]
+#[error("Not supported")]
+pub struct InstanceError;
+
+pub trait Api: Clone + Sized {
+    type Instance: Instance<Self>;
+    type Surface: Surface<Self>;
+    type Adapter: Adapter<Self>;
+    type Device: Device<Self>;
+
+    type Queue: Queue<Self>;
+    type CommandEncoder: CommandEncoder<Self>;
+    type CommandBuffer: Send + Sync;
+
+    type Buffer: fmt::Debug + Send + Sync + 'static;
+    type Texture: fmt::Debug + Send + Sync + 'static;
+    type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
+    type TextureView: fmt::Debug + Send + Sync;
+    type Sampler: fmt::Debug + Send + Sync;
+    type QuerySet: fmt::Debug + Send + Sync;
+    type Fence: fmt::Debug + Send + Sync;
+
+    type BindGroupLayout: Send + Sync;
+    type BindGroup: fmt::Debug + Send + Sync;
+    type PipelineLayout: Send + Sync;
+    type ShaderModule: fmt::Debug + Send + Sync;
+    type RenderPipeline: Send + Sync;
+    type ComputePipeline: Send + Sync;
+}
+
+pub trait Instance<A: Api>: Sized + Send + Sync {
+    unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
+    unsafe fn create_surface(
+        &self,
+        rwh: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<A::Surface, InstanceError>;
+    unsafe fn destroy_surface(&self, surface: A::Surface);
+    unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
+}
+
+pub trait Surface<A: Api>: Send + Sync {
+    unsafe fn configure(
+        &mut self,
+        device: &A::Device,
+        config: &SurfaceConfiguration,
+    ) -> Result<(), SurfaceError>;
+
+    unsafe fn unconfigure(&mut self, device: &A::Device);
+
+    /// Returns `None` on timing out.
+    unsafe fn acquire_texture(
+        &mut self,
+        timeout_ms: u32,
+    ) -> Result<Option<AcquiredSurfaceTexture<A>>, SurfaceError>;
+    unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
+}
+
+pub trait Adapter<A: Api>: Send + Sync {
+    unsafe fn open(&self, features: wgt::Features) -> Result<OpenDevice<A>, DeviceError>;
+
+    /// Return the set of supported capabilities for a texture format.
+    unsafe fn texture_format_capabilities(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> TextureFormatCapability;
+
+    /// Returns the capabilities of working with a specified surface.
+    ///
+    /// `None` means presentation is not supported for it.
+    unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
+}
+
+pub trait Device<A: Api>: Send + Sync {
+    /// Exit connection to this logical device.
+    unsafe fn exit(self);
+    /// Creates a new buffer.
+    ///
+    /// The initial usage is `BufferUse::empty()`.
+    unsafe fn create_buffer(&self, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
+    unsafe fn destroy_buffer(&self, buffer: A::Buffer);
+    //TODO: clarify if zero-sized mapping is allowed
+    unsafe fn map_buffer(
+        &self,
+        buffer: &A::Buffer,
+        range: MemoryRange,
+    ) -> Result<BufferMapping, DeviceError>;
+    unsafe fn unmap_buffer(&self, buffer: &A::Buffer) -> Result<(), DeviceError>;
+    unsafe fn flush_mapped_ranges<I>(&self, buffer: &A::Buffer, ranges: I)
+    where
+        I: Iterator<Item = MemoryRange>;
+    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &A::Buffer, ranges: I)
+    where
+        I: Iterator<Item = MemoryRange>;
+
+    /// Creates a new texture.
+    ///
+    /// The initial usage for all subresources is `TextureUse::UNINITIALIZED`.
+    unsafe fn create_texture(&self, desc: &TextureDescriptor) -> Result<A::Texture, DeviceError>;
+    unsafe fn destroy_texture(&self, texture: A::Texture);
+    unsafe fn create_texture_view(
+        &self,
+        texture: &A::Texture,
+        desc: &TextureViewDescriptor,
+    ) -> Result<A::TextureView, DeviceError>;
+    unsafe fn destroy_texture_view(&self, view: A::TextureView);
+    unsafe fn create_sampler(&self, desc: &SamplerDescriptor) -> Result<A::Sampler, DeviceError>;
+    unsafe fn destroy_sampler(&self, sampler: A::Sampler);
+
+    unsafe fn create_command_encoder(
+        &self,
+        desc: &CommandEncoderDescriptor<A>,
+    ) -> Result<A::CommandEncoder, DeviceError>;
+    unsafe fn destroy_command_encoder(&self, pool: A::CommandEncoder);
+
+    unsafe fn create_bind_group_layout(
+        &self,
+        desc: &BindGroupLayoutDescriptor,
+    ) -> Result<A::BindGroupLayout, DeviceError>;
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: A::BindGroupLayout);
+    unsafe fn create_pipeline_layout(
+        &self,
+        desc: &PipelineLayoutDescriptor<A>,
+    ) -> Result<A::PipelineLayout, DeviceError>;
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: A::PipelineLayout);
+    unsafe fn create_bind_group(
+        &self,
+        desc: &BindGroupDescriptor<A>,
+    ) -> Result<A::BindGroup, DeviceError>;
+    unsafe fn destroy_bind_group(&self, group: A::BindGroup);
+
+    unsafe fn create_shader_module(
+        &self,
+        desc: &ShaderModuleDescriptor,
+        shader: NagaShader,
+    ) -> Result<A::ShaderModule, ShaderError>;
+    unsafe fn destroy_shader_module(&self, module: A::ShaderModule);
+    unsafe fn create_render_pipeline(
+        &self,
+        desc: &RenderPipelineDescriptor<A>,
+    ) -> Result<A::RenderPipeline, PipelineError>;
+    unsafe fn destroy_render_pipeline(&self, pipeline: A::RenderPipeline);
+    unsafe fn create_compute_pipeline(
+        &self,
+        desc: &ComputePipelineDescriptor<A>,
+    ) -> Result<A::ComputePipeline, PipelineError>;
+    unsafe fn destroy_compute_pipeline(&self, pipeline: A::ComputePipeline);
+
+    unsafe fn create_query_set(
+        &self,
+        desc: &wgt::QuerySetDescriptor<Label>,
+    ) -> Result<A::QuerySet, DeviceError>;
+    unsafe fn destroy_query_set(&self, set: A::QuerySet);
+    unsafe fn create_fence(&self) -> Result<A::Fence, DeviceError>;
+    unsafe fn destroy_fence(&self, fence: A::Fence);
+    unsafe fn get_fence_value(&self, fence: &A::Fence) -> Result<FenceValue, DeviceError>;
+    unsafe fn wait(
+        &self,
+        fence: &A::Fence,
+        value: FenceValue,
+        timeout_ms: u32,
+    ) -> Result<bool, DeviceError>;
+
+    unsafe fn start_capture(&self) -> bool;
+    unsafe fn stop_capture(&self);
+}
+
+pub trait Queue<A: Api>: Send + Sync {
+    /// Submits the command buffers for execution on GPU.
+    ///
+    /// Valid usage:
+    /// - all of the command buffers were created from command pools
+    ///   that are associated with this queue.
+    /// - all of the command buffers had `CommadBuffer::finish()` called.
+    unsafe fn submit(
+        &mut self,
+        command_buffers: &[&A::CommandBuffer],
+        signal_fence: Option<(&mut A::Fence, FenceValue)>,
+    ) -> Result<(), DeviceError>;
+    unsafe fn present(
+        &mut self,
+        surface: &mut A::Surface,
+        texture: A::SurfaceTexture,
+    ) -> Result<(), SurfaceError>;
+}
+
+/// Encoder for commands in command buffers.
+/// Serves as a parent for all the encoded command buffers.
+/// Works in bursts of action: one or more command buffers are recorded,
+/// then submitted to a queue, and then it needs to be `reset_all()`.
+pub trait CommandEncoder<A: Api>: Send + Sync {
+    /// Begin encoding a new command buffer.
+    unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
+    /// Discard currently recorded list, if any.
+    unsafe fn discard_encoding(&mut self);
+    unsafe fn end_encoding(&mut self) -> Result<A::CommandBuffer, DeviceError>;
+    /// Reclaims all resources that are allocated for this encoder.
+    /// Must get all of the produced command buffers back,
+    /// and they must not be used by GPU at this moment.
+    unsafe fn reset_all<I>(&mut self, command_buffers: I)
+    where
+        I: Iterator<Item = A::CommandBuffer>;
+
+    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
+    where
+        T: Iterator<Item = BufferBarrier<'a, A>>;
+
+    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
+    where
+        T: Iterator<Item = TextureBarrier<'a, A>>;
+
+    // copy operations
+
+    unsafe fn fill_buffer(&mut self, buffer: &A::Buffer, range: MemoryRange, value: u8);
+
+    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &A::Buffer, dst: &A::Buffer, regions: T)
+    where
+        T: Iterator<Item = BufferCopy>;
+
+    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
+    unsafe fn copy_texture_to_texture<T>(
+        &mut self,
+        src: &A::Texture,
+        src_usage: TextureUse,
+        dst: &A::Texture,
+        regions: T,
+    ) where
+        T: Iterator<Item = TextureCopy>;
+
+    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
+    unsafe fn copy_buffer_to_texture<T>(&mut self, src: &A::Buffer, dst: &A::Texture, regions: T)
+    where
+        T: Iterator<Item = BufferTextureCopy>;
+
+    unsafe fn copy_texture_to_buffer<T>(
+        &mut self,
+        src: &A::Texture,
+        src_usage: TextureUse,
+        dst: &A::Buffer,
+        regions: T,
+    ) where
+        T: Iterator<Item = BufferTextureCopy>;
+
+    // pass common
+
+    /// Sets the bind group at `index` to `group`, assuming the layout
+    /// of all the preceeding groups to be taken from `layout`.
+    unsafe fn set_bind_group(
+        &mut self,
+        layout: &A::PipelineLayout,
+        index: u32,
+        group: &A::BindGroup,
+        dynamic_offsets: &[wgt::DynamicOffset],
+    );
+
+    unsafe fn set_push_constants(
+        &mut self,
+        layout: &A::PipelineLayout,
+        stages: wgt::ShaderStage,
+        offset: u32,
+        data: &[u32],
+    );
+
+    unsafe fn insert_debug_marker(&mut self, label: &str);
+    unsafe fn begin_debug_marker(&mut self, group_label: &str);
+    unsafe fn end_debug_marker(&mut self);
+
+    // queries
+
+    unsafe fn begin_query(&mut self, set: &A::QuerySet, index: u32);
+    unsafe fn end_query(&mut self, set: &A::QuerySet, index: u32);
+    unsafe fn write_timestamp(&mut self, set: &A::QuerySet, index: u32);
+    unsafe fn reset_queries(&mut self, set: &A::QuerySet, range: Range<u32>);
+    unsafe fn copy_query_results(
+        &mut self,
+        set: &A::QuerySet,
+        range: Range<u32>,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+    );
+
+    // render passes
+
+    // Begins a render pass, clears all active bindings.
+    unsafe fn begin_render_pass(&mut self, desc: &RenderPassDescriptor<A>);
+    unsafe fn end_render_pass(&mut self);
+
+    unsafe fn set_render_pipeline(&mut self, pipeline: &A::RenderPipeline);
+
+    unsafe fn set_index_buffer<'a>(
+        &mut self,
+        binding: BufferBinding<'a, A>,
+        format: wgt::IndexFormat,
+    );
+    unsafe fn set_vertex_buffer<'a>(&mut self, index: u32, binding: BufferBinding<'a, A>);
+    unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
+    unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
+    unsafe fn set_stencil_reference(&mut self, value: u32);
+    unsafe fn set_blend_constants(&mut self, color: &wgt::Color);
+
+    unsafe fn draw(
+        &mut self,
+        start_vertex: u32,
+        vertex_count: u32,
+        start_instance: u32,
+        instance_count: u32,
+    );
+    unsafe fn draw_indexed(
+        &mut self,
+        start_index: u32,
+        index_count: u32,
+        base_vertex: i32,
+        start_instance: u32,
+        instance_count: u32,
+    );
+    unsafe fn draw_indirect(
+        &mut self,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    );
+    unsafe fn draw_indexed_indirect(
+        &mut self,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    );
+    unsafe fn draw_indirect_count(
+        &mut self,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &A::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+    );
+    unsafe fn draw_indexed_indirect_count(
+        &mut self,
+        buffer: &A::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &A::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+    );
+
+    // compute passes
+
+    // Begins a compute pass, clears all active bindings.
+    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor);
+    unsafe fn end_compute_pass(&mut self);
+
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &A::ComputePipeline);
+
+    unsafe fn dispatch(&mut self, count: [u32; 3]);
+    unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
+}
+
+bitflags!(
+    /// Instance initialization flags.
+    pub struct InstanceFlag: u32 {
+        /// Generate debug information in shaders and objects.
+        const DEBUG = 0x1;
+        /// Enable validation, if possible.
+        const VALIDATION = 0x2;
+    }
+);
+
+bitflags!(
+    /// Texture format capability flags.
+    pub struct TextureFormatCapability: u32 {
+        /// Format can be sampled.
+        const SAMPLED = 0x1;
+        /// Format can be sampled with a linear sampler.
+        const SAMPLED_LINEAR = 0x2;
+        /// Format can be sampled with a min/max reduction sampler.
+        const SAMPLED_MINMAX = 0x4;
+
+        /// Format can be used as storage with exclusive read & write access.
+        const STORAGE = 0x10;
+        /// Format can be used as storage with simultaneous read/write access.
+        const STORAGE_READ_WRITE = 0x20;
+        /// Format can be used as storage with atomics.
+        const STORAGE_ATOMIC = 0x40;
+
+        /// Format can be used as color and input attachment.
+        const COLOR_ATTACHMENT = 0x100;
+        /// Format can be used as color (with blending) and input attachment.
+        const COLOR_ATTACHMENT_BLEND = 0x200;
+        /// Format can be used as depth-stencil and input attachment.
+        const DEPTH_STENCIL_ATTACHMENT = 0x400;
+
+        /// Format can be copied from.
+        const COPY_SRC = 0x1000;
+        /// Format can be copied to.
+        const COPY_DST = 0x2000;
+    }
+);
+
+bitflags!(
+    /// Texture format capability flags.
+    pub struct FormatAspect: u8 {
+        const COLOR = 1;
+        const DEPTH = 2;
+        const STENCIL = 4;
+    }
+);
+
+impl From<wgt::TextureAspect> for FormatAspect {
+    fn from(aspect: wgt::TextureAspect) -> Self {
+        match aspect {
+            wgt::TextureAspect::All => Self::all(),
+            wgt::TextureAspect::DepthOnly => Self::DEPTH,
+            wgt::TextureAspect::StencilOnly => Self::STENCIL,
+        }
+    }
+}
+
+impl From<wgt::TextureFormat> for FormatAspect {
+    fn from(format: wgt::TextureFormat) -> Self {
+        match format {
+            wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
+            wgt::TextureFormat::Depth24PlusStencil8 => Self::DEPTH | Self::STENCIL,
+            _ => Self::COLOR,
+        }
+    }
+}
+
+bitflags!(
+    pub struct MemoryFlag: u32 {
+        const TRANSIENT = 1;
+    }
+);
+
+bitflags!(
+    pub struct AttachmentOp: u8 {
+        const LOAD = 1;
+        const STORE = 2;
+    }
+);
+
+bitflags::bitflags! {
+    /// Similar to `wgt::BufferUsage` but for internal use.
+    pub struct BufferUse: u32 {
+        const MAP_READ = 1;
+        const MAP_WRITE = 2;
+        const COPY_SRC = 4;
+        const COPY_DST = 8;
+        const INDEX = 16;
+        const VERTEX = 32;
+        const UNIFORM = 64;
+        const STORAGE_LOAD = 128;
+        const STORAGE_STORE = 256;
+        const INDIRECT = 512;
+        /// The combination of all read-only usages.
+        const READ_ALL = Self::MAP_READ.bits | Self::COPY_SRC.bits |
+            Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
+            Self::STORAGE_LOAD.bits | Self::INDIRECT.bits;
+        /// The combination of all write-only and read-write usages.
+        const WRITE_ALL = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_STORE.bits;
+        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+        /// If a usage is not ordered, then even if it doesn't change between draw calls, there
+        /// still need to be pipeline barriers inserted for synchronization.
+        const ORDERED = Self::READ_ALL.bits | Self::MAP_WRITE.bits | Self::COPY_DST.bits;
+    }
+}
+
+bitflags::bitflags! {
+    /// Similar to `wgt::TextureUsage` but for internal use.
+    pub struct TextureUse: u32 {
+        const COPY_SRC = 1;
+        const COPY_DST = 2;
+        const SAMPLED = 4;
+        const COLOR_TARGET = 8;
+        const DEPTH_STENCIL_READ = 16;
+        const DEPTH_STENCIL_WRITE = 32;
+        const STORAGE_LOAD = 64;
+        const STORAGE_STORE = 128;
+        /// The combination of all read-only usages.
+        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits | Self::DEPTH_STENCIL_READ.bits | Self::STORAGE_LOAD.bits;
+        /// The combination of all write-only and read-write usages.
+        const WRITE_ALL = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_STORE.bits;
+        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+        /// If a usage is not ordered, then even if it doesn't change between draw calls, there
+        /// still need to be pipeline barriers inserted for synchronization.
+        const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits;
+        const UNINITIALIZED = 0xFFFF;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct InstanceDescriptor<'a> {
+    pub name: &'a str,
+    pub flags: InstanceFlag,
+}
+
+#[derive(Clone, Debug)]
+pub struct Alignments {
+    /// The alignment of the start of the buffer used as a GPU copy source.
+    pub buffer_copy_offset: wgt::BufferSize,
+    /// The alignment of the row pitch of the texture data stored in a buffer that is
+    /// used in a GPU copy operation.
+    pub buffer_copy_pitch: wgt::BufferSize,
+    pub storage_buffer_offset: wgt::BufferSize,
+    pub uniform_buffer_offset: wgt::BufferSize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Capabilities {
+    pub limits: wgt::Limits,
+    pub alignments: Alignments,
+    pub downlevel: wgt::DownlevelCapabilities,
+}
+
+#[derive(Debug)]
+pub struct ExposedAdapter<A: Api> {
+    pub adapter: A::Adapter,
+    pub info: wgt::AdapterInfo,
+    pub features: wgt::Features,
+    pub capabilities: Capabilities,
+}
+
+/// Describes information about what a `Surface`'s presentation capabilities are.
+/// Fetch this with [Adapter::surface_capabilities].
+#[derive(Debug, Clone)]
+pub struct SurfaceCapabilities {
+    /// List of supported texture formats.
+    ///
+    /// Must be at least one.
+    pub formats: Vec<wgt::TextureFormat>,
+
+    /// Range for the swap chain sizes.
+    ///
+    /// - `swap_chain_sizes.start` must be at least 1.
+    /// - `swap_chain_sizes.end` must be larger or equal to `swap_chain_sizes.start`.
+    pub swap_chain_sizes: RangeInclusive<u32>,
+
+    /// Current extent of the surface, if known.
+    pub current_extent: Option<wgt::Extent3d>,
+
+    /// Range of supported extents.
+    ///
+    /// `current_extent` must be inside this range.
+    pub extents: RangeInclusive<wgt::Extent3d>,
+
+    /// Supported texture usage flags.
+    ///
+    /// Must have at least `TextureUse::COLOR_TARGET`
+    pub usage: TextureUse,
+
+    /// List of supported V-sync modes.
+    ///
+    /// Must be at least one.
+    pub present_modes: Vec<wgt::PresentMode>,
+
+    /// List of supported alpha composition modes.
+    ///
+    /// Must be at least one.
+    pub composite_alpha_modes: Vec<CompositeAlphaMode>,
+}
+
+#[derive(Debug)]
+pub struct AcquiredSurfaceTexture<A: Api> {
+    pub texture: A::SurfaceTexture,
+    /// The presentation configuration no longer matches
+    /// the surface properties exactly, but can still be used to present
+    /// to the surface successfully.
+    pub suboptimal: bool,
+}
+
+#[derive(Debug)]
+pub struct OpenDevice<A: Api> {
+    pub device: A::Device,
+    pub queue: A::Queue,
+}
+
+#[derive(Clone, Debug)]
+pub struct BufferMapping {
+    pub ptr: NonNull<u8>,
+    pub is_coherent: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct BufferDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::BufferAddress,
+    pub usage: BufferUse,
+    pub memory_flags: MemoryFlag,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextureDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::Extent3d,
+    pub mip_level_count: u32,
+    pub sample_count: u32,
+    pub dimension: wgt::TextureDimension,
+    pub format: wgt::TextureFormat,
+    pub usage: TextureUse,
+    pub memory_flags: MemoryFlag,
+}
+
+/// TextureView descriptor.
+///
+/// Valid usage:
+///. - `format` has to be the same as `TextureDescriptor::format`
+///. - `dimension` has to be compatible with `TextureDescriptor::dimension`
+///. - `usage` has to be a subset of `TextureDescriptor::usage`
+///. - `range` has to be a subset of parent texture
+#[derive(Clone, Debug)]
+pub struct TextureViewDescriptor<'a> {
+    pub label: Label<'a>,
+    pub format: wgt::TextureFormat,
+    pub dimension: wgt::TextureViewDimension,
+    pub usage: TextureUse,
+    pub range: wgt::ImageSubresourceRange,
+}
+
+#[derive(Clone, Debug)]
+pub struct SamplerDescriptor<'a> {
+    pub label: Label<'a>,
+    pub address_modes: [wgt::AddressMode; 3],
+    pub mag_filter: wgt::FilterMode,
+    pub min_filter: wgt::FilterMode,
+    pub mipmap_filter: wgt::FilterMode,
+    pub lod_clamp: Option<Range<f32>>,
+    pub compare: Option<wgt::CompareFunction>,
+    pub anisotropy_clamp: Option<NonZeroU8>,
+    pub border_color: Option<wgt::SamplerBorderColor>,
+}
+
+#[derive(Clone, Debug)]
+pub struct BindGroupLayoutDescriptor<'a> {
+    pub label: Label<'a>,
+    pub entries: &'a [wgt::BindGroupLayoutEntry],
+}
+
+#[derive(Clone, Debug)]
+pub struct PipelineLayoutDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    pub bind_group_layouts: &'a [&'a A::BindGroupLayout],
+    pub push_constant_ranges: &'a [wgt::PushConstantRange],
+}
+
+#[derive(Debug)]
+pub struct BufferBinding<'a, A: Api> {
+    pub buffer: &'a A::Buffer,
+    pub offset: wgt::BufferAddress,
+    pub size: Option<wgt::BufferSize>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for BufferBinding<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            buffer: self.buffer,
+            offset: self.offset,
+            size: self.size,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TextureBinding<'a, A: Api> {
+    pub view: &'a A::TextureView,
+    pub usage: TextureUse,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for TextureBinding<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            view: self.view,
+            usage: self.usage,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BindGroupEntry {
+    pub binding: u32,
+    pub resource_index: u32,
+}
+
+/// BindGroup descriptor.
+///
+/// Valid usage:
+///. - `entries` has to be sorted by ascending `BindGroupEntry::binding`
+///. - `entries` has to have the same set of `BindGroupEntry::binding` as `layout`
+///. - each entry has to be compatible with the `layout`
+///. - each entry's `BindGroupEntry::resource_index` is within range
+///    of the corresponding resource array, selected by the relevant
+///    `BindGroupLayoutEntry`.
+#[derive(Clone, Debug)]
+pub struct BindGroupDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    pub layout: &'a A::BindGroupLayout,
+    pub buffers: &'a [BufferBinding<'a, A>],
+    pub samplers: &'a [&'a A::Sampler],
+    pub textures: &'a [TextureBinding<'a, A>],
+    pub entries: &'a [BindGroupEntry],
+}
+
+#[derive(Clone, Debug)]
+pub struct CommandEncoderDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    pub queue: &'a A::Queue,
+}
+
+/// Naga shader module.
+#[derive(Debug)]
+pub struct NagaShader {
+    /// Shader module IR.
+    pub module: naga::Module,
+    /// Analysis information of the module.
+    pub info: naga::valid::ModuleInfo,
+}
+
+pub struct ShaderModuleDescriptor<'a> {
+    pub label: Label<'a>,
+}
+
+/// Describes a programmable pipeline stage.
+#[derive(Debug)]
+pub struct ProgrammableStage<'a, A: Api> {
+    /// The compiled shader module for this stage.
+    pub module: &'a A::ShaderModule,
+    /// The name of the entry point in the compiled shader. There must be a function that returns
+    /// void with this name in the shader.
+    pub entry_point: &'a str,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for ProgrammableStage<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            module: self.module,
+            entry_point: self.entry_point,
+        }
+    }
+}
+
+/// Describes a compute pipeline.
+#[derive(Clone, Debug)]
+pub struct ComputePipelineDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: &'a A::PipelineLayout,
+    /// The compiled compute stage and its entry point.
+    pub stage: ProgrammableStage<'a, A>,
+}
+
+/// Describes how the vertex buffer is interpreted.
+#[derive(Clone, Debug)]
+pub struct VertexBufferLayout<'a> {
+    /// The stride, in bytes, between elements of this buffer.
+    pub array_stride: wgt::BufferAddress,
+    /// How often this vertex buffer is "stepped" forward.
+    pub step_mode: wgt::InputStepMode,
+    /// The list of attributes which comprise a single vertex.
+    pub attributes: &'a [wgt::VertexAttribute],
+}
+
+/// Describes a render (graphics) pipeline.
+#[derive(Clone, Debug)]
+pub struct RenderPipelineDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: &'a A::PipelineLayout,
+    /// The format of any vertex buffers used with this pipeline.
+    pub vertex_buffers: &'a [VertexBufferLayout<'a>],
+    /// The vertex stage for this pipeline.
+    pub vertex_stage: ProgrammableStage<'a, A>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    pub primitive: wgt::PrimitiveState,
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    pub depth_stencil: Option<wgt::DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    pub multisample: wgt::MultisampleState,
+    /// The fragment stage for this pipeline.
+    pub fragment_stage: Option<ProgrammableStage<'a, A>>,
+    /// The effect of draw calls on the color aspect of the output target.
+    pub color_targets: &'a [wgt::ColorTargetState],
+}
+
+/// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
+/// compositing.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CompositeAlphaMode {
+    /// The alpha channel, if it exists, of the textures is ignored in the
+    /// compositing process. Instead, the textures is treated as if it has a
+    /// constant alpha of 1.0.
+    Opaque,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are
+    /// expected to already be multiplied by the alpha channel by the
+    /// application.
+    PreMultiplied,
+    /// The alpha channel, if it exists, of the textures is respected in the
+    /// compositing process. The non-alpha channels of the textures are not
+    /// expected to already be multiplied by the alpha channel by the
+    /// application; instead, the compositor will multiply the non-alpha
+    /// channels of the texture by the alpha channel during compositing.
+    PostMultiplied,
+}
+
+#[derive(Debug, Clone)]
+pub struct SurfaceConfiguration {
+    /// Number of textures in the swap chain. Must be in
+    /// `SurfaceCapabilities::swap_chain_size` range.
+    pub swap_chain_size: u32,
+    /// Vertical synchronization mode.
+    pub present_mode: wgt::PresentMode,
+    /// Alpha composition mode.
+    pub composite_alpha_mode: CompositeAlphaMode,
+    /// Format of the surface textures.
+    pub format: wgt::TextureFormat,
+    /// Requested texture extent. Must be in
+    /// `SurfaceCapabilities::extents` range.
+    pub extent: wgt::Extent3d,
+    /// Allowed usage of surface textures,
+    pub usage: TextureUse,
+}
+
+#[derive(Debug, Clone)]
+pub struct Rect<T> {
+    pub x: T,
+    pub y: T,
+    pub w: T,
+    pub h: T,
+}
+
+#[derive(Debug, Clone)]
+pub struct BufferBarrier<'a, A: Api> {
+    pub buffer: &'a A::Buffer,
+    pub usage: Range<BufferUse>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TextureBarrier<'a, A: Api> {
+    pub texture: &'a A::Texture,
+    pub range: wgt::ImageSubresourceRange,
+    pub usage: Range<TextureUse>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BufferCopy {
+    pub src_offset: wgt::BufferAddress,
+    pub dst_offset: wgt::BufferAddress,
+    pub size: wgt::BufferSize,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextureCopyBase {
+    pub origin: wgt::Origin3d,
+    pub mip_level: u32,
+    pub aspect: FormatAspect,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextureCopy {
+    pub src_base: TextureCopyBase,
+    pub dst_base: TextureCopyBase,
+    pub size: wgt::Extent3d,
+}
+
+#[derive(Clone, Debug)]
+pub struct BufferTextureCopy {
+    pub buffer_layout: wgt::ImageDataLayout,
+    pub texture_base: TextureCopyBase,
+    pub size: wgt::Extent3d,
+}
+
+#[derive(Debug)]
+pub struct Attachment<'a, A: Api> {
+    pub view: &'a A::TextureView,
+    /// Contains either a single mutating usage as a target, or a valid combination
+    /// of read-only usages.
+    pub usage: TextureUse,
+    /// Defines the boundary usages for the attachment.
+    /// It is expected to begin a render pass with `boundary_usage.start` usage,
+    /// and will end it with `boundary_usage.end` usage.
+    pub boundary_usage: Range<TextureUse>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for Attachment<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            view: self.view,
+            usage: self.usage,
+            boundary_usage: self.boundary_usage.clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ColorAttachment<'a, A: Api> {
+    pub target: Attachment<'a, A>,
+    pub resolve_target: Option<Attachment<'a, A>>,
+    pub ops: AttachmentOp,
+    pub clear_value: wgt::Color,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for ColorAttachment<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            target: self.target.clone(),
+            resolve_target: self.resolve_target.clone(),
+            ops: self.ops,
+            clear_value: self.clear_value,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DepthStencilAttachment<'a, A: Api> {
+    pub target: Attachment<'a, A>,
+    pub depth_ops: AttachmentOp,
+    pub stencil_ops: AttachmentOp,
+    pub clear_value: (f32, u32),
+}
+
+#[derive(Clone, Debug)]
+pub struct RenderPassDescriptor<'a, A: Api> {
+    pub label: Label<'a>,
+    pub color_attachments: &'a [ColorAttachment<'a, A>],
+    pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ComputePassDescriptor<'a> {
+    pub label: Label<'a>,
+}
+
+#[test]
+fn test_default_limits() {
+    let limits = wgt::Limits::default();
+    assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
+}

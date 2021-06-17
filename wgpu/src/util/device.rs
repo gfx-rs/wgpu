@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -82,26 +82,16 @@ impl DeviceExt for crate::Device {
         let texture = self.create_texture(desc);
 
         let format_info = desc.format.describe();
-
-        let (layer_iterations, mip_extent) = if desc.dimension == crate::TextureDimension::D3 {
-            (1, desc.size)
-        } else {
-            (
-                desc.size.depth_or_array_layers,
-                crate::Extent3d {
-                    depth_or_array_layers: 1,
-                    ..desc.size
-                },
-            )
-        };
-
-        let mip_level_count =
-            u8::try_from(desc.mip_level_count).expect("mip level count overflows a u8");
+        let layer_iterations = desc.array_layer_count();
 
         let mut binary_offset = 0;
         for layer in 0..layer_iterations {
-            for mip in 0..mip_level_count {
-                let mip_size = mip_extent.at_mip_level(mip).unwrap();
+            for mip in 0..desc.mip_level_count {
+                let mut mip_size = desc.mip_level_size(mip).unwrap();
+                // copying layers separately
+                if desc.dimension != wgt::TextureDimension::D3 {
+                    mip_size.depth_or_array_layers = 1;
+                }
 
                 // When uploading mips of compressed textures and the mip is supposed to be
                 // a size that isn't a multiple of the block size, the mip needs to be uploaded
@@ -114,7 +104,7 @@ impl DeviceExt for crate::Device {
                 let height_blocks = mip_physical.height / format_info.block_dimensions.1 as u32;
 
                 let bytes_per_row = width_blocks * format_info.block_size as u32;
-                let data_size = bytes_per_row * height_blocks * mip_extent.depth_or_array_layers;
+                let data_size = bytes_per_row * height_blocks * mip_size.depth_or_array_layers;
 
                 let end_offset = binary_offset + data_size as usize;
 
@@ -127,6 +117,7 @@ impl DeviceExt for crate::Device {
                             y: 0,
                             z: layer,
                         },
+                        aspect: wgt::TextureAspect::All,
                     },
                     &data[binary_offset..end_offset],
                     crate::ImageDataLayout {
@@ -135,7 +126,7 @@ impl DeviceExt for crate::Device {
                             NonZeroU32::new(bytes_per_row).expect("invalid bytes per row"),
                         ),
                         rows_per_image: Some(
-                            NonZeroU32::new(mip_physical.height).expect("invalid height"),
+                            NonZeroU32::new(height_blocks).expect("invalid height"),
                         ),
                     },
                     mip_physical,

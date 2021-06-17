@@ -117,24 +117,16 @@ impl Example {
 impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
         log::info!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;
 
-        let mut flags = wgpu::ShaderFlags::VALIDATION;
-        match adapter.get_info().backend {
-            wgpu::Backend::Metal | wgpu::Backend::Vulkan => {
-                flags |= wgpu::ShaderFlags::EXPERIMENTAL_TRANSLATION
-            }
-            _ => (), //TODO
-        }
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            flags,
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

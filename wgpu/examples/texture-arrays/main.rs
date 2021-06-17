@@ -151,11 +151,7 @@ impl framework::Example for Example {
         let green_texture_view = green_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         queue.write_texture(
-            wgpu::ImageCopyTexture {
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                texture: &red_texture,
-            },
+            red_texture.as_image_copy(),
             &red_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,
@@ -165,11 +161,7 @@ impl framework::Example for Example {
             wgpu::Extent3d::default(),
         );
         queue.write_texture(
-            wgpu::ImageCopyTexture {
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                texture: &green_texture,
-            },
+            green_texture.as_image_copy(),
             &green_texture_data,
             wgpu::ImageDataLayout {
                 offset: 0,

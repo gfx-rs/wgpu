@@ -2,16 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use hal::command::CommandBuffer as _;
+use hal::CommandEncoder as _;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    device::all_buffer_stages,
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{self, Id, TypedId},
-    resource::{BufferUse, QuerySet},
+    resource::QuerySet,
     track::UseExtendError,
     Epoch, FastHashMap, Index,
 };
@@ -20,11 +19,11 @@ use thiserror::Error;
 use wgt::BufferAddress;
 
 #[derive(Debug)]
-pub(super) struct QueryResetMap<B: hal::Backend> {
+pub(super) struct QueryResetMap<A: hal::Api> {
     map: FastHashMap<Index, (Vec<bool>, Epoch)>,
-    _phantom: PhantomData<B>,
+    _phantom: PhantomData<A>,
 }
-impl<B: hal::Backend> QueryResetMap<B> {
+impl<A: hal::Api> QueryResetMap<A> {
     pub fn new() -> Self {
         Self {
             map: FastHashMap::default(),
@@ -35,7 +34,7 @@ impl<B: hal::Backend> QueryResetMap<B> {
     pub fn use_query_set(
         &mut self,
         id: id::QuerySetId,
-        query_set: &QuerySet<B>,
+        query_set: &QuerySet<A>,
         query: u32,
     ) -> bool {
         let (index, epoch, _) = id.unzip();
@@ -49,8 +48,8 @@ impl<B: hal::Backend> QueryResetMap<B> {
 
     pub fn reset_queries(
         self,
-        cmd_buf_raw: &mut B::CommandBuffer,
-        query_set_storage: &Storage<QuerySet<B>, id::QuerySetId>,
+        raw_encoder: &mut A::CommandEncoder,
+        query_set_storage: &Storage<QuerySet<A>, id::QuerySetId>,
         backend: wgt::Backend,
     ) -> Result<(), id::QuerySetId> {
         for (query_set_id, (state, epoch)) in self.map.into_iter() {
@@ -70,7 +69,7 @@ impl<B: hal::Backend> QueryResetMap<B> {
                     // We've hit the end of a run, dispatch a reset
                     (Some(start), false) => {
                         run_start = None;
-                        unsafe { cmd_buf_raw.reset_query_pool(&query_set.raw, start..idx as u32) };
+                        unsafe { raw_encoder.reset_queries(&query_set.raw, start..idx as u32) };
                     }
                     // We're starting a run
                     (None, true) => {
@@ -88,12 +87,14 @@ impl<B: hal::Backend> QueryResetMap<B> {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SimplifiedQueryType {
+    Occlusion,
     Timestamp,
     PipelineStatistics,
 }
 impl From<wgt::QueryType> for SimplifiedQueryType {
     fn from(q: wgt::QueryType) -> Self {
         match q {
+            wgt::QueryType::Occlusion => SimplifiedQueryType::Occlusion,
             wgt::QueryType::Timestamp => SimplifiedQueryType::Timestamp,
             wgt::QueryType::PipelineStatistics(..) => SimplifiedQueryType::PipelineStatistics,
         }
@@ -161,14 +162,14 @@ pub enum ResolveError {
     },
 }
 
-impl<B: GfxBackend> QuerySet<B> {
+impl<A: HalApi> QuerySet<A> {
     fn validate_query(
         &self,
         query_set_id: id::QuerySetId,
         query_type: SimplifiedQueryType,
         query_index: u32,
-        reset_state: Option<&mut QueryResetMap<B>>,
-    ) -> Result<hal::query::Query<'_, B>, QueryUseError> {
+        reset_state: Option<&mut QueryResetMap<A>>,
+    ) -> Result<&A::QuerySet, QueryUseError> {
         // We need to defer our resets because we are in a renderpass, add the usage to the reset map.
         if let Some(reset) = reset_state {
             let used = reset.use_query_set(query_set_id, self, query_index);
@@ -192,23 +193,18 @@ impl<B: GfxBackend> QuerySet<B> {
             });
         }
 
-        let hal_query = hal::query::Query::<B> {
-            pool: &self.raw,
-            id: query_index,
-        };
-
-        Ok(hal_query)
+        Ok(&self.raw)
     }
 
     pub(super) fn validate_and_write_timestamp(
         &self,
-        cmd_buf_raw: &mut B::CommandBuffer,
+        raw_encoder: &mut A::CommandEncoder,
         query_set_id: id::QuerySetId,
         query_index: u32,
-        reset_state: Option<&mut QueryResetMap<B>>,
+        reset_state: Option<&mut QueryResetMap<A>>,
     ) -> Result<(), QueryUseError> {
         let needs_reset = reset_state.is_none();
-        let hal_query = self.validate_query(
+        let query_set = self.validate_query(
             query_set_id,
             SimplifiedQueryType::Timestamp,
             query_index,
@@ -218,9 +214,9 @@ impl<B: GfxBackend> QuerySet<B> {
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
-                cmd_buf_raw.reset_query_pool(&self.raw, query_index..(query_index + 1));
+                raw_encoder.reset_queries(&self.raw, query_index..(query_index + 1));
             }
-            cmd_buf_raw.write_timestamp(hal::pso::PipelineStage::BOTTOM_OF_PIPE, hal_query);
+            raw_encoder.write_timestamp(query_set, query_index);
         }
 
         Ok(())
@@ -228,14 +224,14 @@ impl<B: GfxBackend> QuerySet<B> {
 
     pub(super) fn validate_and_begin_pipeline_statistics_query(
         &self,
-        cmd_buf_raw: &mut B::CommandBuffer,
+        raw_encoder: &mut A::CommandEncoder,
         query_set_id: id::QuerySetId,
         query_index: u32,
-        reset_state: Option<&mut QueryResetMap<B>>,
+        reset_state: Option<&mut QueryResetMap<A>>,
         active_query: &mut Option<(id::QuerySetId, u32)>,
     ) -> Result<(), QueryUseError> {
         let needs_reset = reset_state.is_none();
-        let hal_query = self.validate_query(
+        let query_set = self.validate_query(
             query_set_id,
             SimplifiedQueryType::PipelineStatistics,
             query_index,
@@ -252,30 +248,25 @@ impl<B: GfxBackend> QuerySet<B> {
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
-                cmd_buf_raw.reset_query_pool(&self.raw, query_index..(query_index + 1));
+                raw_encoder.reset_queries(&self.raw, query_index..(query_index + 1));
             }
-            cmd_buf_raw.begin_query(hal_query, hal::query::ControlFlags::empty());
+            raw_encoder.begin_query(query_set, query_index);
         }
 
         Ok(())
     }
 }
 
-pub(super) fn end_pipeline_statistics_query<B: GfxBackend>(
-    cmd_buf_raw: &mut B::CommandBuffer,
-    storage: &Storage<QuerySet<B>, id::QuerySetId>,
+pub(super) fn end_pipeline_statistics_query<A: HalApi>(
+    raw_encoder: &mut A::CommandEncoder,
+    storage: &Storage<QuerySet<A>, id::QuerySetId>,
     active_query: &mut Option<(id::QuerySetId, u32)>,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set_id, query_index)) = active_query.take() {
         // We can unwrap here as the validity was validated when the active query was set
         let query_set = storage.get(query_set_id).unwrap();
 
-        let hal_query = hal::query::Query::<B> {
-            pool: &query_set.raw,
-            id: query_index,
-        };
-
-        unsafe { cmd_buf_raw.end_query(hal_query) }
+        unsafe { raw_encoder.end_query(&query_set.raw, query_index) };
 
         Ok(())
     } else {
@@ -284,20 +275,20 @@ pub(super) fn end_pipeline_statistics_query<B: GfxBackend>(
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_write_timestamp<B: GfxBackend>(
+    pub fn command_encoder_write_timestamp<A: HalApi>(
         &self,
         command_encoder_id: id::CommandEncoderId,
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) -> Result<(), QueryError> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let raw_encoder = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -316,12 +307,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 _ => unreachable!(),
             })?;
 
-        query_set.validate_and_write_timestamp(cmd_buf_raw, query_set_id, query_index, None)?;
+        query_set.validate_and_write_timestamp(raw_encoder, query_set_id, query_index, None)?;
 
         Ok(())
     }
 
-    pub fn command_encoder_resolve_query_set<B: GfxBackend>(
+    pub fn command_encoder_resolve_query_set<A: HalApi>(
         &self,
         command_encoder_id: id::CommandEncoderId,
         query_set_id: id::QuerySetId,
@@ -330,7 +321,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: id::BufferId,
         destination_offset: BufferAddress,
     ) -> Result<(), QueryError> {
-        let hub = B::hub(self);
+        let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -338,7 +329,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
-        let cmd_buf_raw = cmd_buf.raw.last_mut().unwrap();
+        let raw_encoder = cmd_buf.encoder.open();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -363,7 +354,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .use_replace(&*buffer_guard, destination, (), BufferUse::COPY_DST)
+            .use_replace(&*buffer_guard, destination, (), hal::BufferUse::COPY_DST)
             .map_err(QueryError::InvalidBuffer)?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
 
@@ -381,9 +372,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        let stride = query_set.elements * wgt::QUERY_SIZE;
-        let bytes_used = (stride * query_count) as BufferAddress;
-
+        let bytes_used = (wgt::QUERY_SIZE * query_count) as BufferAddress;
         let buffer_start_offset = destination_offset;
         let buffer_end_offset = buffer_start_offset + bytes_used;
 
@@ -391,7 +380,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(ResolveError::BufferOverrun {
                 start_query,
                 end_query,
-                stride,
+                stride: wgt::QUERY_SIZE,
                 buffer_size: dst_buffer.size,
                 buffer_start_offset,
                 buffer_end_offset,
@@ -400,18 +389,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         unsafe {
-            cmd_buf_raw.pipeline_barrier(
-                all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
-                hal::memory::Dependencies::empty(),
-                dst_barrier,
-            );
-            cmd_buf_raw.copy_query_pool_results(
+            raw_encoder.transition_buffers(dst_barrier);
+            raw_encoder.copy_query_results(
                 &query_set.raw,
                 start_query..end_query,
-                &dst_buffer.raw.as_ref().unwrap().0,
+                dst_buffer.raw.as_ref().unwrap(),
                 destination_offset,
-                stride,
-                hal::query::ResultFlags::WAIT | hal::query::ResultFlags::BITS_64,
             );
         }
 

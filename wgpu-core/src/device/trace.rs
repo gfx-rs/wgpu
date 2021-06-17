@@ -22,7 +22,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
         label,
         color_formats: Cow::Borrowed(&context.attachments.colors),
         depth_stencil_format: context.attachments.depth_stencil,
-        sample_count: context.sample_count as u32,
+        sample_count: context.sample_count,
     }
 }
 
@@ -98,7 +98,7 @@ pub enum Action<'a> {
     DestroyRenderBundle(id::RenderBundleId),
     CreateQuerySet {
         id: id::QuerySetId,
-        desc: wgt::QuerySetDescriptor,
+        desc: crate::resource::QuerySetDescriptor<'a>,
     },
     DestroyQuerySet(id::QuerySetId),
     WriteBuffer {
