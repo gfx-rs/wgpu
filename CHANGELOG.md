@@ -1,7 +1,9 @@
 # Change Log
 
 TBD:
-  - Merged wgpu-rs and wgpu back into a single repository
+  - Crates:
+    - Merged wgpu-rs and wgpu back into a single repository
+    - Replaced gfx-rs dependencies by the new `wgpu-hal`
 
 ## v0.8 (2021-04-29)
   - Naga is used by default to translate shaders, SPIRV-Cross is optional behind `cross` feature

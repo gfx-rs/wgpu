@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/gfx-rs/naga/issues/new/choose
     about: Issues with or enhancements for the shader translation.
   - name: Question about wgpu
-    url: https://github.com/gfx-rs/wgpu-rs/discussions/new
+    url: https://github.com/gfx-rs/wgpu/discussions/new
     about: Any questions about how to use wgpu should go here.

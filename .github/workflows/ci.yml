@@ -21,7 +21,7 @@ jobs:
 
   android_build:
     name: Android Stable
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     env:
       TARGET: aarch64-linux-android
       PKG_CONFIG_ALLOW_CROSS: 1
@@ -37,7 +37,7 @@ jobs:
   wasm:
     if: false  # disable until hal/Gles backend is setup
     name: Web Assembly
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     env:
       RUSTFLAGS: --cfg=web_sys_unstable_apis
     steps:
@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-10.15, ubuntu-18.04, windows-2019]
+        os: [macos-10.15, ubuntu-20.04, windows-2019]
         channel: [stable, nightly]
         include:
           - name: MacOS Stable
@@ -70,18 +70,18 @@ jobs:
             additional_core_features:
             additional_player_features:
           - name: Ubuntu Stable
-            os: ubuntu-18.04
+            os: ubuntu-20.04
             channel: stable
             prepare_command:
             additional_core_features: trace,replay
             additional_player_features:
           - name: Ubuntu Nightly
-            os: ubuntu-18.04
+            os: ubuntu-20.04
             channel: nightly
             prepare_command: |
               echo "Installing Vulkan"
               sudo apt-get update -y -qq
-              sudo add-apt-repository ppa:kisak/kisak-mesa -y
+              sudo add-apt-repository ppa:ubuntu-x-swat/updates -y
               sudo apt-get update
               sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
             additional_core_features: serial-pass
@@ -124,7 +124,7 @@ jobs:
         run: cargo test -- --nocapture
 
   docs:
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Install latest nightly

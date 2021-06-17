@@ -54,13 +54,7 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         .await
         .unwrap();
 
-    // Loads the shader from the SPIR-V file.arrayvec
-    let info = adapter.get_info();
-    // skip this on LavaPipe temporarily
-    if info.vendor == 0x10005 {
-        return None;
-    }
-
+    // Loads the shader from WGSL
     let cs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
