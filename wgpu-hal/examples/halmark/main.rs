@@ -79,7 +79,11 @@ impl<A: hal::Api> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, hal::InstanceError> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
-            flags: hal::InstanceFlag::all(),
+            flags: if cfg!(debug_assertions) {
+                hal::InstanceFlag::all()
+            } else {
+                hal::InstanceFlag::empty()
+            },
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe { instance.create_surface(window).unwrap() };
@@ -101,7 +105,7 @@ impl<A: hal::Api> Example<A> {
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: 2,
+            swap_chain_size: 3,
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
             format: wgt::TextureFormat::Bgra8UnormSrgb,
