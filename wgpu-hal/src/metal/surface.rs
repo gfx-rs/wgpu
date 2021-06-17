@@ -63,7 +63,7 @@ impl super::Surface {
             let screen: *mut Object = msg_send![window, screen];
             assert!(!screen.is_null(), "window is not attached to a screen");
 
-            let scale_factor: mtl::CGFloat = msg_send![screen, nativeScale];
+            let scale_factor: CGFloat = msg_send![screen, nativeScale];
             let () = msg_send![view, setContentScaleFactor: scale_factor];
         }
 

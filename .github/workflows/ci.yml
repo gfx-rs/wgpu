@@ -35,6 +35,7 @@ jobs:
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features trace --target ${{ env.TARGET }}
 
   wasm:
+    if: false  # disable until hal/Gles backend is setup
     name: Web Assembly
     runs-on: ubuntu-18.04
     env:

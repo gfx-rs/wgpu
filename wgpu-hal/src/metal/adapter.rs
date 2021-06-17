@@ -18,11 +18,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         features: wgt::Features,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let queue = self
-            .shared
-            .device
-            .lock()
-            .new_command_queue_with_max_command_buffer_count(5);
+        let queue = self.shared.device.lock().new_command_queue();
         Ok(crate::OpenDevice {
             device: super::Device {
                 shared: Arc::clone(&self.shared),

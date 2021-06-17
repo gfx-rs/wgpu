@@ -640,14 +640,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        match self
-            .device
-            .extension_fns
-            .draw_indirect_count
-            .as_ref()
-            .expect("Feature `DRAW_INDIRECT_COUNT` must be enabled")
-        {
-            super::ExtensionFn::Extension(t) => {
+        match self.device.extension_fns.draw_indirect_count {
+            Some(super::ExtensionFn::Extension(ref t)) => {
                 t.cmd_draw_indirect_count(
                     self.active,
                     buffer.raw,
@@ -658,7 +652,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     0,
                 );
             }
-            super::ExtensionFn::Promoted => {
+            Some(super::ExtensionFn::Promoted) => {
                 self.device.raw.cmd_draw_indirect_count(
                     self.active,
                     buffer.raw,
@@ -669,6 +663,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     0,
                 );
             }
+            None => panic!("Feature `DRAW_INDIRECT_COUNT` not enabled"),
         }
     }
     unsafe fn draw_indexed_indirect_count(
@@ -679,14 +674,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        match self
-            .device
-            .extension_fns
-            .draw_indirect_count
-            .as_ref()
-            .expect("Feature `DRAW_INDIRECT_COUNT` must be enabled")
-        {
-            super::ExtensionFn::Extension(t) => {
+        match self.device.extension_fns.draw_indirect_count {
+            Some(super::ExtensionFn::Extension(ref t)) => {
                 t.cmd_draw_indexed_indirect_count(
                     self.active,
                     buffer.raw,
@@ -697,7 +686,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     0,
                 );
             }
-            super::ExtensionFn::Promoted => {
+            Some(super::ExtensionFn::Promoted) => {
                 self.device.raw.cmd_draw_indexed_indirect_count(
                     self.active,
                     buffer.raw,
@@ -708,6 +697,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     0,
                 );
             }
+            None => panic!("Feature `DRAW_INDIRECT_COUNT` not enabled"),
         }
     }
 

@@ -25,10 +25,10 @@ If you are looking for the native implementation or bindings to the API in other
 
    API   |    Windows 7/10    |  Linux & Android   |    macOS & iOS     |
   -----  | ------------------ | ------------------ | ------------------ |
-  DX11   | :ok:               |                    |                    |
-  DX12   | :white_check_mark: |                    |                    |
+  DX11   |                    |                    |                    |
+  DX12   |                    |                    |                    |
   Vulkan | :white_check_mark: | :white_check_mark: |                    |
   Metal  |                    |                    | :white_check_mark: |
-  GL ES3 |                    | :construction:     |                    |
+  GLes3  |                    |                    |                    |
 
 :white_check_mark: = Primary support — :ok: = Secondary support — :construction: = Unsupported, but support in progress

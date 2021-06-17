@@ -968,7 +968,7 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.22.0"
-source = "git+https://github.com/kvark/metal-rs?branch=core-graphics-types#457518722ac2ca51cf1e668a2d2be57b751c8071"
+source = "git+https://github.com/kvark/metal-rs?branch=core-graphics-types#6e005374eaba2f9af368a81cdb2948ca29b3ff17"
 dependencies = [
  "bitflags",
  "block",
