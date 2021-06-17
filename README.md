@@ -22,7 +22,7 @@ GLSL            | :construction:     | glsl-in | Temporarily broken |
 Back-end        |       Status       | Feature  | Notes |
 --------------- | ------------------ | -------- | ----- |
 SPIR-V          | :white_check_mark: | spv-out  |       |
-WGSL            | :construction:     | wgsl-out |       |
+WGSL            | :ok:               | wgsl-out |       |
 Metal           | :white_check_mark: | msl-out  |       |
 HLSL            | :construction:     | hlsl-out | Shader Model 5.0+ (DirectX 11+) |
 GLSL            | :ok:               | glsl-out |       |
