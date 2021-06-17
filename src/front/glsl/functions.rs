@@ -205,7 +205,9 @@ impl Program<'_> {
                     }
                     "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" | "sqrt"
                     | "inversesqrt" | "exp" | "exp2" | "sign" | "transpose" | "inverse"
-                    | "normalize" => {
+                    | "normalize" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
+                    | "log" | "log2" | "length" | "determinant" | "bitCount"
+                    | "bitfieldReverse" => {
                         if args.len() != 1 {
                             return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
                         }
@@ -227,6 +229,19 @@ impl Program<'_> {
                                     "transpose" => MathFunction::Transpose,
                                     "inverse" => MathFunction::Inverse,
                                     "normalize" => MathFunction::Normalize,
+                                    "sinh" => MathFunction::Sinh,
+                                    "cos" => MathFunction::Cos,
+                                    "cosh" => MathFunction::Cosh,
+                                    "tan" => MathFunction::Tan,
+                                    "tanh" => MathFunction::Tanh,
+                                    "acos" => MathFunction::Acos,
+                                    "asin" => MathFunction::Asin,
+                                    "log" => MathFunction::Log,
+                                    "log2" => MathFunction::Log2,
+                                    "length" => MathFunction::Length,
+                                    "determinant" => MathFunction::Determinant,
+                                    "bitCount" => MathFunction::CountOneBits,
+                                    "bitfieldReverse" => MathFunction::ReverseBits,
                                     _ => unreachable!(),
                                 },
                                 arg: args[0].0,
@@ -235,6 +250,31 @@ impl Program<'_> {
                             },
                             body,
                         )))
+                    }
+                    "atan" => {
+                        let expr = match args.len() {
+                            1 => Expression::Math {
+                                fun: MathFunction::Atan,
+                                arg: args[0].0,
+                                arg1: None,
+                                arg2: None,
+                            },
+                            2 => Expression::Math {
+                                fun: MathFunction::Atan2,
+                                arg: args[0].0,
+                                arg1: Some(args[1].0),
+                                arg2: None,
+                            },
+                            _ => {
+                                return Err(ErrorKind::wrong_function_args(
+                                    name,
+                                    2,
+                                    args.len(),
+                                    meta,
+                                ))
+                            }
+                        };
+                        Ok(Some(ctx.add_expression(expr, body)))
                     }
                     "mod" => {
                         if args.len() != 2 {
@@ -248,26 +288,17 @@ impl Program<'_> {
                             self, &mut left, left_meta, &mut right, right_meta,
                         )?;
 
-                        let expr = if let Some(ScalarKind::Float) =
-                            self.resolve_type(ctx, args[0].0, args[1].1)?.scalar_kind()
-                        {
-                            Expression::Math {
-                                fun: MathFunction::Modf,
-                                arg: left,
-                                arg1: Some(right),
-                                arg2: None,
-                            }
-                        } else {
+                        Ok(Some(ctx.add_expression(
                             Expression::Binary {
                                 op: BinaryOperator::Modulo,
                                 left,
                                 right,
-                            }
-                        };
-
-                        Ok(Some(ctx.add_expression(expr, body)))
+                            },
+                            body,
+                        )))
                     }
-                    "pow" | "dot" | "max" | "min" | "reflect" | "cross" => {
+                    "pow" | "dot" | "max" | "min" | "reflect" | "cross" | "outerProduct"
+                    | "distance" | "step" | "modf" | "frexp" | "ldexp" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
@@ -280,6 +311,12 @@ impl Program<'_> {
                                     "min" => MathFunction::Min,
                                     "reflect" => MathFunction::Reflect,
                                     "cross" => MathFunction::Cross,
+                                    "outerProduct" => MathFunction::Outer,
+                                    "distance" => MathFunction::Distance,
+                                    "step" => MathFunction::Step,
+                                    "modf" => MathFunction::Modf,
+                                    "frexp" => MathFunction::Frexp,
+                                    "ldexp" => MathFunction::Ldexp,
                                     _ => unreachable!(),
                                 },
                                 arg: args[0].0,
@@ -289,7 +326,7 @@ impl Program<'_> {
                             body,
                         )))
                     }
-                    "mix" | "clamp" => {
+                    "mix" | "clamp" | "faceforward" | "refract" | "fma" | "smoothstep" => {
                         if args.len() != 3 {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
@@ -298,6 +335,10 @@ impl Program<'_> {
                                 fun: match name.as_str() {
                                     "mix" => MathFunction::Mix,
                                     "clamp" => MathFunction::Clamp,
+                                    "faceforward" => MathFunction::FaceForward,
+                                    "refract" => MathFunction::Refract,
+                                    "fma" => MathFunction::Fma,
+                                    "smoothstep" => MathFunction::SmoothStep,
                                     _ => unreachable!(),
                                 },
                                 arg: args[0].0,
