@@ -65,10 +65,10 @@ fn test_backend_macro() {
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         metal: u32,
 
-        #[cfg(windows)]
+        #[cfg(dx12)]
         dx12: u32,
 
-        #[cfg(windows)]
+        #[cfg(dx11)]
         dx11: u32,
     }
 
@@ -110,10 +110,10 @@ fn test_backend_macro() {
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     assert!(vec.contains(&(2, 'b')));
 
-    #[cfg(windows)]
+    #[cfg(dx12)]
     assert!(vec.contains(&(3, 'c')));
 
-    #[cfg(windows)]
+    #[cfg(dx11)]
     assert!(vec.contains(&(4, 'd')));
 
     // test complex statement-per-backend
@@ -206,9 +206,9 @@ fn test_backend_macro() {
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     let _ = var_metal;
 
-    #[cfg(windows)]
+    #[cfg(dx12)]
     let _ = var_dx12;
 
-    #[cfg(windows)]
+    #[cfg(dx11)]
     let _ = var_dx11;
 }
