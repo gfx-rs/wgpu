@@ -1527,13 +1527,11 @@ impl<A: HalApi> Device<A> {
                 };
                 Ok((wgt::TextureUsage::STORAGE, internal_use))
             }
-            _ => {
-                return Err(Error::WrongBindingType {
-                    binding,
-                    actual: decl.ty,
-                    expected,
-                })
-            }
+            _ => Err(Error::WrongBindingType {
+                binding,
+                actual: decl.ty,
+                expected,
+            }),
         }
     }
 
