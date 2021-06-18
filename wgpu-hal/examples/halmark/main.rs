@@ -28,9 +28,24 @@ struct Locals {
     _pad: u32,
 }
 
-struct UsedResources<A: hal::Api> {
-    view: A::TextureView,
-    cmd_buf: A::CommandBuffer,
+struct ExecutionContext<A: hal::Api> {
+    encoder: A::CommandEncoder,
+    fence: A::Fence,
+    fence_value: hal::FenceValue,
+    used_views: Vec<A::TextureView>,
+    used_cmd_bufs: Vec<A::CommandBuffer>,
+    bunnies_recorded: usize,
+}
+
+impl<A: hal::Api> ExecutionContext<A> {
+    unsafe fn wait_and_clear(&mut self, device: &A::Device) {
+        device.wait(&self.fence, self.fence_value, !0).unwrap();
+        for view in self.used_views.drain(..) {
+            device.destroy_texture_view(view);
+        }
+        self.encoder.reset_all(self.used_cmd_bufs.drain(..));
+        self.bunnies_recorded = 0;
+    }
 }
 
 #[allow(dead_code)]
@@ -53,11 +68,9 @@ struct Example<A: hal::Api> {
     global_buffer: A::Buffer,
     sampler: A::Sampler,
     texture: A::Texture,
-    view: A::TextureView,
-    fence: A::Fence,
-    fence_value: hal::FenceValue,
-    cmd_encoder: A::CommandEncoder,
-    old_resources: Vec<(hal::FenceValue, UsedResources<A>)>,
+    texture_view: A::TextureView,
+    contexts: Vec<ExecutionContext<A>>,
+    context_index: usize,
     extent: [u32; 2],
     start: Instant,
 }
@@ -66,7 +79,11 @@ impl<A: hal::Api> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, hal::InstanceError> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
-            flags: hal::InstanceFlag::all(),
+            flags: if cfg!(debug_assertions) {
+                hal::InstanceFlag::all()
+            } else {
+                hal::InstanceFlag::empty()
+            },
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe { instance.create_surface(window).unwrap() };
@@ -88,7 +105,7 @@ impl<A: hal::Api> Example<A> {
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: 2,
+            swap_chain_size: 3,
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
             format: wgt::TextureFormat::Bgra8UnormSrgb,
@@ -357,7 +374,7 @@ impl<A: hal::Api> Example<A> {
             usage: hal::TextureUse::SAMPLED,
             range: wgt::ImageSubresourceRange::default(),
         };
-        let view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
+        let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
         let global_group = {
             let global_buffer_binding = hal::BufferBinding {
@@ -366,7 +383,7 @@ impl<A: hal::Api> Example<A> {
                 size: None,
             };
             let texture_binding = hal::TextureBinding {
-                view: &view,
+                view: &texture_view,
                 usage: hal::TextureUse::SAMPLED,
             };
             let global_group_desc = hal::BindGroupDescriptor {
@@ -442,11 +459,16 @@ impl<A: hal::Api> Example<A> {
             global_buffer,
             sampler,
             texture,
-            view,
-            old_resources: Vec::new(),
-            cmd_encoder,
-            fence,
-            fence_value: 1,
+            texture_view,
+            contexts: vec![ExecutionContext {
+                encoder: cmd_encoder,
+                fence,
+                fence_value: 1,
+                used_views: Vec::new(),
+                used_cmd_bufs: Vec::new(),
+                bunnies_recorded: 0,
+            }],
+            context_index: 0,
             extent: [window_size.0, window_size.1],
             start: Instant::now(),
         })
@@ -454,22 +476,24 @@ impl<A: hal::Api> Example<A> {
 
     fn exit(mut self) {
         unsafe {
-            self.device.wait(&self.fence, self.fence_value, !0).unwrap();
-            let mut cmd_buffers = Vec::new();
-            for (_, old) in self.old_resources {
-                self.device.destroy_texture_view(old.view);
-                cmd_buffers.push(old.cmd_buf);
+            {
+                let ctx = &mut self.contexts[self.context_index];
+                self.queue
+                    .submit(&[], Some((&mut ctx.fence, ctx.fence_value)))
+                    .unwrap();
             }
-            self.cmd_encoder.reset_all(cmd_buffers.into_iter());
-            self.surface.unconfigure(&self.device);
+
+            for mut ctx in self.contexts {
+                ctx.wait_and_clear(&self.device);
+                self.device.destroy_command_encoder(ctx.encoder);
+                self.device.destroy_fence(ctx.fence);
+            }
 
             self.device.destroy_bind_group(self.local_group);
             self.device.destroy_bind_group(self.global_group);
             self.device.destroy_buffer(self.local_buffer);
             self.device.destroy_buffer(self.global_buffer);
-            self.device.destroy_texture_view(self.view);
-            self.device.destroy_command_encoder(self.cmd_encoder);
-            self.device.destroy_fence(self.fence);
+            self.device.destroy_texture_view(self.texture_view);
             self.device.destroy_texture(self.texture);
             self.device.destroy_sampler(self.sampler);
             self.device.destroy_shader_module(self.shader);
@@ -480,6 +504,7 @@ impl<A: hal::Api> Example<A> {
                 .destroy_bind_group_layout(self.global_group_layout);
             self.device.destroy_pipeline_layout(self.pipeline_layout);
 
+            self.surface.unconfigure(&self.device);
             self.device.exit();
             self.instance.destroy_surface(self.surface);
         }
@@ -551,8 +576,10 @@ impl<A: hal::Api> Example<A> {
             }
         }
 
+        let ctx = &mut self.contexts[self.context_index];
+
         unsafe {
-            self.cmd_encoder.begin_encoding(Some("frame")).unwrap();
+            ctx.encoder.begin_encoding(Some("frame")).unwrap();
         }
 
         let surface_tex = unsafe { self.surface.acquire_texture(!0).unwrap().unwrap().texture };
@@ -588,9 +615,9 @@ impl<A: hal::Api> Example<A> {
             depth_stencil_attachment: None,
         };
         unsafe {
-            self.cmd_encoder.begin_render_pass(&pass_desc);
-            self.cmd_encoder.set_render_pipeline(&self.pipeline);
-            self.cmd_encoder
+            ctx.encoder.begin_render_pass(&pass_desc);
+            ctx.encoder.set_render_pipeline(&self.pipeline);
+            ctx.encoder
                 .set_bind_group(&self.pipeline_layout, 0, &self.global_group, &[]);
         }
 
@@ -598,45 +625,56 @@ impl<A: hal::Api> Example<A> {
             let offset =
                 (i as wgt::DynamicOffset) * (wgt::BIND_BUFFER_ALIGNMENT as wgt::DynamicOffset);
             unsafe {
-                self.cmd_encoder.set_bind_group(
-                    &self.pipeline_layout,
-                    1,
-                    &self.local_group,
-                    &[offset],
-                );
-                self.cmd_encoder.draw(0, 4, 0, 1);
+                ctx.encoder
+                    .set_bind_group(&self.pipeline_layout, 1, &self.local_group, &[offset]);
+                ctx.encoder.draw(0, 4, 0, 1);
             }
         }
 
-        self.fence_value += 1;
-        let last_done = unsafe { self.device.get_fence_value(&self.fence).unwrap() };
-        for i in (0..self.old_resources.len()).rev() {
-            if self.old_resources[i].0 <= last_done {
-                let (_, old) = self.old_resources.swap_remove(i);
-                unsafe {
-                    self.device.destroy_texture_view(old.view);
-                    //TODO: destroy the command buffer
-                }
-            }
-        }
+        ctx.bunnies_recorded += self.bunnies.len();
+        let do_fence = ctx.bunnies_recorded > MAX_BUNNIES;
 
-        let cmd_buf = unsafe {
-            self.cmd_encoder.end_render_pass();
-            let cmd_buf = self.cmd_encoder.end_encoding().unwrap();
-            self.queue
-                .submit(&[&cmd_buf], Some((&mut self.fence, self.fence_value)))
-                .unwrap();
+        unsafe {
+            ctx.encoder.end_render_pass();
+            let cmd_buf = ctx.encoder.end_encoding().unwrap();
+            let fence_param = if do_fence {
+                Some((&mut ctx.fence, ctx.fence_value))
+            } else {
+                None
+            };
+            self.queue.submit(&[&cmd_buf], fence_param).unwrap();
             self.queue.present(&mut self.surface, surface_tex).unwrap();
-            cmd_buf
+            ctx.used_cmd_bufs.push(cmd_buf);
+            ctx.used_views.push(surface_tex_view);
         };
 
-        self.old_resources.push((
-            self.fence_value,
-            UsedResources {
-                view: surface_tex_view,
-                cmd_buf,
-            },
-        ));
+        if do_fence {
+            log::info!("Context switch from {}", self.context_index);
+            let old_fence_value = ctx.fence_value;
+            drop(ctx);
+            if self.contexts.len() == 1 {
+                let hal_desc = hal::CommandEncoderDescriptor {
+                    label: None,
+                    queue: &self.queue,
+                };
+                self.contexts.push(unsafe {
+                    ExecutionContext {
+                        encoder: self.device.create_command_encoder(&hal_desc).unwrap(),
+                        fence: self.device.create_fence().unwrap(),
+                        fence_value: 0,
+                        used_views: Vec::new(),
+                        used_cmd_bufs: Vec::new(),
+                        bunnies_recorded: 0,
+                    }
+                });
+            }
+            self.context_index = (self.context_index + 1) % self.contexts.len();
+            let next = &mut self.contexts[self.context_index];
+            unsafe {
+                next.wait_and_clear(&self.device);
+            }
+            next.fence_value = old_fence_value + 1;
+        }
     }
 }
 
