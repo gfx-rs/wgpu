@@ -7,7 +7,7 @@ description = "WebGPU core logic on gfx-hal"
 homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
-license = "MPL-2.0"
+license = "MIT OR Apache-2.0"
 
 [lib]
 
