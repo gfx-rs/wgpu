@@ -1,4 +1,4 @@
-use crate::{arena::Handle, FastHashMap};
+use crate::{arena::Handle, FastHashMap, FastHashSet};
 use std::collections::hash_map::Entry;
 
 pub type EntryPointIndex = u16;
@@ -21,7 +21,10 @@ pub enum NameKey {
 /// that may need identifiers in a textual backend.
 #[derive(Default)]
 pub struct Namer {
-    unique: FastHashMap<String, u32>,
+    unique: FastHashMap<(String, u32), u32>,
+    keywords: FastHashSet<String>,
+    /// Currently active namespace.
+    namespace_index: u32,
     reserved_prefixes: Vec<String>,
 }
 
@@ -52,29 +55,42 @@ impl Namer {
     /// This function should be used **after** [`Namer`](crate::proc::Namer) initialization by [`reset`](Self::reset()) function.
     pub fn call_unique(&mut self, string: &str) -> String {
         let base = self.sanitize(string);
-        match self.unique.entry(base) {
+        match self.unique.entry((base, self.namespace_index)) {
             Entry::Occupied(mut e) => {
                 *e.get_mut() += 1;
-                format!("{}{}", e.key(), e.get())
+                format!("{}{}", e.key().0, e.get())
             }
             Entry::Vacant(e) => {
-                let name = e.key().to_string();
-                name
+                let name = &e.key().0;
+                if self.keywords.contains(&e.key().0) {
+                    let name = format!("{}1", name);
+                    e.insert(1);
+                    name
+                } else {
+                    name.to_string()
+                }
             }
         }
     }
 
     pub fn call(&mut self, label_raw: &str) -> String {
         let base = self.sanitize(label_raw);
-        match self.unique.entry(base) {
+        match self.unique.entry((base, self.namespace_index)) {
             Entry::Occupied(mut e) => {
                 *e.get_mut() += 1;
-                format!("{}{}", e.key(), e.get())
+                format!("{}{}", e.key().0, e.get())
             }
             Entry::Vacant(e) => {
-                let name = e.key().to_string();
-                e.insert(0);
-                name
+                let name = &e.key().0;
+                if self.keywords.contains(&e.key().0) {
+                    let name = format!("{}1", name);
+                    e.insert(1);
+                    name
+                } else {
+                    let name = name.to_string();
+                    e.insert(0);
+                    name
+                }
             }
         }
     }
@@ -86,16 +102,12 @@ impl Namer {
         })
     }
 
-    fn namespace(&mut self, reserved_keywords: &[&str], f: impl FnOnce(&mut Self)) {
-        let parent_unique = std::mem::take(&mut self.unique);
-        self.unique.extend(
-            reserved_keywords
-                .iter()
-                .map(|string| (string.to_string(), 0)),
-        );
-
+    fn namespace(&mut self, f: impl FnOnce(&mut Self)) {
+        self.namespace_index += 1;
         f(self);
-        self.unique = parent_unique;
+        let current_ns = self.namespace_index;
+        self.unique.retain(|&(_, ns), _| ns != current_ns);
+        self.namespace_index -= 1;
     }
 
     pub fn reset(
@@ -110,11 +122,9 @@ impl Namer {
             .extend(reserved_prefixes.iter().map(|string| string.to_string()));
 
         self.unique.clear();
-        self.unique.extend(
-            reserved_keywords
-                .iter()
-                .map(|string| (string.to_string(), 0)),
-        );
+        self.keywords.clear();
+        self.keywords
+            .extend(reserved_keywords.iter().map(|string| (string.to_string())));
         let mut temp = String::new();
 
         for (ty_handle, ty) in module.types.iter() {
@@ -123,7 +133,7 @@ impl Namer {
 
             if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
                 // struct members have their own namespace, because access is always prefixed
-                self.namespace(reserved_keywords, |namer| {
+                self.namespace(|namer| {
                     for (index, member) in members.iter().enumerate() {
                         let name = namer.call_or(&member.name, "member");
                         output.insert(NameKey::StructMember(ty_handle, index as u32), name);
