@@ -57,9 +57,14 @@ pub enum TypeError {
     #[error("Structure member[{index}] at {offset} overlaps the previous member")]
     MemberOverlap { index: u32, offset: u32 },
     #[error(
-        "Structure member[{index}] at {offset} and size {size} crosses the structure boundary"
+        "Structure member[{index}] at {offset} and size {size} crosses the structure boundary of size {span}"
     )]
-    MemberOutOfBounds { index: u32, offset: u32, size: u32 },
+    MemberOutOfBounds {
+        index: u32,
+        offset: u32,
+        size: u32,
+        span: u32,
+    },
     #[error("The composite type contains a top-level structure")]
     NestedTopLevel,
 }
@@ -359,6 +364,7 @@ impl super::Validator {
                             index: i as u32,
                             offset: member.offset,
                             size: base_size,
+                            span,
                         });
                     }
 
