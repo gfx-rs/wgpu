@@ -138,7 +138,11 @@ impl PhysicalDeviceFeatures {
                                 wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
-                        //.shader_storage_image_array_non_uniform_indexing(
+                        .shader_storage_image_array_non_uniform_indexing(
+                            requested_features.contains(
+                                wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                            ),
+                        )
                         //.shader_storage_buffer_array_non_uniform_indexing(
                         .shader_uniform_buffer_array_non_uniform_indexing(
                             requested_features
@@ -164,7 +168,11 @@ impl PhysicalDeviceFeatures {
                                 wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
-                        //.shader_storage_image_array_non_uniform_indexing(
+                        .shader_storage_image_array_non_uniform_indexing(
+                            requested_features.contains(
+                                wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                            ),
+                        )
                         //.shader_storage_buffer_array_non_uniform_indexing(
                         .shader_uniform_buffer_array_non_uniform_indexing(
                             requested_features
@@ -199,6 +207,7 @@ impl PhysicalDeviceFeatures {
             | F::PUSH_CONSTANTS
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::SAMPLED_TEXTURE_BINDING_ARRAY
+            | F::STORAGE_TEXTURE_BINDING_ARRAY
             | F::BUFFER_BINDING_ARRAY;
         let mut dl_flags = Df::all();
 
@@ -245,6 +254,10 @@ impl PhysicalDeviceFeatures {
             self.core.shader_sampled_image_array_dynamic_indexing != 0,
         );
         features.set(
+            F::STORAGE_TEXTURE_ARRAY_DYNAMIC_INDEXING,
+            self.core.shader_storage_image_array_dynamic_indexing != 0,
+        );
+        features.set(
             F::STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING,
             self.core.shader_storage_buffer_array_dynamic_indexing != 0,
         );
@@ -270,7 +283,9 @@ impl PhysicalDeviceFeatures {
             if vulkan_1_2.shader_sampled_image_array_non_uniform_indexing != 0 {
                 features |= F::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
             }
-            //if vulkan_1_2.shader_storage_image_array_non_uniform_indexing != 0 {
+            if vulkan_1_2.shader_storage_image_array_non_uniform_indexing != 0 {
+                features |= F::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
+            }
             //if vulkan_1_2.shader_storage_buffer_array_non_uniform_indexing != 0 {
             if vulkan_1_2.shader_uniform_buffer_array_non_uniform_indexing != 0 {
                 features |= F::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
@@ -289,7 +304,9 @@ impl PhysicalDeviceFeatures {
             if descriptor_indexing.shader_sampled_image_array_non_uniform_indexing != 0 {
                 features |= F::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
             }
-            //if descriptor_indexing.shader_storage_image_array_non_uniform_indexing != 0 {
+            if descriptor_indexing.shader_storage_image_array_non_uniform_indexing != 0 {
+                features |= F::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
+            }
             //if descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing != 0 {
             if descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing != 0 {
                 features |= F::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING;

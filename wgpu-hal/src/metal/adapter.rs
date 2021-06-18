@@ -817,6 +817,22 @@ impl super::PrivateCapabilities {
             } else {
                 Self::version_at_least(major, minor, 11, 0)
             },
+            supports_arrays_of_textures: Self::supports_any(
+                &device,
+                &[
+                    MTLFeatureSet::iOS_GPUFamily3_v2,
+                    MTLFeatureSet::iOS_GPUFamily4_v1,
+                    MTLFeatureSet::iOS_GPUFamily5_v1,
+                    MTLFeatureSet::tvOS_GPUFamily2_v1,
+                    MTLFeatureSet::macOS_GPUFamily1_v3,
+                    MTLFeatureSet::macOS_GPUFamily2_v1,
+                ],
+            ),
+            supports_arrays_of_textures_write: device.supports_family(MTLGPUFamily::Apple6)
+                || device.supports_family(MTLGPUFamily::Mac1)
+                || device.supports_family(MTLGPUFamily::Mac2)
+                || device.supports_family(MTLGPUFamily::MacCatalyst1)
+                || device.supports_family(MTLGPUFamily::MacCatalyst2),
         }
     }
 
@@ -830,8 +846,21 @@ impl super::PrivateCapabilities {
             | F::VERTEX_WRITABLE_STORAGE;
 
         features.set(
-            F::SAMPLED_TEXTURE_BINDING_ARRAY | F::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
-            self.msl_version >= MTLLanguageVersion::V2_0,
+            F::SAMPLED_TEXTURE_BINDING_ARRAY
+                | F::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
+                | F::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            self.msl_version >= MTLLanguageVersion::V2_0 && self.supports_arrays_of_textures,
+        );
+        //// XXX: this is technically not true, as read-only storage images can be used in arrays
+        //// on precisely the same conditions that sampled textures can. But texel fetch from a
+        //// sampled texture is a thing; should we bother introducing another feature flag?
+        features.set(
+            F::STORAGE_TEXTURE_BINDING_ARRAY
+                | F::STORAGE_TEXTURE_ARRAY_DYNAMIC_INDEXING
+                | F::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            self.msl_version >= MTLLanguageVersion::V2_2
+                && self.supports_arrays_of_textures
+                && self.supports_arrays_of_textures_write,
         );
         features.set(
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
