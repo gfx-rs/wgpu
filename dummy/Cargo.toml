@@ -5,6 +5,7 @@ authors = [
     "Dzmitry Malyshau <kvark@mozilla.com>",
 ]
 edition = "2018"
+license = "MIT OR Apache-2.0"
 publish = false
 
 [features]

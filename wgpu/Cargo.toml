@@ -7,7 +7,7 @@ description = "Rusty WebGPU API wrapper"
 homepage = "https://github.com/gfx-rs/wgpu-rs"
 repository = "https://github.com/gfx-rs/wgpu-rs"
 keywords = ["graphics"]
-license = "MPL-2.0"
+license = "MIT OR Apache-2.0"
 exclude = ["etc/**/*", "examples/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 
 [package.metadata.docs.rs]
