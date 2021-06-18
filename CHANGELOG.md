@@ -5,6 +5,9 @@ TBD:
     - Merged wgpu-rs and wgpu back into a single repository
     - Replaced gfx-rs dependencies by the new `wgpu-hal`
 
+## Unreleased
+  - Added support for storage texture arrays for Vulkan and Metal.
+
 ## v0.8 (2021-04-29)
   - Naga is used by default to translate shaders, SPIRV-Cross is optional behind `cross` feature
   - All of the examples (except "texture-array") now use WGSL
