@@ -795,6 +795,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
             };
 
+            device.temp_suspected.clear();
+
             profiling::scope!("cleanup");
             if let Some(pending_execution) = device.pending_writes.post_submit(
                 &device.command_allocator,

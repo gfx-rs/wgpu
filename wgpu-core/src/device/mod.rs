@@ -358,9 +358,12 @@ impl<A: HalApi> Device<A> {
         profiling::scope!("maintain", "Device");
         let mut life_tracker = self.lock_life(token);
 
+        life_tracker
+            .suspected_resources
+            .extend(&self.temp_suspected);
+
         life_tracker.triage_suspected(
             hub,
-            &self.temp_suspected,
             &self.trackers,
             #[cfg(feature = "trace")]
             self.trace.as_ref(),
@@ -455,6 +458,8 @@ impl<A: HalApi> Device<A> {
         self.lock_life(&mut token)
             .suspected_resources
             .extend(&self.temp_suspected);
+
+        self.temp_suspected.clear();
     }
 
     fn create_buffer(
@@ -4160,7 +4165,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
         device.lock_life(&mut token).triage_suspected(
             &hub,
-            &device.temp_suspected,
             &device.trackers,
             #[cfg(feature = "trace")]
             None,
