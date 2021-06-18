@@ -1340,6 +1340,18 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     }
 
     fn parse_statement(&mut self, ctx: &mut Context, body: &mut Block) -> Result<()> {
+        // TODO: This prevents snippets like the following from working
+        // ```glsl
+        // vec4(1.0);
+        // ```
+        // But this would require us to add lookahead to also support
+        // declarations and since this statement is very unlikely and most
+        // likely an error, for now we don't support it
+        if self.peek_type_name() || self.peek_type_qualifier() {
+            self.parse_declaration(ctx, body, false)?;
+            return Ok(());
+        }
+
         match self.expect_peek()?.value {
             TokenValue::Continue => {
                 self.bump()?;
@@ -1686,19 +1698,13 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 ctx.remove_current_scope();
                 body.push(Statement::Block(block));
             }
-            // TODO: We should also add TypeName here because this is valid
-            // ```glsl
-            // vec4(1.0);
-            // ```
-            // But this would require us to add lookahead to also support
-            // declarations and since this statement is very unlikely and most
-            // likely an error, for now we don't support it
             TokenValue::Plus
             | TokenValue::Dash
             | TokenValue::Bang
             | TokenValue::Tilde
             | TokenValue::LeftParen
             | TokenValue::Identifier(_)
+            | TokenValue::TypeName(_)
             | TokenValue::IntConstant(_)
             | TokenValue::BoolConstant(_)
             | TokenValue::FloatConstant(_) => {
@@ -1709,11 +1715,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::Semicolon => {
                 self.bump()?;
             }
-            _ => {
-                if self.peek_type_name() || self.peek_type_qualifier() {
-                    self.parse_declaration(ctx, body, false)?;
-                }
-            }
+            _ => {}
         }
 
         Ok(())
