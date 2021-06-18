@@ -537,6 +537,56 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
+        /// Allows the user to create uniform arrays of storage textures in shaders:
+        ///
+        /// eg. `uniform image2D textures[10]`.
+        ///
+        /// This capability allows them to exist and to be indexed by compile time constant
+        /// values.
+        ///
+        /// Supported platforms:
+        /// - Metal (with MSL 2.2+ on macOS 10.13+)
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const STORAGE_TEXTURE_BINDING_ARRAY = 0x0000_0040_0000_0000;
+        /// Allows shaders to index storage texture arrays with dynamically uniform values:
+        ///
+        /// eg. `texture_array[uniform_value]`
+        ///
+        /// This capability means the hardware will also support STORAGE_TEXTURE_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - Metal (with MSL 2.2+ on macOS 10.13+)
+        /// - Vulkan's shaderSampledImageArrayDynamicIndexing feature
+        ///
+        /// This is a native only feature.
+        const STORAGE_TEXTURE_ARRAY_DYNAMIC_INDEXING = 0x0000_0080_0000_0000;
+        /// Allows shaders to index storage texture arrays with dynamically non-uniform values:
+        ///
+        /// eg. `texture_array[vertex_data]`
+        ///
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// eg. `texture_array[nonuniformEXT(vertex_data)]`
+        ///
+        /// This capability means the hardware will also support STORAGE_TEXTURE_ARRAY_DYNAMIC_INDEXING
+        /// and STORAGE_TEXTURE_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - Metal (with MSL 2.2+ on macOS 10.13+)
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing feature)
+        ///
+        /// This is a native only feature.
+        const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0100_0000_0000;
         /// Enables clear to zero for buffers & images.
         ///
         /// Supported platforms:

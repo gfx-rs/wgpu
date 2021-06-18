@@ -982,7 +982,7 @@ impl<A: HalApi> Device<A> {
                 Bt::Sampler { .. } => (None, false),
                 Bt::Texture { .. } => (Some(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY), false),
                 Bt::StorageTexture { access, .. } => (
-                    None,
+                    Some(wgt::Features::STORAGE_TEXTURE_BINDING_ARRAY),
                     match access {
                         wgt::StorageTextureAccess::ReadOnly => false,
                         wgt::StorageTextureAccess::WriteOnly => true,
@@ -1304,104 +1304,13 @@ impl<A: HalApi> Device<A> {
                         .views
                         .use_extend(&*texture_view_guard, id, (), ())
                         .map_err(|_| Error::InvalidTextureView(id))?;
-                    let format_info = view.desc.format.describe();
-                    let (pub_usage, internal_use) = match decl.ty {
-                        wgt::BindingType::Texture {
-                            sample_type,
-                            view_dimension,
-                            multisampled,
-                        } => {
-                            use wgt::TextureSampleType as Tst;
-                            if multisampled != (view.samples != 1) {
-                                return Err(Error::InvalidTextureMultisample {
-                                    binding,
-                                    layout_multisampled: multisampled,
-                                    view_samples: view.samples,
-                                });
-                            }
-                            match (sample_type, format_info.sample_type, view.format_features.filterable ) {
-                                (Tst::Uint, Tst::Uint, ..) |
-                                (Tst::Sint, Tst::Sint, ..) |
-                                (Tst::Depth, Tst::Depth, ..) |
-                                // if we expect non-filterable, accept anything float
-                                (Tst::Float { filterable: false }, Tst::Float { .. }, ..) |
-                                // if we expect filterable, require it
-                                (Tst::Float { filterable: true }, Tst::Float { filterable: true }, ..) |
-                                // if we expect filterable, also accept Float that is defined as unfilterable if filterable feature is explicitly enabled
-                                // (only hit if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is enabled)
-                                (Tst::Float { filterable: true }, Tst::Float { .. }, true) |
-                                // if we expect float, also accept depth
-                                (Tst::Float { .. }, Tst::Depth, ..) => {}
-                                _ => {
-                                    return Err(Error::InvalidTextureSampleType {
-                                        binding,
-                                        layout_sample_type: sample_type,
-                                        view_format: view.desc.format,
-                                    })
-                                }
-                            }
-                            if view_dimension != view.desc.dimension {
-                                return Err(Error::InvalidTextureDimension {
-                                    binding,
-                                    layout_dimension: view_dimension,
-                                    view_dimension: view.desc.dimension,
-                                });
-                            }
-                            (wgt::TextureUsage::SAMPLED, view.sampled_internal_use)
-                        }
-                        wgt::BindingType::StorageTexture {
-                            access,
-                            format,
-                            view_dimension,
-                        } => {
-                            if format != view.desc.format {
-                                return Err(Error::InvalidStorageTextureFormat {
-                                    binding,
-                                    layout_format: format,
-                                    view_format: view.desc.format,
-                                });
-                            }
-                            if view_dimension != view.desc.dimension {
-                                return Err(Error::InvalidTextureDimension {
-                                    binding,
-                                    layout_dimension: view_dimension,
-                                    view_dimension: view.desc.dimension,
-                                });
-                            }
-                            let internal_use = match access {
-                                wgt::StorageTextureAccess::ReadOnly => {
-                                    hal::TextureUse::STORAGE_LOAD
-                                }
-                                wgt::StorageTextureAccess::WriteOnly => {
-                                    hal::TextureUse::STORAGE_STORE
-                                }
-                                wgt::StorageTextureAccess::ReadWrite => {
-                                    if !view.format_features.flags.contains(
-                                        wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-                                    ) {
-                                        return Err(Error::StorageReadWriteNotSupported(
-                                            view.desc.format,
-                                        ));
-                                    }
+                    let (pub_usage, internal_use) = Self::texture_use_parameters(
+                        binding,
+                        decl,
+                        view,
+                        "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
+                    )?;
 
-                                    hal::TextureUse::STORAGE_STORE | hal::TextureUse::STORAGE_LOAD
-                                }
-                            };
-                            (wgt::TextureUsage::STORAGE, internal_use)
-                        }
-                        _ => return Err(Error::WrongBindingType {
-                            binding,
-                            actual: decl.ty,
-                            expected:
-                                "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
-                        }),
-                    };
-
-                    if hal::FormatAspect::from(view.desc.format)
-                        .contains(hal::FormatAspect::DEPTH | hal::FormatAspect::STENCIL)
-                    {
-                        return Err(Error::DepthStencilAspect);
-                    }
                     match view.source {
                         resource::TextureViewSource::Native(ref source_id) => {
                             // Careful here: the texture may no longer have its own ref count,
@@ -1449,18 +1358,10 @@ impl<A: HalApi> Device<A> {
                             .views
                             .use_extend(&*texture_view_guard, id, (), ())
                             .map_err(|_| Error::InvalidTextureView(id))?;
-                        let (pub_usage, internal_use) = match decl.ty {
-                            wgt::BindingType::Texture { .. } => {
-                                (wgt::TextureUsage::SAMPLED, view.sampled_internal_use)
-                            }
-                            _ => {
-                                return Err(Error::WrongBindingType {
-                                    binding,
-                                    actual: decl.ty,
-                                    expected: "SampledTextureArray",
-                                })
-                            }
-                        };
+                        let (pub_usage, internal_use) =
+                            Self::texture_use_parameters(binding, decl, view,
+                                                         "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray"
+)?;
 
                         match view.source {
                             resource::TextureViewSource::Native(ref source_id) => {
@@ -1531,6 +1432,109 @@ impl<A: HalApi> Device<A> {
             used_buffer_ranges,
             dynamic_binding_info,
         })
+    }
+
+    fn texture_use_parameters(
+        binding: u32,
+        decl: &wgt::BindGroupLayoutEntry,
+        view: &crate::resource::TextureView<A>,
+        expected: &'static str,
+    ) -> Result<(wgt::TextureUsage, hal::TextureUse), binding_model::CreateBindGroupError> {
+        use crate::binding_model::CreateBindGroupError as Error;
+        if hal::FormatAspect::from(view.desc.format)
+            .contains(hal::FormatAspect::DEPTH | hal::FormatAspect::STENCIL)
+        {
+            return Err(Error::DepthStencilAspect);
+        }
+        let format_info = view.desc.format.describe();
+        match decl.ty {
+            wgt::BindingType::Texture {
+                sample_type,
+                view_dimension,
+                multisampled,
+            } => {
+                use wgt::TextureSampleType as Tst;
+                if multisampled != (view.samples != 1) {
+                    return Err(Error::InvalidTextureMultisample {
+                        binding,
+                        layout_multisampled: multisampled,
+                        view_samples: view.samples,
+                    });
+                }
+                match (sample_type, format_info.sample_type, view.format_features.filterable) {
+                    (Tst::Uint, Tst::Uint, ..) |
+                    (Tst::Sint, Tst::Sint, ..) |
+                    (Tst::Depth, Tst::Depth, ..) |
+                    // if we expect non-filterable, accept anything float
+                    (Tst::Float { filterable: false }, Tst::Float { .. }, ..) |
+                    // if we expect filterable, require it
+                    (Tst::Float { filterable: true }, Tst::Float { filterable: true }, ..) |
+                    // if we expect filterable, also accept Float that is defined as unfilterable if filterable feature is explicitly enabled
+                    // (only hit if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is enabled)
+                    (Tst::Float { filterable: true }, Tst::Float { .. }, true) |
+                    // if we expect float, also accept depth
+                    (Tst::Float { .. }, Tst::Depth, ..) => {}
+                    _ => {
+                        return Err(Error::InvalidTextureSampleType {
+                            binding,
+                            layout_sample_type: sample_type,
+                            view_format: view.desc.format,
+                        })
+                    }
+                }
+                if view_dimension != view.desc.dimension {
+                    return Err(Error::InvalidTextureDimension {
+                        binding,
+                        layout_dimension: view_dimension,
+                        view_dimension: view.desc.dimension,
+                    });
+                }
+                Ok((wgt::TextureUsage::SAMPLED, view.sampled_internal_use))
+            }
+            wgt::BindingType::StorageTexture {
+                access,
+                format,
+                view_dimension,
+            } => {
+                if format != view.desc.format {
+                    return Err(Error::InvalidStorageTextureFormat {
+                        binding,
+                        layout_format: format,
+                        view_format: view.desc.format,
+                    });
+                }
+                if view_dimension != view.desc.dimension {
+                    return Err(Error::InvalidTextureDimension {
+                        binding,
+                        layout_dimension: view_dimension,
+                        view_dimension: view.desc.dimension,
+                    });
+                }
+                let internal_use = match access {
+                    wgt::StorageTextureAccess::ReadOnly => hal::TextureUse::STORAGE_LOAD,
+                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUse::STORAGE_STORE,
+                    wgt::StorageTextureAccess::ReadWrite => {
+                        if !view
+                            .format_features
+                            .flags
+                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE)
+                        {
+                            return Err(Error::StorageReadWriteNotSupported(view.desc.format));
+                        }
+
+                        hal::TextureUse::STORAGE_STORE | hal::TextureUse::STORAGE_LOAD
+                    }
+                };
+                Ok((wgt::TextureUsage::STORAGE, internal_use))
+            }
+            _ => {
+                return Err(Error::WrongBindingType {
+                    binding,
+                    actual: decl.ty,
+                    expected,
+                })
+            }
+        }
     }
 
     fn create_pipeline_layout(

@@ -192,6 +192,8 @@ struct PrivateCapabilities {
     can_set_maximum_drawables_count: bool,
     can_set_display_sync: bool,
     can_set_next_drawable_timeout: bool,
+    supports_arrays_of_textures: bool,
+    supports_arrays_of_textures_write: bool,
 }
 
 #[derive(Clone, Debug)]
