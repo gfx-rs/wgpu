@@ -17,7 +17,7 @@ Front-end       |       Status       | Feature | Notes |
 --------------- | ------------------ | ------- | ----- |
 SPIR-V (binary) | :white_check_mark: | spv-in  |       |
 WGSL            | :white_check_mark: | wgsl-in | Fully validated |
-GLSL            | :construction:     | glsl-in | Temporarily broken |
+GLSL            | :ok:               | glsl-in | |
 
 Back-end        |       Status       | Feature  | Notes |
 --------------- | ------------------ | -------- | ----- |

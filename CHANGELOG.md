@@ -1,5 +1,43 @@
 # Change Log
 
+## v0.5 (2021-06-18)
+  - development release for wgpu-0.9
+  - API:
+    - barriers
+    - dynamic indexing of matrices and arrays is only allowed on variables
+    - validator now accepts a list of IR capabilities to allow
+    - improved documentation
+  - Infrastructure:
+    - much richer test suite, focused around consuming or emitting WGSL
+    - lazy testing on large shader corpuses
+    - the binary is moved to a sub-crate "naga-cli"
+  - Frontends:
+    - GLSL frontend:
+      - rewritten from scratch and effectively revived, no longer depends on `pomelo`
+      - only supports 440/450/460 versions for now
+      - has optional support for codespan messages
+    - SPIRV frontend has improved CFG resolution (still with issues unresolved)
+    - WGSL got better error messages, workgroup memory support
+  - Backends:
+    - general: better expression naming and emitting
+    - new HLSL backend (in progress)
+    - MSL:
+      - support `ArraySize` expression
+      - better texture sampling instructions
+    - GLSL:
+      - multisampling on GLES
+    - WGSL is vastly improved and now usable
+
+### v0.4.2 (2021-05-28)
+  - SPIR-V frontend:
+    - fix image stores
+    - fix matrix stride check
+  - SPIR-V backend:
+    - fix auto-deriving the capabilities
+  - GLSL backend:
+    - support sample interpolation
+    - write out swizzled vector accesses
+
 ### v0.4.1 (2021-05-14)
   - numerous additions and improvements to SPIR-V frontend:
     - int8, in16, int64
