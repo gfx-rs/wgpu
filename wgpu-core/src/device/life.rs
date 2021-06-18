@@ -253,7 +253,6 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         &mut self,
         index: SubmissionIndex,
         fence: B::Fence,
-        new_suspects: &SuspectedResources,
         temp_resources: impl Iterator<Item = (TempResource<B>, alloc::MemoryBlock<B>)>,
     ) {
         let mut last_resources = NonReferencedResources::new();
@@ -274,7 +273,6 @@ impl<B: hal::Backend> LifetimeTracker<B> {
                 .drain(..)
                 .map(|stored| stored.value),
         );
-        self.suspected_resources.extend(new_suspects);
 
         self.active.alloc().init(ActiveSubmission {
             index,
@@ -380,11 +378,14 @@ impl<B: GfxBackend> LifetimeTracker<B> {
     pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<B, G>,
+        new_suspects: &SuspectedResources,
         trackers: &Mutex<TrackerSet>,
         #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
         token: &mut Token<super::Device<B>>,
     ) {
         profiling::scope!("triage_suspected");
+
+        self.suspected_resources.extend(new_suspects);
 
         if !self.suspected_resources.render_bundles.is_empty() {
             let (mut guard, _) = hub.render_bundles.write(token);
