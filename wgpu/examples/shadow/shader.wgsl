@@ -71,7 +71,7 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     let proj_correction = 1.0 / homogeneous_coords.w;
     let light_local = homogeneous_coords.xy * flip_correction * proj_correction + vec2<f32>(0.5, 0.5);
     // do the lookup, using HW PCF and comparison
-    return textureSampleCompare(t_shadow, sampler_shadow, light_local, i32(light_id), homogeneous_coords.z * proj_correction);
+    return textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), homogeneous_coords.z * proj_correction);
 }
 
 let c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
