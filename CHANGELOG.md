@@ -1,13 +1,51 @@
 # Change Log
 
-TBD:
-  - Crates:
-    - Merged wgpu-rs and wgpu back into a single repository
-    - Replaced gfx-rs dependencies by the new `wgpu-hal`
+## v0.9 (2021-06-18)
+  - Updated:
+    - naga to `v0.5`.
+  - Added:
+    - `Features::VERTEX_WRITABLE_STORAGE`.
+    - `Features::CLEAR_COMMANDS` which allows you to use `cmd_buf.clear_texture` and `cmd_buf.clear_buffer`.
+  - Changed:
+    - Updated default storage buffer/image limit to `8` from `4`.
+  - Fixed:
+    - `Buffer::get_mapped_range` can now have a range of zero.
+    - Fixed output spirv requiring the "kernal" capability.
+    - Fixed segfault due to improper drop order.
+    - Fixed incorrect dynamic stencil reference for Replace ops.
+    - Fixed tracking of temporary resources.
+    - Stopped unconditionally adding cubemap flags when the backend doesn't support cubemaps.
+  - Validation:
+    - Ensure that if resources are viewed from the vertex stage, they are read only unless `Features::VERTEX_WRITABLE_STORAGE` is true.
+    - Ensure storage class (i.e. storage vs uniform) is consistent between the shader and the pipeline layout.
+    - Error when a color texture is used as a depth/stencil texture.
+    - Check that pipeline output formats are logical
+    - Added shader label to log messages if validation fails.
+  - Tracing:
+    - Make renderpasses show up in the trace before they are run.
+  - Docs: 
+    - Fix typo in `PowerPreference::LowPower` description.
+  - Player:
+    - Automatically start and stop RenderDoc captures.
+  - Examples:
+    - Handle winit's unconditional exception.
+  - Internal: 
+    - Merged wgpu-rs and wgpu back into a single repository.
+    - The tracker was split into two different stateful/stateless trackers to reduce overhead.
+    - Added code coverage testing
+    - CI can now test on lavapipe
+    - Add missing extern "C" in wgpu-core on `wgpu_render_pass_execute_bundles`
+    - Fix incorrect function name `wgpu_render_pass_bundle_indexed_indirect` to `wgpu_render_bundle_draw_indexed_indirect`.
+
+## wgpu-types-0.8.1 (2021-06-08)
+  - fix dynamic stencil reference for Replace ops
+
+## v0.8.1 (2021-05-06)
+  - fix SPIR-V generation from WGSL, which was broken due to "Kernel" capability
+  - validate buffer storage classes
 
 ## v0.8 (2021-04-29)
   - Naga is used by default to translate shaders, SPIRV-Cross is optional behind `cross` feature
-  - All of the examples (except "texture-array") now use WGSL
   - Features:
     - buffers are zero-initialized
     - downlevel limits for DX11/OpenGL support
