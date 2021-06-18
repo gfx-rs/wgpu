@@ -250,7 +250,7 @@ impl<S: ResourceState> ResourceTracker<S> {
             Entry::Occupied(e) => {
                 if e.get().ref_count.load() == 1 {
                     let res = e.remove();
-                    assert_eq!(res.epoch, epoch);
+                    assert_eq!(res.epoch, epoch, "Epoch mismatch for {:?}", id);
                     true
                 } else {
                     false
