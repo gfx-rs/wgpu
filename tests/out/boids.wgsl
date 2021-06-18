@@ -37,8 +37,8 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     var colVel: vec2<f32>;
     var cMassCount: i32 = 0;
     var cVelCount: i32 = 0;
-    var pos1: vec2<f32>;
-    var vel1: vec2<f32>;
+    var pos: vec2<f32>;
+    var vel: vec2<f32>;
     var i: u32 = 0u;
 
     let index: u32 = global_invocation_id.x;
@@ -63,35 +63,35 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
         }
         let _e42: u32 = i;
         let _e45: vec2<f32> = particlesSrc.particles[_e42].pos;
-        pos1 = _e45;
+        pos = _e45;
         let _e47: u32 = i;
         let _e50: vec2<f32> = particlesSrc.particles[_e47].vel;
-        vel1 = _e50;
-        let _e51: vec2<f32> = pos1;
+        vel = _e50;
+        let _e51: vec2<f32> = pos;
         let _e52: vec2<f32> = vPos;
         let _e55: f32 = params.rule1Distance;
         if ((distance(_e51, _e52) < _e55)) {
             let _e57: vec2<f32> = cMass;
-            let _e58: vec2<f32> = pos1;
+            let _e58: vec2<f32> = pos;
             cMass = (_e57 + _e58);
             let _e60: i32 = cMassCount;
             cMassCount = (_e60 + 1);
         }
-        let _e63: vec2<f32> = pos1;
+        let _e63: vec2<f32> = pos;
         let _e64: vec2<f32> = vPos;
         let _e67: f32 = params.rule2Distance;
         if ((distance(_e63, _e64) < _e67)) {
             let _e69: vec2<f32> = colVel;
-            let _e70: vec2<f32> = pos1;
+            let _e70: vec2<f32> = pos;
             let _e71: vec2<f32> = vPos;
             colVel = (_e69 - (_e70 - _e71));
         }
-        let _e74: vec2<f32> = pos1;
+        let _e74: vec2<f32> = pos;
         let _e75: vec2<f32> = vPos;
         let _e78: f32 = params.rule3Distance;
         if ((distance(_e74, _e75) < _e78)) {
             let _e80: vec2<f32> = cVel;
-            let _e81: vec2<f32> = vel1;
+            let _e81: vec2<f32> = vel;
             cVel = (_e80 + _e81);
             let _e83: i32 = cVelCount;
             cVelCount = (_e83 + 1);

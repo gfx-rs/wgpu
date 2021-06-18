@@ -10,22 +10,22 @@ struct VertexOutput {
 
 struct VertexInput {
     float2 pos1 : LOC0;
-    float2 uv3 : LOC1;
+    float2 uv2 : LOC1;
 };
 
 struct FragmentInput {
-    float2 uv4 : LOC0;
+    float2 uv3 : LOC0;
 };
 
 VertexOutput vert_main(VertexInput vertexinput)
 {
-    const VertexOutput vertexoutput1 = { vertexinput.uv3, float4((c_scale * vertexinput.pos1), 0.0, 1.0) };
+    const VertexOutput vertexoutput1 = { vertexinput.uv2, float4((c_scale * vertexinput.pos1), 0.0, 1.0) };
     return vertexoutput1;
 }
 
 float4 frag_main(FragmentInput fragmentinput) : SV_Target0
 {
-    float4 color = u_texture.Sample(u_sampler, fragmentinput.uv4);
+    float4 color = u_texture.Sample(u_sampler, fragmentinput.uv3);
     if ((color.w == 0.0)) {
         discard;
     }

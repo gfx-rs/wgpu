@@ -37,8 +37,8 @@ void main() {
     vec2 colVel;
     int cMassCount = 0;
     int cVelCount = 0;
-    vec2 pos1;
-    vec2 vel1;
+    vec2 pos;
+    vec2 vel;
     uint i = 0u;
     uint index = global_invocation_id.x;
     if ((index >= 1500u)) {
@@ -62,35 +62,35 @@ void main() {
         }
         uint _expr42 = i;
         vec2 _expr45 = _group_0_binding_1.particles[_expr42].pos;
-        pos1 = _expr45;
+        pos = _expr45;
         uint _expr47 = i;
         vec2 _expr50 = _group_0_binding_1.particles[_expr47].vel;
-        vel1 = _expr50;
-        vec2 _expr51 = pos1;
+        vel = _expr50;
+        vec2 _expr51 = pos;
         vec2 _expr52 = vPos;
         float _expr55 = _group_0_binding_0.rule1Distance;
         if ((distance(_expr51, _expr52) < _expr55)) {
             vec2 _expr57 = cMass;
-            vec2 _expr58 = pos1;
+            vec2 _expr58 = pos;
             cMass = (_expr57 + _expr58);
             int _expr60 = cMassCount;
             cMassCount = (_expr60 + 1);
         }
-        vec2 _expr63 = pos1;
+        vec2 _expr63 = pos;
         vec2 _expr64 = vPos;
         float _expr67 = _group_0_binding_0.rule2Distance;
         if ((distance(_expr63, _expr64) < _expr67)) {
             vec2 _expr69 = colVel;
-            vec2 _expr70 = pos1;
+            vec2 _expr70 = pos;
             vec2 _expr71 = vPos;
             colVel = (_expr69 - (_expr70 - _expr71));
         }
-        vec2 _expr74 = pos1;
+        vec2 _expr74 = pos;
         vec2 _expr75 = vPos;
         float _expr78 = _group_0_binding_0.rule3Distance;
         if ((distance(_expr74, _expr75) < _expr78)) {
             vec2 _expr80 = cVel;
-            vec2 _expr81 = vel1;
+            vec2 _expr81 = vel;
             cVel = (_expr80 + _expr81);
             int _expr83 = cVelCount;
             cVelCount = (_expr83 + 1);

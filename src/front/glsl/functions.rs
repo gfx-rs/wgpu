@@ -701,7 +701,7 @@ impl Program<'_> {
                 let ty = self.module.global_variables[arg.handle].ty;
 
                 members.push(StructMember {
-                    name: None,
+                    name: arg.name.clone(),
                     ty,
                     binding: Some(arg.binding.clone()),
                     offset: span,

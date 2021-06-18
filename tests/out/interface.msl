@@ -12,7 +12,7 @@ struct FragmentOutput {
 };
 
 struct vertex1Input {
-    metal::uint color1 [[attribute(10)]];
+    metal::uint color [[attribute(10)]];
 };
 struct vertex1Output {
     metal::float4 position [[position]];
@@ -23,8 +23,8 @@ vertex vertex1Output vertex1(
 , metal::uint vertex_index [[vertex_id]]
 , metal::uint instance_index [[instance_id]]
 ) {
-    const auto color1 = varyings.color1;
-    metal::uint tmp = (vertex_index + instance_index) + color1;
+    const auto color = varyings.color;
+    metal::uint tmp = (vertex_index + instance_index) + color;
     const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>(tmp)};
     return vertex1Output { _tmp.position, _tmp.varying };
 }
@@ -43,12 +43,12 @@ fragment fragment1Output fragment1(
 , metal::float4 position [[position]]
 , bool front_facing [[front_facing]]
 , metal::uint sample_index [[sample_id]]
-, metal::uint sample_mask1 [[sample_mask]]
+, metal::uint sample_mask [[sample_mask]]
 ) {
     const VertexOutput in = { position, varyings1.varying };
-    metal::uint mask = sample_mask1 & (1u << sample_index);
-    float color2 = front_facing ? 0.0 : 1.0;
-    const auto _tmp = FragmentOutput {in.varying, mask, color2};
+    metal::uint mask = sample_mask & (1u << sample_index);
+    float color1 = front_facing ? 0.0 : 1.0;
+    const auto _tmp = FragmentOutput {in.varying, mask, color1};
     return fragment1Output { _tmp.depth, _tmp.sample_mask, _tmp.color };
 }
 

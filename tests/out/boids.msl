@@ -41,8 +41,8 @@ kernel void main1(
     metal::float2 colVel;
     int cMassCount = 0;
     int cVelCount = 0;
-    metal::float2 pos1;
-    metal::float2 vel1;
+    metal::float2 pos;
+    metal::float2 vel;
     metal::uint i = 0u;
     uint index = global_invocation_id.x;
     if (index >= NUM_PARTICLES) {
@@ -72,35 +72,35 @@ kernel void main1(
         }
         metal::uint _e42 = i;
         metal::float2 _e45 = particlesSrc.particles[_e42].pos;
-        pos1 = _e45;
+        pos = _e45;
         metal::uint _e47 = i;
         metal::float2 _e50 = particlesSrc.particles[_e47].vel;
-        vel1 = _e50;
-        metal::float2 _e51 = pos1;
+        vel = _e50;
+        metal::float2 _e51 = pos;
         metal::float2 _e52 = vPos;
         float _e55 = params.rule1Distance;
         if (metal::distance(_e51, _e52) < _e55) {
             metal::float2 _e57 = cMass;
-            metal::float2 _e58 = pos1;
+            metal::float2 _e58 = pos;
             cMass = _e57 + _e58;
             int _e60 = cMassCount;
             cMassCount = _e60 + 1;
         }
-        metal::float2 _e63 = pos1;
+        metal::float2 _e63 = pos;
         metal::float2 _e64 = vPos;
         float _e67 = params.rule2Distance;
         if (metal::distance(_e63, _e64) < _e67) {
             metal::float2 _e69 = colVel;
-            metal::float2 _e70 = pos1;
+            metal::float2 _e70 = pos;
             metal::float2 _e71 = vPos;
             colVel = _e69 - (_e70 - _e71);
         }
-        metal::float2 _e74 = pos1;
+        metal::float2 _e74 = pos;
         metal::float2 _e75 = vPos;
         float _e78 = params.rule3Distance;
         if (metal::distance(_e74, _e75) < _e78) {
             metal::float2 _e80 = cVel;
-            metal::float2 _e81 = vel1;
+            metal::float2 _e81 = vel;
             cVel = _e80 + _e81;
             int _e83 = cVelCount;
             cVelCount = _e83 + 1;

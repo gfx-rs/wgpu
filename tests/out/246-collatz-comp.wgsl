@@ -41,7 +41,7 @@ fn collatz_iterations(n: u32) -> u32 {
     return _e35;
 }
 
-fn main() {
+fn main1() {
     var index: u32;
 
     let _e3: vec3<u32> = gl_GlobalInvocationID;
@@ -56,8 +56,8 @@ fn main() {
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
-fn main1([[builtin(global_invocation_id)]] param: vec3<u32>) {
+fn main([[builtin(global_invocation_id)]] param: vec3<u32>) {
     gl_GlobalInvocationID = param;
-    main();
+    main1();
     return;
 }

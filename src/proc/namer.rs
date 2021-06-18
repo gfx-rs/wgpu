@@ -86,6 +86,18 @@ impl Namer {
         })
     }
 
+    fn namespace(&mut self, reserved_keywords: &[&str], f: impl FnOnce(&mut Self)) {
+        let parent_unique = std::mem::take(&mut self.unique);
+        self.unique.extend(
+            reserved_keywords
+                .iter()
+                .map(|string| (string.to_string(), 0)),
+        );
+
+        f(self);
+        self.unique = parent_unique;
+    }
+
     pub fn reset(
         &mut self,
         module: &crate::Module,
@@ -110,10 +122,42 @@ impl Namer {
             output.insert(NameKey::Type(ty_handle), ty_name);
 
             if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
-                for (index, member) in members.iter().enumerate() {
-                    let name = self.call_or(&member.name, "member");
-                    output.insert(NameKey::StructMember(ty_handle, index as u32), name);
-                }
+                // struct members have their own namespace, because access is always prefixed
+                self.namespace(reserved_keywords, |namer| {
+                    for (index, member) in members.iter().enumerate() {
+                        let name = namer.call_or(&member.name, "member");
+                        output.insert(NameKey::StructMember(ty_handle, index as u32), name);
+                    }
+                })
+            }
+        }
+
+        for (ep_index, ep) in module.entry_points.iter().enumerate() {
+            let ep_name = self.call(&ep.name);
+            output.insert(NameKey::EntryPoint(ep_index as _), ep_name);
+            for (index, arg) in ep.function.arguments.iter().enumerate() {
+                let name = self.call_or(&arg.name, "param");
+                output.insert(
+                    NameKey::EntryPointArgument(ep_index as _, index as u32),
+                    name,
+                );
+            }
+            for (handle, var) in ep.function.local_variables.iter() {
+                let name = self.call_or(&var.name, "local");
+                output.insert(NameKey::EntryPointLocal(ep_index as _, handle), name);
+            }
+        }
+
+        for (fun_handle, fun) in module.functions.iter() {
+            let fun_name = self.call_or(&fun.name, "function");
+            output.insert(NameKey::Function(fun_handle), fun_name);
+            for (index, arg) in fun.arguments.iter().enumerate() {
+                let name = self.call_or(&arg.name, "param");
+                output.insert(NameKey::FunctionArgument(fun_handle, index as u32), name);
+            }
+            for (handle, var) in fun.local_variables.iter() {
+                let name = self.call_or(&var.name, "local");
+                output.insert(NameKey::FunctionLocal(fun_handle, handle), name);
             }
         }
 
@@ -171,35 +215,6 @@ impl Namer {
             };
             let name = self.call(label);
             output.insert(NameKey::Constant(handle), name);
-        }
-
-        for (fun_handle, fun) in module.functions.iter() {
-            let fun_name = self.call_or(&fun.name, "function");
-            output.insert(NameKey::Function(fun_handle), fun_name);
-            for (index, arg) in fun.arguments.iter().enumerate() {
-                let name = self.call_or(&arg.name, "param");
-                output.insert(NameKey::FunctionArgument(fun_handle, index as u32), name);
-            }
-            for (handle, var) in fun.local_variables.iter() {
-                let name = self.call_or(&var.name, "local");
-                output.insert(NameKey::FunctionLocal(fun_handle, handle), name);
-            }
-        }
-
-        for (ep_index, ep) in module.entry_points.iter().enumerate() {
-            let ep_name = self.call(&ep.name);
-            output.insert(NameKey::EntryPoint(ep_index as _), ep_name);
-            for (index, arg) in ep.function.arguments.iter().enumerate() {
-                let name = self.call_or(&arg.name, "param");
-                output.insert(
-                    NameKey::EntryPointArgument(ep_index as _, index as u32),
-                    name,
-                );
-            }
-            for (handle, var) in ep.function.local_variables.iter() {
-                let name = self.call_or(&var.name, "local");
-                output.insert(NameKey::EntryPointLocal(ep_index as _, handle), name);
-            }
         }
     }
 }

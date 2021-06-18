@@ -35,7 +35,7 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
 void main() {
     vec3 raw_normal = _vs2fs_location0;
     vec4 position = _vs2fs_location1;
-    vec3 color1 = vec3(0.05, 0.05, 0.05);
+    vec3 color = vec3(0.05, 0.05, 0.05);
     uint i = 0u;
     vec3 normal = normalize(raw_normal);
     while(true) {
@@ -50,12 +50,12 @@ void main() {
         float _expr25 = fetch_shadow(_expr22, (light.proj * position));
         vec3 light_dir = normalize((light.pos.xyz - position.xyz));
         float diffuse = max(0.0, dot(normal, light_dir));
-        vec3 _expr34 = color1;
-        color1 = (_expr34 + ((_expr25 * diffuse) * light.color.xyz));
+        vec3 _expr34 = color;
+        color = (_expr34 + ((_expr25 * diffuse) * light.color.xyz));
         uint _expr40 = i;
         i = (_expr40 + 1u);
     }
-    vec3 _expr43 = color1;
+    vec3 _expr43 = color;
     _fs2p_location0 = vec4(_expr43, 1.0);
     return;
 }

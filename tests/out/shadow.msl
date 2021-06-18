@@ -51,7 +51,7 @@ fragment fs_mainOutput fs_main(
 ) {
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;
-    metal::float3 color1 = c_ambient;
+    metal::float3 color = c_ambient;
     metal::uint i = 0u;
     metal::float3 normal = metal::normalize(raw_normal);
     bool loop_init = true;
@@ -72,9 +72,9 @@ fragment fs_mainOutput fs_main(
         float _e25 = fetch_shadow(_e22, light.proj * position, t_shadow, sampler_shadow);
         metal::float3 light_dir = metal::normalize(light.pos.xyz - position.xyz);
         float diffuse = metal::max(0.0, metal::dot(normal, light_dir));
-        metal::float3 _e34 = color1;
-        color1 = _e34 + ((_e25 * diffuse) * light.color.xyz);
+        metal::float3 _e34 = color;
+        color = _e34 + ((_e25 * diffuse) * light.color.xyz);
     }
-    metal::float3 _e43 = color1;
+    metal::float3 _e43 = color;
     return fs_mainOutput { metal::float4(_e43, 1.0) };
 }

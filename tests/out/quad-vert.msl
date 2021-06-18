@@ -12,55 +12,55 @@ struct gl_PerVertex {
 };
 struct type10 {
     metal::float2 member;
-    metal::float4 gl_Position1;
-    float gl_PointSize1;
-    type6 gl_ClipDistance1;
-    type6 gl_CullDistance1;
+    metal::float4 gl_Position;
+    float gl_PointSize;
+    type6 gl_ClipDistance;
+    type6 gl_CullDistance;
 };
 constant metal::float4 const_type4_ = {0.0, 0.0, 0.0, 1.0};
 constant type6 const_type6_ = {0.0};
 constant gl_PerVertex const_gl_PerVertex = {const_type4_, 1.0, const_type6_, const_type6_};
 
-void main1(
+void main2(
     thread metal::float2& v_uv,
-    thread metal::float2 const& a_uv,
+    thread metal::float2 const& a_uv1,
     thread gl_PerVertex& perVertexStruct,
-    thread metal::float2 const& a_pos
+    thread metal::float2 const& a_pos1
 ) {
-    metal::float2 _e12 = a_uv;
+    metal::float2 _e12 = a_uv1;
     v_uv = _e12;
-    metal::float2 _e13 = a_pos;
+    metal::float2 _e13 = a_pos1;
     perVertexStruct.gl_Position = metal::float4(_e13.x, _e13.y, 0.0, 1.0);
     return;
 }
 
-struct main2Input {
-    metal::float2 a_uv1 [[attribute(1)]];
-    metal::float2 a_pos1 [[attribute(0)]];
+struct main1Input {
+    metal::float2 a_uv [[attribute(1)]];
+    metal::float2 a_pos [[attribute(0)]];
 };
-struct main2Output {
+struct main1Output {
     metal::float2 member [[user(loc0), center_perspective]];
-    metal::float4 gl_Position1 [[position]];
-    float gl_PointSize1 [[point_size]];
-    float gl_ClipDistance1 [[clip_distance]] [1];
+    metal::float4 gl_Position [[position]];
+    float gl_PointSize [[point_size]];
+    float gl_ClipDistance [[clip_distance]] [1];
 };
-vertex main2Output main2(
-  main2Input varyings [[stage_in]]
+vertex main1Output main1(
+  main1Input varyings [[stage_in]]
 ) {
     metal::float2 v_uv = {};
-    metal::float2 a_uv = {};
+    metal::float2 a_uv1 = {};
     gl_PerVertex perVertexStruct = const_gl_PerVertex;
-    metal::float2 a_pos = {};
-    const auto a_uv1 = varyings.a_uv1;
-    const auto a_pos1 = varyings.a_pos1;
-    a_uv = a_uv1;
-    a_pos = a_pos1;
-    main1(v_uv, a_uv, perVertexStruct, a_pos);
+    metal::float2 a_pos1 = {};
+    const auto a_uv = varyings.a_uv;
+    const auto a_pos = varyings.a_pos;
+    a_uv1 = a_uv;
+    a_pos1 = a_pos;
+    main2(v_uv, a_uv1, perVertexStruct, a_pos1);
     metal::float2 _e10 = v_uv;
     metal::float4 _e11 = perVertexStruct.gl_Position;
     float _e12 = perVertexStruct.gl_PointSize;
     type6 _e13 = perVertexStruct.gl_ClipDistance;
     type6 _e14 = perVertexStruct.gl_CullDistance;
     const auto _tmp = type10 {_e10, _e11, _e12, _e13, _e14};
-    return main2Output { _tmp.member, _tmp.gl_Position1, _tmp.gl_PointSize1, {_tmp.gl_ClipDistance1.inner[0]} };
+    return main1Output { _tmp.member, _tmp.gl_Position, _tmp.gl_PointSize, {_tmp.gl_ClipDistance.inner[0]} };
 }

@@ -1,4 +1,4 @@
-fn main() {
+fn main1() {
     var a: mat4x4<f32>;
 
     let _e2: vec4<f32> = vec4<f32>(f32(1));
@@ -7,7 +7,7 @@ fn main() {
 }
 
 [[stage(vertex)]]
-fn main1() {
-    main();
+fn main() {
+    main1();
     return;
 }

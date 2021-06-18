@@ -6,7 +6,7 @@ struct PointLight {
 
 struct DirectionalLight {
     direction: vec4<f32>;
-    color1: vec4<f32>;
+    color: vec4<f32>;
 };
 
 [[block]]
@@ -53,14 +53,14 @@ struct StandardMaterial_emissive {
 };
 
 struct FragmentOutput {
-    [[location(0), interpolate(perspective)]] member: vec4<f32>;
+    [[location(0), interpolate(perspective)]] o_Target: vec4<f32>;
 };
 
-var<private> gen_entry_v_WorldPosition: vec3<f32>;
-var<private> gen_entry_v_WorldNormal: vec3<f32>;
-var<private> gen_entry_v_Uv: vec2<f32>;
-var<private> gen_entry_v_WorldTangent: vec4<f32>;
-var<private> gen_entry_o_Target: vec4<f32>;
+var<private> v_WorldPosition1: vec3<f32>;
+var<private> v_WorldNormal1: vec3<f32>;
+var<private> v_Uv1: vec2<f32>;
+var<private> v_WorldTangent1: vec4<f32>;
+var<private> o_Target: vec4<f32>;
 [[group(0), binding(0)]]
 var<uniform> global: CameraViewProj;
 [[group(0), binding(1)]]
@@ -315,9 +315,9 @@ fn Fd_Burley(roughness6: f32, NoV4: f32, NoL4: f32, LoH4: f32) -> f32 {
     return ((_e74 * _e75) * (1.0 / 3.1415927410125732));
 }
 
-fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness1: f32, NoV6: f32) -> vec3<f32> {
+fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV6: f32) -> vec3<f32> {
     var f0_8: vec3<f32>;
-    var perceptual_roughness2: f32;
+    var perceptual_roughness1: f32;
     var NoV7: f32;
     var c0_: vec4<f32> = vec4<f32>(-1.0, -0.027499999850988388, -0.5720000267028809, 0.02199999988079071);
     var c1_: vec4<f32> = vec4<f32>(1.0, 0.042500000447034836, 1.0399999618530273, -0.03999999910593033);
@@ -326,9 +326,9 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness1: f32, NoV6: f32) -> vec3
     var AB: vec2<f32>;
 
     f0_8 = f0_7;
-    perceptual_roughness2 = perceptual_roughness1;
+    perceptual_roughness1 = perceptual_roughness;
     NoV7 = NoV6;
-    let _e62: f32 = perceptual_roughness2;
+    let _e62: f32 = perceptual_roughness1;
     let _e64: vec4<f32> = c0_;
     let _e66: vec4<f32> = c1_;
     r = ((vec4<f32>(_e62) * _e64) + _e66);
@@ -359,29 +359,29 @@ fn perceptualRoughnessToRoughness(perceptualRoughness: f32) -> f32 {
     return (_e47 * _e48);
 }
 
-fn reinhard(color2: vec3<f32>) -> vec3<f32> {
-    var color3: vec3<f32>;
+fn reinhard(color: vec3<f32>) -> vec3<f32> {
+    var color1: vec3<f32>;
 
-    color3 = color2;
-    let _e42: vec3<f32> = color3;
-    let _e45: vec3<f32> = color3;
+    color1 = color;
+    let _e42: vec3<f32> = color1;
+    let _e45: vec3<f32> = color1;
     return (_e42 / (vec3<f32>(1.0) + _e45));
 }
 
-fn reinhard_extended(color4: vec3<f32>, max_white: f32) -> vec3<f32> {
-    var color5: vec3<f32>;
+fn reinhard_extended(color2: vec3<f32>, max_white: f32) -> vec3<f32> {
+    var color3: vec3<f32>;
     var max_white1: f32;
     var numerator: vec3<f32>;
 
-    color5 = color4;
+    color3 = color2;
     max_white1 = max_white;
-    let _e44: vec3<f32> = color5;
-    let _e47: vec3<f32> = color5;
+    let _e44: vec3<f32> = color3;
+    let _e47: vec3<f32> = color3;
     let _e48: f32 = max_white1;
     let _e49: f32 = max_white1;
     numerator = (_e44 * (vec3<f32>(1.0) + (_e47 / vec3<f32>((_e48 * _e49)))));
     let _e56: vec3<f32> = numerator;
-    let _e59: vec3<f32> = color5;
+    let _e59: vec3<f32> = color3;
     return (_e56 / (vec3<f32>(1.0) + _e59));
 }
 
@@ -409,34 +409,34 @@ fn change_luminance(c_in: vec3<f32>, l_out: f32) -> vec3<f32> {
     return (_e48 * (_e49 / _e50));
 }
 
-fn reinhard_luminance(color6: vec3<f32>) -> vec3<f32> {
-    var color7: vec3<f32>;
+fn reinhard_luminance(color4: vec3<f32>) -> vec3<f32> {
+    var color5: vec3<f32>;
     var l_old: f32;
     var l_new: f32;
 
-    color7 = color6;
-    let _e43: vec3<f32> = color7;
+    color5 = color4;
+    let _e43: vec3<f32> = color5;
     let _e44: f32 = luminance(_e43);
     l_old = _e44;
     let _e46: f32 = l_old;
     let _e48: f32 = l_old;
     l_new = (_e46 / (1.0 + _e48));
-    let _e54: vec3<f32> = color7;
+    let _e54: vec3<f32> = color5;
     let _e55: f32 = l_new;
     let _e56: vec3<f32> = change_luminance(_e54, _e55);
     return _e56;
 }
 
-fn reinhard_extended_luminance(color8: vec3<f32>, max_white_l: f32) -> vec3<f32> {
-    var color9: vec3<f32>;
+fn reinhard_extended_luminance(color6: vec3<f32>, max_white_l: f32) -> vec3<f32> {
+    var color7: vec3<f32>;
     var max_white_l1: f32;
     var l_old1: f32;
     var numerator1: f32;
     var l_new1: f32;
 
-    color9 = color8;
+    color7 = color6;
     max_white_l1 = max_white_l;
-    let _e45: vec3<f32> = color9;
+    let _e45: vec3<f32> = color7;
     let _e46: f32 = luminance(_e45);
     l_old1 = _e46;
     let _e48: f32 = l_old1;
@@ -447,7 +447,7 @@ fn reinhard_extended_luminance(color8: vec3<f32>, max_white_l: f32) -> vec3<f32>
     let _e58: f32 = numerator1;
     let _e60: f32 = l_old1;
     l_new1 = (_e58 / (1.0 + _e60));
-    let _e66: vec3<f32> = color9;
+    let _e66: vec3<f32> = color7;
     let _e67: f32 = l_new1;
     let _e68: vec3<f32> = change_luminance(_e66, _e67);
     return _e68;
@@ -489,7 +489,7 @@ fn point_light(light: PointLight, roughness8: f32, NdotV: f32, N: vec3<f32>, V1:
     F0_1 = F0_;
     diffuseColor1 = diffuseColor;
     let _e56: PointLight = light1;
-    let _e59: vec3<f32> = gen_entry_v_WorldPosition;
+    let _e59: vec3<f32> = v_WorldPosition1;
     light_to_frag = (_e56.pos.xyz - _e59.xyz);
     let _e63: vec3<f32> = light_to_frag;
     let _e64: vec3<f32> = light_to_frag;
@@ -640,21 +640,21 @@ fn dir_light(light2: DirectionalLight, roughness10: f32, NdotV2: f32, normal: ve
     let _e119: vec3<f32> = diffuse1;
     let _e121: DirectionalLight = light3;
     let _e125: f32 = NoL7;
-    return (((_e118 + _e119) * _e121.color1.xyz) * _e125);
+    return (((_e118 + _e119) * _e121.color.xyz) * _e125);
 }
 
-fn main() {
+fn main1() {
     var output_color: vec4<f32>;
     var metallic_roughness: vec4<f32>;
-    var metallic1: f32;
-    var perceptual_roughness3: f32;
+    var metallic: f32;
+    var perceptual_roughness2: f32;
     var roughness12: f32;
     var N2: vec3<f32>;
     var T: vec3<f32>;
     var B: vec3<f32>;
     var TBN: mat3x3<f32>;
     var occlusion: f32;
-    var emissive1: vec4<f32>;
+    var emissive: vec4<f32>;
     var V3: vec3<f32>;
     var NdotV4: f32;
     var F0_4: vec3<f32>;
@@ -669,28 +669,28 @@ fn main() {
     let _e40: vec4<f32> = global3.base_color;
     output_color = _e40;
     let _e42: vec4<f32> = output_color;
-    let _e43: vec2<f32> = gen_entry_v_Uv;
+    let _e43: vec2<f32> = v_Uv1;
     let _e44: vec4<f32> = textureSample(StandardMaterial_base_color_texture, StandardMaterial_base_color_texture_sampler, _e43);
     output_color = (_e42 * _e44);
-    let _e46: vec2<f32> = gen_entry_v_Uv;
+    let _e46: vec2<f32> = v_Uv1;
     let _e47: vec4<f32> = textureSample(StandardMaterial_metallic_roughness_texture, StandardMaterial_metallic_roughness_texture_sampler, _e46);
     metallic_roughness = _e47;
     let _e49: f32 = global5.metallic;
     let _e50: vec4<f32> = metallic_roughness;
-    metallic1 = (_e49 * _e50.z);
+    metallic = (_e49 * _e50.z);
     let _e54: f32 = global4.perceptual_roughness;
     let _e55: vec4<f32> = metallic_roughness;
-    perceptual_roughness3 = (_e54 * _e55.y);
-    let _e60: f32 = perceptual_roughness3;
+    perceptual_roughness2 = (_e54 * _e55.y);
+    let _e60: f32 = perceptual_roughness2;
     let _e61: f32 = perceptualRoughnessToRoughness(_e60);
     roughness12 = _e61;
-    let _e63: vec3<f32> = gen_entry_v_WorldNormal;
+    let _e63: vec3<f32> = v_WorldNormal1;
     N2 = normalize(_e63);
-    let _e66: vec4<f32> = gen_entry_v_WorldTangent;
+    let _e66: vec4<f32> = v_WorldTangent1;
     T = normalize(_e66.xyz);
     let _e70: vec3<f32> = N2;
     let _e71: vec3<f32> = T;
-    let _e73: vec4<f32> = gen_entry_v_WorldTangent;
+    let _e73: vec4<f32> = v_WorldTangent1;
     B = (cross(_e70, _e71) * _e73.w);
     let _e78: bool = gl_FrontFacing;
     let _e79: vec3<f32> = N2;
@@ -709,36 +709,36 @@ fn main() {
     let _e95: vec3<f32> = N2;
     TBN = mat3x3<f32>(_e93, _e94, _e95);
     let _e98: mat3x3<f32> = TBN;
-    let _e99: vec2<f32> = gen_entry_v_Uv;
+    let _e99: vec2<f32> = v_Uv1;
     let _e100: vec4<f32> = textureSample(StandardMaterial_normal_map, StandardMaterial_normal_map_sampler, _e99);
     N2 = (_e98 * normalize(((_e100.xyz * 2.0) - vec3<f32>(1.0))));
-    let _e109: vec2<f32> = gen_entry_v_Uv;
+    let _e109: vec2<f32> = v_Uv1;
     let _e110: vec4<f32> = textureSample(StandardMaterial_occlusion_texture, StandardMaterial_occlusion_texture_sampler, _e109);
     occlusion = _e110.x;
     let _e113: vec4<f32> = global7.emissive;
-    emissive1 = _e113;
-    let _e115: vec4<f32> = emissive1;
-    let _e117: vec4<f32> = emissive1;
-    let _e119: vec2<f32> = gen_entry_v_Uv;
+    emissive = _e113;
+    let _e115: vec4<f32> = emissive;
+    let _e117: vec4<f32> = emissive;
+    let _e119: vec2<f32> = v_Uv1;
     let _e120: vec4<f32> = textureSample(StandardMaterial_emissive_texture, StandardMaterial_emissive_texture_sampler, _e119);
     let _e122: vec3<f32> = (_e117.xyz * _e120.xyz);
-    emissive1.x = _e122.x;
-    emissive1.y = _e122.y;
-    emissive1.z = _e122.z;
+    emissive.x = _e122.x;
+    emissive.y = _e122.y;
+    emissive.z = _e122.z;
     let _e129: vec4<f32> = global1.CameraPos;
-    let _e131: vec3<f32> = gen_entry_v_WorldPosition;
+    let _e131: vec3<f32> = v_WorldPosition1;
     V3 = normalize((_e129.xyz - _e131.xyz));
     let _e136: vec3<f32> = N2;
     let _e137: vec3<f32> = V3;
     NdotV4 = max(dot(_e136, _e137), 0.00009999999747378752);
     let _e143: f32 = global6.reflectance;
     let _e145: f32 = global6.reflectance;
-    let _e148: f32 = metallic1;
+    let _e148: f32 = metallic;
     let _e152: vec4<f32> = output_color;
-    let _e154: f32 = metallic1;
+    let _e154: f32 = metallic;
     F0_4 = (vec3<f32>((((0.1599999964237213 * _e143) * _e145) * (1.0 - _e148))) + (_e152.xyz * vec3<f32>(_e154)));
     let _e159: vec4<f32> = output_color;
-    let _e162: f32 = metallic1;
+    let _e162: f32 = metallic;
     diffuseColor4 = (_e159.xyz * vec3<f32>((1.0 - _e162)));
     let _e167: vec3<f32> = V3;
     let _e169: vec3<f32> = N2;
@@ -802,7 +802,7 @@ fn main() {
     let _e255: vec3<f32> = EnvBRDFApprox(_e252, 1.0, _e254);
     diffuse_ambient = _e255;
     let _e260: vec3<f32> = F0_4;
-    let _e261: f32 = perceptual_roughness3;
+    let _e261: f32 = perceptual_roughness2;
     let _e262: f32 = NdotV4;
     let _e263: vec3<f32> = EnvBRDFApprox(_e260, _e261, _e262);
     specular_ambient = _e263;
@@ -823,7 +823,7 @@ fn main() {
     output_color.z = _e286.z;
     let _e293: vec4<f32> = output_color;
     let _e295: vec4<f32> = output_color;
-    let _e297: vec4<f32> = emissive1;
+    let _e297: vec4<f32> = emissive;
     let _e299: vec4<f32> = output_color;
     let _e302: vec3<f32> = (_e295.xyz + (_e297.xyz * _e299.w));
     output_color.x = _e302.x;
@@ -837,18 +837,18 @@ fn main() {
     output_color.y = _e315.y;
     output_color.z = _e315.z;
     let _e322: vec4<f32> = output_color;
-    gen_entry_o_Target = _e322;
+    o_Target = _e322;
     return;
 }
 
 [[stage(fragment)]]
-fn main1([[location(0), interpolate(perspective)]] v_WorldPosition: vec3<f32>, [[location(1), interpolate(perspective)]] v_WorldNormal: vec3<f32>, [[location(2), interpolate(perspective)]] v_Uv: vec2<f32>, [[location(3), interpolate(perspective)]] v_WorldTangent: vec4<f32>, [[builtin(front_facing)]] param: bool) -> FragmentOutput {
-    gen_entry_v_WorldPosition = v_WorldPosition;
-    gen_entry_v_WorldNormal = v_WorldNormal;
-    gen_entry_v_Uv = v_Uv;
-    gen_entry_v_WorldTangent = v_WorldTangent;
+fn main([[location(0), interpolate(perspective)]] v_WorldPosition: vec3<f32>, [[location(1), interpolate(perspective)]] v_WorldNormal: vec3<f32>, [[location(2), interpolate(perspective)]] v_Uv: vec2<f32>, [[location(3), interpolate(perspective)]] v_WorldTangent: vec4<f32>, [[builtin(front_facing)]] param: bool) -> FragmentOutput {
+    v_WorldPosition1 = v_WorldPosition;
+    v_WorldNormal1 = v_WorldNormal;
+    v_Uv1 = v_Uv;
+    v_WorldTangent1 = v_WorldTangent;
     gl_FrontFacing = param;
-    main();
-    let _e11: vec4<f32> = gen_entry_o_Target;
+    main1();
+    let _e11: vec4<f32> = o_Target;
     return FragmentOutput(_e11);
 }

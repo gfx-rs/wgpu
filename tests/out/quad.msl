@@ -9,7 +9,7 @@ struct VertexOutput {
 
 struct main1Input {
     metal::float2 pos [[attribute(0)]];
-    metal::float2 uv1 [[attribute(1)]];
+    metal::float2 uv [[attribute(1)]];
 };
 struct main1Output {
     metal::float2 uv [[user(loc0), center_perspective]];
@@ -19,14 +19,14 @@ vertex main1Output main1(
   main1Input varyings [[stage_in]]
 ) {
     const auto pos = varyings.pos;
-    const auto uv1 = varyings.uv1;
-    const auto _tmp = VertexOutput {uv1, metal::float4(c_scale * pos, 0.0, 1.0)};
+    const auto uv = varyings.uv;
+    const auto _tmp = VertexOutput {uv, metal::float4(c_scale * pos, 0.0, 1.0)};
     return main1Output { _tmp.uv, _tmp.position };
 }
 
 
 struct main2Input {
-    metal::float2 uv2 [[user(loc0), center_perspective]];
+    metal::float2 uv1 [[user(loc0), center_perspective]];
 };
 struct main2Output {
     metal::float4 member1 [[color(0)]];
@@ -36,8 +36,8 @@ fragment main2Output main2(
 , metal::texture2d<float, metal::access::sample> u_texture [[user(fake0)]]
 , metal::sampler u_sampler [[user(fake0)]]
 ) {
-    const auto uv2 = varyings1.uv2;
-    metal::float4 color = u_texture.sample(u_sampler, uv2);
+    const auto uv1 = varyings1.uv1;
+    metal::float4 color = u_texture.sample(u_sampler, uv1);
     if (color.w == 0.0) {
         metal::discard_fragment();
     }
