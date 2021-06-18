@@ -805,7 +805,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,
-                &device.temp_suspected,
                 device.pending_writes.temp_resources.drain(..),
             );
 
