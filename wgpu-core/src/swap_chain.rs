@@ -277,13 +277,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let view = &mut view_guard[view_id.value];
             let _ = view.life_guard.ref_count.take();
 
-            /*
-            let (view_maybe, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
-            drop(view_id); // contains the ref count
-            let view = view_maybe.ok_or(SwapChainError::Invalid)?;
-            if view.life_guard.ref_count.unwrap().load() != 1 {
-                return Err(SwapChainError::StillReferenced);
-            }*/
             suf_texture
         };
 

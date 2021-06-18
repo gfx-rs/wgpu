@@ -360,6 +360,7 @@ impl<A: HalApi> Device<A> {
 
         life_tracker.triage_suspected(
             hub,
+            &self.temp_suspected,
             &self.trackers,
             #[cfg(feature = "trace")]
             self.trace.as_ref(),
@@ -4159,6 +4160,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
         device.lock_life(&mut token).triage_suspected(
             &hub,
+            &device.temp_suspected,
             &device.trackers,
             #[cfg(feature = "trace")]
             None,
