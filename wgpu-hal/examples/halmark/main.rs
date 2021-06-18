@@ -681,7 +681,9 @@ impl<A: hal::Api> Example<A> {
 type Api = hal::api::Metal;
 #[cfg(all(feature = "vulkan", not(feature = "metal")))]
 type Api = hal::api::Vulkan;
-#[cfg(all(not(feature = "vulkan"), not(feature = "metal")))]
+#[cfg(all(feature = "gles", not(feature = "metal"), not(feature = "vulkan")))]
+type Api = hal::api::Gles;
+#[cfg(not(any(feature = "metal", feature = "vulkan", feature = "gles")))]
 type Api = hal::api::Empty;
 
 fn main() {

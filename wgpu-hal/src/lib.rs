@@ -48,11 +48,14 @@ mod empty;
 #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
 mod metal;
 #[cfg(feature = "vulkan")]
-mod vulkan;
+mod vulkan;#[cfg(feature = "gles")]
+mod gles;
 
 pub mod util;
 pub mod api {
     pub use super::empty::Api as Empty;
+    #[cfg(feature = "gles")]
+    pub use super::gles::Api as Gles;
     #[cfg(feature = "metal")]
     pub use super::metal::Api as Metal;
     #[cfg(feature = "vulkan")]
