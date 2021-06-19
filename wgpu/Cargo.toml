@@ -4,8 +4,8 @@ version = "0.9.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
-homepage = "https://github.com/gfx-rs/wgpu-rs"
-repository = "https://github.com/gfx-rs/wgpu-rs"
+homepage = "https://wgpu.rs"
+repository = "https://github.com/gfx-rs/wgpu/tree/v0.9"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 exclude = ["etc/**/*", "examples/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
@@ -26,6 +26,7 @@ cross = ["wgc/cross"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
+version = "0.9"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
@@ -33,10 +34,12 @@ package = "wgpu-core"
 path = "../wgpu-core"
 features = ["raw-window-handle"]
 optional = true
+version = "0.9"
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
+version = "0.9"
 
 [dependencies]
 arrayvec = "0.5"
