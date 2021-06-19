@@ -396,14 +396,17 @@ impl<A: hal::Api> Example<A> {
                     hal::BindGroupEntry {
                         binding: 0,
                         resource_index: 0,
+                        size: 1,
                     },
                     hal::BindGroupEntry {
                         binding: 1,
                         resource_index: 0,
+                        size: 1,
                     },
                     hal::BindGroupEntry {
                         binding: 2,
                         resource_index: 0,
+                        size: 1,
                     },
                 ],
             };
@@ -425,6 +428,7 @@ impl<A: hal::Api> Example<A> {
                 entries: &[hal::BindGroupEntry {
                     binding: 0,
                     resource_index: 0,
+                    size: 1,
                 }],
             };
             unsafe { device.create_bind_group(&local_group_desc).unwrap() }

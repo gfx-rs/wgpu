@@ -1014,7 +1014,7 @@ impl crate::Device<super::Api> for super::Device {
             write = match ty {
                 vk::DescriptorType::SAMPLER => {
                     let index = sampler_infos.len();
-                    let binding = desc.samplers[index];
+                    let binding = desc.samplers[entry.resource_index as usize];
                     let vk_info = vk::DescriptorImageInfo::builder()
                         .sampler(binding.raw)
                         .build();
@@ -1023,26 +1023,39 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
                     let index = image_infos.len();
-                    let binding = &desc.textures[index];
-                    let layout = conv::derive_image_layout(binding.usage, binding.view.aspects());
-                    let vk_info = vk::DescriptorImageInfo::builder()
-                        .image_view(binding.view.raw)
-                        .image_layout(layout)
-                        .build();
-                    image_infos.push(vk_info);
+                    let start = entry.resource_index;
+                    let end = entry.resource_index + entry.size;
+                    image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
+                        |binding| {
+                            let layout =
+                                conv::derive_image_layout(binding.usage, binding.view.aspects());
+                            vk::DescriptorImageInfo::builder()
+                                .image_view(binding.view.raw)
+                                .image_layout(layout)
+                                .build()
+                        },
+                    ));
                     write.image_info(&image_infos[index..])
                 }
-                _ => {
+                vk::DescriptorType::UNIFORM_BUFFER
+                | vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC
+                | vk::DescriptorType::STORAGE_BUFFER
+                | vk::DescriptorType::STORAGE_BUFFER_DYNAMIC => {
                     let index = buffer_infos.len();
-                    let binding = &desc.buffers[index];
-                    let vk_info = vk::DescriptorBufferInfo::builder()
-                        .buffer(binding.buffer.raw)
-                        .offset(binding.offset)
-                        .range(binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get))
-                        .build();
-                    buffer_infos.push(vk_info);
+                    let start = entry.resource_index;
+                    let end = entry.resource_index + entry.size;
+                    buffer_infos.extend(desc.buffers[start as usize..end as usize].iter().map(
+                        |binding| {
+                            vk::DescriptorBufferInfo::builder()
+                                .buffer(binding.buffer.raw)
+                                .offset(binding.offset)
+                                .range(binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get))
+                                .build()
+                        },
+                    ));
                     write.buffer_info(&buffer_infos[index..])
                 }
+                _ => unreachable!(),
             };
             writes.push(write.build());
         }
