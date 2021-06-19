@@ -1,12 +1,16 @@
 use std::num::NonZeroU64;
 
+use wgpu::util::DeviceExt;
+
 use crate::common::{initialize_test, TestParameters};
 
 #[test]
 fn draw() {
     initialize_test(
         TestParameters::default()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
+            .features(
+                wgpu::Features::VERTEX_WRITABLE_STORAGE | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
+            )
             .failure(),
         |ctx| {
             let shader = ctx
@@ -32,7 +36,9 @@ fn draw() {
             let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: 4 * 6,
-                usage: wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::STORAGE,
+                usage: wgpu::BufferUsage::COPY_SRC
+                    | wgpu::BufferUsage::STORAGE
+                    | wgpu::BufferUsage::MAP_READ,
                 mapped_at_creation: false,
             });
 
@@ -66,14 +72,51 @@ fn draw() {
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
-                    fragment: None,
+                    fragment: Some(wgpu::FragmentState {
+                        entry_point: "fs_main",
+                        module: &shader,
+                        targets: &[wgpu::ColorTargetState {
+                            format: wgpu::TextureFormat::Rgba8Unorm,
+                            blend: None,
+                            write_mask: wgpu::ColorWrite::ALL,
+                        }],
+                    }),
                 });
+
+            let dummy = ctx
+                .device
+                .create_texture_with_data(
+                    &ctx.queue,
+                    &wgpu::TextureDescriptor {
+                        label: Some("dummy"),
+                        size: wgpu::Extent3d {
+                            width: 1,
+                            height: 1,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        usage: wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::COPY_DST,
+                    },
+                    &[0, 0, 0, 1],
+                )
+                .create_view(&wgpu::TextureViewDescriptor::default());
 
             let mut encoder = ctx
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor::default());
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[wgpu::RenderPassColorAttachment {
+                    ops: wgpu::Operations::default(),
+                    resolve_target: None,
+                    view: &dummy,
+                }],
+                depth_stencil_attachment: None,
+                label: None,
+            });
 
             rpass.set_pipeline(&pipeline);
             rpass.set_bind_group(0, &bg, &[]);
