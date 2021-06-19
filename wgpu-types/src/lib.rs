@@ -235,11 +235,16 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const MAPPABLE_PRIMARY_BUFFERS = 0x0000_0000_0001_0000;
-        /// Allows the user to create uniform arrays of sampled textures in shaders:
+        /// Allows the user to create uniform arrays of textures in shaders:
         ///
         /// eg. `uniform texture2D textures[10]`.
         ///
-        /// This capability allows them to exist and to be indexed by compile time constant
+        /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
+        /// may also create uniform arrays of storage textures.
+        ///
+        /// eg. `uniform image2D textures[10]`.
+        ///
+        /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
         ///
         /// Supported platforms:
@@ -248,21 +253,8 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SAMPLED_TEXTURE_BINDING_ARRAY = 0x0000_0000_0002_0000;
-        /// Allows shaders to index sampled texture arrays with dynamically uniform values:
-        ///
-        /// eg. `texture_array[uniform_value]`
-        ///
-        /// This capability means the hardware will also support SAMPLED_TEXTURE_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan's shaderSampledImageArrayDynamicIndexing feature
-        ///
-        /// This is a native only feature.
-        const SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING = 0x0000_0000_0004_0000;
-        /// Allows shaders to index sampled texture arrays with dynamically non-uniform values:
+        const TEXTURE_BINDING_ARRAY = 0x0000_0000_0002_0000;
+        /// Allows shaders to index resource arrays with dynamically non-uniform values:
         ///
         /// eg. `texture_array[vertex_data]`
         ///
@@ -280,21 +272,18 @@ bitflags::bitflags! {
         ///
         /// HLSL does not need any extension.
         ///
-        /// This capability means the hardware will also support SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
-        /// and SAMPLED_TEXTURE_BINDING_ARRAY.
-        ///
         /// Supported platforms:
         /// - DX12
         /// - Metal (with MSL 2.0+ on macOS 10.13+)
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
-        const SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0008_0000;
+        const RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0008_0000;
         /// Allows the user to create unsized uniform arrays of bindings:
         ///
         /// eg. `uniform texture2D textures[]`.
         ///
-        /// If this capability is supported, SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING is very likely
+        /// If this capability is supported, [`Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING`] is very likely
         /// to also be supported
         ///
         /// Supported platforms:
@@ -437,8 +426,13 @@ bitflags::bitflags! {
         ///
         /// eg. `uniform myBuffer { .... } buffer_array[10]`.
         ///
-        /// This capability allows them to exist and to be indexed by compile time constant
+        /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
+        ///
+        /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
+        /// may also create arrays of storage buffers.
+        ///
+        /// eg. `buffer myBuffer { ... } buffer_array[10]`
         ///
         /// Supported platforms:
         /// - DX12
@@ -446,84 +440,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const BUFFER_BINDING_ARRAY = 0x0000_0001_0000_0000;
-        /// Allows shaders to index uniform buffer arrays with dynamically uniform values:
-        ///
-        /// eg. `buffer_array[uniform_value]`
-        ///
-        /// This capability means the hardware will also support BUFFER_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan's shaderUniformBufferArrayDynamicIndexing feature
-        ///
-        /// This is a native only feature.
-        const UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING = 0x0000_0002_0000_0000;
-        /// Allows shaders to index uniform buffer arrays with dynamically non-uniform values:
-        ///
-        /// eg. `buffer_array[vertex_data]`
-        ///
-        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
-        ///
-        /// `#extension GL_EXT_nonuniform_qualifier : require`
-        ///
-        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
-        ///
-        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
-        ///
-        /// or as `nonuniformEXT` constructor:
-        ///
-        /// eg. `buffer_array[nonuniformEXT(vertex_data)]`
-        ///
-        /// HLSL does not need any extension.
-        ///
-        /// This capability means the hardware will also support UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING
-        /// and BUFFER_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing feature)
-        ///
-        /// This is a native only feature.
-        const UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0004_0000_0000;
-        /// Allows shaders to index storage buffer arrays with dynamically uniform values:
-        ///
-        /// eg. `buffer_array[uniform_value]`
-        ///
-        /// This capability means the hardware will also support BUFFER_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan's shaderStorageBufferArrayDynamicIndexing feature
-        ///
-        /// This is a native only feature.
-        const STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING = 0x0000_0008_0000_0000;
-        /// Allows shaders to index storage buffer arrays with dynamically non-uniform values:
-        ///
-        /// eg. `buffer_array[vertex_data]`
-        ///
-        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
-        ///
-        /// `#extension GL_EXT_nonuniform_qualifier : require`
-        ///
-        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
-        ///
-        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
-        ///
-        /// or as `nonuniformEXT` constructor:
-        ///
-        /// eg. `buffer_array[nonuniformEXT(vertex_data)]`
-        ///
-        /// HLSL does not need any extension.
-        ///
-        /// This capability means the hardware will also support STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
-        /// and BUFFER_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderStorageBufferArrayNonUniformIndexing feature)
-        ///
-        /// This is a native only feature.
-        const STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0010_0000_0000;
         /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
         ///
         /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
@@ -533,11 +449,11 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
-        /// Allows the user to create uniform arrays of storage textures in shaders:
+        /// Allows the user to create uniform arrays of storage buffers or textures in shaders,
+        /// if resp. [`Features::BUFFER_BINDING_ARRAY`] or [`Features::TEXTURE_BINDING_ARRAY`]
+        /// is supported.
         ///
-        /// eg. `uniform image2D textures[10]`.
-        ///
-        /// This capability allows them to exist and to be indexed by compile time constant
+        /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
         ///
         /// Supported platforms:
@@ -545,44 +461,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const STORAGE_TEXTURE_BINDING_ARRAY = 0x0000_0040_0000_0000;
-        /// Allows shaders to index storage texture arrays with dynamically uniform values:
-        ///
-        /// eg. `texture_array[uniform_value]`
-        ///
-        /// This capability means the hardware will also support STORAGE_TEXTURE_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - Metal (with MSL 2.2+ on macOS 10.13+)
-        /// - Vulkan's shaderSampledImageArrayDynamicIndexing feature
-        ///
-        /// This is a native only feature.
-        const STORAGE_TEXTURE_ARRAY_DYNAMIC_INDEXING = 0x0000_0080_0000_0000;
-        /// Allows shaders to index storage texture arrays with dynamically non-uniform values:
-        ///
-        /// eg. `texture_array[vertex_data]`
-        ///
-        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
-        ///
-        /// `#extension GL_EXT_nonuniform_qualifier : require`
-        ///
-        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
-        ///
-        /// eg. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
-        ///
-        /// or as `nonuniformEXT` constructor:
-        ///
-        /// eg. `texture_array[nonuniformEXT(vertex_data)]`
-        ///
-        /// This capability means the hardware will also support STORAGE_TEXTURE_ARRAY_DYNAMIC_INDEXING
-        /// and STORAGE_TEXTURE_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - Metal (with MSL 2.2+ on macOS 10.13+)
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing feature)
-        ///
-        /// This is a native only feature.
-        const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0100_0000_0000;
+        const STORAGE_RESOURCE_BINDING_ARRAY = 0x0000_0040_0000_0000;
         /// Enables clear to zero for buffers & images.
         ///
         /// Supported platforms:
