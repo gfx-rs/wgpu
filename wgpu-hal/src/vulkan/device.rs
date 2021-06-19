@@ -5,7 +5,7 @@ use ash::{extensions::khr, version::DeviceV1_0, vk};
 use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
 
-use std::{cmp, collections::hash_map::Entry, ffi::CString, ptr, sync::Arc};
+use std::{borrow::Cow, cmp, collections::hash_map::Entry, ffi::CString, ptr, sync::Arc};
 
 impl super::DeviceShared {
     pub(super) unsafe fn set_object_name(
@@ -1059,10 +1059,19 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_shader_module(
         &self,
         desc: &crate::ShaderModuleDescriptor,
-        shader: crate::NagaShader,
+        shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
-        let spv = naga::back::spv::write_vec(&shader.module, &shader.info, &self.naga_options)
-            .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?;
+        let spv = match shader {
+            crate::ShaderInput::NagaShader(naga_shader) => Cow::Owned(
+                naga::back::spv::write_vec(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    &self.naga_options,
+                )
+                .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?,
+            ),
+            crate::ShaderInput::SpirVShader(spv) => spv,
+        };
 
         let vk_info = vk::ShaderModuleCreateInfo::builder()
             .flags(vk::ShaderModuleCreateFlags::empty())

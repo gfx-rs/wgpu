@@ -228,6 +228,11 @@ trait Context: Debug + Send + Sized + Sync {
         device: &Self::DeviceId,
         desc: &ShaderModuleDescriptor,
     ) -> Self::ShaderModuleId;
+    unsafe fn device_create_shader_module_spirv(
+        &self,
+        device: &Self::DeviceId,
+        desc: &ShaderModuleDescriptorSpirV,
+    ) -> Self::ShaderModuleId;
     fn device_create_bind_group_layout(
         &self,
         device: &Self::DeviceId,
@@ -750,6 +755,14 @@ pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     /// Source code for the shader.
     pub source: ShaderSource<'a>,
+}
+
+/// Descriptor for a shader module given by SPIR-V binary.
+pub struct ShaderModuleDescriptorSpirV<'a> {
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// Binary SPIR-V data, in 4-byte words.
+    pub source: Cow<'a, [u32]>,
 }
 
 /// Handle to a pipeline layout.
@@ -1549,6 +1562,22 @@ impl Device {
         ShaderModule {
             context: Arc::clone(&self.context),
             id: Context::device_create_shader_module(&*self.context, &self.id, desc),
+        }
+    }
+
+    /// Creates a shader module from SPIR-V binary directly.
+    ///
+    /// # Safety
+    ///
+    /// This function passes SPIR-V binary to the backend as-is and can potentially result in a
+    /// driver crash.
+    pub unsafe fn create_shader_module_spirv(
+        &self,
+        desc: &ShaderModuleDescriptorSpirV,
+    ) -> ShaderModule {
+        ShaderModule {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_shader_module_spirv(&*self.context, &self.id, desc),
         }
     }
 

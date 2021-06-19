@@ -174,7 +174,7 @@ impl crate::Device<Api> for Context {
     unsafe fn create_shader_module(
         &self,
         desc: &crate::ShaderModuleDescriptor,
-        shader: crate::NagaShader,
+        shader: crate::ShaderInput,
     ) -> Result<Resource, crate::ShaderError> {
         Ok(Resource)
     }

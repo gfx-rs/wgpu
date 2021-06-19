@@ -594,6 +594,14 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const CLEAR_COMMANDS = 0x0000_0001_0000_0000;
+        /// Enables creating shader modules from SPIR-V binary data (unsafe).
+        ///
+        /// Supported platforms:
+        /// - Vulkan, in case shader's requested capabilities and extensions agree with
+        /// Vulkan implementation.
+        ///
+        /// This is a native only feature.
+        const SPIR_V_SHADER_MODULES = 0x0000_0002_0000_0000;
 
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;

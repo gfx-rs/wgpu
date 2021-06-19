@@ -138,7 +138,7 @@ impl<A: hal::Api> Example<A> {
         let shader_desc = hal::ShaderModuleDescriptor { label: None };
         let shader = unsafe {
             device
-                .create_shader_module(&shader_desc, naga_shader)
+                .create_shader_module(&shader_desc, hal::ShaderInput::NagaShader(naga_shader))
                 .unwrap()
         };
 

@@ -64,7 +64,7 @@ pub mod api {
 }
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     fmt,
     num::NonZeroU8,
     ops::{Range, RangeInclusive},
@@ -257,7 +257,7 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn create_shader_module(
         &self,
         desc: &ShaderModuleDescriptor,
-        shader: NagaShader,
+        shader: ShaderInput,
     ) -> Result<A::ShaderModule, ShaderError>;
     unsafe fn destroy_shader_module(&self, module: A::ShaderModule);
     unsafe fn create_render_pipeline(
@@ -837,6 +837,12 @@ pub struct NagaShader {
     pub module: naga::Module,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
+}
+
+/// Shader input.
+pub enum ShaderInput<'a> {
+    NagaShader(NagaShader),
+    SpirVShader(Cow<'a, [u32]>),
 }
 
 pub struct ShaderModuleDescriptor<'a> {

@@ -630,9 +630,14 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_shader_module(
         &self,
         _desc: &crate::ShaderModuleDescriptor,
-        shader: crate::NagaShader,
+        shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
-        Ok(super::ShaderModule { raw: shader })
+        match shader {
+            crate::ShaderInput::NagaShader(raw) => Ok(super::ShaderModule { raw }),
+            crate::ShaderInput::SpirVShader(_) => Err(crate::ShaderError::Compilation(
+                "SPIR-V shaders are not supported for Metal".to_string(),
+            )),
+        }
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
 
