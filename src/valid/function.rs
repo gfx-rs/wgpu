@@ -65,8 +65,10 @@ pub enum FunctionError {
     InvalidArgumentType { index: usize, name: String },
     #[error("There are instructions after `return`/`break`/`continue`")]
     InstructionsAfterReturn,
-    #[error("The `break`/`continue` is used outside of a loop context")]
-    BreakContinueOutsideOfLoop,
+    #[error("The `break` is used outside of a `loop` or `switch` context")]
+    BreakOutsideOfLoopOrSwitch,
+    #[error("The `continue` is used outside of a `loop` context")]
+    ContinueOutsideOfLoop,
     #[error("The `return` is called within a `continuing` block")]
     InvalidReturnSpot,
     #[error("The `return` value {0:?} does not match the function return value")]
@@ -108,16 +110,18 @@ pub enum FunctionError {
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    struct Flags: u8 {
-        /// The control can jump out of this block.
-        const CAN_JUMP = 0x1;
-        /// The control is in a loop, can break and continue.
-        const IN_LOOP = 0x2;
+    struct ControlFlowAbility: u8 {
+        /// The control can return out of this block.
+        const RETURN = 0x1;
+        /// The control can break.
+        const BREAK = 0x2;
+        /// The control can continue.
+        const CONTINUE = 0x4;
     }
 }
 
 struct BlockContext<'a> {
-    flags: Flags,
+    abilities: ControlFlowAbility,
     info: &'a FunctionInfo,
     expressions: &'a Arena<crate::Expression>,
     types: &'a Arena<crate::Type>,
@@ -135,7 +139,7 @@ impl<'a> BlockContext<'a> {
         prev_infos: &'a [FunctionInfo],
     ) -> Self {
         Self {
-            flags: Flags::CAN_JUMP,
+            abilities: ControlFlowAbility::RETURN,
             info,
             expressions: &fun.expressions,
             types: &module.types,
@@ -146,8 +150,8 @@ impl<'a> BlockContext<'a> {
         }
     }
 
-    fn with_flags(&self, flags: Flags) -> Self {
-        BlockContext { flags, ..*self }
+    fn with_abilities(&self, abilities: ControlFlowAbility) -> Self {
+        BlockContext { abilities, ..*self }
     }
 
     fn get_expression(
@@ -304,10 +308,14 @@ impl super::Validator {
                             return Err(FunctionError::ConflictingSwitchCase(case.value));
                         }
                     }
+                    let pass_through_abilities = context.abilities
+                        & (ControlFlowAbility::RETURN | ControlFlowAbility::CONTINUE);
+                    let sub_context =
+                        context.with_abilities(pass_through_abilities | ControlFlowAbility::BREAK);
                     for case in cases {
-                        stages &= self.validate_block(&case.body, context)?;
+                        stages &= self.validate_block(&case.body, &sub_context)?;
                     }
-                    stages &= self.validate_block(default, context)?;
+                    stages &= self.validate_block(default, &sub_context)?;
                 }
                 S::Loop {
                     ref body,
@@ -316,24 +324,37 @@ impl super::Validator {
                     // special handling for block scoping is needed here,
                     // because the continuing{} block inherits the scope
                     let base_expression_count = self.valid_expression_list.len();
+                    let pass_through_abilities = context.abilities & ControlFlowAbility::RETURN;
                     stages &= self.validate_block_impl(
                         body,
-                        &context.with_flags(Flags::CAN_JUMP | Flags::IN_LOOP),
+                        &context.with_abilities(
+                            pass_through_abilities
+                                | ControlFlowAbility::BREAK
+                                | ControlFlowAbility::CONTINUE,
+                        ),
                     )?;
-                    stages &=
-                        self.validate_block_impl(continuing, &context.with_flags(Flags::empty()))?;
+                    stages &= self.validate_block_impl(
+                        continuing,
+                        &context.with_abilities(ControlFlowAbility::empty()),
+                    )?;
                     for handle in self.valid_expression_list.drain(base_expression_count..) {
                         self.valid_expression_set.remove(handle.index());
                     }
                 }
-                S::Break | S::Continue => {
-                    if !context.flags.contains(Flags::IN_LOOP) {
-                        return Err(FunctionError::BreakContinueOutsideOfLoop);
+                S::Break => {
+                    if !context.abilities.contains(ControlFlowAbility::BREAK) {
+                        return Err(FunctionError::BreakOutsideOfLoopOrSwitch);
+                    }
+                    finished = true;
+                }
+                S::Continue => {
+                    if !context.abilities.contains(ControlFlowAbility::CONTINUE) {
+                        return Err(FunctionError::ContinueOutsideOfLoop);
                     }
                     finished = true;
                 }
                 S::Return { value } => {
-                    if !context.flags.contains(Flags::CAN_JUMP) {
+                    if !context.abilities.contains(ControlFlowAbility::RETURN) {
                         return Err(FunctionError::InvalidReturnSpot);
                     }
                     let value_ty = value
