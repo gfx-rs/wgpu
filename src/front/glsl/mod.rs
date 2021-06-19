@@ -19,6 +19,7 @@ mod token;
 mod types;
 mod variables;
 
+#[derive(Default)]
 pub struct Options {
     pub entry_points: FastHashMap<String, ShaderStage>,
     pub defines: FastHashMap<String, String>,
