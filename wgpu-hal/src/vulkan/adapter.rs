@@ -208,7 +208,8 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::SAMPLED_TEXTURE_BINDING_ARRAY
             | F::STORAGE_TEXTURE_BINDING_ARRAY
-            | F::BUFFER_BINDING_ARRAY;
+            | F::BUFFER_BINDING_ARRAY
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         let mut dl_flags = Df::all();
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
