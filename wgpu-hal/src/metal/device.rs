@@ -586,6 +586,7 @@ impl crate::Device<super::Api> for super::Device {
                         has_dynamic_offset,
                         ..
                     } => {
+                        debug_assert_eq!(entry.size, 1);
                         let source = &desc.buffers[entry.resource_index as usize];
                         let remaining_size =
                             wgt::BufferSize::new(source.buffer.size - source.offset);
@@ -614,9 +615,14 @@ impl crate::Device<super::Api> for super::Device {
                         counter.samplers += 1;
                     }
                     wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
-                        let res = desc.textures[entry.resource_index as usize].view.as_raw();
-                        bg.textures.push(res);
-                        counter.textures += 1;
+                        let start = entry.resource_index;
+                        let end = entry.resource_index + entry.size;
+                        bg.textures.extend(
+                            desc.textures[start as usize..end as usize]
+                                .iter()
+                                .map(|tex| tex.view.as_raw()),
+                        );
+                        counter.textures += entry.size;
                     }
                 }
             }
