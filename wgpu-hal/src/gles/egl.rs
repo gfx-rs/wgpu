@@ -238,7 +238,7 @@ unsafe impl Sync for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let egl = match unsafe { egl::DynamicInstance::<egl::EGL1_4>::load_required() } {
+        let egl = match egl::DynamicInstance::<egl::EGL1_4>::load_required() {
             Ok(egl) => Arc::new(egl),
             Err(e) => {
                 log::warn!("Unable to open libEGL.so: {:?}", e);
@@ -447,10 +447,43 @@ impl crate::Instance<super::Api> for Instance {
             swapchain: None,
         })
     }
-    unsafe fn destroy_surface(&self, surface: Surface) {}
+    unsafe fn destroy_surface(&self, surface: Surface) {
+        let inner = self.inner.lock();
+        inner
+            .egl
+            .destroy_surface(inner.display, surface.raw)
+            .unwrap();
+        if let Some(wl_window) = surface.wl_window {
+            let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> = self
+                .wsi_library
+                .as_ref()
+                .expect("unsupported window")
+                .get(b"wl_egl_window_destroy")
+                .unwrap();
+            wl_egl_window_destroy(wl_window)
+        }
+    }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
-        Vec::new()
+        let inner = self.inner.lock();
+        inner
+            .egl
+            .make_current(
+                inner.display,
+                inner.pbuffer,
+                inner.pbuffer,
+                Some(inner.context),
+            )
+            .unwrap();
+
+        let context = glow::Context::from_loader_function(|name| {
+            inner
+                .egl
+                .get_proc_address(name)
+                .map_or(ptr::null(), |p| p as *const _)
+        });
+
+        vec![super::Adapter::expose(context)]
     }
 }
 
@@ -482,7 +515,7 @@ unsafe impl Sync for Surface {}
 impl crate::Surface<super::Api> for Surface {
     unsafe fn configure(
         &mut self,
-        device: &super::Context,
+        device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         self.unconfigure(device);
@@ -500,15 +533,16 @@ impl crate::Surface<super::Api> for Surface {
             );
         }
 
-        //let desc = conv::describe_format(config.format).unwrap();
-        let desc: super::FormatDescription = unimplemented!();
-
-        let gl: glow::Context = unimplemented!(); //&device.share.context;
+        let format_desc = device
+            .shared
+            .private_caps
+            .describe_texture_format(config.format);
+        let gl = &device.shared.context;
         let renderbuffer = gl.create_renderbuffer().unwrap();
         gl.bind_renderbuffer(glow::RENDERBUFFER, Some(renderbuffer));
         gl.renderbuffer_storage(
             glow::RENDERBUFFER,
-            desc.tex_internal,
+            format_desc.tex_internal,
             config.extent.width as _,
             config.extent.height as _,
         );
@@ -527,20 +561,19 @@ impl crate::Surface<super::Api> for Surface {
             renderbuffer,
             framebuffer,
             extent: config.extent,
-            format: desc.tex_internal,
+            format: format_desc.tex_internal,
             sample_type: wgt::TextureSampleType::Float { filterable: false },
         });
 
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Context) {
-        /*
-        let gl = &device.share.context;
+    unsafe fn unconfigure(&mut self, device: &super::Device) {
+        let gl = &device.shared.context;
         if let Some(sc) = self.swapchain.take() {
             gl.delete_renderbuffer(sc.renderbuffer);
             gl.delete_framebuffer(sc.framebuffer);
-        }*/
+        }
     }
 
     unsafe fn acquire_texture(
@@ -552,5 +585,5 @@ impl crate::Surface<super::Api> for Surface {
         //    native::SwapchainImage::new(sc.renderbuffer, sc.format, sc.extent, sc.channel);
         Ok(None)
     }
-    unsafe fn discard_texture(&mut self, texture: super::Resource) {}
+    unsafe fn discard_texture(&mut self, _texture: super::Resource) {}
 }

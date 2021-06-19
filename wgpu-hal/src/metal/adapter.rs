@@ -905,8 +905,8 @@ impl super::PrivateCapabilities {
             alignments: crate::Alignments {
                 buffer_copy_offset: buffer_alignment,
                 buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),
-                storage_buffer_offset: buffer_alignment,
                 uniform_buffer_offset: buffer_alignment,
+                storage_buffer_offset: buffer_alignment,
             },
             downlevel,
         }

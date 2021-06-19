@@ -3,10 +3,13 @@
 #[cfg(not(target_arch = "wasm32"))]
 mod egl;
 
+mod adapter;
+mod conv;
+
 #[cfg(not(target_arch = "wasm32"))]
 use self::egl::{Instance, Surface};
 
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 #[derive(Clone)]
 pub struct Api;
@@ -20,8 +23,8 @@ type DeviceResult<T> = Result<T, crate::DeviceError>;
 impl crate::Api for Api {
     type Instance = Instance;
     type Surface = Surface;
-    type Adapter = Context;
-    type Device = Context;
+    type Adapter = Adapter;
+    type Device = Device;
 
     type Queue = Context;
     type CommandEncoder = Encoder;
@@ -43,6 +46,10 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
+const fn is_webgl() -> bool {
+    cfg!(target_arch = "wasm32")
+}
+
 type TextureFormat = u32;
 
 #[derive(Debug, Clone, Copy)]
@@ -60,25 +67,22 @@ struct FormatDescription {
     va_kind: VertexAttribKind,
 }
 
-impl FormatDescription {
-    fn new(
-        tex_internal: u32,
-        tex_external: u32,
-        data_type: u32,
-        num_components: u8,
-        va_kind: VertexAttribKind,
-    ) -> Self {
-        FormatDescription {
-            tex_internal,
-            tex_external,
-            data_type,
-            num_components,
-            va_kind,
-        }
-    }
+struct PrivateCapabilities {}
+
+struct AdapterShared {
+    context: glow::Context,
+    private_caps: PrivateCapabilities,
 }
 
-impl crate::Adapter<Api> for Context {
+pub struct Adapter {
+    shared: Arc<AdapterShared>,
+}
+
+pub struct Device {
+    shared: Arc<AdapterShared>,
+}
+
+impl crate::Adapter<Api> for Adapter {
     unsafe fn open(&self, features: wgt::Features) -> DeviceResult<crate::OpenDevice<Api>> {
         Err(crate::DeviceError::Lost)
     }
@@ -110,7 +114,7 @@ impl crate::Queue<Api> for Context {
     }
 }
 
-impl crate::Device<Api> for Context {
+impl crate::Device<Api> for Device {
     unsafe fn exit(self) {}
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)

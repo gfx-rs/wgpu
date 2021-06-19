@@ -624,8 +624,8 @@ pub struct Alignments {
     /// The alignment of the row pitch of the texture data stored in a buffer that is
     /// used in a GPU copy operation.
     pub buffer_copy_pitch: wgt::BufferSize,
-    pub storage_buffer_offset: wgt::BufferSize,
     pub uniform_buffer_offset: wgt::BufferSize,
+    pub storage_buffer_offset: wgt::BufferSize,
 }
 
 #[derive(Clone, Debug)]
