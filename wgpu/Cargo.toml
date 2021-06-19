@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
@@ -64,14 +64,12 @@ env_logger = "0.8"
 
 # used to test all the example shaders
 [dev-dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-26"
+version = "0.5"
 features = ["wgsl-in"]
 
 # used to generate SPIR-V for the Web target
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-26"
+version = "0.5"
 features = ["wgsl-in", "spv-out"]
 
 [[example]]
