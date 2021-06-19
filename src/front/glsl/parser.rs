@@ -427,8 +427,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 TokenValue::Semicolon if self.program.version == 460 => Ok(()),
                 _ => {
                     let expected = match self.program.version {
-                        460 => vec![TokenValue::Semicolon.into(), ExpectedToken::EOF],
-                        _ => vec![ExpectedToken::EOF],
+                        460 => vec![TokenValue::Semicolon.into(), ExpectedToken::Eof],
+                        _ => vec![ExpectedToken::Eof],
                     };
                     Err(ErrorKind::InvalidToken(token, expected))
                 }

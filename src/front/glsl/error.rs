@@ -26,7 +26,7 @@ pub enum ExpectedToken {
     IntLiteral,
     FloatLiteral,
     BoolLiteral,
-    EOF,
+    Eof,
 }
 impl From<TokenValue> for ExpectedToken {
     fn from(token: TokenValue) -> Self {
@@ -42,7 +42,7 @@ impl std::fmt::Display for ExpectedToken {
             ExpectedToken::IntLiteral => write!(f, "integer literal"),
             ExpectedToken::FloatLiteral => write!(f, "float literal"),
             ExpectedToken::BoolLiteral => write!(f, "bool literal"),
-            ExpectedToken::EOF => write!(f, "end of file"),
+            ExpectedToken::Eof => write!(f, "end of file"),
         }
     }
 }

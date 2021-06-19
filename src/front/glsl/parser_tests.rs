@@ -56,7 +56,7 @@ fn version() {
                 value: TokenValue::Unknown(PreprocessorError::UnexpectedHash),
                 meta: SourceMetadata { start: 24, end: 25 }
             },
-            vec![ExpectedToken::EOF]
+            vec![ExpectedToken::Eof]
         )
     );
 
