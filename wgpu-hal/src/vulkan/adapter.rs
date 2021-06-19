@@ -803,7 +803,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             .instance
             .raw
             .get_physical_device_format_properties(self.raw, vk_format);
-        let features = properties.linear_tiling_features;
+        let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();
         flags.set(
