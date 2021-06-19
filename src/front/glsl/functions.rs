@@ -2,6 +2,7 @@ use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, EntryPoint, Expression, Function,
     FunctionArgument, FunctionResult, Handle, LocalVariable, MathFunction, RelationalFunction,
     SampleLevel, ScalarKind, Statement, StructMember, SwizzleComponent, Type, TypeInner,
+    VectorSize,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -200,6 +201,77 @@ impl Program<'_> {
                             Err(ErrorKind::SemanticError(
                                 meta,
                                 "Bad call to textureLod".into(),
+                            ))
+                        }
+                    }
+                    "texelFetch" => {
+                        if args.len() != 3 {
+                            return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                        }
+                        if ctx.samplers.get(&args[0].0).is_some() {
+                            let (arrayed, dims) =
+                                match *self.resolve_type(ctx, args[0].0, args[0].1)? {
+                                    TypeInner::Image { arrayed, dim, .. } => (arrayed, dim),
+                                    _ => (false, crate::ImageDimension::D1),
+                                };
+
+                            let (coordinate, array_index) = if arrayed {
+                                (
+                                    match dims {
+                                        crate::ImageDimension::D1 => ctx.add_expression(
+                                            Expression::AccessIndex {
+                                                base: args[1].0,
+                                                index: 0,
+                                            },
+                                            body,
+                                        ),
+                                        crate::ImageDimension::D2 => ctx.add_expression(
+                                            Expression::Swizzle {
+                                                size: VectorSize::Bi,
+                                                vector: args[1].0,
+                                                pattern: SwizzleComponent::XYZW,
+                                            },
+                                            body,
+                                        ),
+                                        _ => ctx.add_expression(
+                                            Expression::Swizzle {
+                                                size: VectorSize::Tri,
+                                                vector: args[1].0,
+                                                pattern: SwizzleComponent::XYZW,
+                                            },
+                                            body,
+                                        ),
+                                    },
+                                    Some(ctx.add_expression(
+                                        Expression::AccessIndex {
+                                            base: args[1].0,
+                                            index: match dims {
+                                                crate::ImageDimension::D1 => 1,
+                                                crate::ImageDimension::D2 => 2,
+                                                crate::ImageDimension::D3 => 3,
+                                                crate::ImageDimension::Cube => 2,
+                                            },
+                                        },
+                                        body,
+                                    )),
+                                )
+                            } else {
+                                (args[1].0, None)
+                            };
+
+                            Ok(Some(ctx.add_expression(
+                                Expression::ImageLoad {
+                                    image: args[0].0,
+                                    coordinate,
+                                    array_index,
+                                    index: Some(args[2].0),
+                                },
+                                body,
+                            )))
+                        } else {
+                            Err(ErrorKind::SemanticError(
+                                meta,
+                                "Bad call to texelFetch".into(),
                             ))
                         }
                     }
