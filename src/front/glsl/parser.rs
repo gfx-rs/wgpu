@@ -1,8 +1,7 @@
 use super::{
     ast::{
-        Context, FunctionCall, FunctionCallKind, FunctionSignature, GlobalLookup, GlobalLookupKind,
-        HirExpr, HirExprKind, ParameterQualifier, Profile, StorageQualifier, StructLayout,
-        TypeQualifier,
+        Context, FunctionCall, FunctionCallKind, GlobalLookup, GlobalLookupKind, HirExpr,
+        HirExprKind, ParameterQualifier, Profile, StorageQualifier, StructLayout, TypeQualifier,
     },
     error::ErrorKind,
     lex::Lexer,
@@ -667,12 +666,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             let mut expressions = Arena::new();
                             let mut local_variables = Arena::new();
                             let mut arguments = Vec::new();
+                            // Normalized function parameters, modifiers are not applied
                             let mut parameters = Vec::new();
+                            let mut qualifiers = Vec::new();
                             let mut body = Block::new();
-                            let mut sig = FunctionSignature {
-                                name: name.clone(),
-                                parameters: Vec::new(),
-                            };
 
                             let mut context = Context::new(
                                 self.program,
@@ -685,8 +682,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             self.parse_function_args(
                                 &mut context,
                                 &mut body,
+                                &mut qualifiers,
                                 &mut parameters,
-                                &mut sig,
                             )?;
 
                             let end_meta = self.expect(TokenValue::RightParen)?.meta;
@@ -698,13 +695,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     // This branch handles function prototypes
                                     self.program.add_prototype(
                                         Function {
-                                            name: Some(name),
+                                            name: Some(name.clone()),
                                             result,
                                             arguments,
                                             ..Default::default()
                                         },
-                                        sig,
+                                        name,
                                         parameters,
+                                        qualifiers,
                                         meta,
                                     )?;
 
@@ -721,7 +719,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     let Context { arg_use, .. } = context;
                                     let handle = self.program.add_function(
                                         Function {
-                                            name: Some(name),
+                                            name: Some(name.clone()),
                                             result,
                                             expressions,
                                             named_expressions: crate::FastHashMap::default(),
@@ -729,8 +727,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                             arguments,
                                             body,
                                         },
-                                        sig,
+                                        name,
                                         parameters,
+                                        qualifiers,
                                         meta,
                                     )?;
 
@@ -1737,19 +1736,26 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         &mut self,
         context: &mut Context,
         body: &mut Block,
-        parameters: &mut Vec<ParameterQualifier>,
-        sig: &mut FunctionSignature,
+        qualifiers: &mut Vec<ParameterQualifier>,
+        parameters: &mut Vec<Handle<Type>>,
     ) -> Result<()> {
         loop {
             if self.peek_type_name() || self.peek_parameter_qualifier() {
                 let qualifier = self.parse_parameter_qualifier();
-                parameters.push(qualifier);
+                qualifiers.push(qualifier);
                 let ty = self.parse_type_non_void()?.0;
 
                 match self.expect_peek()?.value {
                     TokenValue::Comma => {
                         self.bump()?;
-                        context.add_function_arg(&mut self.program, sig, body, None, ty, qualifier);
+                        context.add_function_arg(
+                            &mut self.program,
+                            parameters,
+                            body,
+                            None,
+                            ty,
+                            qualifier,
+                        );
                         continue;
                     }
                     TokenValue::Identifier(_) => {
@@ -1760,7 +1766,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
 
                         context.add_function_arg(
                             &mut self.program,
-                            sig,
+                            parameters,
                             body,
                             Some(name),
                             ty,

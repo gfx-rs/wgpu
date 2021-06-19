@@ -384,67 +384,126 @@ impl Program<'_> {
                         ))
                     }
                     _ => {
-                        let mut parameters = Vec::new();
+                        let declarations = self.lookup_function.get(&name).ok_or_else(|| {
+                            ErrorKind::SemanticError(
+                                meta,
+                                format!("Unknown function '{}'", name).into(),
+                            )
+                        })?;
 
-                        for (e, meta) in args {
-                            let handle = self.resolve_handle(ctx, e, meta)?;
+                        let mut maybe_decl = None;
 
-                            parameters.push(handle)
+                        'outer: for decl in declarations {
+                            if args.len() != decl.parameters.len() {
+                                continue;
+                            }
+
+                            let mut exact = true;
+
+                            for (decl_arg, call_arg) in decl.parameters.iter().zip(args.iter()) {
+                                let decl_inner = &self.module.types[*decl_arg].inner;
+                                let call_inner = self.resolve_type(ctx, call_arg.0, call_arg.1)?;
+
+                                if decl_inner != call_inner {
+                                    exact = false;
+
+                                    match (
+                                        decl_inner.scalar_kind().and_then(type_power),
+                                        call_inner.scalar_kind().and_then(type_power),
+                                    ) {
+                                        (Some(decl_power), Some(call_power)) => {
+                                            if decl_power < call_power {
+                                                continue 'outer;
+                                            }
+                                        }
+                                        _ => continue 'outer,
+                                    }
+                                }
+                            }
+
+                            if exact {
+                                maybe_decl = Some(decl);
+                                break;
+                            } else if maybe_decl.is_some() {
+                                return Err(ErrorKind::SemanticError(
+                                    meta,
+                                    format!("Ambiguous best function for '{}'", name).into(),
+                                ));
+                            } else {
+                                maybe_decl = Some(decl)
+                            }
                         }
 
-                        let sig = FunctionSignature { name, parameters };
+                        let decl = maybe_decl.ok_or_else(|| {
+                            ErrorKind::SemanticError(
+                                meta,
+                                format!("Unknown function '{}'", name).into(),
+                            )
+                        })?;
 
-                        let fun = self
-                            .lookup_function
-                            .get(&sig)
-                            .ok_or_else(|| {
-                                ErrorKind::SemanticError(
-                                    meta,
-                                    // FIXME: Proper signature display
-                                    format!("Unknown function: {:?}", sig).into(),
-                                )
-                            })?
-                            .clone();
+                        let qualifiers = decl.qualifiers.clone();
+                        let parameters = decl.parameters.clone();
+                        let function = decl.handle;
+                        let is_void = decl.void;
 
-                        let mut arguments = Vec::with_capacity(raw_args.len());
+                        let mut arguments = Vec::with_capacity(args.len());
                         let mut proxy_writes = Vec::new();
-                        for (qualifier, expr) in fun.qualifiers.iter().zip(raw_args.iter()) {
-                            let handle = ctx.lower_expect(self, *expr, qualifier.is_lhs(), body)?.0;
-                            if qualifier.is_lhs()
-                                && matches! { ctx.get_expression(handle), &Expression::Swizzle { .. } }
+                        for (qualifier, (expr, parameter)) in qualifiers
+                            .iter()
+                            .zip(raw_args.iter().zip(parameters.iter()))
+                        {
+                            let (mut handle, meta) =
+                                ctx.lower_expect(self, *expr, qualifier.is_lhs(), body)?;
+
+                            if let TypeInner::Vector { size, kind, width } =
+                                *self.resolve_type(ctx, handle, meta)?
                             {
-                                let meta = ctx.hir_exprs[*expr].meta;
-                                let ty = self.resolve_handle(ctx, handle, meta)?;
-                                let temp_var = ctx.locals.append(LocalVariable {
-                                    name: None,
-                                    ty,
-                                    init: None,
-                                });
-                                let temp_expr =
-                                    ctx.add_expression(Expression::LocalVariable(temp_var), body);
+                                if qualifier.is_lhs()
+                                    && matches!(
+                                        *ctx.get_expression(handle),
+                                        Expression::Swizzle { .. }
+                                    )
+                                {
+                                    let ty = self.module.types.append(Type {
+                                        name: None,
+                                        inner: TypeInner::Vector { size, kind, width },
+                                    });
+                                    let temp_var = ctx.locals.append(LocalVariable {
+                                        name: None,
+                                        ty,
+                                        init: None,
+                                    });
+                                    let temp_expr = ctx
+                                        .add_expression(Expression::LocalVariable(temp_var), body);
 
-                                body.push(Statement::Store {
-                                    pointer: temp_expr,
-                                    value: handle,
-                                });
+                                    body.push(Statement::Store {
+                                        pointer: temp_expr,
+                                        value: handle,
+                                    });
 
-                                arguments.push(temp_expr);
-                                proxy_writes.push((*expr, temp_expr));
-                            } else {
-                                arguments.push(handle);
+                                    arguments.push(temp_expr);
+                                    proxy_writes.push((*expr, temp_expr));
+                                    continue;
+                                }
                             }
+
+                            if let Some(kind) = self.module.types[*parameter].inner.scalar_kind() {
+                                ctx.implicit_conversion(self, &mut handle, meta, kind)?;
+                            }
+
+                            arguments.push(handle)
                         }
 
                         ctx.emit_flush(body);
 
-                        let result = if !fun.void {
-                            Some(ctx.add_expression(Expression::Call(fun.handle), body))
+                        let result = if !is_void {
+                            Some(ctx.add_expression(Expression::Call(function), body))
                         } else {
                             None
                         };
 
                         body.push(crate::Statement::Call {
-                            function: fun.handle,
+                            function,
                             arguments,
                             result,
                         });
@@ -505,22 +564,46 @@ impl Program<'_> {
     pub fn add_function(
         &mut self,
         mut function: Function,
-        sig: FunctionSignature,
+        name: String,
+        // Normalized function parameters, modifiers are not applied
+        parameters: Vec<Handle<Type>>,
         qualifiers: Vec<ParameterQualifier>,
         meta: SourceMetadata,
     ) -> Result<Handle<Function>, ErrorKind> {
         ensure_block_returns(&mut function.body);
-        let stage = self.entry_points.get(&sig.name);
+        let stage = self.entry_points.get(&name);
 
         Ok(if let Some(&stage) = stage {
             let handle = self.module.functions.append(function);
-            self.entries.push((sig.name, stage, handle));
+            self.entries.push((name, stage, handle));
             self.function_arg_use.push(Vec::new());
             handle
         } else {
             let void = function.result.is_none();
 
-            if let Some(decl) = self.lookup_function.get_mut(&sig) {
+            let &mut Program {
+                ref mut lookup_function,
+                ref mut module,
+                ..
+            } = self;
+
+            let declarations = lookup_function.entry(name).or_default();
+
+            'outer: for decl in declarations.iter_mut() {
+                if parameters.len() != decl.parameters.len() {
+                    continue;
+                }
+
+                for (new_parameter, old_parameter) in parameters.iter().zip(decl.parameters.iter())
+                {
+                    let new_inner = &module.types[*new_parameter].inner;
+                    let old_inner = &module.types[*old_parameter].inner;
+
+                    if new_inner != old_inner {
+                        continue 'outer;
+                    }
+                }
+
                 if decl.defined {
                     return Err(ErrorKind::SemanticError(
                         meta,
@@ -529,55 +612,72 @@ impl Program<'_> {
                 }
 
                 decl.defined = true;
+                decl.qualifiers = qualifiers;
                 *self.module.functions.get_mut(decl.handle) = function;
-                decl.handle
-            } else {
-                self.function_arg_use.push(Vec::new());
-                let handle = self.module.functions.append(function);
-                self.lookup_function.insert(
-                    sig,
-                    FunctionDeclaration {
-                        qualifiers,
-                        handle,
-                        defined: true,
-                        void,
-                    },
-                );
-                handle
+                return Ok(decl.handle);
             }
+
+            self.function_arg_use.push(Vec::new());
+            let handle = module.functions.append(function);
+            declarations.push(FunctionDeclaration {
+                parameters,
+                qualifiers,
+                handle,
+                defined: true,
+                void,
+            });
+            handle
         })
     }
 
     pub fn add_prototype(
         &mut self,
         function: Function,
-        sig: FunctionSignature,
+        name: String,
+        // Normalized function parameters, modifiers are not applied
+        parameters: Vec<Handle<Type>>,
         qualifiers: Vec<ParameterQualifier>,
         meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
         let void = function.result.is_none();
 
-        self.function_arg_use.push(Vec::new());
-        let handle = self.module.functions.append(function);
+        let &mut Program {
+            ref mut lookup_function,
+            ref mut module,
+            ..
+        } = self;
 
-        if self
-            .lookup_function
-            .insert(
-                sig,
-                FunctionDeclaration {
-                    qualifiers,
-                    handle,
-                    defined: false,
-                    void,
-                },
-            )
-            .is_some()
-        {
+        let declarations = lookup_function.entry(name).or_default();
+
+        'outer: for decl in declarations.iter_mut() {
+            if parameters.len() != decl.parameters.len() {
+                continue;
+            }
+
+            for (new_parameter, old_parameter) in parameters.iter().zip(decl.parameters.iter()) {
+                let new_inner = &module.types[*new_parameter].inner;
+                let old_inner = &module.types[*old_parameter].inner;
+
+                if new_inner != old_inner {
+                    continue 'outer;
+                }
+            }
+
             return Err(ErrorKind::SemanticError(
                 meta,
                 "Prototype already defined".into(),
             ));
         }
+
+        self.function_arg_use.push(Vec::new());
+        let handle = module.functions.append(function);
+        declarations.push(FunctionDeclaration {
+            parameters,
+            qualifiers,
+            handle,
+            defined: false,
+            void,
+        });
 
         Ok(())
     }

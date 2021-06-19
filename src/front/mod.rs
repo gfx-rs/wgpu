@@ -69,30 +69,6 @@ impl Typifier {
         self.resolutions[expr_handle.index()].inner_with(types)
     }
 
-    pub fn get_handle(
-        &mut self,
-        expr_handle: Handle<crate::Expression>,
-        types: &mut Arena<crate::Type>,
-    ) -> Handle<crate::Type> {
-        let mut dummy = TypeResolution::Value(crate::TypeInner::Sampler { comparison: false });
-        let res = &mut self.resolutions[expr_handle.index()];
-
-        std::mem::swap(&mut dummy, res);
-
-        let v = match dummy {
-            TypeResolution::Handle(h) => h,
-            TypeResolution::Value(inner) => {
-                let h = types.fetch_or_append(crate::Type { name: None, inner });
-                dummy = TypeResolution::Handle(h);
-                h
-            }
-        };
-
-        std::mem::swap(&mut dummy, res);
-
-        v
-    }
-
     pub fn grow(
         &mut self,
         expr_handle: Handle<crate::Expression>,

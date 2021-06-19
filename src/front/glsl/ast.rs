@@ -26,14 +26,10 @@ pub struct GlobalLookup {
     pub mutable: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub struct FunctionSignature {
-    pub name: String,
-    pub parameters: Vec<Handle<Type>>,
-}
-
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
+    /// Normalized function parameters, modifiers are not applied
+    pub parameters: Vec<Handle<Type>>,
     pub qualifiers: Vec<ParameterQualifier>,
     pub handle: Handle<Function>,
     /// Wheter this function was already defined or is just a prototype
@@ -84,7 +80,7 @@ pub struct Program<'a> {
     pub workgroup_size: [u32; 3],
     pub early_fragment_tests: bool,
 
-    pub lookup_function: FastHashMap<FunctionSignature, FunctionDeclaration>,
+    pub lookup_function: FastHashMap<String, Vec<FunctionDeclaration>>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
 
     pub global_variables: Vec<(String, GlobalLookup)>,
@@ -120,7 +116,7 @@ impl<'a> Program<'a> {
     }
 
     pub fn resolve_type<'b>(
-        &'b mut self,
+        &'b self,
         context: &'b mut Context,
         handle: Handle<Expression>,
         meta: SourceMetadata,
@@ -143,33 +139,6 @@ impl<'a> Program<'a> {
                 format!("Can't resolve type: {:?}", error).into(),
             )),
             Ok(()) => Ok(context.typifier.get(handle, &self.module.types)),
-        }
-    }
-
-    pub fn resolve_handle(
-        &mut self,
-        context: &mut Context,
-        handle: Handle<Expression>,
-        meta: SourceMetadata,
-    ) -> Result<Handle<Type>, ErrorKind> {
-        let resolve_ctx = ResolveContext {
-            constants: &self.module.constants,
-            types: &self.module.types,
-            global_vars: &self.module.global_variables,
-            local_vars: context.locals,
-            functions: &self.module.functions,
-            arguments: context.arguments,
-        };
-        match context
-            .typifier
-            .grow(handle, context.expressions, &resolve_ctx)
-        {
-            //TODO: better error report
-            Err(error) => Err(ErrorKind::SemanticError(
-                meta,
-                format!("Can't resolve type: {:?}", error).into(),
-            )),
-            Ok(()) => Ok(context.typifier.get_handle(handle, &mut self.module.types)),
         }
     }
 
@@ -362,7 +331,7 @@ impl<'function> Context<'function> {
     pub fn add_function_arg(
         &mut self,
         program: &mut Program,
-        sig: &mut FunctionSignature,
+        parameters: &mut Vec<Handle<Type>>,
         body: &mut Block,
         name: Option<String>,
         ty: Handle<Type>,
@@ -374,7 +343,7 @@ impl<'function> Context<'function> {
             ty,
             binding: None,
         };
-        sig.parameters.push(ty);
+        parameters.push(ty);
 
         if qualifier.is_lhs() {
             arg.ty = program.module.types.fetch_or_append(Type {
@@ -880,7 +849,7 @@ impl<'function> Context<'function> {
     }
 }
 
-fn type_power(kind: ScalarKind) -> Option<u32> {
+pub fn type_power(kind: ScalarKind) -> Option<u32> {
     Some(match kind {
         ScalarKind::Sint => 0,
         ScalarKind::Uint => 1,

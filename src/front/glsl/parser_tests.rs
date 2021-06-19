@@ -471,6 +471,54 @@ fn implicit_conversions() {
         &entry_points,
     )
     .unwrap();
+
+    assert_eq!(
+        parse_program(
+            r#"
+                #  version 450
+                void test(int a) {}
+                void test(uint a) {}
+
+                void main() {
+                    test(1.0);
+                }
+                "#,
+            &entry_points
+        )
+        .err()
+        .unwrap(),
+        ErrorKind::SemanticError(
+            SourceMetadata {
+                start: 156,
+                end: 165
+            },
+            "Unknown function \'test\'".into()
+        )
+    );
+
+    assert_eq!(
+        parse_program(
+            r#"
+                #  version 450
+                void test(float a) {}
+                void test(uint a) {}
+
+                void main() {
+                    test(1);
+                }
+                "#,
+            &entry_points
+        )
+        .err()
+        .unwrap(),
+        ErrorKind::SemanticError(
+            SourceMetadata {
+                start: 158,
+                end: 165
+            },
+            "Ambiguous best function for \'test\'".into()
+        )
+    );
 }
 
 #[test]
