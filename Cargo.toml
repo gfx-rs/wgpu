@@ -1,11 +1,11 @@
 [package]
 name = "naga"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Naga Developers"]
 edition = "2018"
 description = "Shader translation infrastructure"
 homepage = "https://github.com/gfx-rs/naga"
-repository = "https://github.com/gfx-rs/naga"
+repository = "https://github.com/gfx-rs/naga/tree/v0.5"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
@@ -26,7 +26,7 @@ thiserror = "1.0.21"
 serde = { version = "1.0", features = ["derive"], optional = true }
 petgraph = { version ="0.5", optional = true }
 rose_tree = { version ="0.2", optional = true }
-pp-rs = { git = "https://github.com/Kangz/glslpp-rs.git", optional = true, rev = "c02476b" }
+pp-rs = { version = "0.2.1", optional = true }
 
 [features]
 default = []
