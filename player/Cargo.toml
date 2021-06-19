@@ -29,7 +29,7 @@ features = ["replay"]
 [dependencies.wgc]
 path = "../wgpu-core"
 package = "wgpu-core"
-features = ["replay", "raw-window-handle"]
+features = ["spirv", "replay", "raw-window-handle"]
 
 [dev-dependencies]
 serde = "1"

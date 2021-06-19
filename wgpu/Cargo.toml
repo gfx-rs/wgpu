@@ -17,6 +17,7 @@ all-features = true
 
 [features]
 default = []
+spirv = ["wgc/spirv"]
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 webgl = ["wgc"]
@@ -78,8 +79,11 @@ features = ["wgsl-in", "spv-out"]
 
 [[example]]
 name="hello-compute"
-path="examples/hello-compute/main.rs"
 test = true
+
+[[example]]
+name="texture-arrays"
+required-features = ["spirv"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.73" # remember to change version in wiki as well

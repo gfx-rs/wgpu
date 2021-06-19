@@ -4,9 +4,10 @@ mod belt;
 mod device;
 mod encoder;
 
+use std::future::Future;
+#[cfg(feature = "spirv")]
 use std::{
     borrow::Cow,
-    future::Future,
     mem::{align_of, size_of},
     ptr::copy_nonoverlapping,
 };
@@ -24,15 +25,16 @@ pub use encoder::RenderEncoder;
 /// - Input length isn't multiple of 4
 /// - Input is longer than [`usize::max_value`]
 /// - SPIR-V magic number is missing from beginning of stream
+#[cfg(feature = "spirv")]
 pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
     super::ShaderSource::SpirV(make_spirv_raw(data))
 }
 
 /// Version of [`make_spirv`] intended for use with [`Device::create_shader_module_spirv`].
 /// Returns raw slice instead of ShaderSource.
+#[cfg(feature = "spirv")]
 pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
-
     assert_eq!(
         data.len() % size_of::<u32>(),
         0,

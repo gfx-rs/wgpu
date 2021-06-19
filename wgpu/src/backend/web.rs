@@ -1140,6 +1140,7 @@ impl crate::Context for Context {
         desc: &crate::ShaderModuleDescriptor,
     ) -> Self::ShaderModuleId {
         let mut descriptor = match desc.source {
+            #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
             }

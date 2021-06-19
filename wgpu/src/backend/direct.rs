@@ -810,6 +810,7 @@ impl crate::Context for Context {
             label: desc.label.map(Borrowed),
         };
         let source = match desc.source {
+            #[cfg(feature = "spirv")]
             ShaderSource::SpirV(ref spv) => wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv)),
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
         };

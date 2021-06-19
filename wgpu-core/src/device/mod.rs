@@ -838,6 +838,7 @@ impl<A: HalApi> Device<A> {
         source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
         let module = match source {
+            #[cfg(feature = "spirv")]
             pipeline::ShaderModuleSource::SpirV(spv) => {
                 profiling::scope!("naga::spv::parse");
                 // Parse the given shader code and store its representation.
@@ -3476,6 +3477,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
                 let data = match source {
+                    #[cfg(feature = "spirv")]
                     pipeline::ShaderModuleSource::SpirV(ref spv) => {
                         trace.make_binary("spv", unsafe {
                             std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)

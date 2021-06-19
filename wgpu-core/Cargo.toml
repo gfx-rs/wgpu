@@ -13,6 +13,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = []
+spirv = ["naga/spv-in"]
 # Enable API tracing
 trace = ["ron", "serde", "wgt/trace", "arrayvec/serde"]
 # Enable API replaying
@@ -37,7 +38,7 @@ thiserror = "1"
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
 tag = "gfx-26"
-features = ["spv-in", "wgsl-in"]
+features = ["wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"

@@ -739,6 +739,7 @@ pub enum ShaderSource<'a> {
     ///
     /// wgpu will attempt to parse and validate it, but the original binary
     /// is passed to `gfx-rs` and `spirv_cross` for translation.
+    #[cfg(feature = "spirv")]
     SpirV(Cow<'a, [u32]>),
     /// WGSL module as a string slice.
     ///
