@@ -2,9 +2,7 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use wgt::{
-    BackendBit, DeviceDescriptor, DownlevelProperties, Features, Limits,
-};
+use wgt::{BackendBit, DeviceDescriptor, DownlevelProperties, Features, Limits};
 
 use wgpu::{util, Adapter, Device, Instance, Queue};
 
@@ -101,8 +99,18 @@ impl Default for TestParameters {
 // Builder pattern to make it easier
 #[allow(dead_code)]
 impl TestParameters {
+    /// Set of common features that most tests require.
+    pub fn test_features(self) -> Self {
+        self.features(Features::MAPPABLE_PRIMARY_BUFFERS | Features::VERTEX_WRITABLE_STORAGE)
+    }
+
     pub fn features(mut self, features: Features) -> Self {
         self.required_features |= features;
+        self
+    }
+
+    pub fn backend_failures(mut self, backends: BackendBit) -> Self {
+        self.backend_failures |= backends;
         self
     }
 
@@ -112,17 +120,17 @@ impl TestParameters {
     }
 }
 
-pub fn initialize_test(
-    parameters: TestParameters,
-    test_function: impl FnOnce(TestingContext),
-) {
-        // We don't actually care if it fails
-        let _ = env_logger::try_init();
+pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {
+    // We don't actually care if it fails
+    let _ = env_logger::try_init();
 
     let backend_bits = util::backend_bits_from_env().unwrap_or(BackendBit::all());
     let instance = Instance::new(backend_bits);
-    let adapter = pollster::block_on(util::initialize_adapter_from_env_or_default(&instance, backend_bits))
-        .expect("could not find sutable adapter on the system");
+    let adapter = pollster::block_on(util::initialize_adapter_from_env_or_default(
+        &instance,
+        backend_bits,
+    ))
+    .expect("could not find sutable adapter on the system");
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
