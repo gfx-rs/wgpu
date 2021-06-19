@@ -208,7 +208,8 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::SAMPLED_TEXTURE_BINDING_ARRAY
             | F::STORAGE_TEXTURE_BINDING_ARRAY
-            | F::BUFFER_BINDING_ARRAY;
+            | F::BUFFER_BINDING_ARRAY
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         let mut dl_flags = Df::all();
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
@@ -802,7 +803,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             .instance
             .raw
             .get_physical_device_format_properties(self.raw, vk_format);
-        let features = properties.linear_tiling_features;
+        let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();
         flags.set(

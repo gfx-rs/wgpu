@@ -843,7 +843,8 @@ impl super::PrivateCapabilities {
             | F::DEPTH_CLAMPING
             | F::TEXTURE_COMPRESSION_BC
             | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::VERTEX_WRITABLE_STORAGE;
+            | F::VERTEX_WRITABLE_STORAGE
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
 
         features.set(
             F::SAMPLED_TEXTURE_BINDING_ARRAY
