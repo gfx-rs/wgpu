@@ -6,7 +6,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
             name: None,
             inner: TypeInner::Scalar {
                 kind: ScalarKind::Bool,
-                width: 4, // https://stackoverflow.com/questions/9419781/what-is-the-size-of-glsl-boolean
+                width: crate::BOOL_WIDTH,
             },
         }),
         "float" => Some(Type {
@@ -56,7 +56,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
             fn kind_width_parse(ty: &str) -> Option<(ScalarKind, u8)> {
                 Some(match ty {
                     "" => (ScalarKind::Float, 4),
-                    "b" => (ScalarKind::Bool, 4),
+                    "b" => (ScalarKind::Bool, crate::BOOL_WIDTH),
                     "i" => (ScalarKind::Sint, 4),
                     "u" => (ScalarKind::Uint, 4),
                     "d" => (ScalarKind::Float, 8),
