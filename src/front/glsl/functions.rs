@@ -1,8 +1,8 @@
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, EntryPoint, Expression, Function,
-    FunctionArgument, FunctionResult, Handle, LocalVariable, MathFunction, RelationalFunction,
-    SampleLevel, ScalarKind, Statement, StructMember, SwizzleComponent, Type, TypeInner,
-    VectorSize,
+    FunctionArgument, FunctionResult, Handle, ImageQuery, LocalVariable, MathFunction,
+    RelationalFunction, SampleLevel, ScalarKind, Statement, StructMember, SwizzleComponent, Type,
+    TypeInner, VectorSize,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -203,6 +203,21 @@ impl Program<'_> {
                                 "Bad call to textureLod".into(),
                             ))
                         }
+                    }
+                    "textureSize" => {
+                        if !(1..=2).contains(&args.len()) {
+                            return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
+                        }
+
+                        Ok(Some(ctx.add_expression(
+                            Expression::ImageQuery {
+                                image: args[0].0,
+                                query: ImageQuery::Size {
+                                    level: args.get(1).map(|e| e.0),
+                                },
+                            },
+                            body,
+                        )))
                     }
                     "texelFetch" => {
                         if args.len() != 3 {
