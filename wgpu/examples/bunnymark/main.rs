@@ -361,7 +361,7 @@ fn bunnymark() {
         768,
         wgpu::Features::default(),
         framework::test_common::TestParameters::default(),
-        0,
+        1,
         50,
     );
 }

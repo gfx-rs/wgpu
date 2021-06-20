@@ -486,7 +486,7 @@ fn mipmap() {
         768,
         wgpu::Features::default(),
         framework::test_common::TestParameters::default(),
-        15, // Mipmap sampling is highly variant between impls. This is currently bounded by the M1
-        40,
+        25, // Mipmap sampling is highly variant between impls. This is currently bounded by an 620
+        100,
     );
 }

@@ -43,13 +43,13 @@ fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> 
     Some(buffer)
 }
 
-fn write_png(path: impl AsRef<Path>, width: u32, height: u32, data: &[u8]) {
+fn write_png(path: impl AsRef<Path>, width: u32, height: u32, data: &[u8], compression: png::Compression) {
     let file = BufWriter::new(File::create(path).unwrap());
 
     let mut encoder = png::Encoder::new(file, width, height);
     encoder.set_color(png::ColorType::RGBA);
     encoder.set_depth(png::BitDepth::Eight);
-    encoder.set_compression(png::Compression::Best);
+    encoder.set_compression(compression);
     let mut writer = encoder.write_header().unwrap();
 
     writer.write_image_data(&data).unwrap();
@@ -110,7 +110,7 @@ pub fn compare_image_output(
                 .unwrap(),
             );
 
-            write_png(&difference_path, width, height, &difference_data);
+            write_png(&difference_path, width, height, &difference_data, png::Compression::Fast);
 
             panic!("Image data mismatch! Outlier count {} over limit {}. Max difference {}", outliers, max_outliers, max_difference)
         } else {
@@ -120,6 +120,6 @@ pub fn compare_image_output(
             );
         }
     } else {
-        write_png(&path, width, height, data);
+        write_png(&path, width, height, data, png::Compression::Best);
     }
 }

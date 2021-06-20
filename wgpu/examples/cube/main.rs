@@ -404,7 +404,7 @@ fn cube_lines() {
         768,
         wgpu::Features::NON_FILL_POLYGON_MODE,
         framework::test_common::TestParameters::default(),
-        1,
-        3,
+        2,
+        400, // Line rasterization is very different between vendors
     );
 }
