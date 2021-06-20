@@ -1062,7 +1062,7 @@ impl crate::Device<super::Api> for super::Device {
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         let spv = match shader {
-            crate::ShaderInput::NagaShader(naga_shader) => Cow::Owned(
+            crate::ShaderInput::Naga(naga_shader) => Cow::Owned(
                 naga::back::spv::write_vec(
                     &naga_shader.module,
                     &naga_shader.info,
@@ -1070,7 +1070,7 @@ impl crate::Device<super::Api> for super::Device {
                 )
                 .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?,
             ),
-            crate::ShaderInput::SpirVShader(spv) => spv,
+            crate::ShaderInput::SpirV(spv) => spv,
         };
 
         let vk_info = vk::ShaderModuleCreateInfo::builder()

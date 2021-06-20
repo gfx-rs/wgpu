@@ -841,8 +841,8 @@ pub struct NagaShader {
 
 /// Shader input.
 pub enum ShaderInput<'a> {
-    NagaShader(NagaShader),
-    SpirVShader(Cow<'a, [u32]>),
+    Naga(NagaShader),
+    SpirV(Cow<'a, [u32]>),
 }
 
 pub struct ShaderModuleDescriptor<'a> {

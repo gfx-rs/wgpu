@@ -902,7 +902,7 @@ impl<A: HalApi> Device<A> {
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)?;
         let interface = validation::Interface::new(&module, &info);
-        let hal_shader = hal::ShaderInput::NagaShader(hal::NagaShader { module, info });
+        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
 
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.borrow_option(),
@@ -941,12 +941,11 @@ impl<A: HalApi> Device<A> {
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: Cow<'a, [u32]>,
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
-        self.require_features(wgt::Features::SPIR_V_SHADER_MODULES)
-            .map_err(pipeline::CreateShaderModuleError::MissingFeatures)?;
+        self.require_features(wgt::Features::SPIRV_SHADER_MODULES)?;
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.borrow_option(),
         };
-        let hal_shader = hal::ShaderInput::SpirVShader(source);
+        let hal_shader = hal::ShaderInput::SpirV(source);
         let raw = match unsafe { self.raw.create_shader_module(&hal_desc, hal_shader) } {
             Ok(raw) => raw,
             Err(error) => {

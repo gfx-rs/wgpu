@@ -601,7 +601,7 @@ bitflags::bitflags! {
         /// Vulkan implementation.
         ///
         /// This is a native only feature.
-        const SPIR_V_SHADER_MODULES = 0x0000_0400_0000_0000;
+        const SPIRV_SHADER_MODULES = 0x0000_0400_0000_0000;
 
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
