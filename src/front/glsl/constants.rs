@@ -340,10 +340,10 @@ impl<'a> ConstantSolver<'a> {
         left: Handle<Constant>,
         right: Handle<Constant>,
     ) -> Result<Handle<Constant>, ConstantSolvingError> {
-        let left = &self.constants[left].inner;
-        let right = &self.constants[right].inner;
+        let left_inner = &self.constants[left].inner;
+        let right_inner = &self.constants[right].inner;
 
-        let inner = match (left, right) {
+        let inner = match (left_inner, right_inner) {
             (
                 &ConstantInner::Scalar {
                     value: left_value,
@@ -415,6 +415,20 @@ impl<'a> ConstantSolver<'a> {
                 };
 
                 ConstantInner::Scalar { value, width }
+            }
+            (&ConstantInner::Composite { ref components, ty }, &ConstantInner::Scalar { .. }) => {
+                let mut components = components.clone();
+                for comp in components.iter_mut() {
+                    *comp = self.binary_op(op, *comp, right)?;
+                }
+                ConstantInner::Composite { ty, components }
+            }
+            (&ConstantInner::Scalar { .. }, &ConstantInner::Composite { ref components, ty }) => {
+                let mut components = components.clone();
+                for comp in components.iter_mut() {
+                    *comp = self.binary_op(op, left, *comp)?;
+                }
+                ConstantInner::Composite { ty, components }
             }
             _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
         };
