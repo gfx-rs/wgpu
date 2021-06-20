@@ -1669,22 +1669,38 @@ impl Writer {
                 kind,
                 convert,
             } => {
-                let expr_id = self.cached[expr];
-                let expr_kind = fun_info[expr]
-                    .ty
-                    .inner_with(&ir_module.types)
-                    .scalar_kind()
-                    .unwrap();
+                use crate::ScalarKind as Sk;
 
-                let op = match (expr_kind, kind) {
-                    _ if convert.is_none() => spirv::Op::Bitcast,
-                    (crate::ScalarKind::Float, crate::ScalarKind::Uint) => spirv::Op::ConvertFToU,
-                    (crate::ScalarKind::Float, crate::ScalarKind::Sint) => spirv::Op::ConvertFToS,
-                    (crate::ScalarKind::Float, crate::ScalarKind::Float) => spirv::Op::FConvert,
-                    (crate::ScalarKind::Sint, crate::ScalarKind::Float) => spirv::Op::ConvertSToF,
-                    (crate::ScalarKind::Sint, crate::ScalarKind::Sint) => spirv::Op::SConvert,
-                    (crate::ScalarKind::Uint, crate::ScalarKind::Float) => spirv::Op::ConvertUToF,
-                    (crate::ScalarKind::Uint, crate::ScalarKind::Uint) => spirv::Op::UConvert,
+                let expr_id = self.cached[expr];
+                let (src_kind, src_width) = match *fun_info[expr].ty.inner_with(&ir_module.types) {
+                    crate::TypeInner::Scalar { kind, width }
+                    | crate::TypeInner::Vector {
+                        kind,
+                        width,
+                        size: _,
+                    } => (kind, width),
+                    crate::TypeInner::Matrix { width, .. } => (crate::ScalarKind::Float, width),
+                    ref other => {
+                        log::error!("As source {:?}", other);
+                        return Err(Error::Validation("Unexpected Expression::As source"));
+                    }
+                };
+
+                let op = match (src_kind, kind, convert) {
+                    (_, _, None) => spirv::Op::Bitcast,
+                    (Sk::Float, Sk::Uint, Some(_)) => spirv::Op::ConvertFToU,
+                    (Sk::Float, Sk::Sint, Some(_)) => spirv::Op::ConvertFToS,
+                    (Sk::Float, Sk::Float, Some(dst_width)) if src_width != dst_width => {
+                        spirv::Op::FConvert
+                    }
+                    (Sk::Sint, Sk::Float, Some(_)) => spirv::Op::ConvertSToF,
+                    (Sk::Sint, Sk::Sint, Some(dst_width)) if src_width != dst_width => {
+                        spirv::Op::SConvert
+                    }
+                    (Sk::Uint, Sk::Float, Some(_)) => spirv::Op::ConvertUToF,
+                    (Sk::Uint, Sk::Uint, Some(dst_width)) if src_width != dst_width => {
+                        spirv::Op::UConvert
+                    }
                     // We assume it's either an identity cast, or int-uint.
                     _ => spirv::Op::Bitcast,
                 };
