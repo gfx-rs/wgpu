@@ -866,10 +866,13 @@ impl crate::Device<super::Api> for super::Device {
             if entry.binding as usize >= types.len() {
                 types.resize(
                     entry.binding as usize + 1,
-                    vk::DescriptorType::INPUT_ATTACHMENT,
+                    (vk::DescriptorType::INPUT_ATTACHMENT, 0),
                 );
             }
-            types[entry.binding as usize] = conv::map_binding_type(entry.ty);
+            types[entry.binding as usize] = (
+                conv::map_binding_type(entry.ty),
+                entry.count.map_or(1, |c| c.get()),
+            );
 
             match entry.ty {
                 wgt::BindingType::Buffer {
@@ -910,8 +913,8 @@ impl crate::Device<super::Api> for super::Device {
             .iter()
             .map(|entry| vk::DescriptorSetLayoutBinding {
                 binding: entry.binding,
-                descriptor_type: types[entry.binding as usize],
-                descriptor_count: entry.count.map_or(1, |c| c.get()),
+                descriptor_type: types[entry.binding as usize].0,
+                descriptor_count: types[entry.binding as usize].1,
                 stage_flags: conv::map_shader_stage(entry.visibility),
                 p_immutable_samplers: ptr::null(),
             })
@@ -1006,7 +1009,10 @@ impl crate::Device<super::Api> for super::Device {
         let mut sampler_infos = Vec::with_capacity(desc.samplers.len());
         let mut image_infos = Vec::with_capacity(desc.textures.len());
         for entry in desc.entries {
-            let ty = desc.layout.types[entry.binding as usize];
+            let (ty, size) = desc.layout.types[entry.binding as usize];
+            if size == 0 {
+                continue; // empty slot
+            }
             let mut write = vk::WriteDescriptorSet::builder()
                 .dst_set(*set.raw())
                 .dst_binding(entry.binding)
@@ -1024,7 +1030,7 @@ impl crate::Device<super::Api> for super::Device {
                 vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
                     let index = image_infos.len();
                     let start = entry.resource_index;
-                    let end = entry.resource_index + entry.size;
+                    let end = start + size;
                     image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
                         |binding| {
                             let layout =
@@ -1043,7 +1049,7 @@ impl crate::Device<super::Api> for super::Device {
                 | vk::DescriptorType::STORAGE_BUFFER_DYNAMIC => {
                     let index = buffer_infos.len();
                     let start = entry.resource_index;
-                    let end = entry.resource_index + entry.size;
+                    let end = start + size;
                     buffer_infos.extend(desc.buffers[start as usize..end as usize].iter().map(
                         |binding| {
                             vk::DescriptorBufferInfo::builder()

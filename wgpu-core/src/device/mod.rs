@@ -1216,7 +1216,7 @@ impl<A: HalApi> Device<A> {
                 .entries
                 .get(&binding)
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
-            let (res_index, size) = match entry.resource {
+            let res_index = match entry.resource {
                 Br::Buffer(ref bb) => {
                     let bb = Self::create_buffer_binding(
                         &bb,
@@ -1231,7 +1231,7 @@ impl<A: HalApi> Device<A> {
 
                     let res_index = hal_buffers.len();
                     hal_buffers.push(bb);
-                    (res_index, 1)
+                    res_index
                 }
                 Br::BufferArray(ref bindings_array) => {
                     if let Some(count) = decl.count {
@@ -1261,7 +1261,7 @@ impl<A: HalApi> Device<A> {
                         )?;
                         hal_buffers.push(bb);
                     }
-                    (res_index, bindings_array.len())
+                    res_index
                 }
                 Br::Sampler(id) => {
                     match decl.ty {
@@ -1293,7 +1293,7 @@ impl<A: HalApi> Device<A> {
 
                             let res_index = hal_samplers.len();
                             hal_samplers.push(&sampler.raw);
-                            (res_index, 1)
+                            res_index
                         }
                         _ => {
                             return Err(Error::WrongBindingType {
@@ -1341,7 +1341,7 @@ impl<A: HalApi> Device<A> {
                         view: &view.raw,
                         usage: internal_use,
                     });
-                    (res_index, 1)
+                    res_index
                 }
                 Br::TextureViewArray(ref bindings_array) => {
                     if let Some(count) = decl.count {
@@ -1394,14 +1394,13 @@ impl<A: HalApi> Device<A> {
                         });
                     }
 
-                    (res_index, bindings_array.len())
+                    res_index
                 }
             };
 
             hal_entries.push(hal::BindGroupEntry {
                 binding,
                 resource_index: res_index as u32,
-                size: size as u32,
             });
         }
 

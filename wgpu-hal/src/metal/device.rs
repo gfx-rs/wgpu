@@ -570,6 +570,7 @@ impl crate::Device<super::Api> for super::Device {
             let stage_bit = map_naga_stage(stage);
             let mut dynamic_offsets_count = 0u32;
             for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+                let size = layout.count.map_or(1, |c| c.get());
                 if let wgt::BindingType::Buffer {
                     has_dynamic_offset: true,
                     ..
@@ -586,7 +587,7 @@ impl crate::Device<super::Api> for super::Device {
                         has_dynamic_offset,
                         ..
                     } => {
-                        debug_assert_eq!(entry.size, 1);
+                        debug_assert_eq!(size, 1);
                         let source = &desc.buffers[entry.resource_index as usize];
                         let remaining_size =
                             wgt::BufferSize::new(source.buffer.size - source.offset);
@@ -616,13 +617,13 @@ impl crate::Device<super::Api> for super::Device {
                     }
                     wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
                         let start = entry.resource_index;
-                        let end = entry.resource_index + entry.size;
+                        let end = start + size;
                         bg.textures.extend(
                             desc.textures[start as usize..end as usize]
                                 .iter()
                                 .map(|tex| tex.view.as_raw()),
                         );
-                        counter.textures += entry.size;
+                        counter.textures += size;
                     }
                 }
             }
