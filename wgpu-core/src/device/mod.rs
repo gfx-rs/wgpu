@@ -939,9 +939,9 @@ impl<A: HalApi> Device<A> {
         &self,
         self_id: id::DeviceId,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
-        source: Cow<'a, [u32]>,
+        source: &'a [u32],
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
-        self.require_features(wgt::Features::SPIRV_SHADER_MODULES)?;
+        self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.borrow_option(),
         };
@@ -3546,7 +3546,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             };
 
-            let shader = match device.create_shader_module_spirv(device_id, desc, source) {
+            let shader = match device.create_shader_module_spirv(device_id, desc, &source) {
                 Ok(shader) => shader,
                 Err(e) => break e,
             };

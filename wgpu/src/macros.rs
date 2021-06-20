@@ -57,7 +57,7 @@ macro_rules! include_spirv {
     };
 }
 
-/// Macro to load raw SPIR-V data statically, for use with [`wgpu::Features::SPIRV_SHADER_MODULES`].
+/// Macro to load raw SPIR-V data statically, for use with [`wgpu::Features::SPIRV_SHADER_PASSTHROUGH`].
 ///
 /// It ensures the word alignment as well as the magic number.
 #[macro_export]

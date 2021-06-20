@@ -64,7 +64,7 @@ pub mod api {
 }
 
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::Borrow,
     fmt,
     num::NonZeroU8,
     ops::{Range, RangeInclusive},
@@ -842,7 +842,7 @@ pub struct NagaShader {
 /// Shader input.
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
-    SpirV(Cow<'a, [u32]>),
+    SpirV(&'a [u32]),
 }
 
 pub struct ShaderModuleDescriptor<'a> {

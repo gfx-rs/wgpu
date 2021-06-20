@@ -77,7 +77,7 @@ impl framework::Example for Example {
             | wgpu::Features::PUSH_CONSTANTS
     }
     fn required_features() -> wgpu::Features {
-        wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY | wgpu::Features::SPIRV_SHADER_MODULES
+        wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {

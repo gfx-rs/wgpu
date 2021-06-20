@@ -635,7 +635,7 @@ impl crate::Device<super::Api> for super::Device {
         match shader {
             crate::ShaderInput::Naga(raw) => Ok(super::ShaderModule { raw }),
             crate::ShaderInput::SpirV(_) => {
-                unreachable!("SPIRV_SHADER_MODULES is not enabled for this backend")
+                unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }
         }
     }

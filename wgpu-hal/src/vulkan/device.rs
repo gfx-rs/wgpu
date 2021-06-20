@@ -1070,7 +1070,7 @@ impl crate::Device<super::Api> for super::Device {
                 )
                 .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?,
             ),
-            crate::ShaderInput::SpirV(spv) => spv,
+            crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
         };
 
         let vk_info = vk::ShaderModuleCreateInfo::builder()

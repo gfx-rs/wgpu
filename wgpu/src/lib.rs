@@ -1569,8 +1569,10 @@ impl Device {
     ///
     /// # Safety
     ///
-    /// This function passes SPIR-V binary to the backend as-is and can potentially result in a
-    /// driver crash.
+    /// This function passes binary data to the backend as-is and can potentially result in a
+    /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid SPIR-V.
+    ///
+    /// See also [`crate::include_spirv_raw!`] and [`crate::make_spirv_raw`].
     pub unsafe fn create_shader_module_spirv(
         &self,
         desc: &ShaderModuleDescriptorSpirV,
