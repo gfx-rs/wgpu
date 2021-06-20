@@ -720,7 +720,7 @@ impl DownlevelCapabilities {
     /// If this returns false, some parts of the API will result in validation errors where they would not normally.
     /// These parts can be determined by the values in this structure.
     pub fn is_webgpu_compliant(self) -> bool {
-        self == Self::default()
+        self.flags.contains(DownlevelFlags::COMPLIANT) && self.shader_model >= ShaderModel::Sm5
     }
 }
 
