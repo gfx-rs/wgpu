@@ -14,7 +14,7 @@ pub struct TypeLayout {
 
 /// Helper processor that derives the sizes of all types.
 /// It uses the default layout algorithm/table, described in
-/// https://github.com/gpuweb/gpuweb/issues/1393
+/// <https://github.com/gpuweb/gpuweb/issues/1393>
 #[derive(Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]

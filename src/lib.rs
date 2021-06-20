@@ -164,8 +164,8 @@ pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
 /// HLSL: Attribute earlydepthstencil
 ///
 /// For more, see:
-///   - https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification
-///   - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-earlydepthstencil
+///   - <https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification>
+///   - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-earlydepthstencil>
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -180,8 +180,8 @@ pub struct EarlyDepthTest {
 /// HLSL: SV_Depth/SV_DepthGreaterEqual/SV_DepthLessEqual
 ///
 /// For more, see:
-///   - https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt
-///   - https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics
+///   - <https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt>
+///   - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics>
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
