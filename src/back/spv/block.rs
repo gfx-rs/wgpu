@@ -90,6 +90,18 @@ impl<'w> BlockContext<'w> {
         self.writer.get_type_id(lookup_type)
     }
 
+    /// Extend texture coordinates with an array index, if necessary.
+    ///
+    /// SPIR-V image read and write instructions take the coordinates of the
+    /// texel to access as a vector. If the image is arrayed, the array index
+    /// must be supplied as the final component of the coordinate vector.
+    ///
+    /// If `array_index` is `Some(expr)`, then this function constructs a new
+    /// vector that is `coordinates` with `array_index` concatenated onto the
+    /// end: a `vec2` becomes a `vec3`, a scalar becomes a `vec2`, and so on.
+    ///
+    /// If `array_index` is `None`, this function simply returns the id for
+    /// `coordinates`.
     fn write_texture_coordinates(
         &mut self,
         coordinates: Handle<crate::Expression>,
