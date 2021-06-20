@@ -413,14 +413,42 @@ impl Program<'_> {
                             body,
                         )))
                     }
-                    "mix" | "clamp" | "faceforward" | "refract" | "fma" | "smoothstep" => {
+                    "mix" => {
+                        if args.len() != 3 {
+                            return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                        }
+                        Ok(Some(
+                            if let Some(ScalarKind::Bool) =
+                                self.resolve_type(ctx, args[2].0, args[2].1)?.scalar_kind()
+                            {
+                                ctx.add_expression(
+                                    Expression::Select {
+                                        condition: args[2].0,
+                                        accept: args[0].0,
+                                        reject: args[1].0,
+                                    },
+                                    body,
+                                )
+                            } else {
+                                ctx.add_expression(
+                                    Expression::Math {
+                                        fun: MathFunction::Mix,
+                                        arg: args[0].0,
+                                        arg1: Some(args[1].0),
+                                        arg2: Some(args[2].0),
+                                    },
+                                    body,
+                                )
+                            },
+                        ))
+                    }
+                    "clamp" | "faceforward" | "refract" | "fma" | "smoothstep" => {
                         if args.len() != 3 {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
                         Ok(Some(ctx.add_expression(
                             Expression::Math {
                                 fun: match name.as_str() {
-                                    "mix" => MathFunction::Mix,
                                     "clamp" => MathFunction::Clamp,
                                     "faceforward" => MathFunction::FaceForward,
                                     "refract" => MathFunction::Refract,
