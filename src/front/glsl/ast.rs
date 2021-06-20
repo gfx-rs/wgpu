@@ -606,6 +606,7 @@ impl<'function> Context<'function> {
                     TypeInner::Pointer { base, .. } => {
                         program.module.types[base].inner.scalar_kind()
                     }
+                    TypeInner::ValuePointer { kind, .. } => Some(kind),
                     ref ty => ty.scalar_kind(),
                 };
 
