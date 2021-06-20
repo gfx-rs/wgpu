@@ -345,6 +345,11 @@ impl<'function> Context<'function> {
         };
         parameters.push(ty);
 
+        let opaque = match program.module.types[ty].inner {
+            TypeInner::Image { .. } | TypeInner::Sampler { .. } => true,
+            _ => false,
+        };
+
         if qualifier.is_lhs() {
             arg.ty = program.module.types.fetch_or_append(Type {
                 name: None,
@@ -359,7 +364,7 @@ impl<'function> Context<'function> {
 
         if let Some(name) = name {
             let expr = self.add_expression(Expression::FunctionArgument(index as u32), body);
-            let mutable = qualifier != ParameterQualifier::Const;
+            let mutable = qualifier != ParameterQualifier::Const && !opaque;
             let load = qualifier.is_lhs();
 
             if mutable && !load {
