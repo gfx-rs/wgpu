@@ -1,10 +1,13 @@
 //! This module contains common test-only code that needs to be shared between the examples and the tests.
+#![allow(dead_code)] // This module is used in a lot of contexts and only parts of it will be used
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use wgt::{BackendBit, DeviceDescriptor, DownlevelProperties, Features, Limits};
 
 use wgpu::{util, Adapter, Device, Instance, Queue};
+
+pub mod image;
 
 async fn initialize_device(
     adapter: &Adapter,
@@ -37,10 +40,10 @@ pub struct TestingContext {
 
 // A rather arbitrary set of limits which should be lower than all devices wgpu reasonably expects to run on and provides enough resources for most tests to run.
 // Adjust as needed if they are too low/high.
-fn lowest_reasonable_limits() -> Limits {
+pub fn lowest_reasonable_limits() -> Limits {
     Limits {
-        max_texture_dimension_1d: 512,
-        max_texture_dimension_2d: 512,
+        max_texture_dimension_1d: 1024,
+        max_texture_dimension_2d: 1024,
         max_texture_dimension_3d: 32,
         max_texture_array_layers: 32,
         max_bind_groups: 1,
@@ -97,7 +100,6 @@ impl Default for TestParameters {
 }
 
 // Builder pattern to make it easier
-#[allow(dead_code)]
 impl TestParameters {
     /// Set of common features that most tests require.
     pub fn test_features(self) -> Self {
@@ -106,6 +108,11 @@ impl TestParameters {
 
     pub fn features(mut self, features: Features) -> Self {
         self.required_features |= features;
+        self
+    }
+
+    pub fn limits(mut self, limits: Limits) -> Self {
+        self.required_limits = limits;
         self
     }
 
