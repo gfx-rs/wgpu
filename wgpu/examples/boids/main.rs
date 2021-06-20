@@ -1,7 +1,10 @@
 // Flocking boids example with gpu compute update pass
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
-use rand::distributions::{Distribution, Uniform};
+use rand::{
+    distributions::{Distribution, Uniform},
+    SeedableRng,
+};
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 
@@ -168,7 +171,7 @@ impl framework::Example for Example {
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
 
         let mut initial_particle_data = vec![0.0f32; (4 * NUM_PARTICLES) as usize];
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let unif = Uniform::new_inclusive(-1.0, 1.0);
         for particle_instance_chunk in initial_particle_data.chunks_mut(4) {
             particle_instance_chunk[0] = unif.sample(&mut rng); // posx
@@ -313,4 +316,17 @@ impl framework::Example for Example {
 /// run example
 fn main() {
     framework::run::<Example>("boids");
+}
+
+#[test]
+fn boids() {
+    framework::test::<Example>(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/examples/boids/screenshot.png"),
+        1024,
+        768,
+        wgpu::Features::default(),
+        framework::test_common::TestParameters::default(),
+        0,
+        50,
+    );
 }

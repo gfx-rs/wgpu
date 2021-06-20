@@ -100,7 +100,7 @@ pub fn compare_image_output(
             .max()
             .unwrap();
 
-        if outliers >= max_outliers {
+        if outliers > max_outliers {
             // Because the deta is mismatched, lets output the difference to a file.
             let old_path = Path::new(&path);
             let difference_path = Path::new(&path).with_file_name(

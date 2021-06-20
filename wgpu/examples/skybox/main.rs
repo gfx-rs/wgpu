@@ -459,3 +459,67 @@ impl framework::Example for Skybox {
 fn main() {
     framework::run::<Skybox>("skybox");
 }
+
+#[test]
+fn skybox() {
+    framework::test::<Skybox>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/skybox/screenshot.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::default(),
+        framework::test_common::TestParameters::default(),
+        2,
+        3,
+    );
+}
+
+#[test]
+fn skybox_bc1() {
+    framework::test::<Skybox>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/skybox/screenshot-bc1.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::TEXTURE_COMPRESSION_BC,
+        framework::test_common::TestParameters::default(),
+        4,
+        0,
+    );
+}
+
+#[test]
+fn skybox_etc2() {
+    framework::test::<Skybox>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/skybox/screenshot-etc2.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::TEXTURE_COMPRESSION_ETC2,
+        framework::test_common::TestParameters::default(),
+        1, // TODO
+        1, // TODO
+    );
+}
+
+#[test]
+fn skybox_astc() {
+    framework::test::<Skybox>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/skybox/screenshot-astc.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        framework::test_common::TestParameters::default(),
+        1, // TODO
+        1, // TODO
+    );
+}

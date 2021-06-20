@@ -73,6 +73,6 @@ fn fs_entity(in: EntityOutput) -> [[location(0)]] vec4<f32> {
     let normal = normalize(in.normal);
     let reflected = incident - 2.0 * dot(normal, incident) * normal;
 
-    let reflected_color = textureSample(r_texture, r_sampler, reflected);
-    return vec4<f32>(0.1, 0.1, 0.1, 0.1) + 0.5 * reflected_color;
+    let reflected_color = textureSample(r_texture, r_sampler, reflected).rgb;
+    return vec4<f32>(vec3<f32>(0.1) + 0.5 * reflected_color, 1.0);
 }

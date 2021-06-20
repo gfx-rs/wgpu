@@ -379,3 +379,32 @@ impl framework::Example for Example {
 fn main() {
     framework::run::<Example>("cube");
 }
+
+#[test]
+fn cube() {
+    framework::test::<Example>(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/examples/cube/screenshot.png"),
+        1024,
+        768,
+        wgpu::Features::default(),
+        framework::test_common::TestParameters::default(),
+        1,
+        3,
+    );
+}
+
+#[test]
+fn cube_lines() {
+    framework::test::<Example>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/cube/screenshot-lines.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::NON_FILL_POLYGON_MODE,
+        framework::test_common::TestParameters::default(),
+        1,
+        3,
+    );
+}

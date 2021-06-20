@@ -1,13 +1,13 @@
-use std::future::Future;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
+use std::{future::Future};
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
 #[path = "../tests/common/mod.rs"]
-mod test_common;
+pub mod test_common;
 
 #[rustfmt::skip]
 #[allow(unused)]
@@ -365,20 +365,28 @@ pub fn run<E: Example>(title: &str) {
 }
 
 #[cfg(test)]
-pub fn test<E: Example>(image_path: &str, width: u32, height: u32, tollerance: u8, max_outliers: usize) {
+#[allow(dead_code)]
+pub fn test<E: Example>(
+    image_path: &str,
+    width: u32,
+    height: u32,
+    optional_features: wgpu::Features,
+    base_test_parameters: test_common::TestParameters,
+    tollerance: u8,
+    max_outliers: usize,
+) {
     use std::num::NonZeroU32;
 
     assert_eq!(width % 64, 0, "width needs to be aligned 64");
 
-    let _optional = E::optional_features();
-    let features = E::required_features();
+    let features = E::required_features() | optional_features;
     let mut limits = E::required_limits();
     if limits == wgpu::Limits::default() {
         limits = test_common::lowest_reasonable_limits();
     }
 
     test_common::initialize_test(
-        test_common::TestParameters::default()
+        base_test_parameters
             .features(features)
             .limits(limits),
         |ctx| {

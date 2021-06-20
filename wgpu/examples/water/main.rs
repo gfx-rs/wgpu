@@ -5,6 +5,7 @@ mod point_gen;
 
 use bytemuck::{Pod, Zeroable};
 use cgmath::Point3;
+use rand::SeedableRng;
 use std::{borrow::Cow, iter, mem};
 use wgpu::util::DeviceExt;
 
@@ -279,7 +280,7 @@ impl framework::Example for Example {
         let terrain_noise = noise::OpenSimplex::new();
 
         // Random colouration
-        let mut terrain_random = rand::thread_rng();
+        let mut terrain_random = rand::rngs::StdRng::seed_from_u64(42);
 
         // Generate terrain. The closure determines what each hexagon will look like.
         let terrain =
@@ -787,4 +788,20 @@ impl framework::Example for Example {
 
 fn main() {
     framework::run::<Example>("water");
+}
+
+#[test]
+fn shadow() {
+    framework::test::<Example>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/water/screenshot.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::default(),
+        framework::test_common::TestParameters::default(),
+        2,
+        2,
+    );
 }

@@ -282,3 +282,19 @@ impl framework::Example for Example {
 fn main() {
     framework::run::<Example>("msaa-line");
 }
+
+#[test]
+fn msaa_line() {
+    framework::test::<Example>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/msaa-line/screenshot.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::default(),
+        framework::test_common::TestParameters::default(),
+        0,
+        1 << 15, // MSAA is comically different between vendors, 32k is a decent limit
+    );
+}

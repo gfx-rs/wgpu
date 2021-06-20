@@ -349,3 +349,19 @@ impl framework::Example for Example {
 fn main() {
     framework::run::<Example>("bunnymark");
 }
+
+#[test]
+fn bunnymark() {
+    framework::test::<Example>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/bunnymark/screenshot.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::default(),
+        framework::test_common::TestParameters::default(),
+        0,
+        50,
+    );
+}

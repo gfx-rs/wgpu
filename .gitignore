@@ -17,4 +17,4 @@
 wgpu/red.png
 
 # Output from invalid comparison tests
-**/screenshot-difference.png
+**/*-difference.png

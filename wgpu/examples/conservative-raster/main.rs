@@ -73,7 +73,7 @@ impl framework::Example for Example {
     }
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
@@ -133,7 +133,7 @@ impl framework::Example for Example {
                 multisample: wgpu::MultisampleState::default(),
             });
 
-        let pipeline_lines = if adapter
+        let pipeline_lines = if device
             .features()
             .contains(wgpu::Features::NON_FILL_POLYGON_MODE)
         {
@@ -311,4 +311,20 @@ impl framework::Example for Example {
 
 fn main() {
     framework::run::<Example>("conservative-raster");
+}
+
+#[test]
+fn conservative_raster() {
+    framework::test::<Example>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/conservative-raster/screenshot.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::default(),
+        framework::test_common::TestParameters::default(),
+        0,
+        0,
+    );
 }

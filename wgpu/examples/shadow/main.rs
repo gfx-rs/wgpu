@@ -821,3 +821,19 @@ impl framework::Example for Example {
 fn main() {
     framework::run::<Example>("shadow");
 }
+
+#[test]
+fn shadow() {
+    framework::test::<Example>(
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/shadow/screenshot.png"
+        ),
+        1024,
+        768,
+        wgpu::Features::default(),
+        framework::test_common::TestParameters::default(),
+        1,
+        1,
+    );
+}
