@@ -889,7 +889,7 @@ impl<A: HalApi> Device<A> {
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)?;
         let interface = validation::Interface::new(&module, &info);
-        let hal_shader = hal::NagaShader { module, info };
+        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
 
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.borrow_option(),
@@ -915,7 +915,46 @@ impl<A: HalApi> Device<A> {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
             },
-            interface,
+            interface: Some(interface),
+            #[cfg(debug_assertions)]
+            label: desc.label.borrow_or_default().to_string(),
+        })
+    }
+
+    #[allow(unused_unsafe)]
+    unsafe fn create_shader_module_spirv<'a>(
+        &self,
+        self_id: id::DeviceId,
+        desc: &pipeline::ShaderModuleDescriptor<'a>,
+        source: &'a [u32],
+    ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
+        self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
+        let hal_desc = hal::ShaderModuleDescriptor {
+            label: desc.label.borrow_option(),
+        };
+        let hal_shader = hal::ShaderInput::SpirV(source);
+        let raw = match unsafe { self.raw.create_shader_module(&hal_desc, hal_shader) } {
+            Ok(raw) => raw,
+            Err(error) => {
+                return Err(match error {
+                    hal::ShaderError::Device(error) => {
+                        pipeline::CreateShaderModuleError::Device(error.into())
+                    }
+                    hal::ShaderError::Compilation(ref msg) => {
+                        log::error!("Shader error: {}", msg);
+                        pipeline::CreateShaderModuleError::Generation
+                    }
+                })
+            }
+        };
+
+        Ok(pipeline::ShaderModule {
+            raw,
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            interface: None,
             #[cfg(debug_assertions)]
             label: desc.label.borrow_or_default().to_string(),
         })
@@ -1735,13 +1774,15 @@ impl<A: HalApi> Device<A> {
                     None
                 }
             };
-            let _ = shader_module.interface.check_stage(
-                provided_layouts.as_ref().map(|p| p.as_slice()),
-                &mut derived_group_layouts,
-                &desc.stage.entry_point,
-                flag,
-                io,
-            )?;
+            if let Some(ref interface) = shader_module.interface {
+                let _ = interface.check_stage(
+                    provided_layouts.as_ref().map(|p| p.as_slice()),
+                    &mut derived_group_layouts,
+                    &desc.stage.entry_point,
+                    flag,
+                    io,
+                )?;
+            }
         }
 
         let pipeline_layout_id = match desc.layout {
@@ -2017,20 +2058,21 @@ impl<A: HalApi> Device<A> {
                 None => None,
             };
 
-            io = shader_module
-                .interface
-                .check_stage(
-                    provided_layouts.as_ref().map(|p| p.as_slice()),
-                    &mut derived_group_layouts,
-                    &stage.entry_point,
-                    flag,
-                    io,
-                )
-                .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                    stage: flag,
-                    error,
-                })?;
-            validated_stages |= flag;
+            if let Some(ref interface) = shader_module.interface {
+                io = interface
+                    .check_stage(
+                        provided_layouts.as_ref().map(|p| p.as_slice()),
+                        &mut derived_group_layouts,
+                        &stage.entry_point,
+                        flag,
+                        io,
+                    )
+                    .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
+                        stage: flag,
+                        error,
+                    })?;
+                validated_stages |= flag;
+            }
 
             hal::ProgrammableStage {
                 module: &shader_module.raw,
@@ -2061,20 +2103,21 @@ impl<A: HalApi> Device<A> {
                 };
 
                 if validated_stages == wgt::ShaderStage::VERTEX {
-                    io = shader_module
-                        .interface
-                        .check_stage(
-                            provided_layouts.as_ref().map(|p| p.as_slice()),
-                            &mut derived_group_layouts,
-                            &fragment.stage.entry_point,
-                            flag,
-                            io,
-                        )
-                        .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                            stage: flag,
-                            error,
-                        })?;
-                    validated_stages |= flag;
+                    if let Some(ref interface) = shader_module.interface {
+                        io = interface
+                            .check_stage(
+                                provided_layouts.as_ref().map(|p| p.as_slice()),
+                                &mut derived_group_layouts,
+                                &fragment.stage.entry_point,
+                                flag,
+                                io,
+                            )
+                            .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
+                                stage: flag,
+                                error,
+                            })?;
+                        validated_stages |= flag;
+                    }
                 }
 
                 Some(hal::ProgrammableStage {
@@ -3454,6 +3497,58 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let shader = match device.create_shader_module(device_id, desc, source) {
+                Ok(shader) => shader,
+                Err(e) => break e,
+            };
+            let id = fid.assign(shader, &mut token);
+            return (id.0, None);
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
+    }
+
+    #[allow(unused_unsafe)] // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
+    /// # Safety
+    ///
+    /// This function passes SPIR-V binary to the backend as-is and can potentially result in a
+    /// driver crash.
+    pub unsafe fn device_create_shader_module_spirv<A: HalApi>(
+        &self,
+        device_id: id::DeviceId,
+        desc: &pipeline::ShaderModuleDescriptor,
+        source: Cow<[u32]>,
+        id_in: Input<G, id::ShaderModuleId>,
+    ) -> (
+        id::ShaderModuleId,
+        Option<pipeline::CreateShaderModuleError>,
+    ) {
+        profiling::scope!("create_shader_module", "Device");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.shader_modules.prepare(id_in);
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                let mut trace = trace.lock();
+                let data = trace.make_binary("spv", unsafe {
+                    std::slice::from_raw_parts(source.as_ptr() as *const u8, source.len() * 4)
+                });
+                trace.add(trace::Action::CreateShaderModule {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                    data,
+                });
+            };
+
+            let shader = match device.create_shader_module_spirv(device_id, desc, &source) {
                 Ok(shader) => shader,
                 Err(e) => break e,
             };

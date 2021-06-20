@@ -25,7 +25,7 @@ pub struct ShaderModuleDescriptor<'a> {
 pub struct ShaderModule<A: hal::Api> {
     pub(crate) raw: A::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) interface: validation::Interface,
+    pub(crate) interface: Option<validation::Interface>,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }

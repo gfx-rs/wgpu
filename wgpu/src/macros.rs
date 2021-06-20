@@ -57,6 +57,22 @@ macro_rules! include_spirv {
     };
 }
 
+/// Macro to load raw SPIR-V data statically, for use with [`wgpu::Features::SPIRV_SHADER_PASSTHROUGH`].
+///
+/// It ensures the word alignment as well as the magic number.
+#[macro_export]
+macro_rules! include_spirv_raw {
+    ($($token:tt)*) => {
+        {
+            //log::info!("including '{}'", $($token)*);
+            $crate::ShaderModuleDescriptorSpirV {
+                label: Some($($token)*),
+                source: $crate::util::make_spirv_raw(include_bytes!($($token)*)),
+            }
+        }
+    };
+}
+
 /// Macro to load a WGSL module statically.
 #[macro_export]
 macro_rules! include_wgsl {

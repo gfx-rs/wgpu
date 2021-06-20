@@ -77,7 +77,7 @@ impl framework::Example for Example {
             | wgpu::Features::PUSH_CONSTANTS
     }
     fn required_features() -> wgpu::Features {
-        wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY
+        wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
@@ -94,22 +94,22 @@ impl framework::Example for Example {
         let mut uniform_workaround = false;
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
         let fs_source = match device.features() {
-            f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
-                wgpu::include_spirv!("unsized-non-uniform.frag.spv")
-            }
+            //f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
+            //    wgpu::include_spirv_raw!("unsized-non-uniform.frag.spv")
+            //}
             f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
-                wgpu::include_spirv!("non-uniform.frag.spv")
+                wgpu::include_spirv_raw!("non-uniform.frag.spv")
             }
             f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
                 uniform_workaround = true;
-                wgpu::include_spirv!("uniform.frag.spv")
+                wgpu::include_spirv_raw!("uniform.frag.spv")
             }
             f if f.contains(wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY) => {
-                wgpu::include_spirv!("constant.frag.spv")
+                wgpu::include_spirv_raw!("constant.frag.spv")
             }
             _ => unreachable!(),
         };
-        let fs_module = device.create_shader_module(&fs_source);
+        let fs_module = unsafe { device.create_shader_module_spirv(&fs_source) };
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();

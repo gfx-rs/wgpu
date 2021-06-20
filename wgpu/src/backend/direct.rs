@@ -4,8 +4,8 @@ use crate::{
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, SwapChainStatus, TextureDescriptor,
-    TextureFormat, TextureViewDescriptor,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
+    SwapChainStatus, TextureDescriptor, TextureFormat, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -823,6 +823,30 @@ impl crate::Context for Context {
                 LABEL,
                 desc.label,
                 "Device::create_shader_module",
+            );
+        }
+        id
+    }
+
+    unsafe fn device_create_shader_module_spirv(
+        &self,
+        device: &Self::DeviceId,
+        desc: &ShaderModuleDescriptorSpirV,
+    ) -> Self::ShaderModuleId {
+        let global = &self.0;
+        let descriptor = wgc::pipeline::ShaderModuleDescriptor {
+            label: desc.label.map(Borrowed),
+        };
+        let (id, error) = wgc::gfx_select!(
+            device.id => global.device_create_shader_module_spirv(device.id, &descriptor, Borrowed(&desc.source), PhantomData)
+        );
+        if let Some(cause) = error {
+            self.handle_error(
+                &device.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_shader_module_spirv",
             );
         }
         id

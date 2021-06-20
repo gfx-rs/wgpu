@@ -25,6 +25,12 @@ pub use encoder::RenderEncoder;
 /// - Input is longer than [`usize::max_value`]
 /// - SPIR-V magic number is missing from beginning of stream
 pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
+    super::ShaderSource::SpirV(make_spirv_raw(data))
+}
+
+/// Version of [`make_spirv`] intended for use with [`Device::create_shader_module_spirv`].
+/// Returns raw slice instead of ShaderSource.
+pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
 
     assert_eq!(
@@ -53,7 +59,8 @@ pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
         "wrong magic word {:x}. Make sure you are using a binary SPIRV file.",
         words[0]
     );
-    super::ShaderSource::SpirV(words)
+
+    words
 }
 
 /// CPU accessible buffer used to download data back from the GPU.

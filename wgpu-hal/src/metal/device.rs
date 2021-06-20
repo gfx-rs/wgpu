@@ -637,9 +637,14 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_shader_module(
         &self,
         _desc: &crate::ShaderModuleDescriptor,
-        shader: crate::NagaShader,
+        shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
-        Ok(super::ShaderModule { raw: shader })
+        match shader {
+            crate::ShaderInput::Naga(raw) => Ok(super::ShaderModule { raw }),
+            crate::ShaderInput::SpirV(_) => {
+                unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
+        }
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
 
