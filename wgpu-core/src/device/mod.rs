@@ -523,8 +523,8 @@ impl<A: HalApi> Device<A> {
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
-        let format_desc = desc.format.describe();
-        self.require_features(format_desc.required_features)
+        let format_features = self
+            .describe_format_features(adapter, desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
 
         // Ensure `D24Plus` textures cannot be copied
@@ -543,15 +543,6 @@ impl<A: HalApi> Device<A> {
         if desc.usage.is_empty() {
             return Err(resource::CreateTextureError::EmptyUsage);
         }
-
-        let format_features = if self
-            .features
-            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
-        {
-            adapter.get_texture_format_features(desc.format)
-        } else {
-            format_desc.guaranteed_format_features
-        };
 
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
@@ -1813,6 +1804,7 @@ impl<A: HalApi> Device<A> {
     fn create_render_pipeline<G: GlobalIdentityHandlerFactory>(
         &self,
         self_id: id::DeviceId,
+        adapter: &crate::instance::Adapter<A>,
         desc: &pipeline::RenderPipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<A, G>,
@@ -1941,16 +1933,14 @@ impl<A: HalApi> Device<A> {
 
         for (i, cs) in color_targets.iter().enumerate() {
             let error = loop {
-                let format_desc = cs.format.describe();
-                self.require_features(format_desc.required_features)?;
-                if !format_desc
-                    .guaranteed_format_features
+                let format_features = self.describe_format_features(adapter, cs.format)?;
+                if !format_features
                     .allowed_usages
                     .contains(wgt::TextureUsage::RENDER_ATTACHMENT)
                 {
                     break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
                 }
-                if cs.blend.is_some() && !format_desc.guaranteed_format_features.filterable {
+                if cs.blend.is_some() && !format_features.filterable {
                     break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                 }
                 if !hal::FormatAspect::from(cs.format).contains(hal::FormatAspect::COLOR) {
@@ -1966,10 +1956,8 @@ impl<A: HalApi> Device<A> {
 
         if let Some(ds) = depth_stencil_state {
             let error = loop {
-                let format_desc = ds.format.describe();
-                self.require_features(format_desc.required_features)?;
-                if !format_desc
-                    .guaranteed_format_features
+                if !self
+                    .describe_format_features(adapter, ds.format)?
                     .allowed_usages
                     .contains(wgt::TextureUsage::RENDER_ATTACHMENT)
                 {
@@ -2222,6 +2210,24 @@ impl<A: HalApi> Device<A> {
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         };
         Ok(pipeline)
+    }
+
+    fn describe_format_features(
+        &self,
+        adapter: &crate::instance::Adapter<A>,
+        format: TextureFormat,
+    ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
+        let format_desc = format.describe();
+        self.require_features(format_desc.required_features)?;
+
+        if self
+            .features
+            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+        {
+            Ok(adapter.get_texture_format_features(format))
+        } else {
+            Ok(format_desc.guaranteed_format_features)
+        }
     }
 
     fn wait_for_submit(
@@ -3760,12 +3766,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(&hub));
 
+        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            let adapter = &adapter_guard[device.adapter_id.value];
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace.lock().add(trace::Action::CreateRenderPipeline {
@@ -3777,6 +3785,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let pipeline = match device.create_render_pipeline(
                 device_id,
+                adapter,
                 desc,
                 implicit_context,
                 &hub,
