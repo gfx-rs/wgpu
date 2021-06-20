@@ -335,6 +335,7 @@ impl crate::Instance<super::Api> for Instance {
                  *
                  * See gfx-rs/gfx#3545
                  */
+                log::warn!("Re-initializing Gles context due to Wayland window");
                 if inner
                     .wl_display
                     .map(|ptr| ptr != handle.display)
@@ -483,7 +484,7 @@ impl crate::Instance<super::Api> for Instance {
                 .map_or(ptr::null(), |p| p as *const _)
         });
 
-        vec![super::Adapter::expose(context)]
+        super::Adapter::expose(context).into_iter().collect()
     }
 }
 

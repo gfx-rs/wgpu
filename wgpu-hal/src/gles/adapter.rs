@@ -4,6 +4,89 @@ use std::sync::Arc;
 // https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
 
 impl super::Adapter {
+    /// According to the OpenGL specification, the version information is
+    /// expected to follow the following syntax:
+    ///
+    /// ~~~bnf
+    /// <major>       ::= <number>
+    /// <minor>       ::= <number>
+    /// <revision>    ::= <number>
+    /// <vendor-info> ::= <string>
+    /// <release>     ::= <major> "." <minor> ["." <release>]
+    /// <version>     ::= <release> [" " <vendor-info>]
+    /// ~~~
+    ///
+    /// Note that this function is intentionally lenient in regards to parsing,
+    /// and will try to recover at least the first two version numbers without
+    /// resulting in an `Err`.
+    /// # Notes
+    /// `WebGL 2` version returned as `OpenGL ES 3.0`
+    fn parse_version(mut src: &str) -> Result<(u8, u8), crate::InstanceError> {
+        let webgl_sig = "WebGL ";
+        // According to the WebGL specification
+        // VERSION  WebGL<space>1.0<space><vendor-specific information>
+        // SHADING_LANGUAGE_VERSION WebGL<space>GLSL<space>ES<space>1.0<space><vendor-specific information>
+        let is_webgl = src.starts_with(webgl_sig);
+        if is_webgl {
+            let pos = src.rfind(webgl_sig).unwrap_or(0);
+            src = &src[pos + webgl_sig.len()..];
+        } else {
+            let es_sig = " ES ";
+            match src.rfind(es_sig) {
+                Some(pos) => {
+                    src = &src[pos + es_sig.len()..];
+                }
+                None => {
+                    log::warn!("ES not found in '{}'", src);
+                    return Err(crate::InstanceError);
+                }
+            }
+        };
+
+        let glsl_es_sig = "GLSL ES ";
+        let is_glsl = match src.find(glsl_es_sig) {
+            Some(pos) => {
+                src = &src[pos + glsl_es_sig.len()..];
+                true
+            }
+            None => false,
+        };
+
+        let (version, vendor_info) = match src.find(' ') {
+            Some(i) => (&src[..i], src[i + 1..].to_string()),
+            None => (src, String::new()),
+        };
+
+        // TODO: make this even more lenient so that we can also accept
+        // `<major> "." <minor> [<???>]`
+        let mut it = version.split('.');
+        let major = it.next().and_then(|s| s.parse().ok());
+        let minor = it.next().and_then(|s| {
+            let trimmed = if s.starts_with('0') {
+                "0"
+            } else {
+                s.trim_end_matches('0')
+            };
+            trimmed.parse().ok()
+        });
+
+        match (major, minor) {
+            (Some(major), Some(minor)) => Ok((
+                // Return WebGL 2.0 version as OpenGL ES 3.0
+                if is_webgl && !is_glsl {
+                    major + 1
+                } else {
+                    major
+                },
+                minor,
+            )),
+            _ => {
+                log::warn!("Unable to extract the version from '{}'", version);
+                Err(crate::InstanceError)
+            }
+        }
+    }
+
     fn make_info(vendor_orig: String, renderer_orig: String) -> wgt::AdapterInfo {
         let vendor = vendor_orig.to_lowercase();
         let renderer = renderer_orig.to_lowercase();
@@ -74,29 +157,63 @@ impl super::Adapter {
         }
     }
 
-    pub(super) unsafe fn expose(gl: glow::Context) -> crate::ExposedAdapter<super::Api> {
+    pub(super) unsafe fn expose(gl: glow::Context) -> Option<crate::ExposedAdapter<super::Api>> {
         let vendor = gl.get_parameter_string(glow::VENDOR);
         let renderer = gl.get_parameter_string(glow::RENDERER);
+        let version = gl.get_parameter_string(glow::VERSION);
+
+        let ver = Self::parse_version(&version).ok()?;
+
+        let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
 
         let min_uniform_buffer_offset_alignment =
             gl.get_parameter_i32(glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT);
-        let min_storage_buffer_offset_alignment = if super::is_webgl() {
+        let min_storage_buffer_offset_alignment = if cfg!(target_arch = "wasm32") {
             256
         } else {
             gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT)
         };
 
-        crate::ExposedAdapter {
+        let limits = wgt::Limits {
+            max_texture_dimension_1d: max_texture_size,
+            max_texture_dimension_2d: max_texture_size,
+            max_texture_dimension_3d: max_texture_size,
+            max_texture_array_layers: gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS) as u32,
+            max_bind_groups: 4,
+            max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+            max_dynamic_storage_buffers_per_pipeline_layout: 4,
+            max_sampled_textures_per_shader_stage: 16,
+            max_samplers_per_shader_stage: 16,
+            max_storage_buffers_per_shader_stage: 8,
+            max_storage_textures_per_shader_stage: 8,
+            max_uniform_buffers_per_shader_stage: 12,
+            max_uniform_buffer_binding_size: 16384,
+            max_storage_buffer_binding_size: 128 << 20,
+            max_vertex_buffers: 8,
+            max_vertex_attributes: 16,
+            max_vertex_buffer_array_stride: 2048,
+            max_push_constant_size: 0,
+        };
+
+        let features = wgt::Features::empty(); //TODO
+        let mut private_caps = super::PrivateCapability::empty();
+        private_caps.set(
+            super::PrivateCapability::EXPLICIT_LAYOUTS_IN_SHADER,
+            ver >= (3, 1),
+        );
+
+        Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 shared: Arc::new(super::AdapterShared {
                     context: gl,
-                    private_caps: super::PrivateCapabilities {},
+                    private_caps,
+                    extra_flags: super::ExtraDownlevelFlag::empty(),
                 }),
             },
             info: Self::make_info(vendor, renderer),
-            features: wgt::Features::empty(), //TODO
+            features,
             capabilities: crate::Capabilities {
-                limits: wgt::Limits::default(),                   //TODO
+                limits,
                 downlevel: wgt::DownlevelCapabilities::default(), //TODO
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(4).unwrap(),
@@ -111,6 +228,37 @@ impl super::Adapter {
                     .unwrap(),
                 },
             },
-        }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::Adapter;
+
+    #[test]
+    fn test_version_parse() {
+        let error = Err(crate::InstanceError);
+        assert_eq!(Adapter::parse_version("1"), error);
+        assert_eq!(Adapter::parse_version("1."), error);
+        assert_eq!(Adapter::parse_version("1 h3l1o. W0rld"), error);
+        assert_eq!(Adapter::parse_version("1. h3l1o. W0rld"), error);
+        assert_eq!(Adapter::parse_version("1.2.3"), error);
+        assert_eq!(Adapter::parse_version("OpenGL ES 3.1"), Ok((3, 1)));
+        assert_eq!(
+            Adapter::parse_version("OpenGL ES 2.0 Google Nexus"),
+            Ok((2, 0))
+        );
+        assert_eq!(Adapter::parse_version("GLSL ES 1.1"), Ok((1, 1)));
+        assert_eq!(Adapter::parse_version("OpenGL ES GLSL ES 3.20"), Ok((3, 2)));
+        assert_eq!(
+            // WebGL 2.0 should parse as OpenGL ES 3.0
+            Adapter::parse_version("WebGL 2.0 (OpenGL ES 3.0 Chromium)"),
+            Ok((3, 0))
+        );
+        assert_eq!(
+            Adapter::parse_version("WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)"),
+            Ok((3, 0))
+        );
     }
 }

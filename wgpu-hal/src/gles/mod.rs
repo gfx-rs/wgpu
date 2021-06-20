@@ -46,8 +46,27 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
-const fn is_webgl() -> bool {
-    cfg!(target_arch = "wasm32")
+//TODO: uplift these to `DownlevelFlags`
+bitflags::bitflags! {
+    /// Flags for features that are required for Vulkan but may not
+    /// be supported by legacy backends (GL/DX11).
+    struct ExtraDownlevelFlag: u32 {
+        /// Support indirect drawing and dispatching.
+        const INDIRECT_EXECUTION = 0x00000001;
+        /// Support indexed drawing with base vertex.
+        const BASE_VERTEX = 0x00000010;
+        /// Support offsets for instanced drawing with base instance.
+        const BASE_INSTANCE = 0x0000020;
+    }
+}
+
+bitflags::bitflags! {
+    /// Flags that affect internal code paths but do not
+    /// change the exposed feature set.
+    struct PrivateCapability: u32 {
+        /// Support explicit layouts in shader.
+        const EXPLICIT_LAYOUTS_IN_SHADER = 0x00002000;
+    }
 }
 
 type TextureFormat = u32;
@@ -67,11 +86,10 @@ struct FormatDescription {
     va_kind: VertexAttribKind,
 }
 
-struct PrivateCapabilities {}
-
 struct AdapterShared {
     context: glow::Context,
-    private_caps: PrivateCapabilities,
+    extra_flags: ExtraDownlevelFlag,
+    private_caps: PrivateCapability,
 }
 
 pub struct Adapter {

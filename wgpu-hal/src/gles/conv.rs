@@ -1,4 +1,4 @@
-impl super::PrivateCapabilities {
+impl super::PrivateCapability {
     pub(super) fn describe_texture_format(
         &self,
         format: wgt::TextureFormat,
