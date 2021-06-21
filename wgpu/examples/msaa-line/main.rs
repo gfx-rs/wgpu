@@ -294,7 +294,7 @@ fn msaa_line() {
         768,
         wgpu::Features::default(),
         framework::test_common::TestParameters::default(),
-        0,
-        1 << 15, // MSAA is comically different between vendors, 32k is a decent limit
+        64,
+        1 << 16, // MSAA is comically different between vendors, 32k is a decent limit
     );
 }

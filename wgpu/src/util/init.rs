@@ -58,7 +58,7 @@ pub fn initialize_adapter_from_env(
         }
     }
 
-    chosen_adapter
+    Some(chosen_adapter.expect("WGPU_ADAPTER_NAME set but no matching adapter found!"))
 }
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable and if it doesn't exist fall back on a default adapter.

@@ -103,6 +103,12 @@ pub fn compare_image_output(
         if outliers > max_outliers {
             // Because the deta is mismatched, lets output the difference to a file.
             let old_path = Path::new(&path);
+            let actual_path = Path::new(&path).with_file_name(
+                OsString::from_str(
+                    &(old_path.file_stem().unwrap().to_string_lossy() + "-actual.png"),
+                )
+                .unwrap(),
+            );
             let difference_path = Path::new(&path).with_file_name(
                 OsString::from_str(
                     &(old_path.file_stem().unwrap().to_string_lossy() + "-difference.png"),
@@ -110,6 +116,7 @@ pub fn compare_image_output(
                 .unwrap(),
             );
 
+            write_png(&actual_path, width, height, &data, png::Compression::Fast);
             write_png(&difference_path, width, height, &difference_data, png::Compression::Fast);
 
             panic!("Image data mismatch! Outlier count {} over limit {}. Max difference {}", outliers, max_outliers, max_difference)

@@ -833,7 +833,7 @@ fn shadow() {
         768,
         wgpu::Features::default(),
         framework::test_common::TestParameters::default(),
-        1,
-        1,
+        2,
+        5,
     );
 }
