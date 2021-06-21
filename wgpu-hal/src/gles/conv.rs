@@ -1,4 +1,4 @@
-impl super::PrivateCapability {
+impl super::AdapterShared {
     pub(super) fn describe_texture_format(
         &self,
         format: wgt::TextureFormat,
@@ -218,5 +218,51 @@ impl super::PrivateCapability {
             num_components,
             va_kind,
         }
+    }
+}
+
+pub fn map_filter_modes(
+    min: wgt::FilterMode,
+    mag: wgt::FilterMode,
+    mip: wgt::FilterMode,
+) -> (u32, u32) {
+    use wgt::FilterMode as Fm;
+
+    let mag_filter = match mag {
+        Fm::Nearest => glow::NEAREST,
+        Fm::Linear => glow::LINEAR,
+    };
+
+    let min_filter = match (min, mip) {
+        (Fm::Nearest, Fm::Nearest) => glow::NEAREST_MIPMAP_NEAREST,
+        (Fm::Nearest, Fm::Linear) => glow::NEAREST_MIPMAP_LINEAR,
+        (Fm::Linear, Fm::Nearest) => glow::LINEAR_MIPMAP_NEAREST,
+        (Fm::Linear, Fm::Linear) => glow::LINEAR_MIPMAP_LINEAR,
+    };
+
+    (min_filter, mag_filter)
+}
+
+pub fn map_address_mode(mode: wgt::AddressMode) -> u32 {
+    match mode {
+        wgt::AddressMode::Repeat => glow::REPEAT,
+        wgt::AddressMode::MirrorRepeat => glow::MIRRORED_REPEAT,
+        wgt::AddressMode::ClampToEdge => glow::CLAMP_TO_EDGE,
+        wgt::AddressMode::ClampToBorder => glow::CLAMP_TO_BORDER,
+        //wgt::AddressMode::MirrorClamp => glow::MIRROR_CLAMP_TO_EDGE,
+    }
+}
+
+pub fn map_compare_func(fun: wgt::CompareFunction) -> u32 {
+    use wgt::CompareFunction as Cf;
+    match fun {
+        Cf::Never => glow::NEVER,
+        Cf::Less => glow::LESS,
+        Cf::LessEqual => glow::LEQUAL,
+        Cf::Equal => glow::EQUAL,
+        Cf::GreaterEqual => glow::GEQUAL,
+        Cf::Greater => glow::GREATER,
+        Cf::NotEqual => glow::NOTEQUAL,
+        Cf::Always => glow::ALWAYS,
     }
 }

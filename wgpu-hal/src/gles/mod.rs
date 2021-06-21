@@ -5,9 +5,12 @@ mod egl;
 
 mod adapter;
 mod conv;
+mod device;
 
 #[cfg(not(target_arch = "wasm32"))]
 use self::egl::{Instance, Surface};
+
+use glow::HasContext;
 
 use std::{ops::Range, sync::Arc};
 
@@ -30,11 +33,11 @@ impl crate::Api for Api {
     type CommandEncoder = Encoder;
     type CommandBuffer = Resource;
 
-    type Buffer = Resource;
-    type Texture = Resource;
-    type SurfaceTexture = Resource;
-    type TextureView = Resource;
-    type Sampler = Resource;
+    type Buffer = Buffer;
+    type Texture = Texture;
+    type SurfaceTexture = Texture;
+    type TextureView = TextureView;
+    type Sampler = Sampler;
     type QuerySet = Resource;
     type Fence = Resource;
 
@@ -55,7 +58,97 @@ bitflags::bitflags! {
     }
 }
 
+type BindTarget = u32;
 type TextureFormat = u32;
+
+trait Sampled {
+    unsafe fn set_param_float(&self, gl: &glow::Context, key: u32, value: f32);
+    // see https://github.com/grovesNL/glow/issues/170
+    unsafe fn set_param_float_vec(&self, gl: &glow::Context, key: u32, values: &mut [f32]);
+    unsafe fn set_param_int(&self, gl: &glow::Context, key: u32, value: i32);
+
+    unsafe fn configure_sampling(&self, gl: &glow::Context, desc: &crate::SamplerDescriptor) {
+        let (min, mag) =
+            conv::map_filter_modes(desc.min_filter, desc.mag_filter, desc.mipmap_filter);
+
+        self.set_param_int(gl, glow::TEXTURE_MIN_FILTER, min as i32);
+        self.set_param_int(gl, glow::TEXTURE_MAG_FILTER, mag as i32);
+
+        self.set_param_int(
+            gl,
+            glow::TEXTURE_WRAP_S,
+            conv::map_address_mode(desc.address_modes[0]) as i32,
+        );
+        self.set_param_int(
+            gl,
+            glow::TEXTURE_WRAP_T,
+            conv::map_address_mode(desc.address_modes[1]) as i32,
+        );
+        self.set_param_int(
+            gl,
+            glow::TEXTURE_WRAP_R,
+            conv::map_address_mode(desc.address_modes[2]) as i32,
+        );
+
+        if let Some(border_color) = desc.border_color {
+            let mut border = match border_color {
+                wgt::SamplerBorderColor::TransparentBlack => [0.0; 4],
+                wgt::SamplerBorderColor::OpaqueBlack => [0.0, 0.0, 0.0, 1.0],
+                wgt::SamplerBorderColor::OpaqueWhite => [1.0; 4],
+            };
+            self.set_param_float_vec(gl, glow::TEXTURE_BORDER_COLOR, &mut border);
+        }
+
+        if let Some(ref range) = desc.lod_clamp {
+            self.set_param_float(gl, glow::TEXTURE_MIN_LOD, range.start);
+            self.set_param_float(gl, glow::TEXTURE_MAX_LOD, range.end);
+        }
+
+        //TODO: `desc.anisotropy_clamp` depends on the downlevel flag
+        // self.set_param_float(glow::TEXTURE_MAX_ANISOTROPY, aniso as f32);
+
+        //set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
+
+        if let Some(compare) = desc.compare {
+            self.set_param_int(
+                gl,
+                glow::TEXTURE_COMPARE_MODE,
+                glow::COMPARE_REF_TO_TEXTURE as i32,
+            );
+            self.set_param_int(
+                gl,
+                glow::TEXTURE_COMPARE_FUNC,
+                conv::map_compare_func(compare) as i32,
+            );
+        }
+    }
+}
+
+struct SamplerBinding(glow::Sampler);
+impl Sampled for SamplerBinding {
+    unsafe fn set_param_float(&self, gl: &glow::Context, key: u32, value: f32) {
+        gl.sampler_parameter_f32(self.0, key, value);
+    }
+    unsafe fn set_param_float_vec(&self, gl: &glow::Context, key: u32, values: &mut [f32]) {
+        gl.sampler_parameter_f32_slice(self.0, key, values);
+    }
+    unsafe fn set_param_int(&self, gl: &glow::Context, key: u32, value: i32) {
+        gl.sampler_parameter_i32(self.0, key, value);
+    }
+}
+
+struct SampledTextureBinding(BindTarget);
+impl Sampled for SampledTextureBinding {
+    unsafe fn set_param_float(&self, gl: &glow::Context, key: u32, value: f32) {
+        gl.tex_parameter_f32(self.0, key, value);
+    }
+    unsafe fn set_param_float_vec(&self, gl: &glow::Context, key: u32, values: &mut [f32]) {
+        gl.tex_parameter_f32_slice(self.0, key, values);
+    }
+    unsafe fn set_param_int(&self, gl: &glow::Context, key: u32, value: i32) {
+        gl.tex_parameter_i32(self.0, key, value);
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 enum VertexAttribKind {
@@ -91,6 +184,43 @@ pub struct Queue {
     features: wgt::Features,
 }
 
+#[derive(Debug)]
+pub struct Buffer {
+    raw: glow::Buffer,
+    target: BindTarget,
+    map_flags: u32,
+}
+
+#[derive(Debug)]
+pub enum Texture {
+    Renderbuffer {
+        raw: glow::Renderbuffer,
+        aspects: crate::FormatAspect,
+    },
+    Texture {
+        raw: glow::Texture,
+        target: BindTarget,
+    },
+}
+
+#[derive(Debug)]
+pub enum TextureView {
+    Renderbuffer {
+        raw: glow::Renderbuffer,
+        aspects: crate::FormatAspect,
+    },
+    Texture {
+        raw: glow::Texture,
+        target: BindTarget,
+        range: wgt::ImageSubresourceRange,
+    },
+}
+
+#[derive(Debug)]
+pub struct Sampler {
+    raw: glow::Sampler,
+}
+
 impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &mut self,
@@ -102,128 +232,10 @@ impl crate::Queue<Api> for Queue {
     unsafe fn present(
         &mut self,
         surface: &mut Surface,
-        texture: Resource,
+        texture: Texture,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
-}
-
-impl crate::Device<Api> for Device {
-    unsafe fn exit(self) {}
-    unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_buffer(&self, buffer: Resource) {}
-    unsafe fn map_buffer(
-        &self,
-        buffer: &Resource,
-        range: crate::MemoryRange,
-    ) -> DeviceResult<crate::BufferMapping> {
-        Err(crate::DeviceError::Lost)
-    }
-    unsafe fn unmap_buffer(&self, buffer: &Resource) -> DeviceResult<()> {
-        Ok(())
-    }
-    unsafe fn flush_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
-    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
-
-    unsafe fn create_texture(&self, desc: &crate::TextureDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_texture(&self, texture: Resource) {}
-    unsafe fn create_texture_view(
-        &self,
-        texture: &Resource,
-        desc: &crate::TextureViewDescriptor,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_texture_view(&self, view: Resource) {}
-    unsafe fn create_sampler(&self, desc: &crate::SamplerDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_sampler(&self, sampler: Resource) {}
-
-    unsafe fn create_command_encoder(
-        &self,
-        desc: &crate::CommandEncoderDescriptor<Api>,
-    ) -> DeviceResult<Encoder> {
-        Ok(Encoder)
-    }
-    unsafe fn destroy_command_encoder(&self, encoder: Encoder) {}
-
-    unsafe fn create_bind_group_layout(
-        &self,
-        desc: &crate::BindGroupLayoutDescriptor,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
-    unsafe fn create_pipeline_layout(
-        &self,
-        desc: &crate::PipelineLayoutDescriptor<Api>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
-    unsafe fn create_bind_group(
-        &self,
-        desc: &crate::BindGroupDescriptor<Api>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_bind_group(&self, group: Resource) {}
-
-    unsafe fn create_shader_module(
-        &self,
-        desc: &crate::ShaderModuleDescriptor,
-        shader: crate::ShaderInput,
-    ) -> Result<Resource, crate::ShaderError> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_shader_module(&self, module: Resource) {}
-    unsafe fn create_render_pipeline(
-        &self,
-        desc: &crate::RenderPipelineDescriptor<Api>,
-    ) -> Result<Resource, crate::PipelineError> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_render_pipeline(&self, pipeline: Resource) {}
-    unsafe fn create_compute_pipeline(
-        &self,
-        desc: &crate::ComputePipelineDescriptor<Api>,
-    ) -> Result<Resource, crate::PipelineError> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
-
-    unsafe fn create_query_set(
-        &self,
-        desc: &wgt::QuerySetDescriptor<crate::Label>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_query_set(&self, set: Resource) {}
-    unsafe fn create_fence(&self) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn destroy_fence(&self, fence: Resource) {}
-    unsafe fn get_fence_value(&self, fence: &Resource) -> DeviceResult<crate::FenceValue> {
-        Ok(0)
-    }
-    unsafe fn wait(
-        &self,
-        fence: &Resource,
-        value: crate::FenceValue,
-        timeout_ms: u32,
-    ) -> DeviceResult<bool> {
-        Ok(true)
-    }
-
-    unsafe fn start_capture(&self) -> bool {
-        false
-    }
-    unsafe fn stop_capture(&self) {}
 }
 
 impl crate::CommandEncoder<Api> for Encoder {
@@ -248,26 +260,26 @@ impl crate::CommandEncoder<Api> for Encoder {
     {
     }
 
-    unsafe fn fill_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange, value: u8) {}
+    unsafe fn fill_buffer(&mut self, buffer: &Buffer, range: crate::MemoryRange, value: u8) {}
 
-    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
+    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Buffer, dst: &Buffer, regions: T) {}
 
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
-        src: &Resource,
+        src: &Texture,
         src_usage: crate::TextureUse,
-        dst: &Resource,
+        dst: &Texture,
         regions: T,
     ) {
     }
 
-    unsafe fn copy_buffer_to_texture<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
+    unsafe fn copy_buffer_to_texture<T>(&mut self, src: &Buffer, dst: &Texture, regions: T) {}
 
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
-        src: &Resource,
+        src: &Texture,
         src_usage: crate::TextureUse,
-        dst: &Resource,
+        dst: &Buffer,
         regions: T,
     ) {
     }
@@ -280,7 +292,7 @@ impl crate::CommandEncoder<Api> for Encoder {
         &mut self,
         set: &Resource,
         range: Range<u32>,
-        buffer: &Resource,
+        buffer: &Buffer,
         offset: wgt::BufferAddress,
     ) {
     }
@@ -345,32 +357,32 @@ impl crate::CommandEncoder<Api> for Encoder {
     }
     unsafe fn draw_indirect(
         &mut self,
-        buffer: &Resource,
+        buffer: &Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
     }
     unsafe fn draw_indexed_indirect(
         &mut self,
-        buffer: &Resource,
+        buffer: &Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
     }
     unsafe fn draw_indirect_count(
         &mut self,
-        buffer: &Resource,
+        buffer: &Buffer,
         offset: wgt::BufferAddress,
-        count_buffer: &Resource,
+        count_buffer: &Buffer,
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
     }
     unsafe fn draw_indexed_indirect_count(
         &mut self,
-        buffer: &Resource,
+        buffer: &Buffer,
         offset: wgt::BufferAddress,
-        count_buffer: &Resource,
+        count_buffer: &Buffer,
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
@@ -384,5 +396,5 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
-    unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
+    unsafe fn dispatch_indirect(&mut self, buffer: &Buffer, offset: wgt::BufferAddress) {}
 }

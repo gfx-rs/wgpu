@@ -449,7 +449,7 @@ impl crate::Instance<super::Api> for Instance {
                 crate::InstanceError
             })
         } else {
-            let attributes_i32: Vec<i32> = attributes.iter().map(|a| (*a as i32).into()).collect();
+            let attributes_i32: Vec<i32> = attributes.iter().map(|a| *a as i32).collect();
             inner
                 .egl
                 .create_window_surface(
@@ -581,10 +581,7 @@ impl crate::Surface<super::Api> for Surface {
             );
         }
 
-        let format_desc = device
-            .shared
-            .private_caps
-            .describe_texture_format(config.format);
+        let format_desc = device.shared.describe_texture_format(config.format);
         let gl = &device.shared.context;
         let renderbuffer = gl.create_renderbuffer().unwrap();
         gl.bind_renderbuffer(glow::RENDERBUFFER, Some(renderbuffer));
@@ -633,5 +630,5 @@ impl crate::Surface<super::Api> for Surface {
         //    native::SwapchainImage::new(sc.renderbuffer, sc.format, sc.extent, sc.channel);
         Ok(None)
     }
-    unsafe fn discard_texture(&mut self, _texture: super::Resource) {}
+    unsafe fn discard_texture(&mut self, _texture: super::Texture) {}
 }
