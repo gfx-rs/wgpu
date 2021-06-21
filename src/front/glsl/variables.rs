@@ -94,7 +94,7 @@ impl Program<'_> {
             ),
             "gl_VertexIndex" => add_builtin(
                 TypeInner::Scalar {
-                    kind: ScalarKind::Sint,
+                    kind: ScalarKind::Uint,
                     width: 4,
                 },
                 BuiltIn::VertexIndex,
@@ -103,7 +103,7 @@ impl Program<'_> {
             ),
             "gl_InstanceIndex" => add_builtin(
                 TypeInner::Scalar {
-                    kind: ScalarKind::Sint,
+                    kind: ScalarKind::Uint,
                     width: 4,
                 },
                 BuiltIn::InstanceIndex,
@@ -123,7 +123,7 @@ impl Program<'_> {
             "gl_FrontFacing" => add_builtin(
                 TypeInner::Scalar {
                     kind: ScalarKind::Bool,
-                    width: 1,
+                    width: crate::BOOL_WIDTH,
                 },
                 BuiltIn::FrontFacing,
                 false,
