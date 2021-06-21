@@ -50,7 +50,7 @@ impl Default for Options {
 pub enum Error {
     #[error(transparent)]
     IoError(#[from] FmtError),
-    #[error("BuiltIn {0:?} is not supported")]
+    #[error("Shader model {0:?} is not supported")]
     UnsupportedShaderModel(ShaderModel),
     #[error("A scalar with an unsupported width was requested: {0:?} {1:?}")]
     UnsupportedScalar(crate::ScalarKind, crate::Bytes),

@@ -937,6 +937,38 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "{}", name)?;
             }
             Expression::Load { pointer } => self.write_expr(module, pointer, func_ctx)?,
+            Expression::Access { base, index } => {
+                self.write_expr(module, base, func_ctx)?;
+                write!(self.out, "[")?;
+                self.write_expr(module, index, func_ctx)?;
+                write!(self.out, "]")?
+            }
+            Expression::Unary { op, expr } => {
+                // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
+                write!(
+                    self.out,
+                    "({} ",
+                    match op {
+                        crate::UnaryOperator::Negate => "-",
+                        crate::UnaryOperator::Not =>
+                            match *func_ctx.info[expr].ty.inner_with(&module.types) {
+                                TypeInner::Scalar {
+                                    kind: ScalarKind::Bool,
+                                    ..
+                                } => "!",
+                                ref other =>
+                                    return Err(Error::Custom(format!(
+                                        "Cannot apply not to type {:?}",
+                                        other
+                                    ))),
+                            },
+                    }
+                )?;
+
+                self.write_expr(module, expr, func_ctx)?;
+
+                write!(self.out, ")")?
+            }
             _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 
