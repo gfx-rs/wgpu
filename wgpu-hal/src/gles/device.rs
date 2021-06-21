@@ -1,4 +1,4 @@
-use super::{DeviceResult, Encoder, Resource}; //TEMP
+use super::{DeviceResult, Resource}; //TEMP
 use glow::HasContext;
 use std::{convert::TryInto, ptr::NonNull};
 
@@ -229,7 +229,7 @@ impl crate::Device<super::Api> for super::Device {
             },
         })
     }
-    unsafe fn destroy_texture_view(&self, view: super::TextureView) {}
+    unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
 
     unsafe fn create_sampler(
         &self,
@@ -251,10 +251,12 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<super::Api>,
-    ) -> DeviceResult<Encoder> {
-        Ok(Encoder)
+    ) -> Result<super::CommandEncoder, crate::DeviceError> {
+        Ok(super::CommandEncoder {
+            cmd_buffer: super::CommandBuffer::default(),
+        })
     }
-    unsafe fn destroy_command_encoder(&self, encoder: Encoder) {}
+    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
