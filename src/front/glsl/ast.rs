@@ -115,12 +115,12 @@ impl<'a> Program<'a> {
         }
     }
 
-    pub fn resolve_type<'b>(
-        &'b self,
-        context: &'b mut Context,
+    pub fn typifier_grow(
+        &self,
+        context: &mut Context,
         handle: Handle<Expression>,
         meta: SourceMetadata,
-    ) -> Result<&'b TypeInner, ErrorKind> {
+    ) -> Result<(), ErrorKind> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
             types: &self.module.types,
@@ -129,17 +129,23 @@ impl<'a> Program<'a> {
             functions: &self.module.functions,
             arguments: context.arguments,
         };
-        match context
+
+        context
             .typifier
             .grow(handle, context.expressions, &resolve_ctx)
-        {
-            //TODO: better error report
-            Err(error) => Err(ErrorKind::SemanticError(
-                meta,
-                format!("Can't resolve type: {:?}", error).into(),
-            )),
-            Ok(()) => Ok(context.typifier.get(handle, &self.module.types)),
-        }
+            .map_err(|error| {
+                ErrorKind::SemanticError(meta, format!("Can't resolve type: {:?}", error).into())
+            })
+    }
+
+    pub fn resolve_type<'b>(
+        &'b self,
+        context: &'b mut Context,
+        handle: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<&'b TypeInner, ErrorKind> {
+        self.typifier_grow(context, handle, meta)?;
+        Ok(context.typifier.get(handle, &self.module.types))
     }
 
     pub fn solve_constant(
@@ -506,40 +512,64 @@ impl<'function> Context<'function> {
                     program, &mut left, left_meta, &mut right, right_meta,
                 )?;
 
-                if let BinaryOperator::Equal | BinaryOperator::NotEqual = op {
-                    let equals = op == BinaryOperator::Equal;
-                    let (left_is_vector, left_dims) =
-                        match *program.resolve_type(self, left, left_meta)? {
-                            crate::TypeInner::Vector { .. } => (true, 1),
-                            crate::TypeInner::Matrix { .. } => (false, 2),
-                            _ => (false, 0),
-                        };
+                program.typifier_grow(self, left, left_meta)?;
+                program.typifier_grow(self, right, right_meta)?;
 
-                    let (right_is_vector, right_dims) =
-                        match *program.resolve_type(self, right, right_meta)? {
-                            crate::TypeInner::Vector { .. } => (true, 1),
-                            crate::TypeInner::Matrix { .. } => (false, 2),
-                            _ => (false, 0),
-                        };
+                let left_inner = self.typifier.get(left, &program.module.types);
+                let right_inner = self.typifier.get(right, &program.module.types);
 
-                    let (op, fun) = match equals {
-                        true => (BinaryOperator::Equal, RelationalFunction::All),
-                        false => (BinaryOperator::NotEqual, RelationalFunction::Any),
-                    };
+                match (left_inner, right_inner) {
+                    (&TypeInner::Vector { .. }, &TypeInner::Vector { .. })
+                    | (&TypeInner::Matrix { .. }, &TypeInner::Matrix { .. }) => match op {
+                        BinaryOperator::Equal | BinaryOperator::NotEqual => {
+                            let equals = op == BinaryOperator::Equal;
 
-                    let argument = self
-                        .expressions
-                        .append(Expression::Binary { op, left, right });
+                            let (op, fun) = match equals {
+                                true => (BinaryOperator::Equal, RelationalFunction::All),
+                                false => (BinaryOperator::NotEqual, RelationalFunction::Any),
+                            };
 
-                    if left_dims != right_dims {
-                        return Err(ErrorKind::SemanticError(meta, "Cannot compare".into()));
-                    } else if left_is_vector && right_is_vector {
-                        self.add_expression(Expression::Relational { fun, argument }, body)
-                    } else {
-                        argument
-                    }
-                } else {
-                    self.add_expression(Expression::Binary { left, op, right }, body)
+                            let argument =
+                                self.expressions
+                                    .append(Expression::Binary { op, left, right });
+
+                            self.add_expression(Expression::Relational { fun, argument }, body)
+                        }
+                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                    },
+                    (&TypeInner::Vector { size, .. }, &TypeInner::Scalar { .. }) => match op {
+                        BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Divide => {
+                            let scalar_vector =
+                                self.add_expression(Expression::Splat { size, value: right }, body);
+
+                            self.add_expression(
+                                Expression::Binary {
+                                    op,
+                                    left,
+                                    right: scalar_vector,
+                                },
+                                body,
+                            )
+                        }
+                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                    },
+                    (&TypeInner::Scalar { .. }, &TypeInner::Vector { size, .. }) => match op {
+                        BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Divide => {
+                            let scalar_vector =
+                                self.add_expression(Expression::Splat { size, value: left }, body);
+
+                            self.add_expression(
+                                Expression::Binary {
+                                    op,
+                                    left: scalar_vector,
+                                    right,
+                                },
+                                body,
+                            )
+                        }
+                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                    },
+                    _ => self.add_expression(Expression::Binary { left, op, right }, body),
                 }
             }
             HirExprKind::Unary { op, expr } if !lhs => {
