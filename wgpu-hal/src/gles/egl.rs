@@ -112,6 +112,48 @@ fn choose_config(
     Err(crate::InstanceError)
 }
 
+fn debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
+    let source_str = match source {
+        glow::DEBUG_SOURCE_API => "API",
+        glow::DEBUG_SOURCE_WINDOW_SYSTEM => "Window System",
+        glow::DEBUG_SOURCE_SHADER_COMPILER => "ShaderCompiler",
+        glow::DEBUG_SOURCE_THIRD_PARTY => "Third Party",
+        glow::DEBUG_SOURCE_APPLICATION => "Application",
+        glow::DEBUG_SOURCE_OTHER => "Other",
+        _ => unreachable!(),
+    };
+
+    let log_severity = match severity {
+        glow::DEBUG_SEVERITY_HIGH => log::Level::Error,
+        glow::DEBUG_SEVERITY_MEDIUM => log::Level::Warn,
+        glow::DEBUG_SEVERITY_LOW => log::Level::Info,
+        glow::DEBUG_SEVERITY_NOTIFICATION => log::Level::Trace,
+        _ => unreachable!(),
+    };
+
+    let type_str = match gltype {
+        glow::DEBUG_TYPE_DEPRECATED_BEHAVIOR => "Deprecated Behavior",
+        glow::DEBUG_TYPE_ERROR => "Error",
+        glow::DEBUG_TYPE_MARKER => "Marker",
+        glow::DEBUG_TYPE_OTHER => "Other",
+        glow::DEBUG_TYPE_PERFORMANCE => "Performance",
+        glow::DEBUG_TYPE_POP_GROUP => "Pop Group",
+        glow::DEBUG_TYPE_PORTABILITY => "Portability",
+        glow::DEBUG_TYPE_PUSH_GROUP => "Push Group",
+        glow::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "Undefined Behavior",
+        _ => unreachable!(),
+    };
+
+    log::log!(
+        log_severity,
+        "[{}/{}] ID {} : {}",
+        source_str,
+        type_str,
+        id,
+        message
+    );
+}
+
 #[derive(Debug)]
 struct Inner {
     egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
@@ -477,14 +519,19 @@ impl crate::Instance<super::Api> for Instance {
             )
             .unwrap();
 
-        let context = glow::Context::from_loader_function(|name| {
+        let gl = glow::Context::from_loader_function(|name| {
             inner
                 .egl
                 .get_proc_address(name)
                 .map_or(ptr::null(), |p| p as *const _)
         });
 
-        super::Adapter::expose(context).into_iter().collect()
+        if self.flags.contains(crate::InstanceFlag::DEBUG) && gl.supports_debug() {
+            gl.enable(glow::DEBUG_OUTPUT);
+            gl.debug_message_callback(debug_message_callback);
+        }
+
+        super::Adapter::expose(gl).into_iter().collect()
     }
 }
 
@@ -505,7 +552,7 @@ pub struct Surface {
     display: egl::Display,
     context: egl::Context,
     pbuffer: Option<egl::Surface>,
-    presentable: bool,
+    pub(super) presentable: bool,
     wl_window: Option<*mut raw::c_void>,
     swapchain: Option<Swapchain>,
 }

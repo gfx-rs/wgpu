@@ -161,10 +161,36 @@ impl super::Adapter {
         let vendor = gl.get_parameter_string(glow::VENDOR);
         let renderer = gl.get_parameter_string(glow::RENDERER);
         let version = gl.get_parameter_string(glow::VERSION);
+        log::info!("Vendor: {}", vendor);
+        log::info!("Renderer: {}", renderer);
+        log::info!("Version: {}", version);
 
         let ver = Self::parse_version(&version).ok()?;
+        let extensions = gl.supported_extensions();
+        log::info!("Extensions: {:?}", extensions);
+
+        let mut features = wgt::Features::empty() | wgt::Features::NON_FILL_POLYGON_MODE;
+        features.set(
+            wgt::Features::DEPTH_CLAMPING,
+            extensions.contains("GL_EXT_depth_clamp"),
+        );
+        features.set(wgt::Features::VERTEX_WRITABLE_STORAGE, ver >= (3, 1));
+
+        let mut downlevel_flags = wgt::DownlevelFlags::empty()
+            | wgt::DownlevelFlags::DEVICE_LOCAL_IMAGE_COPIES
+            | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
+            | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
+        downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, ver >= (3, 1));
+        downlevel_flags.set(
+            wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
+            ver >= (3, 1),
+        );
+        downlevel_flags.set(wgt::DownlevelFlags::INDIRECT_EXECUTION, ver >= (3, 1));
+        downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, ver >= (3, 2));
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
+        let max_texture_3d_size = gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) as u32;
 
         let min_uniform_buffer_offset_alignment =
             gl.get_parameter_i32(glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT);
@@ -173,29 +199,36 @@ impl super::Adapter {
         } else {
             gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT)
         };
+        let max_uniform_buffers_per_shader_stage =
+            gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS)
+                .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS)) as u32;
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
-            max_texture_dimension_3d: max_texture_size,
+            max_texture_dimension_3d: max_texture_3d_size,
             max_texture_array_layers: gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS) as u32,
-            max_bind_groups: 4,
+            max_bind_groups: crate::MAX_BIND_GROUPS as u32,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
             max_samplers_per_shader_stage: 16,
             max_storage_buffers_per_shader_stage: 8,
             max_storage_textures_per_shader_stage: 8,
-            max_uniform_buffers_per_shader_stage: 12,
-            max_uniform_buffer_binding_size: 16384,
-            max_storage_buffer_binding_size: 128 << 20,
-            max_vertex_buffers: 8,
-            max_vertex_attributes: 16,
+            max_uniform_buffers_per_shader_stage,
+            max_uniform_buffer_binding_size: gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
+                as u32,
+            max_storage_buffer_binding_size: if ver >= (3, 1) {
+                gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) as u32
+            } else {
+                0
+            },
+            max_vertex_buffers: gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) as u32,
+            max_vertex_attributes: gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) as u32,
             max_vertex_buffer_array_stride: 2048,
             max_push_constant_size: 0,
         };
 
-        let features = wgt::Features::empty(); //TODO
         let mut private_caps = super::PrivateCapability::empty();
         private_caps.set(
             super::PrivateCapability::EXPLICIT_LAYOUTS_IN_SHADER,
@@ -207,14 +240,16 @@ impl super::Adapter {
                 shared: Arc::new(super::AdapterShared {
                     context: gl,
                     private_caps,
-                    extra_flags: super::ExtraDownlevelFlag::empty(),
                 }),
             },
             info: Self::make_info(vendor, renderer),
             features,
             capabilities: crate::Capabilities {
                 limits,
-                downlevel: wgt::DownlevelCapabilities::default(), //TODO
+                downlevel: wgt::DownlevelCapabilities {
+                    flags: downlevel_flags,
+                    shader_model: wgt::ShaderModel::Sm5,
+                },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(4).unwrap(),
                     buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),
@@ -229,6 +264,66 @@ impl super::Adapter {
                 },
             },
         })
+    }
+}
+
+impl crate::Adapter<super::Api> for super::Adapter {
+    unsafe fn open(
+        &self,
+        features: wgt::Features,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        let gl = &self.shared.context;
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+        let main_vao = gl.create_vertex_array().unwrap();
+        gl.bind_vertex_array(Some(main_vao));
+
+        Ok(crate::OpenDevice {
+            device: super::Device {
+                shared: Arc::clone(&self.shared),
+                main_vao,
+            },
+            queue: super::Queue {
+                shared: Arc::clone(&self.shared),
+                features,
+            },
+        })
+    }
+
+    unsafe fn texture_format_capabilities(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> crate::TextureFormatCapability {
+        crate::TextureFormatCapability::empty() //TODO
+    }
+
+    unsafe fn surface_capabilities(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<crate::SurfaceCapabilities> {
+        if surface.presentable {
+            Some(crate::SurfaceCapabilities {
+                formats: vec![
+                    wgt::TextureFormat::Rgba8UnormSrgb,
+                    wgt::TextureFormat::Bgra8UnormSrgb,
+                ],
+                present_modes: vec![wgt::PresentMode::Fifo], //TODO
+                composite_alpha_modes: vec![crate::CompositeAlphaMode::Opaque], //TODO
+                swap_chain_sizes: 2..=2,
+                current_extent: None,
+                extents: wgt::Extent3d {
+                    width: 4,
+                    height: 4,
+                    depth_or_array_layers: 1,
+                }..=wgt::Extent3d {
+                    width: 4096,
+                    height: 4096,
+                    depth_or_array_layers: 1,
+                },
+                usage: crate::TextureUse::COLOR_TARGET,
+            })
+        } else {
+            None
+        }
     }
 }
 

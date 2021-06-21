@@ -45,11 +45,12 @@
 compile_error!("Metal backend enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 
 mod empty;
+#[cfg(feature = "gles")]
+mod gles;
 #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
 mod metal;
 #[cfg(feature = "vulkan")]
-mod vulkan;#[cfg(feature = "gles")]
-mod gles;
+mod vulkan;
 
 pub mod util;
 pub mod api {

@@ -880,6 +880,9 @@ impl super::PrivateCapabilities {
             wgt::DownlevelFlags::COMPARISON_SAMPLERS,
             self.mutable_comparison_samplers,
         );
+        downlevel
+            .flags
+            .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
         crate::Capabilities {
             limits: wgt::Limits {

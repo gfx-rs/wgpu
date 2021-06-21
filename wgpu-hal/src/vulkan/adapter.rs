@@ -99,7 +99,7 @@ impl PhysicalDeviceFeatures {
                     requested_features.contains(wgt::Features::VERTEX_WRITABLE_STORAGE),
                 )
                 .fragment_stores_and_atomics(
-                    downlevel_flags.contains(wgt::DownlevelFlags::STORAGE_IMAGES),
+                    downlevel_flags.contains(wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE),
                 )
                 //.shader_image_gather_extended(
                 //.shader_storage_image_extended_formats(
@@ -239,7 +239,7 @@ impl PhysicalDeviceFeatures {
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);
         dl_flags.set(Df::ANISOTROPIC_FILTERING, self.core.sampler_anisotropy != 0);
         dl_flags.set(
-            Df::STORAGE_IMAGES,
+            Df::FRAGMENT_WRITABLE_STORAGE,
             self.core.fragment_stores_and_atomics != 0,
         );
 

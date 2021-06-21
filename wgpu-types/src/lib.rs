@@ -619,24 +619,30 @@ bitflags::bitflags! {
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
         const COMPUTE_SHADERS = 0x0000_0001;
-        /// Supports creating storage images.
-        const STORAGE_IMAGES = 0x0000_0002;
+        /// Supports binding storage buffers and textures to fragment shaders.
+        const FRAGMENT_WRITABLE_STORAGE = 0x0000_0002;
+        /// Supports indirect drawing and dispatching.
+        const INDIRECT_EXECUTION = 0x0000_0004;
+        /// Supports non-zero `base_vertex` parameter to indexed draw calls.
+        const BASE_VERTEX = 0x0000_0008;
+        /// Supports non-zero `base_instance` parameter to draw calls.
+        const BASE_INSTANCE = 0x0000_0010;
         /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
-        const READ_ONLY_DEPTH_STENCIL = 0x0000_0004;
+        const READ_ONLY_DEPTH_STENCIL = 0x0000_0020;
         /// Supports:
         /// - copy_image_to_image
         /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
-        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0008;
+        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0040;
         /// Supports textures with mipmaps which have a non power of two size.
-        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
+        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0080;
         /// Supports textures that are cube arrays.
-        const CUBE_ARRAY_TEXTURES = 0x0000_0020;
+        const CUBE_ARRAY_TEXTURES = 0x0000_0100;
         /// Supports comparison samplers.
-        const COMPARISON_SAMPLERS = 0x0000_0040;
+        const COMPARISON_SAMPLERS = 0x0000_0200;
         /// Supports samplers with anisotropic filtering
         const ANISOTROPIC_FILTERING = 0x0001_0000;
         /// All flags are in their compliant state.
-        const COMPLIANT = 0x0000_007F;
+        const COMPLIANT = 0x0000_02FF;
     }
 }
 

@@ -26,7 +26,7 @@ impl crate::Api for Api {
     type Adapter = Adapter;
     type Device = Device;
 
-    type Queue = Context;
+    type Queue = Queue;
     type CommandEncoder = Encoder;
     type CommandBuffer = Resource;
 
@@ -44,20 +44,6 @@ impl crate::Api for Api {
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
-}
-
-//TODO: uplift these to `DownlevelFlags`
-bitflags::bitflags! {
-    /// Flags for features that are required for Vulkan but may not
-    /// be supported by legacy backends (GL/DX11).
-    struct ExtraDownlevelFlag: u32 {
-        /// Support indirect drawing and dispatching.
-        const INDIRECT_EXECUTION = 0x00000001;
-        /// Support indexed drawing with base vertex.
-        const BASE_VERTEX = 0x00000010;
-        /// Support offsets for instanced drawing with base instance.
-        const BASE_INSTANCE = 0x0000020;
-    }
 }
 
 bitflags::bitflags! {
@@ -88,7 +74,6 @@ struct FormatDescription {
 
 struct AdapterShared {
     context: glow::Context,
-    extra_flags: ExtraDownlevelFlag,
     private_caps: PrivateCapability,
 }
 
@@ -98,24 +83,15 @@ pub struct Adapter {
 
 pub struct Device {
     shared: Arc<AdapterShared>,
+    main_vao: glow::VertexArray,
 }
 
-impl crate::Adapter<Api> for Adapter {
-    unsafe fn open(&self, features: wgt::Features) -> DeviceResult<crate::OpenDevice<Api>> {
-        Err(crate::DeviceError::Lost)
-    }
-    unsafe fn texture_format_capabilities(
-        &self,
-        format: wgt::TextureFormat,
-    ) -> crate::TextureFormatCapability {
-        crate::TextureFormatCapability::empty()
-    }
-    unsafe fn surface_capabilities(&self, surface: &Surface) -> Option<crate::SurfaceCapabilities> {
-        None
-    }
+pub struct Queue {
+    shared: Arc<AdapterShared>,
+    features: wgt::Features,
 }
 
-impl crate::Queue<Api> for Context {
+impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &mut self,
         command_buffers: &[&Resource],
@@ -201,7 +177,7 @@ impl crate::Device<Api> for Device {
     unsafe fn create_shader_module(
         &self,
         desc: &crate::ShaderModuleDescriptor,
-        shader: crate::NagaShader,
+        shader: crate::ShaderInput,
     ) -> Result<Resource, crate::ShaderError> {
         Ok(Resource)
     }
