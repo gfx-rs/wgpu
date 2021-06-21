@@ -35,7 +35,6 @@ jobs:
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features trace --target ${{ env.TARGET }}
 
   wasm:
-    if: false  # disable until hal/Gles backend is setup
     name: Web Assembly
     runs-on: ubuntu-latest
     env:
@@ -44,9 +43,10 @@ jobs:
     - uses: actions/checkout@v2
     - run: rustup target add wasm32-unknown-unknown
     - name: Check WebGPU
-      run: cargo check --all-targets --target=wasm32-unknown-unknown
-    - name: Check WebGL
-      run: cargo check --all-targets --target=wasm32-unknown-unknown --features webgl
+      run: cargo check --package wgpu --examples --target=wasm32-unknown-unknown
+    # disable until hal/Gles backend is setup
+    # - name: Check WebGL
+    #  run: cargo check --all-targets --target=wasm32-unknown-unknown --features webgl
 
   build:
     name: ${{ matrix.name }}
