@@ -147,16 +147,7 @@ impl<'a> BlockContext<'a> {
     }
 
     fn with_flags(&self, flags: Flags) -> Self {
-        BlockContext {
-            flags,
-            info: self.info,
-            expressions: self.expressions,
-            types: self.types,
-            global_vars: self.global_vars,
-            functions: self.functions,
-            prev_infos: self.prev_infos,
-            return_type: self.return_type,
-        }
+        BlockContext { flags, ..*self }
     }
 
     fn get_expression(
@@ -576,6 +567,7 @@ impl super::Validator {
         }
 
         self.valid_expression_set.clear();
+        self.valid_expression_list.clear();
         for (handle, expr) in fun.expressions.iter() {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle.index());
