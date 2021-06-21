@@ -8,6 +8,16 @@ use super::ast::*;
 use super::error::ErrorKind;
 use super::token::SourceMetadata;
 
+macro_rules! qualifier_arm {
+    ($src:expr, $tgt:expr, $meta:expr, $msg:literal $(,)?) => {{
+        if $tgt.is_some() {
+            return Err(ErrorKind::SemanticError($meta, $msg.into()));
+        }
+
+        $tgt = Some($src);
+    }};
+}
+
 pub struct VarDeclaration<'a> {
     pub qualifiers: &'a [(TypeQualifier, SourceMetadata)],
     pub ty: Handle<Type>,
@@ -310,57 +320,37 @@ impl Program<'_> {
 
                     storage = s;
                 }
-                TypeQualifier::Interpolation(i) => {
-                    if interpolation.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one interpolation qualifier per declaration"
-                                .into(),
-                        ));
-                    }
+                TypeQualifier::Interpolation(i) => qualifier_arm!(
+                    i,
+                    interpolation,
+                    meta,
+                    "Cannot use more than one interpolation qualifier per declaration"
+                ),
+                TypeQualifier::ResourceBinding(ref r) => qualifier_arm!(
+                    r.clone(),
+                    binding,
+                    meta,
+                    "Cannot use more than one binding per declaration"
+                ),
+                TypeQualifier::Location(l) => qualifier_arm!(
+                    l,
+                    location,
+                    meta,
+                    "Cannot use more than one binding per declaration"
+                ),
+                TypeQualifier::Sampling(s) => qualifier_arm!(
+                    s,
+                    sampling,
+                    meta,
+                    "Cannot use more than one sampling qualifier per declaration"
+                ),
+                TypeQualifier::Layout(ref l) => qualifier_arm!(
+                    l,
+                    layout,
+                    meta,
+                    "Cannot use more than one layout qualifier per declaration"
+                ),
 
-                    interpolation = Some(i);
-                }
-                TypeQualifier::ResourceBinding(ref r) => {
-                    if binding.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one binding per declaration".into(),
-                        ));
-                    }
-
-                    binding = Some(r.clone());
-                }
-                TypeQualifier::Location(l) => {
-                    if location.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one binding per declaration".into(),
-                        ));
-                    }
-
-                    location = Some(l);
-                }
-                TypeQualifier::Sampling(s) => {
-                    if sampling.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one sampling qualifier per declaration".into(),
-                        ));
-                    }
-
-                    sampling = Some(s);
-                }
-                TypeQualifier::Layout(ref l) => {
-                    if layout.is_some() {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Cannot use more than one layout qualifier per declaration".into(),
-                        ));
-                    }
-
-                    layout = Some(l);
-                }
                 _ => {
                     return Err(ErrorKind::SemanticError(
                         meta,
