@@ -1262,6 +1262,14 @@ impl crate::Context for Context {
         Sendable(device.0.create_bind_group_layout(&mapped_desc))
     }
 
+    unsafe fn device_create_shader_module_spirv(
+        &self,
+        device: &Self::DeviceId,
+        desc: &crate::ShaderModuleDescriptorSpirV,
+    ) -> Self::ShaderModuleId {
+        unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
+    }
+
     fn device_create_bind_group(
         &self,
         device: &Self::DeviceId,
