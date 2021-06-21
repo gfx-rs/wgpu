@@ -955,6 +955,7 @@ pub enum TypeQualifier {
     WorkGroupSize(usize, u32),
     Sampling(Sampling),
     Layout(StructLayout),
+    Precision(Precision),
     EarlyFragmentTests,
 }
 
@@ -982,6 +983,14 @@ pub enum StorageQualifier {
 pub enum StructLayout {
     Std140,
     Std430,
+}
+
+// TODO: Encode precision hints in the IR
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum Precision {
+    Low,
+    Medium,
+    High,
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

@@ -302,6 +302,7 @@ impl Program<'_> {
         let mut location = None;
         let mut sampling = None;
         let mut layout = None;
+        let mut precision = None;
 
         for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
@@ -350,7 +351,12 @@ impl Program<'_> {
                     meta,
                     "Cannot use more than one layout qualifier per declaration"
                 ),
-
+                TypeQualifier::Precision(ref p) => qualifier_arm!(
+                    p,
+                    precision,
+                    meta,
+                    "Cannot use more than one precision qualifier per declaration"
+                ),
                 _ => {
                     return Err(ErrorKind::SemanticError(
                         meta,

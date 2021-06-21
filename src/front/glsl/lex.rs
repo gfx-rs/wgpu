@@ -1,4 +1,5 @@
 use super::{
+    ast::Precision,
     token::{SourceMetadata, Token, TokenValue},
     types::parse_type,
 };
@@ -58,6 +59,7 @@ impl<'a> Iterator for Lexer<'a> {
             PPTokenValue::Float(float) => TokenValue::FloatConstant(float),
             PPTokenValue::Ident(ident) => {
                 match ident.as_str() {
+                    // Qualifiers
                     "layout" => TokenValue::Layout,
                     "in" => TokenValue::In,
                     "out" => TokenValue::Out,
@@ -70,6 +72,10 @@ impl<'a> Iterator for Lexer<'a> {
                     "sample" => TokenValue::Sampling(crate::Sampling::Sample),
                     "const" => TokenValue::Const,
                     "inout" => TokenValue::InOut,
+                    "precision" => TokenValue::Precision,
+                    "highp" => TokenValue::PrecisionQualifier(Precision::High),
+                    "mediump" => TokenValue::PrecisionQualifier(Precision::Medium),
+                    "lowp" => TokenValue::PrecisionQualifier(Precision::Low),
                     // values
                     "true" => TokenValue::BoolConstant(true),
                     "false" => TokenValue::BoolConstant(false),

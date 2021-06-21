@@ -246,6 +246,15 @@ fn declarations() {
         &entry_points,
     )
     .unwrap();
+
+    let _program = parse_program(
+        r#"
+        #version 450
+        precision highp float;
+        "#,
+        &entry_points,
+    )
+    .unwrap();
 }
 
 #[test]

@@ -1,5 +1,6 @@
 pub use pp_rs::token::{Float, Integer, PreprocessorError};
 
+use super::ast::Precision;
 use crate::{Interpolation, Sampling, Type};
 use std::{fmt, ops::Range};
 
@@ -57,6 +58,8 @@ pub enum TokenValue {
     Const,
     Interpolation(Interpolation),
     Sampling(Sampling),
+    Precision,
+    PrecisionQualifier(Precision),
 
     Continue,
     Break,

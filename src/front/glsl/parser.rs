@@ -10,9 +10,11 @@ use super::{
     Program,
 };
 use crate::{
-    arena::Handle, front::glsl::error::ExpectedToken, Arena, ArraySize, BinaryOperator, Block,
-    Constant, ConstantInner, Expression, Function, FunctionResult, ResourceBinding, ScalarValue,
-    Statement, StorageClass, StructMember, SwitchCase, Type, TypeInner, UnaryOperator,
+    arena::Handle,
+    front::glsl::{ast::Precision, error::ExpectedToken},
+    Arena, ArraySize, BinaryOperator, Block, Constant, ConstantInner, Expression, Function,
+    FunctionResult, ResourceBinding, ScalarKind, ScalarValue, Statement, StorageClass,
+    StructMember, SwitchCase, Type, TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
 use std::{iter::Peekable, mem};
@@ -206,6 +208,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         self.lexer.peek().map_or(false, |t| match t.value {
             TokenValue::Interpolation(_)
             | TokenValue::Sampling(_)
+            | TokenValue::PrecisionQualifier(_)
             | TokenValue::Const
             | TokenValue::In
             | TokenValue::Out
@@ -241,7 +244,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         StorageQualifier::StorageClass(StorageClass::Storage),
                     ),
                     TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
-
+                    TokenValue::PrecisionQualifier(p) => TypeQualifier::Precision(p),
                     _ => unreachable!(),
                 },
                 token.meta,
@@ -829,7 +832,51 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 }
             }
         } else {
-            Ok(false)
+            match self.lexer.peek().map(|t| &t.value) {
+                Some(&TokenValue::Precision) => {
+                    // PRECISION precision_qualifier type_specifier SEMICOLON
+                    self.bump()?;
+
+                    let token = self.bump()?;
+                    let _ = match token.value {
+                        TokenValue::PrecisionQualifier(p) => p,
+                        _ => {
+                            return Err(ErrorKind::InvalidToken(
+                                token,
+                                vec![
+                                    TokenValue::PrecisionQualifier(Precision::High).into(),
+                                    TokenValue::PrecisionQualifier(Precision::Medium).into(),
+                                    TokenValue::PrecisionQualifier(Precision::Low).into(),
+                                ],
+                            ))
+                        }
+                    };
+
+                    let (ty, meta) = self.parse_type_non_void()?;
+
+                    match self.program.module.types[ty].inner {
+                        TypeInner::Scalar {
+                            kind: ScalarKind::Float,
+                            ..
+                        }
+                        | TypeInner::Scalar {
+                            kind: ScalarKind::Sint,
+                            ..
+                        } => {}
+                        _ => {
+                            return Err(ErrorKind::SemanticError(
+                                meta,
+                                "Precision statement can only work on floats and ints".into(),
+                            ))
+                        }
+                    }
+
+                    self.expect(TokenValue::Semicolon)?;
+
+                    Ok(true)
+                }
+                _ => Ok(false),
+            }
         }
     }
 
