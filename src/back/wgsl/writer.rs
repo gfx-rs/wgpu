@@ -1,6 +1,9 @@
 use super::Error;
 use crate::{
-    back::{binary_operation_str, vector_size_str, wgsl::keywords::RESERVED},
+    back::{
+        binary_operation_str, vector_size_str, wgsl::keywords::RESERVED, BAKE_PREFIX, COMPONENTS,
+        INDENT,
+    },
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, Binding, Constant, ConstantInner, Expression, FastHashMap, Function,
@@ -9,10 +12,6 @@ use crate::{
     StorageFormat, StructMember, Type, TypeInner,
 };
 use std::fmt::Write;
-
-const INDENT: &str = "    ";
-const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
-const BAKE_PREFIX: &str = "_e";
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;

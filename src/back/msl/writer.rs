@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     arena::{Arena, Handle},
-    back::vector_size_str,
+    back::{vector_size_str, BAKE_PREFIX, COMPONENTS, INDENT},
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{Capabilities, FunctionInfo, GlobalUse, ModuleInfo},
     FastHashMap,
@@ -15,8 +15,6 @@ use std::{
 };
 
 const NAMESPACE: &str = "metal";
-const INDENT: &str = "    ";
-const BAKE_PREFIX: &str = "_e";
 const WRAPPED_ARRAY_FIELD: &str = "inner";
 
 #[derive(Clone)]
@@ -304,8 +302,6 @@ fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
         crate::ScalarKind::Bool => "bool",
     }
 }
-
-const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 
 fn separate(need_separator: bool) -> &'static str {
     if need_separator {

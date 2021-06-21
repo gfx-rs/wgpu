@@ -44,6 +44,7 @@
 pub use features::Features;
 
 use crate::{
+    back::{COMPONENTS, INDENT},
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
@@ -69,9 +70,6 @@ mod keywords;
 pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
 /// List of supported es glsl versions
 pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
-const INDENT: &str = "    ";
-
-const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 
 /// glsl version
 #[derive(Debug, Copy, Clone, PartialEq)]

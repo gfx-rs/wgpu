@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 use super::{Error, Options, ShaderModel};
 use crate::{
-    back::{hlsl::keywords::RESERVED, vector_size_str},
+    back::{hlsl::keywords::RESERVED, vector_size_str, BAKE_PREFIX, COMPONENTS, INDENT},
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
     Arena, ArraySize, BuiltIn, Bytes, Constant, ConstantInner, Expression, FastHashMap, Function,
@@ -11,10 +11,7 @@ use crate::{
 };
 use std::fmt::Write;
 
-const INDENT: &str = "    ";
-const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 const LOCATION_SEMANTIC: &str = "LOC";
-const BAKE_PREFIX: &str = "_e";
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
