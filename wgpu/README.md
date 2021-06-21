@@ -50,7 +50,6 @@ See [wiki article](https://github.com/gfx-rs/wgpu-rs/wiki/Running-on-the-Web-wit
 Users can run the [naga](https://github.com/gfx-rs/naga) binary in the following way to convert their SPIR-V shaders to WGSL:
 ```bash
 cargo run -- <input.spv> <output.wgsl>
-
 ```
 
 In addition, SPIR-V can be used by enabling the `spirv` feature, and the cost of slightly increased build times.

@@ -9,8 +9,6 @@ use std::borrow::Cow;
 use thiserror::Error;
 
 pub enum ShaderModuleSource<'a> {
-    #[cfg(feature = "spirv")]
-    SpirV(Cow<'a, [u32]>),
     Wgsl(Cow<'a, str>),
     Naga(naga::Module),
 }

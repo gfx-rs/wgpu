@@ -17,7 +17,7 @@ all-features = true
 
 [features]
 default = []
-spirv = ["wgc/spirv"]
+spirv = ["naga/spv-in"]
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 webgl = ["wgc"]
@@ -64,6 +64,11 @@ winit = { version = "0.24", features = ["web-sys"] }
 async-executor = "1.0"
 pollster = "0.2"
 env_logger = "0.8"
+
+[dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-26"
+optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]

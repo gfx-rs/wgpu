@@ -838,28 +838,6 @@ impl<A: HalApi> Device<A> {
         source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
         let module = match source {
-            #[cfg(feature = "spirv")]
-            pipeline::ShaderModuleSource::SpirV(spv) => {
-                profiling::scope!("naga::spv::parse");
-                // Parse the given shader code and store its representation.
-                let options = naga::front::spv::Options {
-                    adjust_coordinate_space: false, // we require NDC_Y_UP feature
-                    strict_capabilities: true,
-                    flow_graph_dump_prefix: None,
-                };
-                let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
-                match parser.parse() {
-                    Ok(module) => module,
-                    Err(err) => {
-                        log::warn!(
-                            "Failed to parse shader SPIR-V code for {:?}: {:?}",
-                            desc.label,
-                            err
-                        );
-                        return Err(pipeline::CreateShaderModuleError::Parsing);
-                    }
-                }
-            }
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::wgsl::parse_str");
                 // TODO: refactor the corresponding Naga error to be owned, and then
@@ -3477,18 +3455,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
                 let data = match source {
-                    #[cfg(feature = "spirv")]
-                    pipeline::ShaderModuleSource::SpirV(ref spv) => {
-                        trace.make_binary("spv", unsafe {
-                            std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
-                        })
-                    }
                     pipeline::ShaderModuleSource::Wgsl(ref code) => {
                         trace.make_binary("wgsl", code.as_bytes())
                     }
-                    pipeline::ShaderModuleSource::Naga(_) => {
-                        // we don't want to enable Naga serialization just for this alone
-                        trace.make_binary("ron", &[])
+                    pipeline::ShaderModuleSource::Naga(ref module) => {
+                        let string =
+                            ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
+                                .unwrap();
+                        trace.make_binary("ron", string.as_bytes())
                     }
                 };
                 trace.add(trace::Action::CreateShaderModule {
