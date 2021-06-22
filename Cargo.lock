@@ -1053,6 +1053,7 @@ dependencies = [
  "num-traits 0.2.14",
  "petgraph",
  "rose_tree",
+ "serde",
  "spirv_headers",
  "thiserror",
 ]

@@ -14,9 +14,9 @@ license = "MIT OR Apache-2.0"
 [features]
 default = []
 # Enable API tracing
-trace = ["ron", "serde", "wgt/trace", "arrayvec/serde"]
+trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
 # Enable API replaying
-replay = ["serde", "wgt/replay", "arrayvec/serde"]
+replay = ["serde", "wgt/replay", "arrayvec/serde", "naga/deserialize"]
 # Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 
@@ -37,7 +37,7 @@ thiserror = "1"
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
 tag = "gfx-26"
-features = ["spv-in", "wgsl-in"]
+features = ["wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"

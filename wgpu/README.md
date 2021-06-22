@@ -43,6 +43,17 @@ The following environment variables can be used to configure how the framework e
 
 See [wiki article](https://github.com/gfx-rs/wgpu-rs/wiki/Running-on-the-Web-with-WebGPU-and-WebGL).
 
+## Shaders
+
+[WGSL](https://gpuweb.github.io/gpuweb/wgsl/) is the main shading language of WebGPU.
+
+Users can run the [naga](https://github.com/gfx-rs/naga) binary in the following way to convert their SPIR-V shaders to WGSL:
+```bash
+cargo run -- <input.spv> <output.wgsl>
+```
+
+In addition, SPIR-V can be used by enabling the `spirv` feature, and the cost of slightly increased build times.
+
 ## Development
 
 If you need to test local fixes to gfx or other dependencies, the simplest way is to add a Cargo patch. For example, when working on DX12 backend on Windows, you can check out the latest release branch in the [gfx-hal repository](https://github.com/gfx-rs/gfx) (e.g. currently `hal-0.8`) and add this patch to the end of `Cargo.toml`:

@@ -810,7 +810,19 @@ impl crate::Context for Context {
             label: desc.label.map(Borrowed),
         };
         let source = match desc.source {
-            ShaderSource::SpirV(ref spv) => wgc::pipeline::ShaderModuleSource::SpirV(Borrowed(spv)),
+            #[cfg(feature = "spirv")]
+            ShaderSource::SpirV(ref spv) => {
+                profiling::scope!("naga::spv::parse");
+                // Parse the given shader code and store its representation.
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: false, // we require NDC_Y_UP feature
+                    strict_capabilities: true,
+                    flow_graph_dump_prefix: None,
+                };
+                let parser = naga::front::spv::Parser::new(spv.iter().cloned(), &options);
+                let module = parser.parse().unwrap();
+                wgc::pipeline::ShaderModuleSource::Naga(module)
+            }
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
         };
         let (id, error) = wgc::gfx_select!(

@@ -239,17 +239,15 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.bind_group_drop::<A>(id);
             }
             Action::CreateShaderModule { id, desc, data } => {
+                log::info!("Creating shader from {}", data);
+                let code = fs::read_to_string(dir.join(&data)).unwrap();
                 let source = if data.ends_with(".wgsl") {
-                    let code = fs::read_to_string(dir.join(data)).unwrap();
                     wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
+                } else if data.ends_with(".ron") {
+                    let module = ron::de::from_str(&code).unwrap();
+                    wgc::pipeline::ShaderModuleSource::Naga(module)
                 } else {
-                    let byte_vec = fs::read(dir.join(&data))
-                        .unwrap_or_else(|e| panic!("Unable to open '{}': {:?}", data, e));
-                    let spv = byte_vec
-                        .chunks(4)
-                        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                        .collect::<Vec<_>>();
-                    wgc::pipeline::ShaderModuleSource::SpirV(Cow::Owned(spv))
+                    panic!("Unknown shader {}", data);
                 };
                 let (_, error) = self.device_create_shader_module::<A>(device, &desc, source, id);
                 if let Some(e) = error {
