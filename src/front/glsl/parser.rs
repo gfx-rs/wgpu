@@ -1032,7 +1032,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             }
         };
 
-        let handle = self.program.module.constants.append(Constant {
+        let handle = self.program.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
             inner: ConstantInner::Scalar { width, value },
