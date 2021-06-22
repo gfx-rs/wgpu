@@ -187,7 +187,7 @@ enum FunctionType {
 /// Helper structure that stores data needed when writing the function
 struct FunctionCtx<'a> {
     /// The current function being written
-    func: FunctionType,
+    ty: FunctionType,
     /// Analysis about the function
     info: &'a FunctionInfo,
     /// The expression arena of the current function being written
@@ -199,7 +199,7 @@ struct FunctionCtx<'a> {
 impl<'a> FunctionCtx<'_> {
     /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a local in the current function
     fn name_key(&self, local: Handle<LocalVariable>) -> NameKey {
-        match self.func {
+        match self.ty {
             FunctionType::Function(handle) => NameKey::FunctionLocal(handle, local),
             FunctionType::EntryPoint(idx) => NameKey::EntryPointLocal(idx, local),
         }
@@ -210,7 +210,7 @@ impl<'a> FunctionCtx<'_> {
     /// # Panics
     /// - If the function arguments are less or equal to `arg`
     fn argument_key(&self, arg: u32) -> NameKey {
-        match self.func {
+        match self.ty {
             FunctionType::Function(handle) => NameKey::FunctionArgument(handle, arg),
             FunctionType::EntryPoint(ep_index) => NameKey::EntryPointArgument(ep_index, arg),
         }
@@ -884,7 +884,7 @@ impl<'a, W: Write> Writer<'a, W> {
     ) -> BackendResult {
         // Create a function context for the function being written
         let ctx = FunctionCtx {
-            func: ty,
+            ty,
             info,
             expressions: &func.expressions,
             named_expressions: &func.named_expressions,
@@ -905,7 +905,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // Start by writing the return type if any otherwise write void
         // This is the only place where `void` is a valid type
         // (though it's more a keyword than a type)
-        if let FunctionType::EntryPoint(_) = ctx.func {
+        if let FunctionType::EntryPoint(_) = ctx.ty {
             write!(self.out, "void")?;
         } else if let Some(ref result) = func.result {
             self.write_type(result.ty)?;
@@ -920,7 +920,7 @@ impl<'a, W: Write> Writer<'a, W> {
         //
         // We need access to `Self` here so we use the reference passed to the closure as an
         // argument instead of capturing as that would cause a borrow checker error
-        let arguments = match ctx.func {
+        let arguments = match ctx.ty {
             FunctionType::EntryPoint(_) => &[][..],
             FunctionType::Function(_) => &func.arguments,
         };
@@ -940,7 +940,7 @@ impl<'a, W: Write> Writer<'a, W> {
         writeln!(self.out, ") {{")?;
 
         // Compose the function arguments from globals, in case of an entry point.
-        if let FunctionType::EntryPoint(ep_index) = ctx.func {
+        if let FunctionType::EntryPoint(ep_index) = ctx.ty {
             let stage = self.module.entry_points[ep_index as usize].stage;
             for (index, arg) in func.arguments.iter().enumerate() {
                 write!(self.out, "{}", INDENT)?;
@@ -1355,7 +1355,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // `return expr;`, `expr` is optional
             Statement::Return { value } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
-                match ctx.func {
+                match ctx.ty {
                     FunctionType::Function(_) => {
                         write!(self.out, "return")?;
                         // Write the expression to be returned if needed
