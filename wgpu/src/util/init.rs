@@ -37,6 +37,7 @@ pub fn power_preference_from_env() -> Option<PowerPreference> {
 }
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn initialize_adapter_from_env(
     instance: &Instance,
     backend_bits: BackendBit,
@@ -59,6 +60,15 @@ pub fn initialize_adapter_from_env(
     }
 
     Some(chosen_adapter.expect("WGPU_ADAPTER_NAME set but no matching adapter found!"))
+}
+
+/// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
+#[cfg(target_arch = "wasm32")]
+pub fn initialize_adapter_from_env(
+    _instance: &Instance,
+    _backend_bits: BackendBit,
+) -> Option<Adapter> {
+    None
 }
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable and if it doesn't exist fall back on a default adapter.

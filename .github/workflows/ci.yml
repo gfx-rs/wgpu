@@ -133,7 +133,10 @@ jobs:
       - if: matrix.clippy_params != ''
         run: cargo clippy ${{ matrix.clippy_params }}
       - if: matrix.channel == 'nightly'
-        run: cargo test -- --nocapture
+        run: cargo test -p wgpu-core -- --nocapture
+      - if: matrix.channel == 'nightly'
+        run: cargo run --example wgpu-info -- cargo test -p wgpu -- --nocapture
+
 
   docs:
     runs-on: [ubuntu-latest]
