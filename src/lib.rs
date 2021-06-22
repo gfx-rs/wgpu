@@ -1125,16 +1125,65 @@ pub enum Statement {
         cases: Vec<SwitchCase>,
         default: Block,
     },
+
     /// Executes a block repeatedly.
+    ///
+    /// Each iteration of the loop executes the `body` block, followed by the
+    /// `continuing` block.
+    ///
+    /// Executing a [`Break`], [`Return`] or [`Kill`] statement exits the loop.
+    ///
+    /// A [`Continue`] statement in `body` jumps to the `continuing` block. The
+    /// `continuing` block is meant to be used to represent structures like the
+    /// third expression of a C-style `for` loop head, to which `continue`
+    /// statements in the loop's body jump.
+    ///
+    /// The `continuing` block and its substatements must not contain `Return`
+    /// or `Kill` statements, or any `Break` or `Continue` statements targeting
+    /// this loop. (It may have `Break` and `Continue` statements targeting
+    /// loops or switches nested within the `continuing` block.)
+    ///
+    /// [`Break`]: Statement::Break
+    /// [`Continue`]: Statement::Continue
+    /// [`Kill`]: Statement::Kill
+    /// [`Return`]: Statement::Return
     Loop { body: Block, continuing: Block },
-    /// Exits the loop.
+
+    /// Exits the innermost enclosing [`Loop`] or [`Switch`].
+    ///
+    /// A `Break` statement may only appear within a [`Loop`] or [`Switch`]
+    /// statement. It may not break out of a [`Loop`] from within the loop's
+    /// `continuing` block.
+    ///
+    /// [`Loop`]: Statement::Loop
+    /// [`Switch`]: Statement::Switch
     Break,
-    /// Skips execution to the next iteration of the loop.
+
+    /// Skips to the `continuing` block of the innermost enclosing [`Loop`].
+    ///
+    /// A `Continue` statement may only appear within the `body` block of the
+    /// innermost enclosing [`Loop`] statement. It must not appear within that
+    /// loop's `continuing` block.
+    ///
+    /// [`Loop`]: Statement::Loop
     Continue,
+
     /// Returns from the function (possibly with a value).
+    ///
+    /// `Return` statements are forbidden within the `continuing` block of a
+    /// [`Loop`] statement.
+    ///
+    /// [`Loop`]: Statement::Loop
     Return { value: Option<Handle<Expression>> },
+
     /// Aborts the current shader execution.
+    ///
+    /// `Kill` statements are forbidden within the `continuing` block of a
+    /// [`Loop`] statement.
+    ///
+    /// [`Loop`]: Statement::Loop
     Kill,
+
     /// Synchronize invocations within the work group.
     /// The `Barrier` flags control which memory accesses should be synchronized.
     /// If empty, this becomes purely an execution barrier.
