@@ -58,8 +58,8 @@ pub enum ErrorKind {
     InvalidVersion(SourceMetadata, u64),
     #[error("Expected {}, found {0}", join_with_comma(.1))]
     InvalidToken(Token, Vec<ExpectedToken>),
-    #[error("Not implemented {0}")]
-    NotImplemented(&'static str),
+    #[error("Not implemented: {1}")]
+    NotImplemented(SourceMetadata, &'static str),
     #[error("Unknown variable: {1}")]
     UnknownVariable(SourceMetadata, String),
     #[error("Unknown type: {1}")]
@@ -82,6 +82,7 @@ impl ErrorKind {
             ErrorKind::UnknownVariable(metadata, _)
             | ErrorKind::InvalidProfile(metadata, _)
             | ErrorKind::InvalidVersion(metadata, _)
+            | ErrorKind::NotImplemented(metadata, _)
             | ErrorKind::UnknownLayoutQualifier(metadata, _)
             | ErrorKind::SemanticError(metadata, _)
             | ErrorKind::UnknownField(metadata, _) => Some(metadata),

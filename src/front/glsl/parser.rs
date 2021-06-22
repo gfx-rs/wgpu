@@ -797,7 +797,10 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
                             // type_qualifier IDENTIFIER identifier_list SEMICOLON
-                            todo!()
+                            Err(ErrorKind::NotImplemented(
+                                token.meta,
+                                "variable qualifier",
+                            ))
                         }
                     }
                     TokenValue::Semicolon => {
