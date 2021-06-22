@@ -812,7 +812,6 @@ impl crate::Context for Context {
         let source = match desc.source {
             #[cfg(feature = "spirv")]
             ShaderSource::SpirV(ref spv) => {
-                profiling::scope!("naga::spv::parse");
                 // Parse the given shader code and store its representation.
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: false, // we require NDC_Y_UP feature
