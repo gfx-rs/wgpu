@@ -1,15 +1,15 @@
 use super::Error;
 use crate::{
     back::{
-        binary_operation_str, vector_size_str, wgsl::keywords::RESERVED, BAKE_PREFIX, COMPONENTS,
-        INDENT,
+        binary_operation_str, vector_size_str, wgsl::keywords::RESERVED, FunctionCtx, FunctionType,
+        BAKE_PREFIX, COMPONENTS, INDENT,
     },
-    proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
+    proc::{NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
-    Arena, ArraySize, Binding, Constant, ConstantInner, Expression, FastHashMap, Function,
-    GlobalVariable, Handle, ImageClass, ImageDimension, Interpolation, LocalVariable, Module,
-    SampleLevel, Sampling, ScalarKind, ScalarValue, ShaderStage, Statement, StorageClass,
-    StorageFormat, StructMember, Type, TypeInner,
+    ArraySize, Binding, Constant, ConstantInner, Expression, FastHashMap, Function, GlobalVariable,
+    Handle, ImageClass, ImageDimension, Interpolation, Module, SampleLevel, Sampling, ScalarKind,
+    ScalarValue, ShaderStage, Statement, StorageClass, StorageFormat, StructMember, Type,
+    TypeInner,
 };
 use std::fmt::Write;
 
@@ -29,40 +29,6 @@ enum Attribute {
     Stage(ShaderStage),
     Stride(u32),
     WorkGroupSize([u32; 3]),
-}
-
-/// Stores the current function type (either a regular function or an entry point)
-///
-/// Also stores data needed to identify it (handle for a regular function or index for an entry point)
-// TODO: copy-paste from glsl-out
-enum FunctionType {
-    /// A regular function and it's handle
-    Function(Handle<Function>),
-    /// A entry point and it's index
-    EntryPoint(EntryPointIndex),
-}
-
-/// Helper structure that stores data needed when writing the function
-// TODO: copy-paste from glsl-out
-struct FunctionCtx<'a> {
-    /// The current function type being written
-    ty: FunctionType,
-    /// Analysis about the function
-    info: &'a FunctionInfo,
-    /// The expression arena of the current function being written
-    expressions: &'a Arena<Expression>,
-    /// Map of expressions that have associated variable names
-    named_expressions: &'a crate::NamedExpressions,
-}
-
-impl<'a> FunctionCtx<'_> {
-    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a local in the current function
-    fn name_key(&self, local: Handle<LocalVariable>) -> NameKey {
-        match self.ty {
-            FunctionType::Function(handle) => NameKey::FunctionLocal(handle, local),
-            FunctionType::EntryPoint(idx) => NameKey::EntryPointLocal(idx, local),
-        }
-    }
 }
 
 pub struct Writer<W> {

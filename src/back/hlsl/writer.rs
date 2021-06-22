@@ -2,12 +2,15 @@
 #![allow(dead_code)]
 use super::{Error, Options, ShaderModel};
 use crate::{
-    back::{hlsl::keywords::RESERVED, vector_size_str, BAKE_PREFIX, COMPONENTS, INDENT},
-    proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
-    valid::{FunctionInfo, ModuleInfo},
-    Arena, ArraySize, BuiltIn, Bytes, Constant, ConstantInner, Expression, FastHashMap, Function,
-    GlobalVariable, Handle, ImageDimension, LocalVariable, Module, ScalarKind, ScalarValue,
-    ShaderStage, Statement, StructMember, Type, TypeInner,
+    back::{
+        hlsl::keywords::RESERVED, vector_size_str, FunctionCtx, FunctionType, BAKE_PREFIX,
+        COMPONENTS, INDENT,
+    },
+    proc::{NameKey, Namer, TypeResolution},
+    valid::ModuleInfo,
+    ArraySize, BuiltIn, Bytes, Constant, ConstantInner, Expression, FastHashMap, Function,
+    GlobalVariable, Handle, ImageDimension, Module, ScalarKind, ScalarValue, ShaderStage,
+    Statement, StructMember, Type, TypeInner,
 };
 use std::fmt::Write;
 
@@ -15,40 +18,6 @@ const LOCATION_SEMANTIC: &str = "LOC";
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
-
-/// Stores the current function type (either a regular function or an entry point)
-///
-/// Also stores data needed to identify it (handle for a regular function or index for an entry point)
-// TODO: copy-paste from glsl-out, wgsl-out
-enum FunctionType {
-    /// A regular function and it's handle
-    Function(Handle<Function>),
-    /// A entry point and it's index
-    EntryPoint(EntryPointIndex),
-}
-
-/// Helper structure that stores data needed when writing the function
-// TODO: copy-paste from glsl-out, wgsl-out
-struct FunctionCtx<'a> {
-    /// The current function type being written
-    ty: FunctionType,
-    /// Analysis about the function
-    info: &'a FunctionInfo,
-    /// The expression arena of the current function being written
-    expressions: &'a Arena<Expression>,
-    /// Map of expressions that have associated variable names
-    named_expressions: &'a crate::NamedExpressions,
-}
-
-impl<'a> FunctionCtx<'_> {
-    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a local in the current function
-    fn name_key(&self, local: Handle<LocalVariable>) -> NameKey {
-        match self.ty {
-            FunctionType::Function(handle) => NameKey::FunctionLocal(handle, local),
-            FunctionType::EntryPoint(idx) => NameKey::EntryPointLocal(idx, local),
-        }
-    }
-}
 
 struct EntryPointBinding {
     stage: ShaderStage,

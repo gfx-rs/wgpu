@@ -44,14 +44,14 @@
 pub use features::Features;
 
 use crate::{
-    back::{COMPONENTS, INDENT},
+    back::{FunctionCtx, FunctionType, COMPONENTS, INDENT},
     proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
-    Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant,
-    ConstantInner, DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle,
-    ImageClass, Interpolation, LocalVariable, Module, RelationalFunction, Sampling, ScalarKind,
-    ScalarValue, ShaderStage, Statement, StorageAccess, StorageClass, StorageFormat, StructMember,
-    Type, TypeInner, UnaryOperator,
+    ArraySize, BinaryOperator, Binding, BuiltIn, Bytes, ConservativeDepth, Constant, ConstantInner,
+    DerivativeAxis, Expression, FastHashMap, Function, GlobalVariable, Handle, ImageClass,
+    Interpolation, Module, RelationalFunction, Sampling, ScalarKind, ScalarValue, ShaderStage,
+    Statement, StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner,
+    UnaryOperator,
 };
 use features::FeaturesManager;
 use std::{
@@ -172,49 +172,6 @@ pub struct TextureMapping {
     pub texture: Handle<GlobalVariable>,
     /// Handle to the associated sampler global variable if it exists
     pub sampler: Option<Handle<GlobalVariable>>,
-}
-
-/// Stores the current function type (either a regular function or an entry point)
-///
-/// Also stores data needed to identify it (handle for a regular function or index for an entry point)
-enum FunctionType {
-    /// A regular function and it's handle
-    Function(Handle<Function>),
-    /// A entry point and it's index
-    EntryPoint(EntryPointIndex),
-}
-
-/// Helper structure that stores data needed when writing the function
-struct FunctionCtx<'a> {
-    /// The current function being written
-    ty: FunctionType,
-    /// Analysis about the function
-    info: &'a FunctionInfo,
-    /// The expression arena of the current function being written
-    expressions: &'a Arena<Expression>,
-    /// Map of expressions that have associated variable names
-    named_expressions: &'a crate::NamedExpressions,
-}
-
-impl<'a> FunctionCtx<'_> {
-    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a local in the current function
-    fn name_key(&self, local: Handle<LocalVariable>) -> NameKey {
-        match self.ty {
-            FunctionType::Function(handle) => NameKey::FunctionLocal(handle, local),
-            FunctionType::EntryPoint(idx) => NameKey::EntryPointLocal(idx, local),
-        }
-    }
-
-    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for a function argument.
-    ///
-    /// # Panics
-    /// - If the function arguments are less or equal to `arg`
-    fn argument_key(&self, arg: u32) -> NameKey {
-        match self.ty {
-            FunctionType::Function(handle) => NameKey::FunctionArgument(handle, arg),
-            FunctionType::EntryPoint(ep_index) => NameKey::EntryPointArgument(ep_index, arg),
-        }
-    }
 }
 
 /// Helper structure that generates a number
