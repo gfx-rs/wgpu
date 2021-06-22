@@ -32,3 +32,31 @@ If you are looking for the native implementation or bindings to the API in other
   GLes3  |                    |                    |                    |
 
 :white_check_mark: = Primary support — :ok: = Secondary support — :construction: = Unsupported, but support in progress
+
+## Testing Infrastructure
+
+wgpu features a set of unit, integration, and example based tests. All framework based examples are automatically reftested against the screenshot in the example directory. The `wgpu-info` example contains the logic which can automatically run the tests multiple times for all the adapters present on the system. These tests are also run on CI on windows and linux over Vulkan/DX12/DX11/GL on software adapters.
+
+To run the test suite, run the following command:
+
+```
+cargo run --example wgpu-info -- cargo test
+```
+
+To run any individual test on a specific adapter, populate the following environment variables:
+- `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. "1080" will match "NVIDIA GeForce 1080ti").
+- `WGPU_BACKEND` with the name of the backend you want to use (`vulkan`, `metal`, `dx12`, `dx11`, or `gl`).
+
+Then to run an example's reftests, run:
+
+```
+cargo test --example <example-name>
+```
+
+Or run a part of the integration test suite:
+
+```
+cargo test -p wgpu -- <name-of-test>
+```
+
+If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases. 

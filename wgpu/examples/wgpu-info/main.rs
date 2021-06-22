@@ -84,13 +84,13 @@ fn main() {
         .collect();
     let adapter_count = adapters.len();
 
-    let all_start = Instant::now();
-
     if args.is_empty() {
         for (idx, adapter) in adapters.into_iter().enumerate() {
             print_info_from_adapter(&adapter, idx)
         }
     } else {
+        let all_start = Instant::now();
+        
         for (idx, adapter) in adapters.into_iter().enumerate() {
             let adapter_start_time = Instant::now();
             let idx = idx + 1;
@@ -134,12 +134,12 @@ fn main() {
                 exit(1);
             }
         }
+
+        let all_time = all_start.elapsed().as_secs_f32();
+
+        println!(
+            "=========== {} adapters PASSED in {:.3}s ===========",
+            adapter_count, all_time
+        );
     }
-
-    let all_time = all_start.elapsed().as_secs_f32();
-
-    println!(
-        "=========== {} adapters PASSED in {:.3}s ===========",
-        adapter_count, all_time
-    );
 }
