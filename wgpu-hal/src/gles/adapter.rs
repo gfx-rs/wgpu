@@ -285,6 +285,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             queue: super::Queue {
                 shared: Arc::clone(&self.shared),
                 features,
+                copy_fbo: gl.create_framebuffer().unwrap(),
             },
         })
     }

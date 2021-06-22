@@ -7,6 +7,7 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod queue;
 
 #[cfg(not(target_arch = "wasm32"))]
 use self::egl::{Instance, Surface};
@@ -181,6 +182,7 @@ pub struct Device {
 pub struct Queue {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
+    copy_fbo: glow::Framebuffer,
 }
 
 #[derive(Debug)]
@@ -307,14 +309,6 @@ pub struct CommandBuffer {
     data: Vec<u8>,
 }
 
-impl CommandBuffer {
-    fn add_marker(&mut self, marker: &str) -> Range<u32> {
-        let start = self.data.len() as u32;
-        self.data.extend(marker.as_bytes());
-        start..self.data.len() as u32
-    }
-}
-
 #[derive(Default)]
 struct CommandState {
     primitive: u32,
@@ -322,24 +316,11 @@ struct CommandState {
     index_offset: wgt::BufferAddress,
 }
 
+//TODO: we would have something like `Arc<typed_arena::Arena>`
+// here and in the command buffers. So that everything grows
+// inside the encoder and stays there until `reset_all`.
+
 pub struct CommandEncoder {
     cmd_buffer: CommandBuffer,
     state: CommandState,
-}
-
-impl crate::Queue<Api> for Queue {
-    unsafe fn submit(
-        &mut self,
-        command_buffers: &[&CommandBuffer],
-        signal_fence: Option<(&mut Resource, crate::FenceValue)>,
-    ) -> DeviceResult<()> {
-        Ok(())
-    }
-    unsafe fn present(
-        &mut self,
-        surface: &mut Surface,
-        texture: Texture,
-    ) -> Result<(), crate::SurfaceError> {
-        Ok(())
-    }
 }

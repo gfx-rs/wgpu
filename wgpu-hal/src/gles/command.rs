@@ -8,6 +8,12 @@ impl super::CommandBuffer {
         self.commands.clear();
         self.data.clear();
     }
+
+    fn add_marker(&mut self, marker: &str) -> Range<u32> {
+        let start = self.data.len() as u32;
+        self.data.extend(marker.as_bytes());
+        start..self.data.len() as u32
+    }
 }
 
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
@@ -21,7 +27,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         Ok(mem::take(&mut self.cmd_buffer))
     }
-    unsafe fn reset_all<I>(&mut self, _command_buffers: I) {}
+    unsafe fn reset_all<I>(&mut self, _command_buffers: I) {
+        //TODO: could re-use the allocations in all these command buffers
+    }
 
     unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
     where
