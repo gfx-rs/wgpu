@@ -651,7 +651,6 @@ impl<A: hal::Api> Example<A> {
         if do_fence {
             log::info!("Context switch from {}", self.context_index);
             let old_fence_value = ctx.fence_value;
-            drop(ctx);
             if self.contexts.len() == 1 {
                 let hal_desc = hal::CommandEncoderDescriptor {
                     label: None,

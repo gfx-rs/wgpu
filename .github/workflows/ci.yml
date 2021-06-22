@@ -61,20 +61,26 @@ jobs:
             channel: stable
             os: macos-10.15
             prepare_command:
-            additional_core_features: trace
+            clippy_params:
+            additional_core_features:
             additional_player_features: winit
+            wrapper_features: trace
           - name: MacOS Nightly
             os: macos-10.15
             channel: nightly
             prepare_command:
+            clippy_params:
             additional_core_features:
             additional_player_features:
+            wrapper_features:
           - name: Ubuntu Stable
             os: ubuntu-20.04
             channel: stable
             prepare_command:
-            additional_core_features: trace,replay
-            additional_player_features:
+            clippy_params: --examples --all
+            additional_core_features: trace,serial-pass
+            additional_player_features: winit
+            wrapper_features: spirv,replay
           - name: Ubuntu Nightly
             os: ubuntu-20.04
             channel: nightly
@@ -84,20 +90,26 @@ jobs:
               sudo add-apt-repository ppa:ubuntu-x-swat/updates -y
               sudo apt-get update
               sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
+            clippy_params:
             additional_core_features: serial-pass
-            additional_player_features: winit
+            additional_player_features:
+            wrapper_features:
           - name: Windows Stable
             os: windows-2019
             channel: stable
             prepare_command: rustup default stable-msvc
-            additional_core_features: trace,serial-pass
+            clippy_params:
+            additional_core_features:
             additional_player_features:
+            wrapper_features:
           - name: Windows Nightly
             os: windows-2019
             channel: nightly
             prepare_command: rustup default nightly-msvc
+            clippy_params:
             additional_core_features:
             additional_player_features:
+            wrapper_features:
     steps:
       - uses: actions/checkout@v2
       - if: matrix.channel == 'nightly'
@@ -106,20 +118,20 @@ jobs:
         with:
           toolchain: nightly
           override: true
-      - if: matrix.channel == 'stable'
+      - if: matrix.clippy_params != ''
         run: rustup component add clippy
         # prepare
       - if: matrix.prepare_command != ''
         run: ${{ matrix.prepare_command }}
-        # build with no features first
-      - if: matrix.additional_core_features == ''
-        run: cargo check --manifest-path wgpu-core/Cargo.toml --no-default-features
+        # regular build
       - if: matrix.additional_core_features != ''
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features ${{ matrix.additional_core_features }}
       - if: matrix.additional_player_features != ''
         run: cargo check --manifest-path player/Cargo.toml --features ${{ matrix.additional_player_features }}
-      - if: matrix.channel == 'stable'
-        run: cargo clippy
+      - run: cargo check --manifest-path wgpu/Cargo.toml --examples --features ${{ matrix.wrapper_features }},
+        # clippy
+      - if: matrix.clippy_params != ''
+        run: cargo clippy ${{ matrix.clippy_params }}
       - if: matrix.channel == 'nightly'
         run: cargo test -- --nocapture
 
