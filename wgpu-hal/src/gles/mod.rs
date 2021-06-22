@@ -13,11 +13,10 @@ use self::egl::{Instance, Surface};
 
 use glow::HasContext;
 
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 
 #[derive(Clone)]
 pub struct Api;
-pub struct Context;
 #[derive(Debug)]
 pub struct Resource;
 
@@ -203,6 +202,15 @@ pub enum Texture {
     },
 }
 
+impl Texture {
+    fn as_native(&self) -> (glow::Texture, BindTarget) {
+        match *self {
+            Self::Renderbuffer { raw, .. } => panic!("Unexpected renderbuffer {}", raw),
+            Self::Texture { raw, target } => (raw, target),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum TextureView {
     Renderbuffer {
@@ -222,16 +230,101 @@ pub struct Sampler {
 }
 
 #[derive(Debug)]
-enum Command {}
+enum Command {
+    Draw {
+        primitive: u32,
+        start_vertex: u32,
+        vertex_count: u32,
+        instance_count: u32,
+    },
+    DrawIndexed {
+        primitive: u32,
+        index_type: u32,
+        index_count: u32,
+        index_offset: wgt::BufferAddress,
+        base_vertex: i32,
+        instance_count: u32,
+    },
+    DrawIndirect {
+        primitive: u32,
+        indirect_buf: glow::Buffer,
+        indirect_offset: wgt::BufferAddress,
+    },
+    DrawIndexedIndirect {
+        primitive: u32,
+        index_type: u32,
+        indirect_buf: glow::Buffer,
+        indirect_offset: wgt::BufferAddress,
+    },
+    Dispatch([u32; 3]),
+    DispatchIndirect {
+        indirect_buf: glow::Buffer,
+        indirect_offset: wgt::BufferAddress,
+    },
+    FillBuffer {
+        dst: glow::Buffer,
+        range: crate::MemoryRange,
+        value: u8,
+    },
+    CopyBufferToBuffer {
+        src: glow::Buffer,
+        src_target: BindTarget,
+        dst: glow::Buffer,
+        dst_target: BindTarget,
+        copy: crate::BufferCopy,
+    },
+    CopyTextureToTexture {
+        src: glow::Texture,
+        src_target: BindTarget,
+        dst: glow::Texture,
+        dst_target: BindTarget,
+        copy: crate::TextureCopy,
+    },
+    CopyBufferToTexture {
+        src: glow::Buffer,
+        src_target: BindTarget,
+        dst: glow::Texture,
+        dst_target: BindTarget,
+        copy: crate::BufferTextureCopy,
+    },
+    CopyTextureToBuffer {
+        src: glow::Texture,
+        src_target: BindTarget,
+        dst: glow::Buffer,
+        dst_target: BindTarget,
+        copy: crate::BufferTextureCopy,
+    },
+    SetIndexBuffer(glow::Buffer),
+    InsertDebugMarker(Range<u32>),
+    PushDebugGroup(Range<u32>),
+    PopDebugGroup,
+}
 
 #[derive(Default)]
 pub struct CommandBuffer {
+    label: Option<String>,
     commands: Vec<Command>,
     data: Vec<u8>,
 }
 
+impl CommandBuffer {
+    fn add_marker(&mut self, marker: &str) -> Range<u32> {
+        let start = self.data.len() as u32;
+        self.data.extend(marker.as_bytes());
+        start..self.data.len() as u32
+    }
+}
+
+#[derive(Default)]
+struct CommandState {
+    primitive: u32,
+    index_format: wgt::IndexFormat,
+    index_offset: wgt::BufferAddress,
+}
+
 pub struct CommandEncoder {
     cmd_buffer: CommandBuffer,
+    state: CommandState,
 }
 
 impl crate::Queue<Api> for Queue {

@@ -254,6 +254,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::CommandEncoder, crate::DeviceError> {
         Ok(super::CommandEncoder {
             cmd_buffer: super::CommandBuffer::default(),
+            state: super::CommandState::default(),
         })
     }
     unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
