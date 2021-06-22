@@ -55,6 +55,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
 
 [dev-dependencies]
+bitflags = "1"
 bytemuck = { version = "1.4", features = ["derive"] }
 cgmath = "0.18"
 ddsfile = "0.4"

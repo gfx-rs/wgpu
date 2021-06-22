@@ -323,7 +323,7 @@ fn conservative_raster() {
         1024,
         768,
         wgpu::Features::default(),
-        framework::test_common::TestParameters::default(),
+        framework::test_common::TestParameters::default().failure(),
         0,
         0,
     );

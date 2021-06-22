@@ -3,7 +3,7 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use wgt::{BackendBit, DeviceDescriptor, DownlevelProperties, Features, Limits};
+use wgt::{BackendBit, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
 use wgpu::{util, Adapter, Device, Instance, Queue};
 
@@ -49,7 +49,7 @@ pub fn lowest_reasonable_limits() -> Limits {
         max_bind_groups: 2,
         max_dynamic_uniform_buffers_per_pipeline_layout: 2,
         max_dynamic_storage_buffers_per_pipeline_layout: 2,
-        max_sampled_textures_per_shader_stage:2,
+        max_sampled_textures_per_shader_stage: 2,
         max_samplers_per_shader_stage: 2,
         max_storage_buffers_per_shader_stage: 2,
         max_storage_textures_per_shader_stage: 2,
@@ -63,8 +63,8 @@ pub fn lowest_reasonable_limits() -> Limits {
     }
 }
 
-fn lowest_downlevel_properties() -> DownlevelProperties {
-    DownlevelProperties {
+fn lowest_downlevel_properties() -> DownlevelCapabilities {
+    DownlevelCapabilities {
         flags: wgt::DownlevelFlags::empty(),
         shader_model: wgt::ShaderModel::Sm2,
     }
@@ -74,15 +74,9 @@ fn lowest_downlevel_properties() -> DownlevelProperties {
 pub struct TestParameters {
     pub required_features: Features,
     pub required_limits: Limits,
-    pub required_downlevel_properties: DownlevelProperties,
-    // Test should always fail
-    pub always_failure: bool,
+    pub required_downlevel_properties: DownlevelCapabilities,
     // Backends where test should fail.
-    pub backend_failures: BackendBit,
-    // Vendors where test should fail.
-    pub vendor_failures: &'static [usize],
-    // Device names where test should fail.
-    pub device_failures: &'static [&'static str],
+    pub failures: Vec<(Option<wgpu::BackendBit>, Option<usize>, Option<String>)>,
 }
 
 impl Default for TestParameters {
@@ -91,11 +85,17 @@ impl Default for TestParameters {
             required_features: Features::empty(),
             required_limits: lowest_reasonable_limits(),
             required_downlevel_properties: lowest_downlevel_properties(),
-            always_failure: false,
-            backend_failures: BackendBit::empty(),
-            vendor_failures: &[],
-            device_failures: &[],
+            failures: Vec::new(),
         }
+    }
+}
+
+bitflags::bitflags! {
+    pub struct FailureReason: u8 {
+        const BACKEND = 0x1;
+        const VENDOR = 0x2;
+        const ADAPTER = 0x4;
+        const ALWAYS = 0x8;
     }
 }
 
@@ -106,23 +106,46 @@ impl TestParameters {
         self.features(Features::MAPPABLE_PRIMARY_BUFFERS | Features::VERTEX_WRITABLE_STORAGE)
     }
 
+    /// Set the list of features this test requires.
     pub fn features(mut self, features: Features) -> Self {
         self.required_features |= features;
         self
     }
 
+    /// Set the list 
     pub fn limits(mut self, limits: Limits) -> Self {
         self.required_limits = limits;
         self
     }
 
-    pub fn backend_failures(mut self, backends: BackendBit) -> Self {
-        self.backend_failures |= backends;
+    /// Mark the test as always failing, equivilant to specific_failure(None, None, None)
+    pub fn failure(mut self) -> Self {
+        self.failures.push((None, None, None));
         self
     }
 
-    pub fn failure(mut self) -> Self {
-        self.always_failure = true;
+    /// Mark the test as always failing on a specific backend, equivilant to specific_failure(backend, None, None)
+    pub fn backend_failures(mut self, backends: wgpu::BackendBit) -> Self {
+        self.failures.push((Some(backends), None, None));
+        self
+    }
+
+    /// Determines if a test should fail under a particular set of conditions. If any of these are None, that means that it will match anything in that field.
+    ///
+    /// ex.
+    /// `specific_failure(Some(wgpu::BackendBit::DX11 | wgpu::BackendBit::DX12), None, Some("RTX"))`
+    /// means that this test will fail on all cards with RTX in their name on either D3D backend, no matter the vendor ID.
+    pub fn specific_failure(
+        mut self,
+        backends: Option<BackendBit>,
+        vendor: Option<usize>,
+        device: Option<&'static str>,
+    ) -> Self {
+        self.failures.push((
+            backends,
+            vendor,
+            device.as_ref().map(AsRef::as_ref).map(str::to_lowercase),
+        ));
         self
     }
 }
@@ -191,66 +214,50 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
 
-    let expect_failure_backend = parameters
-        .backend_failures
-        .contains(wgt::BackendBit::from(adapter_info.backend));
-    let expect_failure_vendor = parameters
-        .vendor_failures
-        .iter()
-        .find(|&&v| v == adapter_info.vendor)
-        .is_some();
-    let expect_failure_device = parameters
-        .device_failures
-        .iter()
-        .find(|&&v| adapter_lowercase_name.contains(&v.to_lowercase()));
+    let failure_reason = parameters.failures.iter().find_map(
+        |(backend_failure, vendor_failure, adapter_failure)| {
+            let always =
+                backend_failure.is_none() && vendor_failure.is_none() && adapter_failure.is_none();
 
-    let expect_failure = parameters.always_failure
-        || expect_failure_backend
-        || expect_failure_vendor
-        || expect_failure_device.is_some();
+            let expect_failure_backend = backend_failure
+                .map(|f| f.contains(wgpu::BackendBit::from(adapter_info.backend)))
+                .unwrap_or(true);
+            let expect_failure_vendor = vendor_failure
+                .map(|v| v == adapter_info.vendor)
+                .unwrap_or(true);
+            let expect_failure_adapter = adapter_failure
+                .as_deref()
+                .map(|f| adapter_lowercase_name.contains(f))
+                .unwrap_or(true);
+
+            if expect_failure_backend && expect_failure_vendor && expect_failure_adapter {
+                if always {
+                    Some(FailureReason::ALWAYS)
+                } else {
+                    let mut reason = FailureReason::empty();
+                    reason.set(FailureReason::BACKEND, expect_failure_backend);
+                    reason.set(FailureReason::VENDOR, expect_failure_vendor);
+                    reason.set(FailureReason::ADAPTER, expect_failure_adapter);
+                    Some(reason)
+                }
+            } else {
+                None
+            }
+        },
+    );
+
+    let expect_failure = failure_reason.is_some();
 
     if panicked == expect_failure {
         // We got the conditions we expected
-        if expect_failure {
+        if let Some(reason) = failure_reason {
             // Print out reason for the failure
-            if parameters.always_failure {
-                println!("GOT EXPECTED TEST FAILURE: ALWAYS");
-            }
-            if expect_failure_backend {
-                println!(
-                    "GOT EXPECTED TEST FAILURE: BACKEND {:?}",
-                    adapter_info.backend
-                );
-            }
-            if expect_failure_vendor {
-                println!("GOT EXPECTED TEST FAILURE: VENDOR {}", adapter_info.vendor);
-            }
-            if let Some(device_match) = expect_failure_device {
-                println!(
-                    "GOT EXPECTED TEST FAILURE: DEVICE {} MATCHED NAME {}",
-                    adapter_info.name, device_match
-                );
-            }
+            println!("GOT EXPECTED TEST FAILURE: {:?}", reason);
         }
     } else {
-        if expect_failure {
+        if let Some(reason) = failure_reason {
             // We expected to fail, but things passed
-            if parameters.always_failure {
-                panic!("UNEXPECTED TEST PASS: ALWAYS");
-            }
-            if expect_failure_backend {
-                panic!("UNEXPECTED TEST PASS: BACKEND {:?}", adapter_info.backend);
-            }
-            if expect_failure_vendor {
-                panic!("UNEXPECTED TEST PASS: VENDOR {}", adapter_info.vendor);
-            }
-            if let Some(device_match) = expect_failure_device {
-                panic!(
-                    "UNEXPECTED TEST PASS: DEVICE {} MATCHED NAME {}",
-                    adapter_info.name, device_match
-                );
-            }
-            unreachable!()
+            panic!("UNEXPECTED TEST PASS: {:?}", reason);
         } else {
             panic!("UNEXPECTED TEST FAILURE")
         }

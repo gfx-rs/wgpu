@@ -1525,7 +1525,7 @@ impl Adapter {
     }
 
     /// Get info about the adapter itself.
-    pub fn get_downlevel_properties(&self) -> DownlevelProperties {
+    pub fn get_downlevel_properties(&self) -> DownlevelCapabilities {
         Context::adapter_downlevel_properties(&*self.context, &self.id)
     }
 

@@ -470,7 +470,7 @@ fn skybox() {
         1024,
         768,
         wgpu::Features::default(),
-        framework::test_common::TestParameters::default(),
+        framework::test_common::TestParameters::default().backend_failures(wgpu::BackendBit::VULKAN),
         2,
         3,
     );
@@ -503,7 +503,7 @@ fn skybox_etc2() {
         768,
         wgpu::Features::TEXTURE_COMPRESSION_ETC2,
         framework::test_common::TestParameters::default(),
-        5, // TODO
+        5,  // TODO
         10, // TODO
     );
 }
@@ -519,7 +519,7 @@ fn skybox_astc() {
         768,
         wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
         framework::test_common::TestParameters::default(),
-        5, // TODO
+        5,  // TODO
         10, // TODO
     );
 }
