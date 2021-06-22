@@ -521,6 +521,12 @@ impl<W: Write> Writer<W> {
                     vector_size_str(rows),
                 )?;
             }
+            TypeInner::Pointer { base, class } => {
+                self.write_type(module, base)?;
+                if let Some(storage_class) = storage_class_str(class) {
+                    write!(self.out, "<{}>", storage_class)?;
+                }
+            },
             _ => {
                 return Err(Error::Unimplemented(format!(
                     "write_value_type {:?}",
