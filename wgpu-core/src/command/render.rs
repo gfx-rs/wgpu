@@ -945,7 +945,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         info.trackers
                             .merge_extend(&bind_group.used)
                             .map_pass_err(scope)?;
-                        cmd_buf.trackers.merge_extend_stateless(&bind_group.used);
+                        //Note: stateless trackers are not merged: the lifetime reference
+                        // is held to the bind group itself.
 
                         cmd_buf.buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {

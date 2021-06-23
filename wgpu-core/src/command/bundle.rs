@@ -210,8 +210,10 @@ impl RenderBundleEncoder {
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                     state
                         .trackers
-                        .merge_extend_all(&bind_group.used)
+                        .merge_extend_stateful(&bind_group.used)
                         .map_pass_err(scope)?;
+                    //Note: stateless trackers are not merged: the lifetime reference
+                    // is held to the bind group itself.
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let scope = PassErrorScope::SetPipelineRender(pipeline_id);
