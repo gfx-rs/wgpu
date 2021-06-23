@@ -274,6 +274,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let gl = &self.shared.context;
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+        gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
         let main_vao = gl.create_vertex_array().unwrap();
         gl.bind_vertex_array(Some(main_vao));
 

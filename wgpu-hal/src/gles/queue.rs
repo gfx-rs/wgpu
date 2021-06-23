@@ -8,6 +8,13 @@ fn extract_marker<'a>(data: &'a [u8], range: &Range<u32>) -> &'a str {
     std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
+fn is_3d_target(target: super::BindTarget) -> bool {
+    match target {
+        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_3D => true,
+        _ => false,
+    }
+}
+
 impl super::Queue {
     unsafe fn process(&mut self, command: &C, data: &[u8]) {
         let gl = &self.shared.context;
@@ -120,25 +127,140 @@ impl super::Queue {
                 dst_target,
                 ref copy,
             } => {
-                //TODO: bind src to self.copy_fbo
+                //TODO: how is depth handled?
+                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
+                for layer in 0..copy.size.depth_or_array_layers as i32 {
+                    if is_3d_target(src_target) {
+                        //TODO: handle GLES without framebuffer_texture_3d
+                        gl.framebuffer_texture_layer(
+                            glow::READ_FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            Some(src),
+                            copy.src_base.mip_level as i32,
+                            copy.src_base.origin.z as i32 + layer,
+                        );
+                    } else {
+                        gl.framebuffer_texture_2d(
+                            glow::READ_FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            src_target,
+                            Some(src),
+                            copy.src_base.mip_level as i32,
+                        );
+                    }
+                    gl.bind_texture(dst_target, Some(dst));
+                    //TODO: https://github.com/grovesNL/glow/issues/173
+                    #[allow(clippy::if_same_then_else)]
+                    if is_3d_target(dst_target) {
+                        //gl.copy_tex_sub_image_3d(dst_target, copy.dst_base.mip_level, copy.dst_base.origin.x, copy.dst_base.origin.y, copy.dst_base.origin.z + layer, copy.src_base.origin.x, copy.src_base.origin.y, copy.size.width, copy.size.height);
+                    } else {
+                        //gl.copy_tex_sub_image_2d(dst_target, copy.dst_base.mip_level, copy.dst_base.origin.x, copy.dst_base.origin.y, copy.src_base.origin.x, copy.src_base.origin.y, copy.size.width, copy.size.height);
+                    }
+                }
             }
             C::CopyBufferToTexture {
                 src,
                 src_target,
                 dst,
                 dst_target,
+                ref dst_info,
                 ref copy,
             } => {
-                //TODO: bind src to self.copy_fbo
+                //TODO: compressed data
+                let row_texels = copy
+                    .buffer_layout
+                    .bytes_per_row
+                    .map_or(0, |bpr| bpr.get() / dst_info.texel_size as u32);
+                let column_texels = copy.buffer_layout.rows_per_image.map_or(0, |rpi| rpi.get());
+                gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, row_texels as i32);
+                gl.pixel_store_i32(glow::UNPACK_IMAGE_HEIGHT, column_texels as i32);
+                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(src));
+
+                let unpack_data =
+                    glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32);
+                gl.bind_texture(dst_target, Some(dst));
+                if is_3d_target(dst_target) {
+                    gl.tex_sub_image_3d(
+                        dst_target,
+                        copy.texture_base.mip_level as i32,
+                        copy.texture_base.origin.x as i32,
+                        copy.texture_base.origin.y as i32,
+                        copy.texture_base.origin.z as i32,
+                        copy.size.width as i32,
+                        copy.size.height as i32,
+                        copy.size.depth_or_array_layers as i32,
+                        dst_info.external_format,
+                        dst_info.data_type,
+                        unpack_data,
+                    );
+                } else {
+                    gl.tex_sub_image_2d(
+                        dst_target,
+                        copy.texture_base.mip_level as i32,
+                        copy.texture_base.origin.x as i32,
+                        copy.texture_base.origin.y as i32,
+                        copy.size.width as i32,
+                        copy.size.height as i32,
+                        dst_info.external_format,
+                        dst_info.data_type,
+                        unpack_data,
+                    );
+                }
             }
             C::CopyTextureToBuffer {
                 src,
                 src_target,
+                ref src_info,
                 dst,
                 dst_target,
                 ref copy,
             } => {
-                //TODO: bind src to self.copy_fbo
+                //TODO: compressed data
+                let row_texels = copy
+                    .buffer_layout
+                    .bytes_per_row
+                    .map_or(copy.size.width, |bpr| {
+                        bpr.get() / src_info.texel_size as u32
+                    });
+                let column_texels = copy
+                    .buffer_layout
+                    .rows_per_image
+                    .map_or(copy.size.height, |rpi| rpi.get());
+                gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32);
+                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst));
+
+                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
+                for layer in 0..copy.size.depth_or_array_layers {
+                    let offset = copy.buffer_layout.offset as u32
+                        + layer * column_texels * row_texels * src_info.texel_size as u32;
+                    if is_3d_target(src_target) {
+                        //TODO: handle GLES without framebuffer_texture_3d
+                        gl.framebuffer_texture_layer(
+                            glow::READ_FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            Some(src),
+                            copy.texture_base.mip_level as i32,
+                            copy.texture_base.origin.z as i32 + layer as i32,
+                        );
+                    } else {
+                        gl.framebuffer_texture_2d(
+                            glow::READ_FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            src_target,
+                            Some(src),
+                            copy.texture_base.mip_level as i32,
+                        );
+                    }
+                    gl.read_pixels(
+                        copy.texture_base.origin.x as i32,
+                        copy.texture_base.origin.y as i32,
+                        copy.size.width as i32,
+                        copy.size.height as i32,
+                        src_info.external_format,
+                        src_info.data_type,
+                        glow::PixelPackData::BufferOffset(offset),
+                    );
+                }
             }
             C::SetIndexBuffer(buffer) => {
                 gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer));

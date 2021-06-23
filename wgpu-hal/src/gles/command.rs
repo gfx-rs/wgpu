@@ -79,14 +79,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::TextureCopy>,
     {
-        let (src_raw, src_target) = src.as_native();
-        let (dst_raw, dst_target) = dst.as_native();
+        let (src_raw, src_target) = src.inner.as_native();
+        let (dst_raw, dst_target) = dst.inner.as_native();
         for copy in regions {
             self.cmd_buffer.commands.push(C::CopyTextureToTexture {
                 src: src_raw,
-                src_target: src_target,
+                src_target,
                 dst: dst_raw,
-                dst_target: dst_target,
+                dst_target,
                 copy,
             })
         }
@@ -100,13 +100,23 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let (dst_raw, dst_target) = dst.as_native();
+        assert_eq!(
+            dst.format_info.block_dimensions,
+            (1, 1),
+            "Compressed texture copies are TODO"
+        );
+        let (dst_raw, dst_target) = dst.inner.as_native();
         for copy in regions {
             self.cmd_buffer.commands.push(C::CopyBufferToTexture {
                 src: src.raw,
                 src_target: src.target,
                 dst: dst_raw,
-                dst_target: dst_target,
+                dst_target,
+                dst_info: super::TextureCopyInfo {
+                    external_format: dst.format_desc.tex_external,
+                    data_type: dst.format_desc.data_type,
+                    texel_size: dst.format_info.block_size,
+                },
                 copy,
             })
         }
@@ -121,11 +131,21 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let (src_raw, src_target) = src.as_native();
+        assert_eq!(
+            src.format_info.block_dimensions,
+            (1, 1),
+            "Compressed texture copies are TODO"
+        );
+        let (src_raw, src_target) = src.inner.as_native();
         for copy in regions {
             self.cmd_buffer.commands.push(C::CopyTextureToBuffer {
                 src: src_raw,
-                src_target: src_target,
+                src_target,
+                src_info: super::TextureCopyInfo {
+                    external_format: src.format_desc.tex_external,
+                    data_type: src.format_desc.data_type,
+                    texel_size: src.format_info.block_size,
+                },
                 dst: dst.raw,
                 dst_target: dst.target,
                 copy,

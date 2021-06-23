@@ -119,71 +119,46 @@ impl crate::Device<super::Api> for super::Device {
             | crate::TextureUse::DEPTH_STENCIL_WRITE
             | crate::TextureUse::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
-        Ok(
-            if render_usage.contains(desc.usage)
-                && desc.dimension == wgt::TextureDimension::D2
-                && desc.size.depth_or_array_layers == 1
-            {
-                let raw = gl.create_renderbuffer().unwrap();
-                gl.bind_renderbuffer(glow::RENDERBUFFER, Some(raw));
-                if desc.sample_count > 1 {
-                    gl.renderbuffer_storage_multisample(
-                        glow::RENDERBUFFER,
-                        desc.sample_count as i32,
-                        format_desc.tex_internal,
-                        desc.size.width as i32,
-                        desc.size.height as i32,
-                    );
-                } else {
-                    gl.renderbuffer_storage(
-                        glow::RENDERBUFFER,
-                        format_desc.tex_internal,
-                        desc.size.width as i32,
-                        desc.size.height as i32,
-                    );
-                }
-                super::Texture::Renderbuffer {
-                    raw,
-                    aspects: desc.format.into(),
-                }
+
+        let inner = if render_usage.contains(desc.usage)
+            && desc.dimension == wgt::TextureDimension::D2
+            && desc.size.depth_or_array_layers == 1
+        {
+            let raw = gl.create_renderbuffer().unwrap();
+            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(raw));
+            if desc.sample_count > 1 {
+                gl.renderbuffer_storage_multisample(
+                    glow::RENDERBUFFER,
+                    desc.sample_count as i32,
+                    format_desc.tex_internal,
+                    desc.size.width as i32,
+                    desc.size.height as i32,
+                );
             } else {
-                let raw = gl.create_texture().unwrap();
-                let target = match desc.dimension {
-                    wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                        if desc.sample_count > 1 {
-                            let target = glow::TEXTURE_2D;
-                            gl.bind_texture(target, Some(raw));
-                            // https://github.com/grovesNL/glow/issues/169
-                            //gl.tex_storage_2d_multisample(target, desc.sample_count as i32, format_desc.tex_internal, desc.size.width as i32, desc.size.height as i32, true);
-                            log::error!("TODO: support `tex_storage_2d_multisample` (https://github.com/grovesNL/glow/issues/169)");
-                            return Err(crate::DeviceError::Lost);
-                        } else if desc.size.depth_or_array_layers > 1 {
-                            let target = glow::TEXTURE_2D_ARRAY;
-                            gl.bind_texture(target, Some(raw));
-                            gl.tex_storage_3d(
-                                target,
-                                desc.mip_level_count as i32,
-                                format_desc.tex_internal,
-                                desc.size.width as i32,
-                                desc.size.height as i32,
-                                desc.size.depth_or_array_layers as i32,
-                            );
-                            target
-                        } else {
-                            let target = glow::TEXTURE_2D;
-                            gl.bind_texture(target, Some(raw));
-                            gl.tex_storage_2d(
-                                target,
-                                desc.mip_level_count as i32,
-                                format_desc.tex_internal,
-                                desc.size.width as i32,
-                                desc.size.height as i32,
-                            );
-                            target
-                        }
-                    }
-                    wgt::TextureDimension::D3 => {
-                        let target = glow::TEXTURE_3D;
+                gl.renderbuffer_storage(
+                    glow::RENDERBUFFER,
+                    format_desc.tex_internal,
+                    desc.size.width as i32,
+                    desc.size.height as i32,
+                );
+            }
+            super::TextureInner::Renderbuffer {
+                raw,
+                aspects: desc.format.into(),
+            }
+        } else {
+            let raw = gl.create_texture().unwrap();
+            let target = match desc.dimension {
+                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+                    if desc.sample_count > 1 {
+                        let target = glow::TEXTURE_2D;
+                        gl.bind_texture(target, Some(raw));
+                        // https://github.com/grovesNL/glow/issues/169
+                        //gl.tex_storage_2d_multisample(target, desc.sample_count as i32, format_desc.tex_internal, desc.size.width as i32, desc.size.height as i32, true);
+                        log::error!("TODO: support `tex_storage_2d_multisample` (https://github.com/grovesNL/glow/issues/169)");
+                        return Err(crate::DeviceError::Lost);
+                    } else if desc.size.depth_or_array_layers > 1 {
+                        let target = glow::TEXTURE_2D_ARRAY;
                         gl.bind_texture(target, Some(raw));
                         gl.tex_storage_3d(
                             target,
@@ -194,19 +169,49 @@ impl crate::Device<super::Api> for super::Device {
                             desc.size.depth_or_array_layers as i32,
                         );
                         target
+                    } else {
+                        let target = glow::TEXTURE_2D;
+                        gl.bind_texture(target, Some(raw));
+                        gl.tex_storage_2d(
+                            target,
+                            desc.mip_level_count as i32,
+                            format_desc.tex_internal,
+                            desc.size.width as i32,
+                            desc.size.height as i32,
+                        );
+                        target
                     }
-                };
-                super::Texture::Texture { raw, target }
-            },
-        )
+                }
+                wgt::TextureDimension::D3 => {
+                    let target = glow::TEXTURE_3D;
+                    gl.bind_texture(target, Some(raw));
+                    gl.tex_storage_3d(
+                        target,
+                        desc.mip_level_count as i32,
+                        format_desc.tex_internal,
+                        desc.size.width as i32,
+                        desc.size.height as i32,
+                        desc.size.depth_or_array_layers as i32,
+                    );
+                    target
+                }
+            };
+            super::TextureInner::Texture { raw, target }
+        };
+
+        Ok(super::Texture {
+            inner,
+            format_desc,
+            format_info: desc.format.describe(),
+        })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
         let gl = &self.shared.context;
-        match texture {
-            super::Texture::Renderbuffer { raw, .. } => {
+        match texture.inner {
+            super::TextureInner::Renderbuffer { raw, .. } => {
                 gl.delete_renderbuffer(raw);
             }
-            super::Texture::Texture { raw, target } => {
+            super::TextureInner::Texture { raw, target } => {
                 gl.delete_texture(raw);
             }
         }
@@ -217,12 +222,14 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        Ok(match *texture {
-            super::Texture::Renderbuffer { raw, aspects } => super::TextureView::Renderbuffer {
-                raw,
-                aspects: aspects & crate::FormatAspect::from(desc.range.aspect),
-            },
-            super::Texture::Texture { raw, target } => super::TextureView::Texture {
+        Ok(match texture.inner {
+            super::TextureInner::Renderbuffer { raw, aspects } => {
+                super::TextureView::Renderbuffer {
+                    raw,
+                    aspects: aspects & crate::FormatAspect::from(desc.range.aspect),
+                }
+            }
+            super::TextureInner::Texture { raw, target } => super::TextureView::Texture {
                 raw,
                 target,
                 range: desc.range.clone(),

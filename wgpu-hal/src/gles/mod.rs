@@ -157,6 +157,7 @@ enum VertexAttribKind {
     Double,  // glVertexAttribLPointer
 }
 
+#[derive(Debug)]
 struct FormatDescription {
     tex_internal: u32,
     tex_external: u32,
@@ -193,7 +194,7 @@ pub struct Buffer {
 }
 
 #[derive(Debug)]
-pub enum Texture {
+enum TextureInner {
     Renderbuffer {
         raw: glow::Renderbuffer,
         aspects: crate::FormatAspect,
@@ -204,13 +205,20 @@ pub enum Texture {
     },
 }
 
-impl Texture {
+impl TextureInner {
     fn as_native(&self) -> (glow::Texture, BindTarget) {
         match *self {
             Self::Renderbuffer { raw, .. } => panic!("Unexpected renderbuffer {}", raw),
             Self::Texture { raw, target } => (raw, target),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Texture {
+    inner: TextureInner,
+    format_desc: FormatDescription,
+    format_info: wgt::TextureFormatInfo,
 }
 
 #[derive(Debug)]
@@ -229,6 +237,13 @@ pub enum TextureView {
 #[derive(Debug)]
 pub struct Sampler {
     raw: glow::Sampler,
+}
+
+#[derive(Debug)]
+struct TextureCopyInfo {
+    external_format: u32,
+    data_type: u32,
+    texel_size: u8,
 }
 
 #[derive(Debug)]
@@ -287,11 +302,13 @@ enum Command {
         src_target: BindTarget,
         dst: glow::Texture,
         dst_target: BindTarget,
+        dst_info: TextureCopyInfo,
         copy: crate::BufferTextureCopy,
     },
     CopyTextureToBuffer {
         src: glow::Texture,
         src_target: BindTarget,
+        src_info: TextureCopyInfo,
         dst: glow::Buffer,
         dst_target: BindTarget,
         copy: crate::BufferTextureCopy,
