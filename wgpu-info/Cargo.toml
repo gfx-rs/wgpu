@@ -10,4 +10,4 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-wgpu = { version = "0.8", path = "../wgpu" }
+wgpu = { version = "0.9", path = "../wgpu" }

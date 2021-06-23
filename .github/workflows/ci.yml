@@ -135,7 +135,7 @@ jobs:
       - if: matrix.channel == 'nightly'
         run: cargo test -p wgpu-core -- --nocapture
       - if: matrix.channel == 'nightly'
-        run: cargo run --example wgpu-info -- cargo test -p wgpu -- --nocapture
+        run: cargo run --bin wgpu-info -- cargo test -p wgpu -- --nocapture
 
 
   docs:

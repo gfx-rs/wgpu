@@ -154,7 +154,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     // We don't actually care if it fails
     let _ = env_logger::try_init();
 
-    let backend_bits = util::backend_bits_from_env().unwrap_or(BackendBit::all());
+    let backend_bits = util::backend_bits_from_env().unwrap_or_else(BackendBit::all);
     let instance = Instance::new(backend_bits);
     let adapter = pollster::block_on(util::initialize_adapter_from_env_or_default(
         &instance,
@@ -254,12 +254,10 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
             // Print out reason for the failure
             println!("GOT EXPECTED TEST FAILURE: {:?}", reason);
         }
+    } else if let Some(reason) = failure_reason {
+        // We expected to fail, but things passed
+        panic!("UNEXPECTED TEST PASS: {:?}", reason);
     } else {
-        if let Some(reason) = failure_reason {
-            // We expected to fail, but things passed
-            panic!("UNEXPECTED TEST PASS: {:?}", reason);
-        } else {
-            panic!("UNEXPECTED TEST FAILURE")
-        }
+        panic!("UNEXPECTED TEST FAILURE")
     }
 }

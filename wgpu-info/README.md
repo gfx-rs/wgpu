@@ -1,13 +1,13 @@
 # wgpu-info
 
-This example is a command line utility that does two different functions. 
+This is a command line utility that does two different functions. 
 
 #### Listing Adapters
 
 When called with no arguments, wgpu-info will list all adapters visible to wgpu and all the information about them we have.
 
 ```
-cargo run --example wgpu-info
+cargo run --bin wgpu-info
 ```
 
 #### Running Test on many Adapters

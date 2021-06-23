@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
@@ -109,10 +109,6 @@ name="hello-compute"
 test = true
 
 [[example]]
-name="texture-arrays"
-required-features = ["spirv"]
-
-[[example]]
 name="mipmap"
 test = true
 
@@ -130,6 +126,7 @@ test = true
 
 [[example]]
 name="texture-arrays"
+required-features = ["spirv"]
 test = true
 
 [[example]]

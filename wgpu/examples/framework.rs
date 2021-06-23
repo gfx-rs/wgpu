@@ -468,7 +468,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
             let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
             test_common::image::compare_image_output(
-                env!("CARGO_MANIFEST_DIR").to_string() + &params.image_path,
+                env!("CARGO_MANIFEST_DIR").to_string() + params.image_path,
                 params.width,
                 params.height,
                 &bytes,

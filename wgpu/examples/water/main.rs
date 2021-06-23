@@ -792,5 +792,13 @@ fn main() {
 
 #[test]
 fn shadow() {
-    framework::test::<Example>( framework::FrameworkRefTest {image_path: "/examples/water/screenshot.png", width: 1024, height: 768, optional_features: wgpu::Features::default(), base_test_parameters: framework::test_common::TestParameters::default(), tollerance: 5, max_outliers: 10, });
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/water/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 5,
+        max_outliers: 10,
+    });
 }
