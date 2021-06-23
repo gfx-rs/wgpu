@@ -738,7 +738,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
-                        trackers.merge_extend_stateless(&baked.trackers);
+                        //Note: stateless trackers are not merged:
+                        // device already knows these resources exist.
                         CommandBuffer::insert_barriers(
                             &mut baked.encoder,
                             &mut *trackers,

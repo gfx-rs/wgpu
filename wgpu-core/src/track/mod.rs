@@ -620,27 +620,12 @@ impl TrackerSet {
         self.query_sets.optimize();
     }
 
-    /// Merge all the trackers of another instance by extending
-    /// the usage. Panics on a stateless conflict, returns a conflict otherwise.
-    pub fn merge_extend_all(&mut self, other: &Self) -> Result<(), UsageConflict> {
+    /// Merge only the stateful trackers of another instance by extending
+    /// the usage. Returns a conflict if any.
+    pub fn merge_extend_stateful(&mut self, other: &Self) -> Result<(), UsageConflict> {
         self.buffers.merge_extend(&other.buffers)?;
         self.textures.merge_extend(&other.textures)?;
-        self.merge_extend_stateless(other);
         Ok(())
-    }
-
-    /// Merge all the stateless trackers of another instance by extending
-    /// the usage. Panics on a conflict.
-    pub fn merge_extend_stateless(&mut self, other: &Self) {
-        self.views.merge_extend(&other.views).unwrap();
-        self.bind_groups.merge_extend(&other.bind_groups).unwrap();
-        self.samplers.merge_extend(&other.samplers).unwrap();
-        self.compute_pipes
-            .merge_extend(&other.compute_pipes)
-            .unwrap();
-        self.render_pipes.merge_extend(&other.render_pipes).unwrap();
-        self.bundles.merge_extend(&other.bundles).unwrap();
-        self.query_sets.merge_extend(&other.query_sets).unwrap();
     }
 
     pub fn backend(&self) -> wgt::Backend {

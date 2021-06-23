@@ -219,7 +219,8 @@ impl State {
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             self.trackers.merge_extend(&bind_group_guard[id].used)?;
-            base_trackers.merge_extend_stateless(&bind_group_guard[id].used);
+            //Note: stateless trackers are not merged: the lifetime reference
+            // is held to the bind group itself.
         }
 
         log::trace!("Encoding dispatch barriers");
