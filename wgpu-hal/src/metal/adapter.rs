@@ -828,11 +828,12 @@ impl super::PrivateCapabilities {
                     MTLFeatureSet::macOS_GPUFamily2_v1,
                 ],
             ),
-            supports_arrays_of_textures_write: device.supports_family(MTLGPUFamily::Apple6)
-                || device.supports_family(MTLGPUFamily::Mac1)
-                || device.supports_family(MTLGPUFamily::Mac2)
-                || device.supports_family(MTLGPUFamily::MacCatalyst1)
-                || device.supports_family(MTLGPUFamily::MacCatalyst2),
+            supports_arrays_of_textures_write: family_check
+                && (device.supports_family(MTLGPUFamily::Apple6)
+                    || device.supports_family(MTLGPUFamily::Mac1)
+                    || device.supports_family(MTLGPUFamily::Mac2)
+                    || device.supports_family(MTLGPUFamily::MacCatalyst1)
+                    || device.supports_family(MTLGPUFamily::MacCatalyst2)),
         }
     }
 
