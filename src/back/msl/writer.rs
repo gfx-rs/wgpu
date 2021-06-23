@@ -10,6 +10,9 @@ use std::{
     iter,
 };
 
+/// Shorthand result used internally by the backend
+type BackendResult = Result<(), Error>;
+
 const NAMESPACE: &str = "metal";
 const WRAPPED_ARRAY_FIELD: &str = "inner";
 
@@ -194,7 +197,7 @@ struct TypedGlobalVariable<'a> {
 }
 
 impl<'a> TypedGlobalVariable<'a> {
-    fn try_fmt<W: Write>(&self, out: &mut W) -> Result<(), Error> {
+    fn try_fmt<W: Write>(&self, out: &mut W) -> BackendResult {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
         let ty_name = TypeContext {
@@ -460,7 +463,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         parameters: impl Iterator<Item = Handle<crate::Expression>>,
         context: &ExpressionContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         write!(self.out, "(")?;
         for (i, handle) in parameters.enumerate() {
             if i != 0 {
@@ -478,7 +481,7 @@ impl<W: Write> Writer<W> {
         query: &str,
         level: Option<Handle<crate::Expression>>,
         context: &ExpressionContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         self.put_expression(image, context, false)?;
         write!(self.out, ".get_{}(", query)?;
         if let Some(expr) = level {
@@ -493,7 +496,7 @@ impl<W: Write> Writer<W> {
         image: Handle<crate::Expression>,
         level: Option<Handle<crate::Expression>>,
         context: &ExpressionContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         //Note: MSL only has separate width/height/depth queries,
         // so compose the result of them.
         let dim = match *context.resolve_type(image) {
@@ -535,7 +538,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         expr: Handle<crate::Expression>,
         context: &ExpressionContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         // coordinates in IR are int, but Metal expects uint
         let size_str = match *context.info[expr].ty.inner_with(&context.module.types) {
             crate::TypeInner::Scalar { .. } => "",
@@ -553,7 +556,7 @@ impl<W: Write> Writer<W> {
         image: Handle<crate::Expression>,
         level: crate::SampleLevel,
         context: &ExpressionContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         let has_levels = match *context.resolve_type(image) {
             crate::TypeInner::Image {
                 dim: crate::ImageDimension::D1,
@@ -595,7 +598,7 @@ impl<W: Write> Writer<W> {
         ty: Handle<crate::Type>,
         components: &[Handle<crate::Expression>],
         context: &ExpressionContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         match context.module.types[ty].inner {
             crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
                 write!(self.out, "{}", scalar_kind_string(kind))?;
@@ -642,7 +645,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         expr: Handle<crate::Expression>,
         context: &ExpressionContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         let handle = match context.function.expressions[expr] {
             crate::Expression::AccessIndex { base, .. } => {
                 match context.function.expressions[base] {
@@ -695,7 +698,7 @@ impl<W: Write> Writer<W> {
         expr_handle: Handle<crate::Expression>,
         context: &ExpressionContext,
         is_scoped: bool,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
         #[allow(trivial_casts)]
@@ -1162,7 +1165,7 @@ impl<W: Write> Writer<W> {
         expr_handle: Handle<crate::Expression>,
         result_struct: Option<&str>,
         context: &ExpressionContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         match result_struct {
             Some(struct_name) => {
                 let result_ty = context.function.result.as_ref().unwrap().ty;
@@ -1239,7 +1242,7 @@ impl<W: Write> Writer<W> {
         handle: Handle<crate::Expression>,
         context: &ExpressionContext,
         name: &str,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         match context.info[handle].ty {
             TypeResolution::Handle(ty_handle) => {
                 let ty_name = TypeContext {
@@ -1290,7 +1293,7 @@ impl<W: Write> Writer<W> {
         level: Level,
         statements: &[crate::Statement],
         context: &StatementContext,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
         #[allow(trivial_casts)]
@@ -1602,7 +1605,7 @@ impl<W: Write> Writer<W> {
         self.write_functions(module, info, options, pipeline_options)
     }
 
-    fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
+    fn write_type_defs(&mut self, module: &crate::Module) -> BackendResult {
         for (handle, ty) in module.types.iter() {
             if !ty.needs_alias() {
                 continue;
@@ -1720,7 +1723,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_scalar_constants(&mut self, module: &crate::Module) -> Result<(), Error> {
+    fn write_scalar_constants(&mut self, module: &crate::Module) -> BackendResult {
         for (handle, constant) in module.constants.iter() {
             match constant.inner {
                 crate::ConstantInner::Scalar {
@@ -1758,7 +1761,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_composite_constants(&mut self, module: &crate::Module) -> Result<(), Error> {
+    fn write_composite_constants(&mut self, module: &crate::Module) -> BackendResult {
         for (handle, constant) in module.constants.iter() {
             match constant.inner {
                 crate::ConstantInner::Scalar { .. } => {}
@@ -1794,7 +1797,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         level: Level,
         sampler: &sm::InlineSampler,
-    ) -> Result<(), Error> {
+    ) -> BackendResult {
         for (&letter, address) in ['s', 't', 'r'].iter().zip(sampler.address.iter()) {
             writeln!(
                 self.out,
