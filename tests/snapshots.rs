@@ -247,7 +247,7 @@ fn write_output_glsl(
     writer.write().unwrap();
 
     fs::write(
-        destination.join(format!("glsl/{}.{:?}.glsl", file_name, stage)),
+        destination.join(format!("glsl/{}.{}.{:?}.glsl", file_name, ep_name, stage)),
         buffer,
     )
     .unwrap();
