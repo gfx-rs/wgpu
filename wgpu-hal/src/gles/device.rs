@@ -1,6 +1,259 @@
-use super::{DeviceResult, Resource}; //TEMP
+use super::conv;
+use super::Resource; //TEMP
+use crate::util::map_naga_stage;
 use glow::HasContext;
-use std::{convert::TryInto, ptr::NonNull, sync::Arc};
+use std::{convert::TryInto, iter, ptr::NonNull, sync::Arc};
+
+type ShaderStage<'a> = (
+    naga::ShaderStage,
+    &'a crate::ProgrammableStage<'a, super::Api>,
+);
+type NameBindingMap = fxhash::FxHashMap<String, (super::BindingRegister, u8)>;
+
+struct CompilationContext<'a> {
+    layout: &'a super::PipelineLayout,
+    sampler_map: &'a mut super::SamplerBindMap,
+    name_binding_map: &'a mut NameBindingMap,
+}
+
+impl CompilationContext<'_> {
+    fn consume_reflection(
+        self,
+        module: &naga::Module,
+        ep_info: &naga::valid::FunctionInfo,
+        reflection_info: naga::back::glsl::ReflectionInfo,
+    ) {
+        for (handle, var) in module.global_variables.iter() {
+            if ep_info[handle].is_empty() {
+                continue;
+            }
+            let register = match var.class {
+                naga::StorageClass::Uniform => super::BindingRegister::UniformBuffers,
+                naga::StorageClass::Storage => super::BindingRegister::StorageBuffers,
+                _ => continue,
+            };
+            //TODO: make Naga reflect all the names, not just textures
+            let br = var.binding.as_ref().unwrap();
+            let slot = self.layout.get_slot(br);
+
+            let name = reflection_info.uniforms[&handle].clone();
+            log::debug!("Rebind buffer: {:?} -> {}", var.name.as_ref(), &name);
+            self.name_binding_map.insert(name, (register, slot));
+        }
+
+        for (name, mapping) in reflection_info.texture_mapping {
+            let tex_br = module.global_variables[mapping.texture]
+                .binding
+                .as_ref()
+                .unwrap();
+            let texture_linear_index = self.layout.get_slot(tex_br);
+
+            self.name_binding_map.insert(
+                name,
+                (super::BindingRegister::Textures, texture_linear_index),
+            );
+            if let Some(sampler_handle) = mapping.sampler {
+                let sam_br = module.global_variables[sampler_handle]
+                    .binding
+                    .as_ref()
+                    .unwrap();
+                let sampler_linear_index = self.layout.get_slot(sam_br);
+                self.sampler_map[texture_linear_index as usize] = Some(sampler_linear_index);
+            }
+        }
+    }
+}
+
+impl super::Device {
+    unsafe fn compile_shader(
+        &self,
+        shader: &str,
+        naga_stage: naga::ShaderStage,
+    ) -> Result<glow::Shader, crate::PipelineError> {
+        let gl = &self.shared.context;
+        let target = match naga_stage {
+            naga::ShaderStage::Vertex => glow::VERTEX_SHADER,
+            naga::ShaderStage::Fragment => glow::FRAGMENT_SHADER,
+            naga::ShaderStage::Compute => glow::COMPUTE_SHADER,
+        };
+
+        let raw = gl.create_shader(target).unwrap();
+        gl.shader_source(raw, shader);
+        gl.compile_shader(raw);
+
+        log::info!("\tCompiled shader {:?}", raw);
+
+        let compiled_ok = gl.get_shader_compile_status(raw);
+        let msg = gl.get_shader_info_log(raw);
+        if compiled_ok {
+            if !msg.is_empty() {
+                log::warn!("\tCompile: {}", msg);
+            }
+            Ok(raw)
+        } else {
+            Err(crate::PipelineError::Linkage(
+                map_naga_stage(naga_stage),
+                msg,
+            ))
+        }
+    }
+
+    fn create_shader(
+        &self,
+        naga_stage: naga::ShaderStage,
+        stage: &crate::ProgrammableStage<super::Api>,
+        context: CompilationContext,
+    ) -> Result<glow::Shader, crate::PipelineError> {
+        use naga::back::glsl;
+        let options = glsl::Options {
+            version: self.shared.shading_language_version,
+            shader_stage: naga_stage,
+            entry_point: stage.entry_point.to_string(),
+        };
+
+        let shader = &stage.module.naga;
+        let entry_point_index = (&shader.module.entry_points)
+            .into_iter()
+            .position(|ep| ep.name.as_str() == stage.entry_point)
+            .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
+
+        let mut output = String::new();
+        let mut writer = glsl::Writer::new(&mut output, &shader.module, &shader.info, &options)
+            .map_err(|e| {
+                let msg = format!("{}", e);
+                crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
+            })?;
+
+        let reflection_info = writer.write().map_err(|e| {
+            let msg = format!("{}", e);
+            crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
+        })?;
+
+        log::debug!("Naga generated shader:\n{}", output);
+
+        context.consume_reflection(
+            &shader.module,
+            shader.info.get_entry_point(entry_point_index),
+            reflection_info,
+        );
+
+        unsafe { self.compile_shader(&output, naga_stage) }
+    }
+
+    unsafe fn create_pipeline<'a, I: Iterator<Item = ShaderStage<'a>>>(
+        &self,
+        shaders: I,
+        layout: &super::PipelineLayout,
+    ) -> Result<super::PipelineInner, crate::PipelineError> {
+        let gl = &self.shared.context;
+        let program = gl.create_program().unwrap();
+
+        let mut name_binding_map = NameBindingMap::default();
+        let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
+        let mut has_stages = wgt::ShaderStage::empty();
+        let mut shaders_to_delete = arrayvec::ArrayVec::<[_; 3]>::new();
+
+        for (naga_stage, stage) in shaders {
+            has_stages |= map_naga_stage(naga_stage);
+            let context = CompilationContext {
+                layout,
+                sampler_map: &mut sampler_map,
+                name_binding_map: &mut name_binding_map,
+            };
+
+            let shader = self.create_shader(naga_stage, stage, context)?;
+            shaders_to_delete.push(shader);
+        }
+
+        // Create empty fragment shader if only vertex shader is present
+        if has_stages == wgt::ShaderStage::VERTEX {
+            let version = match self.shared.shading_language_version {
+                naga::back::glsl::Version::Embedded(v) => v,
+                naga::back::glsl::Version::Desktop(_) => unreachable!(),
+            };
+            let shader_src = format!("#version {} es \n void main(void) {{}}", version,);
+            log::info!("Only vertex shader is present. Creating an empty fragment shader",);
+            let shader = self.compile_shader(&shader_src, naga::ShaderStage::Fragment)?;
+            shaders_to_delete.push(shader);
+        }
+
+        for &shader in shaders_to_delete.iter() {
+            gl.attach_shader(program, shader);
+        }
+        gl.link_program(program);
+
+        for shader in shaders_to_delete {
+            gl.delete_shader(shader);
+        }
+
+        log::info!("\tLinked program {:?}", program);
+
+        let linked_ok = gl.get_program_link_status(program);
+        let msg = gl.get_program_info_log(program);
+        if !linked_ok {
+            return Err(crate::PipelineError::Linkage(has_stages, msg));
+        }
+        if !msg.is_empty() {
+            log::warn!("\tLink: {}", msg);
+        }
+
+        if !self
+            .shared
+            .private_caps
+            .contains(super::PrivateCapability::EXPLICIT_LAYOUTS_IN_SHADER)
+        {
+            gl.use_program(Some(program));
+            for (ref name, (register, slot)) in name_binding_map {
+                log::trace!("Get binding {:?} from program {:?}", name, program);
+                match register {
+                    super::BindingRegister::Textures => {
+                        let loc = gl.get_uniform_location(program, name).unwrap();
+                        gl.uniform_1_i32(Some(&loc), slot as _);
+                    }
+                    super::BindingRegister::UniformBuffers => {
+                        let index = gl.get_uniform_block_index(program, name).unwrap();
+                        gl.uniform_block_binding(program, index, slot as _);
+                    }
+                    super::BindingRegister::StorageBuffers => {
+                        let index = gl.get_shader_storage_block_index(program, name).unwrap();
+                        gl.shader_storage_block_binding(program, index, slot as _);
+                    }
+                }
+            }
+        }
+
+        let uniforms = {
+            let count = gl.get_active_uniforms(program);
+            let mut offset = 0;
+            let mut uniforms = Vec::new();
+
+            for uniform in 0..count {
+                let glow::ActiveUniform { size, utype, name } =
+                    gl.get_active_uniform(program, uniform).unwrap();
+
+                if let Some(location) = gl.get_uniform_location(program, &name) {
+                    // Sampler2D won't show up in UniformLocation and the only other uniforms
+                    // should be push constants
+                    uniforms.push(super::UniformDesc {
+                        location,
+                        offset,
+                        utype,
+                    });
+
+                    offset += size as u32;
+                }
+            }
+
+            uniforms.into_boxed_slice()
+        };
+
+        Ok(super::PipelineInner {
+            program,
+            sampler_map,
+            uniforms,
+        })
+    }
+}
 
 impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self) {
@@ -76,7 +329,7 @@ impl crate::Device<super::Api> for super::Device {
             is_coherent: buffer.map_flags & glow::MAP_COHERENT_BIT != 0,
         })
     }
-    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> DeviceResult<()> {
+    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
         let gl = &self.shared.context;
         gl.bind_buffer(buffer.target, Some(buffer.raw));
         gl.unmap_buffer(buffer.target);
@@ -131,14 +384,14 @@ impl crate::Device<super::Api> for super::Device {
                 gl.renderbuffer_storage_multisample(
                     glow::RENDERBUFFER,
                     desc.sample_count as i32,
-                    format_desc.tex_internal,
+                    format_desc.internal,
                     desc.size.width as i32,
                     desc.size.height as i32,
                 );
             } else {
                 gl.renderbuffer_storage(
                     glow::RENDERBUFFER,
-                    format_desc.tex_internal,
+                    format_desc.internal,
                     desc.size.width as i32,
                     desc.size.height as i32,
                 );
@@ -164,7 +417,7 @@ impl crate::Device<super::Api> for super::Device {
                         gl.tex_storage_3d(
                             target,
                             desc.mip_level_count as i32,
-                            format_desc.tex_internal,
+                            format_desc.internal,
                             desc.size.width as i32,
                             desc.size.height as i32,
                             desc.size.depth_or_array_layers as i32,
@@ -176,7 +429,7 @@ impl crate::Device<super::Api> for super::Device {
                         gl.tex_storage_2d(
                             target,
                             desc.mip_level_count as i32,
-                            format_desc.tex_internal,
+                            format_desc.internal,
                             desc.size.width as i32,
                             desc.size.height as i32,
                         );
@@ -189,7 +442,7 @@ impl crate::Device<super::Api> for super::Device {
                     gl.tex_storage_3d(
                         target,
                         desc.mip_level_count as i32,
-                        format_desc.tex_internal,
+                        format_desc.internal,
                         desc.size.width as i32,
                         desc.size.height as i32,
                         desc.size.depth_or_array_layers as i32,
@@ -391,37 +644,87 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
-    ) -> Result<Resource, crate::ShaderError> {
-        Ok(Resource)
+    ) -> Result<super::ShaderModule, crate::ShaderError> {
+        Ok(super::ShaderModule {
+            naga: match shader {
+                crate::ShaderInput::SpirV(_) => panic!("Unable to pass-through SPIR-V"),
+                crate::ShaderInput::Naga(naga) => naga,
+            },
+        })
     }
-    unsafe fn destroy_shader_module(&self, module: Resource) {}
+    unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
+
     unsafe fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
-    ) -> Result<Resource, crate::PipelineError> {
-        Ok(Resource)
+    ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        let shaders = iter::once((naga::ShaderStage::Vertex, &desc.vertex_stage)).chain(
+            desc.fragment_stage
+                .as_ref()
+                .map(|fs| (naga::ShaderStage::Fragment, fs)),
+        );
+        let inner = self.create_pipeline(shaders, desc.layout)?;
+
+        let attributes = {
+            let gl = &self.shared.context;
+            let mut attributes = Vec::new();
+
+            for (index, vb_layout) in desc.vertex_buffers.iter().enumerate() {
+                for vat in vb_layout.attributes.iter() {
+                    let format_desc = conv::describe_vertex_format(vat.format);
+                    attributes.push(super::AttributeDesc {
+                        location: vat.shader_location,
+                        offset: vat.offset as u32,
+                        buffer_index: index as u32,
+                        format_desc,
+                    });
+                }
+            }
+
+            attributes.into_boxed_slice()
+        };
+
+        Ok(super::RenderPipeline {
+            inner,
+            primitive: desc.primitive.clone(),
+            attributes,
+            depth: desc.depth_stencil.clone(),
+        })
     }
-    unsafe fn destroy_render_pipeline(&self, pipeline: Resource) {}
+    unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
+        let gl = &self.shared.context;
+        gl.delete_program(pipeline.inner.program);
+    }
+
     unsafe fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<super::Api>,
-    ) -> Result<Resource, crate::PipelineError> {
-        Ok(Resource)
+    ) -> Result<super::ComputePipeline, crate::PipelineError> {
+        let shaders = iter::once((naga::ShaderStage::Compute, &desc.stage));
+        let inner = self.create_pipeline(shaders, desc.layout)?;
+
+        Ok(super::ComputePipeline { inner })
     }
-    unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
+    unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
+        let gl = &self.shared.context;
+        gl.delete_program(pipeline.inner.program);
+    }
 
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
-    ) -> DeviceResult<Resource> {
+    ) -> Result<Resource, crate::DeviceError> {
         Ok(Resource)
     }
     unsafe fn destroy_query_set(&self, set: Resource) {}
-    unsafe fn create_fence(&self) -> DeviceResult<Resource> {
+    unsafe fn create_fence(&self) -> Result<Resource, crate::DeviceError> {
         Ok(Resource)
     }
     unsafe fn destroy_fence(&self, fence: Resource) {}
-    unsafe fn get_fence_value(&self, fence: &Resource) -> DeviceResult<crate::FenceValue> {
+    unsafe fn get_fence_value(
+        &self,
+        fence: &Resource,
+    ) -> Result<crate::FenceValue, crate::DeviceError> {
         Ok(0)
     }
     unsafe fn wait(
@@ -429,7 +732,7 @@ impl crate::Device<super::Api> for super::Device {
         fence: &Resource,
         value: crate::FenceValue,
         timeout_ms: u32,
-    ) -> DeviceResult<bool> {
+    ) -> Result<bool, crate::DeviceError> {
         Ok(true)
     }
 

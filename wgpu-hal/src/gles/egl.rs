@@ -587,7 +587,7 @@ impl crate::Surface<super::Api> for Surface {
         gl.bind_renderbuffer(glow::RENDERBUFFER, Some(renderbuffer));
         gl.renderbuffer_storage(
             glow::RENDERBUFFER,
-            format_desc.tex_internal,
+            format_desc.internal,
             config.extent.width as _,
             config.extent.height as _,
         );
@@ -606,7 +606,7 @@ impl crate::Surface<super::Api> for Surface {
             renderbuffer,
             framebuffer,
             extent: config.extent,
-            format: format_desc.tex_internal,
+            format: format_desc.internal,
             sample_type: wgt::TextureSampleType::Float { filterable: false },
         });
 

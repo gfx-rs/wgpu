@@ -21,7 +21,10 @@ pub struct Api;
 #[derive(Debug)]
 pub struct Resource;
 
-type DeviceResult<T> = Result<T, crate::DeviceError>;
+//Note: we can support more samplers if not every one of them is used at a time,
+// but it probably doesn't worth it.
+const MAX_SAMPLER_SLOTS: usize = 16;
+const MAX_TEXTURE_SLOTS: usize = 16;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -44,9 +47,9 @@ impl crate::Api for Api {
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
     type PipelineLayout = PipelineLayout;
-    type ShaderModule = Resource;
-    type RenderPipeline = Resource;
-    type ComputePipeline = Resource;
+    type ShaderModule = ShaderModule;
+    type RenderPipeline = RenderPipeline;
+    type ComputePipeline = ComputePipeline;
 }
 
 bitflags::bitflags! {
@@ -152,23 +155,22 @@ impl Sampled for SampledTextureBinding {
 
 #[derive(Debug, Clone, Copy)]
 enum VertexAttribKind {
-    Float,   // glVertexAttribPointer
+    Float, // glVertexAttribPointer
     Integer, // glVertexAttribIPointer
-    Double,  // glVertexAttribLPointer
+           //Double,  // glVertexAttribLPointer
 }
 
 #[derive(Debug)]
-struct FormatDescription {
-    tex_internal: u32,
-    tex_external: u32,
+struct TextureFormatDesc {
+    internal: u32,
+    external: u32,
     data_type: u32,
-    num_components: u8,
-    va_kind: VertexAttribKind,
 }
 
 struct AdapterShared {
     context: glow::Context,
     private_caps: PrivateCapability,
+    shading_language_version: naga::back::glsl::Version,
 }
 
 pub struct Adapter {
@@ -218,7 +220,7 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     inner: TextureInner,
-    format_desc: FormatDescription,
+    format_desc: TextureFormatDesc,
     format_info: wgt::TextureFormatInfo,
 }
 
@@ -258,6 +260,13 @@ pub struct PipelineLayout {
     group_infos: Box<[BindGroupLayoutInfo]>,
 }
 
+impl PipelineLayout {
+    fn get_slot(&self, br: &naga::ResourceBinding) -> u8 {
+        let group_info = &self.group_infos[br.group as usize];
+        group_info.binding_to_slot[br.binding as usize]
+    }
+}
+
 #[derive(Debug)]
 enum BindingRegister {
     Textures,
@@ -288,6 +297,54 @@ pub struct BindGroup {
 }
 
 #[derive(Debug)]
+pub struct ShaderModule {
+    naga: crate::NagaShader,
+}
+
+struct VertexFormatDesc {
+    element_count: i32,
+    element_format: u32,
+    attrib_kind: VertexAttribKind,
+}
+
+struct AttributeDesc {
+    location: u32,
+    offset: u32,
+    buffer_index: u32,
+    format_desc: VertexFormatDesc,
+}
+
+#[derive(Clone)]
+struct UniformDesc {
+    location: glow::UniformLocation,
+    offset: u32,
+    utype: u32,
+}
+
+/// For each texture in the pipeline layout, store the index of the only
+/// sampler (in this layout) that the texture is used with.
+type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
+
+struct PipelineInner {
+    program: glow::Program,
+    sampler_map: SamplerBindMap,
+    uniforms: Box<[UniformDesc]>,
+}
+
+pub struct RenderPipeline {
+    inner: PipelineInner,
+    //blend_targets: Vec<pso::ColorBlendDesc>,
+    attributes: Box<[AttributeDesc]>,
+    //vertex_buffers: Box<[wgt::VertexBufferLayout]>,
+    primitive: wgt::PrimitiveState,
+    depth: Option<wgt::DepthStencilState>,
+}
+
+pub struct ComputePipeline {
+    inner: PipelineInner,
+}
+
+#[derive(Debug)]
 struct TextureCopyInfo {
     external_format: u32,
     data_type: u32,
@@ -297,13 +354,13 @@ struct TextureCopyInfo {
 #[derive(Debug)]
 enum Command {
     Draw {
-        primitive: u32,
+        topology: u32,
         start_vertex: u32,
         vertex_count: u32,
         instance_count: u32,
     },
     DrawIndexed {
-        primitive: u32,
+        topology: u32,
         index_type: u32,
         index_count: u32,
         index_offset: wgt::BufferAddress,
@@ -311,12 +368,12 @@ enum Command {
         instance_count: u32,
     },
     DrawIndirect {
-        primitive: u32,
+        topology: u32,
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
     },
     DrawIndexedIndirect {
-        primitive: u32,
+        topology: u32,
         index_type: u32,
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
@@ -376,7 +433,7 @@ pub struct CommandBuffer {
 
 #[derive(Default)]
 struct CommandState {
-    primitive: u32,
+    topology: u32,
     index_format: wgt::IndexFormat,
     index_offset: wgt::BufferAddress,
 }

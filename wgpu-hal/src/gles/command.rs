@@ -1,5 +1,5 @@
-use super::Command as C;
 use super::Resource; //TEMP
+use super::{conv, Command as C};
 use std::{mem, ops::Range};
 
 impl super::CommandBuffer {
@@ -113,7 +113,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 dst: dst_raw,
                 dst_target,
                 dst_info: super::TextureCopyInfo {
-                    external_format: dst.format_desc.tex_external,
+                    external_format: dst.format_desc.external,
                     data_type: dst.format_desc.data_type,
                     texel_size: dst.format_info.block_size,
                 },
@@ -142,7 +142,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 src: src_raw,
                 src_target,
                 src_info: super::TextureCopyInfo {
-                    external_format: src.format_desc.tex_external,
+                    external_format: src.format_desc.external,
                     data_type: src.format_desc.data_type,
                     texel_size: src.format_info.block_size,
                 },
@@ -200,7 +200,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.cmd_buffer.commands.push(C::PopDebugGroup);
     }
 
-    unsafe fn set_render_pipeline(&mut self, pipeline: &Resource) {}
+    unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
+        self.state.topology = conv::map_primitive_topology(pipeline.primitive.topology);
+    }
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
@@ -233,7 +235,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         debug_assert_eq!(start_instance, 0);
         self.cmd_buffer.commands.push(C::Draw {
-            primitive: self.state.primitive,
+            topology: self.state.topology,
             start_vertex,
             vertex_count,
             instance_count,
@@ -254,7 +256,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
         let index_offset = self.state.index_offset + index_size * start_index as wgt::BufferAddress;
         self.cmd_buffer.commands.push(C::DrawIndexed {
-            primitive: self.state.primitive,
+            topology: self.state.topology,
             index_type,
             index_offset,
             index_count,
@@ -272,7 +274,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             let indirect_offset =
                 offset + draw * mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
             self.cmd_buffer.commands.push(C::DrawIndirect {
-                primitive: self.state.primitive,
+                topology: self.state.topology,
                 indirect_buf: buffer.raw,
                 indirect_offset,
             });
@@ -292,7 +294,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             let indirect_offset = offset
                 + draw * mem::size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
             self.cmd_buffer.commands.push(C::DrawIndexedIndirect {
-                primitive: self.state.primitive,
+                topology: self.state.topology,
                 index_type,
                 indirect_buf: buffer.raw,
                 indirect_offset,
@@ -325,7 +327,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {}
     unsafe fn end_compute_pass(&mut self) {}
 
-    unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {}
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
         self.cmd_buffer.commands.push(C::Dispatch(count));

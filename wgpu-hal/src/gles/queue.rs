@@ -20,16 +20,16 @@ impl super::Queue {
         let gl = &self.shared.context;
         match *command {
             C::Draw {
-                primitive,
+                topology,
                 start_vertex,
                 vertex_count,
                 instance_count,
             } => {
                 if instance_count == 1 {
-                    gl.draw_arrays(primitive, start_vertex as i32, vertex_count as i32);
+                    gl.draw_arrays(topology, start_vertex as i32, vertex_count as i32);
                 } else {
                     gl.draw_arrays_instanced(
-                        primitive,
+                        topology,
                         start_vertex as i32,
                         vertex_count as i32,
                         instance_count as i32,
@@ -37,7 +37,7 @@ impl super::Queue {
                 }
             }
             C::DrawIndexed {
-                primitive,
+                topology,
                 index_type,
                 index_count,
                 index_offset,
@@ -45,27 +45,27 @@ impl super::Queue {
                 instance_count,
             } => match (base_vertex, instance_count) {
                 (0, 1) => gl.draw_elements(
-                    primitive,
+                    topology,
                     index_count as i32,
                     index_type,
                     index_offset as i32,
                 ),
                 (0, _) => gl.draw_elements_instanced(
-                    primitive,
+                    topology,
                     index_count as i32,
                     index_type,
                     index_offset as i32,
                     instance_count as i32,
                 ),
                 (_, 1) => gl.draw_elements_base_vertex(
-                    primitive,
+                    topology,
                     index_count as i32,
                     index_type,
                     index_offset as i32,
                     base_vertex,
                 ),
                 (_, _) => gl.draw_elements_instanced_base_vertex(
-                    primitive,
+                    topology,
                     index_count as _,
                     index_type,
                     index_offset as i32,
@@ -74,16 +74,16 @@ impl super::Queue {
                 ),
             },
             C::DrawIndirect {
-                primitive: _,
+                topology: _,
                 indirect_buf,
                 indirect_offset: _,
             } => {
                 gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf));
                 //TODO: https://github.com/grovesNL/glow/issues/172
-                //gl.draw_arrays_indirect(primitive, indirect_offset);
+                //gl.draw_arrays_indirect(topology, indirect_offset);
             }
             C::DrawIndexedIndirect {
-                primitive: _,
+                topology: _,
                 index_type: _,
                 indirect_buf,
                 indirect_offset: _,

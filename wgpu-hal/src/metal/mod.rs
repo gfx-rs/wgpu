@@ -555,7 +555,7 @@ unsafe impl Sync for BindGroup {}
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    raw: crate::NagaShader,
+    naga: crate::NagaShader,
 }
 
 #[derive(Debug, Default)]

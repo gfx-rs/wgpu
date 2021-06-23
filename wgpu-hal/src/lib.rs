@@ -837,12 +837,19 @@ pub struct CommandEncoderDescriptor<'a, A: Api> {
 }
 
 /// Naga shader module.
-#[derive(Debug)]
 pub struct NagaShader {
     /// Shader module IR.
     pub module: naga::Module,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
+}
+
+// Custom implementation avoids the need to generate Debug impl code
+// for the whole Naga module and info.
+impl fmt::Debug for NagaShader {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "Naga shader")
+    }
 }
 
 /// Shader input.

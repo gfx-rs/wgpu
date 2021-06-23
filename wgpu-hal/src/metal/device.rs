@@ -61,10 +61,10 @@ impl super::Device {
             },
         };
 
-        let module = &stage.module.raw.module;
+        let module = &stage.module.naga.module;
         let (source, info) = naga::back::msl::write_string(
             module,
-            &stage.module.raw.info,
+            &stage.module.naga.info,
             &layout.naga_options,
             &pipeline_options,
         )
@@ -644,7 +644,7 @@ impl crate::Device<super::Api> for super::Device {
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         match shader {
-            crate::ShaderInput::Naga(raw) => Ok(super::ShaderModule { raw }),
+            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule { naga }),
             crate::ShaderInput::SpirV(_) => {
                 unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }
