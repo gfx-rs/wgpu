@@ -1,6 +1,6 @@
 //TODO: temp
 #![allow(dead_code)]
-use super::{Error, Options, ShaderModel};
+use super::{Error, Options};
 use crate::{
     back,
     proc::{self, NameKey},
@@ -55,10 +55,6 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
-        if self.options.shader_model < ShaderModel::default() {
-            return Err(Error::UnsupportedShaderModel(self.options.shader_model));
-        }
-
         self.reset(module);
 
         // Write all constants

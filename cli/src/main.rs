@@ -103,10 +103,16 @@ fn main() {
                     };
                 }
                 "shader-model" => {
-                    use naga::back::hlsl::{ShaderModel, DEFAULT_SHADER_MODEL};
+                    use naga::back::hlsl::ShaderModel;
                     let string = args.next().unwrap();
-                    params.hlsl.shader_model =
-                        ShaderModel::new(string.parse().unwrap_or(DEFAULT_SHADER_MODEL));
+                    let sm_numb = string.parse::<u16>().unwrap();
+                    let sm = match string.parse().unwrap() {
+                        50 => ShaderModel::V5_0,
+                        51 => ShaderModel::V5_1,
+                        60 => ShaderModel::V6_0,
+                        _ => panic!("Unsupported shader model: {}", sm_numb),
+                    };
+                    params.hlsl.shader_model = sm;
                 }
                 other => log::warn!("Unknown parameter: {}", other),
             }
