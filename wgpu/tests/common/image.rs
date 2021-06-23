@@ -43,7 +43,13 @@ fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> 
     Some(buffer)
 }
 
-fn write_png(path: impl AsRef<Path>, width: u32, height: u32, data: &[u8], compression: png::Compression) {
+fn write_png(
+    path: impl AsRef<Path>,
+    width: u32,
+    height: u32,
+    data: &[u8],
+    compression: png::Compression,
+) {
     let file = BufWriter::new(File::create(path).unwrap());
 
     let mut encoder = png::Encoder::new(file, width, height);
@@ -117,9 +123,18 @@ pub fn compare_image_output(
             );
 
             write_png(&actual_path, width, height, &data, png::Compression::Fast);
-            write_png(&difference_path, width, height, &difference_data, png::Compression::Fast);
+            write_png(
+                &difference_path,
+                width,
+                height,
+                &difference_data,
+                png::Compression::Fast,
+            );
 
-            panic!("Image data mismatch! Outlier count {} over limit {}. Max difference {}", outliers, max_outliers, max_difference)
+            panic!(
+                "Image data mismatch! Outlier count {} over limit {}. Max difference {}",
+                outliers, max_outliers, max_difference
+            )
         } else {
             println!(
                 "{} outliers over max difference {}",

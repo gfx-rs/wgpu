@@ -1975,6 +1975,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-info"
+version = "0.9.0"
+dependencies = [
+ "wgpu",
+]
+
+[[package]]
 name = "wgpu-types"
 version = "0.8.0"
 dependencies = [

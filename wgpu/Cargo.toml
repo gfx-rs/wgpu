@@ -90,22 +90,18 @@ features = ["wgsl-in", "spv-out"]
 
 [[example]]
 name="boids"
-path="examples/boids/main.rs"
 test = true
 
 [[example]]
 name="bunnymark"
-path="examples/bunnymark/main.rs"
 test = true
 
 [[example]]
 name="conservative-raster"
-path="examples/conservative-raster/main.rs"
 test = true
 
 [[example]]
 name="cube"
-path="examples/cube/main.rs"
 test = true
 
 [[example]]
@@ -122,27 +118,22 @@ test = true
 
 [[example]]
 name="msaa-line"
-path="examples/msaa-line/main.rs"
 test = true
 
 [[example]]
 name="shadow"
-path="examples/shadow/main.rs"
 test = true
 
 [[example]]
 name="skybox"
-path="examples/skybox/main.rs"
 test = true
 
 [[example]]
 name="texture-arrays"
-path="examples/texture-arrays/main.rs"
 test = true
 
 [[example]]
 name="water"
-path="examples/water/main.rs"
 test = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

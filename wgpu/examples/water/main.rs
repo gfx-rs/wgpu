@@ -735,7 +735,7 @@ impl framework::Example for Example {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(back_color),
@@ -762,7 +762,7 @@ impl framework::Example for Example {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -792,16 +792,5 @@ fn main() {
 
 #[test]
 fn shadow() {
-    framework::test::<Example>(
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/examples/water/screenshot.png"
-        ),
-        1024,
-        768,
-        wgpu::Features::default(),
-        framework::test_common::TestParameters::default(),
-        5,
-        10,
-    );
+    framework::test::<Example>( framework::FrameworkRefTest {image_path: "/examples/water/screenshot.png", width: 1024, height: 768, optional_features: wgpu::Features::default(), base_test_parameters: framework::test_common::TestParameters::default(), tollerance: 5, max_outliers: 10, });
 }

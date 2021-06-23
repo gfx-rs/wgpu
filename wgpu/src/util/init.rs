@@ -16,7 +16,7 @@ pub fn backend_bits_from_env() -> Option<BackendBit> {
             Ok("metal") => BackendBit::METAL,
             Ok("gl") => BackendBit::GL,
             Ok("webgpu") => BackendBit::BROWSER_WEBGPU,
-            _ => None?,
+            _ => return None,
         },
     )
 }
@@ -31,7 +31,7 @@ pub fn power_preference_from_env() -> Option<PowerPreference> {
         {
             Ok("low") => PowerPreference::LowPower,
             Ok("high") => PowerPreference::HighPerformance,
-            _ => None?,
+            _ => return None,
         },
     )
 }

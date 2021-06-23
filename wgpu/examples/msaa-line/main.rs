@@ -254,7 +254,7 @@ impl framework::Example for Example {
             };
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops,
                 }
@@ -285,16 +285,13 @@ fn main() {
 
 #[test]
 fn msaa_line() {
-    framework::test::<Example>(
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/examples/msaa-line/screenshot.png"
-        ),
-        1024,
-        768,
-        wgpu::Features::default(),
-        framework::test_common::TestParameters::default(),
-        64,
-        1 << 16, // MSAA is comically different between vendors, 32k is a decent limit
-    );
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/msaa-line/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 64,
+        max_outliers: 1 << 16, // MSAA is comically different between vendors, 32k is a decent limit
+    });
 }

@@ -285,7 +285,7 @@ impl framework::Example for Example {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("full resolution"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -315,16 +315,13 @@ fn main() {
 
 #[test]
 fn conservative_raster() {
-    framework::test::<Example>(
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/examples/conservative-raster/screenshot.png"
-        ),
-        1024,
-        768,
-        wgpu::Features::default(),
-        framework::test_common::TestParameters::default().failure(),
-        0,
-        0,
-    );
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/conservative-raster/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default().failure(),
+        tollerance: 0,
+        max_outliers: 0,
+    });
 }

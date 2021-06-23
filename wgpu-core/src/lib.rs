@@ -43,11 +43,9 @@ mod validation;
 
 pub use hal::api;
 
-use std::sync::atomic;
-
 use atomic::{AtomicU64, AtomicUsize, Ordering};
 
-use std::{borrow::Cow, os::raw::c_char, ptr};
+use std::{borrow::Cow, os::raw::c_char, ptr, sync::atomic};
 
 type SubmissionIndex = hal::FenceValue;
 type Index = u32;

@@ -1,11 +1,12 @@
+use std::future::Future;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
-use std::{future::Future};
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
+#[cfg(test)]
 #[path = "../tests/common/mod.rs"]
 pub mod test_common;
 
@@ -365,28 +366,31 @@ pub fn run<E: Example>(title: &str) {
 }
 
 #[cfg(test)]
+pub struct FrameworkRefTest {
+    pub image_path: &'static str,
+    pub width: u32,
+    pub height: u32,
+    pub optional_features: wgpu::Features,
+    pub base_test_parameters: test_common::TestParameters,
+    pub tollerance: u8,
+    pub max_outliers: usize,
+}
+
+#[cfg(test)]
 #[allow(dead_code)]
-pub fn test<E: Example>(
-    image_path: &str,
-    width: u32,
-    height: u32,
-    optional_features: wgpu::Features,
-    base_test_parameters: test_common::TestParameters,
-    tollerance: u8,
-    max_outliers: usize,
-) {
-    use std::num::NonZeroU32;
+pub fn test<E: Example>(mut params: FrameworkRefTest) {
+    use std::{mem, num::NonZeroU32};
 
-    assert_eq!(width % 64, 0, "width needs to be aligned 64");
+    assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
 
-    let features = E::required_features() | optional_features;
+    let features = E::required_features() | params.optional_features;
     let mut limits = E::required_limits();
     if limits == wgpu::Limits::default() {
         limits = test_common::lowest_reasonable_limits();
     }
 
     test_common::initialize_test(
-        base_test_parameters
+        mem::take(&mut params.base_test_parameters)
             .features(features)
             .limits(limits),
         |ctx| {
@@ -395,8 +399,8 @@ pub fn test<E: Example>(
             let dst_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("destination"),
                 size: wgpu::Extent3d {
-                    width,
-                    height,
+                    width: params.width,
+                    height: params.height,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
@@ -410,7 +414,7 @@ pub fn test<E: Example>(
 
             let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("image map buffer"),
-                size: width as u64 * height as u64 * 4,
+                size: params.width as u64 * params.height as u64 * 4,
                 usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
                 mapped_at_creation: false,
             });
@@ -419,8 +423,8 @@ pub fn test<E: Example>(
                 &wgpu::SwapChainDescriptor {
                     usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    width,
-                    height,
+                    width: params.width,
+                    height: params.height,
                     present_mode: wgpu::PresentMode::Fifo,
                 },
                 &ctx.adapter,
@@ -445,13 +449,13 @@ pub fn test<E: Example>(
                     buffer: &dst_buffer,
                     layout: wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: NonZeroU32::new(width * 4),
+                        bytes_per_row: NonZeroU32::new(params.width * 4),
                         rows_per_image: None,
                     },
                 },
                 wgpu::Extent3d {
-                    width,
-                    height,
+                    width: params.width,
+                    height: params.height,
                     depth_or_array_layers: 1,
                 },
             );
@@ -464,12 +468,12 @@ pub fn test<E: Example>(
             let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
             test_common::image::compare_image_output(
-                &image_path,
-                width,
-                height,
+                env!("CARGO_MANIFEST_DIR").to_string() + &params.image_path,
+                params.width,
+                params.height,
                 &bytes,
-                tollerance,
-                max_outliers,
+                params.tollerance,
+                params.max_outliers,
             );
         },
     );

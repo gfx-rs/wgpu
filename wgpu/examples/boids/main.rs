@@ -264,7 +264,7 @@ impl framework::Example for Example {
     ) {
         // create render pass descriptor and its color attachments
         let color_attachments = [wgpu::RenderPassColorAttachment {
-            view: &view,
+            view,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -320,13 +320,13 @@ fn main() {
 
 #[test]
 fn boids() {
-    framework::test::<Example>(
-        concat!(env!("CARGO_MANIFEST_DIR"), "/examples/boids/screenshot.png"),
-        1024,
-        768,
-        wgpu::Features::default(),
-        framework::test_common::TestParameters::default(),
-        0,
-        50,
-    );
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/boids/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 0,
+        max_outliers: 50,
+    });
 }

@@ -781,7 +781,7 @@ impl framework::Example for Example {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -824,16 +824,13 @@ fn main() {
 
 #[test]
 fn shadow() {
-    framework::test::<Example>(
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/examples/shadow/screenshot.png"
-        ),
-        1024,
-        768,
-        wgpu::Features::default(),
-        framework::test_common::TestParameters::default(),
-        2,
-        5,
-    );
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/shadow/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 2,
+        max_outliers: 5,
+    });
 }
