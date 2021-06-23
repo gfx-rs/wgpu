@@ -363,11 +363,8 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> DeviceResult<super::BindGroupLayout> {
-        let mut map = desc.entries.to_vec();
-        map.sort_by_key(|e| e.binding);
-
         Ok(super::BindGroupLayout {
-            entries: Arc::new(map),
+            entries: Arc::from(desc.entries),
         })
     }
     unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}

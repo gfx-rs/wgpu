@@ -238,6 +238,7 @@ pub trait Device<A: Api>: Send + Sync {
     ) -> Result<A::CommandEncoder, DeviceError>;
     unsafe fn destroy_command_encoder(&self, pool: A::CommandEncoder);
 
+    /// Creates a bind group layout.
     unsafe fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor,
@@ -753,6 +754,10 @@ pub struct SamplerDescriptor<'a> {
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 
+/// BindGroupLayout descriptor.
+///
+/// Valid usage:
+/// - `entries` are sorted by ascending `wgt::BindGroupLayoutEntry::binding`
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     pub label: Label<'a>,

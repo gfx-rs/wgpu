@@ -1035,7 +1035,8 @@ impl<A: HalApi> Device<A> {
                 })?;
         }
 
-        let hal_bindings = entry_map.values().cloned().collect::<Vec<_>>();
+        let mut hal_bindings = entry_map.values().cloned().collect::<Vec<_>>();
+        hal_bindings.sort_by_key(|b| b.binding);
         let hal_desc = hal::BindGroupLayoutDescriptor {
             label,
             entries: &hal_bindings,

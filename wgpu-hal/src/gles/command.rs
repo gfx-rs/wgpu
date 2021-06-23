@@ -173,15 +173,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn set_bind_group(
         &mut self,
-        layout: &Resource,
+        layout: &super::PipelineLayout,
         index: u32,
-        group: &Resource,
+        group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
     }
     unsafe fn set_push_constants(
         &mut self,
-        layout: &Resource,
+        layout: &super::PipelineLayout,
         stages: wgt::ShaderStage,
         offset: u32,
         data: &[u32],

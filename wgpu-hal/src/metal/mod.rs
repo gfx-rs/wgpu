@@ -412,7 +412,7 @@ impl Sampler {
 #[derive(Debug)]
 pub struct BindGroupLayout {
     /// Sorted list of BGL entries.
-    entries: Arc<Vec<wgt::BindGroupLayoutEntry>>,
+    entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
 
 #[derive(Clone, Debug, Default)]

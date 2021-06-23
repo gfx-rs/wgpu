@@ -41,9 +41,9 @@ impl crate::Api for Api {
     type QuerySet = Resource;
     type Fence = Resource;
 
-    type BindGroupLayout = Resource;
-    type BindGroup = Resource;
-    type PipelineLayout = Resource;
+    type BindGroupLayout = BindGroupLayout;
+    type BindGroup = BindGroup;
+    type PipelineLayout = PipelineLayout;
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
@@ -190,6 +190,7 @@ pub struct Queue {
 pub struct Buffer {
     raw: glow::Buffer,
     target: BindTarget,
+    size: wgt::BufferAddress,
     map_flags: u32,
 }
 
@@ -237,6 +238,53 @@ pub enum TextureView {
 #[derive(Debug)]
 pub struct Sampler {
     raw: glow::Sampler,
+}
+
+pub struct BindGroupLayout {
+    entries: Arc<[wgt::BindGroupLayoutEntry]>,
+}
+
+struct BindGroupLayoutInfo {
+    entries: Arc<[wgt::BindGroupLayoutEntry]>,
+    /// Mapping of resources, indexed by `binding`, into the whole layout space.
+    /// For texture resources, the value is the texture slot index.
+    /// For sampler resources, the value is the index of the sampler in the whole layout.
+    /// For buffers, the value is the uniform or storage slot index.
+    /// For unused bindings, the value is `!0`
+    binding_to_slot: Box<[u8]>,
+}
+
+pub struct PipelineLayout {
+    group_infos: Box<[BindGroupLayoutInfo]>,
+}
+
+#[derive(Debug)]
+enum BindingRegister {
+    Textures,
+    UniformBuffers,
+    StorageBuffers,
+}
+
+#[derive(Debug)]
+enum RawBinding {
+    Buffer {
+        register: BindingRegister,
+        raw: glow::Buffer,
+        offset: i32,
+        size: i32,
+    },
+    Texture {
+        raw: glow::Texture,
+        target: BindTarget,
+        range: wgt::ImageSubresourceRange,
+    },
+    Sampler(glow::Sampler),
+}
+
+#[derive(Debug)]
+pub struct BindGroup {
+    layout_entries: Arc<[wgt::BindGroupLayoutEntry]>,
+    contents: Box<[RawBinding]>,
 }
 
 #[derive(Debug)]

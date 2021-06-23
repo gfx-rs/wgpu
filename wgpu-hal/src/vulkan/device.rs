@@ -937,7 +937,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::BindGroupLayout {
             raw,
             desc_count,
-            types,
+            types: types.into_boxed_slice(),
         })
     }
     unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {

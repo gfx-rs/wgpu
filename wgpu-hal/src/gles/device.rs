@@ -1,6 +1,6 @@
 use super::{DeviceResult, Resource}; //TEMP
 use glow::HasContext;
-use std::{convert::TryInto, ptr::NonNull};
+use std::{convert::TryInto, ptr::NonNull, sync::Arc};
 
 impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self) {
@@ -46,6 +46,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Buffer {
             raw,
             target,
+            size: desc.size,
             map_flags,
         })
     }
@@ -269,24 +270,122 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
+    ) -> Result<super::BindGroupLayout, crate::DeviceError> {
+        Ok(super::BindGroupLayout {
+            entries: Arc::from(desc.entries),
+        })
     }
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
+    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
+
     unsafe fn create_pipeline_layout(
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
+    ) -> Result<super::PipelineLayout, crate::DeviceError> {
+        let mut group_infos = Vec::with_capacity(desc.bind_group_layouts.len());
+        let mut num_samplers = 0u8;
+        let mut num_textures = 0u8;
+        let mut num_uniform_buffers = 0u8;
+        let mut num_storage_buffers = 0u8;
+
+        for bg_layout in desc.bind_group_layouts {
+            // create a vector with the size enough to hold all the bindings, filled with `!0`
+            let mut binding_to_slot = vec![
+                !0;
+                bg_layout
+                    .entries
+                    .last()
+                    .map_or(0, |b| b.binding as usize + 1)
+            ]
+            .into_boxed_slice();
+
+            for entry in bg_layout.entries.iter() {
+                let counter = match entry.ty {
+                    wgt::BindingType::Sampler { .. } => &mut num_samplers,
+                    wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
+                        &mut num_textures
+                    }
+                    wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Uniform,
+                        ..
+                    } => &mut num_uniform_buffers,
+                    wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Storage { .. },
+                        ..
+                    } => &mut num_storage_buffers,
+                };
+
+                binding_to_slot[entry.binding as usize] = *counter;
+                *counter += entry.count.map_or(1, |c| c.get() as u8);
+            }
+
+            group_infos.push(super::BindGroupLayoutInfo {
+                entries: Arc::clone(&bg_layout.entries),
+                binding_to_slot,
+            });
+        }
+
+        Ok(super::PipelineLayout {
+            group_infos: group_infos.into_boxed_slice(),
+        })
     }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {}
+
     unsafe fn create_bind_group(
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
+    ) -> Result<super::BindGroup, crate::DeviceError> {
+        let mut contents = Vec::new();
+
+        for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
+            let binding = match layout.ty {
+                wgt::BindingType::Buffer { ty, .. } => {
+                    let bb = &desc.buffers[entry.resource_index as usize];
+                    let register = match ty {
+                        wgt::BufferBindingType::Uniform => super::BindingRegister::UniformBuffers,
+                        wgt::BufferBindingType::Storage { .. } => {
+                            super::BindingRegister::StorageBuffers
+                        }
+                    };
+                    super::RawBinding::Buffer {
+                        register,
+                        raw: bb.buffer.raw,
+                        offset: bb.offset as i32,
+                        size: match bb.size {
+                            Some(s) => s.get() as i32,
+                            None => (bb.buffer.size - bb.offset) as i32,
+                        },
+                    }
+                }
+                wgt::BindingType::Sampler { .. } => {
+                    let sampler = desc.samplers[entry.resource_index as usize];
+                    super::RawBinding::Sampler(sampler.raw)
+                }
+                wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
+                    match *desc.textures[entry.resource_index as usize].view {
+                        super::TextureView::Renderbuffer { .. } => {
+                            panic!("Unable to use a renderbuffer in a group")
+                        }
+                        super::TextureView::Texture {
+                            raw,
+                            target,
+                            ref range,
+                        } => super::RawBinding::Texture {
+                            raw,
+                            target,
+                            range: range.clone(),
+                        },
+                    }
+                }
+            };
+            contents.push(binding);
+        }
+
+        Ok(super::BindGroup {
+            layout_entries: Arc::clone(&desc.layout.entries),
+            contents: contents.into_boxed_slice(),
+        })
     }
-    unsafe fn destroy_bind_group(&self, group: Resource) {}
+    unsafe fn destroy_bind_group(&self, _group: super::BindGroup) {}
 
     unsafe fn create_shader_module(
         &self,

@@ -271,7 +271,7 @@ pub struct Sampler {
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
     desc_count: gpu_descriptor::DescriptorTotalCount,
-    types: Vec<(vk::DescriptorType, u32)>,
+    types: Box<[(vk::DescriptorType, u32)]>,
 }
 
 #[derive(Debug)]
