@@ -1,4 +1,4 @@
-<img align="right" width="25%" src="logo.png">
+<img align="right" width="25%" src="../logo.png">
 
 wgpu-rs is an idiomatic Rust wrapper over [wgpu-core](https://github.com/gfx-rs/wgpu). It's designed to be suitable for general purpose graphics and computation needs of Rust community.
 
