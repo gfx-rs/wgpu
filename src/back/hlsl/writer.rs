@@ -542,7 +542,15 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             back::FunctionType::EntryPoint(index) => {
                 // EntryPoint arguments wrapped into structure
-                if !self.ep_inputs.is_empty() {
+                // We need to ensure that entry points have arguments too.
+                // For the case when we working with multiple entry points
+                // for example vertex shader with arguments and fragment shader without arguments.
+                if !self.ep_inputs.is_empty()
+                    && !module.entry_points[index as usize]
+                        .function
+                        .arguments
+                        .is_empty()
+                {
                     if let Some(ref ep_input) = self.ep_inputs[index as usize] {
                         write!(
                             self.out,
