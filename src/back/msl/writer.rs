@@ -1,13 +1,9 @@
-use super::{
-    keywords::RESERVED, sampler as sm, Error, LocationMode, Options, PipelineOptions,
-    TranslationInfo,
-};
+use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
-    arena::{Arena, Handle},
-    back::{vector_size_str, BAKE_PREFIX, COMPONENTS, INDENT},
-    proc::{EntryPointIndex, NameKey, Namer, TypeResolution},
-    valid::{Capabilities, FunctionInfo, GlobalUse, ModuleInfo},
-    FastHashMap,
+    arena::Handle,
+    back,
+    proc::{self, NameKey, TypeResolution},
+    valid, FastHashMap,
 };
 use std::{
     fmt::{Display, Error as FmtError, Formatter, Write},
@@ -26,13 +22,13 @@ impl Level {
 }
 impl Display for Level {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
-        (0..self.0).try_for_each(|_| formatter.write_str(INDENT))
+        (0..self.0).try_for_each(|_| formatter.write_str(back::INDENT))
     }
 }
 
 struct TypeContext<'a> {
     handle: Handle<crate::Type>,
-    arena: &'a Arena<crate::Type>,
+    arena: &'a crate::Arena<crate::Type>,
     names: &'a FastHashMap<NameKey, String>,
     access: crate::StorageAccess,
     first_time: bool,
@@ -63,7 +59,7 @@ impl<'a> Display for TypeContext<'a> {
                     "{}::{}{}",
                     NAMESPACE,
                     scalar_kind_string(kind),
-                    vector_size_str(size),
+                    back::vector_size_str(size),
                 )
             }
             crate::TypeInner::Matrix { columns, rows, .. } => {
@@ -72,8 +68,8 @@ impl<'a> Display for TypeContext<'a> {
                     "{}::{}{}x{}",
                     NAMESPACE,
                     scalar_kind_string(crate::ScalarKind::Float),
-                    vector_size_str(columns),
-                    vector_size_str(rows),
+                    back::vector_size_str(columns),
+                    back::vector_size_str(rows),
                 )
             }
             crate::TypeInner::Pointer { base, class } => {
@@ -116,7 +112,7 @@ impl<'a> Display for TypeContext<'a> {
                     class_name,
                     NAMESPACE,
                     scalar_kind_string(kind),
-                    vector_size_str(size),
+                    back::vector_size_str(size),
                 )
             }
             crate::TypeInner::Array { base, .. } => {
@@ -193,7 +189,7 @@ struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
     names: &'a FastHashMap<NameKey, String>,
     handle: Handle<crate::GlobalVariable>,
-    usage: GlobalUse,
+    usage: valid::GlobalUse,
     reference: bool,
 }
 
@@ -213,7 +209,7 @@ impl<'a> TypedGlobalVariable<'a> {
             Some(space) if self.reference => {
                 let access = match var.class {
                     crate::StorageClass::Private | crate::StorageClass::WorkGroup
-                        if !self.usage.contains(GlobalUse::WRITE) =>
+                        if !self.usage.contains(valid::GlobalUse::WRITE) =>
                     {
                         "const"
                     }
@@ -240,7 +236,7 @@ impl<'a> TypedGlobalVariable<'a> {
 
 struct ConstantContext<'a> {
     handle: Handle<crate::Constant>,
-    arena: &'a Arena<crate::Constant>,
+    arena: &'a crate::Arena<crate::Constant>,
     names: &'a FastHashMap<NameKey, String>,
     first_time: bool,
 }
@@ -286,7 +282,7 @@ pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
     named_expressions: crate::NamedExpressions,
-    namer: Namer,
+    namer: proc::Namer,
     runtime_sized_buffers: FastHashMap<Handle<crate::GlobalVariable>, usize>,
     #[cfg(test)]
     put_expression_stack_pointers: crate::FastHashSet<*const ()>,
@@ -337,7 +333,7 @@ fn should_pack_struct_member(
     }
 }
 
-fn needs_array_length(ty: Handle<crate::Type>, arena: &Arena<crate::Type>) -> bool {
+fn needs_array_length(ty: Handle<crate::Type>, arena: &crate::Arena<crate::Type>) -> bool {
     if let crate::TypeInner::Struct { ref members, .. } = arena[ty].inner {
         if let Some(member) = members.last() {
             if let crate::TypeInner::Array {
@@ -388,6 +384,7 @@ impl crate::Type {
     // Returns `true` if we need to emit an alias for this type.
     fn needs_alias(&self) -> bool {
         use crate::TypeInner as Ti;
+
         match self.inner {
             // value types are concise enough, we only alias them if they are named
             Ti::Scalar { .. }
@@ -415,13 +412,13 @@ impl crate::Constant {
 
 enum FunctionOrigin {
     Handle(Handle<crate::Function>),
-    EntryPoint(EntryPointIndex),
+    EntryPoint(proc::EntryPointIndex),
 }
 
 struct ExpressionContext<'a> {
     function: &'a crate::Function,
     origin: FunctionOrigin,
-    info: &'a FunctionInfo,
+    info: &'a valid::FunctionInfo,
     module: &'a crate::Module,
     pipeline_options: &'a PipelineOptions,
 }
@@ -434,7 +431,7 @@ impl<'a> ExpressionContext<'a> {
 
 struct StatementContext<'a> {
     expression: ExpressionContext<'a>,
-    mod_info: &'a ModuleInfo,
+    mod_info: &'a valid::ModuleInfo,
     result_struct: Option<&'a str>,
 }
 
@@ -445,7 +442,7 @@ impl<W: Write> Writer<W> {
             out,
             names: FastHashMap::default(),
             named_expressions: crate::NamedExpressions::default(),
-            namer: Namer::default(),
+            namer: proc::Namer::default(),
             runtime_sized_buffers: FastHashMap::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
@@ -542,7 +539,7 @@ impl<W: Write> Writer<W> {
         // coordinates in IR are int, but Metal expects uint
         let size_str = match *context.info[expr].ty.inner_with(&context.module.types) {
             crate::TypeInner::Scalar { .. } => "",
-            crate::TypeInner::Vector { size, .. } => vector_size_str(size),
+            crate::TypeInner::Vector { size, .. } => back::vector_size_str(size),
             _ => return Err(Error::Validation),
         };
         write!(self.out, "{}::uint{}(", NAMESPACE, size_str)?;
@@ -610,7 +607,7 @@ impl<W: Write> Writer<W> {
                     "{}::{}{}",
                     NAMESPACE,
                     scalar_kind_string(kind),
-                    vector_size_str(size)
+                    back::vector_size_str(size)
                 )?;
                 self.put_call_parameters(components.iter().cloned(), context)?;
             }
@@ -621,8 +618,8 @@ impl<W: Write> Writer<W> {
                     "{}::{}{}x{}",
                     NAMESPACE,
                     scalar_kind_string(kind),
-                    vector_size_str(columns),
-                    vector_size_str(rows)
+                    back::vector_size_str(columns),
+                    back::vector_size_str(rows)
                 )?;
                 self.put_call_parameters(components.iter().cloned(), context)?;
             }
@@ -755,7 +752,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, ".{}", name)?;
                     }
                     crate::TypeInner::ValuePointer { .. } | crate::TypeInner::Vector { .. } => {
-                        write!(self.out, ".{}", COMPONENTS[index as usize])?;
+                        write!(self.out, ".{}", back::COMPONENTS[index as usize])?;
                     }
                     crate::TypeInner::Matrix { .. } => {
                         write!(self.out, "[{}]", index)?;
@@ -783,7 +780,7 @@ impl<W: Write> Writer<W> {
                     _ => return Err(Error::Validation),
                 };
                 let scalar = scalar_kind_string(scalar_kind);
-                let size = vector_size_str(size);
+                let size = back::vector_size_str(size);
 
                 write!(self.out, "{}::{}{}(", NAMESPACE, scalar, size)?;
                 self.put_expression(value, context, true)?;
@@ -797,7 +794,7 @@ impl<W: Write> Writer<W> {
                 self.put_expression(vector, context, false)?;
                 write!(self.out, ".")?;
                 for &sc in pattern[..size as usize].iter() {
-                    write!(self.out, "{}", COMPONENTS[sc as usize])?;
+                    write!(self.out, "{}", back::COMPONENTS[sc as usize])?;
                 }
             }
             crate::Expression::Compose { ty, ref components } => {
@@ -1133,13 +1130,15 @@ impl<W: Write> Writer<W> {
                 let scalar = scalar_kind_string(kind);
                 let (size, width) = match *context.resolve_type(expr) {
                     crate::TypeInner::Scalar { width, .. } => ("", width),
-                    crate::TypeInner::Vector { size, width, .. } => (vector_size_str(size), width),
+                    crate::TypeInner::Vector { size, width, .. } => {
+                        (back::vector_size_str(size), width)
+                    }
                     _ => return Err(Error::Validation),
                 };
                 let op = match convert {
                     Some(w) if w == width => "static_cast",
                     Some(8) if kind == crate::ScalarKind::Float => {
-                        return Err(Error::CapabilityNotSupported(Capabilities::FLOAT64))
+                        return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
                     }
                     Some(_) => return Err(Error::Validation),
                     None => "as_type",
@@ -1261,7 +1260,7 @@ impl<W: Write> Writer<W> {
                     "{}::{}{}",
                     NAMESPACE,
                     scalar_kind_string(kind),
-                    vector_size_str(size)
+                    back::vector_size_str(size)
                 )?;
             }
             TypeResolution::Value(crate::TypeInner::Matrix { columns, rows, .. }) => {
@@ -1270,8 +1269,8 @@ impl<W: Write> Writer<W> {
                     "{}::{}{}x{}",
                     NAMESPACE,
                     scalar_kind_string(crate::ScalarKind::Float),
-                    vector_size_str(columns),
-                    vector_size_str(rows),
+                    back::vector_size_str(columns),
+                    back::vector_size_str(rows),
                 )?;
             }
             TypeResolution::Value(ref other) => {
@@ -1315,7 +1314,7 @@ impl<W: Write> Writer<W> {
                             let min_ref_count =
                                 context.expression.function.expressions[handle].bake_ref_count();
                             if min_ref_count <= context.expression.info[handle].ref_count {
-                                Some(format!("{}{}", BAKE_PREFIX, handle.index()))
+                                Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
                             } else {
                                 None
                             }
@@ -1501,7 +1500,7 @@ impl<W: Write> Writer<W> {
                 } => {
                     write!(self.out, "{}", level)?;
                     if let Some(expr) = result {
-                        let name = format!("{}{}", BAKE_PREFIX, expr.index());
+                        let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
                         self.start_baking_expression(expr, &context.expression, &name)?;
                         self.named_expressions.insert(expr, name);
                     }
@@ -1562,12 +1561,13 @@ impl<W: Write> Writer<W> {
     pub fn write(
         &mut self,
         module: &crate::Module,
-        info: &ModuleInfo,
+        info: &valid::ModuleInfo,
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
-        self.namer.reset(module, RESERVED, &[], &mut self.names);
+        self.namer
+            .reset(module, super::keywords::RESERVED, &[], &mut self.names);
         self.runtime_sized_buffers.clear();
 
         writeln!(self.out, "#include <metal_stdlib>")?;
@@ -1588,7 +1588,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "struct _mslBufferSizes {{")?;
 
                 for idx in indices {
-                    writeln!(self.out, "{}{}::uint size{};", INDENT, NAMESPACE, idx)?;
+                    writeln!(self.out, "{}{}::uint size{};", back::INDENT, NAMESPACE, idx)?;
                 }
 
                 writeln!(self.out, "}};")?;
@@ -1635,7 +1635,10 @@ impl<W: Write> Writer<W> {
                             writeln!(
                                 self.out,
                                 "{}{} {}[{}];",
-                                INDENT, base_name, WRAPPED_ARRAY_FIELD, coco
+                                back::INDENT,
+                                base_name,
+                                WRAPPED_ARRAY_FIELD,
+                                coco
                             )?;
                             writeln!(self.out, "}};")?;
                         }
@@ -1654,7 +1657,7 @@ impl<W: Write> Writer<W> {
                         if member.binding.is_none() && member.offset > last_offset {
                             let pad = member.offset - last_offset;
                             //TODO: adjust the struct initializers
-                            writeln!(self.out, "{}char _pad{}[{}];", INDENT, index, pad)?;
+                            writeln!(self.out, "{}char _pad{}[{}];", back::INDENT, index, pad)?;
                         }
                         let ty_inner = &module.types[member.ty].inner;
                         last_offset = member.offset + ty_inner.span(&module.constants);
@@ -1667,7 +1670,7 @@ impl<W: Write> Writer<W> {
                                 writeln!(
                                     self.out,
                                     "{}packed_{}3 {};",
-                                    INDENT,
+                                    back::INDENT,
                                     scalar_kind_string(kind),
                                     member_name
                                 )?;
@@ -1680,7 +1683,13 @@ impl<W: Write> Writer<W> {
                                     access: crate::StorageAccess::empty(),
                                     first_time: false,
                                 };
-                                writeln!(self.out, "{}{} {};", INDENT, base_name, member_name)?;
+                                writeln!(
+                                    self.out,
+                                    "{}{} {};",
+                                    back::INDENT,
+                                    base_name,
+                                    member_name
+                                )?;
 
                                 // for 3-component vectors, add one component
                                 if let crate::TypeInner::Vector {
@@ -1863,7 +1872,7 @@ impl<W: Write> Writer<W> {
     fn write_functions(
         &mut self,
         module: &crate::Module,
-        mod_info: &ModuleInfo,
+        mod_info: &valid::ModuleInfo,
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
@@ -1917,7 +1926,10 @@ impl<W: Write> Writer<W> {
                 writeln!(
                     self.out,
                     "{}{} {}{}",
-                    INDENT, param_type_name, name, separator
+                    back::INDENT,
+                    param_type_name,
+                    name,
+                    separator
                 )?;
             }
             for (index, &handle) in pass_through_globals.iter().enumerate() {
@@ -1930,7 +1942,7 @@ impl<W: Write> Writer<W> {
                 };
                 let separator =
                     separate(index + 1 != pass_through_globals.len() || supports_array_length);
-                write!(self.out, "{}", INDENT)?;
+                write!(self.out, "{}", back::INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 writeln!(self.out, "{}", separator)?;
             }
@@ -1939,7 +1951,7 @@ impl<W: Write> Writer<W> {
                 writeln!(
                     self.out,
                     "{}constant _mslBufferSizes& _buffer_sizes",
-                    INDENT
+                    back::INDENT
                 )?;
             }
 
@@ -1954,7 +1966,7 @@ impl<W: Write> Writer<W> {
                     first_time: false,
                 };
                 let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
-                write!(self.out, "{}{} {}", INDENT, ty_name, local_name)?;
+                write!(self.out, "{}{} {}", back::INDENT, ty_name, local_name)?;
                 if let Some(value) = local.init {
                     let coco = ConstantContext {
                         handle: value,
@@ -2085,7 +2097,7 @@ impl<W: Write> Writer<W> {
                         first_time: false,
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
-                    write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
+                    write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
                     resolved.try_fmt_decorated(&mut self.out, "")?;
                     writeln!(self.out, ";")?;
                 }
@@ -2145,7 +2157,7 @@ impl<W: Write> Writer<W> {
                             _ => None,
                         };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
-                        write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
+                        write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
                         resolved.try_fmt_decorated(&mut self.out, "")?;
                         if let Some(array_len) = array_len {
                             write!(self.out, " [{}]", array_len)?;
@@ -2277,7 +2289,7 @@ impl<W: Write> Writer<W> {
                         usage,
                         reference: false,
                     };
-                    write!(self.out, "{}", INDENT)?;
+                    write!(self.out, "{}", back::INDENT)?;
                     tyvar.try_fmt(&mut self.out)?;
                     match var.init {
                         Some(value) => {
@@ -2301,10 +2313,12 @@ impl<W: Write> Writer<W> {
                         writeln!(
                             self.out,
                             "{}constexpr {}::sampler {}(",
-                            INDENT, NAMESPACE, name
+                            back::INDENT,
+                            NAMESPACE,
+                            name
                         )?;
                         self.put_inline_sampler_properties(Level(2), sampler)?;
-                        writeln!(self.out, "{});", INDENT)?;
+                        writeln!(self.out, "{});", back::INDENT)?;
                     }
                 }
             }
@@ -2319,7 +2333,9 @@ impl<W: Write> Writer<W> {
                         write!(
                             self.out,
                             "{}const {} {} = {{ ",
-                            INDENT, struct_name, arg_name
+                            back::INDENT,
+                            struct_name,
+                            arg_name
                         )?;
                         for (member_index, member) in members.iter().enumerate() {
                             let name =
@@ -2339,7 +2355,10 @@ impl<W: Write> Writer<W> {
                             writeln!(
                                 self.out,
                                 "{}const auto {} = {}.{};",
-                                INDENT, arg_name, varyings_member_name, arg_name
+                                back::INDENT,
+                                arg_name,
+                                varyings_member_name,
+                                arg_name
                             )?;
                         }
                     }
@@ -2357,7 +2376,7 @@ impl<W: Write> Writer<W> {
                     access: crate::StorageAccess::empty(),
                     first_time: false,
                 };
-                write!(self.out, "{}{} {}", INDENT, ty_name, name)?;
+                write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
                 if let Some(value) = local.init {
                     let coco = ConstantContext {
                         handle: value,
