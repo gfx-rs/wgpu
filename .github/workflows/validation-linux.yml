@@ -2,10 +2,10 @@ name: validation-linux
 on:
   pull_request:
     paths:
-    - 'tests/out/*.spvasm'
-    - 'tests/out/*.glsl'
-    - 'tests/out/*.dot'
-    - 'tests/out/*.wgsl'
+    - 'tests/out/spv/*.spvasm'
+    - 'tests/out/glsl/*.glsl'
+    - 'tests/out/dot/*.dot'
+    - 'tests/out/wgsl/*.wgsl'
 
 jobs:
   validate-linux:

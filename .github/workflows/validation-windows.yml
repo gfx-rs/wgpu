@@ -2,7 +2,7 @@ name: validation-windows
 on:
   pull_request:
     paths:
-      - 'tests/out/*.hlsl'
+      - 'tests/out/hlsl/*.hlsl'
 
 jobs:
   validate-windows:

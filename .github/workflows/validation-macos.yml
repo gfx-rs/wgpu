@@ -2,7 +2,7 @@ name: validation-macos
 on:
   pull_request:
     paths:
-    - 'tests/out/*.msl'
+    - 'tests/out/msl/*.msl'
 
 jobs:
   validate-macos:
