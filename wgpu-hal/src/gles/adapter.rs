@@ -232,7 +232,8 @@ impl super::Adapter {
                 0
             },
             max_vertex_buffers: gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) as u32,
-            max_vertex_attributes: gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) as u32,
+            max_vertex_attributes: (gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) as u32)
+                .min(super::MAX_VERTEX_ATTRIBUTES as u32),
             max_vertex_buffer_array_stride: 2048,
             max_push_constant_size: 0,
         };

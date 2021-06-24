@@ -292,7 +292,7 @@ impl super::Queue {
                 gl.bind_buffer(dst_target, Some(dst));
                 gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data);
             }
-            C::ResetFramebuffer(extent) => {
+            C::ResetFramebuffer => {
                 gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo));
                 gl.framebuffer_texture_2d(
                     glow::DRAW_FRAMEBUFFER,
@@ -317,8 +317,6 @@ impl super::Queue {
                 gl.disable(glow::DEPTH_TEST);
                 gl.disable(glow::STENCIL_TEST);
                 gl.disable(glow::SCISSOR_TEST);
-                gl.scissor(0, 0, extent.width as i32, extent.height as i32);
-                gl.viewport(0, 0, extent.width as i32, extent.height as i32);
             }
             C::SetFramebufferAttachment {
                 attachment,
@@ -409,7 +407,7 @@ impl super::Queue {
                 }
                 gl.memory_barrier(flags);
             }
-            C::TextureBarrier(_raw, usage) => {
+            C::TextureBarrier(usage) => {
                 let mut flags = 0;
                 if usage.contains(crate::TextureUse::SAMPLED) {
                     flags |= glow::TEXTURE_FETCH_BARRIER_BIT;
@@ -430,6 +428,55 @@ impl super::Queue {
                     flags |= glow::FRAMEBUFFER_BARRIER_BIT;
                 }
                 gl.memory_barrier(flags);
+            }
+            C::SetViewport {
+                ref rect,
+                ref depth,
+            } => {
+                gl.viewport(rect.x, rect.y, rect.w, rect.h);
+                gl.depth_range_f32(depth.start, depth.end);
+            }
+            C::SetScissor(ref rect) => {
+                gl.scissor(rect.x, rect.y, rect.w, rect.h);
+            }
+            C::SetStencilFunc {
+                face,
+                function,
+                reference,
+                read_mask,
+            } => {
+                gl.stencil_func_separate(face, function, reference as i32, read_mask);
+            }
+            C::SetStencilOps {
+                face,
+                write_mask,
+                ref ops,
+            } => {
+                gl.stencil_mask_separate(face, write_mask);
+                gl.stencil_op_separate(face, ops.fail, ops.depth_fail, ops.pass);
+            }
+            C::SetVertexAttribute(ref vat, ref vb) => {
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(vb.raw));
+                let offset = vat.offset as i32 + vb.offset as i32;
+                match vat.format_desc.attrib_kind {
+                    super::VertexAttribKind::Float => gl.vertex_attrib_pointer_f32(
+                        vat.location,
+                        vat.format_desc.element_count,
+                        vat.format_desc.element_format,
+                        true, // always normalized
+                        vb.stride as i32,
+                        offset,
+                    ),
+                    super::VertexAttribKind::Integer => gl.vertex_attrib_pointer_i32(
+                        vat.location,
+                        vat.format_desc.element_count,
+                        vat.format_desc.element_format,
+                        vb.stride as i32,
+                        offset,
+                    ),
+                }
+                gl.vertex_attrib_divisor(vat.location, vb.step as u32);
+                gl.enable_vertex_attrib_array(vat.location);
             }
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);

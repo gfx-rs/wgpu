@@ -518,7 +518,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::CommandEncoder, crate::DeviceError> {
         Ok(super::CommandEncoder {
             cmd_buffer: super::CommandBuffer::default(),
-            state: super::CommandState::default(),
+            state: Default::default(),
             private_caps: self.shared.private_caps,
         })
     }
@@ -665,11 +665,16 @@ impl crate::Device<super::Api> for super::Device {
         );
         let inner = self.create_pipeline(shaders, desc.layout)?;
 
-        let attributes = {
-            let gl = &self.shared.context;
+        let (vertex_buffers, vertex_attributes) = {
+            let mut buffers = Vec::new();
             let mut attributes = Vec::new();
-
             for (index, vb_layout) in desc.vertex_buffers.iter().enumerate() {
+                buffers.push(super::VertexBufferDesc {
+                    raw: 0,
+                    offset: 0,
+                    step: vb_layout.step_mode,
+                    stride: vb_layout.array_stride as u32,
+                });
                 for vat in vb_layout.attributes.iter() {
                     let format_desc = conv::describe_vertex_format(vat.format);
                     attributes.push(super::AttributeDesc {
@@ -680,15 +685,23 @@ impl crate::Device<super::Api> for super::Device {
                     });
                 }
             }
-
-            attributes.into_boxed_slice()
+            (buffers.into_boxed_slice(), attributes.into_boxed_slice())
         };
 
         Ok(super::RenderPipeline {
             inner,
             primitive: desc.primitive,
-            attributes,
-            depth: desc.depth_stencil.clone(),
+            vertex_buffers,
+            vertex_attributes,
+            depth: desc.depth_stencil.as_ref().map(|ds| super::DepthState {
+                function: conv::map_compare_func(ds.depth_compare),
+                mask: ds.depth_write_enabled,
+            }),
+            depth_bias: desc.depth_stencil.as_ref().map(|ds| ds.bias),
+            stencil: desc
+                .depth_stencil
+                .as_ref()
+                .map(|ds| conv::map_stencil(&ds.stencil)),
         })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {

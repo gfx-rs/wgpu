@@ -232,3 +232,44 @@ pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> u32 {
         Tvd::D3 => glow::TEXTURE_3D,
     }
 }
+
+fn map_stencil_op(operation: wgt::StencilOperation) -> u32 {
+    use wgt::StencilOperation as So;
+    match operation {
+        So::Keep => glow::KEEP,
+        So::Zero => glow::ZERO,
+        So::Replace => glow::REPLACE,
+        So::Invert => glow::INVERT,
+        So::IncrementClamp => glow::INCR,
+        So::DecrementClamp => glow::DECR,
+        So::IncrementWrap => glow::INCR_WRAP,
+        So::DecrementWrap => glow::DECR_WRAP,
+    }
+}
+
+fn map_stencil_ops(face: &wgt::StencilFaceState) -> super::StencilOps {
+    super::StencilOps {
+        pass: map_stencil_op(face.pass_op),
+        fail: map_stencil_op(face.fail_op),
+        depth_fail: map_stencil_op(face.depth_fail_op),
+    }
+}
+
+pub(super) fn map_stencil(state: &wgt::StencilState) -> super::StencilState {
+    super::StencilState {
+        front: super::StencilSide {
+            function: map_compare_func(state.front.compare),
+            mask_read: state.read_mask,
+            mask_write: state.write_mask,
+            reference: 0,
+            ops: map_stencil_ops(&state.front),
+        },
+        back: super::StencilSide {
+            function: map_compare_func(state.back.compare),
+            mask_read: state.read_mask,
+            mask_write: state.write_mask,
+            reference: 0,
+            ops: map_stencil_ops(&state.back),
+        },
+    }
+}

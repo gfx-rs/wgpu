@@ -22,6 +22,7 @@ pub struct Api;
 //Note: we can support more samplers if not every one of them is used at a time,
 // but it probably doesn't worth it.
 const MAX_TEXTURE_SLOTS: usize = 16;
+const MAX_VERTEX_ATTRIBUTES: usize = 16;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -157,6 +158,12 @@ enum VertexAttribKind {
     Float, // glVertexAttribPointer
     Integer, // glVertexAttribIPointer
            //Double,  // glVertexAttribLPointer
+}
+
+impl Default for VertexAttribKind {
+    fn default() -> Self {
+        Self::Float
+    }
 }
 
 #[derive(Debug)]
@@ -296,17 +303,27 @@ pub struct ShaderModule {
     naga: crate::NagaShader,
 }
 
+#[derive(Clone, Debug, Default)]
 struct VertexFormatDesc {
     element_count: i32,
     element_format: u32,
     attrib_kind: VertexAttribKind,
 }
 
+#[derive(Clone, Debug, Default)]
 struct AttributeDesc {
     location: u32,
     offset: u32,
     buffer_index: u32,
     format_desc: VertexFormatDesc,
+}
+
+#[derive(Clone, Debug, Default)]
+struct VertexBufferDesc {
+    raw: glow::Buffer,
+    offset: wgt::BufferAddress,
+    step: wgt::InputStepMode,
+    stride: u32,
 }
 
 #[derive(Clone)]
@@ -326,13 +343,20 @@ struct PipelineInner {
     uniforms: Box<[UniformDesc]>,
 }
 
+struct DepthState {
+    function: u32,
+    mask: bool,
+}
+
 pub struct RenderPipeline {
     inner: PipelineInner,
     //blend_targets: Vec<pso::ColorBlendDesc>,
-    attributes: Box<[AttributeDesc]>,
-    //vertex_buffers: Box<[wgt::VertexBufferLayout]>,
+    vertex_buffers: Box<[VertexBufferDesc]>,
+    vertex_attributes: Box<[AttributeDesc]>,
     primitive: wgt::PrimitiveState,
-    depth: Option<wgt::DepthStencilState>,
+    depth: Option<DepthState>,
+    depth_bias: Option<wgt::DepthBiasState>,
+    stencil: Option<StencilState>,
 }
 
 pub struct ComputePipeline {
@@ -385,6 +409,50 @@ struct TextureCopyInfo {
     external_format: u32,
     data_type: u32,
     texel_size: u8,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct StencilOps {
+    pass: u32,
+    fail: u32,
+    depth_fail: u32,
+}
+
+impl Default for StencilOps {
+    fn default() -> Self {
+        Self {
+            pass: glow::KEEP,
+            fail: glow::KEEP,
+            depth_fail: glow::KEEP,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct StencilSide {
+    function: u32,
+    mask_read: u32,
+    mask_write: u32,
+    reference: u32,
+    ops: StencilOps,
+}
+
+impl Default for StencilSide {
+    fn default() -> Self {
+        Self {
+            function: glow::ALWAYS,
+            mask_read: 0xFF,
+            mask_write: 0xFF,
+            reference: 0,
+            ops: StencilOps::default(),
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+struct StencilState {
+    front: StencilSide,
+    back: StencilSide,
 }
 
 #[derive(Debug)]
@@ -463,7 +531,7 @@ enum Command {
         dst_target: BindTarget,
         dst_offset: wgt::BufferAddress,
     },
-    ResetFramebuffer(wgt::Extent3d),
+    ResetFramebuffer,
     SetFramebufferAttachment {
         attachment: u32,
         view: TextureView,
@@ -475,7 +543,24 @@ enum Command {
     ClearDepth(f32),
     ClearStencil(u32),
     BufferBarrier(glow::Buffer, crate::BufferUse),
-    TextureBarrier(glow::Texture, crate::TextureUse),
+    TextureBarrier(crate::TextureUse),
+    SetViewport {
+        rect: crate::Rect<i32>,
+        depth: Range<f32>,
+    },
+    SetScissor(crate::Rect<i32>),
+    SetStencilFunc {
+        face: u32,
+        function: u32,
+        reference: u32,
+        read_mask: u32,
+    },
+    SetStencilOps {
+        face: u32,
+        write_mask: u32,
+        ops: StencilOps,
+    },
+    SetVertexAttribute(AttributeDesc, VertexBufferDesc),
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
@@ -489,20 +574,12 @@ pub struct CommandBuffer {
     data_words: Vec<u32>,
 }
 
-#[derive(Default)]
-struct CommandState {
-    topology: u32,
-    index_format: wgt::IndexFormat,
-    index_offset: wgt::BufferAddress,
-    has_pass_label: bool,
-}
-
 //TODO: we would have something like `Arc<typed_arena::Arena>`
 // here and in the command buffers. So that everything grows
 // inside the encoder and stays there until `reset_all`.
 
 pub struct CommandEncoder {
     cmd_buffer: CommandBuffer,
-    state: CommandState,
+    state: command::State,
     private_caps: PrivateCapability,
 }
