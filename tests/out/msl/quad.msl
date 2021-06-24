@@ -44,3 +44,12 @@ fragment main2Output main2(
     metal::float4 premultiplied = color.w * color;
     return main2Output { premultiplied };
 }
+
+
+struct fs_extraOutput {
+    metal::float4 member2 [[color(0)]];
+};
+fragment fs_extraOutput fs_extra(
+) {
+    return fs_extraOutput { metal::float4(0.0, 0.5, 0.0, 0.5) };
+}

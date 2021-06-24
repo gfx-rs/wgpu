@@ -32,3 +32,8 @@ float4 main1(FragmentInput_main fragmentinput_main) : SV_Target0
     float4 premultiplied = (color.w * color);
     return premultiplied;
 }
+
+float4 fs_extra() : SV_Target0
+{
+    return float4(0.0, 0.5, 0.0, 0.5);
+}

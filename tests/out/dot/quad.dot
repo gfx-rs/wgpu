@@ -82,4 +82,26 @@ digraph Module {
 		ep1_s8 -> ep1_e8 [ style=dotted ]
 		ep1_s8 -> ep1_e9 [ style=dotted ]
 	}
+	subgraph cluster_ep2 {
+		label="Fragment/'fs_extra'"
+		node [ style=filled ]
+		ep2_e0 [ fillcolor="#ffffb3" label="[1] Constant" ]
+		ep2_e1 [ fillcolor="#ffffb3" label="[2] Global" ]
+		g1 -> ep2_e1 [fillcolor=gray]
+		ep2_e2 [ fillcolor="#ffffb3" label="[3] Global" ]
+		g0 -> ep2_e2 [fillcolor=gray]
+		ep2_e3 [ fillcolor="#ffffb3" label="[4] Constant" ]
+		ep2_e4 [ fillcolor="#ffffb3" label="[5] Constant" ]
+		ep2_e5 [ fillcolor="#ffffb3" label="[6] Constant" ]
+		ep2_e6 [ fillcolor="#ffffb3" label="[7] Constant" ]
+		ep2_e7 [ fillcolor="#bebada" label="[8] Compose" ]
+		{ ep2_e3 ep2_e4 ep2_e5 ep2_e6 } -> ep2_e7
+		ep2_s0 [ shape=square label="Root" ]
+		ep2_s1 [ shape=square label="Emit" ]
+		ep2_s2 [ shape=square label="Return" ]
+		ep2_s0 -> ep2_s1 [ arrowhead=tee label="" ]
+		ep2_s1 -> ep2_s2 [ arrowhead=tee label="" ]
+		ep2_e7 -> ep2_s2 [ label="value" ]
+		ep2_s1 -> ep2_e7 [ style=dotted ]
+	}
 }

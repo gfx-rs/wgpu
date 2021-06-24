@@ -24,3 +24,8 @@ fn main1([[location(0), interpolate(perspective)]] uv1: vec2<f32>) -> [[location
     let premultiplied: vec4<f32> = (color.w * color);
     return premultiplied;
 }
+
+[[stage(fragment)]]
+fn fs_extra() -> [[location(0)]] vec4<f32> {
+    return vec4<f32>(0.0, 0.5, 0.0, 0.5);
+}
