@@ -48,8 +48,12 @@ impl Default for Options {
     }
 }
 
+/// Structure that contains a reflection info
 pub struct ReflectionInfo {
     /// Information about all entry points (stage, name).
+    /// HLSL backend returns information about all entry points in shaders that will be allowed by the `hlsl` compiler.
+    /// For example:
+    /// the entry point with the name `line` is valid for `wgsl`, but not valid for `hlsl`, because `line` is a reserved keyword.
     pub entry_points: Vec<(crate::ShaderStage, String)>,
     // TODO: locations
 }
