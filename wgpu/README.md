@@ -53,15 +53,3 @@ cargo run -- <input.spv> <output.wgsl>
 ```
 
 In addition, SPIR-V can be used by enabling the `spirv` feature, and the cost of slightly increased build times.
-
-## Development
-
-If you need to test local fixes to gfx or other dependencies, the simplest way is to add a Cargo patch. For example, when working on DX12 backend on Windows, you can check out the latest release branch in the [gfx-hal repository](https://github.com/gfx-rs/gfx) (e.g. currently `hal-0.8`) and add this patch to the end of `Cargo.toml`:
-
-```toml
-[patch."https://github.com/gfx-rs/gfx"]
-gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
-gfx-hal = { path = "../gfx/src/hal" }
-```
-
-If a version needs to be changed, you need to do `cargo update -p gfx-backend-dx12`.
