@@ -1,6 +1,9 @@
-use crate::arena::{Arena, Handle};
+use crate::{
+    arena::{Arena, Handle},
+    FunctionArgument,
+};
 
-use super::{Error, LookupExpression, LookupHelper as _};
+use super::{Error, FunctionInfo, LookupExpression, LookupHelper as _};
 
 #[derive(Clone, Debug)]
 pub(super) struct LookupSampledImage {
@@ -19,12 +22,15 @@ bitflags::bitflags! {
 }
 
 impl Arena<crate::Expression> {
-    fn get_global_var(
+    fn get_image_expr_ty(
         &self,
         handle: Handle<crate::Expression>,
-    ) -> Result<Handle<crate::GlobalVariable>, Error> {
+        global_vars: &Arena<crate::GlobalVariable>,
+        arguments: &[FunctionArgument],
+    ) -> Result<Handle<crate::Type>, Error> {
         match self[handle] {
-            crate::Expression::GlobalVariable(handle) => Ok(handle),
+            crate::Expression::GlobalVariable(handle) => Ok(global_vars[handle].ty),
+            crate::Expression::FunctionArgument(i) => Ok(arguments[i as usize].ty),
             ref other => Err(Error::InvalidGlobalVar(other.clone())),
         }
     }
@@ -229,6 +235,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         words_left: u16,
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
+        arguments: &[FunctionArgument],
         expressions: &mut Arena<crate::Expression>,
     ) -> Result<crate::Statement, Error> {
         let image_id = self.next()?;
@@ -246,12 +253,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_var_handle = expressions.get_global_var(image_lexp.handle)?;
-        let image_var = &global_arena[image_var_handle];
+        let image_ty = expressions.get_image_expr_ty(image_lexp.handle, global_arena, arguments)?;
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let (coordinate, array_index) = match type_arena[image_var.ty].inner {
+        let (coordinate, array_index) = match type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -268,7 +274,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 type_arena,
                 expressions,
             ),
-            _ => return Err(Error::InvalidImage(image_var.ty)),
+            _ => return Err(Error::InvalidImage(image_ty)),
         };
 
         let value_lexp = self.lookup_expression.lookup(value_id)?;
@@ -286,6 +292,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         mut words_left: u16,
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
+        arguments: &[FunctionArgument],
         expressions: &mut Arena<crate::Expression>,
     ) -> Result<(), Error> {
         let result_type_id = self.next()?;
@@ -328,12 +335,11 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_var_handle = expressions.get_global_var(image_lexp.handle)?;
-        let image_var = &global_arena[image_var_handle];
+        let image_ty = expressions.get_image_expr_ty(image_lexp.handle, global_arena, arguments)?;
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let (coordinate, array_index) = match type_arena[image_var.ty].inner {
+        let (coordinate, array_index) = match type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -350,7 +356,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 type_arena,
                 expressions,
             ),
-            _ => return Err(Error::InvalidImage(image_var.ty)),
+            _ => return Err(Error::InvalidImage(image_ty)),
         };
 
         let expr = crate::Expression::ImageLoad {
@@ -369,13 +375,16 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn parse_image_sample(
         &mut self,
         mut words_left: u16,
         options: SamplingOptions,
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
+        arguments: &[FunctionArgument],
         expressions: &mut Arena<crate::Expression>,
+        function_info: &mut FunctionInfo,
     ) -> Result<(), Error> {
         let result_type_id = self.next()?;
         let result_id = self.next()?;
@@ -432,26 +441,42 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
 
-        let image_var_handle = expressions.get_global_var(si_lexp.image)?;
-        let sampler_var_handle = expressions.get_global_var(si_lexp.sampler)?;
-        log::debug!(
-            "\t\t\tImage {:?} sampled with {:?} under {:?}",
-            image_var_handle,
-            sampler_var_handle,
-            options,
-        );
         let sampling_bit = if options.compare {
             SamplingFlags::COMPARISON
         } else {
             SamplingFlags::REGULAR
         };
-        if let Some(flags) = self.handle_sampling.get_mut(&image_var_handle) {
-            *flags |= sampling_bit;
-        }
-        *self.handle_sampling.get_mut(&sampler_var_handle).unwrap() |= sampling_bit;
 
-        let image_var = &global_arena[image_var_handle];
-        let (coordinate, array_index) = match type_arena[image_var.ty].inner {
+        let image_ty = match expressions[si_lexp.image] {
+            crate::Expression::GlobalVariable(handle) => {
+                if let Some(flags) = self.handle_sampling.get_mut(&handle) {
+                    *flags |= sampling_bit;
+                }
+
+                global_arena[handle].ty
+            }
+            crate::Expression::FunctionArgument(i) => {
+                let flags = function_info.parameters_sampling[i as usize]
+                    .get_or_insert(SamplingFlags::empty());
+                *flags |= sampling_bit;
+
+                arguments[i as usize].ty
+            }
+            ref other => return Err(Error::InvalidGlobalVar(other.clone())),
+        };
+        match expressions[si_lexp.sampler] {
+            crate::Expression::GlobalVariable(handle) => {
+                *self.handle_sampling.get_mut(&handle).unwrap() |= sampling_bit
+            }
+            crate::Expression::FunctionArgument(i) => {
+                let flags = function_info.parameters_sampling[i as usize]
+                    .get_or_insert(SamplingFlags::empty());
+                *flags |= sampling_bit;
+            }
+            ref other => return Err(Error::InvalidGlobalVar(other.clone())),
+        }
+
+        let (coordinate, array_index) = match type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -470,7 +495,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 type_arena,
                 expressions,
             ),
-            _ => return Err(Error::InvalidImage(image_var.ty)),
+            _ => return Err(Error::InvalidImage(image_ty)),
         };
 
         let expr = crate::Expression::ImageSample {

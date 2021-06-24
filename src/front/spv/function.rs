@@ -1,6 +1,6 @@
 use crate::arena::{Arena, Handle};
 
-use super::{flow::*, Error, Instruction, LookupExpression, LookupHelper as _};
+use super::{flow::*, Error, FunctionInfo, Instruction, LookupExpression, LookupHelper as _};
 
 pub type BlockId = u32;
 
@@ -135,6 +135,10 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.function_call_graph.add_node(fun_id);
         let mut flow_graph = FlowGraph::new();
 
+        let mut function_info = FunctionInfo {
+            parameters_sampling: vec![None; fun.arguments.len()],
+        };
+
         // Scan the blocks and add them as nodes
         loop {
             let fun_inst = self.next_inst()?;
@@ -153,6 +157,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         &mut module.constants,
                         &module.types,
                         &module.global_variables,
+                        &fun.arguments,
+                        &mut function_info,
                     )?;
 
                     flow_graph.add_node(node);
@@ -187,6 +193,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         // done
         let fun_handle = module.functions.append(fun);
         self.lookup_function.insert(fun_id, fun_handle);
+        self.function_info.insert(fun_handle, function_info);
         if let Some(ep) = self.lookup_entry_point.remove(&fun_id) {
             // create a wrapping function
             let mut function = crate::Function {
