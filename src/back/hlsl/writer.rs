@@ -13,9 +13,14 @@ const LOCATION_SEMANTIC: &str = "LOC";
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
 
+/// Structure contains information required for generating
+/// wrapped structure of all entry points arguments
 struct EntryPointBinding {
+    /// Associated shader stage
     stage: ShaderStage,
+    /// Generated structure name
     name: String,
+    /// Members of generated structure
     members: Vec<EpStructMember>,
 }
 
@@ -29,8 +34,11 @@ pub struct Writer<'a, W> {
     out: W,
     names: crate::FastHashMap<NameKey, String>,
     namer: proc::Namer,
+    /// HLSL backend options
     options: &'a Options,
+    /// Information about entry point arguments wrapped into structure
     ep_inputs: Vec<Option<EntryPointBinding>>,
+    /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
 }
 
@@ -54,7 +62,11 @@ impl<'a, W: Write> Writer<'a, W> {
         self.ep_inputs.clear();
     }
 
-    pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
+    pub fn write(
+        &mut self,
+        module: &Module,
+        info: &valid::ModuleInfo,
+    ) -> Result<super::ReflectionInfo, Error> {
         self.reset(module);
 
         // Write all constants
@@ -102,7 +114,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write all entry points wrapped structs
         for (index, ep) in module.entry_points.iter().enumerate() {
-            self.write_ep_input_struct(module, &ep.function, ep.stage, index)?;
+            self.write_ep_input_struct(module, &ep.function, ep.stage, &ep.name, index)?;
         }
 
         // Write all regular functions
@@ -120,6 +132,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
             writeln!(self.out)?;
         }
+
+        let mut entry_points_info = Vec::with_capacity(module.entry_points.len());
 
         // Write all entry points
         for (index, ep) in module.entry_points.iter().enumerate() {
@@ -140,20 +154,20 @@ impl<'a, W: Write> Writer<'a, W> {
                 )?;
             }
 
-            let name = match ep.stage {
-                ShaderStage::Vertex => &self.options.vertex_entry_point_name,
-                ShaderStage::Fragment => &self.options.fragment_entry_point_name,
-                ShaderStage::Compute => &self.options.compute_entry_point_name,
-            };
+            let name = self.names[&NameKey::EntryPoint(index as u16)].clone();
 
-            self.write_function(module, name, &ep.function, &ctx)?;
+            self.write_function(module, &name, &ep.function, &ctx)?;
 
             if index < module.entry_points.len() - 1 {
                 writeln!(self.out)?;
             }
+
+            entry_points_info.push((ep.stage, name))
         }
 
-        Ok(())
+        Ok(super::ReflectionInfo {
+            entry_points: entry_points_info,
+        })
     }
 
     fn write_binding(&mut self, binding: &crate::Binding) -> BackendResult {
@@ -174,14 +188,16 @@ impl<'a, W: Write> Writer<'a, W> {
         module: &Module,
         func: &crate::Function,
         stage: ShaderStage,
+        entry_point_name: &str,
         index: usize,
     ) -> BackendResult {
         if !func.arguments.is_empty() {
-            let struct_name = self.namer.call_unique(match stage {
+            let struct_name_prefix = match stage {
                 ShaderStage::Vertex => "VertexInput",
                 ShaderStage::Fragment => "FragmentInput",
                 ShaderStage::Compute => "ComputeInput",
-            });
+            };
+            let struct_name = format!("{}_{}", struct_name_prefix, entry_point_name);
 
             let mut members = Vec::with_capacity(func.arguments.len());
 
@@ -1057,10 +1073,6 @@ impl<'a, W: Write> Writer<'a, W> {
         self.named_expressions.insert(handle, name);
 
         Ok(())
-    }
-
-    pub fn finish(self) -> W {
-        self.out
     }
 }
 

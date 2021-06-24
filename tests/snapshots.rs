@@ -261,26 +261,30 @@ fn write_output_hlsl(
     file_name: &str,
 ) {
     use naga::back::hlsl;
+    let mut buffer = String::new();
     let options = hlsl::Options::default();
-    let string = hlsl::write_string(module, info, &options).unwrap();
+    let mut writer = hlsl::Writer::new(&mut buffer, &options);
+    let reflection_info = writer.write(module, info).unwrap();
 
-    fs::write(destination.join(format!("hlsl/{}.hlsl", file_name)), string).unwrap();
+    fs::write(destination.join(format!("hlsl/{}.hlsl", file_name)), buffer).unwrap();
 
     // We need a config file for validation script
     // This file contains an info about profiles (shader stages) contains inside generated shader
     // This info will be passed to dxc
     let mut config_str = String::from("");
-    for ep in module.entry_points.iter() {
-        let (stage_str, profile, ep_name) = match ep.stage {
-            naga::ShaderStage::Vertex => ("vertex", "vs_5_0", &options.vertex_entry_point_name),
-            naga::ShaderStage::Fragment => {
-                ("fragment", "ps_5_0", &options.fragment_entry_point_name)
-            }
-            naga::ShaderStage::Compute => ("compute", "cs_5_0", &options.compute_entry_point_name),
+    for (stage, name) in reflection_info.entry_points.iter() {
+        let stage_str = match stage {
+            naga::ShaderStage::Vertex => "vertex",
+            naga::ShaderStage::Fragment => "fragment",
+            naga::ShaderStage::Compute => "compute",
         };
         config_str = format!(
             "{}{}={}\n{}_name={}\n",
-            config_str, stage_str, profile, stage_str, ep_name
+            config_str,
+            stage_str,
+            options.shader_model.to_profile_string(*stage),
+            stage_str,
+            name
         );
     }
     fs::write(

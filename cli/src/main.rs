@@ -304,9 +304,12 @@ fn main() {
             }
             "hlsl" => {
                 use naga::back::hlsl;
-                let hlsl = hlsl::write_string(&module, info.as_ref().unwrap(), &params.hlsl)
+                let mut buffer = String::new();
+                let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
+                writer
+                    .write(&module, info.as_ref().unwrap())
                     .unwrap_pretty();
-                fs::write(output_path, hlsl).unwrap();
+                fs::write(output_path, buffer).unwrap();
             }
             "wgsl" => {
                 use naga::back::wgsl;

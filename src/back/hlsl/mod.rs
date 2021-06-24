@@ -15,28 +15,43 @@ pub enum ShaderModel {
     V6_0,
 }
 
+impl ShaderModel {
+    pub fn to_profile_string(self, stage: crate::ShaderStage) -> String {
+        let stage_prefix = match stage {
+            crate::ShaderStage::Vertex => "vs_",
+            crate::ShaderStage::Fragment => "ps_",
+            crate::ShaderStage::Compute => "cs_",
+        };
+
+        let version = match self {
+            Self::V5_0 => "5_0",
+            Self::V5_1 => "5_1",
+            Self::V6_0 => "6_0",
+        };
+
+        format!("{}{}", stage_prefix, version)
+    }
+}
+
 /// Structure that contains the configuration used in the [`Writer`](Writer)
 #[derive(Debug, Clone)]
 pub struct Options {
     /// The hlsl shader model to be used
     pub shader_model: ShaderModel,
-    /// The vertex entry point name in generated shader
-    pub vertex_entry_point_name: String,
-    /// The fragment entry point name in generated shader
-    pub fragment_entry_point_name: String,
-    /// The comput entry point name in generated shader
-    pub compute_entry_point_name: String,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Options {
             shader_model: ShaderModel::V5_0,
-            vertex_entry_point_name: String::from("vert_main"),
-            fragment_entry_point_name: String::from("frag_main"),
-            compute_entry_point_name: String::from("comp_main"),
         }
     }
+}
+
+pub struct ReflectionInfo {
+    /// Information about all entry points (stage, name).
+    pub entry_points: Vec<(crate::ShaderStage, String)>,
+    // TODO: locations
 }
 
 #[derive(Error, Debug)]
@@ -49,15 +64,4 @@ pub enum Error {
     Unimplemented(String), // TODO: Error used only during development
     #[error("{0}")]
     Custom(String),
-}
-
-pub fn write_string(
-    module: &crate::Module,
-    info: &crate::valid::ModuleInfo,
-    options: &Options,
-) -> Result<String, Error> {
-    let mut w = Writer::new(String::new(), options);
-    w.write(module, info)?;
-    let output = w.finish();
-    Ok(output)
 }

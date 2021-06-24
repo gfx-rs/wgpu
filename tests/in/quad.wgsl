@@ -29,3 +29,10 @@ fn main([[location(0)]] uv : vec2<f32>) -> [[location(0)]] vec4<f32> {
   let premultiplied = color.a * color;
   return premultiplied;
 }
+
+
+// We need to make sure that backends are successfully handling multiple entry points for the same shader stage. 
+//[[stage(fragment)]]
+//fn fs_extra() -> [[location(0)]] vec4<f32> {
+//    return vec4<f32>(0.0, 0.5, 0.0, 0.5);
+//}
