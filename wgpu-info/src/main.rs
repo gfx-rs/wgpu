@@ -23,7 +23,9 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     for i in 0..(size_of::<wgpu::Features>() * 8) {
         let bit = wgpu::Features::from_bits(1 << i as u64);
         if let Some(bit) = bit {
-            println!("\t\t{:<44} {}", format!("{:?}:", bit), features.contains(bit));
+            if wgpu::Features::all().contains(bit) {
+                println!("\t\t{:<44} {}", format!("{:?}:", bit), features.contains(bit));
+            }
         }
     }
     println!("\tLimits:");
@@ -74,7 +76,9 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     for i in 0..(size_of::<wgpu::DownlevelFlags>() * 8) {
         let bit = wgpu::DownlevelFlags::from_bits(1 << i as u64);
         if let Some(bit) = bit {
-            println!("\t\t{:<36} {}", format!("{:?}:", bit), flags.contains(bit));
+            if wgpu::DownlevelFlags::all().contains(bit) {
+                println!("\t\t{:<36} {}", format!("{:?}:", bit), flags.contains(bit));
+            }
         }
     }
 }
