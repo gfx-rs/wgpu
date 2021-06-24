@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU core logic on gfx-hal"
@@ -42,12 +42,12 @@ features = ["wgsl-in"]
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.8"
+version = "0.9"
 
 [dependencies.hal]
 path = "../wgpu-hal"
 package = "wgpu-hal"
-version = "0.1"
+version = "0.9"
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["metal"] }
@@ -58,9 +58,6 @@ hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan"] }
-
-[dev-dependencies]
-loom = "0.3"
 
 [build-dependencies]
 cfg_aliases = "0.1"

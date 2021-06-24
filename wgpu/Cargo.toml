@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
@@ -9,11 +9,16 @@ repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 exclude = ["etc/**/*", "examples/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
+autotests = false
 
 [package.metadata.docs.rs]
 all-features = true
 
 [lib]
+
+[[test]]
+name = "wgpu-tests"
+path = "tests/root.rs"
 
 [features]
 default = []
@@ -50,6 +55,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
 
 [dev-dependencies]
+bitflags = "1"
 bytemuck = { version = "1.4", features = ["derive"] }
 cgmath = "0.18"
 ddsfile = "0.4"
@@ -83,12 +89,49 @@ tag = "gfx-26"
 features = ["wgsl-in", "spv-out"]
 
 [[example]]
+name="boids"
+test = true
+
+[[example]]
+name="bunnymark"
+test = true
+
+[[example]]
+name="conservative-raster"
+test = true
+
+[[example]]
+name="cube"
+test = true
+
+[[example]]
 name="hello-compute"
+test = true
+
+[[example]]
+name="mipmap"
+test = true
+
+[[example]]
+name="msaa-line"
+test = true
+
+[[example]]
+name="shadow"
+test = true
+
+[[example]]
+name="skybox"
 test = true
 
 [[example]]
 name="texture-arrays"
 required-features = ["spirv"]
+test = true
+
+[[example]]
+name="water"
+test = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.73" # remember to change version in wiki as well

@@ -602,11 +602,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SPIRV_SHADER_PASSTHROUGH = 0x0000_0400_0000_0000;
-
-        /// Features which are part of the upstream WebGPU standard.
-        const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
-        /// Features that are only available when targeting native (not web).
-        const ALL_NATIVE = 0xFFFF_FFFF_FFFF_0000;
     }
 }
 

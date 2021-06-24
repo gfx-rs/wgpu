@@ -5,6 +5,7 @@ mod point_gen;
 
 use bytemuck::{Pod, Zeroable};
 use cgmath::Point3;
+use rand::SeedableRng;
 use std::{borrow::Cow, iter, mem};
 use wgpu::util::DeviceExt;
 
@@ -279,7 +280,7 @@ impl framework::Example for Example {
         let terrain_noise = noise::OpenSimplex::new();
 
         // Random colouration
-        let mut terrain_random = rand::thread_rng();
+        let mut terrain_random = rand::rngs::StdRng::seed_from_u64(42);
 
         // Generate terrain. The closure determines what each hexagon will look like.
         let terrain =
@@ -663,7 +664,7 @@ impl framework::Example for Example {
     #[allow(clippy::eq_op)]
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainTexture,
+        view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         _spawner: &framework::Spawner,
@@ -734,7 +735,7 @@ impl framework::Example for Example {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &frame.view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(back_color),
@@ -761,7 +762,7 @@ impl framework::Example for Example {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &frame.view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -787,4 +788,17 @@ impl framework::Example for Example {
 
 fn main() {
     framework::run::<Example>("water");
+}
+
+#[test]
+fn shadow() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/water/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 5,
+        max_outliers: 10,
+    });
 }

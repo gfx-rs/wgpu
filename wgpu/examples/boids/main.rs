@@ -1,7 +1,10 @@
 // Flocking boids example with gpu compute update pass
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
-use rand::distributions::{Distribution, Uniform};
+use rand::{
+    distributions::{Distribution, Uniform},
+    SeedableRng,
+};
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 
@@ -168,7 +171,7 @@ impl framework::Example for Example {
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
 
         let mut initial_particle_data = vec![0.0f32; (4 * NUM_PARTICLES) as usize];
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let unif = Uniform::new_inclusive(-1.0, 1.0);
         for particle_instance_chunk in initial_particle_data.chunks_mut(4) {
             particle_instance_chunk[0] = unif.sample(&mut rng); // posx
@@ -254,14 +257,14 @@ impl framework::Example for Example {
     ///   a TriangleList draw call for all NUM_PARTICLES at 3 vertices each
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainTexture,
+        view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         _spawner: &framework::Spawner,
     ) {
         // create render pass descriptor and its color attachments
         let color_attachments = [wgpu::RenderPassColorAttachment {
-            view: &frame.view,
+            view,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -313,4 +316,17 @@ impl framework::Example for Example {
 /// run example
 fn main() {
     framework::run::<Example>("boids");
+}
+
+#[test]
+fn boids() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/boids/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 0,
+        max_outliers: 50,
+    });
 }

@@ -225,7 +225,7 @@ impl framework::Example for Example {
 
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainTexture,
+        view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         _spawner: &framework::Spawner,
@@ -254,14 +254,14 @@ impl framework::Example for Example {
             };
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachment {
-                    view: &frame.view,
+                    view,
                     resolve_target: None,
                     ops,
                 }
             } else {
                 wgpu::RenderPassColorAttachment {
                     view: &self.multisampled_framebuffer,
-                    resolve_target: Some(&frame.view),
+                    resolve_target: Some(&view),
                     ops,
                 }
             };
@@ -281,4 +281,17 @@ impl framework::Example for Example {
 
 fn main() {
     framework::run::<Example>("msaa-line");
+}
+
+#[test]
+fn msaa_line() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/msaa-line/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 64,
+        max_outliers: 1 << 16, // MSAA is comically different between vendors, 32k is a decent limit
+    });
 }

@@ -100,7 +100,11 @@ impl framework::Example for Example {
             f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
                 wgpu::include_spirv_raw!("non-uniform.frag.spv")
             }
-            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
+            f if f.contains(
+                wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
+                    | wgpu::Features::PUSH_CONSTANTS,
+            ) =>
+            {
                 uniform_workaround = true;
                 wgpu::include_spirv_raw!("uniform.frag.spv")
             }
@@ -278,7 +282,7 @@ impl framework::Example for Example {
     }
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainTexture,
+        view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         _spawner: &framework::Spawner,
@@ -290,7 +294,7 @@ impl framework::Example for Example {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[wgpu::RenderPassColorAttachment {
-                view: &frame.view,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -321,4 +325,62 @@ impl framework::Example for Example {
 
 fn main() {
     framework::run::<Example>("texture-arrays");
+}
+
+// This fails due to an issue with naga https://github.com/gfx-rs/wgpu/issues/1532
+#[test]
+fn texture_arrays_constant() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/texture-arrays/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default().failure(),
+        tollerance: 0,
+        max_outliers: 0,
+    });
+}
+
+// This fails due to an issue with naga https://github.com/gfx-rs/wgpu/issues/1532
+#[test]
+fn texture_arrays_uniform() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/texture-arrays/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
+            | wgpu::Features::PUSH_CONSTANTS,
+        base_test_parameters: framework::test_common::TestParameters::default().failure(),
+        tollerance: 0,
+        max_outliers: 0,
+    });
+}
+
+// This fails due to an issue with naga https://github.com/gfx-rs/wgpu/issues/1532
+#[test]
+fn texture_arrays_non_uniform() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/texture-arrays/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        base_test_parameters: framework::test_common::TestParameters::default().failure(),
+        tollerance: 0,
+        max_outliers: 0,
+    });
+}
+
+// This fails due to an issue with naga https://github.com/gfx-rs/wgpu/issues/1532
+#[test]
+fn texture_arrays_unsized_non_uniform() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/texture-arrays/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::UNSIZED_BINDING_ARRAY,
+        base_test_parameters: framework::test_common::TestParameters::default().failure(),
+        tollerance: 0,
+        max_outliers: 0,
+    });
 }

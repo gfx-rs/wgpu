@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.1.0"
+version = "0.9.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU hardware abstraction layer"

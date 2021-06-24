@@ -6,6 +6,10 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
+#[cfg(test)]
+#[path = "../tests/common/mod.rs"]
+pub mod test_common;
+
 #[rustfmt::skip]
 #[allow(unused)]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -54,7 +58,7 @@ pub trait Example: 'static + Sized {
     fn update(&mut self, event: WindowEvent);
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainTexture,
+        view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         spawner: &Spawner,
@@ -106,39 +110,15 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let backend = if let Ok(backend) = std::env::var("WGPU_BACKEND") {
-        match backend.to_lowercase().as_str() {
-            "vulkan" => wgpu::BackendBit::VULKAN,
-            "metal" => wgpu::BackendBit::METAL,
-            "dx12" => wgpu::BackendBit::DX12,
-            "dx11" => wgpu::BackendBit::DX11,
-            "gl" => wgpu::BackendBit::GL,
-            "webgpu" => wgpu::BackendBit::BROWSER_WEBGPU,
-            other => panic!("Unknown backend: {}", other),
-        }
-    } else {
-        wgpu::BackendBit::PRIMARY
-    };
-    let power_preference = if let Ok(power_preference) = std::env::var("WGPU_POWER_PREF") {
-        match power_preference.to_lowercase().as_str() {
-            "low" => wgpu::PowerPreference::LowPower,
-            "high" => wgpu::PowerPreference::HighPerformance,
-            other => panic!("Unknown power preference: {}", other),
-        }
-    } else {
-        wgpu::PowerPreference::default()
-    };
+    let backend = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::BackendBit::PRIMARY);
+
     let instance = wgpu::Instance::new(backend);
     let (size, surface) = unsafe {
         let size = window.inner_size();
         let surface = instance.create_surface(&window);
         (size, surface)
     };
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference,
-            compatible_surface: Some(&surface),
-        })
+    let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, backend)
         .await
         .expect("No suitable GPU adapters found on the system!");
 
@@ -304,7 +284,7 @@ fn start<E: Example>(
                     }
                 };
 
-                example.render(&frame.output, &device, &queue, &spawner);
+                example.render(&frame.output.view, &device, &queue, &spawner);
             }
             _ => {}
         }
@@ -383,6 +363,120 @@ pub fn run<E: Example>(title: &str) {
             fn call_catch(this: &JsValue) -> Result<(), JsValue>;
         }
     });
+}
+
+#[cfg(test)]
+pub struct FrameworkRefTest {
+    pub image_path: &'static str,
+    pub width: u32,
+    pub height: u32,
+    pub optional_features: wgpu::Features,
+    pub base_test_parameters: test_common::TestParameters,
+    pub tollerance: u8,
+    pub max_outliers: usize,
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+pub fn test<E: Example>(mut params: FrameworkRefTest) {
+    use std::{mem, num::NonZeroU32};
+
+    assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
+
+    let features = E::required_features() | params.optional_features;
+    let mut limits = E::required_limits();
+    if limits == wgpu::Limits::default() {
+        limits = test_common::lowest_reasonable_limits();
+    }
+
+    test_common::initialize_test(
+        mem::take(&mut params.base_test_parameters)
+            .features(features)
+            .limits(limits),
+        |ctx| {
+            let spawner = Spawner::new();
+
+            let dst_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("destination"),
+                size: wgpu::Extent3d {
+                    width: params.width,
+                    height: params.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::COPY_SRC,
+            });
+
+            let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("image map buffer"),
+                size: params.width as u64 * params.height as u64 * 4,
+                usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
+                mapped_at_creation: false,
+            });
+
+            let mut example = E::init(
+                &wgpu::SwapChainDescriptor {
+                    usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    width: params.width,
+                    height: params.height,
+                    present_mode: wgpu::PresentMode::Fifo,
+                },
+                &ctx.adapter,
+                &ctx.device,
+                &ctx.queue,
+            );
+
+            example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+
+            let mut cmd_buf = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+            cmd_buf.copy_texture_to_buffer(
+                wgpu::ImageCopyTexture {
+                    texture: &dst_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::ImageCopyBuffer {
+                    buffer: &dst_buffer,
+                    layout: wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: NonZeroU32::new(params.width * 4),
+                        rows_per_image: None,
+                    },
+                },
+                wgpu::Extent3d {
+                    width: params.width,
+                    height: params.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+
+            ctx.queue.submit(Some(cmd_buf.finish()));
+
+            let dst_buffer_slice = dst_buffer.slice(..);
+            let _ = dst_buffer_slice.map_async(wgpu::MapMode::Read);
+            ctx.device.poll(wgpu::Maintain::Wait);
+            let bytes = dst_buffer_slice.get_mapped_range().to_vec();
+
+            test_common::image::compare_image_output(
+                env!("CARGO_MANIFEST_DIR").to_string() + params.image_path,
+                params.width,
+                params.height,
+                &bytes,
+                params.tollerance,
+                params.max_outliers,
+            );
+        },
+    );
 }
 
 // This allows treating the framework as a standalone example,

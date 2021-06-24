@@ -436,7 +436,7 @@ impl framework::Example for Example {
 
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainTexture,
+        view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         _spawner: &framework::Spawner,
@@ -453,7 +453,7 @@ impl framework::Example for Example {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &frame.view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(clear_color),
@@ -473,4 +473,18 @@ impl framework::Example for Example {
 
 fn main() {
     framework::run::<Example>("mipmap");
+}
+
+#[test]
+fn mipmap() {
+    framework::test::<Example>(framework::FrameworkRefTest {
+        image_path: "/examples/mipmap/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default()
+            .backend_failures(wgpu::BackendBit::VULKAN),
+        tollerance: 25,
+        max_outliers: 3000, // Mipmap sampling is highly variant between impls. This is currently bounded by AMD on mac
+    });
 }

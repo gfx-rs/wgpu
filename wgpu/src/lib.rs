@@ -1524,6 +1524,11 @@ impl Adapter {
         Context::adapter_get_info(&*self.context, &self.id)
     }
 
+    /// Get info about the adapter itself.
+    pub fn get_downlevel_properties(&self) -> DownlevelCapabilities {
+        Context::adapter_downlevel_properties(&*self.context, &self.id)
+    }
+
     /// Returns the features supported for a given texture format by this adapter.
     ///
     /// Note that the WebGPU spec further restricts the available usages/features.

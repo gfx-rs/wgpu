@@ -14,6 +14,7 @@ The repository hosts the following parts:
   - [![Crates.io](https://img.shields.io/crates/v/wgpu.svg?label=wgpu)](https://crates.io/crates/wgpu) [![docs.rs](https://docs.rs/wgpu/badge.svg)](https://docs.rs/wgpu/) - public Rust API for users
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - internal Rust API for WebGPU implementations to use
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-hal.svg?label=wgpu-hal)](https://crates.io/crates/wgpu-hal) [![docs.rs](https://docs.rs/wgpu-hal/badge.svg)](https://docs.rs/wgpu-hal/) - internal unsafe GPU abstraction API
+  - [![Crates.io](https://img.shields.io/crates/v/wgpu-info.svg?label=wgpu-types)](https://crates.io/crates/wgpu-info) - Program that prints out information about all the adapters on the system or invokes a command for every adapter.
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between `wgpu-core` and `wgpu-rs`
   - `player` - standalone application for replaying the API traces, uses `winit`
 
@@ -25,10 +26,38 @@ If you are looking for the native implementation or bindings to the API in other
 
    API   |    Windows 7/10    |  Linux & Android   |    macOS & iOS     |
   -----  | ------------------ | ------------------ | ------------------ |
-  DX11   |                    |                    |                    |
-  DX12   |                    |                    |                    |
+  DX11   | :construction:     |                    |                    |
+  DX12   | :construction:     |                    |                    |
   Vulkan | :white_check_mark: | :white_check_mark: |                    |
   Metal  |                    |                    | :white_check_mark: |
-  GLes3  |                    |                    |                    |
+  GLes3  |                    | :construction:     |                    |
 
 :white_check_mark: = Primary support — :ok: = Secondary support — :construction: = Unsupported, but support in progress
+
+## Testing Infrastructure
+
+wgpu features a set of unit, integration, and example based tests. All framework based examples are automatically reftested against the screenshot in the example directory. The `wgpu-info` example contains the logic which can automatically run the tests multiple times for all the adapters present on the system. These tests are also run on CI on windows and linux over Vulkan/DX12/DX11/GL on software adapters.
+
+To run the test suite, run the following command:
+
+```
+cargo run --bin wgpu-info -- cargo test
+```
+
+To run any individual test on a specific adapter, populate the following environment variables:
+- `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. "1080" will match "NVIDIA GeForce 1080ti").
+- `WGPU_BACKEND` with the name of the backend you want to use (`vulkan`, `metal`, `dx12`, `dx11`, or `gl`).
+
+Then to run an example's reftests, run:
+
+```
+cargo test --example <example-name>
+```
+
+Or run a part of the integration test suite:
+
+```
+cargo test -p wgpu -- <name-of-test>
+```
+
+If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases. 

@@ -9,7 +9,7 @@ Notably, `capture` example shows rendering without a surface/window. It reads ba
 
 All the examples use [WGSL](https://gpuweb.github.io/gpuweb/wgsl.html) shaders unless specified otherwise.
 
-All framework-based examples render to the window.
+All framework-based examples render to the window and are reftested against the screenshot in the directory.
 
 ## Feature matrix
 | Feature                      | boids  | bunnymark | cube   | mipmap | msaa-line | shadow | skybox | texture-arrays | water  | conservative-raster |

@@ -389,7 +389,7 @@ impl framework::Example for Skybox {
 
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainTexture,
+        view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         spawner: &framework::Spawner,
@@ -415,7 +415,7 @@ impl framework::Example for Skybox {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &frame.view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -458,4 +458,57 @@ impl framework::Example for Skybox {
 
 fn main() {
     framework::run::<Skybox>("skybox");
+}
+
+#[test]
+fn skybox() {
+    framework::test::<Skybox>(framework::FrameworkRefTest {
+        image_path: "/examples/skybox/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: framework::test_common::TestParameters::default()
+            .backend_failures(wgpu::BackendBit::VULKAN),
+        tollerance: 2,
+        max_outliers: 3,
+    });
+}
+
+#[test]
+fn skybox_bc1() {
+    framework::test::<Skybox>(framework::FrameworkRefTest {
+        image_path: "/examples/skybox/screenshot-bc1.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 5,
+        max_outliers: 10,
+    });
+}
+
+#[test]
+fn skybox_etc2() {
+    framework::test::<Skybox>(framework::FrameworkRefTest {
+        image_path: "/examples/skybox/screenshot-etc2.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 5,    // TODO
+        max_outliers: 10, // TODO
+    });
+}
+
+#[test]
+fn skybox_astc() {
+    framework::test::<Skybox>(framework::FrameworkRefTest {
+        image_path: "/examples/skybox/screenshot-astc.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+        base_test_parameters: framework::test_common::TestParameters::default(),
+        tollerance: 5,    // TODO
+        max_outliers: 10, // TODO
+    });
 }
