@@ -990,11 +990,6 @@ impl crate::Context for Context {
         if trace_dir.is_some() {
             //Error: Tracing isn't supported on the Web target
         }
-        assert!(
-            !desc.features.intersects(crate::Features::ALL_NATIVE),
-            "The web backend doesn't support any native extensions. Enabled native extensions: {:?}",
-            desc.features & crate::Features::ALL_NATIVE
-        );
 
         // TODO: non-guaranteed limits
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
