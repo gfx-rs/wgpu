@@ -46,6 +46,9 @@ bitflags::bitflags! {
 
         /// This is a top-level host-shareable type.
         const TOP_LEVEL = 0x10;
+
+        /// This type can be passed as a function argument.
+        const ARGUMENT = 0x20;
     }
 }
 
@@ -192,7 +195,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED,
+                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::ARGUMENT,
                     width as u32,
                 )
             }
@@ -205,7 +209,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED,
+                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::ARGUMENT,
                     count * (width as u32),
                 )
             }
@@ -222,7 +227,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::INTERFACE
-                        | TypeFlags::HOST_SHARED,
+                        | TypeFlags::HOST_SHARED
+                        | TypeFlags::ARGUMENT,
                     count * (width as u32),
                 )
             }
@@ -239,9 +245,9 @@ impl super::Validator {
                 // `DATA`.
                 let base_info = &self.types[base.index()];
                 let data_flag = if base_info.flags.contains(TypeFlags::SIZED) {
-                    TypeFlags::DATA
+                    TypeFlags::DATA | TypeFlags::ARGUMENT
                 } else if let crate::TypeInner::Struct { .. } = types[base].inner {
-                    TypeFlags::DATA
+                    TypeFlags::DATA | TypeFlags::ARGUMENT
                 } else {
                     TypeFlags::empty()
                 };
@@ -350,7 +356,7 @@ impl super::Validator {
                             return Err(TypeError::NonPositiveArrayLength(const_handle));
                         }
 
-                        TypeFlags::SIZED
+                        TypeFlags::SIZED | TypeFlags::ARGUMENT
                     }
                     crate::ArraySize::Dynamic => {
                         // Non-SIZED types may only appear as the last element of a structure.
@@ -376,7 +382,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::HOST_SHARED
-                        | TypeFlags::INTERFACE,
+                        | TypeFlags::INTERFACE
+                        | TypeFlags::ARGUMENT,
                     1,
                 );
                 let mut min_offset = 0;
@@ -460,7 +467,7 @@ impl super::Validator {
 
                 ti
             }
-            Ti::Image { .. } | Ti::Sampler { .. } => TypeInfo::new(TypeFlags::empty(), 0),
+            Ti::Image { .. } | Ti::Sampler { .. } => TypeInfo::new(TypeFlags::ARGUMENT, 0),
         })
     }
 }

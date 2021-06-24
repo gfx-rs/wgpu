@@ -339,24 +339,26 @@ impl super::Validator {
                 depth_ref,
             } => {
                 // check the validity of expressions
-                let image_var = match function.expressions[image] {
+                let image_ty = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        &module.global_variables[var_handle]
+                        module.global_variables[var_handle].ty
                     }
+                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
                 };
-                let sampler_var = match function.expressions[sampler] {
+                let sampler_ty = match function.expressions[sampler] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        &module.global_variables[var_handle]
+                        module.global_variables[var_handle].ty
                     }
+                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
                 };
-                let comparison = match module.types[sampler_var.ty].inner {
+                let comparison = match module.types[sampler_ty].inner {
                     Ti::Sampler { comparison } => comparison,
-                    _ => return Err(ExpressionError::ExpectedSamplerType(sampler_var.ty)),
+                    _ => return Err(ExpressionError::ExpectedSamplerType(sampler_ty)),
                 };
 
-                let (class, dim) = match module.types[image_var.ty].inner {
+                let (class, dim) = match module.types[image_ty].inner {
                     Ti::Image {
                         class,
                         arrayed,
@@ -377,7 +379,7 @@ impl super::Validator {
                         }
                         (class, dim)
                     }
-                    _ => return Err(ExpressionError::ExpectedImageType(image_var.ty)),
+                    _ => return Err(ExpressionError::ExpectedImageType(image_ty)),
                 };
 
                 // check sampling and comparison properties
@@ -515,13 +517,14 @@ impl super::Validator {
                 array_index,
                 index,
             } => {
-                let var = match function.expressions[image] {
+                let ty = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        &module.global_variables[var_handle]
+                        module.global_variables[var_handle].ty
                     }
+                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
                 };
-                match module.types[var.ty].inner {
+                match module.types[ty].inner {
                     Ti::Image {
                         class,
                         arrayed,
@@ -564,18 +567,19 @@ impl super::Validator {
                             }
                         }
                     }
-                    _ => return Err(ExpressionError::ExpectedImageType(var.ty)),
+                    _ => return Err(ExpressionError::ExpectedImageType(ty)),
                 }
                 ShaderStages::all()
             }
             E::ImageQuery { image, query } => {
-                let var = match function.expressions[image] {
+                let ty = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
-                        &module.global_variables[var_handle]
+                        module.global_variables[var_handle].ty
                     }
+                    crate::Expression::FunctionArgument(i) => function.arguments[i as usize].ty,
                     _ => return Err(ExpressionError::ExpectedGlobalVariable),
                 };
-                match module.types[var.ty].inner {
+                match module.types[ty].inner {
                     Ti::Image { class, arrayed, .. } => {
                         let can_level = match class {
                             crate::ImageClass::Sampled { multi, .. } => !multi,
@@ -593,7 +597,7 @@ impl super::Validator {
                             return Err(ExpressionError::InvalidImageClass(class));
                         }
                     }
-                    _ => return Err(ExpressionError::ExpectedImageType(var.ty)),
+                    _ => return Err(ExpressionError::ExpectedImageType(ty)),
                 }
                 ShaderStages::all()
             }

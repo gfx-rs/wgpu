@@ -336,6 +336,9 @@
                     ty: Handle(1),
                 ),
             ],
+            argument_sampling: [
+                None,
+            ],
         ),
     ],
     entry_points: [
@@ -491,6 +494,9 @@
                     assignable_global: None,
                     ty: Handle(1),
                 ),
+            ],
+            argument_sampling: [
+                None,
             ],
         ),
     ],

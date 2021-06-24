@@ -1060,6 +1060,10 @@
                     )),
                 ),
             ],
+            argument_sampling: [
+                None,
+                None,
+            ],
         ),
         (
             flags: (
@@ -2748,6 +2752,7 @@
                     ty: Handle(4),
                 ),
             ],
+            argument_sampling: [],
         ),
     ],
     entry_points: [
@@ -2870,6 +2875,10 @@
                     assignable_global: None,
                     ty: Handle(4),
                 ),
+            ],
+            argument_sampling: [
+                None,
+                None,
             ],
         ),
     ],
