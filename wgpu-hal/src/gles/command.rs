@@ -18,6 +18,7 @@ impl super::CommandBuffer {
 
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
+        self.state = super::CommandState::default();
         self.cmd_buffer.label = label.map(str::to_string);
         Ok(())
     }
@@ -100,8 +101,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
+        let format_info = dst.format.describe();
         assert_eq!(
-            dst.format_info.block_dimensions,
+            format_info.block_dimensions,
             (1, 1),
             "Compressed texture copies are TODO"
         );
@@ -115,7 +117,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 dst_info: super::TextureCopyInfo {
                     external_format: dst.format_desc.external,
                     data_type: dst.format_desc.data_type,
-                    texel_size: dst.format_info.block_size,
+                    texel_size: format_info.block_size,
                 },
                 copy,
             })
@@ -131,8 +133,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
+        let format_info = src.format.describe();
         assert_eq!(
-            src.format_info.block_dimensions,
+            format_info.block_dimensions,
             (1, 1),
             "Compressed texture copies are TODO"
         );
@@ -144,7 +147,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 src_info: super::TextureCopyInfo {
                     external_format: src.format_desc.external,
                     data_type: src.format_desc.data_type,
-                    texel_size: src.format_info.block_size,
+                    texel_size: format_info.block_size,
                 },
                 dst: dst.raw,
                 dst_target: dst.target,
@@ -190,8 +193,82 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {}
-    unsafe fn end_render_pass(&mut self) {}
+    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+        if let Some(label) = desc.label {
+            let range = self.cmd_buffer.add_marker(label);
+            self.cmd_buffer.commands.push(C::PushDebugGroup(range));
+            self.state.has_pass_label = true;
+        }
+
+        // set the framebuffer
+        self.cmd_buffer
+            .commands
+            .push(C::ResetFramebuffer(desc.extent));
+        for (i, cat) in desc.color_attachments.iter().enumerate() {
+            let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
+            self.cmd_buffer.commands.push(C::SetFramebufferAttachment {
+                attachment,
+                view: cat.target.view.clone(),
+            });
+        }
+        if let Some(ref dsat) = desc.depth_stencil_attachment {
+            let attachment = match dsat.target.view.aspects {
+                crate::FormatAspect::DEPTH => glow::DEPTH_ATTACHMENT,
+                crate::FormatAspect::STENCIL => glow::STENCIL_ATTACHMENT,
+                _ => glow::DEPTH_STENCIL_ATTACHMENT,
+            };
+            self.cmd_buffer.commands.push(C::SetFramebufferAttachment {
+                attachment,
+                view: dsat.target.view.clone(),
+            });
+        }
+
+        self.cmd_buffer
+            .commands
+            .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+        // issue the clears
+        for (i, cat) in desc.color_attachments.iter().enumerate() {
+            if !cat.ops.contains(crate::AttachmentOp::LOAD) {
+                let draw_buffer = glow::DRAW_BUFFER0 + i as u32;
+                let c = &cat.clear_value;
+                self.cmd_buffer
+                    .commands
+                    .push(match cat.target.view.sample_type {
+                        wgt::TextureSampleType::Float { .. } => C::ClearColorF(
+                            draw_buffer,
+                            [c.r as f32, c.g as f32, c.r as f32, c.a as f32],
+                        ),
+                        wgt::TextureSampleType::Depth => unimplemented!(),
+                        wgt::TextureSampleType::Uint => C::ClearColorU(
+                            draw_buffer,
+                            [c.r as u32, c.g as u32, c.r as u32, c.a as u32],
+                        ),
+                        wgt::TextureSampleType::Sint => C::ClearColorI(
+                            draw_buffer,
+                            [c.r as i32, c.g as i32, c.r as i32, c.a as i32],
+                        ),
+                    });
+            }
+        }
+        if let Some(ref dsat) = desc.depth_stencil_attachment {
+            if !dsat.depth_ops.contains(crate::AttachmentOp::LOAD) {
+                self.cmd_buffer
+                    .commands
+                    .push(C::ClearDepth(dsat.clear_value.0));
+            }
+            if !dsat.stencil_ops.contains(crate::AttachmentOp::LOAD) {
+                self.cmd_buffer
+                    .commands
+                    .push(C::ClearStencil(dsat.clear_value.1));
+            }
+        }
+    }
+    unsafe fn end_render_pass(&mut self) {
+        if self.state.has_pass_label {
+            self.cmd_buffer.commands.push(C::PopDebugGroup);
+            self.state.has_pass_label = false;
+        }
+    }
 
     unsafe fn set_bind_group(
         &mut self,
@@ -346,8 +423,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {}
-    unsafe fn end_compute_pass(&mut self) {}
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+        if let Some(label) = desc.label {
+            let range = self.cmd_buffer.add_marker(label);
+            self.cmd_buffer.commands.push(C::PushDebugGroup(range));
+            self.state.has_pass_label = true;
+        }
+    }
+    unsafe fn end_compute_pass(&mut self) {
+        if self.state.has_pass_label {
+            self.cmd_buffer.commands.push(C::PopDebugGroup);
+            self.state.has_pass_label = false;
+        }
+    }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {}
 

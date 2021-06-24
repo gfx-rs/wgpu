@@ -638,8 +638,6 @@ impl crate::Surface<super::Api> for super::Surface {
                 dim: wgt::TextureDimension::D2,
                 aspects: crate::FormatAspect::COLOR,
                 format_info: sc.config.format.describe(),
-                sample_count: 1,
-                size: sc.config.extent,
                 raw_flags: vk::ImageCreateFlags::empty(),
             },
         };

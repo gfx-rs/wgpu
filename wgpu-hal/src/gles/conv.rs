@@ -221,3 +221,14 @@ pub fn map_primitive_topology(topology: wgt::PrimitiveTopology) -> u32 {
         Pt::TriangleStrip => glow::TRIANGLE_STRIP,
     }
 }
+
+pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> u32 {
+    use wgt::TextureViewDimension as Tvd;
+    match dim {
+        Tvd::D1 | Tvd::D2 => glow::TEXTURE_2D,
+        Tvd::D2Array => glow::TEXTURE_2D_ARRAY,
+        Tvd::Cube => glow::TEXTURE_CUBE_MAP,
+        Tvd::CubeArray => glow::TEXTURE_CUBE_MAP_ARRAY,
+        Tvd::D3 => glow::TEXTURE_3D,
+    }
+}

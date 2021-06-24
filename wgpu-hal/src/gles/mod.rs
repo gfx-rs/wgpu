@@ -181,6 +181,7 @@ pub struct Device {
 
 pub struct Queue {
     shared: Arc<AdapterShared>,
+    draw_fbo: glow::Framebuffer,
     copy_fbo: glow::Framebuffer,
     temp_query_results: Vec<u64>,
 }
@@ -193,11 +194,10 @@ pub struct Buffer {
     map_flags: u32,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum TextureInner {
     Renderbuffer {
         raw: glow::Renderbuffer,
-        aspects: crate::FormatAspect,
     },
     Texture {
         raw: glow::Texture,
@@ -217,21 +217,17 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     inner: TextureInner,
+    format: wgt::TextureFormat,
     format_desc: TextureFormatDesc,
-    format_info: wgt::TextureFormatInfo,
 }
 
-#[derive(Debug)]
-pub enum TextureView {
-    Renderbuffer {
-        raw: glow::Renderbuffer,
-        aspects: crate::FormatAspect,
-    },
-    Texture {
-        raw: glow::Texture,
-        target: BindTarget,
-        range: wgt::ImageSubresourceRange,
-    },
+#[derive(Clone, Debug)]
+pub struct TextureView {
+    inner: TextureInner,
+    sample_type: wgt::TextureSampleType,
+    aspects: crate::FormatAspect,
+    base_mip_level: u32,
+    base_array_layer: u32,
 }
 
 #[derive(Debug)]
@@ -283,7 +279,6 @@ enum RawBinding {
     Texture {
         raw: glow::Texture,
         target: BindTarget,
-        range: wgt::ImageSubresourceRange,
     },
     Sampler(glow::Sampler),
 }
@@ -466,6 +461,17 @@ enum Command {
         dst_target: BindTarget,
         dst_offset: wgt::BufferAddress,
     },
+    ResetFramebuffer(wgt::Extent3d),
+    SetFramebufferAttachment {
+        attachment: u32,
+        view: TextureView,
+    },
+    SetDrawColorBuffers(u8),
+    ClearColorF(u32, [f32; 4]),
+    ClearColorU(u32, [u32; 4]),
+    ClearColorI(u32, [i32; 4]),
+    ClearDepth(f32),
+    ClearStencil(u32),
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
@@ -484,6 +490,7 @@ struct CommandState {
     topology: u32,
     index_format: wgt::IndexFormat,
     index_offset: wgt::BufferAddress,
+    has_pass_label: bool,
 }
 
 //TODO: we would have something like `Arc<typed_arena::Arena>`

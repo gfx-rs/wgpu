@@ -181,24 +181,11 @@ struct FramebufferAttachment {
     view_format: wgt::TextureFormat,
 }
 
-#[derive(Clone, Eq, Default, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {
     attachments: ArrayVec<[FramebufferAttachment; MAX_TOTAL_ATTACHMENTS]>,
     extent: wgt::Extent3d,
     sample_count: u32,
-}
-
-impl FramebufferKey {
-    fn add(&mut self, view: &TextureView) {
-        self.extent.width = self.extent.width.max(view.render_size.width);
-        self.extent.height = self.extent.height.max(view.render_size.height);
-        self.extent.depth_or_array_layers = self
-            .extent
-            .depth_or_array_layers
-            .max(view.render_size.depth_or_array_layers);
-        self.sample_count = self.sample_count.max(view.sample_count);
-        self.attachments.push(view.attachment.clone());
-    }
 }
 
 struct DeviceShared {
@@ -243,8 +230,6 @@ pub struct Texture {
     dim: wgt::TextureDimension,
     aspects: crate::FormatAspect,
     format_info: wgt::TextureFormatInfo,
-    sample_count: u32,
-    size: wgt::Extent3d,
     raw_flags: vk::ImageCreateFlags,
 }
 
@@ -252,8 +237,6 @@ pub struct Texture {
 pub struct TextureView {
     raw: vk::ImageView,
     attachment: FramebufferAttachment,
-    sample_count: u32,
-    render_size: wgt::Extent3d,
 }
 
 impl TextureView {

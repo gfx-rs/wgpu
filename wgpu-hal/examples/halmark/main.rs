@@ -597,6 +597,12 @@ impl<A: hal::Api> Example<A> {
         };
         let pass_desc = hal::RenderPassDescriptor {
             label: None,
+            extent: wgt::Extent3d {
+                width: self.extent[0],
+                height: self.extent[1],
+                depth_or_array_layers: 1,
+            },
+            sample_count: 1,
             color_attachments: &[hal::ColorAttachment {
                 target: hal::Attachment {
                     view: &surface_tex_view,

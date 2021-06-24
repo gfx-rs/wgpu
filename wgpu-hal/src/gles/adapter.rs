@@ -284,7 +284,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let gl = &self.shared.context;
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
         gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
-        let main_vao = gl.create_vertex_array().unwrap();
+        let main_vao = gl
+            .create_vertex_array()
+            .map_err(|_| crate::DeviceError::OutOfMemory)?;
         gl.bind_vertex_array(Some(main_vao));
 
         Ok(crate::OpenDevice {
@@ -294,7 +296,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
             },
             queue: super::Queue {
                 shared: Arc::clone(&self.shared),
-                copy_fbo: gl.create_framebuffer().unwrap(),
+                draw_fbo: gl
+                    .create_framebuffer()
+                    .map_err(|_| crate::DeviceError::OutOfMemory)?,
+                copy_fbo: gl
+                    .create_framebuffer()
+                    .map_err(|_| crate::DeviceError::OutOfMemory)?,
                 temp_query_results: Vec::new(),
             },
         })

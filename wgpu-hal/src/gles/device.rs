@@ -113,8 +113,10 @@ impl super::Device {
         };
 
         let shader = &stage.module.naga;
-        let entry_point_index = (&shader.module.entry_points)
-            .into_iter()
+        let entry_point_index = shader
+            .module
+            .entry_points
+            .iter()
             .position(|ep| ep.name.as_str() == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
 
@@ -397,10 +399,7 @@ impl crate::Device<super::Api> for super::Device {
                     desc.size.height as i32,
                 );
             }
-            super::TextureInner::Renderbuffer {
-                raw,
-                aspects: desc.format.into(),
-            }
+            super::TextureInner::Renderbuffer { raw }
         } else {
             let raw = gl.create_texture().unwrap();
             let target = match desc.dimension {
@@ -456,8 +455,8 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Texture {
             inner,
+            format: desc.format,
             format_desc,
-            format_info: desc.format.describe(),
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
@@ -477,18 +476,21 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        Ok(match texture.inner {
-            super::TextureInner::Renderbuffer { raw, aspects } => {
-                super::TextureView::Renderbuffer {
-                    raw,
-                    aspects: aspects & crate::FormatAspect::from(desc.range.aspect),
+        Ok(super::TextureView {
+            inner: match texture.inner {
+                super::TextureInner::Renderbuffer { raw } => {
+                    super::TextureInner::Renderbuffer { raw }
                 }
-            }
-            super::TextureInner::Texture { raw, target } => super::TextureView::Texture {
-                raw,
-                target,
-                range: desc.range.clone(),
+                super::TextureInner::Texture { raw, target: _ } => super::TextureInner::Texture {
+                    raw,
+                    target: conv::map_view_dimension(desc.dimension),
+                },
             },
+            sample_type: texture.format.describe().sample_type,
+            aspects: crate::FormatAspect::from(texture.format)
+                & crate::FormatAspect::from(desc.range.aspect),
+            base_mip_level: desc.range.base_mip_level,
+            base_array_layer: desc.range.base_array_layer,
         })
     }
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
@@ -615,19 +617,13 @@ impl crate::Device<super::Api> for super::Device {
                     super::RawBinding::Sampler(sampler.raw)
                 }
                 wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
-                    match *desc.textures[entry.resource_index as usize].view {
-                        super::TextureView::Renderbuffer { .. } => {
+                    match desc.textures[entry.resource_index as usize].view.inner {
+                        super::TextureInner::Renderbuffer { .. } => {
                             panic!("Unable to use a renderbuffer in a group")
                         }
-                        super::TextureView::Texture {
-                            raw,
-                            target,
-                            ref range,
-                        } => super::RawBinding::Texture {
-                            raw,
-                            target,
-                            range: range.clone(),
-                        },
+                        super::TextureInner::Texture { raw, target } => {
+                            super::RawBinding::Texture { raw, target }
+                        }
                     }
                 }
             };
@@ -687,7 +683,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::RenderPipeline {
             inner,
-            primitive: desc.primitive.clone(),
+            primitive: desc.primitive,
             attributes,
             depth: desc.depth_stencil.clone(),
         })

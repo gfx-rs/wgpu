@@ -5,7 +5,7 @@ use ash::{extensions::khr, version::DeviceV1_0, vk};
 use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
 
-use std::{borrow::Cow, cmp, collections::hash_map::Entry, ffi::CString, ptr, sync::Arc};
+use std::{borrow::Cow, collections::hash_map::Entry, ffi::CString, ptr, sync::Arc};
 
 impl super::DeviceShared {
     pub(super) unsafe fn set_object_name(
@@ -697,8 +697,6 @@ impl crate::Device<super::Api> for super::Device {
             dim: desc.dimension,
             aspects: crate::FormatAspect::from(desc.format),
             format_info: desc.format.describe(),
-            sample_count: desc.sample_count,
-            size: desc.size,
             raw_flags,
         })
     }
@@ -746,19 +744,8 @@ impl crate::Device<super::Api> for super::Device {
             raw_image_flags: texture.raw_flags,
             view_format: desc.format,
         };
-        let sample_count = texture.sample_count;
-        let render_size = wgt::Extent3d {
-            width: cmp::max(1, texture.size.width >> desc.range.base_mip_level),
-            height: cmp::max(1, texture.size.height >> desc.range.base_mip_level),
-            depth_or_array_layers: 1,
-        };
 
-        Ok(super::TextureView {
-            raw,
-            attachment,
-            sample_count,
-            render_size,
-        })
+        Ok(super::TextureView { raw, attachment })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
         if !self.shared.private_caps.imageless_framebuffers {

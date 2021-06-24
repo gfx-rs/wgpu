@@ -745,6 +745,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         let hal_desc = hal::RenderPassDescriptor {
             label,
+            extent,
+            sample_count,
             color_attachments: &colors,
             depth_stencil_attachment: depth_stencil,
         };

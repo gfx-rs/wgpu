@@ -1,4 +1,5 @@
 use super::Command as C;
+use arrayvec::ArrayVec;
 use glow::HasContext;
 use std::{mem, ops::Range, slice};
 
@@ -290,6 +291,87 @@ impl super::Queue {
                 );
                 gl.bind_buffer(dst_target, Some(dst));
                 gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data);
+            }
+            C::ResetFramebuffer(extent) => {
+                gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo));
+                gl.framebuffer_texture_2d(
+                    glow::DRAW_FRAMEBUFFER,
+                    glow::DEPTH_STENCIL_ATTACHMENT,
+                    glow::TEXTURE_2D,
+                    None,
+                    0,
+                );
+                for i in 0..crate::MAX_COLOR_TARGETS {
+                    let target = glow::COLOR_ATTACHMENT0 + i as u32;
+                    gl.framebuffer_texture_2d(
+                        glow::DRAW_FRAMEBUFFER,
+                        target,
+                        glow::TEXTURE_2D,
+                        None,
+                        0,
+                    );
+                }
+                gl.color_mask(true, true, true, true);
+                gl.depth_mask(true);
+                gl.stencil_mask(!0);
+                gl.disable(glow::DEPTH_TEST);
+                gl.disable(glow::STENCIL_TEST);
+                gl.disable(glow::SCISSOR_TEST);
+                gl.scissor(0, 0, extent.width as i32, extent.height as i32);
+                gl.viewport(0, 0, extent.width as i32, extent.height as i32);
+            }
+            C::SetFramebufferAttachment {
+                attachment,
+                ref view,
+            } => match view.inner {
+                super::TextureInner::Renderbuffer { raw } => {
+                    gl.framebuffer_renderbuffer(
+                        glow::DRAW_FRAMEBUFFER,
+                        attachment,
+                        glow::RENDERBUFFER,
+                        Some(raw),
+                    );
+                }
+                super::TextureInner::Texture { raw, target } => {
+                    if is_3d_target(target) {
+                        gl.framebuffer_texture_layer(
+                            glow::DRAW_FRAMEBUFFER,
+                            attachment,
+                            Some(raw),
+                            view.base_mip_level as i32,
+                            view.base_array_layer as i32,
+                        );
+                    } else {
+                        gl.framebuffer_texture_2d(
+                            glow::DRAW_FRAMEBUFFER,
+                            attachment,
+                            target,
+                            Some(raw),
+                            view.base_mip_level as i32,
+                        );
+                    }
+                }
+            },
+            C::SetDrawColorBuffers(count) => {
+                let indices = (0..count as u32)
+                    .map(|i| glow::COLOR_ATTACHMENT0 + i)
+                    .collect::<ArrayVec<[_; crate::MAX_COLOR_TARGETS]>>();
+                gl.draw_buffers(&indices);
+            }
+            C::ClearColorF(draw_buffer, mut color) => {
+                gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, &mut color);
+            }
+            C::ClearColorU(draw_buffer, mut color) => {
+                gl.clear_buffer_u32_slice(glow::COLOR, draw_buffer, &mut color);
+            }
+            C::ClearColorI(draw_buffer, mut color) => {
+                gl.clear_buffer_i32_slice(glow::COLOR, draw_buffer, &mut color);
+            }
+            C::ClearDepth(depth) => {
+                gl.clear_buffer_depth_stencil(glow::DEPTH, 0, depth, 0);
+            }
+            C::ClearStencil(value) => {
+                gl.clear_buffer_depth_stencil(glow::STENCIL, 0, 0.0, value as i32);
             }
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);

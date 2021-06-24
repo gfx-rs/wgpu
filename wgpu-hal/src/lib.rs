@@ -557,6 +557,8 @@ bitflags!(
     }
 );
 
+//TODO: it's not intuitive for the backends to consider `LOAD` being optional.
+
 bitflags!(
     pub struct AttachmentOp: u8 {
         const LOAD = 1;
@@ -1067,6 +1069,8 @@ pub struct DepthStencilAttachment<'a, A: Api> {
 #[derive(Clone, Debug)]
 pub struct RenderPassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
+    pub extent: wgt::Extent3d,
+    pub sample_count: u32,
     pub color_attachments: &'a [ColorAttachment<'a, A>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
 }
