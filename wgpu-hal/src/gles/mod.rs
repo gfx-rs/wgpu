@@ -54,7 +54,9 @@ bitflags::bitflags! {
     /// change the exposed feature set.
     struct PrivateCapability: u32 {
         /// Support explicit layouts in shader.
-        const EXPLICIT_LAYOUTS_IN_SHADER = 0x00002000;
+        const EXPLICIT_LAYOUTS_IN_SHADER = 0x0001;
+        /// Support memory barriers.
+        const MEMORY_BARRIERS = 0x0002;
     }
 }
 
@@ -472,6 +474,8 @@ enum Command {
     ClearColorI(u32, [i32; 4]),
     ClearDepth(f32),
     ClearStencil(u32),
+    BufferBarrier(glow::Buffer, crate::BufferUse),
+    TextureBarrier(glow::Texture, crate::TextureUse),
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
@@ -500,4 +504,5 @@ struct CommandState {
 pub struct CommandEncoder {
     cmd_buffer: CommandBuffer,
     state: CommandState,
+    private_caps: PrivateCapability,
 }

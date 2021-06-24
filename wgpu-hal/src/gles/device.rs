@@ -31,7 +31,7 @@ impl CompilationContext<'_> {
                 naga::StorageClass::Storage => super::BindingRegister::StorageBuffers,
                 _ => continue,
             };
-            //TODO: make Naga reflect all the names, not just textures
+
             let br = var.binding.as_ref().unwrap();
             let slot = self.layout.get_slot(br);
 
@@ -519,6 +519,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::CommandEncoder {
             cmd_buffer: super::CommandBuffer::default(),
             state: super::CommandState::default(),
+            private_caps: self.shared.private_caps,
         })
     }
     unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
@@ -644,7 +645,9 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         Ok(super::ShaderModule {
             naga: match shader {
-                crate::ShaderInput::SpirV(_) => panic!("Unable to pass-through SPIR-V"),
+                crate::ShaderInput::SpirV(_) => {
+                    panic!("`Features::SPIRV_SHADER_PASSTHROUGH` is not enabled")
+                }
                 crate::ShaderInput::Naga(naga) => naga,
             },
         })

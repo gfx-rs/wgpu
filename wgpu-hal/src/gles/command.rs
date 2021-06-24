@@ -32,16 +32,50 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         //TODO: could re-use the allocations in all these command buffers
     }
 
-    unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
+    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
         T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
     {
+        if !self
+            .private_caps
+            .contains(super::PrivateCapability::MEMORY_BARRIERS)
+        {
+            return;
+        }
+        for bar in barriers {
+            // GLES only synchronizes storage -> anything explicitly
+            if !bar.usage.start.contains(crate::BufferUse::STORAGE_STORE) {
+                continue;
+            }
+            self.cmd_buffer
+                .commands
+                .push(C::BufferBarrier(bar.buffer.raw, bar.usage.end));
+        }
     }
 
-    unsafe fn transition_textures<'a, T>(&mut self, _barriers: T)
+    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
         T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
     {
+        if !self
+            .private_caps
+            .contains(super::PrivateCapability::MEMORY_BARRIERS)
+        {
+            return;
+        }
+        for bar in barriers {
+            // GLES only synchronizes storage -> anything explicitly
+            if !bar.usage.start.contains(crate::TextureUse::STORAGE_STORE) {
+                continue;
+            }
+            let raw = match bar.texture.inner {
+                super::TextureInner::Texture { raw, .. } => raw,
+                super::TextureInner::Renderbuffer { .. } => continue,
+            };
+            self.cmd_buffer
+                .commands
+                .push(C::TextureBarrier(raw, bar.usage.end));
+        }
     }
 
     unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {

@@ -373,6 +373,64 @@ impl super::Queue {
             C::ClearStencil(value) => {
                 gl.clear_buffer_depth_stencil(glow::STENCIL, 0, 0.0, value as i32);
             }
+            C::BufferBarrier(raw, usage) => {
+                let mut flags = 0;
+                if usage.contains(crate::BufferUse::VERTEX) {
+                    flags |= glow::VERTEX_ATTRIB_ARRAY_BARRIER_BIT;
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(raw));
+                    gl.vertex_attrib_pointer_f32(0, 1, glow::BYTE, true, 0, 0);
+                }
+                if usage.contains(crate::BufferUse::INDEX) {
+                    flags |= glow::ELEMENT_ARRAY_BARRIER_BIT;
+                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(raw));
+                }
+                if usage.contains(crate::BufferUse::UNIFORM) {
+                    flags |= glow::UNIFORM_BARRIER_BIT;
+                }
+                if usage.contains(crate::BufferUse::INDIRECT) {
+                    flags |= glow::COMMAND_BARRIER_BIT;
+                    gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(raw));
+                }
+                if usage.contains(crate::BufferUse::COPY_SRC) {
+                    flags |= glow::PIXEL_BUFFER_BARRIER_BIT;
+                    gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(raw));
+                }
+                if usage.contains(crate::BufferUse::COPY_DST) {
+                    flags |= glow::PIXEL_BUFFER_BARRIER_BIT;
+                    gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(raw));
+                }
+                if usage.intersects(crate::BufferUse::MAP_READ | crate::BufferUse::MAP_WRITE) {
+                    flags |= glow::BUFFER_UPDATE_BARRIER_BIT;
+                }
+                if usage
+                    .intersects(crate::BufferUse::STORAGE_LOAD | crate::BufferUse::STORAGE_STORE)
+                {
+                    flags |= glow::SHADER_STORAGE_BARRIER_BIT;
+                }
+                gl.memory_barrier(flags);
+            }
+            C::TextureBarrier(_raw, usage) => {
+                let mut flags = 0;
+                if usage.contains(crate::TextureUse::SAMPLED) {
+                    flags |= glow::TEXTURE_FETCH_BARRIER_BIT;
+                }
+                if usage
+                    .intersects(crate::TextureUse::STORAGE_LOAD | crate::TextureUse::STORAGE_STORE)
+                {
+                    flags |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
+                }
+                if usage.contains(crate::TextureUse::COPY_DST) {
+                    flags |= glow::TEXTURE_UPDATE_BARRIER_BIT;
+                }
+                if usage.intersects(
+                    crate::TextureUse::COLOR_TARGET
+                        | crate::TextureUse::DEPTH_STENCIL_READ
+                        | crate::TextureUse::DEPTH_STENCIL_WRITE,
+                ) {
+                    flags |= glow::FRAMEBUFFER_BARRIER_BIT;
+                }
+                gl.memory_barrier(flags);
+            }
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);
                 gl.debug_message_insert(

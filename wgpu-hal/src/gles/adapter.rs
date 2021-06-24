@@ -242,6 +242,7 @@ impl super::Adapter {
             super::PrivateCapability::EXPLICIT_LAYOUTS_IN_SHADER,
             ver >= (3, 1),
         );
+        private_caps.set(super::PrivateCapability::MEMORY_BARRIERS, ver >= (3, 1));
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
