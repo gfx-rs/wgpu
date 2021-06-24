@@ -19,6 +19,7 @@ jobs:
       - run: sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
       - name: Generate report
         uses: actions-rs/tarpaulin@v0.1
+        args: -p wgpu-core
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
         with:
