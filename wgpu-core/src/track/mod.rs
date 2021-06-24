@@ -271,6 +271,11 @@ impl<S: ResourceState> ResourceTracker<S> {
             .map(move |(&index, resource)| Valid(S::Id::zip(index, resource.epoch, backend)))
     }
 
+    /// Return true if there is nothing here.
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
     /// Clear the tracked contents.
     fn clear(&mut self) {
         self.map.clear();

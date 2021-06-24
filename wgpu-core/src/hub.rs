@@ -263,6 +263,7 @@ impl<A: hal::Api> Access<QuerySet<A>> for Device<A> {}
 impl<A: hal::Api> Access<QuerySet<A>> for CommandBuffer<A> {}
 impl<A: hal::Api> Access<QuerySet<A>> for RenderPipeline<A> {}
 impl<A: hal::Api> Access<QuerySet<A>> for ComputePipeline<A> {}
+impl<A: hal::Api> Access<QuerySet<A>> for Sampler<A> {}
 impl<A: hal::Api> Access<ShaderModule<A>> for Device<A> {}
 impl<A: hal::Api> Access<ShaderModule<A>> for BindGroupLayout<A> {}
 impl<A: hal::Api> Access<Buffer<A>> for Root {}

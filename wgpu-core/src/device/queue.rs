@@ -616,7 +616,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
                     let (texture_guard, mut token) = hub.textures.write(&mut token);
                     let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
-                    let (sampler_guard, _) = hub.samplers.read(&mut token);
+                    let (sampler_guard, mut token) = hub.samplers.read(&mut token);
+                    let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
                     let mut required_buffer_inits = RequiredBufferInits::default();
                     //Note: locking the trackers has to be done after the storages
@@ -703,15 +704,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
                         for id in cmdbuf.trackers.bind_groups.used() {
-                            if !bind_group_guard[id].life_guard.use_at(submit_index) {
+                            let bg = &bind_group_guard[id];
+                            if !bg.life_guard.use_at(submit_index) {
                                 device.temp_suspected.bind_groups.push(id);
                             }
-                        }
-                        for id in cmdbuf.trackers.samplers.used() {
-                            if !sampler_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.samplers.push(id);
+                            // We need to update the submission indices for the contained
+                            // state-less (!) resources as well, so that they don't get
+                            // deleted too early if the parent bind group goes out of scope.
+                            for sub_id in bg.used.views.used() {
+                                texture_view_guard[sub_id].life_guard.use_at(submit_index);
+                            }
+                            for sub_id in bg.used.samplers.used() {
+                                sampler_guard[sub_id].life_guard.use_at(submit_index);
                             }
                         }
+                        assert!(cmdbuf.trackers.samplers.is_empty());
                         for id in cmdbuf.trackers.compute_pipes.used() {
                             if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.compute_pipelines.push(id);
@@ -722,9 +729,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 device.temp_suspected.render_pipelines.push(id);
                             }
                         }
+                        for id in cmdbuf.trackers.query_sets.used() {
+                            if !query_set_guard[id].life_guard.use_at(submit_index) {
+                                device.temp_suspected.query_sets.push(id);
+                            }
+                        }
                         for id in cmdbuf.trackers.bundles.used() {
-                            if !render_bundle_guard[id].life_guard.use_at(submit_index) {
+                            let bundle = &render_bundle_guard[id];
+                            if !bundle.life_guard.use_at(submit_index) {
                                 device.temp_suspected.render_bundles.push(id);
+                            }
+                            // We need to update the submission indices for the contained
+                            // state-less (!) resources as well, excluding the bind groups.
+                            // They don't get deleted too early if the bundle goes out of scope.
+                            for sub_id in bundle.used.compute_pipes.used() {
+                                compute_pipe_guard[sub_id].life_guard.use_at(submit_index);
+                            }
+                            for sub_id in bundle.used.render_pipes.used() {
+                                render_pipe_guard[sub_id].life_guard.use_at(submit_index);
                             }
                         }
 

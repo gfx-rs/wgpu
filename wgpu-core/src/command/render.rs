@@ -1720,6 +1720,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         info.trackers
                             .merge_extend(&bundle.used)
                             .map_pass_err(scope)?;
+                        // Start tracking the bind groups specifically, as they are the only
+                        // compound resources, to make it easier to update submission indices
+                        // later at submission time.
+                        cmd_buf
+                            .trackers
+                            .bind_groups
+                            .merge_extend(&bundle.used.bind_groups)
+                            .unwrap();
                         state.reset_bundle();
                     }
                 }
