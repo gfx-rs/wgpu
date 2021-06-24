@@ -76,7 +76,12 @@ pub struct TestParameters {
     pub required_limits: Limits,
     pub required_downlevel_properties: DownlevelCapabilities,
     // Backends where test should fail.
-    pub failures: Vec<(Option<wgpu::BackendBit>, Option<usize>, Option<String>)>,
+    pub failures: Vec<(
+        Option<wgpu::BackendBit>,
+        Option<usize>,
+        Option<String>,
+        bool,
+    )>,
 }
 
 impl Default for TestParameters {
@@ -120,31 +125,35 @@ impl TestParameters {
 
     /// Mark the test as always failing, equivilant to specific_failure(None, None, None)
     pub fn failure(mut self) -> Self {
-        self.failures.push((None, None, None));
+        self.failures.push((None, None, None, false));
         self
     }
 
     /// Mark the test as always failing on a specific backend, equivilant to specific_failure(backend, None, None)
     pub fn backend_failures(mut self, backends: wgpu::BackendBit) -> Self {
-        self.failures.push((Some(backends), None, None));
+        self.failures.push((Some(backends), None, None, false));
         self
     }
 
     /// Determines if a test should fail under a particular set of conditions. If any of these are None, that means that it will match anything in that field.
     ///
     /// ex.
-    /// `specific_failure(Some(wgpu::BackendBit::DX11 | wgpu::BackendBit::DX12), None, Some("RTX"))`
+    /// `specific_failure(Some(wgpu::BackendBit::DX11 | wgpu::BackendBit::DX12), None, Some("RTX"), false)`
     /// means that this test will fail on all cards with RTX in their name on either D3D backend, no matter the vendor ID.
+    ///
+    /// If segfault is set to true, the test won't be run at all due to avoid segfaults.
     pub fn specific_failure(
         mut self,
         backends: Option<BackendBit>,
         vendor: Option<usize>,
         device: Option<&'static str>,
+        segfault: bool,
     ) -> Self {
         self.failures.push((
             backends,
             vendor,
             device.as_ref().map(AsRef::as_ref).map(str::to_lowercase),
+            segfault,
         ));
         self
     }
@@ -212,10 +221,8 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         queue,
     };
 
-    let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
-
     let failure_reason = parameters.failures.iter().find_map(
-        |(backend_failure, vendor_failure, adapter_failure)| {
+        |(backend_failure, vendor_failure, adapter_failure, segfault)| {
             let always =
                 backend_failure.is_none() && vendor_failure.is_none() && adapter_failure.is_none();
 
@@ -232,13 +239,13 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
             if expect_failure_backend && expect_failure_vendor && expect_failure_adapter {
                 if always {
-                    Some(FailureReason::ALWAYS)
+                    Some((FailureReason::ALWAYS, *segfault))
                 } else {
                     let mut reason = FailureReason::empty();
                     reason.set(FailureReason::BACKEND, expect_failure_backend);
                     reason.set(FailureReason::VENDOR, expect_failure_vendor);
                     reason.set(FailureReason::ADAPTER, expect_failure_adapter);
-                    Some(reason)
+                    Some((reason, *segfault))
                 }
             } else {
                 None
@@ -246,11 +253,21 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         },
     );
 
+    if let Some((reason, true)) = failure_reason {
+        println!(
+            "EXPECTED TEST FAILURE SKIPPED DUE TO SEGFAULT: {:?}",
+            reason
+        );
+        return;
+    }
+
+    let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
+
     let expect_failure = failure_reason.is_some();
 
     if panicked == expect_failure {
         // We got the conditions we expected
-        if let Some(reason) = failure_reason {
+        if let Some((reason, _)) = failure_reason {
             // Print out reason for the failure
             println!("GOT EXPECTED TEST FAILURE: {:?}", reason);
         }

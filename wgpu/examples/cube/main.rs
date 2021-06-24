@@ -400,7 +400,12 @@ fn cube_lines() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::NON_FILL_POLYGON_MODE,
-        base_test_parameters: framework::test_common::TestParameters::default(),
+        base_test_parameters: framework::test_common::TestParameters::default().specific_failure(
+            Some(wgpu::BackendBit::VULKAN),
+            None,
+            Some("llvmpipe"),
+            true,
+        ),
         tollerance: 2,
         max_outliers: 400, // Line rasterization is very different between vendors
     });
