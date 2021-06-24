@@ -18,12 +18,9 @@ use std::{ops::Range, sync::Arc};
 
 #[derive(Clone)]
 pub struct Api;
-#[derive(Debug)]
-pub struct Resource;
 
 //Note: we can support more samplers if not every one of them is used at a time,
 // but it probably doesn't worth it.
-const MAX_SAMPLER_SLOTS: usize = 16;
 const MAX_TEXTURE_SLOTS: usize = 16;
 
 impl crate::Api for Api {
@@ -41,8 +38,8 @@ impl crate::Api for Api {
     type SurfaceTexture = Texture;
     type TextureView = TextureView;
     type Sampler = Sampler;
-    type QuerySet = Resource;
-    type Fence = Resource;
+    type QuerySet = QuerySet;
+    type Fence = Fence;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -184,8 +181,8 @@ pub struct Device {
 
 pub struct Queue {
     shared: Arc<AdapterShared>,
-    features: wgt::Features,
     copy_fbo: glow::Framebuffer,
+    temp_query_results: Vec<u64>,
 }
 
 #[derive(Debug)]
@@ -345,6 +342,47 @@ pub struct ComputePipeline {
 }
 
 #[derive(Debug)]
+pub struct QuerySet {
+    queries: Box<[glow::Query]>,
+    target: BindTarget,
+}
+
+#[derive(Debug)]
+pub struct Fence {
+    last_completed: crate::FenceValue,
+    pending: Vec<(crate::FenceValue, glow::Fence)>,
+}
+
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
+
+impl Fence {
+    fn get_latest(&self, gl: &glow::Context) -> crate::FenceValue {
+        let mut max_value = self.last_completed;
+        for &(value, sync) in self.pending.iter() {
+            let status = unsafe { gl.get_sync_status(sync) };
+            if status == glow::SIGNALED {
+                max_value = value;
+            }
+        }
+        max_value
+    }
+
+    fn maintain(&mut self, gl: &glow::Context) {
+        let latest = self.get_latest(gl);
+        for &(value, sync) in self.pending.iter() {
+            if value <= latest {
+                unsafe {
+                    gl.delete_sync(sync);
+                }
+            }
+        }
+        self.pending.retain(|&(value, _)| value > latest);
+        self.last_completed = latest;
+    }
+}
+
+#[derive(Debug)]
 struct TextureCopyInfo {
     external_format: u32,
     data_type: u32,
@@ -419,6 +457,14 @@ enum Command {
         copy: crate::BufferTextureCopy,
     },
     SetIndexBuffer(glow::Buffer),
+    BeginQuery(glow::Query, BindTarget),
+    EndQuery(BindTarget),
+    CopyQueryResults {
+        query_range: Range<u32>,
+        dst: glow::Buffer,
+        dst_target: BindTarget,
+        dst_offset: wgt::BufferAddress,
+    },
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
@@ -428,7 +474,8 @@ enum Command {
 pub struct CommandBuffer {
     label: Option<String>,
     commands: Vec<Command>,
-    data: Vec<u8>,
+    data_bytes: Vec<u8>,
+    data_words: Vec<u32>,
 }
 
 #[derive(Default)]

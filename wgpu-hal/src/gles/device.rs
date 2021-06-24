@@ -1,5 +1,4 @@
 use super::conv;
-use super::Resource; //TEMP
 use crate::util::map_naga_stage;
 use glow::HasContext;
 use std::{convert::TryInto, iter, ptr::NonNull, sync::Arc};
@@ -713,27 +712,71 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
-    ) -> Result<Resource, crate::DeviceError> {
-        Ok(Resource)
+    ) -> Result<super::QuerySet, crate::DeviceError> {
+        let gl = &self.shared.context;
+
+        let mut queries = Vec::with_capacity(desc.count as usize);
+        for _ in 0..desc.count {
+            let query = gl
+                .create_query()
+                .map_err(|_| crate::DeviceError::OutOfMemory)?;
+            queries.push(query);
+        }
+
+        Ok(super::QuerySet {
+            queries: queries.into_boxed_slice(),
+            target: match desc.ty {
+                wgt::QueryType::Occlusion => glow::ANY_SAMPLES_PASSED,
+                _ => unimplemented!(),
+            },
+        })
     }
-    unsafe fn destroy_query_set(&self, set: Resource) {}
-    unsafe fn create_fence(&self) -> Result<Resource, crate::DeviceError> {
-        Ok(Resource)
+    unsafe fn destroy_query_set(&self, set: super::QuerySet) {
+        let gl = &self.shared.context;
+        for &query in set.queries.iter() {
+            gl.delete_query(query);
+        }
     }
-    unsafe fn destroy_fence(&self, fence: Resource) {}
+    unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
+        Ok(super::Fence {
+            last_completed: 0,
+            pending: Vec::new(),
+        })
+    }
+    unsafe fn destroy_fence(&self, fence: super::Fence) {
+        let gl = &self.shared.context;
+        for (_, sync) in fence.pending {
+            gl.delete_sync(sync);
+        }
+    }
     unsafe fn get_fence_value(
         &self,
-        fence: &Resource,
+        fence: &super::Fence,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
-        Ok(0)
+        Ok(fence.get_latest(&self.shared.context))
     }
     unsafe fn wait(
         &self,
-        fence: &Resource,
-        value: crate::FenceValue,
+        fence: &super::Fence,
+        wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        Ok(true)
+        if fence.last_completed < wait_value {
+            let gl = &self.shared.context;
+            let timeout_ns = (timeout_ms as u64 * 1_000_000).min(!0u32 as u64);
+            let &(_, sync) = fence
+                .pending
+                .iter()
+                .find(|&&(value, _)| value >= wait_value)
+                .unwrap();
+            match gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32) {
+                glow::TIMEOUT_EXPIRED => Ok(false),
+                glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
+                _ => Err(crate::DeviceError::Lost),
+            }
+        } else {
+            Ok(true)
+        }
     }
 
     unsafe fn start_capture(&self) -> bool {

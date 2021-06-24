@@ -1,6 +1,6 @@
 use super::Command as C;
 use glow::HasContext;
-use std::ops::Range;
+use std::{mem, ops::Range, slice};
 
 const DEBUG_ID: u32 = 0;
 
@@ -16,7 +16,7 @@ fn is_3d_target(target: super::BindTarget) -> bool {
 }
 
 impl super::Queue {
-    unsafe fn process(&mut self, command: &C, data: &[u8]) {
+    unsafe fn process(&mut self, command: &C, data_bytes: &[u8], data_words: &[u32]) {
         let gl = &self.shared.context;
         match *command {
             C::Draw {
@@ -265,8 +265,34 @@ impl super::Queue {
             C::SetIndexBuffer(buffer) => {
                 gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer));
             }
+            C::BeginQuery(query, target) => {
+                gl.begin_query(target, query);
+            }
+            C::EndQuery(target) => {
+                gl.end_query(target);
+            }
+            C::CopyQueryResults {
+                ref query_range,
+                dst,
+                dst_target,
+                dst_offset,
+            } => {
+                self.temp_query_results.clear();
+                for &query in
+                    data_words[query_range.start as usize..query_range.end as usize].iter()
+                {
+                    let result = gl.get_query_parameter_u32(query, glow::QUERY_RESULT);
+                    self.temp_query_results.push(result as u64);
+                }
+                let query_data = slice::from_raw_parts(
+                    self.temp_query_results.as_ptr() as *const u8,
+                    self.temp_query_results.len() * mem::size_of::<u64>(),
+                );
+                gl.bind_buffer(dst_target, Some(dst));
+                gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data);
+            }
             C::InsertDebugMarker(ref range) => {
-                let marker = extract_marker(data, range);
+                let marker = extract_marker(data_bytes, range);
                 gl.debug_message_insert(
                     glow::DEBUG_SOURCE_APPLICATION,
                     glow::DEBUG_TYPE_MARKER,
@@ -276,7 +302,7 @@ impl super::Queue {
                 );
             }
             C::PushDebugGroup(ref range) => {
-                let marker = extract_marker(data, range);
+                let marker = extract_marker(data_bytes, range);
                 gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker);
             }
             C::PopDebugGroup => {
@@ -290,13 +316,23 @@ impl crate::Queue<super::Api> for super::Queue {
     unsafe fn submit(
         &mut self,
         command_buffers: &[&super::CommandBuffer],
-        signal_fence: Option<(&mut super::Resource, crate::FenceValue)>,
+        signal_fence: Option<(&mut super::Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         for cmd_buf in command_buffers.iter() {
             for command in cmd_buf.commands.iter() {
-                self.process(command, &cmd_buf.data);
+                self.process(command, &cmd_buf.data_bytes, &cmd_buf.data_words);
             }
         }
+
+        if let Some((fence, value)) = signal_fence {
+            let gl = &self.shared.context;
+            fence.maintain(gl);
+            let sync = gl
+                .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
+                .map_err(|_| crate::DeviceError::OutOfMemory)?;
+            fence.pending.push((value, sync));
+        }
+
         Ok(())
     }
 

@@ -1,4 +1,3 @@
-use super::Resource; //TEMP
 use super::{conv, Command as C};
 use std::{mem, ops::Range};
 
@@ -6,13 +5,14 @@ impl super::CommandBuffer {
     fn clear(&mut self) {
         self.label = None;
         self.commands.clear();
-        self.data.clear();
+        self.data_bytes.clear();
+        self.data_words.clear();
     }
 
     fn add_marker(&mut self, marker: &str) -> Range<u32> {
-        let start = self.data.len() as u32;
-        self.data.extend(marker.as_bytes());
-        start..self.data.len() as u32
+        let start = self.data_bytes.len() as u32;
+        self.data_bytes.extend(marker.as_bytes());
+        start..self.data_bytes.len() as u32
     }
 }
 
@@ -153,17 +153,39 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
-    unsafe fn begin_query(&mut self, set: &Resource, index: u32) {}
-    unsafe fn end_query(&mut self, set: &Resource, index: u32) {}
-    unsafe fn write_timestamp(&mut self, set: &Resource, index: u32) {}
-    unsafe fn reset_queries(&mut self, set: &Resource, range: Range<u32>) {}
+    unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
+        let query = set.queries[index as usize];
+        self.cmd_buffer
+            .commands
+            .push(C::BeginQuery(query, set.target));
+    }
+    unsafe fn end_query(&mut self, set: &super::QuerySet, _index: u32) {
+        self.cmd_buffer.commands.push(C::EndQuery(set.target));
+    }
+    unsafe fn write_timestamp(&mut self, _set: &super::QuerySet, _index: u32) {
+        unimplemented!()
+    }
+    unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {
+        //TODO: what do we do here?
+    }
     unsafe fn copy_query_results(
         &mut self,
-        set: &Resource,
+        set: &super::QuerySet,
         range: Range<u32>,
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
     ) {
+        let start = self.cmd_buffer.data_words.len();
+        self.cmd_buffer
+            .data_words
+            .extend_from_slice(&set.queries[range.start as usize..range.end as usize]);
+        let query_range = start as u32..self.cmd_buffer.data_words.len() as u32;
+        self.cmd_buffer.commands.push(C::CopyQueryResults {
+            query_range,
+            dst: buffer.raw,
+            dst_target: buffer.target,
+            dst_offset: offset,
+        });
     }
 
     // render

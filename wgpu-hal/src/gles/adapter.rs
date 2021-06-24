@@ -279,7 +279,7 @@ impl super::Adapter {
 impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
-        features: wgt::Features,
+        _features: wgt::Features,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let gl = &self.shared.context;
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
@@ -294,8 +294,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             },
             queue: super::Queue {
                 shared: Arc::clone(&self.shared),
-                features,
                 copy_fbo: gl.create_framebuffer().unwrap(),
+                temp_query_results: Vec::new(),
             },
         })
     }
