@@ -560,6 +560,57 @@ pub struct Surface {
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 
+impl Surface {
+    pub(super) unsafe fn present(
+        &mut self,
+        _suf_texture: super::Texture,
+        gl: &glow::Context,
+    ) -> Result<(), crate::SurfaceError> {
+        let sc = self.swapchain.as_ref().unwrap();
+
+        self.egl
+            .make_current(
+                self.display,
+                Some(self.raw),
+                Some(self.raw),
+                Some(self.context),
+            )
+            .map_err(|e| {
+                log::error!("make_current(surface) failed: {}", e);
+                crate::SurfaceError::Lost
+            })?;
+
+        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer));
+        gl.blit_framebuffer(
+            0,
+            0,
+            sc.extent.width as i32,
+            sc.extent.height as i32,
+            0,
+            0,
+            sc.extent.width as i32,
+            sc.extent.height as i32,
+            glow::COLOR_BUFFER_BIT,
+            glow::NEAREST,
+        );
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
+
+        self.egl.swap_buffers(self.display, self.raw).map_err(|e| {
+            log::error!("swap_buffers failed: {}", e);
+            crate::SurfaceError::Lost
+        })?;
+        self.egl
+            .make_current(self.display, self.pbuffer, self.pbuffer, Some(self.context))
+            .map_err(|e| {
+                log::error!("make_current(null) failed: {}", e);
+                crate::SurfaceError::Lost
+            })?;
+
+        Ok(())
+    }
+}
+
 impl crate::Surface<super::Api> for Surface {
     unsafe fn configure(
         &mut self,

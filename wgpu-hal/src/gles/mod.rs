@@ -266,9 +266,10 @@ impl PipelineLayout {
 
 #[derive(Debug)]
 enum BindingRegister {
-    Textures,
     UniformBuffers,
     StorageBuffers,
+    Textures,
+    Images,
 }
 
 #[derive(Debug)]

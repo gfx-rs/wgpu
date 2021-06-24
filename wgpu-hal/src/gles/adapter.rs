@@ -304,7 +304,85 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         format: wgt::TextureFormat,
     ) -> crate::TextureFormatCapability {
-        crate::TextureFormatCapability::empty() //TODO
+        use crate::TextureFormatCapability as Tfc;
+        use wgt::TextureFormat as Tf;
+        // The storage types are sprinkled based on section
+        // "TEXTURE IMAGE LOADS AND STORES" of GLES-3.2 spec.
+        let unfiltered_color = Tfc::SAMPLED | Tfc::COLOR_ATTACHMENT;
+        let filtered_color = unfiltered_color | Tfc::SAMPLED_LINEAR | Tfc::COLOR_ATTACHMENT_BLEND;
+        match format {
+            Tf::R8Unorm | Tf::R8Snorm => filtered_color,
+            Tf::R8Uint | Tf::R8Sint | Tf::R16Uint | Tf::R16Sint => unfiltered_color,
+            Tf::R16Float | Tf::Rg8Unorm | Tf::Rg8Snorm => filtered_color,
+            Tf::Rg8Uint | Tf::Rg8Sint | Tf::R32Uint | Tf::R32Sint => {
+                unfiltered_color | Tfc::STORAGE
+            }
+            Tf::R32Float => unfiltered_color,
+            Tf::Rg16Uint | Tf::Rg16Sint => unfiltered_color,
+            Tf::Rg16Float | Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => filtered_color | Tfc::STORAGE,
+            Tf::Bgra8UnormSrgb | Tf::Rgba8Snorm | Tf::Bgra8Unorm => filtered_color,
+            Tf::Rgba8Uint | Tf::Rgba8Sint => unfiltered_color | Tfc::STORAGE,
+            Tf::Rgb10a2Unorm | Tf::Rg11b10Float => filtered_color,
+            Tf::Rg32Uint | Tf::Rg32Sint => unfiltered_color,
+            Tf::Rg32Float => unfiltered_color | Tfc::STORAGE,
+            Tf::Rgba16Uint | Tf::Rgba16Sint => unfiltered_color | Tfc::STORAGE,
+            Tf::Rgba16Float => filtered_color | Tfc::STORAGE,
+            Tf::Rgba32Uint | Tf::Rgba32Sint => unfiltered_color | Tfc::STORAGE,
+            Tf::Rgba32Float => unfiltered_color | Tfc::STORAGE,
+            Tf::Depth32Float => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
+            Tf::Depth24Plus => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
+            Tf::Depth24PlusStencil8 => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
+            Tf::Bc1RgbaUnorm
+            | Tf::Bc1RgbaUnormSrgb
+            | Tf::Bc2RgbaUnorm
+            | Tf::Bc2RgbaUnormSrgb
+            | Tf::Bc3RgbaUnorm
+            | Tf::Bc3RgbaUnormSrgb
+            | Tf::Bc4RUnorm
+            | Tf::Bc4RSnorm
+            | Tf::Bc5RgUnorm
+            | Tf::Bc5RgSnorm
+            | Tf::Bc6hRgbSfloat
+            | Tf::Bc6hRgbUfloat
+            | Tf::Bc7RgbaUnorm
+            | Tf::Bc7RgbaUnormSrgb
+            | Tf::Etc2RgbUnorm
+            | Tf::Etc2RgbUnormSrgb
+            | Tf::Etc2RgbA1Unorm
+            | Tf::Etc2RgbA1UnormSrgb
+            | Tf::EacRUnorm
+            | Tf::EacRSnorm
+            | Tf::EtcRgUnorm
+            | Tf::EtcRgSnorm
+            | Tf::Astc4x4RgbaUnorm
+            | Tf::Astc4x4RgbaUnormSrgb
+            | Tf::Astc5x4RgbaUnorm
+            | Tf::Astc5x4RgbaUnormSrgb
+            | Tf::Astc5x5RgbaUnorm
+            | Tf::Astc5x5RgbaUnormSrgb
+            | Tf::Astc6x5RgbaUnorm
+            | Tf::Astc6x5RgbaUnormSrgb
+            | Tf::Astc6x6RgbaUnorm
+            | Tf::Astc6x6RgbaUnormSrgb
+            | Tf::Astc8x5RgbaUnorm
+            | Tf::Astc8x5RgbaUnormSrgb
+            | Tf::Astc8x6RgbaUnorm
+            | Tf::Astc8x6RgbaUnormSrgb
+            | Tf::Astc10x5RgbaUnorm
+            | Tf::Astc10x5RgbaUnormSrgb
+            | Tf::Astc10x6RgbaUnorm
+            | Tf::Astc10x6RgbaUnormSrgb
+            | Tf::Astc8x8RgbaUnorm
+            | Tf::Astc8x8RgbaUnormSrgb
+            | Tf::Astc10x8RgbaUnorm
+            | Tf::Astc10x8RgbaUnormSrgb
+            | Tf::Astc10x10RgbaUnorm
+            | Tf::Astc10x10RgbaUnormSrgb
+            | Tf::Astc12x10RgbaUnorm
+            | Tf::Astc12x10RgbaUnormSrgb
+            | Tf::Astc12x12RgbaUnorm
+            | Tf::Astc12x12RgbaUnormSrgb => Tfc::SAMPLED | Tfc::SAMPLED_LINEAR,
+        }
     }
 
     unsafe fn surface_capabilities(

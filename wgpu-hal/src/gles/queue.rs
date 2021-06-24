@@ -341,6 +341,7 @@ impl crate::Queue<super::Api> for super::Queue {
         surface: &mut super::Surface,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
-        Ok(())
+        let gl = &self.shared.context;
+        surface.present(texture, gl)
     }
 }

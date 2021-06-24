@@ -41,16 +41,18 @@ impl CompilationContext<'_> {
         }
 
         for (name, mapping) in reflection_info.texture_mapping {
-            let tex_br = module.global_variables[mapping.texture]
-                .binding
-                .as_ref()
-                .unwrap();
+            let var = &module.global_variables[mapping.texture];
+            let register = if var.storage_access.is_empty() {
+                super::BindingRegister::Textures
+            } else {
+                super::BindingRegister::Images
+            };
+
+            let tex_br = var.binding.as_ref().unwrap();
             let texture_linear_index = self.layout.get_slot(tex_br);
 
-            self.name_binding_map.insert(
-                name,
-                (super::BindingRegister::Textures, texture_linear_index),
-            );
+            self.name_binding_map
+                .insert(name, (register, texture_linear_index));
             if let Some(sampler_handle) = mapping.sampler {
                 let sam_br = module.global_variables[sampler_handle]
                     .binding
@@ -205,10 +207,6 @@ impl super::Device {
             for (ref name, (register, slot)) in name_binding_map {
                 log::trace!("Get binding {:?} from program {:?}", name, program);
                 match register {
-                    super::BindingRegister::Textures => {
-                        let loc = gl.get_uniform_location(program, name).unwrap();
-                        gl.uniform_1_i32(Some(&loc), slot as _);
-                    }
                     super::BindingRegister::UniformBuffers => {
                         let index = gl.get_uniform_block_index(program, name).unwrap();
                         gl.uniform_block_binding(program, index, slot as _);
@@ -216,6 +214,10 @@ impl super::Device {
                     super::BindingRegister::StorageBuffers => {
                         let index = gl.get_shader_storage_block_index(program, name).unwrap();
                         gl.shader_storage_block_binding(program, index, slot as _);
+                    }
+                    super::BindingRegister::Textures | super::BindingRegister::Images => {
+                        let loc = gl.get_uniform_location(program, name).unwrap();
+                        gl.uniform_1_i32(Some(&loc), slot as _);
                     }
                 }
             }
@@ -536,6 +538,7 @@ impl crate::Device<super::Api> for super::Device {
         let mut group_infos = Vec::with_capacity(desc.bind_group_layouts.len());
         let mut num_samplers = 0u8;
         let mut num_textures = 0u8;
+        let mut num_images = 0u8;
         let mut num_uniform_buffers = 0u8;
         let mut num_storage_buffers = 0u8;
 
@@ -553,9 +556,8 @@ impl crate::Device<super::Api> for super::Device {
             for entry in bg_layout.entries.iter() {
                 let counter = match entry.ty {
                     wgt::BindingType::Sampler { .. } => &mut num_samplers,
-                    wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
-                        &mut num_textures
-                    }
+                    wgt::BindingType::Texture { .. } => &mut num_textures,
+                    wgt::BindingType::StorageTexture { .. } => &mut num_images,
                     wgt::BindingType::Buffer {
                         ty: wgt::BufferBindingType::Uniform,
                         ..
