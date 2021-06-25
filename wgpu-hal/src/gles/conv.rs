@@ -313,3 +313,11 @@ pub(super) fn map_blend(blend: &wgt::BlendState) -> super::BlendDesc {
         alpha: map_blend_component(&blend.alpha),
     }
 }
+
+pub(super) fn map_storage_access(access: wgt::StorageTextureAccess) -> u32 {
+    match access {
+        wgt::StorageTextureAccess::ReadOnly => glow::READ_ONLY,
+        wgt::StorageTextureAccess::WriteOnly => glow::WRITE_ONLY,
+        wgt::StorageTextureAccess::ReadWrite => glow::READ_WRITE,
+    }
+}

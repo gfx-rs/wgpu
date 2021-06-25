@@ -190,6 +190,8 @@ impl super::Adapter {
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, ver >= (3, 1));
+        //Note: storage textures aren't supported atm, only buffers. See
+        // https://github.com/grovesNL/glow/issues/174
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
             ver >= (3, 1),

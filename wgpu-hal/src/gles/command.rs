@@ -495,6 +495,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         size,
                     });
                 }
+                super::RawBinding::Sampler(sampler) => {
+                    dirty_samplers |= 1 << slot;
+                    self.state.samplers[slot as usize] = Some(sampler);
+                }
                 super::RawBinding::Texture { raw, target } => {
                     dirty_textures |= 1 << slot;
                     self.state.texture_slots[slot as usize].tex_target = target;
@@ -504,9 +508,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         target,
                     });
                 }
-                super::RawBinding::Sampler(sampler) => {
-                    dirty_samplers |= 1 << slot;
-                    self.state.samplers[slot as usize] = Some(sampler);
+                super::RawBinding::Image(ref binding) => {
+                    self.cmd_buffer.commands.push(C::BindImage {
+                        slot,
+                        binding: binding.clone(),
+                    });
                 }
             }
         }

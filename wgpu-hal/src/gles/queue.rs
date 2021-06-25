@@ -346,8 +346,8 @@ impl super::Queue {
                             glow::DRAW_FRAMEBUFFER,
                             attachment,
                             Some(raw),
-                            view.base_mip_level as i32,
-                            view.base_array_layer as i32,
+                            view.mip_levels.start as i32,
+                            view.array_layers.start as i32,
                         );
                     } else {
                         gl.framebuffer_texture_2d(
@@ -355,7 +355,7 @@ impl super::Queue {
                             attachment,
                             target,
                             Some(raw),
-                            view.base_mip_level as i32,
+                            view.mip_levels.start as i32,
                         );
                     }
                 }
@@ -601,6 +601,15 @@ impl super::Queue {
             } => {
                 gl.active_texture(glow::TEXTURE0 + slot);
                 gl.bind_texture(target, Some(texture));
+            }
+            C::BindImage {
+                slot: _,
+                binding: _,
+            } => {
+                //TODO: https://github.com/grovesNL/glow/issues/174
+                //gl.bind_image_texture(slot, Some(binding.raw), binding.mip_level as i32,
+                //    binding.array_layer.is_none(), binding.array_layer.unwrap_or_default(),
+                //    binding.access, binding.format);
             }
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);

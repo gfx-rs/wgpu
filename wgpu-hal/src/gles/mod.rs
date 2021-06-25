@@ -224,6 +224,8 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     inner: TextureInner,
+    mip_level_count: u32,
+    array_layer_count: u32,
     format: wgt::TextureFormat,
     format_desc: TextureFormatDesc,
 }
@@ -233,8 +235,8 @@ pub struct TextureView {
     inner: TextureInner,
     sample_type: wgt::TextureSampleType,
     aspects: crate::FormatAspect,
-    base_mip_level: u32,
-    base_array_layer: u32,
+    mip_levels: Range<u32>,
+    array_layers: Range<u32>,
 }
 
 #[derive(Debug)]
@@ -285,7 +287,9 @@ enum RawBinding {
     Texture {
         raw: glow::Texture,
         target: BindTarget,
+        //TODO: mip levels, array layers
     },
+    Image(ImageBinding),
     Sampler(glow::Sampler),
 }
 
@@ -318,6 +322,15 @@ struct AttributeDesc {
 struct BufferBinding {
     raw: glow::Buffer,
     offset: wgt::BufferAddress,
+}
+
+#[derive(Clone, Debug)]
+struct ImageBinding {
+    raw: glow::Texture,
+    mip_level: u32,
+    array_layer: Option<u32>,
+    access: u32,
+    format: u32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -606,6 +619,10 @@ enum Command {
         slot: u32,
         texture: glow::Texture,
         target: BindTarget,
+    },
+    BindImage {
+        slot: u32,
+        binding: ImageBinding,
     },
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),

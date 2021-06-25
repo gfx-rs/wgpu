@@ -455,6 +455,12 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Texture {
             inner,
+            mip_level_count: desc.mip_level_count,
+            array_layer_count: if desc.dimension == wgt::TextureDimension::D2 {
+                desc.size.depth_or_array_layers
+            } else {
+                1
+            },
             format: desc.format,
             format_desc,
         })
@@ -476,6 +482,14 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
+        let end_array_layer = match desc.range.array_layer_count {
+            Some(count) => desc.range.base_array_layer + count.get(),
+            None => texture.array_layer_count,
+        };
+        let end_mip_level = match desc.range.mip_level_count {
+            Some(count) => desc.range.base_mip_level + count.get(),
+            None => texture.mip_level_count,
+        };
         Ok(super::TextureView {
             inner: match texture.inner {
                 super::TextureInner::Renderbuffer { raw } => {
@@ -489,8 +503,8 @@ impl crate::Device<super::Api> for super::Device {
             sample_type: texture.format.describe().sample_type,
             aspects: crate::FormatAspect::from(texture.format)
                 & crate::FormatAspect::from(desc.range.aspect),
-            base_mip_level: desc.range.base_mip_level,
-            base_array_layer: desc.range.base_array_layer,
+            mip_levels: desc.range.base_mip_level..end_mip_level,
+            array_layers: desc.range.base_array_layer..end_array_layer,
         })
     }
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
@@ -610,13 +624,40 @@ impl crate::Device<super::Api> for super::Device {
                     let sampler = desc.samplers[entry.resource_index as usize];
                     super::RawBinding::Sampler(sampler.raw)
                 }
-                wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
-                    match desc.textures[entry.resource_index as usize].view.inner {
+                wgt::BindingType::Texture { .. } => {
+                    let view = desc.textures[entry.resource_index as usize].view;
+                    match view.inner {
                         super::TextureInner::Renderbuffer { .. } => {
                             panic!("Unable to use a renderbuffer in a group")
                         }
                         super::TextureInner::Texture { raw, target } => {
                             super::RawBinding::Texture { raw, target }
+                        }
+                    }
+                }
+                wgt::BindingType::StorageTexture {
+                    access,
+                    format,
+                    view_dimension,
+                } => {
+                    let view = desc.textures[entry.resource_index as usize].view;
+                    let format_desc = self.shared.describe_texture_format(format);
+                    match view.inner {
+                        super::TextureInner::Renderbuffer { .. } => {
+                            panic!("Unable to use a renderbuffer in a group")
+                        }
+                        super::TextureInner::Texture { raw, .. } => {
+                            super::RawBinding::Image(super::ImageBinding {
+                                raw,
+                                mip_level: view.mip_levels.start,
+                                array_layer: match view_dimension {
+                                    wgt::TextureViewDimension::D2Array
+                                    | wgt::TextureViewDimension::CubeArray => None,
+                                    _ => Some(view.array_layers.start),
+                                },
+                                access: conv::map_storage_access(access),
+                                format: format_desc.internal,
+                            })
                         }
                     }
                 }
