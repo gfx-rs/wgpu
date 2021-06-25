@@ -5,6 +5,7 @@ mod helpers;
 mod index;
 mod instructions;
 mod layout;
+mod recyclable;
 mod writer;
 
 pub use spirv::Capability;
@@ -15,6 +16,7 @@ use spirv::Word;
 use std::ops;
 use thiserror::Error;
 
+#[derive(Clone)]
 struct PhysicalLayout {
     magic_number: Word,
     version: Word,
@@ -237,6 +239,13 @@ impl ops::IndexMut<Handle<crate::Expression>> for CachedExpressions {
             unreachable!("Expression {:?} is already cached!", h);
         }
         id
+    }
+}
+impl recyclable::Recyclable for CachedExpressions {
+    fn recycle(self) -> Self {
+        CachedExpressions {
+            ids: self.ids.recycle(),
+        }
     }
 }
 

@@ -118,9 +118,6 @@ impl Writer {
             return Err(Error::UnsupportedVersion(major, minor));
         }
         let raw_version = ((major as u32) << 16) | ((minor as u32) << 8);
-        let mut id_gen = IdGenerator::default();
-        let gl450_ext_inst_id = id_gen.next();
-        let void_type = id_gen.next();
 
         let (capabilities, forbidden_caps) = match options.capabilities {
             Some(ref caps) => (caps.clone(), None),
@@ -131,6 +128,10 @@ impl Writer {
                 (caps, Some(forbidden))
             }
         };
+
+        let mut id_gen = IdGenerator::default();
+        let gl450_ext_inst_id = id_gen.next();
+        let void_type = id_gen.next();
 
         Ok(Writer {
             physical_layout: PhysicalLayout::new(raw_version),
@@ -154,6 +155,56 @@ impl Writer {
             gl450_ext_inst_id,
             temp_list: Vec::new(),
         })
+    }
+
+    /// Reset `Writer` to its initial state, retaining any allocations.
+    ///
+    /// Why not just implement `Recyclable` for `Writer`? By design,
+    /// `Recyclable::recycle` requires ownership of the value, not just
+    /// `&mut`; see the trait documentation. But we need to use this method
+    /// from functions like `Writer::write`, which only have `&mut Writer`.
+    /// Workarounds include unsafe code (`std::ptr::read`, then `write`, ugh)
+    /// or something like a `Default` impl that returns an oddly-initialized
+    /// `Writer`, which is worse.
+    fn reset(&mut self) {
+        use super::recyclable::Recyclable;
+        use std::mem::take;
+
+        let mut id_gen = IdGenerator::default();
+        let gl450_ext_inst_id = id_gen.next();
+        let void_type = id_gen.next();
+
+        // Every field of the old writer that is not determined by the `Options`
+        // passed to `Writer::new` should be reset somehow.
+        let fresh = Writer {
+            // Copied from the old Writer:
+            flags: self.flags,
+            index_bounds_check_policy: self.index_bounds_check_policy,
+            capabilities: take(&mut self.capabilities),
+            forbidden_caps: take(&mut self.forbidden_caps),
+
+            // Initialized afresh:
+            id_gen,
+            void_type,
+            gl450_ext_inst_id,
+
+            // Recycled:
+            physical_layout: self.physical_layout.clone().recycle(),
+            logical_layout: take(&mut self.logical_layout).recycle(),
+            debugs: take(&mut self.debugs).recycle(),
+            annotations: take(&mut self.annotations).recycle(),
+            lookup_type: take(&mut self.lookup_type).recycle(),
+            lookup_function: take(&mut self.lookup_function).recycle(),
+            lookup_function_type: take(&mut self.lookup_function_type).recycle(),
+            lookup_function_call: take(&mut self.lookup_function_call).recycle(),
+            constant_ids: take(&mut self.constant_ids).recycle(),
+            cached_constants: take(&mut self.cached_constants).recycle(),
+            global_variables: take(&mut self.global_variables).recycle(),
+            cached: take(&mut self.cached).recycle(),
+            temp_list: take(&mut self.temp_list).recycle(),
+        };
+
+        *self = fresh;
     }
 
     fn check(&mut self, capabilities: &[spirv::Capability]) -> Result<(), Error> {
@@ -2783,7 +2834,6 @@ impl Writer {
                 .push(Instruction::source(spirv::SourceLanguage::GLSL, 450));
         }
 
-        self.constant_ids.clear();
         self.constant_ids.resize(ir_module.constants.len(), 0);
         // first, output all the scalar constants
         for (handle, constant) in ir_module.constants.iter() {
@@ -2826,7 +2876,6 @@ impl Writer {
         debug_assert_eq!(self.constant_ids.iter().position(|&id| id == 0), None);
 
         // now write all globals
-        self.global_variables.clear();
         for (_, var) in ir_module.global_variables.iter() {
             let (instruction, id) = self.write_global_variable(ir_module, var)?;
             instruction.to_words(&mut self.logical_layout.declarations);
@@ -2884,9 +2933,7 @@ impl Writer {
         info: &ModuleInfo,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
-        self.lookup_function.clear();
-        self.lookup_function_type.clear();
-        self.lookup_function_call.clear();
+        self.reset();
 
         self.write_logical_layout(ir_module, info)?;
         self.write_physical_layout();

@@ -25,6 +25,18 @@ impl PhysicalLayout {
     }
 }
 
+impl super::recyclable::Recyclable for PhysicalLayout {
+    fn recycle(self) -> Self {
+        PhysicalLayout {
+            magic_number: self.magic_number,
+            version: self.version,
+            generator: self.generator,
+            instruction_schema: self.instruction_schema,
+            bound: 0,
+        }
+    }
+}
+
 impl LogicalLayout {
     pub(super) fn in_words(&self, sink: &mut impl Extend<Word>) {
         sink.extend(self.capabilities.iter().cloned());
@@ -38,6 +50,24 @@ impl LogicalLayout {
         sink.extend(self.declarations.iter().cloned());
         sink.extend(self.function_declarations.iter().cloned());
         sink.extend(self.function_definitions.iter().cloned());
+    }
+}
+
+impl super::recyclable::Recyclable for LogicalLayout {
+    fn recycle(self) -> Self {
+        Self {
+            capabilities: self.capabilities.recycle(),
+            extensions: self.extensions.recycle(),
+            ext_inst_imports: self.ext_inst_imports.recycle(),
+            memory_model: self.memory_model.recycle(),
+            entry_points: self.entry_points.recycle(),
+            execution_modes: self.execution_modes.recycle(),
+            debugs: self.debugs.recycle(),
+            annotations: self.annotations.recycle(),
+            declarations: self.declarations.recycle(),
+            function_declarations: self.function_declarations.recycle(),
+            function_definitions: self.function_definitions.recycle(),
+        }
     }
 }
 
