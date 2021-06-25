@@ -77,7 +77,6 @@ pub struct CommandBuffer<A: hal::Api> {
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
     pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
-    downlevel: wgt::DownlevelCapabilities,
     support_fill_buffer_texture: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
@@ -88,7 +87,7 @@ impl<A: HalApi> CommandBuffer<A> {
         encoder: A::CommandEncoder,
         device_id: Stored<id::DeviceId>,
         limits: wgt::Limits,
-        downlevel: wgt::DownlevelCapabilities,
+        _downlevel: wgt::DownlevelCapabilities,
         features: wgt::Features,
         #[cfg(feature = "trace")] enable_tracing: bool,
         label: &Label,
@@ -106,7 +105,6 @@ impl<A: HalApi> CommandBuffer<A> {
             used_swap_chains: Default::default(),
             buffer_memory_init_actions: Default::default(),
             limits,
-            downlevel,
             support_fill_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
             #[cfg(feature = "trace")]
             commands: if enable_tracing {

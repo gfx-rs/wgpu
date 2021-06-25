@@ -52,7 +52,7 @@ impl super::Adapter {
             None => false,
         };
 
-        let (version, vendor_info) = match src.find(' ') {
+        let (version, _vendor_info) = match src.find(' ') {
             Some(i) => (&src[..i], src[i + 1..].to_string()),
             None => (src, String::new()),
         };
@@ -196,6 +196,10 @@ impl super::Adapter {
         );
         downlevel_flags.set(wgt::DownlevelFlags::INDIRECT_EXECUTION, ver >= (3, 1));
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, ver >= (3, 2));
+        downlevel_flags.set(
+            wgt::DownlevelFlags::INDEPENDENT_BLENDING,
+            ver >= (3, 2) || extensions.contains("GL_EXT_draw_buffers_indexed"),
+        );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
         let max_texture_3d_size = gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) as u32;

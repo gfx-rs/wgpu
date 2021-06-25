@@ -465,7 +465,7 @@ impl crate::Device<super::Api> for super::Device {
             super::TextureInner::Renderbuffer { raw, .. } => {
                 gl.delete_renderbuffer(raw);
             }
-            super::TextureInner::Texture { raw, target } => {
+            super::TextureInner::Texture { raw, .. } => {
                 gl.delete_texture(raw);
             }
         }
@@ -514,7 +514,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_command_encoder(
         &self,
-        desc: &crate::CommandEncoderDescriptor<super::Api>,
+        _desc: &crate::CommandEncoderDescriptor<super::Api>,
     ) -> Result<super::CommandEncoder, crate::DeviceError> {
         Ok(super::CommandEncoder {
             cmd_buffer: super::CommandBuffer::default(),
@@ -585,7 +585,7 @@ impl crate::Device<super::Api> for super::Device {
             group_infos: group_infos.into_boxed_slice(),
         })
     }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {}
+    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
 
     unsafe fn create_bind_group(
         &self,
@@ -640,7 +640,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_shader_module(
         &self,
-        desc: &crate::ShaderModuleDescriptor,
+        _desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         Ok(super::ShaderModule {
@@ -670,8 +670,6 @@ impl crate::Device<super::Api> for super::Device {
             let mut attributes = Vec::new();
             for (index, vb_layout) in desc.vertex_buffers.iter().enumerate() {
                 buffers.push(super::VertexBufferDesc {
-                    raw: 0,
-                    offset: 0,
                     step: vb_layout.step_mode,
                     stride: vb_layout.array_stride as u32,
                 });
@@ -688,16 +686,34 @@ impl crate::Device<super::Api> for super::Device {
             (buffers.into_boxed_slice(), attributes.into_boxed_slice())
         };
 
+        let color_targets = {
+            let mut targets = Vec::new();
+            for ct in desc.color_targets.iter() {
+                targets.push(super::ColorTargetDesc {
+                    mask: ct.write_mask,
+                    blend: ct.blend.as_ref().map(conv::map_blend),
+                });
+            }
+            //Note: if any of the states are different, and `INDEPENDENT_BLEND` flag
+            // is not exposed, then this pipeline will not bind correctly.
+            targets.into_boxed_slice()
+        };
+
         Ok(super::RenderPipeline {
             inner,
             primitive: desc.primitive,
             vertex_buffers,
             vertex_attributes,
+            color_targets,
             depth: desc.depth_stencil.as_ref().map(|ds| super::DepthState {
                 function: conv::map_compare_func(ds.depth_compare),
                 mask: ds.depth_write_enabled,
             }),
-            depth_bias: desc.depth_stencil.as_ref().map(|ds| ds.bias),
+            depth_bias: desc
+                .depth_stencil
+                .as_ref()
+                .map(|ds| ds.bias)
+                .unwrap_or_default(),
             stencil: desc
                 .depth_stencil
                 .as_ref()

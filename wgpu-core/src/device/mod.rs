@@ -8,6 +8,7 @@ use crate::{
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
+    DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -316,6 +317,17 @@ impl<A: HalApi> Device<A> {
             Ok(())
         } else {
             Err(MissingFeatures(feature))
+        }
+    }
+
+    pub(crate) fn require_downlevel_flags(
+        &self,
+        flags: wgt::DownlevelFlags,
+    ) -> Result<(), MissingDownlevelFlags> {
+        if self.downlevel.flags.contains(flags) {
+            Ok(())
+        } else {
+            Err(MissingDownlevelFlags(flags))
         }
     }
 
@@ -1729,13 +1741,7 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        if !self
-            .downlevel
-            .flags
-            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
-        {
-            return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
-        }
+        self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>::new();
@@ -1857,6 +1863,16 @@ impl<A: HalApi> Device<A> {
             .as_ref()
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
+
+        if !color_targets.is_empty() && {
+            let first = &color_targets[0];
+            color_targets[1..]
+                .iter()
+                .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
+        } {
+            log::error!("Color targets: {:?}", color_targets);
+            self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLENDING)?;
+        }
 
         let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStage::empty();
@@ -2404,6 +2420,13 @@ impl From<hal::DeviceError> for DeviceError {
 #[derive(Clone, Debug, Error)]
 #[error("Features {0:?} are required but not enabled on the device")]
 pub struct MissingFeatures(pub wgt::Features);
+
+#[derive(Clone, Debug, Error)]
+#[error(
+    "Downlevel flags {0:?} are required but not supported on the device. {}",
+    DOWNLEVEL_ERROR_WARNING_MESSAGE
+)]
+pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]

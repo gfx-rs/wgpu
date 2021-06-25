@@ -17,6 +17,16 @@ fn is_3d_target(target: super::BindTarget) -> bool {
 }
 
 impl super::Queue {
+    unsafe fn reset_state(&self) {
+        let gl = &self.shared.context;
+        gl.use_program(None);
+        gl.polygon_offset(0.0, 0.0);
+        gl.disable(glow::DEPTH_TEST);
+        gl.disable(glow::STENCIL_TEST);
+        gl.disable(glow::SCISSOR_TEST);
+        gl.disable(glow::BLEND);
+    }
+
     unsafe fn process(&mut self, command: &C, data_bytes: &[u8], data_words: &[u32]) {
         let gl = &self.shared.context;
         match *command {
@@ -161,7 +171,7 @@ impl super::Queue {
             }
             C::CopyBufferToTexture {
                 src,
-                src_target,
+                src_target: _,
                 dst,
                 dst_target,
                 ref dst_info,
@@ -213,7 +223,7 @@ impl super::Queue {
                 src_target,
                 ref src_info,
                 dst,
-                dst_target,
+                dst_target: _,
                 ref copy,
             } => {
                 //TODO: compressed data
@@ -355,6 +365,9 @@ impl super::Queue {
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
                     .collect::<ArrayVec<[_; crate::MAX_COLOR_TARGETS]>>();
                 gl.draw_buffers(&indices);
+                for draw_buffer in 0..count as u32 {
+                    gl.disable_draw_buffer(glow::BLEND, draw_buffer);
+                }
             }
             C::ClearColorF(draw_buffer, mut color) => {
                 gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, &mut color);
@@ -438,6 +451,7 @@ impl super::Queue {
             }
             C::SetScissor(ref rect) => {
                 gl.scissor(rect.x, rect.y, rect.w, rect.h);
+                gl.enable(glow::SCISSOR_TEST);
             }
             C::SetStencilFunc {
                 face,
@@ -455,28 +469,118 @@ impl super::Queue {
                 gl.stencil_mask_separate(face, write_mask);
                 gl.stencil_op_separate(face, ops.fail, ops.depth_fail, ops.pass);
             }
-            C::SetVertexAttribute(ref vat, ref vb) => {
-                gl.bind_buffer(glow::ARRAY_BUFFER, Some(vb.raw));
-                let offset = vat.offset as i32 + vb.offset as i32;
+            C::SetVertexAttribute {
+                ref buffer_desc,
+                ref buffer,
+                attribute_desc: ref vat,
+            } => {
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer.raw));
+                let offset = vat.offset as i32 + buffer.offset as i32;
                 match vat.format_desc.attrib_kind {
                     super::VertexAttribKind::Float => gl.vertex_attrib_pointer_f32(
                         vat.location,
                         vat.format_desc.element_count,
                         vat.format_desc.element_format,
                         true, // always normalized
-                        vb.stride as i32,
+                        buffer_desc.stride as i32,
                         offset,
                     ),
                     super::VertexAttribKind::Integer => gl.vertex_attrib_pointer_i32(
                         vat.location,
                         vat.format_desc.element_count,
                         vat.format_desc.element_format,
-                        vb.stride as i32,
+                        buffer_desc.stride as i32,
                         offset,
                     ),
                 }
-                gl.vertex_attrib_divisor(vat.location, vb.step as u32);
+                gl.vertex_attrib_divisor(vat.location, buffer_desc.step as u32);
                 gl.enable_vertex_attrib_array(vat.location);
+            }
+            C::SetDepth(ref depth) => {
+                gl.depth_func(depth.function);
+                gl.depth_mask(depth.mask);
+            }
+            C::SetDepthBias(bias) => {
+                gl.polygon_offset(bias.constant as f32, bias.slope_scale);
+            }
+            C::ConfigureDepthStencil(aspects) => {
+                if aspects.contains(crate::FormatAspect::DEPTH) {
+                    gl.enable(glow::DEPTH_TEST);
+                } else {
+                    gl.disable(glow::DEPTH_TEST);
+                }
+                if aspects.contains(crate::FormatAspect::STENCIL) {
+                    gl.enable(glow::STENCIL_TEST);
+                } else {
+                    gl.disable(glow::STENCIL_TEST);
+                }
+            }
+            C::SetProgram(program) => {
+                gl.use_program(Some(program));
+            }
+            C::SetBlendConstant(c) => {
+                gl.blend_color(c[0], c[1], c[2], c[3]);
+            }
+            C::SetColorTarget {
+                draw_buffer_index,
+                desc: super::ColorTargetDesc { mask, ref blend },
+            } => {
+                use wgt::ColorWrite as Cw;
+                if let Some(index) = draw_buffer_index {
+                    gl.color_mask_draw_buffer(
+                        index,
+                        mask.contains(Cw::RED),
+                        mask.contains(Cw::GREEN),
+                        mask.contains(Cw::BLUE),
+                        mask.contains(Cw::ALPHA),
+                    );
+                    if let Some(ref blend) = *blend {
+                        gl.enable_draw_buffer(index, glow::BLEND);
+                        if blend.color != blend.alpha {
+                            gl.blend_equation_separate_draw_buffer(
+                                index,
+                                blend.color.equation,
+                                blend.alpha.equation,
+                            );
+                            gl.blend_func_separate_draw_buffer(
+                                index,
+                                blend.color.src,
+                                blend.color.dst,
+                                blend.alpha.src,
+                                blend.alpha.dst,
+                            );
+                        } else {
+                            gl.blend_equation_draw_buffer(index, blend.color.equation);
+                            gl.blend_func_draw_buffer(index, blend.color.src, blend.color.dst);
+                        }
+                    } else {
+                        gl.disable_draw_buffer(index, glow::BLEND);
+                    }
+                } else {
+                    gl.color_mask(
+                        mask.contains(Cw::RED),
+                        mask.contains(Cw::GREEN),
+                        mask.contains(Cw::BLUE),
+                        mask.contains(Cw::ALPHA),
+                    );
+                    if let Some(ref blend) = *blend {
+                        gl.enable(glow::BLEND);
+                        if blend.color != blend.alpha {
+                            gl.blend_equation_separate(blend.color.equation, blend.alpha.equation);
+                            gl.blend_func_separate(
+                                blend.color.src,
+                                blend.color.dst,
+                                blend.alpha.src,
+                                blend.alpha.dst,
+                            );
+                        } else {
+                            gl.blend_equation(blend.color.equation);
+                            gl.blend_func(blend.color.src, blend.color.dst);
+                        }
+                    } else {
+                        gl.disable(glow::BLEND);
+                    }
+                }
             }
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);
@@ -505,6 +609,7 @@ impl crate::Queue<super::Api> for super::Queue {
         command_buffers: &[&super::CommandBuffer],
         signal_fence: Option<(&mut super::Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
+        self.reset_state();
         for cmd_buf in command_buffers.iter() {
             for command in cmd_buf.commands.iter() {
                 self.process(command, &cmd_buf.data_bytes, &cmd_buf.data_words);

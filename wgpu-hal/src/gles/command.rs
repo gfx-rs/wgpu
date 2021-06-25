@@ -14,9 +14,11 @@ pub(super) struct State {
     topology: u32,
     index_format: wgt::IndexFormat,
     index_offset: wgt::BufferAddress,
-    vertex_buffers: [super::VertexBufferDesc; crate::MAX_VERTEX_BUFFERS],
+    vertex_buffers: [(super::VertexBufferDesc, super::BufferBinding); crate::MAX_VERTEX_BUFFERS],
     vertex_attributes: ArrayVec<[super::AttributeDesc; super::MAX_VERTEX_ATTRIBUTES]>,
+    color_targets: ArrayVec<[super::ColorTargetDesc; crate::MAX_COLOR_TARGETS]>,
     stencil: super::StencilState,
+    depth_bias: wgt::DepthBiasState,
     has_pass_label: bool,
     dirty: Dirty,
 }
@@ -63,18 +65,19 @@ impl super::CommandEncoder {
 
     fn rebind_vertex_attributes(&mut self, first_instance: u32) {
         for attribute in self.state.vertex_attributes.iter() {
-            let vb = self.state.vertex_buffers[attribute.buffer_index as usize].clone();
+            let (buffer_desc, buffer) =
+                self.state.vertex_buffers[attribute.buffer_index as usize].clone();
 
-            let mut vat = attribute.clone();
-            vat.offset += vb.offset as u32;
-
-            if vb.step == wgt::InputStepMode::Instance {
-                vat.offset += vb.stride * first_instance;
+            let mut attribute_desc = attribute.clone();
+            if buffer_desc.step == wgt::InputStepMode::Instance {
+                attribute_desc.offset += buffer_desc.stride * first_instance;
             }
 
-            self.cmd_buffer
-                .commands
-                .push(C::SetVertexAttribute(vat, vb));
+            self.cmd_buffer.commands.push(C::SetVertexAttribute {
+                buffer_desc,
+                buffer,
+                attribute_desc,
+            });
         }
     }
 
@@ -391,6 +394,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.state.has_pass_label = false;
         }
         self.state.dirty = Dirty::empty();
+        self.state.color_targets.clear();
+        self.state.vertex_attributes.clear();
     }
 
     unsafe fn set_bind_group(
@@ -426,11 +431,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.topology = conv::map_primitive_topology(pipeline.primitive.topology);
         self.state.dirty |= Dirty::VERTEX_BUFFERS;
 
+        self.cmd_buffer
+            .commands
+            .push(C::SetProgram(pipeline.inner.program));
+
         self.state.vertex_attributes.clear();
         for vat in pipeline.vertex_attributes.iter() {
             self.state.vertex_attributes.push(vat.clone());
         }
-        for (state_desc, pipe_desc) in self
+        for (&mut (ref mut state_desc, _), pipe_desc) in self
             .state
             .vertex_buffers
             .iter_mut()
@@ -440,7 +449,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             state_desc.stride = pipe_desc.stride;
         }
 
+        let mut aspects = crate::FormatAspect::empty();
+        if pipeline.depth_bias != self.state.depth_bias {
+            self.state.depth_bias = pipeline.depth_bias;
+            self.cmd_buffer
+                .commands
+                .push(C::SetDepthBias(pipeline.depth_bias));
+        }
+        if let Some(ref depth) = pipeline.depth {
+            aspects |= crate::FormatAspect::DEPTH;
+            self.cmd_buffer.commands.push(C::SetDepth(depth.clone()));
+        }
         if let Some(ref stencil) = pipeline.stencil {
+            aspects |= crate::FormatAspect::STENCIL;
             self.state.stencil = stencil.clone();
             self.rebind_stencil_func();
             if stencil.front.ops == stencil.back.ops
@@ -464,6 +485,34 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 });
             }
         }
+        self.cmd_buffer
+            .commands
+            .push(C::ConfigureDepthStencil(aspects));
+
+        if self.state.color_targets[..] != pipeline.color_targets[..] {
+            if pipeline
+                .color_targets
+                .iter()
+                .skip(1)
+                .any(|ct| *ct != pipeline.color_targets[0])
+            {
+                for (index, ct) in pipeline.color_targets.iter().enumerate() {
+                    self.cmd_buffer.commands.push(C::SetColorTarget {
+                        draw_buffer_index: Some(index as u32),
+                        desc: ct.clone(),
+                    });
+                }
+            } else {
+                self.cmd_buffer.commands.push(C::SetColorTarget {
+                    draw_buffer_index: None,
+                    desc: pipeline.color_targets.first().cloned().unwrap_or_default(),
+                });
+            }
+        }
+        self.state.color_targets.clear();
+        for ct in pipeline.color_targets.iter() {
+            self.state.color_targets.push(ct.clone());
+        }
     }
 
     unsafe fn set_index_buffer<'a>(
@@ -483,7 +532,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         binding: crate::BufferBinding<'a, super::Api>,
     ) {
         self.state.dirty |= Dirty::VERTEX_BUFFERS;
-        let vb = &mut self.state.vertex_buffers[index as usize];
+        let vb = &mut self.state.vertex_buffers[index as usize].1;
         vb.raw = binding.buffer.raw;
         vb.offset = binding.offset;
     }
@@ -511,7 +560,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.stencil.back.reference = value;
         self.rebind_stencil_func();
     }
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {}
+    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {
+        let color = [
+            color.r as f32,
+            color.g as f32,
+            color.b as f32,
+            color.a as f32,
+        ];
+        self.cmd_buffer.commands.push(C::SetBlendConstant(color));
+    }
 
     unsafe fn draw(
         &mut self,
@@ -628,7 +685,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.dirty = Dirty::empty();
     }
 
-    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {}
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
+        self.cmd_buffer
+            .commands
+            .push(C::SetProgram(pipeline.inner.program));
+    }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
         self.cmd_buffer.commands.push(C::Dispatch(count));

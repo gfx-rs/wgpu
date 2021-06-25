@@ -625,24 +625,24 @@ bitflags::bitflags! {
         const INDIRECT_EXECUTION = 0x0000_0004;
         /// Supports non-zero `base_vertex` parameter to indexed draw calls.
         const BASE_VERTEX = 0x0000_0008;
-        /// Supports non-zero `base_instance` parameter to draw calls.
-        const BASE_INSTANCE = 0x0000_0010;
         /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
-        const READ_ONLY_DEPTH_STENCIL = 0x0000_0020;
+        const READ_ONLY_DEPTH_STENCIL = 0x0000_0010;
         /// Supports:
         /// - copy_image_to_image
         /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
-        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0040;
+        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0020;
         /// Supports textures with mipmaps which have a non power of two size.
-        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0080;
+        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0040;
         /// Supports textures that are cube arrays.
-        const CUBE_ARRAY_TEXTURES = 0x0000_0100;
+        const CUBE_ARRAY_TEXTURES = 0x0000_0080;
         /// Supports comparison samplers.
-        const COMPARISON_SAMPLERS = 0x0000_0200;
+        const COMPARISON_SAMPLERS = 0x0000_0100;
+        /// Supports different blending modes per color target.
+        const INDEPENDENT_BLENDING = 0x0000_0200;
         /// Supports samplers with anisotropic filtering
         const ANISOTROPIC_FILTERING = 0x0001_0000;
         /// All flags are in their compliant state.
-        const COMPLIANT = 0x0000_02FF;
+        const COMPLIANT = 0x0000_13FF;
     }
 }
 

@@ -1,5 +1,3 @@
-#![allow(unused_variables)]
-
 #[cfg(not(target_arch = "wasm32"))]
 mod egl;
 
@@ -319,9 +317,13 @@ struct AttributeDesc {
 }
 
 #[derive(Clone, Debug, Default)]
-struct VertexBufferDesc {
+struct BufferBinding {
     raw: glow::Buffer,
     offset: wgt::BufferAddress,
+}
+
+#[derive(Clone, Debug, Default)]
+struct VertexBufferDesc {
     step: wgt::InputStepMode,
     stride: u32,
 }
@@ -343,19 +345,39 @@ struct PipelineInner {
     uniforms: Box<[UniformDesc]>,
 }
 
+#[derive(Clone, Debug)]
 struct DepthState {
     function: u32,
     mask: bool,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct BlendComponent {
+    src: u32,
+    dst: u32,
+    equation: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct BlendDesc {
+    alpha: BlendComponent,
+    color: BlendComponent,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+struct ColorTargetDesc {
+    mask: wgt::ColorWrite,
+    blend: Option<BlendDesc>,
+}
+
 pub struct RenderPipeline {
     inner: PipelineInner,
-    //blend_targets: Vec<pso::ColorBlendDesc>,
+    primitive: wgt::PrimitiveState,
     vertex_buffers: Box<[VertexBufferDesc]>,
     vertex_attributes: Box<[AttributeDesc]>,
-    primitive: wgt::PrimitiveState,
+    color_targets: Box<[ColorTargetDesc]>,
     depth: Option<DepthState>,
-    depth_bias: Option<wgt::DepthBiasState>,
+    depth_bias: wgt::DepthBiasState,
     stencil: Option<StencilState>,
 }
 
@@ -560,7 +582,20 @@ enum Command {
         write_mask: u32,
         ops: StencilOps,
     },
-    SetVertexAttribute(AttributeDesc, VertexBufferDesc),
+    SetDepth(DepthState),
+    SetDepthBias(wgt::DepthBiasState),
+    ConfigureDepthStencil(crate::FormatAspect),
+    SetVertexAttribute {
+        buffer: BufferBinding,
+        buffer_desc: VertexBufferDesc,
+        attribute_desc: AttributeDesc,
+    },
+    SetProgram(glow::Program),
+    SetBlendConstant([f32; 4]),
+    SetColorTarget {
+        draw_buffer_index: Option<u32>,
+        desc: ColorTargetDesc,
+    },
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),
     PopDebugGroup,

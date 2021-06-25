@@ -11,7 +11,7 @@ use crate::{
     resource::{Buffer, Texture},
     track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
     validation::{check_buffer_usage, MissingBufferUsageError},
-    Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
+    Label,
 };
 
 use hal::CommandEncoder as _;
@@ -149,11 +149,6 @@ pub enum ComputePassErrorInner {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
-    #[error(
-        "Compute shaders are not supported by the underlying platform. {}",
-        DOWNLEVEL_ERROR_WARNING_MESSAGE
-    )]
-    ComputeShadersUnsupported,
     #[error(transparent)]
     Dispatch(#[from] DispatchError),
     #[error(transparent)]
@@ -273,17 +268,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(crate::device::trace::Command::RunComputePass {
                 base: BasePass::from_ref(base),
-            });
-        }
-
-        if !cmd_buf
-            .downlevel
-            .flags
-            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
-        {
-            return Err(ComputePassError {
-                scope: PassErrorScope::Pass(encoder_id),
-                inner: ComputePassErrorInner::ComputeShadersUnsupported,
             });
         }
 

@@ -273,3 +273,43 @@ pub(super) fn map_stencil(state: &wgt::StencilState) -> super::StencilState {
         },
     }
 }
+
+fn map_blend_factor(factor: wgt::BlendFactor) -> u32 {
+    use wgt::BlendFactor as Bf;
+    match factor {
+        Bf::Zero => glow::ZERO,
+        Bf::One => glow::ONE,
+        Bf::Src => glow::SRC_COLOR,
+        Bf::OneMinusSrc => glow::ONE_MINUS_SRC_COLOR,
+        Bf::Dst => glow::DST_COLOR,
+        Bf::OneMinusDst => glow::ONE_MINUS_DST_COLOR,
+        Bf::SrcAlpha => glow::SRC_ALPHA,
+        Bf::OneMinusSrcAlpha => glow::ONE_MINUS_SRC_ALPHA,
+        Bf::DstAlpha => glow::DST_ALPHA,
+        Bf::OneMinusDstAlpha => glow::ONE_MINUS_DST_ALPHA,
+        Bf::Constant => glow::CONSTANT_COLOR,
+        Bf::OneMinusConstant => glow::ONE_MINUS_CONSTANT_COLOR,
+        Bf::SrcAlphaSaturated => glow::SRC_ALPHA_SATURATE,
+    }
+}
+
+fn map_blend_component(component: &wgt::BlendComponent) -> super::BlendComponent {
+    super::BlendComponent {
+        src: map_blend_factor(component.src_factor),
+        dst: map_blend_factor(component.dst_factor),
+        equation: match component.operation {
+            wgt::BlendOperation::Add => glow::FUNC_ADD,
+            wgt::BlendOperation::Subtract => glow::FUNC_SUBTRACT,
+            wgt::BlendOperation::ReverseSubtract => glow::FUNC_REVERSE_SUBTRACT,
+            wgt::BlendOperation::Min => glow::MIN,
+            wgt::BlendOperation::Max => glow::MAX,
+        },
+    }
+}
+
+pub(super) fn map_blend(blend: &wgt::BlendState) -> super::BlendDesc {
+    super::BlendDesc {
+        color: map_blend_component(&blend.color),
+        alpha: map_blend_component(&blend.alpha),
+    }
+}
