@@ -9,6 +9,12 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct TextureSlotDesc {
+    tex_target: super::BindTarget,
+    sampler_index: Option<u8>,
+}
+
 #[derive(Default)]
 pub(super) struct State {
     topology: u32,
@@ -19,6 +25,8 @@ pub(super) struct State {
     color_targets: ArrayVec<[super::ColorTargetDesc; crate::MAX_COLOR_TARGETS]>,
     stencil: super::StencilState,
     depth_bias: wgt::DepthBiasState,
+    samplers: [Option<glow::Sampler>; super::MAX_SAMPLERS],
+    texture_slots: [TextureSlotDesc; super::MAX_TEXTURE_SLOTS],
     has_pass_label: bool,
     dirty: Dirty,
 }
@@ -81,6 +89,22 @@ impl super::CommandEncoder {
         }
     }
 
+    fn rebind_sampler_states(&mut self, dirty_textures: u32, dirty_samplers: u32) {
+        for (texture_index, slot) in self.state.texture_slots.iter().enumerate() {
+            if let Some(sampler_index) = slot.sampler_index {
+                if dirty_textures & (1 << texture_index) != 0
+                    || dirty_samplers & (1 << sampler_index) != 0
+                {
+                    if let Some(sampler) = self.state.samplers[sampler_index as usize] {
+                        self.cmd_buffer
+                            .commands
+                            .push(C::BindSampler(texture_index as u32, sampler));
+                    }
+                }
+            }
+        }
+    }
+
     fn prepare_draw(&mut self, first_instance: u32) {
         if first_instance != 0 {
             self.rebind_vertex_attributes(first_instance);
@@ -88,6 +112,31 @@ impl super::CommandEncoder {
         } else if self.state.dirty.contains(Dirty::VERTEX_BUFFERS) {
             self.rebind_vertex_attributes(0);
             self.state.dirty.set(Dirty::VERTEX_BUFFERS, false);
+        }
+    }
+
+    fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
+        self.cmd_buffer.commands.push(C::SetProgram(inner.program));
+
+        //TODO: push constants
+        let _ = &inner.uniforms;
+
+        // rebind textures, if needed
+        let mut dirty_textures = 0u32;
+        for (texture_index, (slot, &sampler_index)) in self
+            .state
+            .texture_slots
+            .iter_mut()
+            .zip(inner.sampler_map.iter())
+            .enumerate()
+        {
+            if slot.sampler_index != sampler_index {
+                slot.sampler_index = sampler_index;
+                dirty_textures |= 1 << texture_index;
+            }
+        }
+        if dirty_textures != 0 {
+            self.rebind_sampler_states(dirty_textures, 0);
         }
     }
 }
@@ -405,14 +454,74 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
+        let mut do_index = 0;
+        let mut dirty_textures = 0u32;
+        let mut dirty_samplers = 0u32;
+        let group_info = &layout.group_infos[index as usize];
+
+        for (binding_layout, raw_binding) in group_info.entries.iter().zip(group.contents.iter()) {
+            let slot = group_info.binding_to_slot[binding_layout.binding as usize] as u32;
+            match *raw_binding {
+                super::RawBinding::Buffer {
+                    raw,
+                    offset: base_offset,
+                    size,
+                } => {
+                    let mut offset = base_offset;
+                    let target = match binding_layout.ty {
+                        wgt::BindingType::Buffer {
+                            ty,
+                            has_dynamic_offset,
+                            min_binding_size: _,
+                        } => {
+                            if has_dynamic_offset {
+                                offset += dynamic_offsets[do_index] as i32;
+                                do_index += 1;
+                            }
+                            match ty {
+                                wgt::BufferBindingType::Uniform => glow::UNIFORM_BUFFER,
+                                wgt::BufferBindingType::Storage { .. } => {
+                                    glow::SHADER_STORAGE_BUFFER
+                                }
+                            }
+                        }
+                        _ => unreachable!(),
+                    };
+                    self.cmd_buffer.commands.push(C::BindBuffer {
+                        target,
+                        slot,
+                        buffer: raw,
+                        offset,
+                        size,
+                    });
+                }
+                super::RawBinding::Texture { raw, target } => {
+                    dirty_textures |= 1 << slot;
+                    self.state.texture_slots[slot as usize].tex_target = target;
+                    self.cmd_buffer.commands.push(C::BindTexture {
+                        slot,
+                        texture: raw,
+                        target,
+                    });
+                }
+                super::RawBinding::Sampler(sampler) => {
+                    dirty_samplers |= 1 << slot;
+                    self.state.samplers[slot as usize] = Some(sampler);
+                }
+            }
+        }
+
+        self.rebind_sampler_states(dirty_textures, dirty_samplers);
     }
+
     unsafe fn set_push_constants(
         &mut self,
-        layout: &super::PipelineLayout,
-        stages: wgt::ShaderStage,
-        offset: u32,
-        data: &[u32],
+        _layout: &super::PipelineLayout,
+        _stages: wgt::ShaderStage,
+        _offset: u32,
+        _data: &[u32],
     ) {
+        unimplemented!()
     }
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {
@@ -431,10 +540,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.topology = conv::map_primitive_topology(pipeline.primitive.topology);
         self.state.dirty |= Dirty::VERTEX_BUFFERS;
 
-        self.cmd_buffer
-            .commands
-            .push(C::SetProgram(pipeline.inner.program));
+        self.set_pipeline_inner(&pipeline.inner);
 
+        // set vertex state
         self.state.vertex_attributes.clear();
         for vat in pipeline.vertex_attributes.iter() {
             self.state.vertex_attributes.push(vat.clone());
@@ -449,6 +557,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             state_desc.stride = pipe_desc.stride;
         }
 
+        // set depth/stencil states
         let mut aspects = crate::FormatAspect::empty();
         if pipeline.depth_bias != self.state.depth_bias {
             self.state.depth_bias = pipeline.depth_bias;
@@ -489,6 +598,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .commands
             .push(C::ConfigureDepthStencil(aspects));
 
+        // set blend states
         if self.state.color_targets[..] != pipeline.color_targets[..] {
             if pipeline
                 .color_targets
@@ -686,9 +796,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
-        self.cmd_buffer
-            .commands
-            .push(C::SetProgram(pipeline.inner.program));
+        self.set_pipeline_inner(&pipeline.inner);
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {

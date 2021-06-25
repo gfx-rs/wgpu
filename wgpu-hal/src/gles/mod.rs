@@ -20,6 +20,7 @@ pub struct Api;
 //Note: we can support more samplers if not every one of them is used at a time,
 // but it probably doesn't worth it.
 const MAX_TEXTURE_SLOTS: usize = 16;
+const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
 
 impl crate::Api for Api {
@@ -60,7 +61,6 @@ bitflags::bitflags! {
 }
 
 type BindTarget = u32;
-type TextureFormat = u32;
 
 trait Sampled {
     unsafe fn set_param_float(&self, gl: &glow::Context, key: u32, value: f32);
@@ -164,7 +164,7 @@ impl Default for VertexAttribKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct TextureFormatDesc {
     internal: u32,
     external: u32,
@@ -278,7 +278,6 @@ enum BindingRegister {
 #[derive(Debug)]
 enum RawBinding {
     Buffer {
-        register: BindingRegister,
         raw: glow::Buffer,
         offset: i32,
         size: i32,
@@ -292,7 +291,6 @@ enum RawBinding {
 
 #[derive(Debug)]
 pub struct BindGroup {
-    layout_entries: Arc<[wgt::BindGroupLayoutEntry]>,
     contents: Box<[RawBinding]>,
 }
 
@@ -595,6 +593,19 @@ enum Command {
     SetColorTarget {
         draw_buffer_index: Option<u32>,
         desc: ColorTargetDesc,
+    },
+    BindBuffer {
+        target: BindTarget,
+        slot: u32,
+        buffer: glow::Buffer,
+        offset: i32,
+        size: i32,
+    },
+    BindSampler(u32, glow::Sampler),
+    BindTexture {
+        slot: u32,
+        texture: glow::Texture,
+        target: BindTarget,
     },
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),

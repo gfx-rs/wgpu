@@ -541,7 +541,8 @@ pub struct Swapchain {
     renderbuffer: glow::Renderbuffer,
     /// Extent because the window lies
     extent: wgt::Extent3d,
-    format: super::TextureFormat,
+    format: wgt::TextureFormat,
+    format_desc: super::TextureFormatDesc,
     sample_type: wgt::TextureSampleType,
 }
 
@@ -657,7 +658,8 @@ impl crate::Surface<super::Api> for Surface {
             renderbuffer,
             framebuffer,
             extent: config.extent,
-            format: format_desc.internal,
+            format: config.format,
+            format_desc,
             sample_type: wgt::TextureSampleType::Float { filterable: false },
         });
 
@@ -674,12 +676,20 @@ impl crate::Surface<super::Api> for Surface {
 
     unsafe fn acquire_texture(
         &mut self,
-        timeout_ms: u32,
+        _timeout_ms: u32, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let sc = self.swapchain.as_ref().unwrap();
-        //let sc_image =
-        //    native::SwapchainImage::new(sc.renderbuffer, sc.format, sc.extent, sc.channel);
-        Ok(None)
+        let texture = super::Texture {
+            inner: super::TextureInner::Renderbuffer {
+                raw: sc.renderbuffer,
+            },
+            format: sc.format,
+            format_desc: sc.format_desc.clone(),
+        };
+        Ok(Some(crate::AcquiredSurfaceTexture {
+            texture,
+            suboptimal: false,
+        }))
     }
     unsafe fn discard_texture(&mut self, _texture: super::Texture) {}
 }

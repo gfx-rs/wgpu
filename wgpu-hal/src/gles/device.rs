@@ -595,16 +595,9 @@ impl crate::Device<super::Api> for super::Device {
 
         for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
             let binding = match layout.ty {
-                wgt::BindingType::Buffer { ty, .. } => {
+                wgt::BindingType::Buffer { .. } => {
                     let bb = &desc.buffers[entry.resource_index as usize];
-                    let register = match ty {
-                        wgt::BufferBindingType::Uniform => super::BindingRegister::UniformBuffers,
-                        wgt::BufferBindingType::Storage { .. } => {
-                            super::BindingRegister::StorageBuffers
-                        }
-                    };
                     super::RawBinding::Buffer {
-                        register,
                         raw: bb.buffer.raw,
                         offset: bb.offset as i32,
                         size: match bb.size {
@@ -632,7 +625,6 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         Ok(super::BindGroup {
-            layout_entries: Arc::clone(&desc.layout.entries),
             contents: contents.into_boxed_slice(),
         })
     }

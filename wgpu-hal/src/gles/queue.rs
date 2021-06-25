@@ -582,6 +582,26 @@ impl super::Queue {
                     }
                 }
             }
+            C::BindBuffer {
+                target,
+                slot,
+                buffer,
+                offset,
+                size,
+            } => {
+                gl.bind_buffer_range(target, slot, Some(buffer), offset, size);
+            }
+            C::BindSampler(texture_index, sampler) => {
+                gl.bind_sampler(texture_index, Some(sampler));
+            }
+            C::BindTexture {
+                slot,
+                texture,
+                target,
+            } => {
+                gl.active_texture(glow::TEXTURE0 + slot);
+                gl.bind_texture(target, Some(texture));
+            }
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);
                 gl.debug_message_insert(
