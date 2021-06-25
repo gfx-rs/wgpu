@@ -47,7 +47,6 @@ impl Function {
             for instruction in block.body.iter() {
                 instruction.to_words(sink);
             }
-            block.termination.as_ref().unwrap().to_words(sink);
         }
     }
 }
@@ -2369,9 +2368,6 @@ impl Writer {
         let mut block = Block::new(label_id);
 
         for statement in statements {
-            if block.termination.is_some() {
-                unimplemented!("No statements are expected after block termination");
-            }
             match *statement {
                 crate::Statement::Emit(ref range) => {
                     for handle in range.clone() {
@@ -2576,11 +2572,15 @@ impl Writer {
                     block = Block::new(merge_id);
                 }
                 crate::Statement::Break => {
-                    block.termination = Some(Instruction::branch(loop_context.break_id.unwrap()));
+                    function.consume(block, Instruction::branch(loop_context.break_id.unwrap()));
+                    return Ok(());
                 }
                 crate::Statement::Continue => {
-                    block.termination =
-                        Some(Instruction::branch(loop_context.continuing_id.unwrap()));
+                    function.consume(
+                        block,
+                        Instruction::branch(loop_context.continuing_id.unwrap()),
+                    );
+                    return Ok(());
                 }
                 crate::Statement::Return { value: Some(value) } => {
                     let value_id = self.cached[value];
@@ -2598,13 +2598,16 @@ impl Writer {
                         }
                         None => Instruction::return_value(value_id),
                     };
-                    block.termination = Some(instruction);
+                    function.consume(block, instruction);
+                    return Ok(());
                 }
                 crate::Statement::Return { value: None } => {
-                    block.termination = Some(Instruction::return_void());
+                    function.consume(block, Instruction::return_void());
+                    return Ok(());
                 }
                 crate::Statement::Kill => {
-                    block.termination = Some(Instruction::kill());
+                    function.consume(block, Instruction::kill());
+                    return Ok(());
                 }
                 crate::Statement::Barrier(flags) => {
                     let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
@@ -2734,24 +2737,22 @@ impl Writer {
             }
         }
 
-        if block.termination.is_none() {
-            block.termination = Some(match exit_id {
-                Some(id) => Instruction::branch(id),
-                // This can happen if the last branch had all the paths
-                // leading out of the graph (i.e. returning).
-                // Or it may be the end of the function.
-                None => match ir_function.result {
-                    Some(ref result) if function.entry_point_context.is_none() => {
-                        let type_id = self.get_type_id(LookupType::Handle(result.ty))?;
-                        let null_id = self.write_constant_null(type_id);
-                        Instruction::return_value(null_id)
-                    }
-                    _ => Instruction::return_void(),
-                },
-            });
-        }
+        let termination = match exit_id {
+            Some(id) => Instruction::branch(id),
+            // This can happen if the last branch had all the paths
+            // leading out of the graph (i.e. returning).
+            // Or it may be the end of the function.
+            None => match ir_function.result {
+                Some(ref result) if function.entry_point_context.is_none() => {
+                    let type_id = self.get_type_id(LookupType::Handle(result.ty))?;
+                    let null_id = self.write_constant_null(type_id);
+                    Instruction::return_value(null_id)
+                }
+                _ => Instruction::return_void(),
+            },
+        };
 
-        function.blocks.push(block);
+        function.consume(block, termination);
         Ok(())
     }
 

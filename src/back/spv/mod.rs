@@ -72,10 +72,26 @@ impl IdGenerator {
     }
 }
 
+/// A SPIR-V block to which we are still adding instructions.
+///
+/// A `Block` represents a SPIR-V block that does not yet have a termination
+/// instruction like `OpBranch` or `OpReturn`.
+///
+/// The `OpLabel` that starts the block is implicit. It will be emitted based on
+/// `label_id` when we write the block to a `LogicalLayout`.
+///
+/// To terminate a `Block`, pass the block and the termination instruction to
+/// `Function::consume`. This takes ownership of the `Block` and transforms it
+/// into a `TerminatedBlock`.
 struct Block {
     label_id: Word,
     body: Vec<Instruction>,
-    termination: Option<Instruction>,
+}
+
+/// A SPIR-V block that ends with a termination instruction.
+struct TerminatedBlock {
+    label_id: Word,
+    body: Vec<Instruction>,
 }
 
 impl Block {
@@ -83,7 +99,6 @@ impl Block {
         Block {
             label_id,
             body: Vec::new(),
-            termination: None,
         }
     }
 }
@@ -109,14 +124,17 @@ struct Function {
     signature: Option<Instruction>,
     parameters: Vec<Instruction>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
-    blocks: Vec<Block>,
+    blocks: Vec<TerminatedBlock>,
     entry_point_context: Option<EntryPointContext>,
 }
 
 impl Function {
     fn consume(&mut self, mut block: Block, termination: Instruction) {
-        block.termination = Some(termination);
-        self.blocks.push(block);
+        block.body.push(termination);
+        self.blocks.push(TerminatedBlock {
+            label_id: block.label_id,
+            body: block.body,
+        })
     }
 
     fn parameter_id(&self, index: u32) -> Word {
