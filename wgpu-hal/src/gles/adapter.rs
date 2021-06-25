@@ -167,13 +167,13 @@ impl super::Adapter {
 
         let ver = Self::parse_version(&version).ok()?;
         let extensions = gl.supported_extensions();
-        log::info!("Extensions: {:?}", extensions);
+        log::debug!("Extensions: {:#?}", extensions);
 
         let shading_language_version = {
             let sl_version = gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION);
             log::info!("SL version: {}", sl_version);
-            let (sl_major, sl_minor) = Self::parse_version(&version).ok()?;
-            let value = (sl_major * 100 + sl_minor * 10) as u16;
+            let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
+            let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
             naga::back::glsl::Version::Embedded(value)
         };
 

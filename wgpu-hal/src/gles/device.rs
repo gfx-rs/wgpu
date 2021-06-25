@@ -275,19 +275,19 @@ impl crate::Device<super::Api> for super::Device {
         } else {
             glow::ARRAY_BUFFER
         };
-        let map_coherent = false;
-        let map_flags = glow::MAP_PERSISTENT_BIT
-            | if map_coherent {
-                glow::MAP_COHERENT_BIT
-            } else {
-                0
-            };
-        let mut storage_flags = 0;
+
+        let mut map_flags = glow::MAP_PERSISTENT_BIT;
+        if desc
+            .memory_flags
+            .contains(crate::MemoryFlag::PREFER_COHERENT)
+        {
+            map_flags |= glow::MAP_COHERENT_BIT;
+        }
         if desc.usage.contains(crate::BufferUse::MAP_READ) {
-            storage_flags |= map_flags | glow::MAP_READ_BIT;
+            map_flags |= glow::MAP_READ_BIT;
         }
         if desc.usage.contains(crate::BufferUse::MAP_WRITE) {
-            storage_flags |= map_flags | glow::MAP_WRITE_BIT;
+            map_flags |= glow::MAP_WRITE_BIT;
         }
 
         let raw = gl.create_buffer().unwrap();
@@ -296,7 +296,7 @@ impl crate::Device<super::Api> for super::Device {
             .size
             .try_into()
             .map_err(|_| crate::DeviceError::OutOfMemory)?;
-        gl.buffer_storage(target, raw_size, None, storage_flags);
+        gl.buffer_storage(target, raw_size, None, map_flags);
         gl.bind_buffer(target, None);
 
         Ok(super::Buffer {
@@ -513,11 +513,63 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> Result<super::Sampler, crate::DeviceError> {
-        use super::Sampled;
         let gl = &self.shared.context;
 
         let raw = gl.create_sampler().unwrap();
-        super::SamplerBinding(raw).configure_sampling(gl, desc);
+
+        let (min, mag) =
+            conv::map_filter_modes(desc.min_filter, desc.mag_filter, desc.mipmap_filter);
+
+        gl.sampler_parameter_i32(raw, glow::TEXTURE_MIN_FILTER, min as i32);
+        gl.sampler_parameter_i32(raw, glow::TEXTURE_MAG_FILTER, mag as i32);
+
+        gl.sampler_parameter_i32(
+            raw,
+            glow::TEXTURE_WRAP_S,
+            conv::map_address_mode(desc.address_modes[0]) as i32,
+        );
+        gl.sampler_parameter_i32(
+            raw,
+            glow::TEXTURE_WRAP_T,
+            conv::map_address_mode(desc.address_modes[1]) as i32,
+        );
+        gl.sampler_parameter_i32(
+            raw,
+            glow::TEXTURE_WRAP_R,
+            conv::map_address_mode(desc.address_modes[2]) as i32,
+        );
+
+        if let Some(border_color) = desc.border_color {
+            let mut border = match border_color {
+                wgt::SamplerBorderColor::TransparentBlack => [0.0; 4],
+                wgt::SamplerBorderColor::OpaqueBlack => [0.0, 0.0, 0.0, 1.0],
+                wgt::SamplerBorderColor::OpaqueWhite => [1.0; 4],
+            };
+            gl.sampler_parameter_f32_slice(raw, glow::TEXTURE_BORDER_COLOR, &mut border);
+        }
+
+        if let Some(ref range) = desc.lod_clamp {
+            gl.sampler_parameter_f32(raw, glow::TEXTURE_MIN_LOD, range.start);
+            gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_LOD, range.end);
+        }
+
+        //TODO: `desc.anisotropy_clamp` depends on the downlevel flag
+        // gl.sampler_parameter_f32(rawow::TEXTURE_MAX_ANISOTROPY, aniso as f32);
+
+        //set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
+
+        if let Some(compare) = desc.compare {
+            gl.sampler_parameter_i32(
+                raw,
+                glow::TEXTURE_COMPARE_MODE,
+                glow::COMPARE_REF_TO_TEXTURE as i32,
+            );
+            gl.sampler_parameter_i32(
+                raw,
+                glow::TEXTURE_COMPARE_FUNC,
+                conv::map_compare_func(compare) as i32,
+            );
+        }
 
         Ok(super::Sampler { raw })
     }

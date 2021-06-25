@@ -140,6 +140,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut options = mtl::MTLResourceOptions::empty();
         options |= if map_read || map_write {
+            // `crate::MemoryFlag::PREFER_COHERENT` is ignored here
             mtl::MTLResourceOptions::StorageModeShared
         } else {
             mtl::MTLResourceOptions::StorageModePrivate

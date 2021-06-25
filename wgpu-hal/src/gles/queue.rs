@@ -20,6 +20,7 @@ impl super::Queue {
     unsafe fn reset_state(&self) {
         let gl = &self.shared.context;
         gl.use_program(None);
+        gl.bind_framebuffer(glow::FRAMEBUFFER, None);
         gl.polygon_offset(0.0, 0.0);
         gl.disable(glow::DEPTH_TEST);
         gl.disable(glow::STENCIL_TEST);

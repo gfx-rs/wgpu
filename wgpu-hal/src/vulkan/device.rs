@@ -558,6 +558,11 @@ impl crate::Device<super::Api> for super::Device {
         {
             let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
             flags.set(
+                gpu_alloc::UsageFlags::COHERENT,
+                desc.memory_flags
+                    .contains(crate::MemoryFlag::PREFER_COHERENT),
+            );
+            flags.set(
                 gpu_alloc::UsageFlags::DOWNLOAD,
                 desc.usage.contains(crate::BufferUse::MAP_READ),
             );

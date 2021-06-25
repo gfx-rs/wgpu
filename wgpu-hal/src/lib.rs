@@ -554,6 +554,7 @@ impl From<wgt::TextureFormat> for FormatAspect {
 bitflags!(
     pub struct MemoryFlag: u32 {
         const TRANSIENT = 1;
+        const PREFER_COHERENT = 2;
     }
 );
 

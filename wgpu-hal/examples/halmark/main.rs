@@ -239,7 +239,7 @@ impl<A: hal::Api> Example<A> {
             label: Some("stage"),
             size: texture_data.len() as wgt::BufferAddress,
             usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::COPY_SRC,
-            memory_flags: hal::MemoryFlag::TRANSIENT,
+            memory_flags: hal::MemoryFlag::TRANSIENT | hal::MemoryFlag::PREFER_COHERENT,
         };
         let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
@@ -342,7 +342,7 @@ impl<A: hal::Api> Example<A> {
             label: Some("global"),
             size: mem::size_of::<Globals>() as wgt::BufferAddress,
             usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::UNIFORM,
-            memory_flags: hal::MemoryFlag::empty(),
+            memory_flags: hal::MemoryFlag::PREFER_COHERENT,
         };
         let global_buffer = unsafe {
             let buffer = device.create_buffer(&global_buffer_desc).unwrap();
@@ -363,7 +363,7 @@ impl<A: hal::Api> Example<A> {
             label: Some("local"),
             size: (MAX_BUNNIES as wgt::BufferAddress) * wgt::BIND_BUFFER_ALIGNMENT,
             usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::UNIFORM,
-            memory_flags: hal::MemoryFlag::empty(),
+            memory_flags: hal::MemoryFlag::PREFER_COHERENT,
         };
         let local_buffer = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
 
@@ -472,6 +472,10 @@ impl<A: hal::Api> Example<A> {
             extent: [window_size.0, window_size.1],
             start: Instant::now(),
         })
+    }
+
+    fn is_empty(&self) -> bool {
+        self.bunnies.is_empty()
     }
 
     fn exit(mut self) {
@@ -732,11 +736,12 @@ fn main() {
                 }
             },
             winit::event::Event::RedrawRequested(_) => {
+                let ex = example.as_mut().unwrap();
                 {
                     accum_time += last_frame_inst.elapsed().as_secs_f32();
                     last_frame_inst = Instant::now();
                     frame_count += 1;
-                    if frame_count == 100 {
+                    if frame_count == 100 && !ex.is_empty() {
                         println!(
                             "Avg frame time {}ms",
                             accum_time * 1000.0 / frame_count as f32
@@ -745,7 +750,7 @@ fn main() {
                         frame_count = 0;
                     }
                 }
-                example.as_mut().unwrap().render();
+                ex.render();
             }
             winit::event::Event::LoopDestroyed => {
                 example.take().unwrap().exit();

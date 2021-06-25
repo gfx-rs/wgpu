@@ -403,23 +403,22 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         // issue the clears
         for (i, cat) in desc.color_attachments.iter().enumerate() {
             if !cat.ops.contains(crate::AttachmentOp::LOAD) {
-                let draw_buffer = glow::DRAW_BUFFER0 + i as u32;
                 let c = &cat.clear_value;
                 self.cmd_buffer
                     .commands
                     .push(match cat.target.view.sample_type {
                         wgt::TextureSampleType::Float { .. } => C::ClearColorF(
-                            draw_buffer,
-                            [c.r as f32, c.g as f32, c.r as f32, c.a as f32],
+                            i as u32,
+                            [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
                         ),
                         wgt::TextureSampleType::Depth => unimplemented!(),
                         wgt::TextureSampleType::Uint => C::ClearColorU(
-                            draw_buffer,
-                            [c.r as u32, c.g as u32, c.r as u32, c.a as u32],
+                            i as u32,
+                            [c.r as u32, c.g as u32, c.b as u32, c.a as u32],
                         ),
                         wgt::TextureSampleType::Sint => C::ClearColorI(
-                            draw_buffer,
-                            [c.r as i32, c.g as i32, c.r as i32, c.a as i32],
+                            i as u32,
+                            [c.r as i32, c.g as i32, c.b as i32, c.a as i32],
                         ),
                     });
             }

@@ -1,7 +1,7 @@
 use glow::HasContext;
 use parking_lot::Mutex;
 
-use std::{os::raw, ptr, sync::Arc};
+use std::{ffi::CStr, os::raw, ptr, sync::Arc};
 
 const EGL_PLATFORM_WAYLAND_KHR: u32 = 0x31D8;
 const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
@@ -39,6 +39,56 @@ extern "C" {
         height: i32,
         format: i32,
     ) -> i32;
+}
+
+type EglLabel = *const raw::c_void;
+type EGLDEBUGPROCKHR = Option<
+    unsafe extern "system" fn(
+        error: egl::Enum,
+        command: *const raw::c_char,
+        message_type: u32,
+        thread_label: EglLabel,
+        object_label: EglLabel,
+        message: *const raw::c_char,
+    ),
+>;
+
+const EGL_DEBUG_MSG_CRITICAL_KHR: u32 = 0x33B9;
+const EGL_DEBUG_MSG_ERROR_KHR: u32 = 0x33BA;
+const EGL_DEBUG_MSG_WARN_KHR: u32 = 0x33BB;
+const EGL_DEBUG_MSG_INFO_KHR: u32 = 0x33BC;
+
+type EglDebugMessageControlFun =
+    unsafe extern "system" fn(proc: EGLDEBUGPROCKHR, attrib_list: *const egl::Attrib) -> raw::c_int;
+
+unsafe extern "system" fn egl_debug_proc(
+    error: egl::Enum,
+    command_raw: *const raw::c_char,
+    message_type: u32,
+    _thread_label: EglLabel,
+    _object_label: EglLabel,
+    message_raw: *const raw::c_char,
+) {
+    let log_severity = match message_type {
+        EGL_DEBUG_MSG_CRITICAL_KHR | EGL_DEBUG_MSG_ERROR_KHR => log::Level::Error,
+        EGL_DEBUG_MSG_WARN_KHR => log::Level::Warn,
+        EGL_DEBUG_MSG_INFO_KHR => log::Level::Info,
+        _ => log::Level::Debug,
+    };
+    let command = CStr::from_ptr(command_raw).to_string_lossy();
+    let message = if message_raw.is_null() {
+        "".into()
+    } else {
+        CStr::from_ptr(message_raw).to_string_lossy()
+    };
+
+    log::log!(
+        log_severity,
+        "EGL '{}' code 0x{:x}: {}",
+        command,
+        error,
+        message,
+    );
 }
 
 fn open_x_display() -> Option<(ptr::NonNull<raw::c_void>, libloading::Library)> {
@@ -112,7 +162,7 @@ fn choose_config(
     Err(crate::InstanceError)
 }
 
-fn debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
+fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
     let source_str = match source {
         glow::DEBUG_SOURCE_API => "API",
         glow::DEBUG_SOURCE_WINDOW_SYSTEM => "Window System",
@@ -146,12 +196,16 @@ fn debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, mess
 
     log::log!(
         log_severity,
-        "[{}/{}] ID {} : {}",
+        "GLES: [{}/{}] ID {} : {}",
         source_str,
         type_str,
         id,
         message
     );
+
+    if log_severity == log::Level::Error {
+        std::process::exit(1);
+    }
 }
 
 #[derive(Debug)]
@@ -181,11 +235,10 @@ impl Inner {
             .query_string(Some(display), egl::EXTENSIONS)
             .unwrap()
             .to_string_lossy();
-        log::info!(
-            "Display vendor {:?}, version {:?}, extensions: {:?}",
-            vendor,
-            version,
-            display_extensions
+        log::info!("Display vendor {:?}, version {:?}", vendor, version,);
+        log::debug!(
+            "Display extensions: {:#?}",
+            display_extensions.split_whitespace().collect::<Vec<_>>()
         );
 
         if log::max_level() >= log::LevelFilter::Trace {
@@ -211,7 +264,7 @@ impl Inner {
             egl::CONTEXT_CLIENT_VERSION,
             3, // Request GLES 3.0 or higher
         ];
-        if flags.contains(crate::InstanceFlag::VALIDATION)
+        if flags.contains(crate::InstanceFlag::DEBUG)
             && wsi_library.is_none()
             && !cfg!(target_os = "android")
         {
@@ -294,7 +347,10 @@ impl crate::Instance<super::Api> for Instance {
             Ok(ext) => ext.to_string_lossy().into_owned(),
             Err(_) => String::new(),
         };
-        log::info!("Client extensions: {:?}", client_ext_str);
+        log::debug!(
+            "Client extensions: {:#?}",
+            client_ext_str.split_whitespace().collect::<Vec<_>>()
+        );
 
         let mut wsi_library = None;
 
@@ -335,6 +391,26 @@ impl crate::Instance<super::Api> for Instance {
             egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
         };
 
+        if desc.flags.contains(crate::InstanceFlag::VALIDATION)
+            && client_ext_str.contains(&"EGL_KHR_debug")
+        {
+            log::info!("Enabling EGL debug output");
+            let function: EglDebugMessageControlFun =
+                std::mem::transmute(egl.get_proc_address("eglDebugMessageControlKHR").unwrap());
+            let attributes = [
+                EGL_DEBUG_MSG_CRITICAL_KHR as egl::Attrib,
+                1,
+                EGL_DEBUG_MSG_ERROR_KHR as egl::Attrib,
+                1,
+                EGL_DEBUG_MSG_WARN_KHR as egl::Attrib,
+                1,
+                EGL_DEBUG_MSG_INFO_KHR as egl::Attrib,
+                1,
+                egl::ATTRIB_NONE,
+            ];
+            (function)(Some(egl_debug_proc), attributes.as_ptr());
+        }
+
         let inner = Inner::create(desc.flags, egl, display, wsi_library.as_ref())?;
 
         Ok(Instance {
@@ -356,6 +432,7 @@ impl crate::Instance<super::Api> for Instance {
         #[cfg(not(any(target_os = "android", target_os = "macos")))]
         let (mut temp_xlib_handle, mut temp_xcb_handle);
 
+        #[allow(trivial_casts)]
         let native_window_ptr = match has_handle.raw_window_handle() {
             #[cfg(not(any(target_os = "android", target_os = "macos")))]
             Rwh::Xlib(handle) => {
@@ -396,9 +473,13 @@ impl crate::Instance<super::Api> for Instance {
                         )
                         .unwrap();
 
-                    let new_inner =
-                        Inner::create(inner.egl.clone(), display, self.wsi_library.as_ref())
-                            .map_err(|_| w::InitError::UnsupportedWindowHandle)?;
+                    let new_inner = Inner::create(
+                        self.flags,
+                        inner.egl.clone(),
+                        display,
+                        self.wsi_library.as_ref(),
+                    )
+                    .map_err(|_| crate::InstanceError)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
                     inner.wl_display = Some(handle.display);
@@ -526,9 +607,10 @@ impl crate::Instance<super::Api> for Instance {
                 .map_or(ptr::null(), |p| p as *const _)
         });
 
-        if self.flags.contains(crate::InstanceFlag::DEBUG) && gl.supports_debug() {
+        if self.flags.contains(crate::InstanceFlag::VALIDATION) && gl.supports_debug() {
+            log::info!("Enabling GLES debug output");
             gl.enable(glow::DEBUG_OUTPUT);
-            gl.debug_message_callback(debug_message_callback);
+            gl.debug_message_callback(gl_debug_message_callback);
         }
 
         super::Adapter::expose(gl).into_iter().collect()
@@ -581,7 +663,6 @@ impl Surface {
                 crate::SurfaceError::Lost
             })?;
 
-        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer));
         gl.blit_framebuffer(
             0,
