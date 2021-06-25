@@ -1130,6 +1130,210 @@ impl Writer {
         }
     }
 
+    fn write_entry_point_return(
+        &mut self,
+        value_id: Word,
+        ir_result: &crate::FunctionResult,
+        result_members: &[ResultMember],
+        body: &mut Vec<Instruction>,
+    ) -> Result<(), Error> {
+        for (index, res_member) in result_members.iter().enumerate() {
+            let member_value_id = match ir_result.binding {
+                Some(_) => value_id,
+                None => {
+                    let member_value_id = self.id_gen.next();
+                    body.push(Instruction::composite_extract(
+                        res_member.type_id,
+                        member_value_id,
+                        value_id,
+                        &[index as u32],
+                    ));
+                    member_value_id
+                }
+            };
+
+            body.push(Instruction::store(res_member.id, member_value_id, None));
+
+            // Flip Y coordinate to adjust for coordinate space difference
+            // between SPIR-V and our IR.
+            if self.flags.contains(WriterFlags::ADJUST_COORDINATE_SPACE)
+                && res_member.built_in == Some(crate::BuiltIn::Position)
+            {
+                let access_id = self.id_gen.next();
+                let float_ptr_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                    vector_size: None,
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                    pointer_class: Some(spirv::StorageClass::Output),
+                }))?;
+                let index_y_id = self.get_index_constant(1)?;
+                body.push(Instruction::access_chain(
+                    float_ptr_type_id,
+                    access_id,
+                    res_member.id,
+                    &[index_y_id],
+                ));
+
+                let load_id = self.id_gen.next();
+                let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                    vector_size: None,
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                    pointer_class: None,
+                }))?;
+                body.push(Instruction::load(float_type_id, load_id, access_id, None));
+
+                let neg_id = self.id_gen.next();
+                body.push(Instruction::unary(
+                    spirv::Op::FNegate,
+                    float_type_id,
+                    neg_id,
+                    load_id,
+                ));
+                body.push(Instruction::store(access_id, neg_id, None));
+            }
+        }
+        Ok(())
+    }
+
+    fn write_physical_layout(&mut self) {
+        self.physical_layout.bound = self.id_gen.0 + 1;
+    }
+
+    fn write_logical_layout(
+        &mut self,
+        ir_module: &crate::Module,
+        mod_info: &ModuleInfo,
+    ) -> Result<(), Error> {
+        let has_storage_buffers = ir_module
+            .global_variables
+            .iter()
+            .any(|(_, var)| var.class == crate::StorageClass::Storage);
+        if self.physical_layout.version < 0x10300 && has_storage_buffers {
+            // enable the storage buffer class on < SPV-1.3
+            Instruction::extension("SPV_KHR_storage_buffer_storage_class")
+                .to_words(&mut self.logical_layout.extensions);
+        }
+        Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
+        Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
+            .to_words(&mut self.logical_layout.ext_inst_imports);
+
+        if self.flags.contains(WriterFlags::DEBUG) {
+            self.debugs
+                .push(Instruction::source(spirv::SourceLanguage::GLSL, 450));
+        }
+
+        self.constant_ids.resize(ir_module.constants.len(), 0);
+        // first, output all the scalar constants
+        for (handle, constant) in ir_module.constants.iter() {
+            match constant.inner {
+                crate::ConstantInner::Composite { .. } => continue,
+                crate::ConstantInner::Scalar { width, ref value } => {
+                    self.constant_ids[handle.index()] = match constant.name {
+                        Some(ref name) => {
+                            let id = self.id_gen.next();
+                            self.write_constant_scalar(id, value, width, Some(name))?;
+                            id
+                        }
+                        None => self.get_constant_scalar(*value, width)?,
+                    };
+                }
+            }
+        }
+
+        // then all types, some of them may rely on constants and struct type set
+        for (handle, _) in ir_module.types.iter() {
+            self.write_type_declaration_arena(&ir_module.types, handle)?;
+        }
+
+        // the all the composite constants, they rely on types
+        for (handle, constant) in ir_module.constants.iter() {
+            match constant.inner {
+                crate::ConstantInner::Scalar { .. } => continue,
+                crate::ConstantInner::Composite { ty, ref components } => {
+                    let id = self.id_gen.next();
+                    self.constant_ids[handle.index()] = id;
+                    if self.flags.contains(WriterFlags::DEBUG) {
+                        if let Some(ref name) = constant.name {
+                            self.debugs.push(Instruction::name(id, name));
+                        }
+                    }
+                    self.write_constant_composite(id, ty, components)?;
+                }
+            }
+        }
+        debug_assert_eq!(self.constant_ids.iter().position(|&id| id == 0), None);
+
+        // now write all globals
+        for (_, var) in ir_module.global_variables.iter() {
+            let (instruction, id) = self.write_global_variable(ir_module, var)?;
+            instruction.to_words(&mut self.logical_layout.declarations);
+            self.global_variables
+                .push(GlobalVariable { id, handle_id: 0 });
+        }
+
+        // all functions
+        for (handle, ir_function) in ir_module.functions.iter() {
+            let info = &mod_info[handle];
+            let id = self.write_function(ir_function, info, ir_module, None)?;
+            self.lookup_function.insert(handle, id);
+        }
+
+        // and entry points
+        for (ep_index, ir_ep) in ir_module.entry_points.iter().enumerate() {
+            let info = mod_info.get_entry_point(ep_index);
+            let ep_instruction = self.write_entry_point(ir_ep, info, ir_module)?;
+            ep_instruction.to_words(&mut self.logical_layout.entry_points);
+        }
+
+        for capability in self.capabilities.iter() {
+            Instruction::capability(*capability).to_words(&mut self.logical_layout.capabilities);
+        }
+        if ir_module.entry_points.is_empty() {
+            // SPIR-V doesn't like modules without entry points
+            Instruction::capability(spirv::Capability::Linkage)
+                .to_words(&mut self.logical_layout.capabilities);
+        }
+
+        let addressing_model = spirv::AddressingModel::Logical;
+        let memory_model = spirv::MemoryModel::GLSL450;
+        self.check(addressing_model.required_capabilities())?;
+        self.check(memory_model.required_capabilities())?;
+
+        Instruction::memory_model(addressing_model, memory_model)
+            .to_words(&mut self.logical_layout.memory_model);
+
+        if self.flags.contains(WriterFlags::DEBUG) {
+            for debug in self.debugs.iter() {
+                debug.to_words(&mut self.logical_layout.debugs);
+            }
+        }
+
+        for annotation in self.annotations.iter() {
+            annotation.to_words(&mut self.logical_layout.annotations);
+        }
+
+        Ok(())
+    }
+
+    pub fn write(
+        &mut self,
+        ir_module: &crate::Module,
+        info: &ModuleInfo,
+        words: &mut Vec<Word>,
+    ) -> Result<(), Error> {
+        self.reset();
+
+        self.write_logical_layout(ir_module, info)?;
+        self.write_physical_layout();
+
+        self.physical_layout.in_words(words);
+        self.logical_layout.in_words(words);
+        Ok(())
+    }
+}
+
+impl Writer {
     fn write_texture_coordinates(
         &mut self,
         ir_module: &crate::Module,
@@ -2337,72 +2541,6 @@ impl Writer {
         }
     }
 
-    fn write_entry_point_return(
-        &mut self,
-        value_id: Word,
-        ir_result: &crate::FunctionResult,
-        result_members: &[ResultMember],
-        body: &mut Vec<Instruction>,
-    ) -> Result<(), Error> {
-        for (index, res_member) in result_members.iter().enumerate() {
-            let member_value_id = match ir_result.binding {
-                Some(_) => value_id,
-                None => {
-                    let member_value_id = self.id_gen.next();
-                    body.push(Instruction::composite_extract(
-                        res_member.type_id,
-                        member_value_id,
-                        value_id,
-                        &[index as u32],
-                    ));
-                    member_value_id
-                }
-            };
-
-            body.push(Instruction::store(res_member.id, member_value_id, None));
-
-            // Flip Y coordinate to adjust for coordinate space difference
-            // between SPIR-V and our IR.
-            if self.flags.contains(WriterFlags::ADJUST_COORDINATE_SPACE)
-                && res_member.built_in == Some(crate::BuiltIn::Position)
-            {
-                let access_id = self.id_gen.next();
-                let float_ptr_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                    pointer_class: Some(spirv::StorageClass::Output),
-                }))?;
-                let index_y_id = self.get_index_constant(1)?;
-                body.push(Instruction::access_chain(
-                    float_ptr_type_id,
-                    access_id,
-                    res_member.id,
-                    &[index_y_id],
-                ));
-
-                let load_id = self.id_gen.next();
-                let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                    pointer_class: None,
-                }))?;
-                body.push(Instruction::load(float_type_id, load_id, access_id, None));
-
-                let neg_id = self.id_gen.next();
-                body.push(Instruction::unary(
-                    spirv::Op::FNegate,
-                    float_type_id,
-                    neg_id,
-                    load_id,
-                ));
-                body.push(Instruction::store(access_id, neg_id, None));
-            }
-        }
-        Ok(())
-    }
-
     //TODO: put most of these into a `BlockContext` structure!
     #[allow(clippy::too_many_arguments)]
     fn write_block(
@@ -2804,142 +2942,6 @@ impl Writer {
         };
 
         function.consume(block, termination);
-        Ok(())
-    }
-
-    fn write_physical_layout(&mut self) {
-        self.physical_layout.bound = self.id_gen.0 + 1;
-    }
-
-    fn write_logical_layout(
-        &mut self,
-        ir_module: &crate::Module,
-        mod_info: &ModuleInfo,
-    ) -> Result<(), Error> {
-        let has_storage_buffers = ir_module
-            .global_variables
-            .iter()
-            .any(|(_, var)| var.class == crate::StorageClass::Storage);
-        if self.physical_layout.version < 0x10300 && has_storage_buffers {
-            // enable the storage buffer class on < SPV-1.3
-            Instruction::extension("SPV_KHR_storage_buffer_storage_class")
-                .to_words(&mut self.logical_layout.extensions);
-        }
-        Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
-        Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
-            .to_words(&mut self.logical_layout.ext_inst_imports);
-
-        if self.flags.contains(WriterFlags::DEBUG) {
-            self.debugs
-                .push(Instruction::source(spirv::SourceLanguage::GLSL, 450));
-        }
-
-        self.constant_ids.resize(ir_module.constants.len(), 0);
-        // first, output all the scalar constants
-        for (handle, constant) in ir_module.constants.iter() {
-            match constant.inner {
-                crate::ConstantInner::Composite { .. } => continue,
-                crate::ConstantInner::Scalar { width, ref value } => {
-                    self.constant_ids[handle.index()] = match constant.name {
-                        Some(ref name) => {
-                            let id = self.id_gen.next();
-                            self.write_constant_scalar(id, value, width, Some(name))?;
-                            id
-                        }
-                        None => self.get_constant_scalar(*value, width)?,
-                    };
-                }
-            }
-        }
-
-        // then all types, some of them may rely on constants and struct type set
-        for (handle, _) in ir_module.types.iter() {
-            self.write_type_declaration_arena(&ir_module.types, handle)?;
-        }
-
-        // the all the composite constants, they rely on types
-        for (handle, constant) in ir_module.constants.iter() {
-            match constant.inner {
-                crate::ConstantInner::Scalar { .. } => continue,
-                crate::ConstantInner::Composite { ty, ref components } => {
-                    let id = self.id_gen.next();
-                    self.constant_ids[handle.index()] = id;
-                    if self.flags.contains(WriterFlags::DEBUG) {
-                        if let Some(ref name) = constant.name {
-                            self.debugs.push(Instruction::name(id, name));
-                        }
-                    }
-                    self.write_constant_composite(id, ty, components)?;
-                }
-            }
-        }
-        debug_assert_eq!(self.constant_ids.iter().position(|&id| id == 0), None);
-
-        // now write all globals
-        for (_, var) in ir_module.global_variables.iter() {
-            let (instruction, id) = self.write_global_variable(ir_module, var)?;
-            instruction.to_words(&mut self.logical_layout.declarations);
-            self.global_variables
-                .push(GlobalVariable { id, handle_id: 0 });
-        }
-
-        // all functions
-        for (handle, ir_function) in ir_module.functions.iter() {
-            let info = &mod_info[handle];
-            let id = self.write_function(ir_function, info, ir_module, None)?;
-            self.lookup_function.insert(handle, id);
-        }
-
-        // and entry points
-        for (ep_index, ir_ep) in ir_module.entry_points.iter().enumerate() {
-            let info = mod_info.get_entry_point(ep_index);
-            let ep_instruction = self.write_entry_point(ir_ep, info, ir_module)?;
-            ep_instruction.to_words(&mut self.logical_layout.entry_points);
-        }
-
-        for capability in self.capabilities.iter() {
-            Instruction::capability(*capability).to_words(&mut self.logical_layout.capabilities);
-        }
-        if ir_module.entry_points.is_empty() {
-            // SPIR-V doesn't like modules without entry points
-            Instruction::capability(spirv::Capability::Linkage)
-                .to_words(&mut self.logical_layout.capabilities);
-        }
-
-        let addressing_model = spirv::AddressingModel::Logical;
-        let memory_model = spirv::MemoryModel::GLSL450;
-        self.check(addressing_model.required_capabilities())?;
-        self.check(memory_model.required_capabilities())?;
-
-        Instruction::memory_model(addressing_model, memory_model)
-            .to_words(&mut self.logical_layout.memory_model);
-
-        if self.flags.contains(WriterFlags::DEBUG) {
-            for debug in self.debugs.iter() {
-                debug.to_words(&mut self.logical_layout.debugs);
-            }
-        }
-
-        for annotation in self.annotations.iter() {
-            annotation.to_words(&mut self.logical_layout.annotations);
-        }
-
-        Ok(())
-    }
-
-    pub fn write(
-        &mut self,
-        ir_module: &crate::Module,
-        info: &ModuleInfo,
-        words: &mut Vec<Word>,
-    ) -> Result<(), Error> {
-        self.reset();
-
-        self.write_logical_layout(ir_module, info)?;
-        self.write_physical_layout();
-
-        self.physical_layout.in_words(words);
-        self.logical_layout.in_words(words);
         Ok(())
     }
 }

@@ -163,7 +163,9 @@ impl Program<'_> {
                                     coordinate: args[1].0,
                                     array_index: None, //TODO
                                     offset: None,      //TODO
-                                    level: args.get(2).map_or(SampleLevel::Auto, |&(expr, _)| SampleLevel::Bias(expr)),
+                                    level: args.get(2).map_or(SampleLevel::Auto, |&(expr, _)| {
+                                        SampleLevel::Bias(expr)
+                                    }),
                                     depth_ref: None,
                                 },
                                 body,
