@@ -557,6 +557,7 @@ impl crate::Device<super::Api> for super::Device {
             .intersects(crate::BufferUse::MAP_READ | crate::BufferUse::MAP_WRITE)
         {
             let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
+            //TODO: find a way to use `crate::MemoryFlag::PREFER_COHERENT`
             flags.set(
                 gpu_alloc::UsageFlags::COHERENT,
                 desc.memory_flags

@@ -36,7 +36,8 @@ impl CompilationContext<'_> {
             let slot = self.layout.get_slot(br);
 
             let name = reflection_info.uniforms[&handle].clone();
-            log::debug!("Rebind buffer: {:?} -> {}", var.name.as_ref(), &name);
+            log::debug!("Rebind buffer: {:?} -> {}, register={:?}, slot={}",
+                var.name.as_ref(), &name, register, slot);
             self.name_binding_map.insert(name, (register, slot));
         }
 
@@ -200,10 +201,7 @@ impl super::Device {
             log::warn!("\tLink: {}", msg);
         }
 
-        if !self
-            .shared
-            .private_caps
-            .contains(super::PrivateCapability::EXPLICIT_LAYOUTS_IN_SHADER)
+        //TODO: check for `PrivateCapability::EXPLICIT_LAYOUTS_IN_SHADER`?
         {
             gl.use_program(Some(program));
             for (ref name, (register, slot)) in name_binding_map {
