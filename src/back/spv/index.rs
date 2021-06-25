@@ -1,7 +1,7 @@
 //! Bounds-checking for SPIR-V output.
 
-use super::{Block, Error, Function, IdGenerator, Instruction, Word, Writer};
-use crate::{arena::Handle, back::IndexBoundsCheckPolicy, valid::FunctionInfo};
+use super::{Block, BlockContext, Error, IdGenerator, Instruction, Word};
+use crate::{arena::Handle, back::IndexBoundsCheckPolicy};
 
 /// The results of emitting code for a left-hand-side expression.
 ///
@@ -46,7 +46,7 @@ pub enum MaybeKnown<T> {
     Computed(Word),
 }
 
-impl Writer {
+impl<'w> BlockContext<'w> {
     /// Emit code to compute the length of a run-time array.
     ///
     /// Given `array`, an expression referring to the final member of a struct,
@@ -55,29 +55,29 @@ impl Writer {
     pub(super) fn write_runtime_array_length(
         &mut self,
         array: Handle<crate::Expression>,
-        ir_function: &crate::Function,
-        function: &Function,
         block: &mut Block,
     ) -> Result<Word, Error> {
         // Look into the expression to find the value and type of the struct
         // holding the dynamically-sized array.
-        let (structure_id, last_member_index) = match ir_function.expressions[array] {
-            crate::Expression::AccessIndex { base, index } => match ir_function.expressions[base] {
-                crate::Expression::GlobalVariable(handle) => {
-                    (self.global_variables[handle.index()].id, index)
+        let (structure_id, last_member_index) = match self.ir_function.expressions[array] {
+            crate::Expression::AccessIndex { base, index } => {
+                match self.ir_function.expressions[base] {
+                    crate::Expression::GlobalVariable(handle) => {
+                        (self.writer.global_variables[handle.index()].id, index)
+                    }
+                    crate::Expression::FunctionArgument(index) => {
+                        let parameter_id = self.function.parameter_id(index);
+                        (parameter_id, index)
+                    }
+                    _ => return Err(Error::Validation("array length expression")),
                 }
-                crate::Expression::FunctionArgument(index) => {
-                    let parameter_id = function.parameter_id(index);
-                    (parameter_id, index)
-                }
-                _ => return Err(Error::Validation("array length expression")),
-            },
+            }
             _ => return Err(Error::Validation("array length expression")),
         };
 
-        let length_id = self.id_gen.next();
+        let length_id = self.gen_id();
         block.body.push(Instruction::array_length(
-            self.get_uint_type_id()?,
+            self.writer.get_uint_type_id()?,
             length_id,
             structure_id,
             last_member_index,
@@ -98,24 +98,19 @@ impl Writer {
     fn write_sequence_length(
         &mut self,
         sequence: Handle<crate::Expression>,
-        ir_module: &crate::Module,
-        ir_function: &crate::Function,
-        fun_info: &FunctionInfo,
-        function: &Function,
         block: &mut Block,
     ) -> Result<MaybeKnown<u32>, Error> {
-        let sequence_ty = fun_info[sequence].ty.inner_with(&ir_module.types);
-        match sequence_ty.indexable_length(ir_module)? {
+        let sequence_ty = self.fun_info[sequence].ty.inner_with(&self.ir_module.types);
+        match sequence_ty.indexable_length(self.ir_module)? {
             crate::proc::IndexableLength::Known(known_length) => {
                 Ok(MaybeKnown::Known(known_length))
             }
             crate::proc::IndexableLength::Dynamic => {
-                let length_id =
-                    self.write_runtime_array_length(sequence, ir_function, function, block)?;
+                let length_id = self.write_runtime_array_length(sequence, block)?;
                 Ok(MaybeKnown::Computed(length_id))
             }
             crate::proc::IndexableLength::Specializable(constant) => {
-                let length_id = self.constant_ids[constant.index()];
+                let length_id = self.writer.constant_ids[constant.index()];
                 Ok(MaybeKnown::Computed(length_id))
             }
         }
@@ -133,20 +128,9 @@ impl Writer {
     fn write_sequence_max_index(
         &mut self,
         sequence: Handle<crate::Expression>,
-        ir_module: &crate::Module,
-        ir_function: &crate::Function,
-        fun_info: &FunctionInfo,
-        function: &Function,
         block: &mut Block,
     ) -> Result<MaybeKnown<u32>, Error> {
-        match self.write_sequence_length(
-            sequence,
-            ir_module,
-            ir_function,
-            fun_info,
-            function,
-            block,
-        )? {
+        match self.write_sequence_length(sequence, block)? {
             MaybeKnown::Known(known_length) => {
                 // We should have thrown out all attempts to subscript zero-length
                 // sequences during validation, so the following subtraction should never
@@ -158,10 +142,10 @@ impl Writer {
             MaybeKnown::Computed(length_id) => {
                 // Emit code to compute the max index from the length.
                 let const_one_id = self.get_index_constant(1)?;
-                let max_index_id = self.id_gen.next();
+                let max_index_id = self.gen_id();
                 block.body.push(Instruction::binary(
                     spirv::Op::ISub,
-                    self.get_uint_type_id()?,
+                    self.writer.get_uint_type_id()?,
                     max_index_id,
                     length_id,
                     const_one_id,
@@ -192,27 +176,16 @@ impl Writer {
         &mut self,
         sequence: Handle<crate::Expression>,
         index: Handle<crate::Expression>,
-        ir_module: &crate::Module,
-        ir_function: &crate::Function,
-        fun_info: &FunctionInfo,
-        function: &Function,
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
-        let index_id = self.cached[index];
+        let index_id = self.writer.cached[index];
 
         // Get the sequence's maximum valid index. Return early if we've already
         // done the bounds check.
-        let max_index_id = match self.write_sequence_max_index(
-            sequence,
-            ir_module,
-            ir_function,
-            fun_info,
-            function,
-            block,
-        )? {
+        let max_index_id = match self.write_sequence_max_index(sequence, block)? {
             MaybeKnown::Known(known_max_index) => {
-                if let crate::Expression::Constant(index_k) = ir_function.expressions[index] {
-                    if let Some(known_index) = ir_module.constants[index_k].to_array_length() {
+                if let crate::Expression::Constant(index_k) = self.ir_function.expressions[index] {
+                    if let Some(known_index) = self.ir_module.constants[index_k].to_array_length() {
                         // Both the index and length are known at compile time.
                         //
                         // In strict WGSL compliance mode, out-of-bounds indices cannot be
@@ -231,11 +204,11 @@ impl Writer {
 
         // One or the other of the index or length is dynamic, so emit code for
         // IndexBoundsCheckPolicy::Restrict.
-        let restricted_index_id = self.id_gen.next();
+        let restricted_index_id = self.gen_id();
         block.body.push(Instruction::ext_inst(
-            self.gl450_ext_inst_id,
+            self.writer.gl450_ext_inst_id,
             spirv::GLOp::UMin,
-            self.get_uint_type_id()?,
+            self.writer.get_uint_type_id()?,
             restricted_index_id,
             &[index_id, max_index_id],
         ));
@@ -264,27 +237,16 @@ impl Writer {
         &mut self,
         sequence: Handle<crate::Expression>,
         index: Handle<crate::Expression>,
-        ir_module: &crate::Module,
-        ir_function: &crate::Function,
-        fun_info: &FunctionInfo,
-        function: &mut Function,
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
-        let index_id = self.cached[index];
+        let index_id = self.writer.cached[index];
 
         // Get the sequence's length. Return early if we've already done the
         // bounds check.
-        let length_id = match self.write_sequence_length(
-            sequence,
-            ir_module,
-            ir_function,
-            fun_info,
-            function,
-            block,
-        )? {
+        let length_id = match self.write_sequence_length(sequence, block)? {
             MaybeKnown::Known(known_length) => {
-                if let crate::Expression::Constant(index_k) = ir_function.expressions[index] {
-                    if let Some(known_index) = ir_module.constants[index_k].to_array_length() {
+                if let crate::Expression::Constant(index_k) = self.ir_function.expressions[index] {
+                    if let Some(known_index) = self.ir_module.constants[index_k].to_array_length() {
                         // Both the index and length are known at compile time.
                         //
                         // It would be nice to assume that, since we are using the
@@ -317,10 +279,10 @@ impl Writer {
         };
 
         // Compare the index against the length.
-        let condition_id = self.id_gen.next();
+        let condition_id = self.gen_id();
         block.body.push(Instruction::binary(
             spirv::Op::ULessThan,
-            self.get_bool_type_id()?,
+            self.writer.get_bool_type_id()?,
             condition_id,
             index_id,
             length_id,
@@ -340,7 +302,6 @@ impl Writer {
         &mut self,
         result_type: Word,
         condition: Word,
-        function: &mut Function,
         block: &mut Block,
         emit_load: F,
     ) -> Word
@@ -348,8 +309,8 @@ impl Writer {
         F: FnOnce(&mut IdGenerator, &mut Block) -> Word,
     {
         let header_block = block.label_id;
-        let merge_block = self.id_gen.next();
-        let in_bounds_block = self.id_gen.next();
+        let merge_block = self.gen_id();
+        let in_bounds_block = self.gen_id();
 
         // Branch based on whether the index was in bounds.
         //
@@ -363,26 +324,26 @@ impl Writer {
             merge_block,
             spirv::SelectionControl::NONE,
         ));
-        function.consume(
+        self.function.consume(
             std::mem::replace(block, Block::new(in_bounds_block)),
             Instruction::branch_conditional(condition, in_bounds_block, merge_block),
         );
 
         // The in-bounds path. Perform the access and the load.
-        let value_id = emit_load(&mut self.id_gen, block);
+        let value_id = emit_load(&mut self.writer.id_gen, block);
 
         // Finish the in-bounds block and start the merge block. This
         // is the block we'll leave current on return.
-        function.consume(
+        self.function.consume(
             std::mem::replace(block, Block::new(merge_block)),
             Instruction::branch(merge_block),
         );
 
         // For the out-of-bounds case, produce a zero value.
-        let null_id = self.write_constant_null(result_type);
+        let null_id = self.writer.write_constant_null(result_type);
 
         // Merge the results from the two paths.
-        let result_id = self.id_gen.next();
+        let result_id = self.gen_id();
         block.body.push(Instruction::phi(
             result_type,
             result_id,
@@ -399,35 +360,17 @@ impl Writer {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn write_bounds_check(
         &mut self,
-        ir_module: &crate::Module,
-        ir_function: &crate::Function,
-        fun_info: &FunctionInfo,
-        function: &mut Function,
         base: Handle<crate::Expression>,
         index: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
-        Ok(match self.index_bounds_check_policy {
-            IndexBoundsCheckPolicy::Restrict => self.write_restricted_index(
-                base,
-                index,
-                ir_module,
-                ir_function,
-                fun_info,
-                function,
-                block,
-            )?,
-            IndexBoundsCheckPolicy::ReadZeroSkipWrite => self.write_index_comparison(
-                base,
-                index,
-                ir_module,
-                ir_function,
-                fun_info,
-                function,
-                block,
-            )?,
+        Ok(match self.writer.index_bounds_check_policy {
+            IndexBoundsCheckPolicy::Restrict => self.write_restricted_index(base, index, block)?,
+            IndexBoundsCheckPolicy::ReadZeroSkipWrite => {
+                self.write_index_comparison(base, index, block)?
+            }
             IndexBoundsCheckPolicy::UndefinedBehavior => {
-                BoundsCheckResult::Computed(self.cached[index])
+                BoundsCheckResult::Computed(self.writer.cached[index])
             }
         })
     }
@@ -438,31 +381,19 @@ impl Writer {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn write_vector_access(
         &mut self,
-        ir_module: &crate::Module,
-        ir_function: &crate::Function,
-        fun_info: &FunctionInfo,
-        function: &mut Function,
         expr_handle: Handle<crate::Expression>,
         base: Handle<crate::Expression>,
         index: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<Word, Error> {
-        let result_type_id = self.get_expression_type_id(&fun_info[expr_handle].ty)?;
+        let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty)?;
 
-        let base_id = self.cached[base];
-        let index_id = self.cached[index];
+        let base_id = self.writer.cached[base];
+        let index_id = self.writer.cached[index];
 
-        let result_id = match self.write_bounds_check(
-            ir_module,
-            ir_function,
-            fun_info,
-            function,
-            base,
-            index,
-            block,
-        )? {
+        let result_id = match self.write_bounds_check(base, index, block)? {
             BoundsCheckResult::KnownInBounds(known_index) => {
-                let result_id = self.id_gen.next();
+                let result_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     result_type_id,
                     result_id,
@@ -472,7 +403,7 @@ impl Writer {
                 result_id
             }
             BoundsCheckResult::Computed(computed_index_id) => {
-                let result_id = self.id_gen.next();
+                let result_id = self.gen_id();
                 block.body.push(Instruction::vector_extract_dynamic(
                     result_type_id,
                     result_id,
@@ -487,7 +418,6 @@ impl Writer {
                 self.write_conditional_indexed_load(
                     result_type_id,
                     comparison_id,
-                    function,
                     block,
                     |id_gen, block| {
                         // The in-bounds path. Generate the access.

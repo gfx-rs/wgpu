@@ -258,6 +258,25 @@ struct GlobalVariable {
     handle_id: Word,
 }
 
+/// General information needed to emit SPIR-V for Naga statements.
+struct BlockContext<'w> {
+    /// The writer handling the module to which this code belongs.
+    writer: &'w mut Writer,
+
+    /// The [`Module`](crate::Module) for which we're generating code.
+    ir_module: &'w crate::Module,
+
+    /// The [`Function`](crate::Function) for which we're generating code.
+    ir_function: &'w crate::Function,
+
+    /// Information module validation produced about
+    /// [`ir_function`](BlockContext::ir_function).
+    fun_info: &'w crate::valid::FunctionInfo,
+
+    /// The [`back::spv::Function`] to which we are contributing SPIR-V instructions.
+    function: &'w mut Function,
+}
+
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
