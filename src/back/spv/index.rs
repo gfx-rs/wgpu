@@ -171,7 +171,6 @@ impl<'w> BlockContext<'w> {
     /// `Pointer` to any of those, or a `ValuePointer`. An array may be
     /// fixed-size, dynamically sized, or use a specializable constant as its
     /// length.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_restricted_index(
         &mut self,
         sequence: Handle<crate::Expression>,
@@ -232,7 +231,6 @@ impl<'w> BlockContext<'w> {
     /// `Pointer` to any of those, or a `ValuePointer`. An array may be
     /// fixed-size, dynamically sized, or use a specializable constant as its
     /// length.
-    #[allow(clippy::too_many_arguments)]
     fn write_index_comparison(
         &mut self,
         sequence: Handle<crate::Expression>,
@@ -357,7 +355,6 @@ impl<'w> BlockContext<'w> {
     ///
     /// Return a `BoundsCheckResult` indicating how the index should be
     /// consumed. See that type's documentation for details.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_bounds_check(
         &mut self,
         base: Handle<crate::Expression>,
@@ -378,7 +375,6 @@ impl<'w> BlockContext<'w> {
     /// Emit code to subscript a vector by value with a computed index.
     ///
     /// Return the id of the element value.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_vector_access(
         &mut self,
         expr_handle: Handle<crate::Expression>,

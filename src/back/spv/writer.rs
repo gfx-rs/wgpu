@@ -2515,7 +2515,6 @@ impl<'w> BlockContext<'w> {
     }
 
     //TODO: put most of these into a `BlockContext` structure!
-    #[allow(clippy::too_many_arguments)]
     fn write_block(
         &mut self,
         label_id: Word,
