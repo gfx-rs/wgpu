@@ -475,11 +475,13 @@ impl Writer {
         // Create a `BlockContext` for generating SPIR-V for the function's
         // body.
         let mut context = BlockContext {
-            writer: self,
             ir_module,
             ir_function,
             fun_info: info,
             function: &mut function,
+            // Steal the Writer's temp list for a bit.
+            temp_list: std::mem::take(&mut self.temp_list),
+            writer: self,
         };
 
         // fill up the pre-emitted expressions
@@ -496,11 +498,13 @@ impl Writer {
             .consume(prelude, Instruction::branch(main_id));
         context.write_block(main_id, &ir_function.body, None, LoopContext::default())?;
 
-        context
-            .function
-            .to_words(&mut context.writer.logical_layout.function_definitions);
-        Instruction::function_end()
-            .to_words(&mut context.writer.logical_layout.function_definitions);
+        // Consume the `BlockContext`, ending its borrows and letting the
+        // `Writer` steal back its temp_list.
+        let BlockContext { temp_list, .. } = context;
+        self.temp_list = temp_list;
+
+        function.to_words(&mut self.logical_layout.function_definitions);
+        Instruction::function_end().to_words(&mut self.logical_layout.function_definitions);
 
         Ok(function_id)
     }
@@ -1352,13 +1356,17 @@ impl<'w> BlockContext<'w> {
             .get_constant_scalar(crate::ScalarValue::Uint(index as _), 4)
     }
 
+    pub(super) fn cached(&self, expression: Handle<crate::Expression>) -> Word {
+        self.writer.cached[expression]
+    }
+
     fn write_texture_coordinates(
         &mut self,
         coordinates: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
         block: &mut Block,
     ) -> Result<Word, Error> {
-        let coordinate_id = self.writer.cached[coordinates];
+        let coordinate_id = self.cached(coordinates);
 
         Ok(if let Some(array_index) = array_index {
             let coordinate_scalar_type_id =
@@ -1406,7 +1414,7 @@ impl<'w> BlockContext<'w> {
             let array_index_f32_id = self.gen_id();
             constituent_ids[size as usize - 1] = array_index_f32_id;
 
-            let array_index_u32_id = self.writer.cached[array_index];
+            let array_index_u32_id = self.cached(array_index);
             let cast_instruction = Instruction::unary(
                 spirv::Op::ConvertUToF,
                 coordinate_scalar_type_id,
@@ -1507,7 +1515,7 @@ impl<'w> BlockContext<'w> {
                     | crate::TypeInner::Array { .. }
                     | crate::TypeInner::Struct { .. } => {
                         let id = self.gen_id();
-                        let base_id = self.writer.cached[base];
+                        let base_id = self.cached(base);
                         block.body.push(Instruction::composite_extract(
                             result_type_id,
                             id,
@@ -1527,15 +1535,15 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::Constant(handle) => self.writer.constant_ids[handle.index()],
             crate::Expression::Splat { size, value } => {
-                let value_id = self.writer.cached[value];
-                self.writer.temp_list.clear();
-                self.writer.temp_list.resize(size as usize, value_id);
+                let value_id = self.cached(value);
+                self.temp_list.clear();
+                self.temp_list.resize(size as usize, value_id);
 
                 let id = self.gen_id();
                 block.body.push(Instruction::composite_construct(
                     result_type_id,
                     id,
-                    &self.writer.temp_list,
+                    &self.temp_list,
                 ));
                 id
             }
@@ -1544,10 +1552,10 @@ impl<'w> BlockContext<'w> {
                 vector,
                 pattern,
             } => {
-                let vector_id = self.writer.cached[vector];
-                self.writer.temp_list.clear();
+                let vector_id = self.cached(vector);
+                self.temp_list.clear();
                 for &sc in pattern[..size as usize].iter() {
-                    self.writer.temp_list.push(sc as Word);
+                    self.temp_list.push(sc as Word);
                 }
                 let id = self.gen_id();
                 block.body.push(Instruction::vector_shuffle(
@@ -1555,7 +1563,7 @@ impl<'w> BlockContext<'w> {
                     id,
                     vector_id,
                     vector_id,
-                    &self.writer.temp_list,
+                    &self.temp_list,
                 ));
                 id
             }
@@ -1563,22 +1571,22 @@ impl<'w> BlockContext<'w> {
                 ty: _,
                 ref components,
             } => {
-                self.writer.temp_list.clear();
+                self.temp_list.clear();
                 for &component in components {
-                    self.writer.temp_list.push(self.writer.cached[component]);
+                    self.temp_list.push(self.cached(component));
                 }
 
                 let id = self.gen_id();
                 block.body.push(Instruction::composite_construct(
                     result_type_id,
                     id,
-                    &self.writer.temp_list,
+                    &self.temp_list,
                 ));
                 id
             }
             crate::Expression::Unary { op, expr } => {
                 let id = self.gen_id();
-                let expr_id = self.writer.cached[expr];
+                let expr_id = self.cached(expr);
                 let expr_ty_inner = self.fun_info[expr].ty.inner_with(&self.ir_module.types);
 
                 let spirv_op = match op {
@@ -1604,8 +1612,8 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::Binary { op, left, right } => {
                 let id = self.gen_id();
-                let left_id = self.writer.cached[left];
-                let right_id = self.writer.cached[right];
+                let left_id = self.cached(left);
+                let right_id = self.cached(right);
 
                 let left_ty_inner = self.fun_info[left].ty.inner_with(&self.ir_module.types);
                 let right_ty_inner = self.fun_info[right].ty.inner_with(&self.ir_module.types);
@@ -1742,17 +1750,17 @@ impl<'w> BlockContext<'w> {
                     Custom(Instruction),
                 }
 
-                let arg0_id = self.writer.cached[arg];
+                let arg0_id = self.cached(arg);
                 let arg_scalar_kind = self.fun_info[arg]
                     .ty
                     .inner_with(&self.ir_module.types)
                     .scalar_kind();
                 let arg1_id = match arg1 {
-                    Some(handle) => self.writer.cached[handle],
+                    Some(handle) => self.cached(handle),
                     None => 0,
                 };
                 let arg2_id = match arg2 {
-                    Some(handle) => self.writer.cached[handle],
+                    Some(handle) => self.cached(handle),
                     None => 0,
                 };
 
@@ -1919,7 +1927,7 @@ impl<'w> BlockContext<'w> {
             } => {
                 use crate::ScalarKind as Sk;
 
-                let expr_id = self.writer.cached[expr];
+                let expr_id = self.cached(expr);
                 let (src_kind, src_width) =
                     match *self.fun_info[expr].ty.inner_with(&self.ir_module.types) {
                         crate::TypeInner::Scalar { kind, width }
@@ -1996,7 +2004,7 @@ impl<'w> BlockContext<'w> {
                 };
 
                 if let Some(index) = index {
-                    let index_id = self.writer.cached[index];
+                    let index_id = self.cached(index);
                     let image_ops = match *self.fun_info[image].ty.inner_with(&self.ir_module.types)
                     {
                         crate::TypeInner::Image {
@@ -2075,7 +2083,7 @@ impl<'w> BlockContext<'w> {
                 ));
                 let id = self.gen_id();
 
-                let depth_id = depth_ref.map(|handle| self.writer.cached[handle]);
+                let depth_id = depth_ref.map(|handle| self.cached(handle));
                 let mut mask = spirv::ImageOperands::empty();
                 mask.set(spirv::ImageOperands::CONST_OFFSET, offset.is_some());
 
@@ -2124,7 +2132,7 @@ impl<'w> BlockContext<'w> {
                             depth_id,
                         );
 
-                        let lod_id = self.writer.cached[lod_handle];
+                        let lod_id = self.cached(lod_handle);
                         mask |= spirv::ImageOperands::LOD;
                         inst.add_operand(mask.bits());
                         inst.add_operand(lod_id);
@@ -2141,7 +2149,7 @@ impl<'w> BlockContext<'w> {
                             depth_id,
                         );
 
-                        let bias_id = self.writer.cached[bias_handle];
+                        let bias_id = self.cached(bias_handle);
                         mask |= spirv::ImageOperands::BIAS;
                         inst.add_operand(mask.bits());
                         inst.add_operand(bias_id);
@@ -2158,8 +2166,8 @@ impl<'w> BlockContext<'w> {
                             depth_id,
                         );
 
-                        let x_id = self.writer.cached[x];
-                        let y_id = self.writer.cached[y];
+                        let x_id = self.cached(x);
+                        let y_id = self.cached(y);
                         mask |= spirv::ImageOperands::GRAD;
                         inst.add_operand(mask.bits());
                         inst.add_operand(x_id);
@@ -2195,9 +2203,9 @@ impl<'w> BlockContext<'w> {
                 reject,
             } => {
                 let id = self.gen_id();
-                let condition_id = self.writer.cached[condition];
-                let accept_id = self.writer.cached[accept];
-                let reject_id = self.writer.cached[reject];
+                let condition_id = self.cached(condition);
+                let accept_id = self.cached(accept);
+                let reject_id = self.cached(reject);
 
                 let instruction =
                     Instruction::select(result_type_id, id, condition_id, accept_id, reject_id);
@@ -2208,7 +2216,7 @@ impl<'w> BlockContext<'w> {
                 use crate::DerivativeAxis as Da;
 
                 let id = self.gen_id();
-                let expr_id = self.writer.cached[expr];
+                let expr_id = self.cached(expr);
                 let op = match axis {
                     Da::X => spirv::Op::DPdx,
                     Da::Y => spirv::Op::DPdy,
@@ -2264,7 +2272,7 @@ impl<'w> BlockContext<'w> {
                             Ic::Storage(_) => (spirv::Op::ImageQuerySize, None),
                             _ => {
                                 let level_id = match level {
-                                    Some(expr) => self.writer.cached[expr],
+                                    Some(expr) => self.cached(expr),
                                     None => self.get_index_constant(0)?,
                                 };
                                 (spirv::Op::ImageQuerySizeLod, Some(level_id))
@@ -2359,7 +2367,7 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::Relational { fun, argument } => {
                 use crate::RelationalFunction as Rf;
-                let arg_id = self.writer.cached[argument];
+                let arg_id = self.cached(argument);
                 let op = match fun {
                     Rf::All => spirv::Op::All,
                     Rf::Any => spirv::Op::Any,
@@ -2411,7 +2419,7 @@ impl<'w> BlockContext<'w> {
         // minimum is essential.
         let mut accumulated_checks = None;
 
-        self.writer.temp_list.clear();
+        self.temp_list.clear();
         let root_id = loop {
             expr_handle = match self.ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
@@ -2443,16 +2451,16 @@ impl<'w> BlockContext<'w> {
                             }
 
                             // Either way, the index to use is unchanged.
-                            self.writer.cached[index]
+                            self.cached(index)
                         }
                     };
-                    self.writer.temp_list.push(index_id);
+                    self.temp_list.push(index_id);
 
                     base
                 }
                 crate::Expression::AccessIndex { base, index } => {
                     let const_id = self.get_index_constant(index)?;
-                    self.writer.temp_list.push(const_id);
+                    self.temp_list.push(const_id);
                     base
                 }
                 crate::Expression::GlobalVariable(handle) => {
@@ -2471,19 +2479,15 @@ impl<'w> BlockContext<'w> {
             }
         };
 
-        let pointer = if self.writer.temp_list.is_empty() {
+        let pointer = if self.temp_list.is_empty() {
             ExpressionPointer::Ready {
                 pointer_id: root_id,
             }
         } else {
-            self.writer.temp_list.reverse();
+            self.temp_list.reverse();
             let pointer_id = self.gen_id();
-            let access = Instruction::access_chain(
-                result_type_id,
-                pointer_id,
-                root_id,
-                &self.writer.temp_list,
-            );
+            let access =
+                Instruction::access_chain(result_type_id, pointer_id, root_id, &self.temp_list);
 
             // If we generated some bounds checks, we need to leave it to our
             // caller to generate the branch, the access, the load or store, and
@@ -2545,7 +2549,7 @@ impl<'w> BlockContext<'w> {
                     ref accept,
                     ref reject,
                 } => {
-                    let condition_id = self.writer.cached[condition];
+                    let condition_id = self.cached(condition);
 
                     let merge_id = self.gen_id();
                     block.body.push(Instruction::selection_merge(
@@ -2587,7 +2591,7 @@ impl<'w> BlockContext<'w> {
                     ref cases,
                     ref default,
                 } => {
-                    let selector_id = self.writer.cached[selector];
+                    let selector_id = self.cached(selector);
 
                     let merge_id = self.gen_id();
                     block.body.push(Instruction::selection_merge(
@@ -2687,7 +2691,7 @@ impl<'w> BlockContext<'w> {
                     return Ok(());
                 }
                 crate::Statement::Return { value: Some(value) } => {
-                    let value_id = self.writer.cached[value];
+                    let value_id = self.cached(value);
                     let instruction = match self.function.entry_point_context {
                         // If this is an entry point, and we need to return anything,
                         // let's instead store the output variables and return `void`.
@@ -2738,7 +2742,7 @@ impl<'w> BlockContext<'w> {
                     ));
                 }
                 crate::Statement::Store { pointer, value } => {
-                    let value_id = self.writer.cached[value];
+                    let value_id = self.cached(value);
                     match self.write_expression_pointer(pointer, &mut block)? {
                         ExpressionPointer::Ready { pointer_id } => {
                             block
@@ -2788,7 +2792,7 @@ impl<'w> BlockContext<'w> {
                     let image_id = self.get_expression_global(image);
                     let coordinate_id =
                         self.write_texture_coordinates(coordinate, array_index, &mut block)?;
-                    let value_id = self.writer.cached[value];
+                    let value_id = self.cached(value);
 
                     block
                         .body
@@ -2800,9 +2804,9 @@ impl<'w> BlockContext<'w> {
                     result,
                 } => {
                     let id = self.gen_id();
-                    self.writer.temp_list.clear();
+                    self.temp_list.clear();
                     for &argument in arguments {
-                        self.writer.temp_list.push(self.writer.cached[argument]);
+                        self.temp_list.push(self.cached(argument));
                     }
 
                     let type_id = match result {
@@ -2823,7 +2827,7 @@ impl<'w> BlockContext<'w> {
                         type_id,
                         id,
                         self.writer.lookup_function[&local_function],
-                        &self.writer.temp_list,
+                        &self.temp_list,
                     ));
                 }
             }

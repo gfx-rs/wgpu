@@ -275,6 +275,9 @@ struct BlockContext<'w> {
 
     /// The [`back::spv::Function`] to which we are contributing SPIR-V instructions.
     function: &'w mut Function,
+
+    /// The `Writer`'s temporary vector, for convenience.
+    temp_list: Vec<Word>,
 }
 
 pub struct Writer {
