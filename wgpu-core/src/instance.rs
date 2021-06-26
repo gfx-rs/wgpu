@@ -31,35 +31,35 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(name: &str, backends: BackendBit) -> Self {
-        let mut flags = hal::InstanceFlag::empty();
-        if cfg!(debug_assertions) {
-            flags |= hal::InstanceFlag::VALIDATION;
-            flags |= hal::InstanceFlag::DEBUG;
-        }
-        let hal_desc = hal::InstanceDescriptor {
-            name: "wgpu",
-            flags,
-        };
-
-        let map = |backend: Backend| unsafe {
-            if backends.contains(backend.into()) {
-                hal::Instance::init(&hal_desc).ok()
+        fn init<A: HalApi>(mask: BackendBit) -> Option<A::Instance> {
+            if mask.contains(A::VARIANT.into()) {
+                let mut flags = hal::InstanceFlag::empty();
+                if cfg!(debug_assertions) {
+                    flags |= hal::InstanceFlag::VALIDATION;
+                    flags |= hal::InstanceFlag::DEBUG;
+                }
+                let hal_desc = hal::InstanceDescriptor {
+                    name: "wgpu",
+                    flags,
+                };
+                unsafe { hal::Instance::init(&hal_desc).ok() }
             } else {
                 None
             }
-        };
+        }
+
         Self {
             name: name.to_string(),
             #[cfg(vulkan)]
-            vulkan: map(Backend::Vulkan),
+            vulkan: init::<hal::api::Vulkan>(backends),
             #[cfg(metal)]
-            metal: map(Backend::Metal),
+            metal: init::<hal::api::Metal>(backends),
             #[cfg(dx12)]
-            dx12: map(Backend::Dx12),
+            dx12: init(Backend::Dx12, backends),
             #[cfg(dx11)]
-            dx11: map(Backend::Dx11),
+            dx11: init(Backend::Dx11, backends),
             #[cfg(gl)]
-            gl: map(Backend::Gl),
+            gl: init::<hal::api::Gles>(backends),
         }
     }
 

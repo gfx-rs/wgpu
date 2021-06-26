@@ -245,10 +245,6 @@ impl super::Adapter {
         };
 
         let mut private_caps = super::PrivateCapability::empty();
-        private_caps.set(
-            super::PrivateCapability::EXPLICIT_LAYOUTS_IN_SHADER,
-            ver >= (3, 1),
-        );
         private_caps.set(super::PrivateCapability::MEMORY_BARRIERS, ver >= (3, 1));
 
         Some(crate::ExposedAdapter {

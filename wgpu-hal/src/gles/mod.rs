@@ -53,10 +53,8 @@ bitflags::bitflags! {
     /// Flags that affect internal code paths but do not
     /// change the exposed feature set.
     struct PrivateCapability: u32 {
-        /// Support explicit layouts in shader.
-        const EXPLICIT_LAYOUTS_IN_SHADER = 0x0001;
         /// Support memory barriers.
-        const MEMORY_BARRIERS = 0x0002;
+        const MEMORY_BARRIERS = 0x0001;
     }
 }
 

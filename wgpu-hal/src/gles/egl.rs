@@ -42,6 +42,8 @@ extern "C" {
 }
 
 type EglLabel = *const raw::c_void;
+
+#[allow(clippy::upper_case_acronyms)]
 type EGLDEBUGPROCKHR = Option<
     unsafe extern "system" fn(
         error: egl::Enum,
@@ -203,7 +205,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
         message
     );
 
-    if log_severity == log::Level::Error {
+    if log_severity == log::Level::Error && false {
         std::process::exit(1);
     }
 }

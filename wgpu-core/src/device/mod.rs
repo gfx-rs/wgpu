@@ -254,6 +254,27 @@ pub enum CreateDeviceError {
     OutOfMemory,
 }
 
+impl<A: hal::Api> Device<A> {
+    pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
+        if self.features.contains(feature) {
+            Ok(())
+        } else {
+            Err(MissingFeatures(feature))
+        }
+    }
+
+    pub(crate) fn require_downlevel_flags(
+        &self,
+        flags: wgt::DownlevelFlags,
+    ) -> Result<(), MissingDownlevelFlags> {
+        if self.downlevel.flags.contains(flags) {
+            Ok(())
+        } else {
+            Err(MissingDownlevelFlags(flags))
+        }
+    }
+}
+
 impl<A: HalApi> Device<A> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
@@ -310,25 +331,6 @@ impl<A: HalApi> Device<A> {
             downlevel,
             pending_writes,
         })
-    }
-
-    pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
-        if self.features.contains(feature) {
-            Ok(())
-        } else {
-            Err(MissingFeatures(feature))
-        }
-    }
-
-    pub(crate) fn require_downlevel_flags(
-        &self,
-        flags: wgt::DownlevelFlags,
-    ) -> Result<(), MissingDownlevelFlags> {
-        if self.downlevel.flags.contains(flags) {
-            Ok(())
-        } else {
-            Err(MissingDownlevelFlags(flags))
-        }
     }
 
     fn lock_life_internal<'this, 'token: 'this>(
@@ -1037,6 +1039,14 @@ impl<A: HalApi> Device<A> {
             }
             if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::VERTEX) {
                 required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+            }
+            if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::FRAGMENT) {
+                self.require_downlevel_flags(wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE)
+                    .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
+                    .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                        binding: entry.binding,
+                        error,
+                    })?;
             }
 
             self.require_features(required_features)
@@ -2423,7 +2433,7 @@ pub struct MissingFeatures(pub wgt::Features);
 
 #[derive(Clone, Debug, Error)]
 #[error(
-    "Downlevel flags {0:?} are required but not supported on the device. {}",
+    "Downlevel flags {0:?} are required but not supported on the device.\n{}",
     DOWNLEVEL_ERROR_WARNING_MESSAGE
 )]
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);

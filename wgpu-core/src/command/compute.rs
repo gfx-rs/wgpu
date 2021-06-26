@@ -5,6 +5,7 @@ use crate::{
         CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
         StateChange,
     },
+    device::MissingDownlevelFlags,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
@@ -157,6 +158,8 @@ pub enum ComputePassErrorInner {
     PushConstants(#[from] PushConstantUploadError),
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 /// Error encountered when performing a compute pass.
@@ -257,12 +260,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
         // will be reset to true if recording is done without errors
         cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.encoder.open();
+
+        let device = &device_guard[cmd_buf.device_id.value];
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -499,6 +506,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     state.is_ready().map_pass_err(scope)?;
+
+                    device
+                        .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
+                        .map_pass_err(scope)?;
 
                     let indirect_buffer = state
                         .trackers
