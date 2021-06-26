@@ -97,6 +97,7 @@ pub struct Device {
 
 pub struct Queue {
     shared: Arc<AdapterShared>,
+    features: wgt::Features,
     draw_fbo: glow::Framebuffer,
     copy_fbo: glow::Framebuffer,
     temp_query_results: Vec<u64>,
@@ -397,6 +398,15 @@ struct StencilState {
     back: StencilSide,
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+struct PrimitiveState {
+    front_face: u32,
+    cull_face: u32,
+    clamp_depth: bool,
+}
+
+type InvalidatedAttachments = arrayvec::ArrayVec<[u32; crate::MAX_COLOR_TARGETS + 2]>;
+
 #[derive(Debug)]
 enum Command {
     Draw {
@@ -474,10 +484,16 @@ enum Command {
         dst_offset: wgt::BufferAddress,
     },
     ResetFramebuffer,
-    SetFramebufferAttachment {
+    BindAttachment {
         attachment: u32,
         view: TextureView,
     },
+    ResolveAttachment {
+        attachment: u32,
+        dst: TextureView,
+        size: wgt::Extent3d,
+    },
+    InvalidateAttachments(InvalidatedAttachments),
     SetDrawColorBuffers(u8),
     ClearColorF(u32, [f32; 4]),
     ClearColorU(u32, [u32; 4]),
@@ -511,6 +527,7 @@ enum Command {
         attribute_desc: AttributeDesc,
     },
     SetProgram(glow::Program),
+    SetPrimitive(PrimitiveState),
     SetBlendConstant([f32; 4]),
     SetColorTarget {
         draw_buffer_index: Option<u32>,

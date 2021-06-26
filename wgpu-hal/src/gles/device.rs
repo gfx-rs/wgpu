@@ -218,7 +218,13 @@ impl super::Device {
                     }
                     super::BindingRegister::StorageBuffers => {
                         let index = gl.get_shader_storage_block_index(program, name).unwrap();
-                        gl.shader_storage_block_binding(program, index, slot as _);
+                        log::error!(
+                            "Unable to re-map shader storage block {} to {}",
+                            name,
+                            index
+                        );
+                        //gl.shader_storage_block_binding(program, index, slot as _);
+                        return Err(crate::DeviceError::Lost.into());
                     }
                     super::BindingRegister::Textures | super::BindingRegister::Images => {
                         let loc = gl.get_uniform_location(program, name).unwrap();
@@ -279,12 +285,18 @@ impl crate::Device<super::Api> for super::Device {
             glow::ARRAY_BUFFER
         };
 
-        let mut map_flags = glow::MAP_PERSISTENT_BIT;
+        let mut map_flags = 0;
         if desc
-            .memory_flags
-            .contains(crate::MemoryFlag::PREFER_COHERENT)
+            .usage
+            .intersects(crate::BufferUse::MAP_READ | crate::BufferUse::MAP_WRITE)
         {
-            map_flags |= glow::MAP_COHERENT_BIT;
+            map_flags |= glow::MAP_PERSISTENT_BIT;
+            if desc
+                .memory_flags
+                .contains(crate::MemoryFlag::PREFER_COHERENT)
+            {
+                map_flags |= glow::MAP_COHERENT_BIT;
+            }
         }
         if desc.usage.contains(crate::BufferUse::MAP_READ) {
             map_flags |= glow::MAP_READ_BIT;
@@ -321,18 +333,24 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let gl = &self.shared.context;
 
+        let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
+        let mut flags = buffer.map_flags | glow::MAP_UNSYNCHRONIZED_BIT;
+        if !is_coherent {
+            flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
+        }
+
         gl.bind_buffer(buffer.target, Some(buffer.raw));
         let ptr = gl.map_buffer_range(
             buffer.target,
             range.start as i32,
             (range.end - range.start) as i32,
-            buffer.map_flags,
+            flags,
         );
         gl.bind_buffer(buffer.target, None);
 
         Ok(crate::BufferMapping {
             ptr: NonNull::new(ptr).ok_or(crate::DeviceError::Lost)?,
-            is_coherent: buffer.map_flags & glow::MAP_COHERENT_BIT != 0,
+            is_coherent,
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
@@ -347,6 +365,7 @@ impl crate::Device<super::Api> for super::Device {
         I: Iterator<Item = crate::MemoryRange>,
     {
         let gl = &self.shared.context;
+        gl.bind_buffer(buffer.target, Some(buffer.raw));
         for range in ranges {
             gl.flush_mapped_buffer_range(
                 buffer.target,
@@ -360,6 +379,7 @@ impl crate::Device<super::Api> for super::Device {
         I: Iterator<Item = crate::MemoryRange>,
     {
         let gl = &self.shared.context;
+        gl.bind_buffer(buffer.target, Some(buffer.raw));
         for range in ranges {
             gl.invalidate_buffer_sub_data(
                 buffer.target,
@@ -402,6 +422,8 @@ impl crate::Device<super::Api> for super::Device {
                     desc.size.height as i32,
                 );
             }
+
+            gl.bind_renderbuffer(glow::RENDERBUFFER, None);
             super::TextureInner::Renderbuffer { raw }
         } else {
             let raw = gl.create_texture().unwrap();
@@ -453,6 +475,20 @@ impl crate::Device<super::Api> for super::Device {
                     target
                 }
             };
+
+            match desc.format.describe().sample_type {
+                wgt::TextureSampleType::Float { filterable: false }
+                | wgt::TextureSampleType::Uint
+                | wgt::TextureSampleType::Sint => {
+                    // reset default filtering mode
+                    gl.tex_parameter_i32(target, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
+                    gl.tex_parameter_i32(target, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+                }
+                wgt::TextureSampleType::Float { filterable: true }
+                | wgt::TextureSampleType::Depth => {}
+            }
+
+            gl.bind_texture(target, None);
             super::TextureInner::Texture { raw, target }
         };
 

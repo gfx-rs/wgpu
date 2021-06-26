@@ -205,7 +205,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
         message
     );
 
-    if log_severity == log::Level::Error && false {
+    if cfg!(debug_assertions) && log_severity == log::Level::Error {
         std::process::exit(1);
     }
 }
@@ -558,7 +558,7 @@ impl crate::Instance<super::Api> for Instance {
 
             if ret != 0 {
                 log::error!("Error returned from ANativeWindow_setBuffersGeometry");
-                return Err(w::InitError::UnsupportedWindowHandle);
+                return Err(crate::InstanceError);
             }
         }
 
@@ -665,6 +665,7 @@ impl Surface {
                 crate::SurfaceError::Lost
             })?;
 
+        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer));
         gl.blit_framebuffer(
             0,

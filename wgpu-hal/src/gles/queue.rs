@@ -26,6 +26,39 @@ impl super::Queue {
         gl.disable(glow::STENCIL_TEST);
         gl.disable(glow::SCISSOR_TEST);
         gl.disable(glow::BLEND);
+        gl.disable(glow::CULL_FACE);
+        gl.disable(glow::POLYGON_OFFSET_FILL);
+        if self.features.contains(wgt::Features::DEPTH_CLAMPING) {
+            gl.disable(glow::DEPTH_CLAMP);
+        }
+    }
+
+    unsafe fn set_attachment(&self, fbo_target: u32, attachment: u32, view: &super::TextureView) {
+        let gl = &self.shared.context;
+        match view.inner {
+            super::TextureInner::Renderbuffer { raw } => {
+                gl.framebuffer_renderbuffer(fbo_target, attachment, glow::RENDERBUFFER, Some(raw));
+            }
+            super::TextureInner::Texture { raw, target } => {
+                if is_3d_target(target) {
+                    gl.framebuffer_texture_layer(
+                        fbo_target,
+                        attachment,
+                        Some(raw),
+                        view.mip_levels.start as i32,
+                        view.array_layers.start as i32,
+                    );
+                } else {
+                    gl.framebuffer_texture_2d(
+                        fbo_target,
+                        attachment,
+                        target,
+                        Some(raw),
+                        view.mip_levels.start as i32,
+                    );
+                }
+            }
+        }
     }
 
     unsafe fn process(&mut self, command: &C, data_bytes: &[u8], data_words: &[u32]) {
@@ -329,38 +362,39 @@ impl super::Queue {
                 gl.disable(glow::STENCIL_TEST);
                 gl.disable(glow::SCISSOR_TEST);
             }
-            C::SetFramebufferAttachment {
+            C::BindAttachment {
                 attachment,
                 ref view,
-            } => match view.inner {
-                super::TextureInner::Renderbuffer { raw } => {
-                    gl.framebuffer_renderbuffer(
-                        glow::DRAW_FRAMEBUFFER,
-                        attachment,
-                        glow::RENDERBUFFER,
-                        Some(raw),
-                    );
-                }
-                super::TextureInner::Texture { raw, target } => {
-                    if is_3d_target(target) {
-                        gl.framebuffer_texture_layer(
-                            glow::DRAW_FRAMEBUFFER,
-                            attachment,
-                            Some(raw),
-                            view.mip_levels.start as i32,
-                            view.array_layers.start as i32,
-                        );
-                    } else {
-                        gl.framebuffer_texture_2d(
-                            glow::DRAW_FRAMEBUFFER,
-                            attachment,
-                            target,
-                            Some(raw),
-                            view.mip_levels.start as i32,
-                        );
-                    }
-                }
-            },
+            } => {
+                self.set_attachment(glow::DRAW_FRAMEBUFFER, attachment, view);
+            }
+            C::ResolveAttachment {
+                attachment,
+                ref dst,
+                ref size,
+            } => {
+                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.draw_fbo));
+                gl.read_buffer(attachment);
+                gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.copy_fbo));
+                self.set_attachment(glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, dst);
+                gl.blit_framebuffer(
+                    0,
+                    0,
+                    size.width as i32,
+                    size.height as i32,
+                    0,
+                    0,
+                    size.width as i32,
+                    size.height as i32,
+                    glow::COLOR_BUFFER_BIT,
+                    glow::NEAREST,
+                );
+                gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
+                gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo));
+            }
+            C::InvalidateAttachments(ref list) => {
+                gl.invalidate_framebuffer(glow::DRAW_FRAMEBUFFER, list);
+            }
             C::SetDrawColorBuffers(count) => {
                 let indices = (0..count as u32)
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
@@ -380,10 +414,10 @@ impl super::Queue {
                 gl.clear_buffer_i32_slice(glow::COLOR, draw_buffer, &mut color);
             }
             C::ClearDepth(depth) => {
-                gl.clear_buffer_depth_stencil(glow::DEPTH, 0, depth, 0);
+                gl.clear_buffer_f32_slice(glow::DEPTH, 0, &mut [depth]);
             }
             C::ClearStencil(value) => {
-                gl.clear_buffer_depth_stencil(glow::STENCIL, 0, 0.0, value as i32);
+                gl.clear_buffer_i32_slice(glow::STENCIL, 0, &mut [value as i32]);
             }
             C::BufferBarrier(raw, usage) => {
                 let mut flags = 0;
@@ -502,7 +536,12 @@ impl super::Queue {
                 gl.depth_mask(depth.mask);
             }
             C::SetDepthBias(bias) => {
-                gl.polygon_offset(bias.constant as f32, bias.slope_scale);
+                if bias.is_enabled() {
+                    gl.enable(glow::POLYGON_OFFSET_FILL);
+                    gl.polygon_offset(bias.constant as f32, bias.slope_scale);
+                } else {
+                    gl.disable(glow::POLYGON_OFFSET_FILL);
+                }
             }
             C::ConfigureDepthStencil(aspects) => {
                 if aspects.contains(crate::FormatAspect::DEPTH) {
@@ -518,6 +557,22 @@ impl super::Queue {
             }
             C::SetProgram(program) => {
                 gl.use_program(Some(program));
+            }
+            C::SetPrimitive(ref state) => {
+                gl.front_face(state.front_face);
+                if state.cull_face != 0 {
+                    gl.enable(glow::CULL_FACE);
+                    gl.cull_face(state.cull_face);
+                } else {
+                    gl.disable(glow::CULL_FACE);
+                }
+                if self.features.contains(wgt::Features::DEPTH_CLAMPING) {
+                    if state.clamp_depth {
+                        gl.enable(glow::DEPTH_CLAMP);
+                    } else {
+                        gl.disable(glow::DEPTH_CLAMP);
+                    }
+                }
             }
             C::SetBlendConstant(c) => {
                 gl.blend_color(c[0], c[1], c[2], c[3]);

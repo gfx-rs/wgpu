@@ -222,6 +222,22 @@ pub fn map_primitive_topology(topology: wgt::PrimitiveTopology) -> u32 {
     }
 }
 
+pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::PrimitiveState {
+    //Note: state.polygon_mode is not supported, see `Features::NON_FILL_POLYGON_MODE`
+    super::PrimitiveState {
+        front_face: match state.front_face {
+            wgt::FrontFace::Cw => glow::CW,
+            wgt::FrontFace::Ccw => glow::CCW,
+        },
+        cull_face: match state.cull_mode {
+            Some(wgt::Face::Front) => glow::FRONT,
+            Some(wgt::Face::Back) => glow::BACK,
+            None => 0,
+        },
+        clamp_depth: state.clamp_depth,
+    }
+}
+
 pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> u32 {
     use wgt::TextureViewDimension as Tvd;
     match dim {

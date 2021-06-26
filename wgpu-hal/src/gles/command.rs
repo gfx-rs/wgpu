@@ -18,6 +18,7 @@ struct TextureSlotDesc {
 #[derive(Default)]
 pub(super) struct State {
     topology: u32,
+    primitive: super::PrimitiveState,
     index_format: wgt::IndexFormat,
     index_offset: wgt::BufferAddress,
     vertex_buffers: [(super::VertexBufferDesc, super::BufferBinding); crate::MAX_VERTEX_BUFFERS],
@@ -27,6 +28,9 @@ pub(super) struct State {
     depth_bias: wgt::DepthBiasState,
     samplers: [Option<glow::Sampler>; super::MAX_SAMPLERS],
     texture_slots: [TextureSlotDesc; super::MAX_TEXTURE_SLOTS],
+    render_size: wgt::Extent3d,
+    resolve_attachments: ArrayVec<[(u32, super::TextureView); crate::MAX_COLOR_TARGETS]>,
+    invalidate_attachments: ArrayVec<[u32; crate::MAX_COLOR_TARGETS + 2]>,
     has_pass_label: bool,
     dirty: Dirty,
 }
@@ -223,12 +227,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferCopy>,
     {
+        //TODO: preserve `src.target` and `dst.target`
+        // at least for the buffers that require it.
         for copy in regions {
             self.cmd_buffer.commands.push(C::CopyBufferToBuffer {
                 src: src.raw,
-                src_target: src.target,
+                src_target: glow::COPY_READ_BUFFER,
                 dst: dst.raw,
-                dst_target: dst.target,
+                dst_target: glow::COPY_WRITE_BUFFER,
                 copy,
             })
         }
@@ -357,6 +363,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+        self.state.render_size = desc.extent;
+        self.state.resolve_attachments.clear();
+        self.state.invalidate_attachments.clear();
         if let Some(label) = desc.label {
             let range = self.cmd_buffer.add_marker(label);
             self.cmd_buffer.commands.push(C::PushDebugGroup(range));
@@ -367,21 +376,44 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.cmd_buffer.commands.push(C::ResetFramebuffer);
         for (i, cat) in desc.color_attachments.iter().enumerate() {
             let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
-            self.cmd_buffer.commands.push(C::SetFramebufferAttachment {
+            self.cmd_buffer.commands.push(C::BindAttachment {
                 attachment,
                 view: cat.target.view.clone(),
             });
+            if let Some(ref rat) = cat.resolve_target {
+                self.state
+                    .resolve_attachments
+                    .push((attachment, rat.view.clone()));
+            }
+            if !cat.ops.contains(crate::AttachmentOp::STORE) {
+                self.state.invalidate_attachments.push(attachment);
+            }
         }
         if let Some(ref dsat) = desc.depth_stencil_attachment {
-            let attachment = match dsat.target.view.aspects {
+            let aspects = dsat.target.view.aspects;
+            let attachment = match aspects {
                 crate::FormatAspect::DEPTH => glow::DEPTH_ATTACHMENT,
                 crate::FormatAspect::STENCIL => glow::STENCIL_ATTACHMENT,
                 _ => glow::DEPTH_STENCIL_ATTACHMENT,
             };
-            self.cmd_buffer.commands.push(C::SetFramebufferAttachment {
+            self.cmd_buffer.commands.push(C::BindAttachment {
                 attachment,
                 view: dsat.target.view.clone(),
             });
+            if aspects.contains(crate::FormatAspect::DEPTH)
+                && !dsat.depth_ops.contains(crate::AttachmentOp::STORE)
+            {
+                self.state
+                    .invalidate_attachments
+                    .push(glow::DEPTH_ATTACHMENT);
+            }
+            if aspects.contains(crate::FormatAspect::STENCIL)
+                && !dsat.stencil_ops.contains(crate::AttachmentOp::STORE)
+            {
+                self.state
+                    .invalidate_attachments
+                    .push(glow::STENCIL_ATTACHMENT);
+            }
         }
 
         // set the draw buffers and states
@@ -437,6 +469,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
     unsafe fn end_render_pass(&mut self) {
+        for (attachment, dst) in self.state.resolve_attachments.drain(..) {
+            self.cmd_buffer.commands.push(C::ResolveAttachment {
+                attachment,
+                dst,
+                size: self.state.render_size,
+            });
+        }
+        if !self.state.invalidate_attachments.is_empty() {
+            self.cmd_buffer.commands.push(C::InvalidateAttachments(
+                self.state.invalidate_attachments.clone(),
+            ));
+            self.state.invalidate_attachments.clear();
+        }
         if self.state.has_pass_label {
             self.cmd_buffer.commands.push(C::PopDebugGroup);
             self.state.has_pass_label = false;
@@ -444,6 +489,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.dirty = Dirty::empty();
         self.state.color_targets.clear();
         self.state.vertex_attributes.clear();
+        self.state.primitive = super::PrimitiveState::default();
     }
 
     unsafe fn set_bind_group(
@@ -560,6 +606,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         {
             state_desc.step = pipe_desc.step;
             state_desc.stride = pipe_desc.stride;
+        }
+
+        // set primitive state
+        let prim_state = conv::map_primitive_state(&pipeline.primitive);
+        if prim_state != self.state.primitive {
+            self.cmd_buffer
+                .commands
+                .push(C::SetPrimitive(prim_state.clone()));
+            self.state.primitive = prim_state;
         }
 
         // set depth/stencil states

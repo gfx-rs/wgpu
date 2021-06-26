@@ -177,7 +177,7 @@ impl super::Adapter {
             naga::back::glsl::Version::Embedded(value)
         };
 
-        let mut features = wgt::Features::empty() | wgt::Features::NON_FILL_POLYGON_MODE;
+        let mut features = wgt::Features::empty();
         features.set(
             wgt::Features::DEPTH_CLAMPING,
             extensions.contains("GL_EXT_depth_clamp"),
@@ -283,7 +283,7 @@ impl super::Adapter {
 impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
-        _features: wgt::Features,
+        features: wgt::Features,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let gl = &self.shared.context;
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
@@ -300,6 +300,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             },
             queue: super::Queue {
                 shared: Arc::clone(&self.shared),
+                features,
                 draw_fbo: gl
                     .create_framebuffer()
                     .map_err(|_| crate::DeviceError::OutOfMemory)?,
