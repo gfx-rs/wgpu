@@ -210,6 +210,8 @@ impl PhysicalDeviceFeatures {
             | F::SAMPLED_TEXTURE_BINDING_ARRAY
             | F::STORAGE_TEXTURE_BINDING_ARRAY
             | F::BUFFER_BINDING_ARRAY
+            | F::TIMESTAMP_QUERY
+            | F::PIPELINE_STATISTICS_QUERY
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         let mut dl_flags = Df::all();
 
