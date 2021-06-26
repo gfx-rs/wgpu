@@ -507,6 +507,7 @@ impl Program<'_> {
                         })?;
 
                         let mut maybe_decl = None;
+                        let mut ambiguous = false;
 
                         'outer: for decl in declarations {
                             if args.len() != decl.parameters.len() {
@@ -538,15 +539,20 @@ impl Program<'_> {
 
                             if exact {
                                 maybe_decl = Some(decl);
+                                ambiguous = false;
                                 break;
                             } else if maybe_decl.is_some() {
-                                return Err(ErrorKind::SemanticError(
-                                    meta,
-                                    format!("Ambiguous best function for '{}'", name).into(),
-                                ));
+                                ambiguous = true;
                             } else {
                                 maybe_decl = Some(decl)
                             }
+                        }
+
+                        if ambiguous {
+                            return Err(ErrorKind::SemanticError(
+                                meta,
+                                format!("Ambiguous best function for '{}'", name).into(),
+                            ));
                         }
 
                         let decl = maybe_decl.ok_or_else(|| {

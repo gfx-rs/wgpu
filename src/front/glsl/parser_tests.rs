@@ -464,6 +464,32 @@ fn constants() {
 }
 
 #[test]
+fn function_overloading() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Vertex);
+
+    parse_program(
+        r#"
+        #  version 450
+
+        float saturate(float v) { return clamp(v, 0.0, 1.0); }
+        vec2 saturate(vec2 v) { return clamp(v, vec2(0.0), vec2(1.0)); }
+        vec3 saturate(vec3 v) { return clamp(v, vec3(0.0), vec3(1.0)); }
+        vec4 saturate(vec4 v) { return clamp(v, vec4(0.0), vec4(1.0)); }
+
+        void main() {
+            float v1 = saturate(1.5);
+            vec2 v2 = saturate(vec2(0.5, 1.5));
+            vec3 v3 = saturate(vec3(0.5, 1.5, 2.5));
+            vec3 v4 = saturate(vec4(0.5, 1.5, 2.5, 3.5));
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+}
+
+#[test]
 fn implicit_conversions() {
     let mut entry_points = crate::FastHashMap::default();
     entry_points.insert("".to_string(), ShaderStage::Vertex);
