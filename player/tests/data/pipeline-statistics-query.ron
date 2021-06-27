@@ -5,7 +5,7 @@
             name: "Queried number of compute invocations is correct",
             buffer: (index: 0, epoch: 1),
             offset: 0,
-            data: Raw([0x2A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            data: U64([0x0, 0x2A]),
         ),
     ],
     actions: [
@@ -38,14 +38,14 @@
             desc: (
                 label: Some("Compute Invocation QuerySet"),
                 count: 2,
-                ty: PipelineStatistics((bits: 0x10)), // COMPUTE_SHADER_INVOCATIONS
+                ty: PipelineStatistics((bits: 0x18)), // FRAGMENT_SHADER_INVOCATIONS | COMPUTE_SHADER_INVOCATIONS
             ),
         ),
         CreateBuffer(
             Id(0, 1, Empty),
             (
                 label: Some("Compute Invocation Result Buffer"),
-                size: 8,
+                size: 16,
                 usage: (
                     bits: 9, // COPY_DST | MAP_READ
                 ),

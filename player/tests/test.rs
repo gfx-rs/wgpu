@@ -26,6 +26,7 @@ struct RawId {
 #[derive(serde::Deserialize)]
 enum ExpectedData {
     Raw(Vec<u8>),
+    U64(Vec<u64>),
     File(String, usize),
 }
 
@@ -33,6 +34,7 @@ impl ExpectedData {
     fn len(&self) -> usize {
         match self {
             ExpectedData::Raw(vec) => vec.len(),
+            ExpectedData::U64(vec) => vec.len() * std::mem::size_of::<u64>(),
             ExpectedData::File(_, size) => *size,
         }
     }
@@ -137,6 +139,10 @@ impl Test<'_> {
 
                     bin
                 }
+                ExpectedData::U64(vec) => vec
+                    .into_iter()
+                    .flat_map(|u| u.to_ne_bytes().to_vec())
+                    .collect::<Vec<u8>>(),
             };
 
             if &expected_data[..] != contents {
