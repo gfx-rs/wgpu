@@ -331,6 +331,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         range: Range<u32>,
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
+        stride: wgt::BufferSize,
     ) {
         self.device.raw.cmd_copy_query_pool_results(
             self.active,
@@ -339,7 +340,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             range.end - range.start,
             buffer.raw,
             offset,
-            0,
+            stride.get(),
             vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
         );
     }

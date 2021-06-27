@@ -279,6 +279,7 @@ impl crate::CommandEncoder<Api> for Encoder {
         range: Range<u32>,
         buffer: &Resource,
         offset: wgt::BufferAddress,
+        stride: wgt::BufferSize,
     ) {
     }
 
