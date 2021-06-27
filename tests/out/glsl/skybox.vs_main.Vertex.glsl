@@ -1,4 +1,4 @@
-#version 310 es
+#version 320 es
 
 precision highp float;
 
@@ -7,7 +7,7 @@ struct VertexOutput {
     vec3 uv;
 };
 
-uniform Data_block_0 {
+layout(binding = 0) uniform Data_block_0 {
     mat4x4 proj_inv;
     mat4x4 view;
 } _group_0_binding_0;

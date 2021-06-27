@@ -7,6 +7,7 @@ use std::{env, error::Error, path::Path};
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
     index_bounds_check_policy: naga::back::IndexBoundsCheckPolicy,
+    entry_point: Option<String>,
     spv_adjust_coordinate_space: bool,
     spv_flow_dump_prefix: Option<String>,
     spv: naga::back::spv::Options,
@@ -89,7 +90,7 @@ fn main() {
                     };
                 }
                 "flow-dir" => params.spv_flow_dump_prefix = args.next(),
-                "entry-point" => params.glsl.entry_point = args.next().unwrap(),
+                "entry-point" => params.entry_point = Some(args.next().unwrap()),
                 "profile" => {
                     use naga::back::glsl::Version;
                     let string = args.next().unwrap();
@@ -282,17 +283,28 @@ fn main() {
             stage @ "vert" | stage @ "frag" | stage @ "comp" => {
                 use naga::back::glsl;
 
-                params.glsl.shader_stage = match stage {
-                    "vert" => naga::ShaderStage::Vertex,
-                    "frag" => naga::ShaderStage::Fragment,
-                    "comp" => naga::ShaderStage::Compute,
-                    _ => unreachable!(),
+                let pipeline_options = glsl::PipelineOptions {
+                    entry_point: match params.entry_point {
+                        Some(ref name) => name.clone(),
+                        None => "main".to_string(),
+                    },
+                    shader_stage: match stage {
+                        "vert" => naga::ShaderStage::Vertex,
+                        "frag" => naga::ShaderStage::Fragment,
+                        "comp" => naga::ShaderStage::Compute,
+                        _ => unreachable!(),
+                    },
                 };
 
                 let mut buffer = String::new();
-                let mut writer =
-                    glsl::Writer::new(&mut buffer, &module, info.as_ref().unwrap(), &params.glsl)
-                        .unwrap_pretty();
+                let mut writer = glsl::Writer::new(
+                    &mut buffer,
+                    &module,
+                    info.as_ref().unwrap(),
+                    &params.glsl,
+                    &pipeline_options,
+                )
+                .unwrap_pretty();
                 writer.write().unwrap();
                 fs::write(output_path, buffer).unwrap();
             }

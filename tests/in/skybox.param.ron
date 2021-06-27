@@ -6,12 +6,18 @@
 	msl_custom: true,
 	msl: (
 		lang_version: (2, 1),
-		binding_map: {
-			(stage: Vertex, group: 0, binding: 0): (buffer: Some(0)),
-			(stage: Fragment, group: 0, binding: 1): (texture: Some(0)),
-			(stage: Fragment, group: 0, binding: 2): (sampler: Some(Inline(0))),
-		},
 		per_stage_map: (
+			vs: (
+				resources: {
+					(group: 0, binding: 0): (buffer: Some(0)),
+				},
+			),
+			fs: (
+				resources: {
+					(group: 0, binding: 1): (texture: Some(0)),
+					(group: 0, binding: 2): (sampler: Some(Inline(0))),
+				},
+			),
 		),
 		inline_samplers: [
 			(
@@ -28,5 +34,13 @@
 		],
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: false,
-	)
+	),
+	glsl_custom: true,
+	glsl: (
+		version: Embedded(320),
+		binding_map: {
+			(group: 0, binding: 0): 0,
+			(group: 0, binding: 1): 0,
+		},
+	),
 )

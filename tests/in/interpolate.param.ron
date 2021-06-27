@@ -3,5 +3,9 @@
 	spv_capabilities: [ Shader, SampleRateShading ],
 	spv_debug: true,
 	spv_adjust_coordinate_space: true,
-	glsl_desktop_version: Some(400)
+	glsl: (
+		version: Desktop(400),
+		binding_map: {},
+	),
+	glsl_custom: true,
 )

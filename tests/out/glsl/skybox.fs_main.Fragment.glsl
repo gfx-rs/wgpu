@@ -1,4 +1,4 @@
-#version 310 es
+#version 320 es
 
 precision highp float;
 
@@ -7,7 +7,7 @@ struct VertexOutput {
     vec3 uv;
 };
 
-uniform highp samplerCube _group_0_binding_1;
+layout(binding = 0) uniform highp samplerCube _group_0_binding_1;
 
 smooth in vec3 _vs2fs_location0;
 layout(location = 0) out vec4 _fs2p_location0;

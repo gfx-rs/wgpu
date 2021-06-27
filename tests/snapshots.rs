@@ -49,9 +49,12 @@ struct Parameters {
     #[cfg(all(not(feature = "deserialize"), feature = "msl-out"))]
     #[serde(default)]
     msl_custom: bool,
-    #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
+    #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
     #[serde(default)]
-    glsl_desktop_version: Option<u16>,
+    glsl: naga::back::glsl::Options,
+    #[cfg(all(not(feature = "deserialize"), feature = "glsl-out"))]
+    #[serde(default)]
+    glsl_custom: bool,
     #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
     #[serde(default)]
     glsl_vert_ep_name: Option<String>,
@@ -233,17 +236,26 @@ fn write_output_glsl(
 ) {
     use naga::back::glsl;
 
-    let options = glsl::Options {
-        version: match params.glsl_desktop_version {
-            Some(v) => glsl::Version::Desktop(v),
-            None => glsl::Version::Embedded(310),
-        },
+    #[cfg_attr(feature = "deserialize", allow(unused_variables))]
+    let default_options = glsl::Options::default();
+    #[cfg(feature = "deserialize")]
+    let options = &params.glsl;
+    #[cfg(not(feature = "deserialize"))]
+    let options = if params.glsl_custom {
+        println!("Skipping {}", destination.display());
+        return;
+    } else {
+        &default_options
+    };
+
+    let pipeline_options = glsl::PipelineOptions {
         shader_stage: stage,
         entry_point: ep_name.to_string(),
     };
 
     let mut buffer = String::new();
-    let mut writer = glsl::Writer::new(&mut buffer, module, info, &options).unwrap();
+    let mut writer =
+        glsl::Writer::new(&mut buffer, module, info, &options, &pipeline_options).unwrap();
     writer.write().unwrap();
 
     fs::write(

@@ -24,7 +24,10 @@ holding the result.
 !*/
 
 use crate::{arena::Handle, valid::ModuleInfo};
-use std::fmt::{Error as FmtError, Write};
+use std::{
+    fmt::{Error as FmtError, Write},
+    ops,
+};
 
 mod keywords;
 pub mod sampler;
@@ -57,21 +60,16 @@ pub struct BindTarget {
     pub mutable: bool,
 }
 
-#[derive(Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct BindSource {
-    pub stage: crate::ShaderStage,
-    pub group: u32,
-    pub binding: u32,
-}
+// Using `BTreeMap` instead of `HashMap` so that we can hash itself.
+pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
-pub type BindingMap = std::collections::BTreeMap<BindSource, BindTarget>;
-
-#[derive(Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PerStageResources {
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub resources: BindingMap,
+
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub push_constant_buffer: Option<Slot>,
 
@@ -82,7 +80,7 @@ pub struct PerStageResources {
     pub sizes_buffer: Option<Slot>,
 }
 
-#[derive(Clone, Debug, Default, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PerStageMap {
@@ -92,6 +90,17 @@ pub struct PerStageMap {
     pub fs: PerStageResources,
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub cs: PerStageResources,
+}
+
+impl ops::Index<crate::ShaderStage> for PerStageMap {
+    type Output = PerStageResources;
+    fn index(&self, stage: crate::ShaderStage) -> &PerStageResources {
+        match stage {
+            crate::ShaderStage::Vertex => &self.vs,
+            crate::ShaderStage::Fragment => &self.fs,
+            crate::ShaderStage::Compute => &self.cs,
+        }
+    }
 }
 
 enum ResolvedBinding {
@@ -146,11 +155,11 @@ pub enum Error {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum EntryPointError {
     #[error("mapping of {0:?} is missing")]
-    MissingBinding(BindSource),
-    #[error("mapping for push constants at stage {0:?} is missing")]
-    MissingPushConstants(crate::ShaderStage),
-    #[error("mapping for sizes buffer for stage {0:?} is missing")]
-    MissingSizesBuffer(crate::ShaderStage),
+    MissingBinding(crate::ResourceBinding),
+    #[error("mapping for push constants is missing")]
+    MissingPushConstants,
+    #[error("mapping for sizes buffer is missing")]
+    MissingSizesBuffer,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -167,9 +176,7 @@ enum LocationMode {
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
-    /// Binding model mapping to Metal.
-    pub binding_map: BindingMap,
-    /// Map of per-stage resources (e.g. push constants) to slots
+    /// Map of per-stage resources to slots.
     pub per_stage_map: PerStageMap,
     /// Samplers to be inlined into the code.
     pub inline_samplers: Vec<sampler::InlineSampler>,
@@ -183,7 +190,6 @@ impl Default for Options {
     fn default() -> Self {
         Options {
             lang_version: (1, 0),
-            binding_map: BindingMap::default(),
             per_stage_map: PerStageMap::default(),
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
@@ -257,19 +263,14 @@ impl Options {
         stage: crate::ShaderStage,
         res_binding: &crate::ResourceBinding,
     ) -> Result<ResolvedBinding, EntryPointError> {
-        let source = BindSource {
-            stage,
-            group: res_binding.group,
-            binding: res_binding.binding,
-        };
-        match self.binding_map.get(&source) {
+        match self.per_stage_map[stage].resources.get(&res_binding) {
             Some(target) => Ok(ResolvedBinding::Resource(target.clone())),
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",
                 index: 0,
                 interpolation: None,
             }),
-            None => Err(EntryPointError::MissingBinding(source)),
+            None => Err(EntryPointError::MissingBinding(res_binding.clone())),
         }
     }
 
@@ -294,7 +295,7 @@ impl Options {
                 index: 0,
                 interpolation: None,
             }),
-            None => Err(EntryPointError::MissingPushConstants(stage)),
+            None => Err(EntryPointError::MissingPushConstants),
         }
     }
 
@@ -302,12 +303,7 @@ impl Options {
         &self,
         stage: crate::ShaderStage,
     ) -> Result<ResolvedBinding, EntryPointError> {
-        let slot = match stage {
-            crate::ShaderStage::Vertex => self.per_stage_map.vs.sizes_buffer,
-            crate::ShaderStage::Fragment => self.per_stage_map.fs.sizes_buffer,
-            crate::ShaderStage::Compute => self.per_stage_map.cs.sizes_buffer,
-        };
-
+        let slot = self.per_stage_map[stage].sizes_buffer;
         match slot {
             Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
                 buffer: Some(slot),
@@ -320,7 +316,7 @@ impl Options {
                 index: 0,
                 interpolation: None,
             }),
-            None => Err(EntryPointError::MissingSizesBuffer(stage)),
+            None => Err(EntryPointError::MissingSizesBuffer),
         }
     }
 }

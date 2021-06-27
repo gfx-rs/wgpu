@@ -66,8 +66,12 @@ pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450]
 /// List of supported es glsl versions
 pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 
+pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
+
 /// glsl version
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum Version {
     /// `core` glsl
     Desktop(u16),
@@ -124,9 +128,29 @@ impl fmt::Display for Version {
 
 /// Structure that contains the configuration used in the [`Writer`](Writer)
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
     /// The glsl version to be used
     pub version: Version,
+    /// Map of resources association to binding locations.
+    pub binding_map: BindingMap,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            version: Version::Embedded(310),
+            binding_map: BindingMap::default(),
+        }
+    }
+}
+
+// A subset of options that are meant to be changed per pipeline.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct PipelineOptions {
     /// The stage of the entry point
     pub shader_stage: ShaderStage,
     /// The name of the entry point
@@ -134,16 +158,6 @@ pub struct Options {
     /// If no entry point that matches is found a error will be thrown while creating a new instance
     /// of [`Writer`](struct.Writer.html)
     pub entry_point: String,
-}
-
-impl Default for Options {
-    fn default() -> Self {
-        Options {
-            version: Version::Embedded(320),
-            shader_stage: ShaderStage::Compute,
-            entry_point: "main".to_string(),
-        }
-    }
 }
 
 /// Structure that contains a reflection info
@@ -297,6 +311,7 @@ impl<'a, W: Write> Writer<'a, W> {
         module: &'a crate::Module,
         info: &'a valid::ModuleInfo,
         options: &'a Options,
+        pipeline_options: &'a PipelineOptions,
     ) -> Result<Self, Error> {
         // Check if the requested version is supported
         if !options.version.is_supported() {
@@ -308,7 +323,9 @@ impl<'a, W: Write> Writer<'a, W> {
         let ep_idx = module
             .entry_points
             .iter()
-            .position(|ep| options.shader_stage == ep.stage && options.entry_point == ep.name)
+            .position(|ep| {
+                pipeline_options.shader_stage == ep.stage && pipeline_options.entry_point == ep.name
+            })
             .ok_or(Error::EntryPointNotFound)?;
 
         // Generate a map with names required to write the module
@@ -370,7 +387,7 @@ impl<'a, W: Write> Writer<'a, W> {
             writeln!(self.out)?;
         }
 
-        if self.options.shader_stage == ShaderStage::Compute {
+        if self.entry_point.stage == ShaderStage::Compute {
             let workgroup_size = self.entry_point.workgroup_size;
             writeln!(
                 self.out,
@@ -439,13 +456,36 @@ impl<'a, W: Write> Writer<'a, W> {
                     arrayed,
                     class,
                 } => {
-                    // Write the storage format if needed
-                    if let TypeInner::Image {
-                        class: crate::ImageClass::Storage(format),
-                        ..
-                    } = self.module.types[global.ty].inner
-                    {
-                        write!(self.out, "layout({}) ", glsl_storage_format(format))?;
+                    // Gather the storage format if needed
+                    let layout_storage_format = match self.module.types[global.ty].inner {
+                        TypeInner::Image {
+                            class: crate::ImageClass::Storage(format),
+                            ..
+                        } => Some(glsl_storage_format(format)),
+                        _ => None,
+                    };
+                    // Gether the location if needed
+                    let layout_binding = if self.options.version.supports_explicit_locations() {
+                        let br = global.binding.as_ref().unwrap();
+                        self.options.binding_map.get(br).cloned()
+                    } else {
+                        None
+                    };
+
+                    // Write all the layout qualifiers
+                    if layout_binding.is_some() || layout_storage_format.is_some() {
+                        write!(self.out, "layout(")?;
+                        if let Some(binding) = layout_binding {
+                            write!(self.out, "binding = {}", binding)?;
+                        }
+                        if let Some(format) = layout_storage_format {
+                            let separator = match layout_binding {
+                                Some(_) => ",",
+                                None => "",
+                            };
+                            write!(self.out, "{}{}", separator, format)?;
+                        }
+                        write!(self.out, ") ")?;
                     }
 
                     if let Some(storage_access) = glsl_storage_access(global.storage_access) {
@@ -702,6 +742,15 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
     ) -> BackendResult {
+        if self.options.version.supports_explicit_locations() {
+            if let Some(ref br) = global.binding {
+                match self.options.binding_map.get(br) {
+                    Some(binding) => write!(self.out, "layout(binding = {}) ", binding)?,
+                    None => log::debug!("unassigned binding for {:?}", global.name),
+                }
+            }
+        }
+
         if let Some(storage_access) = glsl_storage_access(global.storage_access) {
             write!(self.out, "{} ", storage_access)?;
         }
@@ -782,7 +831,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 //
                 // We ignore all interpolation and auxiliary modifiers that aren't used in fragment
                 // shaders' input globals or vertex shaders' output globals.
-                let emit_interpolation_and_auxiliary = match self.options.shader_stage {
+                let emit_interpolation_and_auxiliary = match self.entry_point.stage {
                     ShaderStage::Vertex => output,
                     ShaderStage::Fragment => !output,
                     _ => false,

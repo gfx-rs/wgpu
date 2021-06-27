@@ -217,7 +217,7 @@ impl<'a, W> Writer<'a, W> {
             self.varying_required_features(result.binding.as_ref(), result.ty);
         }
 
-        if let ShaderStage::Compute = self.options.shader_stage {
+        if let ShaderStage::Compute = self.entry_point.stage {
             self.features.request(Features::COMPUTE_SHADER)
         }
 
