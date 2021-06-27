@@ -398,6 +398,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
         range: Range<u32>,
         buffer: &A::Buffer,
         offset: wgt::BufferAddress,
+        stride: wgt::BufferSize,
     );
 
     // render passes

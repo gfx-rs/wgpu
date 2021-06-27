@@ -294,6 +294,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         range: Range<u32>,
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
+        _: wgt::BufferSize, // Metal doesn't support queries that are bigger than a single element are not supported
     ) {
         let encoder = self.enter_blit();
         let size = (range.end - range.start) as u64 * crate::QUERY_SIZE;

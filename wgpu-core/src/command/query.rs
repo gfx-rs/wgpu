@@ -6,6 +6,7 @@ use crate::{
     command::{CommandBuffer, CommandEncoderError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{self, Id, TypedId},
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::QuerySet,
     track::UseExtendError,
     Epoch, FastHashMap, Index,
@@ -368,7 +369,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        let bytes_used = (wgt::QUERY_SIZE * query_count) as BufferAddress;
+        let elements_per_query = match query_set.desc.ty {
+            wgt::QueryType::Occlusion => 1,
+            wgt::QueryType::PipelineStatistics(ps) => ps.bits().count_ones(),
+            wgt::QueryType::Timestamp => 1,
+        };
+        let stride = elements_per_query * wgt::QUERY_SIZE;
+        let bytes_used = (stride * query_count) as BufferAddress;
+
         let buffer_start_offset = destination_offset;
         let buffer_end_offset = buffer_start_offset + bytes_used;
 
@@ -376,13 +384,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(ResolveError::BufferOverrun {
                 start_query,
                 end_query,
-                stride: wgt::QUERY_SIZE,
+                stride,
                 buffer_size: dst_buffer.size,
                 buffer_start_offset,
                 buffer_end_offset,
             }
             .into());
         }
+
+        cmd_buf.buffer_memory_init_actions.extend(
+            dst_buffer
+                .initialization_status
+                .check(buffer_start_offset..buffer_end_offset)
+                .map(|range| MemoryInitTrackerAction {
+                    id: destination,
+                    range,
+                    kind: MemoryInitKind::ImplicitlyInitialized,
+                }),
+        );
 
         unsafe {
             raw_encoder.transition_buffers(dst_barrier);
@@ -391,6 +410,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 start_query..end_query,
                 dst_buffer.raw.as_ref().unwrap(),
                 destination_offset,
+                wgt::BufferSize::new_unchecked(stride as u64),
             );
         }
 
