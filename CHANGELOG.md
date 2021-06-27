@@ -4,6 +4,7 @@
   - fix buffer inits delayed by a frame
   - fix query resolves to initialize buffers
   - fix pipeline statistics stride
+  - fix the check for maximum query count
 
 ## v0.9 (2021-06-18)
   - Updated:

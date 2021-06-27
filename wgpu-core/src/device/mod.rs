@@ -2678,7 +2678,7 @@ impl<B: GfxBackend> Device<B> {
             return Err(Error::ZeroCount);
         }
 
-        if desc.count >= wgt::QUERY_SET_MAX_QUERIES {
+        if desc.count > wgt::QUERY_SET_MAX_QUERIES {
             return Err(Error::TooManyQueries {
                 count: desc.count,
                 maximum: wgt::QUERY_SET_MAX_QUERIES,
