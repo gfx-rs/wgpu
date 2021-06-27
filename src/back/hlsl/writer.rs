@@ -292,16 +292,17 @@ impl<'a, W: Write> Writer<'a, W> {
     /// Ends in a newline
     fn write_global_constant(
         &mut self,
-        _module: &Module,
+        module: &Module,
         inner: &crate::ConstantInner,
         handle: Handle<crate::Constant>,
     ) -> BackendResult {
+        write!(self.out, "static const ")?;
+
         match *inner {
             crate::ConstantInner::Scalar {
                 width: _,
                 ref value,
             } => {
-                write!(self.out, "static const ")?;
                 // Write type
                 match *value {
                     crate::ScalarValue::Sint(_) => write!(self.out, "int")?,
@@ -323,15 +324,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     crate::ScalarValue::Bool(value) => write!(self.out, "{}", value)?,
                 };
-                writeln!(self.out, ";")?;
             }
-            crate::ConstantInner::Composite { .. } => {
-                return Err(Error::Unimplemented(format!(
-                    "write_global_constant Composite {:?}",
-                    inner
-                )))
+            crate::ConstantInner::Composite { ty, ref components } => {
+                self.write_type(module, ty)?;
+                self.write_composite_constant(module, ty, components)?;
             }
         }
+        writeln!(self.out, ";")?;
         // End with extra newline for readability
         writeln!(self.out)?;
         Ok(())
@@ -610,10 +609,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
             // Write the local name
             // The leading space is important
-            write!(self.out, "var {}: ", self.names[&func_ctx.name_key(handle)])?;
-
-            // Write the local type
             self.write_type(module, local.ty)?;
+            write!(self.out, " {}", self.names[&func_ctx.name_key(handle)])?;
 
             // Write the local initializer if needed
             if let Some(init) = local.init {
@@ -793,6 +790,27 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                 }
                 writeln!(self.out, ");")?
+            }
+            Statement::Loop {
+                ref body,
+                ref continuing,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                writeln!(self.out, "while(true) {{")?;
+
+                for sta in body.iter().chain(continuing.iter()) {
+                    self.write_stmt(module, sta, func_ctx, indent + 1)?;
+                }
+
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
+            }
+            Statement::Break => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                writeln!(self.out, "break;")?
+            }
+            Statement::Continue => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                writeln!(self.out, "continue;")?
             }
             _ => return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt))),
         }
@@ -1097,6 +1115,11 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.out.write_char(back::COMPONENTS[sc as usize])?;
                 }
             }
+            // `ArrayLength` is written as `expr.length()`
+            Expression::ArrayLength(expr) => {
+                self.write_expr(module, expr, func_ctx)?;
+                write!(self.out, ".length()")?
+            }
             _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 
@@ -1125,26 +1148,37 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
             crate::ConstantInner::Composite { ty, ref components } => {
-                let (open_b, close_b) = match module.types[ty].inner {
-                    TypeInner::Struct { .. } => ("{ ", " }"),
-                    _ => {
-                        // We should write type only for non struct constants
-                        self.write_type(module, ty)?;
-                        ("(", ")")
-                    }
-                };
-                write!(self.out, "{}", open_b)?;
-                for (index, constant) in components.iter().enumerate() {
-                    self.write_constant(module, *constant)?;
-                    // Only write a comma if isn't the last element
-                    if index != components.len().saturating_sub(1) {
-                        // The leading space is for readability only
-                        write!(self.out, ", ")?;
-                    }
-                }
-                write!(self.out, "{}", close_b)?;
+                self.write_composite_constant(module, ty, components)?;
             }
         }
+
+        Ok(())
+    }
+
+    fn write_composite_constant(
+        &mut self,
+        module: &Module,
+        ty: Handle<crate::Type>,
+        components: &[Handle<crate::Constant>],
+    ) -> BackendResult {
+        let (open_b, close_b) = match module.types[ty].inner {
+            TypeInner::Struct { .. } => ("{ ", " }"),
+            _ => {
+                // We should write type only for non struct constants
+                self.write_type(module, ty)?;
+                ("(", ")")
+            }
+        };
+        write!(self.out, "{}", open_b)?;
+        for (index, constant) in components.iter().enumerate() {
+            self.write_constant(module, *constant)?;
+            // Only write a comma if isn't the last element
+            if index != components.len().saturating_sub(1) {
+                // The leading space is for readability only
+                write!(self.out, ", ")?;
+            }
+        }
+        write!(self.out, "{}", close_b)?;
 
         Ok(())
     }
