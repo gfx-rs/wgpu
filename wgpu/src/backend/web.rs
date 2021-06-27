@@ -1146,6 +1146,8 @@ impl crate::Context for Context {
                     lang_version: (1, 0),
                     flags: spv::WriterFlags::empty(),
                     capabilities: None,
+                    index_bounds_check_policy:
+                        naga::back::IndexBoundsCheckPolicy::UndefinedBehavior,
                 };
                 let analysis = Validator::new(
                     naga::valid::ValidationFlags::empty(),
