@@ -728,6 +728,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 lang_version: (1, 0),
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
+                index_bounds_check_policy: naga::back::IndexBoundsCheckPolicy::Restrict,
             }
         };
 

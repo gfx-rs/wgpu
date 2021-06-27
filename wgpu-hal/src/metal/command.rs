@@ -64,9 +64,7 @@ impl super::CommandState {
         result_sizes.clear();
         for br in stage_info.sized_bindings.iter() {
             // If it's None, this isn't the right time to update the sizes
-            let size = self
-                .storage_buffer_length_map
-                .get(&(br.group, br.binding))?;
+            let size = self.storage_buffer_length_map.get(br)?;
             result_sizes.push(*size);
         }
         Some((slot as _, result_sizes))
@@ -417,9 +415,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     offset,
                 );
                 if let Some(size) = buf.binding_size {
-                    self.state
-                        .storage_buffer_length_map
-                        .insert((group_index, buf.binding_location), size);
+                    let br = naga::ResourceBinding {
+                        group: group_index,
+                        binding: buf.binding_location,
+                    };
+                    self.state.storage_buffer_length_map.insert(br, size);
                     changes_sizes_buffer = true;
                 }
             }
@@ -449,9 +449,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     offset,
                 );
                 if let Some(size) = buf.binding_size {
-                    self.state
-                        .storage_buffer_length_map
-                        .insert((group_index, buf.binding_location), size);
+                    let br = naga::ResourceBinding {
+                        group: group_index,
+                        binding: buf.binding_location,
+                    };
+                    self.state.storage_buffer_length_map.insert(br, size);
                     changes_sizes_buffer = true;
                 }
             }
@@ -519,9 +521,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     offset,
                 );
                 if let Some(size) = buf.binding_size {
-                    self.state
-                        .storage_buffer_length_map
-                        .insert((group_index, buf.binding_location), size);
+                    let br = naga::ResourceBinding {
+                        group: group_index,
+                        binding: buf.binding_location,
+                    };
+                    self.state.storage_buffer_length_map.insert(br, size);
                     changes_sizes_buffer = true;
                 }
             }

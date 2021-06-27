@@ -666,8 +666,7 @@ struct CommandState {
     index: Option<IndexState>,
     raw_wg_size: mtl::MTLSize,
     stage_infos: MultiStageData<PipelineStageInfo>,
-    //TODO: use `naga::ResourceBinding` for keys
-    storage_buffer_length_map: fxhash::FxHashMap<(u32, u32), wgt::BufferSize>,
+    storage_buffer_length_map: fxhash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
 }
 
 pub struct CommandEncoder {

@@ -384,6 +384,7 @@ impl crate::Device<super::Api> for super::Device {
             pc_limit: u32,
             sizes_buffer: Option<super::ResourceIndex>,
             sizes_count: u8,
+            resources: naga::back::msl::BindingMap,
         }
 
         let mut stage_data = super::NAGA_STAGES.map(|&stage| StageInfo {
@@ -393,8 +394,8 @@ impl crate::Device<super::Api> for super::Device {
             pc_limit: 0,
             sizes_buffer: None,
             sizes_count: 0,
+            resources: Default::default(),
         });
-        let mut binding_map = std::collections::BTreeMap::default();
         let mut bind_group_infos = arrayvec::ArrayVec::new();
 
         // First, place the push constants
@@ -487,12 +488,11 @@ impl crate::Device<super::Api> for super::Device {
                         }
                     }
 
-                    let source = naga::back::msl::BindSource {
-                        stage: info.stage,
+                    let br = naga::ResourceBinding {
                         group: group_index as u32,
                         binding: entry.binding,
                     };
-                    binding_map.insert(source, target);
+                    info.resources.insert(br, target);
                 }
             }
 
@@ -524,31 +524,10 @@ impl crate::Device<super::Api> for super::Device {
             sizes_buffer: info
                 .sizes_buffer
                 .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+            resources: Default::default(),
         });
 
-        let naga_options = naga::back::msl::Options {
-            lang_version: match self.shared.private_caps.msl_version {
-                mtl::MTLLanguageVersion::V1_0 => (1, 0),
-                mtl::MTLLanguageVersion::V1_1 => (1, 1),
-                mtl::MTLLanguageVersion::V1_2 => (1, 2),
-                mtl::MTLLanguageVersion::V2_0 => (2, 0),
-                mtl::MTLLanguageVersion::V2_1 => (2, 1),
-                mtl::MTLLanguageVersion::V2_2 => (2, 2),
-                mtl::MTLLanguageVersion::V2_3 => (2, 3),
-            },
-            binding_map,
-            inline_samplers: Default::default(),
-            spirv_cross_compatibility: false,
-            fake_missing_bindings: false,
-            per_stage_map: naga::back::msl::PerStageMap {
-                vs: per_stage_map.vs,
-                fs: per_stage_map.fs,
-                cs: per_stage_map.cs,
-            },
-        };
-
         Ok(super::PipelineLayout {
-            naga_options,
             bind_group_infos,
             push_constants_infos: stage_data.map(|info| {
                 info.pc_buffer.map(|buffer_index| super::PushConstantsInfo {
@@ -557,6 +536,34 @@ impl crate::Device<super::Api> for super::Device {
                 })
             }),
             total_counters: stage_data.map(|info| info.counters.clone()),
+            naga_options: naga::back::msl::Options {
+                lang_version: match self.shared.private_caps.msl_version {
+                    mtl::MTLLanguageVersion::V1_0 => (1, 0),
+                    mtl::MTLLanguageVersion::V1_1 => (1, 1),
+                    mtl::MTLLanguageVersion::V1_2 => (1, 2),
+                    mtl::MTLLanguageVersion::V2_0 => (2, 0),
+                    mtl::MTLLanguageVersion::V2_1 => (2, 1),
+                    mtl::MTLLanguageVersion::V2_2 => (2, 2),
+                    mtl::MTLLanguageVersion::V2_3 => (2, 3),
+                },
+                inline_samplers: Default::default(),
+                spirv_cross_compatibility: false,
+                fake_missing_bindings: false,
+                per_stage_map: naga::back::msl::PerStageMap {
+                    vs: naga::back::msl::PerStageResources {
+                        resources: stage_data.vs.resources,
+                        ..per_stage_map.vs
+                    },
+                    fs: naga::back::msl::PerStageResources {
+                        resources: stage_data.fs.resources,
+                        ..per_stage_map.fs
+                    },
+                    cs: naga::back::msl::PerStageResources {
+                        resources: stage_data.cs.resources,
+                        ..per_stage_map.cs
+                    },
+                },
+            },
         })
     }
     unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
