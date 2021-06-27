@@ -1,5 +1,9 @@
 # Change Log
 
+## Unreleased
+  - Fixed:
+    - `Device::create_query_set` would return an error when creating exactly `QUERY_SET_MAX_QUERIES` (8192) queries. Now it only returns an error when trying to create *more* than `QUERY_SET_MAX_QUERIES` queries.
+
 ## v0.9 (2021-06-18)
   - Updated:
     - naga to `v0.5`.
