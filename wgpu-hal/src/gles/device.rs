@@ -114,6 +114,9 @@ impl super::Device {
         use naga::back::glsl;
         let options = glsl::Options {
             version: self.shared.shading_language_version,
+            binding_map: Default::default(), //TODO
+        };
+        let pipeline_options = glsl::PipelineOptions {
             shader_stage: naga_stage,
             entry_point: stage.entry_point.to_string(),
         };
@@ -127,11 +130,17 @@ impl super::Device {
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
 
         let mut output = String::new();
-        let mut writer = glsl::Writer::new(&mut output, &shader.module, &shader.info, &options)
-            .map_err(|e| {
-                let msg = format!("{}", e);
-                crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
-            })?;
+        let mut writer = glsl::Writer::new(
+            &mut output,
+            &shader.module,
+            &shader.info,
+            &options,
+            &pipeline_options,
+        )
+        .map_err(|e| {
+            let msg = format!("{}", e);
+            crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
+        })?;
 
         let reflection_info = writer.write().map_err(|e| {
             let msg = format!("{}", e);
@@ -206,8 +215,13 @@ impl super::Device {
             log::warn!("\tLink: {}", msg);
         }
 
-        //TODO: check for `PrivateCapability::EXPLICIT_LAYOUTS_IN_SHADER`?
+        if !self
+            .shared
+            .private_caps
+            .contains(super::PrivateCapability::SHADER_BINDING_LAYOUT)
         {
+            // This remapping is only needed if we aren't able to put the binding layout
+            // in the shader. We can't remap storage buffers this way.
             gl.use_program(Some(program));
             for (ref name, (register, slot)) in name_binding_map {
                 log::trace!("Get binding {:?} from program {:?}", name, program);
@@ -223,7 +237,6 @@ impl super::Device {
                             name,
                             index
                         );
-                        //gl.shader_storage_block_binding(program, index, slot as _);
                         return Err(crate::DeviceError::Lost.into());
                     }
                     super::BindingRegister::Textures | super::BindingRegister::Images => {
@@ -432,10 +445,15 @@ impl crate::Device<super::Api> for super::Device {
                     if desc.sample_count > 1 {
                         let target = glow::TEXTURE_2D;
                         gl.bind_texture(target, Some(raw));
-                        // https://github.com/grovesNL/glow/issues/169
-                        //gl.tex_storage_2d_multisample(target, desc.sample_count as i32, format_desc.tex_internal, desc.size.width as i32, desc.size.height as i32, true);
-                        log::error!("TODO: support `tex_storage_2d_multisample` (https://github.com/grovesNL/glow/issues/169)");
-                        return Err(crate::DeviceError::Lost);
+                        gl.tex_storage_2d_multisample(
+                            target,
+                            desc.sample_count as i32,
+                            format_desc.internal,
+                            desc.size.width as i32,
+                            desc.size.height as i32,
+                            true,
+                        );
+                        target
                     } else if desc.size.depth_or_array_layers > 1 {
                         let target = glow::TEXTURE_2D_ARRAY;
                         gl.bind_texture(target, Some(raw));
@@ -579,12 +597,12 @@ impl crate::Device<super::Api> for super::Device {
         );
 
         if let Some(border_color) = desc.border_color {
-            let mut border = match border_color {
+            let border = match border_color {
                 wgt::SamplerBorderColor::TransparentBlack => [0.0; 4],
                 wgt::SamplerBorderColor::OpaqueBlack => [0.0, 0.0, 0.0, 1.0],
                 wgt::SamplerBorderColor::OpaqueWhite => [1.0; 4],
             };
-            gl.sampler_parameter_f32_slice(raw, glow::TEXTURE_BORDER_COLOR, &mut border);
+            gl.sampler_parameter_f32_slice(raw, glow::TEXTURE_BORDER_COLOR, &border);
         }
 
         if let Some(ref range) = desc.lod_clamp {

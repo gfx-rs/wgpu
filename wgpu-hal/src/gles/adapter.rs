@@ -190,8 +190,6 @@ impl super::Adapter {
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, ver >= (3, 1));
-        //Note: storage textures aren't supported atm, only buffers. See
-        // https://github.com/grovesNL/glow/issues/174
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
             ver >= (3, 1),
@@ -245,6 +243,10 @@ impl super::Adapter {
         };
 
         let mut private_caps = super::PrivateCapability::empty();
+        private_caps.set(
+            super::PrivateCapability::SHADER_BINDING_LAYOUT,
+            ver >= (3, 1),
+        );
         private_caps.set(super::PrivateCapability::MEMORY_BARRIERS, ver >= (3, 1));
 
         Some(crate::ExposedAdapter {

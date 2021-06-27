@@ -855,6 +855,7 @@ impl HalApi for hal::api::Dx11 {
     }
 }
 */
+
 #[cfg(gl)]
 impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;

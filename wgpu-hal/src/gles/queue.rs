@@ -21,7 +21,6 @@ impl super::Queue {
         let gl = &self.shared.context;
         gl.use_program(None);
         gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-        gl.polygon_offset(0.0, 0.0);
         gl.disable(glow::DEPTH_TEST);
         gl.disable(glow::STENCIL_TEST);
         gl.disable(glow::SCISSOR_TEST);
@@ -119,22 +118,21 @@ impl super::Queue {
                 ),
             },
             C::DrawIndirect {
-                topology: _,
+                topology,
                 indirect_buf,
-                indirect_offset: _,
+                indirect_offset,
             } => {
                 gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf));
-                //TODO: https://github.com/grovesNL/glow/issues/172
-                //gl.draw_arrays_indirect(topology, indirect_offset);
+                gl.draw_arrays_indirect_offset(topology, indirect_offset as i32);
             }
             C::DrawIndexedIndirect {
-                topology: _,
-                index_type: _,
+                topology,
+                index_type,
                 indirect_buf,
-                indirect_offset: _,
+                indirect_offset,
             } => {
                 gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf));
-                //TODO: https://github.com/grovesNL/glow/issues/172
+                gl.draw_elements_indirect_offset(topology, index_type, indirect_offset as i32);
             }
             C::Dispatch(group_counts) => {
                 gl.dispatch_compute(group_counts[0], group_counts[1], group_counts[2]);
@@ -194,12 +192,29 @@ impl super::Queue {
                         );
                     }
                     gl.bind_texture(dst_target, Some(dst));
-                    //TODO: https://github.com/grovesNL/glow/issues/173
-                    #[allow(clippy::if_same_then_else)]
                     if is_3d_target(dst_target) {
-                        //gl.copy_tex_sub_image_3d(dst_target, copy.dst_base.mip_level, copy.dst_base.origin.x, copy.dst_base.origin.y, copy.dst_base.origin.z + layer, copy.src_base.origin.x, copy.src_base.origin.y, copy.size.width, copy.size.height);
+                        gl.copy_tex_sub_image_3d(
+                            dst_target,
+                            copy.dst_base.mip_level as i32,
+                            copy.dst_base.origin.x as i32,
+                            copy.dst_base.origin.y as i32,
+                            copy.dst_base.origin.z as i32 + layer,
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                        );
                     } else {
-                        //gl.copy_tex_sub_image_2d(dst_target, copy.dst_base.mip_level, copy.dst_base.origin.x, copy.dst_base.origin.y, copy.src_base.origin.x, copy.src_base.origin.y, copy.size.width, copy.size.height);
+                        gl.copy_tex_sub_image_2d(
+                            dst_target,
+                            copy.dst_base.mip_level as i32,
+                            copy.dst_base.origin.x as i32,
+                            copy.dst_base.origin.y as i32,
+                            copy.src_base.origin.x as i32,
+                            copy.src_base.origin.y as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                        );
                     }
                 }
             }
@@ -404,20 +419,20 @@ impl super::Queue {
                     gl.disable_draw_buffer(glow::BLEND, draw_buffer);
                 }
             }
-            C::ClearColorF(draw_buffer, mut color) => {
-                gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, &mut color);
+            C::ClearColorF(draw_buffer, ref color) => {
+                gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color);
             }
-            C::ClearColorU(draw_buffer, mut color) => {
-                gl.clear_buffer_u32_slice(glow::COLOR, draw_buffer, &mut color);
+            C::ClearColorU(draw_buffer, ref color) => {
+                gl.clear_buffer_u32_slice(glow::COLOR, draw_buffer, color);
             }
-            C::ClearColorI(draw_buffer, mut color) => {
-                gl.clear_buffer_i32_slice(glow::COLOR, draw_buffer, &mut color);
+            C::ClearColorI(draw_buffer, ref color) => {
+                gl.clear_buffer_i32_slice(glow::COLOR, draw_buffer, color);
             }
             C::ClearDepth(depth) => {
-                gl.clear_buffer_f32_slice(glow::DEPTH, 0, &mut [depth]);
+                gl.clear_buffer_f32_slice(glow::DEPTH, 0, &[depth]);
             }
             C::ClearStencil(value) => {
-                gl.clear_buffer_i32_slice(glow::STENCIL, 0, &mut [value as i32]);
+                gl.clear_buffer_i32_slice(glow::STENCIL, 0, &[value as i32]);
             }
             C::BufferBarrier(raw, usage) => {
                 let mut flags = 0;
@@ -658,14 +673,16 @@ impl super::Queue {
                 gl.active_texture(glow::TEXTURE0 + slot);
                 gl.bind_texture(target, Some(texture));
             }
-            C::BindImage {
-                slot: _,
-                binding: _,
-            } => {
-                //TODO: https://github.com/grovesNL/glow/issues/174
-                //gl.bind_image_texture(slot, Some(binding.raw), binding.mip_level as i32,
-                //    binding.array_layer.is_none(), binding.array_layer.unwrap_or_default(),
-                //    binding.access, binding.format);
+            C::BindImage { slot, ref binding } => {
+                gl.bind_image_texture(
+                    slot,
+                    binding.raw,
+                    binding.mip_level as i32,
+                    binding.array_layer.is_none(),
+                    binding.array_layer.unwrap_or_default() as i32,
+                    binding.access,
+                    binding.format,
+                );
             }
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);
