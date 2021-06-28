@@ -38,6 +38,7 @@
 	glsl_custom: true,
 	glsl: (
 		version: Embedded(320),
+		writer_flags: (bits: 0),
 		binding_map: {
 			(group: 0, binding: 0): 0,
 			(group: 0, binding: 1): 0,

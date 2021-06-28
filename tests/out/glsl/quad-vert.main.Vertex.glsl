@@ -49,6 +49,7 @@ void main() {
     type10 _tmp_return = type10(_expr10, _expr11, _expr12, _expr13, _expr14);
     _vs2fs_location0 = _tmp_return.member;
     gl_Position = _tmp_return.gen_gl_Position;
+    gl_Position.z = gl_Position.z * 2.0 - gl_Position.w;
     return;
 }
 

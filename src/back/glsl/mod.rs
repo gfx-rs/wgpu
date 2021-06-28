@@ -126,6 +126,15 @@ impl fmt::Display for Version {
     }
 }
 
+bitflags::bitflags! {
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    pub struct WriterFlags: u32 {
+        /// Extend output Z from (0,1) to (-1,1).
+        const ADJUST_COORDINATE_SPACE = 0x1;
+    }
+}
+
 /// Structure that contains the configuration used in the [`Writer`](Writer)
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -133,6 +142,8 @@ impl fmt::Display for Version {
 pub struct Options {
     /// The glsl version to be used
     pub version: Version,
+    /// Configuration flags for the writer.
+    pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
     pub binding_map: BindingMap,
 }
@@ -141,6 +152,7 @@ impl Default for Options {
     fn default() -> Self {
         Options {
             version: Version::Embedded(310),
+            writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
         }
     }
@@ -1203,7 +1215,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_stmt(
         &mut self,
         sta: &crate::Statement,
-        ctx: &back::FunctionCtx<'_>,
+        ctx: &back::FunctionCtx,
         indent: usize,
     ) -> BackendResult {
         use crate::Statement;
@@ -1391,22 +1403,23 @@ impl<'a, W: Write> Writer<'a, W> {
                             let value = value.unwrap();
                             match self.module.types[result.ty].inner {
                                 crate::TypeInner::Struct { ref members, .. } => {
-                                    let (mut is_temp_struct_used, mut return_struct) = (false, "");
-                                    if let crate::Expression::Compose { .. } =
-                                        ctx.expressions[value]
-                                    {
-                                        is_temp_struct_used = true;
-                                        return_struct = "_tmp_return";
-                                        write!(
-                                            self.out,
-                                            "{} {} = ",
-                                            &self.names[&NameKey::Type(result.ty)],
-                                            return_struct
-                                        )?;
-                                        self.write_expr(value, ctx)?;
-                                        writeln!(self.out, ";")?;
-                                        write!(self.out, "{}", INDENT.repeat(indent))?;
-                                    }
+                                    let temp_struct_name = match ctx.expressions[value] {
+                                        crate::Expression::Compose { .. } => {
+                                            let return_struct = "_tmp_return";
+                                            write!(
+                                                self.out,
+                                                "{} {} = ",
+                                                &self.names[&NameKey::Type(result.ty)],
+                                                return_struct
+                                            )?;
+                                            self.write_expr(value, ctx)?;
+                                            writeln!(self.out, ";")?;
+                                            write!(self.out, "{}", INDENT.repeat(indent))?;
+                                            Some(return_struct)
+                                        }
+                                        _ => None,
+                                    };
+
                                     for (index, member) in members.iter().enumerate() {
                                         // TODO: handle builtin in better way
                                         if let Some(crate::Binding::BuiltIn(builtin)) =
@@ -1434,11 +1447,13 @@ impl<'a, W: Write> Writer<'a, W> {
                                             .clone();
                                         write!(self.out, "{} = ", varying_name)?;
 
-                                        if !is_temp_struct_used {
+                                        if let Some(struct_name) = temp_struct_name {
+                                            write!(self.out, "{}", struct_name)?;
+                                        } else {
                                             self.write_expr(value, ctx)?;
                                         }
 
-                                        writeln!(self.out, "{}.{};", return_struct, &field_name)?;
+                                        writeln!(self.out, ".{};", field_name)?;
                                         write!(self.out, "{}", INDENT.repeat(indent))?;
                                     }
                                 }
@@ -1453,6 +1468,22 @@ impl<'a, W: Write> Writer<'a, W> {
                                     writeln!(self.out, ";")?;
                                     write!(self.out, "{}", INDENT.repeat(indent))?;
                                 }
+                            }
+                        }
+
+                        if let back::FunctionType::EntryPoint(ep_index) = ctx.ty {
+                            if self.module.entry_points[ep_index as usize].stage
+                                == crate::ShaderStage::Vertex
+                                && self
+                                    .options
+                                    .writer_flags
+                                    .contains(WriterFlags::ADJUST_COORDINATE_SPACE)
+                            {
+                                writeln!(
+                                    self.out,
+                                    "gl_Position.z = gl_Position.z * 2.0 - gl_Position.w;",
+                                )?;
+                                write!(self.out, "{}", INDENT.repeat(indent))?;
                             }
                         }
                         writeln!(self.out, "return;")?;

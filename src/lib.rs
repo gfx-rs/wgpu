@@ -942,7 +942,7 @@ pub enum Expression {
     },
     /// Constant value.
     ///
-    /// Every `Constant` expression 
+    /// Every `Constant` expression
     Constant(Handle<Constant>),
     /// Splat scalar into a vector.
     Splat {
