@@ -254,6 +254,37 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_BINDING_ARRAY = 0x0000_0000_0002_0000;
+        /// Allows the user to create arrays of buffers in shaders:
+        ///
+        /// eg. `uniform myBuffer { .... } buffer_array[10]`.
+        ///
+        /// This capability allows them to exist and to be indexed by dynamically uniform
+        /// values.
+        ///
+        /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
+        /// may also create arrays of storage buffers.
+        ///
+        /// eg. `buffer myBuffer { ... } buffer_array[10]`
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const BUFFER_BINDING_ARRAY = 0x0000_0000_0004_0000;
+        /// Allows the user to create uniform arrays of storage buffers or textures in shaders,
+        /// if resp. [`Features::BUFFER_BINDING_ARRAY`] or [`Features::TEXTURE_BINDING_ARRAY`]
+        /// is supported.
+        ///
+        /// This capability allows them to exist and to be indexed by dynamically uniform
+        /// values.
+        ///
+        /// Supported platforms:
+        /// - Metal (with MSL 2.2+ on macOS 10.13+)
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const STORAGE_RESOURCE_BINDING_ARRAY = 0x0000_0000_0008_0000;
         /// Allows shaders to index resource arrays with dynamically non-uniform values:
         ///
         /// eg. `texture_array[vertex_data]`
@@ -278,7 +309,7 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
-        const RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0008_0000;
+        const RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0010_0000;
         /// Allows the user to create unsized uniform arrays of bindings:
         ///
         /// eg. `uniform texture2D textures[]`.
@@ -291,7 +322,7 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s runtimeDescriptorArray feature
         ///
         /// This is a native only feature.
-        const UNSIZED_BINDING_ARRAY = 0x0000_0000_0010_0000;
+        const UNSIZED_BINDING_ARRAY = 0x0000_0000_0020_0000;
         /// Allows the user to call [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`].
         ///
         /// Allows multiple indirect calls to be dispatched from a single buffer.
@@ -302,7 +333,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const MULTI_DRAW_INDIRECT = 0x0000_0000_0020_0000;
+        const MULTI_DRAW_INDIRECT = 0x0000_0000_0040_0000;
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
         /// This allows the use of a buffer containing the actual number of draw calls.
@@ -312,7 +343,7 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
         ///
         /// This is a native only feature.
-        const MULTI_DRAW_INDIRECT_COUNT = 0x0000_0000_0040_0000;
+        const MULTI_DRAW_INDIRECT_COUNT = 0x0000_0000_0080_0000;
         /// Allows the use of push constants: small, fast bits of memory that can be updated
         /// inside a [`RenderPass`].
         ///
@@ -329,7 +360,7 @@ bitflags::bitflags! {
         /// - OpenGL (emulated with uniforms)
         ///
         /// This is a native only feature.
-        const PUSH_CONSTANTS = 0x0000_0000_0080_0000;
+        const PUSH_CONSTANTS = 0x0000_0000_0100_0000;
         /// Allows the use of [`AddressMode::ClampToBorder`].
         ///
         /// Supported platforms:
@@ -340,7 +371,7 @@ bitflags::bitflags! {
         /// - OpenGL
         ///
         /// This is a web and native feature.
-        const ADDRESS_MODE_CLAMP_TO_BORDER = 0x0000_0000_0100_0000;
+        const ADDRESS_MODE_CLAMP_TO_BORDER = 0x0000_0000_0200_0000;
         /// Allows the user to set a non-fill polygon mode in [`PrimitiveState::polygon_mode`]
         ///
         /// This allows drawing polygons/triangles as lines (wireframe) or points instead of filled
@@ -350,7 +381,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const NON_FILL_POLYGON_MODE = 0x0000_0000_0200_0000;
+        const NON_FILL_POLYGON_MODE = 0x0000_0000_0400_0000;
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
         ///
@@ -365,7 +396,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ETC2 = 0x0000_0000_0400_0000;
+        const TEXTURE_COMPRESSION_ETC2 = 0x0000_0000_0800_0000;
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
         /// Blocks are always 16 bytes.
         ///
@@ -380,7 +411,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ASTC_LDR = 0x0000_0000_0800_0000;
+        const TEXTURE_COMPRESSION_ASTC_LDR = 0x0000_0000_1000_0000;
         /// Enables device specific texture format features.
         ///
         /// See `TextureFormatFeatures` for a listing of the features in question.
@@ -392,7 +423,7 @@ bitflags::bitflags! {
         /// This extension does not enable additional formats.
         ///
         /// This is a native-only feature.
-        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 0x0000_0000_1000_0000;
+        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 0x0000_0000_2000_0000;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -402,7 +433,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const SHADER_FLOAT64 = 0x0000_0000_2000_0000;
+        const SHADER_FLOAT64 = 0x0000_0000_4000_0000;
         /// Enables using 64-bit types for vertex attributes.
         ///
         /// Requires SHADER_FLOAT64.
@@ -410,7 +441,7 @@ bitflags::bitflags! {
         /// Supported Platforms: N/A
         ///
         /// This is a native-only feature.
-        const VERTEX_ATTRIBUTE_64BIT = 0x0000_0000_4000_0000;
+        const VERTEX_ATTRIBUTE_64BIT = 0x0000_0000_8000_0000;
         /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
         ///
         /// Processing of degenerate triangles/lines is hardware specific.
@@ -421,25 +452,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const CONSERVATIVE_RASTERIZATION = 0x0000_0000_8000_0000;
-        /// Allows the user to create arrays of buffers in shaders:
-        ///
-        /// eg. `uniform myBuffer { .... } buffer_array[10]`.
-        ///
-        /// This capability allows them to exist and to be indexed by dynamically uniform
-        /// values.
-        ///
-        /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
-        /// may also create arrays of storage buffers.
-        ///
-        /// eg. `buffer myBuffer { ... } buffer_array[10]`
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const BUFFER_BINDING_ARRAY = 0x0000_0001_0000_0000;
+        const CONSERVATIVE_RASTERIZATION = 0x0000_0001_0000_0000;
         /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
         ///
         /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
@@ -448,27 +461,14 @@ bitflags::bitflags! {
         /// - All
         ///
         /// This is a native-only feature.
-        const VERTEX_WRITABLE_STORAGE = 0x0000_0020_0000_0000;
-        /// Allows the user to create uniform arrays of storage buffers or textures in shaders,
-        /// if resp. [`Features::BUFFER_BINDING_ARRAY`] or [`Features::TEXTURE_BINDING_ARRAY`]
-        /// is supported.
-        ///
-        /// This capability allows them to exist and to be indexed by dynamically uniform
-        /// values.
-        ///
-        /// Supported platforms:
-        /// - Metal (with MSL 2.2+ on macOS 10.13+)
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const STORAGE_RESOURCE_BINDING_ARRAY = 0x0000_0040_0000_0000;
+        const VERTEX_WRITABLE_STORAGE = 0x0000_0002_0000_0000;
         /// Enables clear to zero for buffers & images.
         ///
         /// Supported platforms:
         /// - All
         ///
         /// This is a native only feature.
-        const CLEAR_COMMANDS = 0x0000_0200_0000_0000;
+        const CLEAR_COMMANDS = 0x0000_0400_0000_0000;
         /// Enables creating shader modules from SPIR-V binary data (unsafe).
         ///
         /// SPIR-V data is not parsed or interpreted in any way; you can use
@@ -480,7 +480,12 @@ bitflags::bitflags! {
         /// Vulkan implementation.
         ///
         /// This is a native only feature.
-        const SPIRV_SHADER_PASSTHROUGH = 0x0000_0400_0000_0000;
+        const SPIRV_SHADER_PASSTHROUGH = 0x0000_0800_0000_0000;
+
+        /// Features which are part of the upstream WebGPU standard.
+        const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
+        /// Features that are only available when targeting native (not web).
+        const ALL_NATIVE = 0xFFFF_FFFF_FFFF_0000;
     }
 }
 
