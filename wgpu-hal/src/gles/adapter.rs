@@ -195,6 +195,8 @@ impl super::Adapter {
             ver >= (3, 1),
         );
         downlevel_flags.set(wgt::DownlevelFlags::INDIRECT_EXECUTION, ver >= (3, 1));
+        //TODO: we can actually support positive `base_vertex` in the same way
+        // as we emulate the `start_instance`. But we can't deal with negatives...
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, ver >= (3, 2));
         downlevel_flags.set(
             wgt::DownlevelFlags::INDEPENDENT_BLENDING,
@@ -214,6 +216,12 @@ impl super::Adapter {
         let max_uniform_buffers_per_shader_stage =
             gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS)
                 .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS)) as u32;
+        let max_storage_buffers_per_shader_stage = gl
+            .get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS)
+            .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS))
+            as u32;
+        let max_storage_textures_per_shader_stage =
+            gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) as u32;
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
@@ -221,12 +229,12 @@ impl super::Adapter {
             max_texture_dimension_3d: max_texture_3d_size,
             max_texture_array_layers: gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS) as u32,
             max_bind_groups: crate::MAX_BIND_GROUPS as u32,
-            max_dynamic_uniform_buffers_per_pipeline_layout: 8,
-            max_dynamic_storage_buffers_per_pipeline_layout: 4,
-            max_sampled_textures_per_shader_stage: 16,
-            max_samplers_per_shader_stage: 16,
-            max_storage_buffers_per_shader_stage: 8,
-            max_storage_textures_per_shader_stage: 8,
+            max_dynamic_uniform_buffers_per_pipeline_layout: max_uniform_buffers_per_shader_stage,
+            max_dynamic_storage_buffers_per_pipeline_layout: max_storage_buffers_per_shader_stage,
+            max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
+            max_samplers_per_shader_stage: super::MAX_SAMPLERS as u32,
+            max_storage_buffers_per_shader_stage,
+            max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,
             max_uniform_buffer_binding_size: gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
                 as u32,
@@ -238,7 +246,8 @@ impl super::Adapter {
             max_vertex_buffers: gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) as u32,
             max_vertex_attributes: (gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) as u32)
                 .min(super::MAX_VERTEX_ATTRIBUTES as u32),
-            max_vertex_buffer_array_stride: 2048,
+            max_vertex_buffer_array_stride: gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_STRIDE)
+                as u32,
             max_push_constant_size: 0,
         };
 

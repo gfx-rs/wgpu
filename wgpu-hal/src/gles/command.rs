@@ -827,7 +827,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         _count_offset: wgt::BufferAddress,
         _max_count: u32,
     ) {
-        unimplemented!()
+        unreachable!()
     }
     unsafe fn draw_indexed_indirect_count(
         &mut self,
@@ -837,7 +837,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         _count_offset: wgt::BufferAddress,
         _max_count: u32,
     ) {
-        unimplemented!()
+        unreachable!()
     }
 
     // compute
