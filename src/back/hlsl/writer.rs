@@ -773,11 +773,18 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 if let Some(expr) = result {
+                    write!(self.out, "const ")?;
                     let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
-                    write!(self.out, "const {} = ", name)?;
+                    let expr_ty = &func_ctx.info[expr].ty;
+                    match *expr_ty {
+                        proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                        proc::TypeResolution::Value(ref value) => {
+                            self.write_value_type(module, value)?
+                        }
+                    };
+                    write!(self.out, " {} = ", name)?;
                     self.write_expr(module, expr, func_ctx)?;
                     self.named_expressions.insert(expr, name);
-                    writeln!(self.out, ";")?
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
                 write!(self.out, "{}(", func_name)?;
@@ -976,27 +983,30 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             Expression::Unary { op, expr } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
-                write!(
-                    self.out,
-                    "({} ",
-                    match op {
-                        crate::UnaryOperator::Negate => "-",
-                        crate::UnaryOperator::Not =>
-                            match *func_ctx.info[expr].ty.inner_with(&module.types) {
-                                TypeInner::Scalar {
-                                    kind: crate::ScalarKind::Bool,
-                                    ..
-                                } => "!",
-                                ref other =>
-                                    return Err(Error::Custom(format!(
-                                        "Cannot apply not to type {:?}",
-                                        other
-                                    ))),
-                            },
-                    }
-                )?;
+                let convert_to_bool = if let TypeInner::Scalar {
+                    kind: crate::ScalarKind::Bool,
+                    ..
+                } = *func_ctx.info[expr].ty.inner_with(&module.types)
+                {
+                    false
+                } else {
+                    true
+                };
+                let op_str = match op {
+                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Not => "!",
+                };
+                write!(self.out, "({}", op_str)?;
+
+                if convert_to_bool {
+                    write!(self.out, "bool(")?;
+                }
 
                 self.write_expr(module, expr, func_ctx)?;
+
+                if convert_to_bool {
+                    write!(self.out, ")")?;
+                }
 
                 write!(self.out, ")")?
             }
@@ -1135,6 +1145,23 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?
             }
+            Expression::Splat { size, value } => {
+                // hlsl is not supported one value constructor
+                // if we write, for example, int4(0), dxc returns error:
+                // error: too few elements in vector initialization (expected 4 elements, have 1)
+                let number_of_components = match size {
+                    crate::VectorSize::Bi => "xx",
+                    crate::VectorSize::Tri => "xxx",
+                    crate::VectorSize::Quad => "xxxx",
+                };
+                let resolved = func_ctx.info[expr].ty.inner_with(&module.types);
+                self.write_value_type(module, resolved)?;
+                write!(self.out, "(")?;
+                self.write_expr(module, value, func_ctx)?;
+                write!(self.out, ".{})", number_of_components)?
+            }
+            // Nothing to do here, since call expression already cached
+            Expression::Call(_) => {}
             _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 
