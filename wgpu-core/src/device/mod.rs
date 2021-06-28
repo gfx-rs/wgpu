@@ -988,11 +988,20 @@ impl<A: HalApi> Device<A> {
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Storage { read_only },
                     ..
-                } => (Some(wgt::Features::BUFFER_BINDING_ARRAY), !read_only),
+                } => (
+                    Some(
+                        wgt::Features::BUFFER_BINDING_ARRAY
+                            | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
+                    ),
+                    !read_only,
+                ),
                 Bt::Sampler { .. } => (None, false),
-                Bt::Texture { .. } => (Some(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY), false),
+                Bt::Texture { .. } => (Some(wgt::Features::TEXTURE_BINDING_ARRAY), false),
                 Bt::StorageTexture { access, .. } => (
-                    Some(wgt::Features::STORAGE_TEXTURE_BINDING_ARRAY),
+                    Some(
+                        wgt::Features::TEXTURE_BINDING_ARRAY
+                            | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
+                    ),
                     match access {
                         wgt::StorageTextureAccess::ReadOnly => false,
                         wgt::StorageTextureAccess::WriteOnly => true,

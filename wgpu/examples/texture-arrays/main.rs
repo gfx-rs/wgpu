@@ -72,12 +72,11 @@ struct Example {
 impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::UNSIZED_BINDING_ARRAY
-            | wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-            | wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
+            | wgpu::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::PUSH_CONSTANTS
     }
     fn required_features() -> wgpu::Features {
-        wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
+        wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
@@ -94,22 +93,15 @@ impl framework::Example for Example {
         let mut uniform_workaround = false;
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
         let fs_source = match device.features() {
-            //f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
-            //    wgpu::include_spirv_raw!("unsized-non-uniform.frag.spv")
-            //}
-            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
+            f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
+                wgpu::include_spirv_raw!("unsized-non-uniform.frag.spv")
+            }
+            f if f.contains(wgpu::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING) => {
                 wgpu::include_spirv_raw!("non-uniform.frag.spv")
             }
-            f if f.contains(
-                wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
-                    | wgpu::Features::PUSH_CONSTANTS,
-            ) =>
-            {
+            f if f.contains(wgpu::Features::TEXTURE_BINDING_ARRAY) => {
                 uniform_workaround = true;
                 wgpu::include_spirv_raw!("uniform.frag.spv")
-            }
-            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY) => {
-                wgpu::include_spirv_raw!("constant.frag.spv")
             }
             _ => unreachable!(),
         };

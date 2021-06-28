@@ -896,10 +896,7 @@ impl crate::Context for Context {
         use wgc::binding_model as bm;
 
         let mut arrayed_texture_views = Vec::new();
-        if device
-            .features
-            .contains(Features::SAMPLED_TEXTURE_BINDING_ARRAY)
-        {
+        if device.features.contains(Features::TEXTURE_BINDING_ARRAY) {
             // gather all the array view IDs first
             for entry in desc.entries.iter() {
                 if let BindingResource::TextureViewArray(array) = entry.resource {
