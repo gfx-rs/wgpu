@@ -132,6 +132,9 @@ bitflags::bitflags! {
     pub struct WriterFlags: u32 {
         /// Extend output Z from (0,1) to (-1,1).
         const ADJUST_COORDINATE_SPACE = 0x1;
+        /// Supports GL_EXT_texture_shadow_lod on the host, which provides
+        /// additional functions on shadows and arrays of shadows.
+        const TEXTURE_SHADOW_LOD = 0x2;
     }
 }
 
@@ -390,6 +393,16 @@ impl<'a, W: Write> Writer<'a, W> {
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
         self.features.write(self.options.version, &mut self.out)?;
+
+        // Write the additional extensions
+        if self
+            .options
+            .writer_flags
+            .contains(WriterFlags::TEXTURE_SHADOW_LOD)
+        {
+            // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_shadow_lod.txt
+            writeln!(self.out, "#extension GL_EXT_texture_shadow_lod : require")?;
+        }
 
         // glsl es requires a precision to be specified for floats
         // TODO: Should this be user configurable?
@@ -1677,19 +1690,27 @@ impl<'a, W: Write> Writer<'a, W> {
             // Furthermore if `depth_ref` is some we need to append it to the coordinate vector
             Expression::ImageSample {
                 image,
-                sampler: _, //TODO
+                sampler: _, //TODO?
                 coordinate,
                 array_index,
-                offset: _, //TODO
+                offset,
                 level,
                 depth_ref,
             } => {
-                //TODO: handle MS
+                let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
+                    TypeInner::Image { dim, .. } => dim,
+                    _ => unreachable!(),
+                };
 
                 // textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL.
                 // To emulate this, we will have to use textureGrad with a constant gradient of 0.
-                let workaround_lod_array_shadow_as_grad =
-                    array_index.is_some() && depth_ref.is_some();
+                let workaround_lod_array_shadow_as_grad = (array_index.is_some()
+                    || dim == crate::ImageDimension::Cube)
+                    && depth_ref.is_some()
+                    && !self
+                        .options
+                        .writer_flags
+                        .contains(WriterFlags::TEXTURE_SHADOW_LOD);
 
                 //Write the function to be used depending on the sample level
                 let fun_name = match level {
@@ -1703,8 +1724,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     crate::SampleLevel::Gradient { .. } => "textureGrad",
                 };
+                let offset_name = match offset {
+                    Some(_) => "Offset",
+                    None => "",
+                };
 
-                write!(self.out, "{}(", fun_name)?;
+                write!(self.out, "{}{}(", fun_name, offset_name)?;
 
                 // Write the image that will be used
                 self.write_expr(image, ctx)?;
@@ -1745,15 +1770,16 @@ impl<'a, W: Write> Writer<'a, W> {
                     // Zero needs level set to 0
                     crate::SampleLevel::Zero => {
                         if workaround_lod_array_shadow_as_grad {
-                            write!(self.out, ", vec2(0, 0), vec2(0,0)")?;
+                            write!(self.out, ", vec2(0,0), vec2(0,0)")?;
                         } else {
-                            write!(self.out, ", 0")?;
+                            write!(self.out, ", 0.0")?;
                         }
                     }
                     // Exact and bias require another argument
                     crate::SampleLevel::Exact(expr) => {
                         if workaround_lod_array_shadow_as_grad {
-                            write!(self.out, ", vec2(0, 0), vec2(0,0)")?;
+                            log::warn!("Unable to `textureLod` a shadow array, ignoring the LOD");
+                            write!(self.out, ", vec2(0,0), vec2(0,0)")?;
                         } else {
                             write!(self.out, ", ")?;
                             self.write_expr(expr, ctx)?;
@@ -1769,6 +1795,11 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ", ")?;
                         self.write_expr(y, ctx)?;
                     }
+                }
+
+                if let Some(constant) = offset {
+                    write!(self.out, ", ")?;
+                    self.write_constant(&self.module.constants[constant])?;
                 }
 
                 // End the function
