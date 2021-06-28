@@ -263,7 +263,7 @@ impl Options {
         stage: crate::ShaderStage,
         res_binding: &crate::ResourceBinding,
     ) -> Result<ResolvedBinding, EntryPointError> {
-        match self.per_stage_map[stage].resources.get(&res_binding) {
+        match self.per_stage_map[stage].resources.get(res_binding) {
             Some(target) => Ok(ResolvedBinding::Resource(target.clone())),
             None if self.fake_missing_bindings => Ok(ResolvedBinding::User {
                 prefix: "fake",

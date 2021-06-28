@@ -1120,6 +1120,21 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ".length()")?
             }
+            Expression::Derivative { axis, expr } => {
+                use crate::DerivativeAxis as Da;
+
+                write!(
+                    self.out,
+                    "{}(",
+                    match axis {
+                        Da::X => "ddx",
+                        Da::Y => "ddy",
+                        Da::Width => "fwidth",
+                    }
+                )?;
+                self.write_expr(module, expr, func_ctx)?;
+                write!(self.out, ")")?
+            }
             _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 
