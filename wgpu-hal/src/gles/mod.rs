@@ -22,6 +22,7 @@ pub struct Api;
 const MAX_TEXTURE_SLOTS: usize = 16;
 const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
+const ZERO_BUFFER_SIZE: usize = 256 << 10;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -55,8 +56,10 @@ bitflags::bitflags! {
     struct PrivateCapability: u32 {
         /// Support explicit layouts in shader.
         const SHADER_BINDING_LAYOUT = 0x0001;
+        /// Support extended shadow sampling instructions.
+        const SHADER_TEXTURE_SHADOW_LOD = 0x0002;
         /// Support memory barriers.
-        const MEMORY_BARRIERS = 0x0002;
+        const MEMORY_BARRIERS = 0x0004;
     }
 }
 
@@ -102,6 +105,10 @@ pub struct Queue {
     features: wgt::Features,
     draw_fbo: glow::Framebuffer,
     copy_fbo: glow::Framebuffer,
+    /// Keep a reasonably large buffer filled with zeroes,
+    /// so that we can implement `FillBuffer` of zeroes
+    /// by copying from it.
+    zero_buffer: glow::Buffer,
     temp_query_results: Vec<u64>,
 }
 
@@ -172,6 +179,7 @@ struct BindGroupLayoutInfo {
 
 pub struct PipelineLayout {
     group_infos: Box<[BindGroupLayoutInfo]>,
+    naga_options: naga::back::glsl::Options,
 }
 
 impl PipelineLayout {
@@ -213,6 +221,7 @@ pub struct BindGroup {
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
+    label: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -443,6 +452,7 @@ enum Command {
     },
     FillBuffer {
         dst: glow::Buffer,
+        dst_target: BindTarget,
         range: crate::MemoryRange,
         value: u8,
     },

@@ -690,7 +690,7 @@ dependencies = [
 [[package]]
 name = "glow"
 version = "0.10.0"
-source = "git+https://github.com/kvark/glow?branch=missing-stuff#23a3f95b396ef7b3a99054494f331af25c071705"
+source = "git+https://github.com/grovesNL/glow?rev=57177a01b1dd91a82ccfd2d7b687fcc36116157c#57177a01b1dd91a82ccfd2d7b687fcc36116157c"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -1040,7 +1040,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.5.0"
-source = "git+https://github.com/gfx-rs/naga?rev=57b325602015ce6445749a4d8ee5d491edc818d7#57b325602015ce6445749a4d8ee5d491edc818d7"
+source = "git+https://github.com/gfx-rs/naga?rev=e8b71b8dc5cd70535308591f1dd2dba5f92f44eb#e8b71b8dc5cd70535308591f1dd2dba5f92f44eb"
 dependencies = [
  "bit-set",
  "bitflags",

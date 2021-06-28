@@ -609,6 +609,13 @@ impl crate::Instance<super::Api> for Instance {
                 .map_or(ptr::null(), |p| p as *const _)
         });
 
+        if self.flags.contains(crate::InstanceFlag::DEBUG) && gl.supports_debug() {
+            log::info!(
+                "Max label length: {}",
+                gl.get_parameter_i32(glow::MAX_LABEL_LENGTH)
+            );
+        }
+
         if self.flags.contains(crate::InstanceFlag::VALIDATION) && gl.supports_debug() {
             log::info!("Enabling GLES debug output");
             gl.enable(glow::DEBUG_OUTPUT);

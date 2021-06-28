@@ -214,6 +214,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {
         self.cmd_buffer.commands.push(C::FillBuffer {
             dst: buffer.raw,
+            dst_target: buffer.target,
             range,
             value,
         });
@@ -346,6 +347,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         range: Range<u32>,
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
+        _stride: wgt::BufferSize,
     ) {
         let start = self.cmd_buffer.data_words.len();
         self.cmd_buffer

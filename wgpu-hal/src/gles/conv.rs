@@ -238,7 +238,7 @@ pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::Primiti
     }
 }
 
-pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> u32 {
+pub fn _map_view_dimension(dim: wgt::TextureViewDimension) -> u32 {
     use wgt::TextureViewDimension as Tvd;
     match dim {
         Tvd::D1 | Tvd::D2 => glow::TEXTURE_2D,

@@ -76,6 +76,7 @@ impl super::Device {
         &self,
         shader: &str,
         naga_stage: naga::ShaderStage,
+        label: Option<&str>,
     ) -> Result<glow::Shader, crate::PipelineError> {
         let gl = &self.shared.context;
         let target = match naga_stage {
@@ -85,6 +86,10 @@ impl super::Device {
         };
 
         let raw = gl.create_shader(target).unwrap();
+        if gl.supports_debug() {
+            gl.object_label(glow::SHADER, raw, label);
+        }
+
         gl.shader_source(raw, shader);
         gl.compile_shader(raw);
 
@@ -112,10 +117,6 @@ impl super::Device {
         context: CompilationContext,
     ) -> Result<glow::Shader, crate::PipelineError> {
         use naga::back::glsl;
-        let options = glsl::Options {
-            version: self.shared.shading_language_version,
-            binding_map: Default::default(), //TODO
-        };
         let pipeline_options = glsl::PipelineOptions {
             shader_stage: naga_stage,
             entry_point: stage.entry_point.to_string(),
@@ -134,7 +135,7 @@ impl super::Device {
             &mut output,
             &shader.module,
             &shader.info,
-            &options,
+            &context.layout.naga_options,
             &pipeline_options,
         )
         .map_err(|e| {
@@ -155,16 +156,22 @@ impl super::Device {
             reflection_info,
         );
 
-        unsafe { self.compile_shader(&output, naga_stage) }
+        unsafe { self.compile_shader(&output, naga_stage, stage.module.label.as_deref()) }
     }
 
     unsafe fn create_pipeline<'a, I: Iterator<Item = ShaderStage<'a>>>(
         &self,
         shaders: I,
         layout: &super::PipelineLayout,
+        label: crate::Label,
     ) -> Result<super::PipelineInner, crate::PipelineError> {
         let gl = &self.shared.context;
         let program = gl.create_program().unwrap();
+        if let Some(label) = label {
+            if gl.supports_debug() {
+                gl.object_label(glow::PROGRAM, program, Some(label));
+            }
+        }
 
         let mut name_binding_map = NameBindingMap::default();
         let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
@@ -191,7 +198,8 @@ impl super::Device {
             };
             let shader_src = format!("#version {} es \n void main(void) {{}}", version,);
             log::info!("Only vertex shader is present. Creating an empty fragment shader",);
-            let shader = self.compile_shader(&shader_src, naga::ShaderStage::Fragment)?;
+            let shader =
+                self.compile_shader(&shader_src, naga::ShaderStage::Fragment, Some("_dummy"))?;
             shaders_to_delete.push(shader);
         }
 
@@ -327,6 +335,12 @@ impl crate::Device<super::Api> for super::Device {
         gl.buffer_storage(target, raw_size, None, map_flags);
         gl.bind_buffer(target, None);
 
+        if let Some(label) = desc.label {
+            if gl.supports_debug() {
+                gl.object_label(glow::BUFFER, raw, Some(label));
+            }
+        }
+
         Ok(super::Buffer {
             raw,
             target,
@@ -436,6 +450,12 @@ impl crate::Device<super::Api> for super::Device {
                 );
             }
 
+            if let Some(label) = desc.label {
+                if gl.supports_debug() {
+                    gl.object_label(glow::RENDERBUFFER, raw, Some(label));
+                }
+            }
+
             gl.bind_renderbuffer(glow::RENDERBUFFER, None);
             super::TextureInner::Renderbuffer { raw }
         } else {
@@ -494,6 +514,12 @@ impl crate::Device<super::Api> for super::Device {
                 }
             };
 
+            if let Some(label) = desc.label {
+                if gl.supports_debug() {
+                    gl.object_label(glow::TEXTURE, raw, Some(label));
+                }
+            }
+
             match desc.format.describe().sample_type {
                 wgt::TextureSampleType::Float { filterable: false }
                 | wgt::TextureSampleType::Uint
@@ -548,15 +574,8 @@ impl crate::Device<super::Api> for super::Device {
             None => texture.mip_level_count,
         };
         Ok(super::TextureView {
-            inner: match texture.inner {
-                super::TextureInner::Renderbuffer { raw } => {
-                    super::TextureInner::Renderbuffer { raw }
-                }
-                super::TextureInner::Texture { raw, target: _ } => super::TextureInner::Texture {
-                    raw,
-                    target: conv::map_view_dimension(desc.dimension),
-                },
-            },
+            //TODO: use `conv::map_view_dimension(desc.dimension)`?
+            inner: texture.inner.clone(),
             sample_type: texture.format.describe().sample_type,
             aspects: crate::FormatAspect::from(texture.format)
                 & crate::FormatAspect::from(desc.range.aspect),
@@ -573,6 +592,11 @@ impl crate::Device<super::Api> for super::Device {
         let gl = &self.shared.context;
 
         let raw = gl.create_sampler().unwrap();
+        if let Some(label) = desc.label {
+            if gl.supports_debug() {
+                gl.object_label(glow::SAMPLER, raw, Some(label));
+            }
+        }
 
         let (min, mag) =
             conv::map_filter_modes(desc.min_filter, desc.mag_filter, desc.mipmap_filter);
@@ -661,6 +685,8 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
     ) -> Result<super::PipelineLayout, crate::DeviceError> {
+        use naga::back::glsl;
+
         let mut group_infos = Vec::with_capacity(desc.bind_group_layouts.len());
         let mut num_samplers = 0u8;
         let mut num_textures = 0u8;
@@ -668,7 +694,16 @@ impl crate::Device<super::Api> for super::Device {
         let mut num_uniform_buffers = 0u8;
         let mut num_storage_buffers = 0u8;
 
-        for bg_layout in desc.bind_group_layouts {
+        let mut writer_flags = glsl::WriterFlags::ADJUST_COORDINATE_SPACE;
+        writer_flags.set(
+            glsl::WriterFlags::TEXTURE_SHADOW_LOD,
+            self.shared
+                .private_caps
+                .contains(super::PrivateCapability::SHADER_TEXTURE_SHADOW_LOD),
+        );
+        let mut binding_map = glsl::BindingMap::default();
+
+        for (group_index, bg_layout) in desc.bind_group_layouts.iter().enumerate() {
             // create a vector with the size enough to hold all the bindings, filled with `!0`
             let mut binding_to_slot = vec![
                 !0;
@@ -695,6 +730,11 @@ impl crate::Device<super::Api> for super::Device {
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
+                let br = naga::ResourceBinding {
+                    group: group_index as u32,
+                    binding: entry.binding,
+                };
+                binding_map.insert(br, *counter);
                 *counter += entry.count.map_or(1, |c| c.get() as u8);
             }
 
@@ -706,6 +746,11 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::PipelineLayout {
             group_infos: group_infos.into_boxed_slice(),
+            naga_options: glsl::Options {
+                version: self.shared.shading_language_version,
+                writer_flags,
+                binding_map,
+            },
         })
     }
     unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
@@ -782,7 +827,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_shader_module(
         &self,
-        _desc: &crate::ShaderModuleDescriptor,
+        desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         Ok(super::ShaderModule {
@@ -792,6 +837,7 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 crate::ShaderInput::Naga(naga) => naga,
             },
+            label: desc.label.map(|str| str.to_string()),
         })
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
@@ -805,7 +851,7 @@ impl crate::Device<super::Api> for super::Device {
                 .as_ref()
                 .map(|fs| (naga::ShaderStage::Fragment, fs)),
         );
-        let inner = self.create_pipeline(shaders, desc.layout)?;
+        let inner = self.create_pipeline(shaders, desc.layout, desc.label)?;
 
         let (vertex_buffers, vertex_attributes) = {
             let mut buffers = Vec::new();
@@ -872,7 +918,7 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let shaders = iter::once((naga::ShaderStage::Compute, &desc.stage));
-        let inner = self.create_pipeline(shaders, desc.layout)?;
+        let inner = self.create_pipeline(shaders, desc.layout, desc.label)?;
 
         Ok(super::ComputePipeline { inner })
     }
@@ -885,13 +931,22 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Result<super::QuerySet, crate::DeviceError> {
+        use std::fmt::Write;
         let gl = &self.shared.context;
+        let mut temp_string = String::new();
 
         let mut queries = Vec::with_capacity(desc.count as usize);
-        for _ in 0..desc.count {
+        for i in 0..desc.count {
             let query = gl
                 .create_query()
                 .map_err(|_| crate::DeviceError::OutOfMemory)?;
+            if gl.supports_debug() {
+                if let Some(label) = desc.label {
+                    temp_string.clear();
+                    let _ = write!(temp_string, "{}[{}]", label, i);
+                    gl.object_label(glow::QUERY, query, Some(&temp_string));
+                }
+            }
             queries.push(query);
         }
 

@@ -210,7 +210,12 @@ impl<A: HalApi> Adapter<A> {
 
         let caps = &self.raw.capabilities;
         if !caps.downlevel.is_webgpu_compliant() {
-            log::warn!("{}", DOWNLEVEL_WARNING_MESSAGE);
+            let missing_flags = wgt::DownlevelFlags::COMPLIANT - caps.downlevel.flags;
+            log::warn!(
+                "Missing downlevel flags: {:?}\n{}",
+                missing_flags,
+                DOWNLEVEL_WARNING_MESSAGE
+            );
         }
 
         // Verify feature preconditions

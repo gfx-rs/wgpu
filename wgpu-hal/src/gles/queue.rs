@@ -144,7 +144,28 @@ impl super::Queue {
                 gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf));
                 gl.dispatch_compute_indirect(indirect_offset as i32);
             }
-            C::FillBuffer { .. } => unimplemented!(),
+            C::FillBuffer {
+                dst,
+                dst_target,
+                ref range,
+                value,
+            } => {
+                assert_eq!(value, 0); // other values require `wgt::Features::CLEAR_COMMANDS`.
+                gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
+                gl.bind_buffer(dst_target, Some(dst));
+                let mut dst_offset = range.start;
+                while dst_offset < range.end {
+                    let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
+                    gl.copy_buffer_sub_data(
+                        glow::COPY_READ_BUFFER,
+                        dst_target,
+                        0,
+                        dst_offset as i32,
+                        size as i32,
+                    );
+                    dst_offset += size;
+                }
+            }
             C::CopyBufferToBuffer {
                 src,
                 src_target,

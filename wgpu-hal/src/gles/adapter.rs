@@ -247,6 +247,10 @@ impl super::Adapter {
             super::PrivateCapability::SHADER_BINDING_LAYOUT,
             ver >= (3, 1),
         );
+        private_caps.set(
+            super::PrivateCapability::SHADER_TEXTURE_SHADOW_LOD,
+            extensions.contains("GL_EXT_texture_shadow_lod"),
+        );
         private_caps.set(super::PrivateCapability::MEMORY_BARRIERS, ver >= (3, 1));
 
         Some(crate::ExposedAdapter {
@@ -295,6 +299,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
             .map_err(|_| crate::DeviceError::OutOfMemory)?;
         gl.bind_vertex_array(Some(main_vao));
 
+        let zero_buffer = gl
+            .create_buffer()
+            .map_err(|_| crate::DeviceError::OutOfMemory)?;
+        gl.bind_buffer(glow::COPY_READ_BUFFER, Some(zero_buffer));
+        let zeroes = vec![0u8; super::ZERO_BUFFER_SIZE];
+        gl.buffer_data_u8_slice(glow::COPY_READ_BUFFER, &zeroes, glow::STATIC_DRAW);
+
         Ok(crate::OpenDevice {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
@@ -309,6 +320,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 copy_fbo: gl
                     .create_framebuffer()
                     .map_err(|_| crate::DeviceError::OutOfMemory)?,
+                zero_buffer,
                 temp_query_results: Vec::new(),
             },
         })
