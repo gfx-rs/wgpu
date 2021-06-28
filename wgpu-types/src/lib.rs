@@ -448,7 +448,6 @@ bitflags::bitflags! {
         /// Only triangles are supported.
         ///
         /// Supported platforms:
-        /// - DX12
         /// - Vulkan
         ///
         /// This is a native only feature.

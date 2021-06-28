@@ -1192,6 +1192,13 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(face) = desc.primitive.cull_mode {
             vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
         }
+        let mut vk_rasterization_conservative_state =
+            vk::PipelineRasterizationConservativeStateCreateInfoEXT::builder()
+                .conservative_rasterization_mode(vk::ConservativeRasterizationModeEXT::OVERESTIMATE)
+                .build();
+        if desc.primitive.conservative {
+            vk_rasterization = vk_rasterization.push_next(&mut vk_rasterization_conservative_state);
+        }
 
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::builder();
         if let Some(ref ds) = desc.depth_stencil {
