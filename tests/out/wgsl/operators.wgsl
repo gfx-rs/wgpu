@@ -12,3 +12,9 @@ fn unary() -> i32 {
     }
 }
 
+[[stage(compute), workgroup_size(1, 1, 1)]]
+fn main() {
+    let _e0: vec4<f32> = splat();
+    let _e1: i32 = unary();
+    return;
+}

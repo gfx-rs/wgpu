@@ -8,3 +8,9 @@ fn unary() -> i32 {
     let a = 1;
     if (!true) { return a; } else { return ~a; };
 }
+
+[[stage(compute), workgroup_size(1)]]
+fn main() {
+    let a = splat();
+    let b = unary();
+}

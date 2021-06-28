@@ -17,3 +17,10 @@ int unary(
         return !1;
     }
 }
+
+kernel void main1(
+) {
+    metal::float4 _e0 = splat();
+    int _e1 = unary();
+    return;
+}
