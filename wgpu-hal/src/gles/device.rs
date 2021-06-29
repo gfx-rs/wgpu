@@ -451,6 +451,14 @@ impl crate::Device<super::Api> for super::Device {
             super::TextureInner::Renderbuffer { raw }
         } else {
             let raw = gl.create_texture().unwrap();
+            //HACK: detect a cube map
+            let cube_count = if desc.size.width == desc.size.height
+                && desc.size.depth_or_array_layers % 6 == 0
+            {
+                Some(desc.size.depth_or_array_layers / 6)
+            } else {
+                None
+            };
             let target = match desc.dimension {
                 wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
@@ -465,8 +473,11 @@ impl crate::Device<super::Api> for super::Device {
                             true,
                         );
                         target
-                    } else if desc.size.depth_or_array_layers > 1 {
-                        let target = glow::TEXTURE_2D_ARRAY;
+                    } else if desc.size.depth_or_array_layers > 1 && cube_count != Some(1) {
+                        let target = match cube_count {
+                            Some(_) => glow::TEXTURE_CUBE_MAP_ARRAY,
+                            None => glow::TEXTURE_2D_ARRAY,
+                        };
                         gl.bind_texture(target, Some(raw));
                         gl.tex_storage_3d(
                             target,
@@ -478,7 +489,10 @@ impl crate::Device<super::Api> for super::Device {
                         );
                         target
                     } else {
-                        let target = glow::TEXTURE_2D;
+                        let target = match cube_count {
+                            Some(_) => glow::TEXTURE_CUBE_MAP,
+                            None => glow::TEXTURE_2D,
+                        };
                         gl.bind_texture(target, Some(raw));
                         gl.tex_storage_2d(
                             target,
@@ -772,6 +786,10 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 wgt::BindingType::Texture { .. } => {
                     let view = desc.textures[entry.resource_index as usize].view;
+                    if view.mip_levels.start != 0 || view.array_layers.start != 0 {
+                        log::error!("Unable to create a sampled texture binding for non-zero mipmap level or array layer.\n{}",
+                            "This is an implementation problem of wgpu-hal/gles backend.")
+                    }
                     match view.inner {
                         super::TextureInner::Renderbuffer { .. } => {
                             panic!("Unable to use a renderbuffer in a group")

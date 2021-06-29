@@ -5,6 +5,15 @@ use std::{mem, ops::Range, slice};
 
 const DEBUG_ID: u32 = 0;
 
+const CUBEMAP_FACES: [u32; 6] = [
+    glow::TEXTURE_CUBE_MAP_POSITIVE_X,
+    glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
+    glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
+    glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
+    glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
+    glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
+];
+
 fn extract_marker<'a>(data: &'a [u8], range: &Range<u32>) -> &'a str {
     std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
@@ -191,6 +200,7 @@ impl super::Queue {
                 dst_target,
                 ref copy,
             } => {
+                //TODO: cubemaps
                 //TODO: how is depth handled?
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
                 for layer in 0..copy.size.depth_or_array_layers as i32 {
@@ -260,32 +270,70 @@ impl super::Queue {
                 let unpack_data =
                     glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32);
                 gl.bind_texture(dst_target, Some(dst));
-                if is_3d_target(dst_target) {
-                    gl.tex_sub_image_3d(
-                        dst_target,
-                        copy.texture_base.mip_level as i32,
-                        copy.texture_base.origin.x as i32,
-                        copy.texture_base.origin.y as i32,
-                        copy.texture_base.origin.z as i32,
-                        copy.size.width as i32,
-                        copy.size.height as i32,
-                        copy.size.depth_or_array_layers as i32,
-                        dst_info.external_format,
-                        dst_info.data_type,
-                        unpack_data,
-                    );
-                } else {
-                    gl.tex_sub_image_2d(
-                        dst_target,
-                        copy.texture_base.mip_level as i32,
-                        copy.texture_base.origin.x as i32,
-                        copy.texture_base.origin.y as i32,
-                        copy.size.width as i32,
-                        copy.size.height as i32,
-                        dst_info.external_format,
-                        dst_info.data_type,
-                        unpack_data,
-                    );
+                match dst_target {
+                    glow::TEXTURE_3D | glow::TEXTURE_2D_ARRAY => {
+                        gl.tex_sub_image_3d(
+                            dst_target,
+                            copy.texture_base.mip_level as i32,
+                            copy.texture_base.origin.x as i32,
+                            copy.texture_base.origin.y as i32,
+                            copy.texture_base.origin.z as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                            copy.size.depth_or_array_layers as i32,
+                            dst_info.external_format,
+                            dst_info.data_type,
+                            unpack_data,
+                        );
+                    }
+                    glow::TEXTURE_2D => {
+                        gl.tex_sub_image_2d(
+                            dst_target,
+                            copy.texture_base.mip_level as i32,
+                            copy.texture_base.origin.x as i32,
+                            copy.texture_base.origin.y as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                            dst_info.external_format,
+                            dst_info.data_type,
+                            unpack_data,
+                        );
+                    }
+                    glow::TEXTURE_CUBE_MAP => {
+                        let mut offset = copy.buffer_layout.offset as u32;
+                        for face_index in 0..copy.size.depth_or_array_layers {
+                            gl.tex_sub_image_2d(
+                                CUBEMAP_FACES[(copy.texture_base.origin.z + face_index) as usize],
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                dst_info.external_format,
+                                dst_info.data_type,
+                                glow::PixelUnpackData::BufferOffset(offset),
+                            );
+                            offset += copy.buffer_layout.rows_per_image.map_or(0, |rpi| rpi.get())
+                                * copy.buffer_layout.bytes_per_row.map_or(0, |bpr| bpr.get());
+                        }
+                    }
+                    glow::TEXTURE_CUBE_MAP_ARRAY => {
+                        //Note: not sure if this is correct!
+                        gl.tex_sub_image_3d(
+                            dst_target,
+                            copy.texture_base.mip_level as i32,
+                            copy.texture_base.origin.x as i32,
+                            copy.texture_base.origin.y as i32,
+                            copy.texture_base.origin.z as i32,
+                            copy.size.width as i32,
+                            copy.size.height as i32,
+                            copy.size.depth_or_array_layers as i32,
+                            dst_info.external_format,
+                            dst_info.data_type,
+                            unpack_data,
+                        );
+                    }
+                    _ => unreachable!(),
                 }
             }
             C::CopyTextureToBuffer {
@@ -297,6 +345,7 @@ impl super::Queue {
                 ref copy,
             } => {
                 //TODO: compressed data
+                //TODO: cubemaps
                 let row_texels = copy
                     .buffer_layout
                     .bytes_per_row
