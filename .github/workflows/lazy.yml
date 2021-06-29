@@ -76,3 +76,76 @@ jobs:
               echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
           done
           cat counter
+  dneto0_spirv-samples:
+    name: Parse dneto0 spirv-samples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - name: Download shaders
+        run: git clone https://github.com/dneto0/spirv-samples.git
+      - name: Build Naga
+        run: cargo build --release --bin naga
+      - name: Install spirv-tools
+        run: |
+           wget -q https://storage.googleapis.com/spirv-tools/artifacts/prod/graphics_shader_compiler/spirv-tools/linux-clang-release/continuous/1489/20210629-121459/install.tgz
+           tar zxf install.tgz
+           ./install/bin/spirv-as --version
+      - name: Compile spv from spvasm
+        run: |
+           cd spirv-samples
+           mkdir -p spv
+
+           find "./spvasm" -name '*.spvasm' | while read fname;
+           do
+               echo "Convert to spv with spirv-as: $fname"
+               ../install/bin/spirv-as --target-env spv1.3 $(realpath ${fname}) -o ./spv/$(basename ${fname}).spv
+           done;
+      - name: Validate spv and generate wgsl
+        run: |
+           set +e
+           cd spirv-samples
+           SUCCESS_RESULT_COUNT=0
+           FILE_COUNT=0
+           mkdir -p spv
+           mkdir -p wgsl
+
+           echo "==== Validate spv and generate wgsl ===="
+           rm -f counter
+           touch counter
+
+           find "./spv" -name '*.spv' | while read fname;
+           do
+               echo "Convert: $fname"
+               FILE_COUNT=$((FILE_COUNT+1))
+               ../target/release/naga --validate 27 $(realpath ${fname}) ./wgsl/$(basename ${fname}).wgsl
+               if [[ $? -eq 0 ]]; then
+                   SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
+               fi
+               echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
+           done
+           cat counter
+      - name: Validate output wgsl
+        run: |
+           set +e
+           cd spirv-samples
+           SUCCESS_RESULT_COUNT=0
+           FILE_COUNT=0
+
+           rm -f counter
+           touch counter
+
+           find "./wgsl" -name '*.wgsl' | while read fname;
+           do
+               echo "Validate: $fname"
+               FILE_COUNT=$((FILE_COUNT+1))
+               ../target/release/naga --validate 27 $(realpath ${fname})
+               if [[ $? -eq 0 ]]; then
+                   SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
+               fi
+               echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
+           done
+           cat counter
