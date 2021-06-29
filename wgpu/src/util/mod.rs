@@ -6,7 +6,6 @@ mod encoder;
 mod init;
 
 use std::future::Future;
-#[cfg(feature = "spirv")]
 use std::{
     borrow::Cow,
     mem::{align_of, size_of},
@@ -37,7 +36,6 @@ pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
 
 /// Version of [`make_spirv`] intended for use with [`Device::create_shader_module_spirv`].
 /// Returns raw slice instead of ShaderSource.
-#[cfg(feature = "spirv")]
 pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
     assert_eq!(
