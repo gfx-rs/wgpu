@@ -61,6 +61,8 @@ pub enum ExpressionError {
     Type(#[from] ResolveError),
     #[error("Not a global variable")]
     ExpectedGlobalVariable,
+    #[error("Not a global variable or a function argument")]
+    ExpectedGlobalOrArgument,
     #[error("Calling an undeclared function {0:?}")]
     CallToUndeclaredFunction(Handle<crate::Function>),
     #[error("Needs to be an image instead of {0:?}")]

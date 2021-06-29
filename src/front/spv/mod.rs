@@ -409,7 +409,7 @@ pub struct Parser<I> {
     options: Options,
     index_constants: Vec<Handle<crate::Constant>>,
     index_constant_expressions: Vec<Handle<crate::Expression>>,
-    function_info: FastHashMap<Handle<crate::Function>, FunctionInfo>,
+    function_info: Vec<FunctionInfo>,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -441,7 +441,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             options: options.clone(),
             index_constants: Vec::new(),
             index_constant_expressions: Vec::new(),
-            function_info: FastHashMap::default(),
+            function_info: Vec::new(),
         }
     }
 
@@ -2312,7 +2312,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     // Patch sampling flags
                     for (i, arg) in arguments.iter().enumerate() {
-                        let callee_info = &self.function_info[&handle];
+                        let callee_info = &self.function_info[handle.index()];
 
                         if let Some(flags) = callee_info.parameters_sampling.get(i).and_then(|e| *e)
                         {
@@ -2323,7 +2323,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 crate::Expression::FunctionArgument(i) => {
                                     if let Some(handle) = function {
                                         let function_info =
-                                            self.function_info.get_mut(&handle).unwrap();
+                                            self.function_info.get_mut(handle.index()).unwrap();
                                         let caller_flags = function_info.parameters_sampling
                                             [i as usize]
                                             .get_or_insert(image::SamplingFlags::empty());

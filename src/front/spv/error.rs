@@ -73,6 +73,8 @@ pub enum Error {
     InvalidBinding(spirv::Word),
     #[error("invalid global var {0:?}")]
     InvalidGlobalVar(crate::Expression),
+    #[error("invalid image/sampler expression {0:?}")]
+    InvalidImageExpression(crate::Expression),
     #[error("invalid image base type {0:?}")]
     InvalidImageBaseType(Handle<crate::Type>),
     #[error("invalid image {0:?}")]

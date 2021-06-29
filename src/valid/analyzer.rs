@@ -159,7 +159,7 @@ impl ExpressionInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 enum GlobalOrArgument {
@@ -167,14 +167,22 @@ enum GlobalOrArgument {
     Argument(u32),
 }
 
-#[derive(Debug, Clone)]
+impl crate::Expression {
+    fn to_global_or_argument(&self) -> Option<GlobalOrArgument> {
+        Some(match *self {
+            crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
+            crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-struct ArgumentSampling {
-    /// Whether this argument is used as an image or a sampler
-    image: bool,
-    /// The other global or argument used in the sampling
-    uses: Vec<GlobalOrArgument>,
+struct Sampling {
+    image: GlobalOrArgument,
+    sampler: GlobalOrArgument,
 }
 
 #[derive(Debug)]
@@ -199,10 +207,8 @@ pub struct FunctionInfo {
     ///
     /// Each item corresponds to an expression in the function.
     expressions: Box<[ExpressionInfo]>,
-    /// Vector with information of wether or not a functin argument is used for sampling
-    ///
-    /// Each item corresponds to a function argument
-    argument_sampling: Box<[Option<ArgumentSampling>]>,
+    /// HashSet with information about sampling realized by the function
+    sampling: crate::FastHashSet<Sampling>,
 }
 
 impl FunctionInfo {
@@ -304,78 +310,39 @@ impl FunctionInfo {
         for key in info.sampling_set.iter() {
             self.sampling_set.insert(key.clone());
         }
-        for (i, arg_sampling) in info
-            .argument_sampling
-            .iter()
-            .enumerate()
-            .filter_map(|(i, s)| Some((i, s.as_ref()?)))
-        {
-            let handle = arguments[i];
-            let arg_storage = match expression_arena[handle] {
-                crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
-                crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
-                _ => {
-                    return Err(FunctionError::Expression {
-                        handle,
-                        error: ExpressionError::ExpectedGlobalVariable,
-                    })
+        for sampling in info.sampling.iter() {
+            let image_storage = match sampling.image {
+                GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
+                GlobalOrArgument::Argument(i) => {
+                    let handle = arguments[i as usize];
+                    expression_arena[handle].to_global_or_argument().ok_or(
+                        FunctionError::Expression {
+                            handle,
+                            error: ExpressionError::ExpectedGlobalOrArgument,
+                        },
+                    )?
                 }
             };
 
-            for other in arg_sampling.uses.iter() {
-                let other_storage = match *other {
-                    GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
-                    GlobalOrArgument::Argument(i) => {
-                        let other_handle = arguments[i as usize];
-                        match expression_arena[other_handle] {
-                            crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
-                            crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
-                            _ => {
-                                return Err(FunctionError::Expression {
-                                    handle,
-                                    error: ExpressionError::ExpectedGlobalVariable,
-                                })
-                            }
-                        }
-                    }
-                };
+            let sampler_storage = match sampling.sampler {
+                GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
+                GlobalOrArgument::Argument(i) => {
+                    let handle = arguments[i as usize];
+                    expression_arena[handle].to_global_or_argument().ok_or(
+                        FunctionError::Expression {
+                            handle,
+                            error: ExpressionError::ExpectedGlobalOrArgument,
+                        },
+                    )?
+                }
+            };
 
-                match (arg_storage, other_storage) {
-                    (GlobalOrArgument::Global(arg), GlobalOrArgument::Global(other)) => {
-                        if arg_sampling.image {
-                            self.sampling_set.insert(SamplingKey {
-                                image: arg,
-                                sampler: other,
-                            });
-                        } else {
-                            self.sampling_set.insert(SamplingKey {
-                                image: other,
-                                sampler: arg,
-                            });
-                        }
-                    }
-                    (GlobalOrArgument::Argument(i), _) => {
-                        let sampling =
-                            self.argument_sampling[i as usize].get_or_insert_with(|| {
-                                ArgumentSampling {
-                                    image: arg_sampling.image,
-                                    uses: Vec::with_capacity(1),
-                                }
-                            });
-
-                        sampling.uses.push(other_storage)
-                    }
-                    (_, GlobalOrArgument::Argument(i)) => {
-                        let sampling =
-                            self.argument_sampling[i as usize].get_or_insert_with(|| {
-                                ArgumentSampling {
-                                    image: !arg_sampling.image,
-                                    uses: Vec::with_capacity(1),
-                                }
-                            });
-
-                        sampling.uses.push(arg_storage)
-                    }
+            match (image_storage, sampler_storage) {
+                (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
+                    self.sampling_set.insert(SamplingKey { image, sampler });
+                }
+                (image, sampler) => {
+                    self.sampling.insert(Sampling { image, sampler });
                 }
             }
         }
@@ -499,42 +466,28 @@ impl FunctionInfo {
                 level,
                 depth_ref,
             } => {
-                let image_storage = match expression_arena[image] {
-                    crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
-                    crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
-                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                };
-                let sampler_storage = match expression_arena[sampler] {
-                    crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
-                    crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
-                    _ => return Err(ExpressionError::ExpectedGlobalVariable),
-                };
+                let image_storage = expression_arena[image]
+                    .to_global_or_argument()
+                    .ok_or(ExpressionError::ExpectedGlobalOrArgument)?;
+                let sampler_storage = expression_arena[sampler]
+                    .to_global_or_argument()
+                    .ok_or(ExpressionError::ExpectedGlobalOrArgument)?;
 
                 match (image_storage, sampler_storage) {
                     (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
                         self.sampling_set.insert(SamplingKey { image, sampler });
                     }
-                    (GlobalOrArgument::Argument(i), _) => {
-                        let sampling =
-                            self.argument_sampling[i as usize].get_or_insert_with(|| {
-                                ArgumentSampling {
-                                    image: true,
-                                    uses: Vec::with_capacity(1),
-                                }
-                            });
-
-                        sampling.uses.push(sampler_storage)
+                    (GlobalOrArgument::Argument(_), _) => {
+                        self.sampling.insert(Sampling {
+                            image: image_storage,
+                            sampler: sampler_storage,
+                        });
                     }
-                    (_, GlobalOrArgument::Argument(i)) => {
-                        let sampling =
-                            self.argument_sampling[i as usize].get_or_insert_with(|| {
-                                ArgumentSampling {
-                                    image: false,
-                                    uses: Vec::with_capacity(1),
-                                }
-                            });
-
-                        sampling.uses.push(image_storage)
+                    (_, GlobalOrArgument::Argument(_)) => {
+                        self.sampling.insert(Sampling {
+                            image: image_storage,
+                            sampler: sampler_storage,
+                        });
                     }
                 }
 
@@ -864,7 +817,7 @@ impl ModuleInfo {
             sampling_set: crate::FastHashSet::default(),
             global_uses: vec![GlobalUse::empty(); module.global_variables.len()].into_boxed_slice(),
             expressions: vec![ExpressionInfo::new(); fun.expressions.len()].into_boxed_slice(),
-            argument_sampling: vec![None; fun.arguments.len()].into_boxed_slice(),
+            sampling: crate::FastHashSet::default(),
         };
         let resolve_context = ResolveContext {
             constants: &module.constants,
@@ -969,7 +922,7 @@ fn uniform_control_flow() {
         sampling_set: crate::FastHashSet::default(),
         global_uses: vec![GlobalUse::empty(); global_var_arena.len()].into_boxed_slice(),
         expressions: vec![ExpressionInfo::new(); expressions.len()].into_boxed_slice(),
-        argument_sampling: vec![None; 0].into_boxed_slice(),
+        sampling: crate::FastHashSet::default(),
     };
     let resolve_context = ResolveContext {
         constants: &constant_arena,

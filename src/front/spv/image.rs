@@ -31,7 +31,7 @@ impl Arena<crate::Expression> {
         match self[handle] {
             crate::Expression::GlobalVariable(handle) => Ok(global_vars[handle].ty),
             crate::Expression::FunctionArgument(i) => Ok(arguments[i as usize].ty),
-            ref other => Err(Error::InvalidGlobalVar(other.clone())),
+            ref other => Err(Error::InvalidImageExpression(other.clone())),
         }
     }
 }

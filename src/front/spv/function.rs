@@ -193,7 +193,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         // done
         let fun_handle = module.functions.append(fun);
         self.lookup_function.insert(fun_id, fun_handle);
-        self.function_info.insert(fun_handle, function_info);
+        self.function_info.push(function_info);
         if let Some(ep) = self.lookup_entry_point.remove(&fun_id) {
             // create a wrapping function
             let mut function = crate::Function {
