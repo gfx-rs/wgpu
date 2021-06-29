@@ -130,7 +130,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct WriterFlags: u32 {
-        /// Extend output Z from (0,1) to (-1,1).
+        /// Flip output Y and extend Z from (0,1) to (-1,1).
         const ADJUST_COORDINATE_SPACE = 0x1;
         /// Supports GL_EXT_texture_shadow_lod on the host, which provides
         /// additional functions on shadows and arrays of shadows.
@@ -1520,7 +1520,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             {
                                 writeln!(
                                     self.out,
-                                    "gl_Position.z = gl_Position.z * 2.0 - gl_Position.w;",
+                                    "gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);",
                                 )?;
                                 write!(self.out, "{}", INDENT.repeat(indent))?;
                             }

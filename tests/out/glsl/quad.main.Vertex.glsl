@@ -17,7 +17,7 @@ void main() {
     VertexOutput _tmp_return = VertexOutput(uv, vec4((1.2 * pos), 0.0, 1.0));
     _vs2fs_location0 = _tmp_return.uv;
     gl_Position = _tmp_return.position;
-    gl_Position.z = gl_Position.z * 2.0 - gl_Position.w;
+    gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;
 }
 
