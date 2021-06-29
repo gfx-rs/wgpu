@@ -671,11 +671,14 @@ impl Surface {
 
         gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer));
+        // Note the Y-flipping here. GL's presentation is not flipped,
+        // but main rendering is. Therefore, we Y-flip the output positions
+        // in the shader, and also this blit.
         gl.blit_framebuffer(
             0,
-            0,
-            sc.extent.width as i32,
             sc.extent.height as i32,
+            sc.extent.width as i32,
+            0,
             0,
             0,
             sc.extent.width as i32,
