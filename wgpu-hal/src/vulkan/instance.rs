@@ -287,6 +287,14 @@ impl super::Instance {
     }
 }
 
+impl Drop for super::Instance {
+    fn drop(&mut self) {
+        unsafe {
+            self.shared.raw.destroy_instance(None);
+        }
+    }
+}
+
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         let entry = match ash::Entry::new() {

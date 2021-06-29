@@ -140,7 +140,7 @@ fn choose_config(
     let mut attributes = Vec::with_capacity(7);
     for tier_max in (0..tiers.len()).rev() {
         let name = tiers[tier_max].0;
-        log::info!("Trying {}", name);
+        log::info!("\tTrying {}", name);
 
         attributes.clear();
         for &(_, tier_attr) in tiers[..=tier_max].iter() {
@@ -229,7 +229,6 @@ impl Inner {
         flags: crate::InstanceFlag,
         egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
         display: egl::Display,
-        wsi_library: Option<&libloading::Library>,
     ) -> Result<Self, crate::InstanceError> {
         let version = egl.initialize(display).map_err(|_| crate::InstanceError)?;
         let vendor = egl.query_string(Some(display), egl::VENDOR).unwrap();
@@ -266,13 +265,17 @@ impl Inner {
             egl::CONTEXT_CLIENT_VERSION,
             3, // Request GLES 3.0 or higher
         ];
-        if flags.contains(crate::InstanceFlag::DEBUG)
-            && wsi_library.is_none()
-            && !cfg!(target_os = "android")
-        {
+        if flags.contains(crate::InstanceFlag::DEBUG) && !cfg!(target_os = "android") {
+            log::info!("\tEGL context: +debug");
             //TODO: figure out why this is needed
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
             context_attributes.push(egl::TRUE as _);
+        }
+        if display_extensions.contains("EGL_EXT_create_context_robustness") {
+            log::info!("\tEGL context: +robust access");
+            context_attributes.push(egl::CONTEXT_OPENGL_ROBUST_ACCESS);
+            context_attributes.push(egl::TRUE as _);
+            //TODO do we need `egl::CONTEXT_OPENGL_NOTIFICATION_STRATEGY_EXT`?
         }
         context_attributes.push(egl::NONE);
         let context = match egl.create_context(display, config, None, &context_attributes) {
@@ -285,20 +288,19 @@ impl Inner {
 
         // Testing if context can be binded without surface
         // and creating dummy pbuffer surface if not.
-        let pbuffer = if version < (1, 5)
-            || !display_extensions.contains("EGL_KHR_surfaceless_context")
-        {
-            let attributes = [egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE];
-            egl.create_pbuffer_surface(display, config, &attributes)
-                .map(Some)
-                .map_err(|e| {
-                    log::warn!("Error in create_pbuffer_surface: {:?}", e);
-                    crate::InstanceError
-                })?
-        } else {
-            log::info!("EGL_KHR_surfaceless_context is present. No need to create a dummy pbuffer");
-            None
-        };
+        let pbuffer =
+            if version < (1, 5) || !display_extensions.contains("EGL_KHR_surfaceless_context") {
+                let attributes = [egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE];
+                egl.create_pbuffer_surface(display, config, &attributes)
+                    .map(Some)
+                    .map_err(|e| {
+                        log::warn!("Error in create_pbuffer_surface: {:?}", e);
+                        crate::InstanceError
+                    })?
+            } else {
+                log::info!("\tEGL context: +surfaceless");
+                None
+            };
 
         Ok(Self {
             egl,
@@ -413,7 +415,7 @@ impl crate::Instance<super::Api> for Instance {
             (function)(Some(egl_debug_proc), attributes.as_ptr());
         }
 
-        let inner = Inner::create(desc.flags, egl, display, wsi_library.as_ref())?;
+        let inner = Inner::create(desc.flags, egl, display)?;
 
         Ok(Instance {
             wsi_library,
@@ -475,13 +477,8 @@ impl crate::Instance<super::Api> for Instance {
                         )
                         .unwrap();
 
-                    let new_inner = Inner::create(
-                        self.flags,
-                        inner.egl.clone(),
-                        display,
-                        self.wsi_library.as_ref(),
-                    )
-                    .map_err(|_| crate::InstanceError)?;
+                    let new_inner = Inner::create(self.flags, inner.egl.clone(), display)
+                        .map_err(|_| crate::InstanceError)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
                     inner.wl_display = Some(handle.display);
