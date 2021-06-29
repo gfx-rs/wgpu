@@ -48,7 +48,6 @@ impl crate::Api for Api {
 
 struct DebugUtils {
     extension: ext::DebugUtils,
-    #[allow(dead_code)]
     messenger: vk::DebugUtilsMessengerEXT,
 }
 

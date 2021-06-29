@@ -287,10 +287,14 @@ impl super::Instance {
     }
 }
 
-impl Drop for super::Instance {
+impl Drop for super::InstanceShared {
     fn drop(&mut self) {
         unsafe {
-            self.shared.raw.destroy_instance(None);
+            if let Some(du) = self.debug_utils.take() {
+                du.extension
+                    .destroy_debug_utils_messenger(du.messenger, None);
+            }
+            self.raw.destroy_instance(None);
         }
     }
 }

@@ -306,16 +306,17 @@ impl crate::Device<super::Api> for super::Device {
             glow::ARRAY_BUFFER
         };
 
-        let mut map_flags = 0;
-        if desc
+        let is_host_visible = desc
             .usage
-            .intersects(crate::BufferUse::MAP_READ | crate::BufferUse::MAP_WRITE)
-        {
+            .intersects(crate::BufferUse::MAP_READ | crate::BufferUse::MAP_WRITE);
+        let is_coherent = desc
+            .memory_flags
+            .contains(crate::MemoryFlag::PREFER_COHERENT);
+        let mut map_flags = 0;
+
+        if is_host_visible {
             map_flags |= glow::MAP_PERSISTENT_BIT;
-            if desc
-                .memory_flags
-                .contains(crate::MemoryFlag::PREFER_COHERENT)
-            {
+            if is_coherent {
                 map_flags |= glow::MAP_COHERENT_BIT;
             }
         }
@@ -334,6 +335,11 @@ impl crate::Device<super::Api> for super::Device {
             .map_err(|_| crate::DeviceError::OutOfMemory)?;
         gl.buffer_storage(target, raw_size, None, map_flags);
         gl.bind_buffer(target, None);
+
+        if !is_coherent && desc.usage.contains(crate::BufferUse::MAP_WRITE) {
+            map_flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
+        }
+        //TODO: do we need `glow::MAP_UNSYNCHRONIZED_BIT`?
 
         if let Some(label) = desc.label {
             if gl.supports_debug() {
@@ -361,17 +367,13 @@ impl crate::Device<super::Api> for super::Device {
         let gl = &self.shared.context;
 
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
-        let mut flags = buffer.map_flags | glow::MAP_UNSYNCHRONIZED_BIT;
-        if !is_coherent {
-            flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
-        }
 
         gl.bind_buffer(buffer.target, Some(buffer.raw));
         let ptr = gl.map_buffer_range(
             buffer.target,
             range.start as i32,
             (range.end - range.start) as i32,
-            flags,
+            buffer.map_flags,
         );
         gl.bind_buffer(buffer.target, None);
 
@@ -401,19 +403,8 @@ impl crate::Device<super::Api> for super::Device {
             );
         }
     }
-    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
-    where
-        I: Iterator<Item = crate::MemoryRange>,
-    {
-        let gl = &self.shared.context;
-        gl.bind_buffer(buffer.target, Some(buffer.raw));
-        for range in ranges {
-            gl.invalidate_buffer_sub_data(
-                buffer.target,
-                range.start as i32,
-                (range.end - range.start) as i32,
-            );
-        }
+    unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {
+        //TODO: do we need to do anything?
     }
 
     unsafe fn create_texture(
@@ -592,11 +583,6 @@ impl crate::Device<super::Api> for super::Device {
         let gl = &self.shared.context;
 
         let raw = gl.create_sampler().unwrap();
-        if let Some(label) = desc.label {
-            if gl.supports_debug() {
-                gl.object_label(glow::SAMPLER, raw, Some(label));
-            }
-        }
 
         let (min, mag) =
             conv::map_filter_modes(desc.min_filter, desc.mag_filter, desc.mipmap_filter);
@@ -650,6 +636,12 @@ impl crate::Device<super::Api> for super::Device {
                 glow::TEXTURE_COMPARE_FUNC,
                 conv::map_compare_func(compare) as i32,
             );
+        }
+
+        if let Some(label) = desc.label {
+            if gl.supports_debug() {
+                gl.object_label(glow::SAMPLER, raw, Some(label));
+            }
         }
 
         Ok(super::Sampler { raw })
