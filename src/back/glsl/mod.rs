@@ -1368,22 +1368,48 @@ impl<'a, W: Write> Writer<'a, W> {
             // Loops in naga IR are based on wgsl loops, glsl can emulate the behaviour by using a
             // while true loop and appending the continuing block to the body resulting on:
             // ```
+            // bool loop_init = true;
             // while(true) {
-            //  body
-            //  continuing
+            //  if (!loop_init) { <continuing> }
+            //  loop_init = false;
+            //  <body>
             // }
             // ```
             Statement::Loop {
                 ref body,
                 ref continuing,
             } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
-                writeln!(self.out, "while(true) {{")?;
-
-                for sta in body.iter().chain(continuing.iter()) {
+                if !continuing.is_empty() {
+                    let gate_name = self.namer.call("loop_init");
+                    writeln!(
+                        self.out,
+                        "{}bool {} = true;",
+                        INDENT.repeat(indent),
+                        gate_name
+                    )?;
+                    writeln!(self.out, "{}while(true) {{", INDENT.repeat(indent))?;
+                    writeln!(
+                        self.out,
+                        "{}if (!{}) {{",
+                        INDENT.repeat(indent + 1),
+                        gate_name
+                    )?;
+                    for sta in continuing {
+                        self.write_stmt(sta, ctx, indent + 1)?;
+                    }
+                    writeln!(self.out, "{}}}", INDENT.repeat(indent + 1))?;
+                    writeln!(
+                        self.out,
+                        "{}{} = false;",
+                        INDENT.repeat(indent + 1),
+                        gate_name
+                    )?;
+                } else {
+                    writeln!(self.out, "{}while(true) {{", INDENT.repeat(indent))?;
+                }
+                for sta in body {
                     self.write_stmt(sta, ctx, indent + 1)?;
                 }
-
                 writeln!(self.out, "{}}}", INDENT.repeat(indent))?
             }
             // Break, continue and return as written as in C

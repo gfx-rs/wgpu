@@ -38,7 +38,13 @@ void main() {
     vec3 color = vec3(0.05, 0.05, 0.05);
     uint i = 0u;
     vec3 normal = normalize(raw_normal);
+    bool loop_init = true;
     while(true) {
+        if (!loop_init) {
+        uint _expr40 = i;
+        i = (_expr40 + 1u);
+        }
+        loop_init = false;
         uint _expr12 = i;
         uvec4 _expr14 = _group_0_binding_0.num_lights;
         if ((_expr12 >= min(_expr14.x, 10u))) {
@@ -52,8 +58,6 @@ void main() {
         float diffuse = max(0.0, dot(normal, light_dir));
         vec3 _expr34 = color;
         color = (_expr34 + ((_expr25 * diffuse) * light.color.xyz));
-        uint _expr40 = i;
-        i = (_expr40 + 1u);
     }
     vec3 _expr43 = color;
     _fs2p_location0 = vec4(_expr43, 1.0);

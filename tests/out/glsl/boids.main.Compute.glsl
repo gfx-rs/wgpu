@@ -51,7 +51,13 @@ void main() {
     cMass = vec2(0.0, 0.0);
     cVel = vec2(0.0, 0.0);
     colVel = vec2(0.0, 0.0);
+    bool loop_init = true;
     while(true) {
+        if (!loop_init) {
+        uint _expr86 = i;
+        i = (_expr86 + 1u);
+        }
+        loop_init = false;
         uint _expr37 = i;
         if ((_expr37 >= 1500u)) {
             break;
@@ -95,8 +101,6 @@ void main() {
             int _expr83 = cVelCount;
             cVelCount = (_expr83 + 1);
         }
-        uint _expr86 = i;
-        i = (_expr86 + 1u);
     }
     int _expr89 = cMassCount;
     if ((_expr89 > 0)) {
