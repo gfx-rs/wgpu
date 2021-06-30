@@ -1,6 +1,13 @@
 # Change Log
 
 ## Unreleased
+  - Infrastructure:
+    - `gfx-hal` is replaced by the in-house graphics abstraction `wgpu-hal`. Backends: Vulkan, Metal, OpenGL ES-3.
+  - API:
+    - `cross` feature is removed entirely. Only Rust code from now on.
+    - processing SPIR-V inputs for later translation now requires `spirv` compile feature enabled
+    - new `Features::SPIRV_SHADER_PASSTHROUGH` run-time feature allows providing pass-through SPIR-V (orthogonal to the compile feature)
+    - Several bitflag names are renamed to plural: `TextureUsage`, `BufferUsage`, `ColorWrite`.
   - Fixed:
     - `Device::create_query_set` would return an error when creating exactly `QUERY_SET_MAX_QUERIES` (8192) queries. Now it only returns an error when trying to create *more* than `QUERY_SET_MAX_QUERIES` queries.
 
