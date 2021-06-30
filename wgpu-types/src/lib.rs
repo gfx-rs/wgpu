@@ -586,11 +586,24 @@ impl Default for Limits {
     }
 }
 
+/// Represents the sets of additional limits on an adapter,
+/// which take place when running on downlevel backends.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DownlevelLimits {}
+
+impl Default for DownlevelLimits {
+    fn default() -> Self {
+        DownlevelLimits {}
+    }
+}
+
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DownlevelCapabilities {
     /// Combined boolean flags.
     pub flags: DownlevelFlags,
+    /// Additional limits
+    pub limits: DownlevelLimits,
     /// Which collections of features shaders support. Defined in terms of D3D's shader models.
     pub shader_model: ShaderModel,
 }
@@ -599,6 +612,7 @@ impl Default for DownlevelCapabilities {
     fn default() -> Self {
         Self {
             flags: DownlevelFlags::COMPLIANT,
+            limits: DownlevelLimits::default(),
             shader_model: ShaderModel::Sm5,
         }
     }
@@ -609,8 +623,10 @@ impl DownlevelCapabilities {
     ///
     /// If this returns false, some parts of the API will result in validation errors where they would not normally.
     /// These parts can be determined by the values in this structure.
-    pub fn is_webgpu_compliant(self) -> bool {
-        self.flags.contains(DownlevelFlags::COMPLIANT) && self.shader_model >= ShaderModel::Sm5
+    pub fn is_webgpu_compliant(&self) -> bool {
+        self.flags.contains(DownlevelFlags::COMPLIANT)
+            && self.limits == DownlevelLimits::default()
+            && self.shader_model >= ShaderModel::Sm5
     }
 }
 

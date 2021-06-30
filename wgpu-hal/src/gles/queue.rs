@@ -590,31 +590,69 @@ impl super::Queue {
                 gl.stencil_op_separate(face, ops.fail, ops.depth_fail, ops.pass);
             }
             C::SetVertexAttribute {
+                buffer,
                 ref buffer_desc,
-                ref buffer,
                 attribute_desc: ref vat,
             } => {
-                gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer.raw));
-                let offset = vat.offset as i32 + buffer.offset as i32;
-                match vat.format_desc.attrib_kind {
-                    super::VertexAttribKind::Float => gl.vertex_attrib_pointer_f32(
-                        vat.location,
-                        vat.format_desc.element_count,
-                        vat.format_desc.element_format,
-                        true, // always normalized
-                        buffer_desc.stride as i32,
-                        offset,
-                    ),
-                    super::VertexAttribKind::Integer => gl.vertex_attrib_pointer_i32(
-                        vat.location,
-                        vat.format_desc.element_count,
-                        vat.format_desc.element_format,
-                        buffer_desc.stride as i32,
-                        offset,
-                    ),
-                }
-                gl.vertex_attrib_divisor(vat.location, buffer_desc.step as u32);
+                gl.bind_buffer(glow::ARRAY_BUFFER, buffer);
                 gl.enable_vertex_attrib_array(vat.location);
+
+                if buffer.is_none() {
+                    match vat.format_desc.attrib_kind {
+                        super::VertexAttribKind::Float => gl.vertex_attrib_format_f32(
+                            vat.location,
+                            vat.format_desc.element_count,
+                            vat.format_desc.element_format,
+                            true, // always normalized
+                            vat.offset,
+                        ),
+                        super::VertexAttribKind::Integer => gl.vertex_attrib_format_i32(
+                            vat.location,
+                            vat.format_desc.element_count,
+                            vat.format_desc.element_format,
+                            vat.offset,
+                        ),
+                    }
+
+                    //Note: there is apparently a bug on AMD 3500U:
+                    // this call is ignored if the current array is disabled.
+                    gl.vertex_attrib_binding(vat.location, vat.buffer_index);
+                } else {
+                    match vat.format_desc.attrib_kind {
+                        super::VertexAttribKind::Float => gl.vertex_attrib_pointer_f32(
+                            vat.location,
+                            vat.format_desc.element_count,
+                            vat.format_desc.element_format,
+                            true, // always normalized
+                            buffer_desc.stride as i32,
+                            vat.offset as i32,
+                        ),
+                        super::VertexAttribKind::Integer => gl.vertex_attrib_pointer_i32(
+                            vat.location,
+                            vat.format_desc.element_count,
+                            vat.format_desc.element_format,
+                            buffer_desc.stride as i32,
+                            vat.offset as i32,
+                        ),
+                    }
+                    gl.vertex_attrib_divisor(vat.location, buffer_desc.step as u32);
+                }
+            }
+            C::UnsetVertexAttribute(location) => {
+                gl.disable_vertex_attrib_array(location);
+            }
+            C::SetVertexBuffer {
+                index,
+                ref buffer,
+                ref buffer_desc,
+            } => {
+                gl.vertex_binding_divisor(index, buffer_desc.step as u32);
+                gl.bind_vertex_buffer(
+                    index,
+                    Some(buffer.raw),
+                    buffer.offset as i32,
+                    buffer_desc.stride as i32,
+                );
             }
             C::SetDepth(ref depth) => {
                 gl.depth_func(depth.function);

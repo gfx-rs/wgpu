@@ -70,7 +70,8 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     println!("\tDownlevel Properties:");
     let wgpu::DownlevelCapabilities {
         shader_model,
-        flags
+        limits: _,
+        flags,
     } = downlevel;
     println!("\t\tShader Model:                        {:?}", shader_model);
     for i in 0..(size_of::<wgpu::DownlevelFlags>() * 8) {

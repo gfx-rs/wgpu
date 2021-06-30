@@ -1,3 +1,61 @@
+/*!
+# OpenGL ES3 API (aka GLES3).
+
+Designed to work on Linux and Android, with context provided by EGL.
+
+## Texture views
+
+GLES3 doesn't really have separate texture view objects. We have to remember the
+original texture and the sub-range into it. Problem is, however, that there is
+no way to expose a subset of array layers or mip levels of a sampled texture.
+
+## Binding model
+
+Binding model is very different from WebGPU, especially with regards to samplers.
+GLES3 has sampler objects, but they aren't separately bindable to the shaders.
+Each sampled texture is exposed to the shader as a combined texture-sampler binding.
+
+When building the pipeline layout, we linearize binding entries based on the groups
+(uniform/storage buffers, uniform/storage textures), and record the mapping into
+`BindGroupLayoutInfo`.
+When a pipeline gets created, and we track all the texture-sampler associations
+from the static use in the shader.
+We only support at most one sampler used with each texture so far. The linear index
+of this sampler is stored per texture slot in `SamplerBindMap` array.
+
+The texture-sampler pairs get potentially invalidated in 2 places:
+  - when a new pipeline is set, we update the linear indices of associated samplers
+  - when a new bind group is set, we update both the textures and the samplers
+
+We expect that the changes to sampler states between any 2 pipelines of the same layout
+will be minimal, if any.
+
+## Vertex data
+
+Generally, vertex buffers are marked as dirty and lazily bound on draw.
+
+GLES3 doesn't support "base instance" semantics. However, it's easy to support,
+since we are forced to do late binding anyway. We just adjust the offsets
+into the vertex data.
+
+### Old path
+
+In GLES-3.0 and WebGL2, vertex buffer layout is provided
+together with the actual buffer binding.
+We invalidate the attributes on the vertex buffer change, and re-bind them.
+
+### New path
+
+In GLES-3.1 and higher, the vertex buffer layout can be declared separately
+from the vertex data itself. This mostly matches WebGPU, however there is a catch:
+`stride` needs to be specified with the data, not as a part of the layout.
+
+To address this, we invalidate the vertex buffers based on:
+  - whether or not `start_instance` is used
+  - stride has changed
+
+*/
+
 #[cfg(not(target_arch = "wasm32"))]
 mod egl;
 
@@ -60,6 +118,8 @@ bitflags::bitflags! {
         const SHADER_TEXTURE_SHADOW_LOD = 0x0002;
         /// Support memory barriers.
         const MEMORY_BARRIERS = 0x0004;
+        /// Vertex buffer layouts separate from the data.
+        const VERTEX_BUFFER_LAYOUT = 0x0008;
     }
 }
 
@@ -254,7 +314,7 @@ struct ImageBinding {
     format: u32,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 struct VertexBufferDesc {
     step: wgt::InputStepMode,
     stride: u32,
@@ -534,9 +594,15 @@ enum Command {
     SetDepthBias(wgt::DepthBiasState),
     ConfigureDepthStencil(crate::FormatAspect),
     SetVertexAttribute {
-        buffer: BufferBinding,
+        buffer: Option<glow::Buffer>,
         buffer_desc: VertexBufferDesc,
         attribute_desc: AttributeDesc,
+    },
+    UnsetVertexAttribute(u32),
+    SetVertexBuffer {
+        index: u32,
+        buffer: BufferBinding,
+        buffer_desc: VertexBufferDesc,
     },
     SetProgram(glow::Program),
     SetPrimitive(PrimitiveState),

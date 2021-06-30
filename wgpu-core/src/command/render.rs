@@ -1171,6 +1171,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .inputs
                             .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
                         let vertex_state = &mut state.vertex.inputs[slot as usize];
+                        //TODO: where are we checking that the offset is in bound?
                         vertex_state.total_size = match size {
                             Some(s) => s.get(),
                             None => buffer.size - offset,

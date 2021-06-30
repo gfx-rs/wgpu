@@ -216,6 +216,7 @@ impl<A: HalApi> Adapter<A> {
                 missing_flags,
                 DOWNLEVEL_WARNING_MESSAGE
             );
+            log::info!("{:#?}", caps.downlevel);
         }
 
         // Verify feature preconditions
@@ -257,7 +258,7 @@ impl<A: HalApi> Adapter<A> {
                 ref_count: self.life_guard.add_ref(),
             },
             caps.alignments.clone(),
-            caps.downlevel,
+            caps.downlevel.clone(),
             desc,
             trace_path,
         )
@@ -658,7 +659,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.downlevel)
+            .map(|adapter| adapter.raw.capabilities.downlevel.clone())
             .map_err(|_| InvalidAdapter)
     }
 

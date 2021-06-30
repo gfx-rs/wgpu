@@ -261,6 +261,12 @@ impl super::Adapter {
             extensions.contains("GL_EXT_texture_shadow_lod"),
         );
         private_caps.set(super::PrivateCapability::MEMORY_BARRIERS, ver >= (3, 1));
+        private_caps.set(
+            super::PrivateCapability::VERTEX_BUFFER_LAYOUT,
+            ver >= (3, 1),
+        );
+
+        let downlevel_limits = wgt::DownlevelLimits {};
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -276,6 +282,7 @@ impl super::Adapter {
                 limits,
                 downlevel: wgt::DownlevelCapabilities {
                     flags: downlevel_flags,
+                    limits: downlevel_limits,
                     shader_model: wgt::ShaderModel::Sm5,
                 },
                 alignments: crate::Alignments {

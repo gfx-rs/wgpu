@@ -2,13 +2,6 @@ use super::{conv, Command as C};
 use arrayvec::ArrayVec;
 use std::{mem, ops::Range};
 
-bitflags::bitflags! {
-    #[derive(Default)]
-    struct Dirty: u32 {
-        const VERTEX_BUFFERS = 0x0001;
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 struct TextureSlotDesc {
     tex_target: super::BindTarget,
@@ -32,7 +25,8 @@ pub(super) struct State {
     resolve_attachments: ArrayVec<[(u32, super::TextureView); crate::MAX_COLOR_TARGETS]>,
     invalidate_attachments: ArrayVec<[u32; crate::MAX_COLOR_TARGETS + 2]>,
     has_pass_label: bool,
-    dirty: Dirty,
+    instance_vbuf_mask: usize,
+    dirty_vbuf_mask: usize,
 }
 
 impl super::CommandBuffer {
@@ -75,21 +69,48 @@ impl super::CommandEncoder {
         }
     }
 
-    fn rebind_vertex_attributes(&mut self, first_instance: u32) {
-        for attribute in self.state.vertex_attributes.iter() {
-            let (buffer_desc, buffer) =
-                self.state.vertex_buffers[attribute.buffer_index as usize].clone();
-
-            let mut attribute_desc = attribute.clone();
-            if buffer_desc.step == wgt::InputStepMode::Instance {
-                attribute_desc.offset += buffer_desc.stride * first_instance;
+    fn rebind_vertex_data(&mut self, first_instance: u32) {
+        if self
+            .private_caps
+            .contains(super::PrivateCapability::VERTEX_BUFFER_LAYOUT)
+        {
+            for (index, &(ref vb_desc, ref vb)) in self.state.vertex_buffers.iter().enumerate() {
+                if self.state.dirty_vbuf_mask & (1 << index) == 0 {
+                    continue;
+                }
+                let instance_offset = match vb_desc.step {
+                    wgt::InputStepMode::Vertex => 0,
+                    wgt::InputStepMode::Instance => first_instance * vb_desc.stride,
+                };
+                self.cmd_buffer.commands.push(C::SetVertexBuffer {
+                    index: index as u32,
+                    buffer: super::BufferBinding {
+                        raw: vb.raw,
+                        offset: vb.offset + instance_offset as wgt::BufferAddress,
+                    },
+                    buffer_desc: vb_desc.clone(),
+                });
             }
+        } else {
+            for attribute in self.state.vertex_attributes.iter() {
+                if self.state.dirty_vbuf_mask & (1 << attribute.buffer_index) == 0 {
+                    continue;
+                }
+                let (buffer_desc, buffer) =
+                    self.state.vertex_buffers[attribute.buffer_index as usize].clone();
 
-            self.cmd_buffer.commands.push(C::SetVertexAttribute {
-                buffer_desc,
-                buffer,
-                attribute_desc,
-            });
+                let mut attribute_desc = attribute.clone();
+                attribute_desc.offset += buffer.offset as u32;
+                if buffer_desc.step == wgt::InputStepMode::Instance {
+                    attribute_desc.offset += buffer_desc.stride * first_instance;
+                }
+
+                self.cmd_buffer.commands.push(C::SetVertexAttribute {
+                    buffer: Some(buffer.raw),
+                    buffer_desc,
+                    attribute_desc,
+                });
+            }
         }
     }
 
@@ -111,11 +132,13 @@ impl super::CommandEncoder {
 
     fn prepare_draw(&mut self, first_instance: u32) {
         if first_instance != 0 {
-            self.rebind_vertex_attributes(first_instance);
-            self.state.dirty.set(Dirty::VERTEX_BUFFERS, true);
-        } else if self.state.dirty.contains(Dirty::VERTEX_BUFFERS) {
-            self.rebind_vertex_attributes(0);
-            self.state.dirty.set(Dirty::VERTEX_BUFFERS, false);
+            self.state.dirty_vbuf_mask = self.state.instance_vbuf_mask;
+        }
+        if self.state.dirty_vbuf_mask != 0 {
+            self.rebind_vertex_data(first_instance);
+            if first_instance == 0 {
+                self.state.dirty_vbuf_mask = 0;
+            }
         }
     }
 
@@ -488,7 +511,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.cmd_buffer.commands.push(C::PopDebugGroup);
             self.state.has_pass_label = false;
         }
-        self.state.dirty = Dirty::empty();
+        self.state.instance_vbuf_mask = 0;
+        self.state.dirty_vbuf_mask = 0;
         self.state.color_targets.clear();
         self.state.vertex_attributes.clear();
         self.state.primitive = super::PrimitiveState::default();
@@ -591,24 +615,55 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.topology = conv::map_primitive_topology(pipeline.primitive.topology);
-        self.state.dirty |= Dirty::VERTEX_BUFFERS;
 
-        self.set_pipeline_inner(&pipeline.inner);
-
-        // set vertex state
-        self.state.vertex_attributes.clear();
-        for vat in pipeline.vertex_attributes.iter() {
-            self.state.vertex_attributes.push(vat.clone());
+        for index in self.state.vertex_attributes.len()..pipeline.vertex_attributes.len() {
+            self.cmd_buffer
+                .commands
+                .push(C::UnsetVertexAttribute(index as u32));
         }
-        for (&mut (ref mut state_desc, _), pipe_desc) in self
+
+        if self
+            .private_caps
+            .contains(super::PrivateCapability::VERTEX_BUFFER_LAYOUT)
+        {
+            for vat in pipeline.vertex_attributes.iter() {
+                let vb = &pipeline.vertex_buffers[vat.buffer_index as usize];
+                // set the layout
+                self.cmd_buffer.commands.push(C::SetVertexAttribute {
+                    buffer: None,
+                    buffer_desc: vb.clone(),
+                    attribute_desc: vat.clone(),
+                });
+            }
+        } else {
+            self.state.dirty_vbuf_mask = 0;
+            // copy vertex attributes
+            for vat in pipeline.vertex_attributes.iter() {
+                //Note: we can invalidate more carefully here.
+                self.state.dirty_vbuf_mask |= 1 << vat.buffer_index;
+                self.state.vertex_attributes.push(vat.clone());
+            }
+        }
+
+        self.state.instance_vbuf_mask = 0;
+        // copy vertex state
+        for (index, (&mut (ref mut state_desc, _), pipe_desc)) in self
             .state
             .vertex_buffers
             .iter_mut()
             .zip(pipeline.vertex_buffers.iter())
+            .enumerate()
         {
-            state_desc.step = pipe_desc.step;
-            state_desc.stride = pipe_desc.stride;
+            if pipe_desc.step == wgt::InputStepMode::Instance {
+                self.state.instance_vbuf_mask |= 1 << index;
+            }
+            if state_desc != pipe_desc {
+                self.state.dirty_vbuf_mask |= 1 << index;
+                *state_desc = pipe_desc.clone();
+            }
         }
+
+        self.set_pipeline_inner(&pipeline.inner);
 
         // set primitive state
         let prim_state = conv::map_primitive_state(&pipeline.primitive);
@@ -703,8 +758,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         index: u32,
         binding: crate::BufferBinding<'a, super::Api>,
     ) {
-        self.state.dirty |= Dirty::VERTEX_BUFFERS;
-        let vb = &mut self.state.vertex_buffers[index as usize].1;
+        self.state.dirty_vbuf_mask |= 1 << index;
+        let (_, ref mut vb) = self.state.vertex_buffers[index as usize];
         vb.raw = binding.buffer.raw;
         vb.offset = binding.offset;
     }
@@ -854,7 +909,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.cmd_buffer.commands.push(C::PopDebugGroup);
             self.state.has_pass_label = false;
         }
-        self.state.dirty = Dirty::empty();
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {

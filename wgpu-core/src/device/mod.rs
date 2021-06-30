@@ -2518,7 +2518,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
 
-        Ok(device.downlevel)
+        Ok(device.downlevel.clone())
     }
 
     pub fn device_create_buffer<A: HalApi>(
@@ -3640,7 +3640,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 encoder,
                 dev_stored,
                 device.limits.clone(),
-                device.downlevel,
+                device.downlevel.clone(),
                 device.features,
                 #[cfg(feature = "trace")]
                 device.trace.is_some(),
