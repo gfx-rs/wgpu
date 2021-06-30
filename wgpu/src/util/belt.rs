@@ -1,5 +1,5 @@
 use crate::{
-    Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsage, BufferViewMut,
+    Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages, BufferViewMut,
     CommandEncoder, Device, MapMode,
 };
 use std::pin::Pin;
@@ -116,7 +116,7 @@ impl StagingBelt {
                 buffer: device.create_buffer(&BufferDescriptor {
                     label: Some("staging"),
                     size,
-                    usage: BufferUsage::MAP_WRITE | BufferUsage::COPY_SRC,
+                    usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
                     mapped_at_creation: true,
                 }),
                 size,

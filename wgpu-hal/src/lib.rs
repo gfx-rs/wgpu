@@ -201,7 +201,7 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn exit(self);
     /// Creates a new buffer.
     ///
-    /// The initial usage is `BufferUse::empty()`.
+    /// The initial usage is `BufferUses::empty()`.
     unsafe fn create_buffer(&self, desc: &BufferDescriptor) -> Result<A::Buffer, DeviceError>;
     unsafe fn destroy_buffer(&self, buffer: A::Buffer);
     //TODO: clarify if zero-sized mapping is allowed
@@ -220,7 +220,7 @@ pub trait Device<A: Api>: Send + Sync {
 
     /// Creates a new texture.
     ///
-    /// The initial usage for all subresources is `TextureUse::UNINITIALIZED`.
+    /// The initial usage for all subresources is `TextureUses::UNINITIALIZED`.
     unsafe fn create_texture(&self, desc: &TextureDescriptor) -> Result<A::Texture, DeviceError>;
     unsafe fn destroy_texture(&self, texture: A::Texture);
     unsafe fn create_texture_view(
@@ -345,17 +345,17 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     where
         T: Iterator<Item = BufferCopy>;
 
-    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
+    /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &A::Texture,
-        src_usage: TextureUse,
+        src_usage: TextureUses,
         dst: &A::Texture,
         regions: T,
     ) where
         T: Iterator<Item = TextureCopy>;
 
-    /// Note: `dst` current usage has to be `TextureUse::COPY_DST`.
+    /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     unsafe fn copy_buffer_to_texture<T>(&mut self, src: &A::Buffer, dst: &A::Texture, regions: T)
     where
         T: Iterator<Item = BufferTextureCopy>;
@@ -363,7 +363,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &A::Texture,
-        src_usage: TextureUse,
+        src_usage: TextureUses,
         dst: &A::Buffer,
         regions: T,
     ) where
@@ -570,8 +570,8 @@ bitflags!(
 );
 
 bitflags::bitflags! {
-    /// Similar to `wgt::BufferUsage` but for internal use.
-    pub struct BufferUse: u32 {
+    /// Similar to `wgt::BufferUsages` but for internal use.
+    pub struct BufferUses: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
         const COPY_SRC = 4;
@@ -596,8 +596,8 @@ bitflags::bitflags! {
 }
 
 bitflags::bitflags! {
-    /// Similar to `wgt::TextureUsage` but for internal use.
-    pub struct TextureUse: u32 {
+    /// Similar to `wgt::TextureUsages` but for internal use.
+    pub struct TextureUses: u32 {
         const COPY_SRC = 1;
         const COPY_DST = 2;
         const SAMPLED = 4;
@@ -675,8 +675,8 @@ pub struct SurfaceCapabilities {
 
     /// Supported texture usage flags.
     ///
-    /// Must have at least `TextureUse::COLOR_TARGET`
-    pub usage: TextureUse,
+    /// Must have at least `TextureUses::COLOR_TARGET`
+    pub usage: TextureUses,
 
     /// List of supported V-sync modes.
     ///
@@ -714,7 +714,7 @@ pub struct BufferMapping {
 pub struct BufferDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
-    pub usage: BufferUse,
+    pub usage: BufferUses,
     pub memory_flags: MemoryFlags,
 }
 
@@ -726,7 +726,7 @@ pub struct TextureDescriptor<'a> {
     pub sample_count: u32,
     pub dimension: wgt::TextureDimension,
     pub format: wgt::TextureFormat,
-    pub usage: TextureUse,
+    pub usage: TextureUses,
     pub memory_flags: MemoryFlags,
 }
 
@@ -742,7 +742,7 @@ pub struct TextureViewDescriptor<'a> {
     pub label: Label<'a>,
     pub format: wgt::TextureFormat,
     pub dimension: wgt::TextureViewDimension,
-    pub usage: TextureUse,
+    pub usage: TextureUses,
     pub range: wgt::ImageSubresourceRange,
 }
 
@@ -797,7 +797,7 @@ impl<A: Api> Clone for BufferBinding<'_, A> {
 #[derive(Debug)]
 pub struct TextureBinding<'a, A: Api> {
     pub view: &'a A::TextureView,
-    pub usage: TextureUse,
+    pub usage: TextureUses,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -966,7 +966,7 @@ pub struct SurfaceConfiguration {
     /// `SurfaceCapabilities::extents` range.
     pub extent: wgt::Extent3d,
     /// Allowed usage of surface textures,
-    pub usage: TextureUse,
+    pub usage: TextureUses,
 }
 
 #[derive(Debug, Clone)]
@@ -980,14 +980,14 @@ pub struct Rect<T> {
 #[derive(Debug, Clone)]
 pub struct BufferBarrier<'a, A: Api> {
     pub buffer: &'a A::Buffer,
-    pub usage: Range<BufferUse>,
+    pub usage: Range<BufferUses>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TextureBarrier<'a, A: Api> {
     pub texture: &'a A::Texture,
     pub range: wgt::ImageSubresourceRange,
-    pub usage: Range<TextureUse>,
+    pub usage: Range<TextureUses>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1023,11 +1023,11 @@ pub struct Attachment<'a, A: Api> {
     pub view: &'a A::TextureView,
     /// Contains either a single mutating usage as a target, or a valid combination
     /// of read-only usages.
-    pub usage: TextureUse,
+    pub usage: TextureUses,
     /// Defines the boundary usages for the attachment.
     /// It is expected to begin a render pass with `boundary_usage.start` usage,
     /// and will end it with `boundary_usage.end` usage.
-    pub boundary_usage: Range<TextureUse>,
+    pub boundary_usage: Range<TextureUses>,
 }
 
 // Rust gets confused about the impl requirements for `A`

@@ -112,14 +112,14 @@ impl framework::Example for Example {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsage::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_data = create_indices();
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&index_data),
-            usage: wgpu::BufferUsage::INDEX,
+            usage: wgpu::BufferUsages::INDEX,
         });
 
         let red_texture_data = create_texture_data(Color::RED);
@@ -131,7 +131,7 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+            usage: wgpu::TextureUsages::SAMPLED | wgpu::TextureUsages::COPY_DST,
             label: None,
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {

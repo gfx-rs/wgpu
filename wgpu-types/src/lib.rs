@@ -182,7 +182,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsage::COPY_SRC | TextureUsage::COPY_DST | TextureUsage::SAMPLED`] for BCn formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::SAMPLED`] for BCn formats.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -388,7 +388,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsage::COPY_SRC | TextureUsage::COPY_DST | TextureUsage::SAMPLED`] for ETC2 formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::SAMPLED`] for ETC2 formats.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -403,7 +403,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsage::COPY_SRC | TextureUsage::COPY_DST | TextureUsage::SAMPLED`] for ASTC formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::SAMPLED`] for ASTC formats.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -958,7 +958,7 @@ pub struct ColorTargetState {
     pub blend: Option<BlendState>,
     /// Mask which enables/disables writes to different color/alpha channel.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
-    pub write_mask: ColorWrite,
+    pub write_mask: ColorWrites,
 }
 
 impl From<TextureFormat> for ColorTargetState {
@@ -966,7 +966,7 @@ impl From<TextureFormat> for ColorTargetState {
         Self {
             format,
             blend: None,
-            write_mask: ColorWrite::ALL,
+            write_mask: ColorWrites::ALL,
         }
     }
 }
@@ -1152,7 +1152,7 @@ bitflags::bitflags! {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct TextureFormatFeatures {
     /// Valid bits for `TextureDescriptor::Usage` provided for format creation.
-    pub allowed_usages: TextureUsage,
+    pub allowed_usages: TextureUsages,
     /// Additional property flags for the format.
     pub flags: TextureFormatFeatureFlags,
     /// If `filterable` is false, the texture can't be sampled with a filtering sampler.
@@ -1585,10 +1585,10 @@ impl TextureFormat {
         let srgb = true;
 
         // Flags
-        let basic = TextureUsage::COPY_SRC | TextureUsage::COPY_DST | TextureUsage::SAMPLED;
-        let attachment = basic | TextureUsage::RENDER_ATTACHMENT;
-        let storage = basic | TextureUsage::STORAGE;
-        let all_flags = TextureUsage::all();
+        let basic = TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::SAMPLED;
+        let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
+        let storage = basic | TextureUsages::STORAGE;
+        let all_flags = TextureUsages::all();
 
         // See <https://gpuweb.github.io/gpuweb/#texture-format-caps> for reference
         let (required_features, sample_type, srgb, block_dimensions, block_size, allowed_usages) =
@@ -1724,7 +1724,7 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
-    pub struct ColorWrite: u32 {
+    pub struct ColorWrites: u32 {
         /// Enable red channel writes
         const RED = 1;
         /// Enable green channel writes
@@ -1740,7 +1740,7 @@ bitflags::bitflags! {
     }
 }
 
-impl Default for ColorWrite {
+impl Default for ColorWrites {
     fn default() -> Self {
         Self::ALL
     }
@@ -2106,7 +2106,7 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
-    pub struct BufferUsage: u32 {
+    pub struct BufferUsages: u32 {
         /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
         /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
@@ -2150,9 +2150,9 @@ pub struct BufferDescriptor<L> {
     pub size: BufferAddress,
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
-    pub usage: BufferUsage,
-    /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsage::MAP_READ`] or
-    /// [`BufferUsage::MAP_WRITE`], all buffers are allowed to be mapped at creation.
+    pub usage: BufferUsages,
+    /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsages::MAP_READ`] or
+    /// [`BufferUsages::MAP_WRITE`], all buffers are allowed to be mapped at creation.
     pub mapped_at_creation: bool,
 }
 
@@ -2223,7 +2223,7 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
-    pub struct TextureUsage: u32 {
+    pub struct TextureUsages: u32 {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
         const COPY_SRC = 1;
@@ -2246,7 +2246,7 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct SwapChainDescriptor {
     /// The usage of the swap chain. The only supported usage is `RENDER_ATTACHMENT`.
-    pub usage: TextureUsage,
+    pub usage: TextureUsages,
     /// The texture format of the swap chain. The only formats that are guaranteed are
     /// `Bgra8Unorm` and `Bgra8UnormSrgb`
     pub format: TextureFormat,
@@ -2474,7 +2474,7 @@ pub struct TextureDescriptor<L> {
     /// Format of the texture.
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
-    pub usage: TextureUsage,
+    pub usage: TextureUsages,
 }
 
 impl<L> TextureDescriptor<L> {
@@ -2507,7 +2507,7 @@ impl<L> TextureDescriptor<L> {
     ///   sample_count: 1,
     ///   dimension: wgpu::TextureDimension::D3,
     ///   format: wgpu::TextureFormat::Rgba8Sint,
-    ///   usage: wgpu::TextureUsage::empty(),
+    ///   usage: wgpu::TextureUsages::empty(),
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));

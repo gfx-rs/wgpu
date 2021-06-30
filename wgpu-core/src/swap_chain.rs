@@ -170,7 +170,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             label: Some("_Frame"),
             format: sc.desc.format,
             dimension: wgt::TextureViewDimension::D2,
-            usage: hal::TextureUse::COLOR_TARGET,
+            usage: hal::TextureUses::COLOR_TARGET,
             range: wgt::ImageSubresourceRange::default(),
         };
 
@@ -194,7 +194,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         range: wgt::ImageSubresourceRange::default(),
                     },
                     format_features: wgt::TextureFormatFeatures {
-                        allowed_usages: wgt::TextureUsage::RENDER_ATTACHMENT,
+                        allowed_usages: wgt::TextureUsages::RENDER_ATTACHMENT,
                         flags: wgt::TextureFormatFeatureFlags::empty(),
                         filterable: false,
                     },
@@ -204,7 +204,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         depth_or_array_layers: 1,
                     },
                     samples: 1,
-                    sampled_internal_use: hal::TextureUse::empty(),
+                    sampled_internal_use: hal::TextureUses::empty(),
                     selector: TextureSelector {
                         layers: 0..1,
                         levels: 0..1,

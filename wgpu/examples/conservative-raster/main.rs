@@ -34,7 +34,7 @@ impl Example {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: RENDER_TARGET_FORMAT,
-                usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::RENDER_ATTACHMENT,
+                usage: wgpu::TextureUsages::SAMPLED | wgpu::TextureUsages::RENDER_ATTACHMENT,
             })
             .create_view(&Default::default());
 

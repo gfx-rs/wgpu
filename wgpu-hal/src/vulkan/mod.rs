@@ -197,7 +197,7 @@ struct RenderPassKey {
 struct FramebufferAttachment {
     /// Can be NULL if the framebuffer is image-less
     raw: vk::ImageView,
-    texture_usage: crate::TextureUse,
+    texture_usage: crate::TextureUses,
     raw_image_flags: vk::ImageCreateFlags,
     view_format: wgt::TextureFormat,
 }
@@ -247,7 +247,7 @@ pub struct Buffer {
 pub struct Texture {
     raw: vk::Image,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    usage: crate::TextureUse,
+    usage: crate::TextureUses,
     dim: wgt::TextureDimension,
     aspects: crate::FormatAspects,
     format_info: wgt::TextureFormatInfo,

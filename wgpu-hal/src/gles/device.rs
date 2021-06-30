@@ -300,7 +300,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::Buffer, crate::DeviceError> {
         let gl = &self.shared.context;
 
-        let target = if desc.usage.contains(crate::BufferUse::INDEX) {
+        let target = if desc.usage.contains(crate::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
             glow::ARRAY_BUFFER
@@ -308,7 +308,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let is_host_visible = desc
             .usage
-            .intersects(crate::BufferUse::MAP_READ | crate::BufferUse::MAP_WRITE);
+            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE);
         let is_coherent = desc
             .memory_flags
             .contains(crate::MemoryFlags::PREFER_COHERENT);
@@ -320,10 +320,10 @@ impl crate::Device<super::Api> for super::Device {
                 map_flags |= glow::MAP_COHERENT_BIT;
             }
         }
-        if desc.usage.contains(crate::BufferUse::MAP_READ) {
+        if desc.usage.contains(crate::BufferUses::MAP_READ) {
             map_flags |= glow::MAP_READ_BIT;
         }
-        if desc.usage.contains(crate::BufferUse::MAP_WRITE) {
+        if desc.usage.contains(crate::BufferUses::MAP_WRITE) {
             map_flags |= glow::MAP_WRITE_BIT;
         }
 
@@ -336,7 +336,7 @@ impl crate::Device<super::Api> for super::Device {
         gl.buffer_storage(target, raw_size, None, map_flags);
         gl.bind_buffer(target, None);
 
-        if !is_coherent && desc.usage.contains(crate::BufferUse::MAP_WRITE) {
+        if !is_coherent && desc.usage.contains(crate::BufferUses::MAP_WRITE) {
             map_flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
         }
         //TODO: do we need `glow::MAP_UNSYNCHRONIZED_BIT`?
@@ -413,9 +413,9 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         let gl = &self.shared.context;
 
-        let render_usage = crate::TextureUse::COLOR_TARGET
-            | crate::TextureUse::DEPTH_STENCIL_WRITE
-            | crate::TextureUse::DEPTH_STENCIL_READ;
+        let render_usage = crate::TextureUses::COLOR_TARGET
+            | crate::TextureUses::DEPTH_STENCIL_WRITE
+            | crate::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
         let inner = if render_usage.contains(desc.usage)

@@ -124,13 +124,13 @@ impl framework::Example for Example {
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsage::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&index_data),
-            usage: wgpu::BufferUsage::INDEX,
+            usage: wgpu::BufferUsages::INDEX,
         });
 
         // Create pipeline layout
@@ -180,7 +180,7 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R8Uint,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+            usage: wgpu::TextureUsages::SAMPLED | wgpu::TextureUsages::COPY_DST,
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         queue.write_texture(
@@ -200,7 +200,7 @@ impl framework::Example for Example {
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(mx_ref),
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         // Create bind group
@@ -287,7 +287,7 @@ impl framework::Example for Example {
                             },
                             alpha: wgpu::BlendComponent::REPLACE,
                         }),
-                        write_mask: wgpu::ColorWrite::ALL,
+                        write_mask: wgpu::ColorWrites::ALL,
                     }],
                 }),
                 primitive: wgpu::PrimitiveState {

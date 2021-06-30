@@ -161,15 +161,15 @@ impl<A: HalApi> Adapter<A> {
 
         let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
         allowed_usages.set(
-            wgt::TextureUsage::SAMPLED,
+            wgt::TextureUsages::SAMPLED,
             caps.contains(hal::TextureFormatCapabilities::SAMPLED),
         );
         allowed_usages.set(
-            wgt::TextureUsage::STORAGE,
+            wgt::TextureUsages::STORAGE,
             caps.contains(hal::TextureFormatCapabilities::STORAGE),
         );
         allowed_usages.set(
-            wgt::TextureUsage::RENDER_ATTACHMENT,
+            wgt::TextureUsages::RENDER_ATTACHMENT,
             caps.intersects(
                 hal::TextureFormatCapabilities::COLOR_ATTACHMENT
                     | hal::TextureFormatCapabilities::DEPTH_STENCIL_ATTACHMENT,

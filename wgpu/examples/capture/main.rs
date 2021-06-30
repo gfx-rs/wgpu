@@ -54,7 +54,7 @@ async fn create_red_image_with_dimensions(
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: (buffer_dimensions.padded_bytes_per_row * buffer_dimensions.height) as u64,
-        usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
@@ -71,7 +71,7 @@ async fn create_red_image_with_dimensions(
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::COPY_SRC,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         label: None,
     });
 

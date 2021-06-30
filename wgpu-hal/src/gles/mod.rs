@@ -358,7 +358,7 @@ struct BlendDesc {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 struct ColorTargetDesc {
-    mask: wgt::ColorWrite,
+    mask: wgt::ColorWrites,
     blend: Option<BlendDesc>,
 }
 
@@ -565,8 +565,8 @@ enum Command {
     ClearColorI(u32, [i32; 4]),
     ClearDepth(f32),
     ClearStencil(u32),
-    BufferBarrier(glow::Buffer, crate::BufferUse),
-    TextureBarrier(crate::TextureUse),
+    BufferBarrier(glow::Buffer, crate::BufferUses),
+    TextureBarrier(crate::TextureUses),
     SetViewport {
         rect: crate::Rect<i32>,
         depth: Range<f32>,

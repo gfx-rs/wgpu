@@ -12,7 +12,7 @@ use wgt::{BufferAddress, BufferSize, Color};
 use std::num::NonZeroU32;
 use thiserror::Error;
 
-pub type BufferError = UseExtendError<hal::BufferUse>;
+pub type BufferError = UseExtendError<hal::BufferUses>;
 
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error, PartialEq)]

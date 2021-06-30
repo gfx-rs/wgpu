@@ -26,7 +26,7 @@ use arrayvec::ArrayVec;
 use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage,
+    BufferAddress, BufferSize, BufferUsages, Color, IndexFormat, InputStepMode, TextureUsages,
 };
 
 #[cfg(any(feature = "serial-pass", feature = "replay"))]
@@ -491,8 +491,8 @@ where
 struct RenderAttachment<'a> {
     texture_id: &'a Stored<id::TextureId>,
     selector: &'a TextureSelector,
-    previous_use: Option<hal::TextureUse>,
-    new_use: hal::TextureUse,
+    previous_use: Option<hal::TextureUses>,
+    new_use: hal::TextureUses,
 }
 
 type AttachmentDataVec<T> = ArrayVec<[T; hal::MAX_COLOR_TARGETS + hal::MAX_COLOR_TARGETS + 1]>;
@@ -584,9 +584,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .query(source_id.value, view.selector.clone());
             let new_use = if at.is_read_only(ds_aspects)? {
                 is_ds_read_only = true;
-                hal::TextureUse::DEPTH_STENCIL_READ | hal::TextureUse::SAMPLED
+                hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::SAMPLED
             } else {
-                hal::TextureUse::DEPTH_STENCIL_WRITE
+                hal::TextureUses::DEPTH_STENCIL_WRITE
             };
             render_attachments.push(RenderAttachment {
                 texture_id: source_id,
@@ -632,7 +632,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                         .trackers
                         .textures
                         .query(source_id.value, color_view.selector.clone());
-                    let new_use = hal::TextureUse::COLOR_TARGET;
+                    let new_use = hal::TextureUses::COLOR_TARGET;
                     render_attachments.push(RenderAttachment {
                         texture_id: source_id,
                         selector: &color_view.selector,
@@ -647,9 +647,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     assert!(used_swap_chain.is_none());
                     used_swap_chain = Some(source_id.clone());
 
-                    let end = hal::TextureUse::empty();
+                    let end = hal::TextureUses::empty();
                     let start = match at.channel.load_op {
-                        LoadOp::Clear => hal::TextureUse::UNINITIALIZED,
+                        LoadOp::Clear => hal::TextureUses::UNINITIALIZED,
                         LoadOp::Load => end,
                     };
                     start..end
@@ -682,7 +682,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                             .trackers
                             .textures
                             .query(source_id.value, resolve_view.selector.clone());
-                        let new_use = hal::TextureUse::COLOR_TARGET;
+                        let new_use = hal::TextureUses::COLOR_TARGET;
                         render_attachments.push(RenderAttachment {
                             texture_id: source_id,
                             selector: &resolve_view.selector,
@@ -696,13 +696,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     TextureViewSource::SwapChain(ref source_id) => {
                         assert!(used_swap_chain.is_none());
                         used_swap_chain = Some(source_id.clone());
-                        hal::TextureUse::UNINITIALIZED..hal::TextureUse::empty()
+                        hal::TextureUses::UNINITIALIZED..hal::TextureUses::empty()
                     }
                 };
 
                 hal_resolve_target = Some(hal::Attachment {
                     view: &resolve_view.raw,
-                    usage: hal::TextureUse::COLOR_TARGET,
+                    usage: hal::TextureUses::COLOR_TARGET,
                     boundary_usage,
                 });
             }
@@ -710,7 +710,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             colors.push(hal::ColorAttachment {
                 target: hal::Attachment {
                     view: &color_view.raw,
-                    usage: hal::TextureUse::COLOR_TARGET,
+                    usage: hal::TextureUses::COLOR_TARGET,
                     boundary_usage,
                 },
                 resolve_target: hal_resolve_target,
@@ -773,7 +773,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         for ra in self.render_attachments {
             let texture = &texture_guard[ra.texture_id.value];
-            check_texture_usage(texture.desc.usage, TextureUsage::RENDER_ATTACHMENT)?;
+            check_texture_usage(texture.desc.usage, TextureUsages::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             self.trackers
@@ -1108,10 +1108,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let buffer = info
                             .trackers
                             .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDEX)
+                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDEX)
                             .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
                             .map_pass_err(scope)?;
-                        check_buffer_usage(buffer.usage, BufferUsage::INDEX).map_pass_err(scope)?;
+                        check_buffer_usage(buffer.usage, BufferUsages::INDEX)
+                            .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
                             .as_ref()
@@ -1157,10 +1158,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let buffer = info
                             .trackers
                             .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::VERTEX)
+                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::VERTEX)
                             .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
                             .map_pass_err(scope)?;
-                        check_buffer_usage(buffer.usage, BufferUsage::VERTEX)
+                        check_buffer_usage(buffer.usage, BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
                             .raw
@@ -1412,10 +1413,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let indirect_buffer = info
                             .trackers
                             .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDIRECT)
+                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
                             .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
                             .map_pass_err(scope)?;
-                        check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)
+                        check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
@@ -1486,10 +1487,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let indirect_buffer = info
                             .trackers
                             .buffers
-                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDIRECT)
+                            .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
                             .map_err(|e| RenderCommandError::Buffer(buffer_id, e))
                             .map_pass_err(scope)?;
-                        check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)
+                        check_buffer_usage(indirect_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let indirect_raw = indirect_buffer
                             .raw
@@ -1504,11 +1505,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 &*buffer_guard,
                                 count_buffer_id,
                                 (),
-                                hal::BufferUse::INDIRECT,
+                                hal::BufferUses::INDIRECT,
                             )
                             .map_err(|e| RenderCommandError::Buffer(count_buffer_id, e))
                             .map_pass_err(scope)?;
-                        check_buffer_usage(count_buffer.usage, BufferUsage::INDIRECT)
+                        check_buffer_usage(count_buffer.usage, BufferUsages::INDIRECT)
                             .map_pass_err(scope)?;
                         let count_raw = count_buffer
                             .raw

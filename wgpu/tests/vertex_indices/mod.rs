@@ -32,9 +32,9 @@ fn pulling_common(
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 4 * expected.len() as u64,
-        usage: wgpu::BufferUsage::COPY_SRC
-            | wgpu::BufferUsage::STORAGE
-            | wgpu::BufferUsage::MAP_READ,
+        usage: wgpu::BufferUsages::COPY_SRC
+            | wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
 
@@ -74,7 +74,7 @@ fn pulling_common(
                 targets: &[wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
-                    write_mask: wgpu::ColorWrite::ALL,
+                    write_mask: wgpu::ColorWrites::ALL,
                 }],
             }),
         });
@@ -94,7 +94,7 @@ fn pulling_common(
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::COPY_DST,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
             },
             &[0, 0, 0, 1],
         )

@@ -120,7 +120,7 @@ impl framework::Example for Example {
                 targets: &[wgpu::ColorTargetState {
                     format: sc_desc.format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrite::default(),
+                    write_mask: wgpu::ColorWrites::default(),
                 }],
             }),
             primitive: wgpu::PrimitiveState {
@@ -150,7 +150,7 @@ impl framework::Example for Example {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsage::COPY_DST | wgpu::TextureUsage::SAMPLED,
+                usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::SAMPLED,
             });
             queue.write_texture(
                 texture.as_image_copy(),
@@ -192,12 +192,12 @@ impl framework::Example for Example {
         let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("global"),
             contents: bytemuck::bytes_of(&globals),
-            usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::UNIFORM,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
         });
         let local_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("local"),
             size: (MAX_BUNNIES as wgpu::BufferAddress) * wgpu::BIND_BUFFER_ALIGNMENT,
-            usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::UNIFORM,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
             mapped_at_creation: false,
         });
 

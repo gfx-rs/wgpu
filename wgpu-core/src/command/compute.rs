@@ -513,10 +513,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let indirect_buffer = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDIRECT)
+                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
                         .map_err(|_| ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
-                    check_buffer_usage(indirect_buffer.usage, wgt::BufferUsage::INDIRECT)
+                    check_buffer_usage(indirect_buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;

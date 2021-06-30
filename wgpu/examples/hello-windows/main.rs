@@ -31,7 +31,7 @@ impl ViewportDesc {
         let size = self.window.inner_size();
 
         let sc_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: adapter
                 .get_swap_chain_preferred_format(&self.surface)
                 .unwrap(),

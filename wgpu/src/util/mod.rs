@@ -85,7 +85,7 @@ impl DownloadBuffer {
 
         let download = device.create_buffer(&super::BufferDescriptor {
             size,
-            usage: super::BufferUsage::COPY_DST | super::BufferUsage::MAP_READ,
+            usage: super::BufferUsages::COPY_DST | super::BufferUsages::MAP_READ,
             mapped_at_creation: false,
             label: None,
         });

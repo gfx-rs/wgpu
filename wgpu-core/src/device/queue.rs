@@ -207,7 +207,7 @@ impl<A: hal::Api> super::Device<A> {
         let stage_desc = hal::BufferDescriptor {
             label: Some("_Staging"),
             size,
-            usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::COPY_SRC,
+            usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
         let buffer = unsafe { self.raw.create_buffer(&stage_desc)? };
@@ -242,7 +242,7 @@ impl<A: hal::Api> super::Device<A> {
             let transition = trackers.buffers.change_replace_tracked(
                 id::Valid(buffer_id),
                 (),
-                hal::BufferUse::COPY_DST,
+                hal::BufferUses::COPY_DST,
             );
             let buffer = buffer_guard.get(buffer_id).unwrap();
             let raw_buf = buffer
@@ -339,13 +339,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
             .buffers
-            .use_replace(&*buffer_guard, buffer_id, (), hal::BufferUse::COPY_DST)
+            .use_replace(&*buffer_guard, buffer_id, (), hal::BufferUses::COPY_DST)
             .map_err(TransferError::InvalidBuffer)?;
         let dst_raw = dst
             .raw
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
-        if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
+        if !dst.usage.contains(wgt::BufferUsages::COPY_DST) {
             return Err(TransferError::MissingCopyDstUsageFlag(Some(buffer_id), None).into());
         }
         dst.life_guard.use_at(device.active_submission_index + 1);
@@ -373,7 +373,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         });
         let barriers = iter::once(hal::BufferBarrier {
             buffer: &stage.buffer,
-            usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
+            usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
         .chain(transition.map(|pending| pending.into_hal(dst)));
         let encoder = device.pending_writes.activate();
@@ -482,7 +482,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*texture_guard,
                 destination.texture,
                 selector,
-                hal::TextureUse::COPY_DST,
+                hal::TextureUses::COPY_DST,
             )
             .unwrap();
         let dst_raw = dst
@@ -490,7 +490,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
-        if !dst.desc.usage.contains(wgt::TextureUsage::COPY_DST) {
+        if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
@@ -562,7 +562,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let barrier = hal::BufferBarrier {
             buffer: &stage.buffer,
-            usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
+            usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         };
         let encoder = device.pending_writes.activate();
         unsafe {

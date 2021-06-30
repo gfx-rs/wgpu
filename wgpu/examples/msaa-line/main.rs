@@ -104,7 +104,7 @@ impl Example {
             sample_count,
             dimension: wgpu::TextureDimension::D2,
             format: sc_desc.format,
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
         };
 
@@ -157,7 +157,7 @@ impl framework::Example for Example {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsage::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX,
         });
         let vertex_count = vertex_data.len() as u32;
 

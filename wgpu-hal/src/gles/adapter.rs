@@ -450,7 +450,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     height: 4096,
                     depth_or_array_layers: 1,
                 },
-                usage: crate::TextureUse::COLOR_TARGET,
+                usage: crate::TextureUses::COLOR_TARGET,
             })
         } else {
             None

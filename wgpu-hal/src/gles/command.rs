@@ -196,7 +196,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
-            if !bar.usage.start.contains(crate::BufferUse::STORAGE_STORE) {
+            if !bar.usage.start.contains(crate::BufferUses::STORAGE_STORE) {
                 continue;
             }
             self.cmd_buffer
@@ -216,10 +216,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             return;
         }
 
-        let mut combined_usage = crate::TextureUse::empty();
+        let mut combined_usage = crate::TextureUses::empty();
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
-            if !bar.usage.start.contains(crate::TextureUse::STORAGE_STORE) {
+            if !bar.usage.start.contains(crate::TextureUses::STORAGE_STORE) {
                 continue;
             }
             // unlike buffers, there is no need for a concrete texture
@@ -267,7 +267,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUse,
+        _src_usage: crate::TextureUses,
         dst: &super::Texture,
         regions: T,
     ) where
@@ -310,7 +310,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUse,
+        _src_usage: crate::TextureUses,
         dst: &super::Buffer,
         regions: T,
     ) where

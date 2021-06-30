@@ -351,11 +351,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .use_replace(&*buffer_guard, destination, (), hal::BufferUse::COPY_DST)
+            .use_replace(&*buffer_guard, destination, (), hal::BufferUses::COPY_DST)
             .map_err(QueryError::InvalidBuffer)?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
 
-        if !dst_buffer.usage.contains(wgt::BufferUsage::COPY_DST) {
+        if !dst_buffer.usage.contains(wgt::BufferUsages::COPY_DST) {
             return Err(ResolveError::MissingBufferUsage.into());
         }
 

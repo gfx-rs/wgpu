@@ -27,7 +27,7 @@ use parking_lot::Mutex;
 pub use wgt::{
     AdapterInfo, AddressMode, Backend, Backends, BindGroupLayoutEntry, BindingType, BlendComponent,
     BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType, BufferSize,
-    BufferUsage, Color, ColorTargetState, ColorWrite, CommandBufferDescriptor, CompareFunction,
+    BufferUsages, Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
     DepthBiasState, DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags,
     DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout, IndexFormat,
     InputStepMode, Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode,
@@ -35,7 +35,7 @@ pub use wgt::{
     SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages, StencilFaceState,
     StencilOperation, StencilState, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
     TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
-    TextureFormatFeatures, TextureSampleType, TextureUsage, TextureViewDimension, VertexAttribute,
+    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
     VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
     MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
     VERTEX_STRIDE_ALIGNMENT,
@@ -591,7 +591,7 @@ pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
     map_context: Mutex<MapContext>,
-    usage: BufferUsage,
+    usage: BufferUsages,
 }
 
 /// Slice into a [`Buffer`].
@@ -1990,7 +1990,7 @@ impl<'a> BufferSlice<'a> {
         BufferViewMut {
             slice: *self,
             data,
-            readable: self.buffer.usage.contains(BufferUsage::MAP_READ),
+            readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
         }
     }
 }

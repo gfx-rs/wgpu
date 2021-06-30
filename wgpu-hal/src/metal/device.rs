@@ -135,8 +135,8 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self) {}
 
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
-        let map_read = desc.usage.contains(crate::BufferUse::MAP_READ);
-        let map_write = desc.usage.contains(crate::BufferUse::MAP_WRITE);
+        let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
+        let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
         let mut options = mtl::MTLResourceOptions::empty();
         options |= if map_read || map_write {

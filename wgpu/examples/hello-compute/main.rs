@@ -80,12 +80,12 @@ async fn execute_gpu_inner(
 
     // Instantiates buffer without data.
     // `usage` of buffer specifies how it can be used:
-    //   `BufferUsage::MAP_READ` allows it to be read (outside the shader).
-    //   `BufferUsage::COPY_DST` allows it to be the destination of the copy.
+    //   `BufferUsages::MAP_READ` allows it to be read (outside the shader).
+    //   `BufferUsages::COPY_DST` allows it to be the destination of the copy.
     let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size,
-        usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
@@ -97,9 +97,9 @@ async fn execute_gpu_inner(
     let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Storage Buffer"),
         contents: bytemuck::cast_slice(numbers),
-        usage: wgpu::BufferUsage::STORAGE
-            | wgpu::BufferUsage::COPY_DST
-            | wgpu::BufferUsage::COPY_SRC,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
     });
 
     // A bind group defines how buffers are accessed by shaders.

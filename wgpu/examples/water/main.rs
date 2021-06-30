@@ -198,9 +198,9 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: sc_desc.format,
-            usage: wgpu::TextureUsage::SAMPLED
-                | wgpu::TextureUsage::COPY_DST
-                | wgpu::TextureUsage::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::SAMPLED
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
         });
 
         let draw_depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
@@ -210,9 +210,9 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsage::SAMPLED
-                | wgpu::TextureUsage::COPY_DST
-                | wgpu::TextureUsage::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::SAMPLED
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -338,13 +338,13 @@ impl framework::Example for Example {
         let water_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Water vertices"),
             contents: bytemuck::cast_slice(&water_vertices),
-            usage: wgpu::BufferUsage::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let terrain_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Terrain vertices"),
             contents: bytemuck::cast_slice(&terrain_vertices),
-            usage: wgpu::BufferUsage::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         // Create the bind group layout. This is what our uniforms will look like.
@@ -438,21 +438,21 @@ impl framework::Example for Example {
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Water Uniforms"),
             size: mem::size_of::<WaterUniforms>() as _,
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let terrain_normal_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Normal Terrain Uniforms"),
             size: mem::size_of::<TerrainUniforms>() as _,
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let terrain_flipped_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Flipped Terrain Uniforms"),
             size: mem::size_of::<TerrainUniforms>() as _,
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -537,7 +537,7 @@ impl framework::Example for Example {
                             operation: wgpu::BlendOperation::Max,
                         },
                     }),
-                    write_mask: wgpu::ColorWrite::ALL,
+                    write_mask: wgpu::ColorWrites::ALL,
                 }],
             }),
             // How the triangles will be rasterized. This is more important

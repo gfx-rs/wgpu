@@ -200,7 +200,7 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
         });
 
@@ -226,7 +226,7 @@ impl framework::Example for Example {
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Cubes Vertex Buffer"),
                 contents: bytemuck::cast_slice(&cube_vertex_data),
-                usage: wgpu::BufferUsage::VERTEX,
+                usage: wgpu::BufferUsages::VERTEX,
             },
         ));
 
@@ -234,7 +234,7 @@ impl framework::Example for Example {
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Cubes Index Buffer"),
                 contents: bytemuck::cast_slice(&cube_index_data),
-                usage: wgpu::BufferUsage::INDEX,
+                usage: wgpu::BufferUsages::INDEX,
             },
         ));
 
@@ -242,13 +242,13 @@ impl framework::Example for Example {
         let plane_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Plane Vertex Buffer"),
             contents: bytemuck::cast_slice(&plane_vertex_data),
-            usage: wgpu::BufferUsage::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let plane_index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Plane Index Buffer"),
             contents: bytemuck::cast_slice(&plane_index_data),
-            usage: wgpu::BufferUsage::INDEX,
+            usage: wgpu::BufferUsages::INDEX,
         });
 
         struct CubeDesc {
@@ -291,7 +291,7 @@ impl framework::Example for Example {
         let entity_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: num_entities * wgpu::BIND_BUFFER_ALIGNMENT,
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -377,7 +377,7 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::SHADOW_FORMAT,
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::SAMPLED,
             label: None,
         });
         let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -427,9 +427,9 @@ impl framework::Example for Example {
         let light_storage_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: light_uniform_size,
-            usage: wgpu::BufferUsage::STORAGE
-                | wgpu::BufferUsage::COPY_SRC
-                | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -471,7 +471,7 @@ impl framework::Example for Example {
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: uniform_size,
-                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
 
@@ -586,7 +586,7 @@ impl framework::Example for Example {
             let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Uniform Buffer"),
                 contents: bytemuck::bytes_of(&forward_uniforms),
-                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
             // Create bind group

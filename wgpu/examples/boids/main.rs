@@ -62,7 +62,7 @@ impl framework::Example for Example {
         let sim_param_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Simulation Parameter Buffer"),
             contents: bytemuck::cast_slice(&sim_param_data),
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         // create compute bind layout group and compute pipeline layout
@@ -165,7 +165,7 @@ impl framework::Example for Example {
         let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::bytes_of(&vertex_buffer_data),
-            usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
@@ -190,9 +190,9 @@ impl framework::Example for Example {
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some(&format!("Particle Buffer {}", i)),
                     contents: bytemuck::cast_slice(&initial_particle_data),
-                    usage: wgpu::BufferUsage::VERTEX
-                        | wgpu::BufferUsage::STORAGE
-                        | wgpu::BufferUsage::COPY_DST,
+                    usage: wgpu::BufferUsages::VERTEX
+                        | wgpu::BufferUsages::STORAGE
+                        | wgpu::BufferUsages::COPY_DST,
                 }),
             );
         }
