@@ -11,7 +11,7 @@ type PlaneStates = RangedStates<u32, Unit<TextureUse>>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextureSelector {
     //TODO: rename to `mip_levels` and `array_layers` for consistency
-    //pub aspects: hal::FormatAspect,
+    //pub aspects: hal::FormatAspects,
     pub levels: Range<u32>,
     pub layers: Range<u32>,
 }

@@ -61,7 +61,7 @@ pub fn map_buffer_usage(usage: wgt::BufferUsage) -> hal::BufferUse {
     u
 }
 
-pub fn map_texture_usage(usage: wgt::TextureUsage, aspect: hal::FormatAspect) -> hal::TextureUse {
+pub fn map_texture_usage(usage: wgt::TextureUsage, aspect: hal::FormatAspects) -> hal::TextureUse {
     let mut u = hal::TextureUse::empty();
     u.set(
         hal::TextureUse::COPY_SRC,
@@ -79,7 +79,7 @@ pub fn map_texture_usage(usage: wgt::TextureUsage, aspect: hal::FormatAspect) ->
         hal::TextureUse::STORAGE_LOAD | hal::TextureUse::STORAGE_STORE,
         usage.contains(wgt::TextureUsage::STORAGE),
     );
-    let is_color = aspect.contains(hal::FormatAspect::COLOR);
+    let is_color = aspect.contains(hal::FormatAspects::COLOR);
     u.set(
         hal::TextureUse::COLOR_TARGET,
         usage.contains(wgt::TextureUsage::RENDER_ATTACHMENT) && is_color,

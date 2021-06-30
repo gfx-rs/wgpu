@@ -80,9 +80,9 @@ impl<A: hal::Api> Example<A> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: if cfg!(debug_assertions) {
-                hal::InstanceFlag::all()
+                hal::InstanceFlags::all()
             } else {
-                hal::InstanceFlag::empty()
+                hal::InstanceFlags::empty()
             },
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
@@ -147,7 +147,7 @@ impl<A: hal::Api> Example<A> {
             entries: &[
                 wgt::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgt::ShaderStage::VERTEX,
+                    visibility: wgt::ShaderStages::VERTEX,
                     ty: wgt::BindingType::Buffer {
                         ty: wgt::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -157,7 +157,7 @@ impl<A: hal::Api> Example<A> {
                 },
                 wgt::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgt::ShaderStage::FRAGMENT,
+                    visibility: wgt::ShaderStages::FRAGMENT,
                     ty: wgt::BindingType::Texture {
                         sample_type: wgt::TextureSampleType::Float { filterable: true },
                         view_dimension: wgt::TextureViewDimension::D2,
@@ -167,7 +167,7 @@ impl<A: hal::Api> Example<A> {
                 },
                 wgt::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgt::ShaderStage::FRAGMENT,
+                    visibility: wgt::ShaderStages::FRAGMENT,
                     ty: wgt::BindingType::Sampler {
                         filtering: true,
                         comparison: false,
@@ -183,7 +183,7 @@ impl<A: hal::Api> Example<A> {
         let local_bgl_desc = hal::BindGroupLayoutDescriptor {
             entries: &[wgt::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgt::ShaderStage::VERTEX,
+                visibility: wgt::ShaderStages::VERTEX,
                 ty: wgt::BindingType::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
@@ -239,7 +239,7 @@ impl<A: hal::Api> Example<A> {
             label: Some("stage"),
             size: texture_data.len() as wgt::BufferAddress,
             usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::COPY_SRC,
-            memory_flags: hal::MemoryFlag::TRANSIENT | hal::MemoryFlag::PREFER_COHERENT,
+            memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
         };
         let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
@@ -267,7 +267,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureDimension::D2,
             format: wgt::TextureFormat::Rgba8UnormSrgb,
             usage: hal::TextureUse::COPY_DST | hal::TextureUse::SAMPLED,
-            memory_flags: hal::MemoryFlag::empty(),
+            memory_flags: hal::MemoryFlags::empty(),
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
@@ -301,7 +301,7 @@ impl<A: hal::Api> Example<A> {
                 texture_base: hal::TextureCopyBase {
                     origin: wgt::Origin3d::ZERO,
                     mip_level: 0,
-                    aspect: hal::FormatAspect::COLOR,
+                    aspect: hal::FormatAspects::COLOR,
                 },
                 size: texture_desc.size,
             };
@@ -342,7 +342,7 @@ impl<A: hal::Api> Example<A> {
             label: Some("global"),
             size: mem::size_of::<Globals>() as wgt::BufferAddress,
             usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::UNIFORM,
-            memory_flags: hal::MemoryFlag::PREFER_COHERENT,
+            memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
         let global_buffer = unsafe {
             let buffer = device.create_buffer(&global_buffer_desc).unwrap();
@@ -363,7 +363,7 @@ impl<A: hal::Api> Example<A> {
             label: Some("local"),
             size: (MAX_BUNNIES as wgt::BufferAddress) * wgt::BIND_BUFFER_ALIGNMENT,
             usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::UNIFORM,
-            memory_flags: hal::MemoryFlag::PREFER_COHERENT,
+            memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
         let local_buffer = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
 
@@ -614,7 +614,7 @@ impl<A: hal::Api> Example<A> {
                     boundary_usage: hal::TextureUse::UNINITIALIZED..hal::TextureUse::empty(),
                 },
                 resolve_target: None,
-                ops: hal::AttachmentOp::STORE,
+                ops: hal::AttachmentOps::STORE,
                 clear_value: wgt::Color {
                     r: 0.1,
                     g: 0.2,

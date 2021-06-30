@@ -158,7 +158,7 @@ pub enum CreateBindGroupError {
 #[derive(Clone, Debug, Error)]
 pub enum BindingZone {
     #[error("stage {0:?}")]
-    Stage(wgt::ShaderStage),
+    Stage(wgt::ShaderStages),
     #[error("whole pipeline")]
     Pipeline,
 }
@@ -191,29 +191,29 @@ pub(crate) struct PerStageBindingTypeCounter {
 }
 
 impl PerStageBindingTypeCounter {
-    pub(crate) fn add(&mut self, stage: wgt::ShaderStage, count: u32) {
-        if stage.contains(wgt::ShaderStage::VERTEX) {
+    pub(crate) fn add(&mut self, stage: wgt::ShaderStages, count: u32) {
+        if stage.contains(wgt::ShaderStages::VERTEX) {
             self.vertex += count;
         }
-        if stage.contains(wgt::ShaderStage::FRAGMENT) {
+        if stage.contains(wgt::ShaderStages::FRAGMENT) {
             self.fragment += count;
         }
-        if stage.contains(wgt::ShaderStage::COMPUTE) {
+        if stage.contains(wgt::ShaderStages::COMPUTE) {
             self.compute += count;
         }
     }
 
     pub(crate) fn max(&self) -> (BindingZone, u32) {
         let max_value = self.vertex.max(self.fragment.max(self.compute));
-        let mut stage = wgt::ShaderStage::NONE;
+        let mut stage = wgt::ShaderStages::NONE;
         if max_value == self.vertex {
-            stage |= wgt::ShaderStage::VERTEX
+            stage |= wgt::ShaderStages::VERTEX
         }
         if max_value == self.fragment {
-            stage |= wgt::ShaderStage::FRAGMENT
+            stage |= wgt::ShaderStages::FRAGMENT
         }
         if max_value == self.compute {
-            stage |= wgt::ShaderStage::COMPUTE
+            stage |= wgt::ShaderStages::COMPUTE
         }
         (BindingZone::Stage(stage), max_value)
     }
@@ -426,8 +426,8 @@ pub enum CreatePipelineLayoutError {
     #[error("push constant range (index {index}) provides for stage(s) {provided:?} but there exists another range that provides stage(s) {intersected:?}. Each stage may only be provided by one range")]
     MoreThanOnePushConstantRangePerStage {
         index: usize,
-        provided: wgt::ShaderStage,
-        intersected: wgt::ShaderStage,
+        provided: wgt::ShaderStages,
+        intersected: wgt::ShaderStages,
     },
     #[error("push constant at index {index} has range {}..{} which exceeds device push constant size limit 0..{max}", range.start, range.end)]
     PushConstantRangeTooLarge {
@@ -452,20 +452,20 @@ pub enum PushConstantUploadError {
     },
     #[error("provided push constant is for stage(s) {actual:?}, stage with a partial match found at index {idx} with stage(s) {matched:?}, however push constants must be complete matches")]
     PartialRangeMatch {
-        actual: wgt::ShaderStage,
+        actual: wgt::ShaderStages,
         idx: usize,
-        matched: wgt::ShaderStage,
+        matched: wgt::ShaderStages,
     },
     #[error("provided push constant is for stage(s) {actual:?}, but intersects a push constant range (at index {idx}) with stage(s) {missing:?}. Push constants must provide the stages for all ranges they intersect")]
     MissingStages {
-        actual: wgt::ShaderStage,
+        actual: wgt::ShaderStages,
         idx: usize,
-        missing: wgt::ShaderStage,
+        missing: wgt::ShaderStages,
     },
     #[error("provided push constant is for stage(s) {actual:?}, however the pipeline layout has no push constant range for the stage(s) {unmatched:?}")]
     UnmatchedStages {
-        actual: wgt::ShaderStage,
-        unmatched: wgt::ShaderStage,
+        actual: wgt::ShaderStages,
+        unmatched: wgt::ShaderStages,
     },
     #[error("provided push constant offset {0} does not respect `PUSH_CONSTANT_ALIGNMENT`")]
     Unaligned(u32),
@@ -504,7 +504,7 @@ impl<A: hal::Api> PipelineLayout<A> {
     /// Validate push constants match up with expected ranges.
     pub(crate) fn validate_push_constant_ranges(
         &self,
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         end_offset: u32,
     ) -> Result<(), PushConstantUploadError> {
@@ -535,7 +535,7 @@ impl<A: hal::Api> PipelineLayout<A> {
         //   when we check for 1, we can simply check that our entire updated range
         //   is within a push constant range. i.e. our range for a specific stage cannot
         //   intersect more than one push constant range.
-        let mut used_stages = wgt::ShaderStage::NONE;
+        let mut used_stages = wgt::ShaderStages::NONE;
         for (idx, range) in self.push_constant_ranges.iter().enumerate() {
             // contains not intersects due to 2
             if stages.contains(range.stages) {

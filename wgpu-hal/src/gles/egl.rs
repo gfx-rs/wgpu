@@ -226,7 +226,7 @@ struct Inner {
 
 impl Inner {
     fn create(
-        flags: crate::InstanceFlag,
+        flags: crate::InstanceFlags,
         egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
         display: egl::Display,
     ) -> Result<Self, crate::InstanceError> {
@@ -265,7 +265,7 @@ impl Inner {
             egl::CONTEXT_CLIENT_VERSION,
             3, // Request GLES 3.0 or higher
         ];
-        if flags.contains(crate::InstanceFlag::DEBUG) && !cfg!(target_os = "android") {
+        if flags.contains(crate::InstanceFlags::DEBUG) && !cfg!(target_os = "android") {
             log::info!("\tEGL context: +debug");
             //TODO: figure out why this is needed
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
@@ -328,7 +328,7 @@ impl Drop for Inner {
 
 pub struct Instance {
     wsi_library: Option<libloading::Library>,
-    flags: crate::InstanceFlag,
+    flags: crate::InstanceFlags,
     inner: Mutex<Inner>,
 }
 
@@ -395,7 +395,7 @@ impl crate::Instance<super::Api> for Instance {
             egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
         };
 
-        if desc.flags.contains(crate::InstanceFlag::VALIDATION)
+        if desc.flags.contains(crate::InstanceFlags::VALIDATION)
             && client_ext_str.contains(&"EGL_KHR_debug")
         {
             log::info!("Enabling EGL debug output");
@@ -606,14 +606,14 @@ impl crate::Instance<super::Api> for Instance {
                 .map_or(ptr::null(), |p| p as *const _)
         });
 
-        if self.flags.contains(crate::InstanceFlag::DEBUG) && gl.supports_debug() {
+        if self.flags.contains(crate::InstanceFlags::DEBUG) && gl.supports_debug() {
             log::info!(
                 "Max label length: {}",
                 gl.get_parameter_i32(glow::MAX_LABEL_LENGTH)
             );
         }
 
-        if self.flags.contains(crate::InstanceFlag::VALIDATION) && gl.supports_debug() {
+        if self.flags.contains(crate::InstanceFlags::VALIDATION) && gl.supports_debug() {
             log::info!("Enabling GLES debug output");
             gl.enable(glow::DEBUG_OUTPUT);
             gl.debug_message_callback(gl_debug_message_callback);

@@ -80,14 +80,14 @@ pub struct PassChannel<V> {
 }
 
 impl<V> PassChannel<V> {
-    fn hal_ops(&self) -> hal::AttachmentOp {
-        let mut ops = hal::AttachmentOp::empty();
+    fn hal_ops(&self) -> hal::AttachmentOps {
+        let mut ops = hal::AttachmentOps::empty();
         match self.load_op {
-            LoadOp::Load => ops |= hal::AttachmentOp::LOAD,
+            LoadOp::Load => ops |= hal::AttachmentOps::LOAD,
             LoadOp::Clear => (),
         };
         match self.store_op {
-            StoreOp::Store => ops |= hal::AttachmentOp::STORE,
+            StoreOp::Store => ops |= hal::AttachmentOps::STORE,
             StoreOp::Clear => (),
         };
         ops
@@ -123,14 +123,14 @@ pub struct RenderPassDepthStencilAttachment {
 }
 
 impl RenderPassDepthStencilAttachment {
-    fn is_read_only(&self, aspects: hal::FormatAspect) -> Result<bool, RenderPassErrorInner> {
-        if aspects.contains(hal::FormatAspect::DEPTH) && !self.depth.read_only {
+    fn is_read_only(&self, aspects: hal::FormatAspects) -> Result<bool, RenderPassErrorInner> {
+        if aspects.contains(hal::FormatAspects::DEPTH) && !self.depth.read_only {
             return Ok(false);
         }
         if (self.depth.load_op, self.depth.store_op) != (LoadOp::Load, StoreOp::Store) {
             return Err(RenderPassErrorInner::InvalidDepthOps);
         }
-        if aspects.contains(hal::FormatAspect::STENCIL) && !self.stencil.read_only {
+        if aspects.contains(hal::FormatAspects::STENCIL) && !self.stencil.read_only {
             return Ok(false);
         }
         if (self.stencil.load_op, self.stencil.store_op) != (LoadOp::Load, StoreOp::Store) {
@@ -564,7 +564,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             add_view(view, "depth")?;
 
             let ds_aspects = view.desc.aspects();
-            if ds_aspects.contains(hal::FormatAspect::COLOR) {
+            if ds_aspects.contains(hal::FormatAspects::COLOR) {
                 return Err(RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(
                     view.desc.format,
                 ));
@@ -616,7 +616,11 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
             add_view(color_view, "color")?;
 
-            if !color_view.desc.aspects().contains(hal::FormatAspect::COLOR) {
+            if !color_view
+                .desc
+                .aspects()
+                .contains(hal::FormatAspects::COLOR)
+            {
                 return Err(RenderPassErrorInner::InvalidColorAttachmentFormat(
                     color_view.desc.format,
                 ));
@@ -1889,7 +1893,7 @@ pub mod render_ffi {
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_push_constants(
         pass: &mut RenderPass,
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         size_bytes: u32,
         data: *const u8,

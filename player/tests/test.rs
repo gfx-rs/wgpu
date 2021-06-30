@@ -159,7 +159,7 @@ impl Test<'_> {
 
 #[derive(serde::Deserialize)]
 struct Corpus {
-    backends: wgt::BackendBit,
+    backends: wgt::Backends,
     tests: Vec<String>,
 }
 

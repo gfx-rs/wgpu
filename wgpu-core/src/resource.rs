@@ -251,8 +251,8 @@ pub(crate) struct HalTextureViewDescriptor {
 }
 
 impl HalTextureViewDescriptor {
-    pub fn aspects(&self) -> hal::FormatAspect {
-        hal::FormatAspect::from(self.format) & hal::FormatAspect::from(self.range.aspect)
+    pub fn aspects(&self) -> hal::FormatAspects {
+        hal::FormatAspects::from(self.format) & hal::FormatAspects::from(self.range.aspect)
     }
 }
 

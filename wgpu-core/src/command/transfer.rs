@@ -112,7 +112,7 @@ pub(crate) fn extract_texture_selector<A: hal::Api>(
 
     let format = texture.desc.format;
     let copy_aspect =
-        hal::FormatAspect::from(format) & hal::FormatAspect::from(copy_texture.aspect);
+        hal::FormatAspects::from(format) & hal::FormatAspects::from(copy_texture.aspect);
     if copy_aspect.is_empty() {
         return Err(TransferError::InvalidTextureAspect {
             format,

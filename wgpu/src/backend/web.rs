@@ -186,7 +186,7 @@ impl crate::RenderInner<Context> for RenderPass {
         self.0
             .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, mapped_size);
     }
-    fn set_push_constants(&mut self, _stages: wgt::ShaderStage, _offset: u32, _data: &[u8]) {
+    fn set_push_constants(&mut self, _stages: wgt::ShaderStages, _offset: u32, _data: &[u8]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
@@ -315,7 +315,7 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
         self.0
             .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, mapped_size);
     }
-    fn set_push_constants(&mut self, _stages: wgt::ShaderStage, _offset: u32, _data: &[u8]) {
+    fn set_push_constants(&mut self, _stages: wgt::ShaderStages, _offset: u32, _data: &[u8]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
@@ -924,7 +924,7 @@ impl crate::Context for Context {
         fn(JsFutureResult) -> Result<(), crate::BufferAsyncError>,
     >;
 
-    fn init(_backends: wgt::BackendBit) -> Self {
+    fn init(_backends: wgt::Backends) -> Self {
         Context(web_sys::window().unwrap().navigator().gpu())
     }
 
@@ -960,7 +960,7 @@ impl crate::Context for Context {
         //TODO: support this check, return `None` if the flag is not set.
         // It's not trivial, since we need the Future logic to have this check,
         // and currently the Future here has no room for extra parameter `backends`.
-        //assert!(backends.contains(wgt::BackendBit::BROWSER_WEBGPU));
+        //assert!(backends.contains(wgt::Backends::BROWSER_WEBGPU));
         let mut mapped_options = web_sys::GpuRequestAdapterOptions::new();
         let mapped_power_preference = match options.power_preference {
             wgt::PowerPreference::LowPower => web_sys::GpuPowerPreference::LowPower,

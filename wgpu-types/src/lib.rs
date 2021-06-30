@@ -92,7 +92,7 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
-    pub struct BackendBit: u32 {
+    pub struct Backends: u32 {
         /// Supported on Windows, Linux/Android, and macOS/iOS via Vulkan Portability (with the Vulkan feature enabled)
         const VULKAN = 1 << Backend::Vulkan as u32;
         /// Currently unsupported
@@ -120,7 +120,7 @@ bitflags::bitflags! {
     }
 }
 
-impl From<Backend> for BackendBit {
+impl From<Backend> for Backends {
     fn from(backend: Backend) -> Self {
         Self::from_bits(1 << backend as u32).unwrap()
     }
@@ -741,10 +741,10 @@ bitflags::bitflags! {
     ///
     /// These can be combined so something that is visible from both vertex and fragment shaders can be defined as:
     ///
-    /// `ShaderStage::VERTEX | ShaderStage::FRAGMENT`
+    /// `ShaderStages::VERTEX | ShaderStages::FRAGMENT`
     #[repr(transparent)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-    pub struct ShaderStage: u32 {
+    pub struct ShaderStages: u32 {
         /// Binding is not visible from any shader stage.
         const NONE = 0;
         /// Binding is visible from the vertex shader of a render pipeline.
@@ -2627,7 +2627,7 @@ impl Default for FilterMode {
 pub struct PushConstantRange {
     /// Stage push constant range is visible from. Each stage can only be served by at most one range.
     /// One range can serve multiple stages however.
-    pub stages: ShaderStage,
+    pub stages: ShaderStages,
     /// Range in push constant memory to use for the stage. Must be less than [`Limits::max_push_constant_size`].
     /// Start and end must be aligned to the 4s.
     pub range: Range<u32>,
@@ -2928,7 +2928,7 @@ pub struct BindGroupLayoutEntry {
     /// of index 1, would be described as `layout(set = 0, binding = 1) uniform` in shaders.
     pub binding: u32,
     /// Which shader stages can see this binding.
-    pub visibility: ShaderStage,
+    pub visibility: ShaderStages,
     /// The type of the binding
     pub ty: BindingType,
     /// If this value is Some, indicates this entry is an array. Array size must be 1 or greater.

@@ -25,20 +25,20 @@ use std::{
 use parking_lot::Mutex;
 
 pub use wgt::{
-    AdapterInfo, AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType,
-    BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType,
-    BufferSize, BufferUsage, Color, ColorTargetState, ColorWrite, CommandBufferDescriptor,
-    CompareFunction, DepthBiasState, DepthStencilState, DeviceType, DownlevelCapabilities,
-    DownlevelFlags, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
-    ImageDataLayout, IndexFormat, InputStepMode, Limits, MultisampleState, Origin3d,
-    PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, PushConstantRange, QueryType, SamplerBorderColor, ShaderLocation,
-    ShaderModel, ShaderStage, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsage, TextureViewDimension, VertexAttribute, VertexFormat, BIND_BUFFER_ALIGNMENT,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    AdapterInfo, AddressMode, Backend, Backends, BindGroupLayoutEntry, BindingType, BlendComponent,
+    BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType, BufferSize,
+    BufferUsage, Color, ColorTargetState, ColorWrite, CommandBufferDescriptor, CompareFunction,
+    DepthBiasState, DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout, IndexFormat,
+    InputStepMode, Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode,
+    PowerPreference, PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
+    SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages, StencilFaceState,
+    StencilOperation, StencilState, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
+    TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
+    TextureFormatFeatures, TextureSampleType, TextureUsage, TextureViewDimension, VertexAttribute,
+    VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
+    VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -88,7 +88,7 @@ trait RenderInner<Ctx: Context> {
         offset: BufferAddress,
         size: Option<BufferSize>,
     );
-    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]);
+    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]);
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
     fn draw_indirect(&mut self, indirect_buffer: &Ctx::BufferId, indirect_offset: BufferAddress);
@@ -183,7 +183,7 @@ trait Context: Debug + Send + Sized + Sync {
         + Send;
     type MapAsyncFuture: Future<Output = Result<(), BufferAsyncError>> + Send;
 
-    fn init(backends: BackendBit) -> Self;
+    fn init(backends: Backends) -> Self;
     fn instance_create_surface(
         &self,
         handle: &impl raw_window_handle::HasRawWindowHandle,
@@ -1380,21 +1380,21 @@ impl Instance {
     ///
     /// # Arguments
     ///
-    /// - `backends` - Controls from which [backends][BackendBit] wgpu will choose
+    /// - `backends` - Controls from which [backends][Backends] wgpu will choose
     ///   during instantiation.
-    pub fn new(backends: BackendBit) -> Self {
+    pub fn new(backends: Backends) -> Self {
         Instance {
             context: Arc::new(C::init(backends)),
         }
     }
 
-    /// Retrieves all available [`Adapter`]s that match the given [`BackendBit`].
+    /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn enumerate_adapters(&self, backends: BackendBit) -> impl Iterator<Item = Adapter> {
+    pub fn enumerate_adapters(&self, backends: Backends) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
             .enumerate_adapters(backends)
@@ -2635,7 +2635,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
+    pub fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
         self.id.set_push_constants(stages, offset, data);
     }
 }
@@ -2942,7 +2942,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
+    pub fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
         self.id.set_push_constants(stages, offset, data);
     }
 }

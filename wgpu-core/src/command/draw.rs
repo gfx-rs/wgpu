@@ -149,7 +149,7 @@ pub enum RenderCommand {
     },
     SetScissor(Rect<u32>),
     SetPushConstant {
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         size_bytes: u32,
         /// None means there is no data and the data should be an array of zeros.

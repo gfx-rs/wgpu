@@ -117,7 +117,7 @@ pub trait RenderEncoder<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]);
+    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]);
 }
 
 impl<'a> RenderEncoder<'a> for RenderPass<'a> {
@@ -166,7 +166,7 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
     }
 
     #[inline(always)]
-    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
+    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
         Self::set_push_constants(self, stages, offset, data);
     }
 }
@@ -217,7 +217,7 @@ impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
     }
 
     #[inline(always)]
-    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
+    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
         Self::set_push_constants(self, stages, offset, data);
     }
 }

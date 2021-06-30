@@ -78,7 +78,7 @@ pub enum ImplicitLayoutError {
     #[error("missing IDs for deriving {0} bind groups")]
     MissingIds(ImplicitBindGroupCount),
     #[error("unable to reflect the shader {0:?} interface")]
-    ReflectionError(wgt::ShaderStage),
+    ReflectionError(wgt::ShaderStages),
     #[error(transparent)]
     BindGroup(#[from] CreateBindGroupLayoutError),
     #[error(transparent)]
@@ -259,13 +259,13 @@ pub enum CreateRenderPipelineError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("error matching {stage:?} shader requirements against the pipeline")]
     Stage {
-        stage: wgt::ShaderStage,
+        stage: wgt::ShaderStages,
         #[source]
         error: validation::StageError,
     },
     #[error("Internal error in {stage:?} shader: {error}")]
     Internal {
-        stage: wgt::ShaderStage,
+        stage: wgt::ShaderStages,
         error: String,
     },
 }

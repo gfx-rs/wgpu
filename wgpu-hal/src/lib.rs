@@ -105,7 +105,7 @@ pub enum ShaderError {
 #[derive(Clone, Debug, PartialEq, Error)]
 pub enum PipelineError {
     #[error("linkage failed for stage {0:?}: {1}")]
-    Linkage(wgt::ShaderStage, String),
+    Linkage(wgt::ShaderStages, String),
     #[error("entry point for stage {0:?} is invalid")]
     EntryPoint(naga::ShaderStage),
     #[error(transparent)]
@@ -188,7 +188,7 @@ pub trait Adapter<A: Api>: Send + Sync {
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
-    ) -> TextureFormatCapability;
+    ) -> TextureFormatCapabilities;
 
     /// Returns the capabilities of working with a specified surface.
     ///
@@ -384,7 +384,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     unsafe fn set_push_constants(
         &mut self,
         layout: &A::PipelineLayout,
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         data: &[u32],
     );
@@ -485,7 +485,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
 
 bitflags!(
     /// Instance initialization flags.
-    pub struct InstanceFlag: u32 {
+    pub struct InstanceFlags: u32 {
         /// Generate debug information in shaders and objects.
         const DEBUG = 0x1;
         /// Enable validation, if possible.
@@ -495,7 +495,7 @@ bitflags!(
 
 bitflags!(
     /// Texture format capability flags.
-    pub struct TextureFormatCapability: u32 {
+    pub struct TextureFormatCapabilities: u32 {
         /// Format can be sampled.
         const SAMPLED = 0x1;
         /// Format can be sampled with a linear sampler.
@@ -526,14 +526,14 @@ bitflags!(
 
 bitflags!(
     /// Texture format capability flags.
-    pub struct FormatAspect: u8 {
+    pub struct FormatAspects: u8 {
         const COLOR = 1;
         const DEPTH = 2;
         const STENCIL = 4;
     }
 );
 
-impl From<wgt::TextureAspect> for FormatAspect {
+impl From<wgt::TextureAspect> for FormatAspects {
     fn from(aspect: wgt::TextureAspect) -> Self {
         match aspect {
             wgt::TextureAspect::All => Self::all(),
@@ -543,7 +543,7 @@ impl From<wgt::TextureAspect> for FormatAspect {
     }
 }
 
-impl From<wgt::TextureFormat> for FormatAspect {
+impl From<wgt::TextureFormat> for FormatAspects {
     fn from(format: wgt::TextureFormat) -> Self {
         match format {
             wgt::TextureFormat::Depth32Float | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
@@ -554,7 +554,7 @@ impl From<wgt::TextureFormat> for FormatAspect {
 }
 
 bitflags!(
-    pub struct MemoryFlag: u32 {
+    pub struct MemoryFlags: u32 {
         const TRANSIENT = 1;
         const PREFER_COHERENT = 2;
     }
@@ -563,7 +563,7 @@ bitflags!(
 //TODO: it's not intuitive for the backends to consider `LOAD` being optional.
 
 bitflags!(
-    pub struct AttachmentOp: u8 {
+    pub struct AttachmentOps: u8 {
         const LOAD = 1;
         const STORE = 2;
     }
@@ -621,7 +621,7 @@ bitflags::bitflags! {
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
-    pub flags: InstanceFlag,
+    pub flags: InstanceFlags,
 }
 
 #[derive(Clone, Debug)]
@@ -715,7 +715,7 @@ pub struct BufferDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
     pub usage: BufferUse,
-    pub memory_flags: MemoryFlag,
+    pub memory_flags: MemoryFlags,
 }
 
 #[derive(Clone, Debug)]
@@ -727,7 +727,7 @@ pub struct TextureDescriptor<'a> {
     pub dimension: wgt::TextureDimension,
     pub format: wgt::TextureFormat,
     pub usage: TextureUse,
-    pub memory_flags: MemoryFlag,
+    pub memory_flags: MemoryFlags,
 }
 
 /// TextureView descriptor.
@@ -1001,7 +1001,7 @@ pub struct BufferCopy {
 pub struct TextureCopyBase {
     pub origin: wgt::Origin3d,
     pub mip_level: u32,
-    pub aspect: FormatAspect,
+    pub aspect: FormatAspects,
 }
 
 #[derive(Clone, Debug)]
@@ -1045,7 +1045,7 @@ impl<A: Api> Clone for Attachment<'_, A> {
 pub struct ColorAttachment<'a, A: Api> {
     pub target: Attachment<'a, A>,
     pub resolve_target: Option<Attachment<'a, A>>,
-    pub ops: AttachmentOp,
+    pub ops: AttachmentOps,
     pub clear_value: wgt::Color,
 }
 
@@ -1064,8 +1064,8 @@ impl<A: Api> Clone for ColorAttachment<'_, A> {
 #[derive(Clone, Debug)]
 pub struct DepthStencilAttachment<'a, A: Api> {
     pub target: Attachment<'a, A>,
-    pub depth_ops: AttachmentOp,
-    pub stencil_ops: AttachmentOp,
+    pub depth_ops: AttachmentOps,
+    pub stencil_ops: AttachmentOps,
     pub clear_value: (f32, u32),
 }
 

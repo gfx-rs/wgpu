@@ -864,15 +864,15 @@ impl Interface {
         given_layouts: Option<&[&BindEntryMap]>,
         derived_layouts: &mut [BindEntryMap],
         entry_point_name: &str,
-        stage_bit: wgt::ShaderStage,
+        stage_bit: wgt::ShaderStages,
         inputs: StageIo,
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
         let shader_stage = match stage_bit {
-            wgt::ShaderStage::VERTEX => naga::ShaderStage::Vertex,
-            wgt::ShaderStage::FRAGMENT => naga::ShaderStage::Fragment,
-            wgt::ShaderStage::COMPUTE => naga::ShaderStage::Compute,
+            wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
+            wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
+            wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
             _ => unreachable!(),
         };
         let pair = (shader_stage, entry_point_name.to_string());

@@ -499,8 +499,8 @@ impl<A: HalApi> Device<A> {
             usage |= hal::BufferUse::COPY_DST;
         }
 
-        let mut memory_flags = hal::MemoryFlag::empty();
-        memory_flags.set(hal::MemoryFlag::TRANSIENT, transient);
+        let mut memory_flags = hal::MemoryFlags::empty();
+        memory_flags.set(hal::MemoryFlags::TRANSIENT, transient);
 
         let hal_desc = hal::BufferDescriptor {
             label: desc.label.borrow_option(),
@@ -583,7 +583,7 @@ impl<A: HalApi> Device<A> {
             dimension: desc.dimension,
             format: desc.format,
             usage: hal_usage,
-            memory_flags: hal::MemoryFlag::empty(),
+            memory_flags: hal::MemoryFlags::empty(),
         };
         let raw = unsafe {
             self.raw
@@ -683,8 +683,8 @@ impl<A: HalApi> Device<A> {
             _ => {}
         }
 
-        let full_aspect = hal::FormatAspect::from(texture.desc.format);
-        let select_aspect = hal::FormatAspect::from(desc.range.aspect);
+        let full_aspect = hal::FormatAspects::from(texture.desc.format);
+        let select_aspect = hal::FormatAspects::from(desc.range.aspect);
         if (full_aspect & select_aspect).is_empty() {
             return Err(resource::CreateTextureViewError::InvalidAspect {
                 texture_format: texture.desc.format,
@@ -1037,10 +1037,10 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
-            if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::VERTEX) {
+            if is_writable_storage && entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
             }
-            if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::FRAGMENT) {
+            if is_writable_storage && entry.visibility.contains(wgt::ShaderStages::FRAGMENT) {
                 self.require_downlevel_flags(wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE)
                     .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
                     .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
@@ -1483,8 +1483,8 @@ impl<A: HalApi> Device<A> {
         expected: &'static str,
     ) -> Result<(wgt::TextureUsage, hal::TextureUse), binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
-        if hal::FormatAspect::from(view.desc.format)
-            .contains(hal::FormatAspect::DEPTH | hal::FormatAspect::STENCIL)
+        if hal::FormatAspects::from(view.desc.format)
+            .contains(hal::FormatAspects::DEPTH | hal::FormatAspects::STENCIL)
         {
             return Err(Error::DepthStencilAspect);
         }
@@ -1598,7 +1598,7 @@ impl<A: HalApi> Device<A> {
             self.require_features(wgt::Features::PUSH_CONSTANTS)?;
         }
 
-        let mut used_stages = wgt::ShaderStage::empty();
+        let mut used_stages = wgt::ShaderStages::empty();
         for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
             if pc.stages.intersects(used_stages) {
                 return Err(Error::MoreThanOnePushConstantRangePerStage {
@@ -1764,7 +1764,7 @@ impl<A: HalApi> Device<A> {
             .map_err(|_| validation::StageError::InvalidModule)?;
 
         {
-            let flag = wgt::ShaderStage::COMPUTE;
+            let flag = wgt::ShaderStages::COMPUTE;
             let provided_layouts = match desc.layout {
                 Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
                     pipeline_layout_guard
@@ -1885,7 +1885,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let mut io = validation::StageIo::default();
-        let mut validated_stages = wgt::ShaderStage::empty();
+        let mut validated_stages = wgt::ShaderStages::empty();
 
         let mut vertex_strides = Vec::with_capacity(desc.vertex.buffers.len());
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
@@ -1995,7 +1995,7 @@ impl<A: HalApi> Device<A> {
                 if cs.blend.is_some() && !format_features.filterable {
                     break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                 }
-                if !hal::FormatAspect::from(cs.format).contains(hal::FormatAspect::COLOR) {
+                if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
                     break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                 }
 
@@ -2017,11 +2017,11 @@ impl<A: HalApi> Device<A> {
                         ds.format,
                     ));
                 }
-                let aspect = hal::FormatAspect::from(ds.format);
-                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspect::DEPTH) {
+                let aspect = hal::FormatAspects::from(ds.format);
+                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspects::DEPTH) {
                     break Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
                 }
-                if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspect::STENCIL) {
+                if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspects::STENCIL) {
                     break Some(pipeline::DepthStencilStateError::FormatNotStencil(
                         ds.format,
                     ));
@@ -2051,7 +2051,7 @@ impl<A: HalApi> Device<A> {
 
         let vertex_stage = {
             let stage = &desc.vertex.stage;
-            let flag = wgt::ShaderStage::VERTEX;
+            let flag = wgt::ShaderStages::VERTEX;
 
             let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
                 pipeline::CreateRenderPipelineError::Stage {
@@ -2097,7 +2097,7 @@ impl<A: HalApi> Device<A> {
 
         let fragment_stage = match desc.fragment {
             Some(ref fragment) => {
-                let flag = wgt::ShaderStage::FRAGMENT;
+                let flag = wgt::ShaderStages::FRAGMENT;
 
                 let shader_module =
                     shader_module_guard
@@ -2117,7 +2117,7 @@ impl<A: HalApi> Device<A> {
                     None => None,
                 };
 
-                if validated_stages == wgt::ShaderStage::VERTEX {
+                if validated_stages == wgt::ShaderStages::VERTEX {
                     if let Some(ref interface) = shader_module.interface {
                         io = interface
                             .check_stage(
@@ -2143,7 +2143,7 @@ impl<A: HalApi> Device<A> {
             None => None,
         };
 
-        if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
+        if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, state) in color_targets.iter().enumerate() {
                 match io.get(&(i as wgt::ShaderLocation)) {
                     Some(ref output) => {
@@ -2171,8 +2171,8 @@ impl<A: HalApi> Device<A> {
             }
         }
         let last_stage = match desc.fragment {
-            Some(_) => wgt::ShaderStage::FRAGMENT,
-            None => wgt::ShaderStage::VERTEX,
+            Some(_) => wgt::ShaderStages::FRAGMENT,
+            None => wgt::ShaderStages::VERTEX,
         };
         if desc.layout.is_none() && !validated_stages.contains(last_stage) {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
@@ -4221,7 +4221,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     height: desc.height,
                     depth_or_array_layers: 1,
                 },
-                usage: conv::map_texture_usage(desc.usage, hal::FormatAspect::COLOR),
+                usage: conv::map_texture_usage(desc.usage, hal::FormatAspects::COLOR),
             };
 
             if let Err(error) = validate_swap_chain_descriptor(&mut config, &caps) {

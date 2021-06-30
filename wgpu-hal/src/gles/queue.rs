@@ -760,12 +760,12 @@ impl super::Queue {
                 }
             }
             C::ConfigureDepthStencil(aspects) => {
-                if aspects.contains(crate::FormatAspect::DEPTH) {
+                if aspects.contains(crate::FormatAspects::DEPTH) {
                     gl.enable(glow::DEPTH_TEST);
                 } else {
                     gl.disable(glow::DEPTH_TEST);
                 }
-                if aspects.contains(crate::FormatAspect::STENCIL) {
+                if aspects.contains(crate::FormatAspects::STENCIL) {
                     gl.enable(glow::STENCIL_TEST);
                 } else {
                     gl.disable(glow::STENCIL_TEST);

@@ -1221,7 +1221,7 @@ pub mod bundle_ffi {
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_set_push_constants(
         pass: &mut RenderBundleEncoder,
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         size_bytes: u32,
         data: *const u8,

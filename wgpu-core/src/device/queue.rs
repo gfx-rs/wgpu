@@ -208,7 +208,7 @@ impl<A: hal::Api> super::Device<A> {
             label: Some("_Staging"),
             size,
             usage: hal::BufferUse::MAP_WRITE | hal::BufferUse::COPY_SRC,
-            memory_flags: hal::MemoryFlag::TRANSIENT,
+            memory_flags: hal::MemoryFlags::TRANSIENT,
         };
         let buffer = unsafe { self.raw.create_buffer(&stage_desc)? };
         Ok(StagingData { buffer })

@@ -17,7 +17,6 @@ use crate::{
 
 use hal::CommandEncoder as _;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
 use std::{fmt, mem, str};
 
@@ -46,7 +45,7 @@ pub enum ComputeCommand {
     Dispatch([u32; 3]),
     DispatchIndirect {
         buffer_id: id::BufferId,
-        offset: BufferAddress,
+        offset: wgt::BufferAddress,
     },
     PushDebugGroup {
         color: u32,
@@ -430,7 +429,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 |clear_offset, clear_data| unsafe {
                                     raw.set_push_constants(
                                         &pipeline_layout.raw,
-                                        wgt::ShaderStage::COMPUTE,
+                                        wgt::ShaderStages::COMPUTE,
                                         clear_offset,
                                         clear_data,
                                     );
@@ -464,7 +463,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     pipeline_layout
                         .validate_push_constant_ranges(
-                            ShaderStage::COMPUTE,
+                            wgt::ShaderStages::COMPUTE,
                             offset,
                             end_offset_bytes,
                         )
@@ -473,7 +472,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unsafe {
                         raw.set_push_constants(
                             &pipeline_layout.raw,
-                            wgt::ShaderStage::COMPUTE,
+                            wgt::ShaderStages::COMPUTE,
                             offset,
                             data_slice,
                         );
@@ -517,7 +516,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDIRECT)
                         .map_err(|_| ComputePassErrorInner::InvalidIndirectBuffer(buffer_id))
                         .map_pass_err(scope)?;
-                    check_buffer_usage(indirect_buffer.usage, BufferUsage::INDIRECT)
+                    check_buffer_usage(indirect_buffer.usage, wgt::BufferUsage::INDIRECT)
                         .map_pass_err(scope)?;
 
                     let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;

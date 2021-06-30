@@ -181,8 +181,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
         // Check if subresource aspects are valid.
-        let requested_aspects = hal::FormatAspect::from(subresource_range.aspect);
-        let clear_aspects = hal::FormatAspect::from(dst_texture.desc.format) & requested_aspects;
+        let requested_aspects = hal::FormatAspects::from(subresource_range.aspect);
+        let clear_aspects = hal::FormatAspects::from(dst_texture.desc.format) & requested_aspects;
         if clear_aspects.is_empty() {
             return Err(ClearError::MissingTextureAspect {
                 texture_format: dst_texture.desc.format,

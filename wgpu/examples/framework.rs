@@ -110,7 +110,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let backend = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::BackendBit::PRIMARY);
+    let backend = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
 
     let instance = wgpu::Instance::new(backend);
     let (size, surface) = unsafe {

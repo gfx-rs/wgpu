@@ -113,7 +113,7 @@ impl super::PrivateCapabilities {
 impl crate::Attachment<'_, super::Api> {
     pub(super) fn make_attachment_key(
         &self,
-        ops: crate::AttachmentOp,
+        ops: crate::AttachmentOps,
         caps: &super::PrivateCapabilities,
     ) -> super::AttachmentKey {
         let aspects = self.view.aspects();
@@ -155,10 +155,10 @@ impl crate::ColorAttachment<'_, super::Api> {
 
 pub fn derive_image_layout(
     usage: crate::TextureUse,
-    aspects: crate::FormatAspect,
+    aspects: crate::FormatAspects,
 ) -> vk::ImageLayout {
     //Note: depth textures are always sampled with RODS layout
-    let is_color = aspects.contains(crate::FormatAspect::COLOR);
+    let is_color = aspects.contains(crate::FormatAspects::COLOR);
     match usage {
         crate::TextureUse::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUse::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -336,15 +336,15 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
     }
 }
 
-pub fn map_aspects(aspects: crate::FormatAspect) -> vk::ImageAspectFlags {
+pub fn map_aspects(aspects: crate::FormatAspects) -> vk::ImageAspectFlags {
     let mut flags = vk::ImageAspectFlags::empty();
-    if aspects.contains(crate::FormatAspect::COLOR) {
+    if aspects.contains(crate::FormatAspects::COLOR) {
         flags |= vk::ImageAspectFlags::COLOR;
     }
-    if aspects.contains(crate::FormatAspect::DEPTH) {
+    if aspects.contains(crate::FormatAspects::DEPTH) {
         flags |= vk::ImageAspectFlags::DEPTH;
     }
-    if aspects.contains(crate::FormatAspect::STENCIL) {
+    if aspects.contains(crate::FormatAspects::STENCIL) {
         flags |= vk::ImageAspectFlags::STENCIL;
     }
     flags
@@ -387,14 +387,14 @@ pub fn map_extent(
 }
 
 pub fn map_attachment_ops(
-    op: crate::AttachmentOp,
+    op: crate::AttachmentOps,
 ) -> (vk::AttachmentLoadOp, vk::AttachmentStoreOp) {
-    let load_op = if op.contains(crate::AttachmentOp::LOAD) {
+    let load_op = if op.contains(crate::AttachmentOps::LOAD) {
         vk::AttachmentLoadOp::LOAD
     } else {
         vk::AttachmentLoadOp::CLEAR
     };
-    let store_op = if op.contains(crate::AttachmentOp::STORE) {
+    let store_op = if op.contains(crate::AttachmentOps::STORE) {
         vk::AttachmentStoreOp::STORE
     } else {
         vk::AttachmentStoreOp::DONT_CARE
@@ -541,10 +541,10 @@ pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> vk::ImageViewType {
 
 pub fn map_subresource_range(
     range: &wgt::ImageSubresourceRange,
-    texture_aspect: crate::FormatAspect,
+    texture_aspect: crate::FormatAspects,
 ) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange {
-        aspect_mask: map_aspects(crate::FormatAspect::from(range.aspect) & texture_aspect),
+        aspect_mask: map_aspects(crate::FormatAspects::from(range.aspect) & texture_aspect),
         base_mip_level: range.base_mip_level,
         level_count: range
             .mip_level_count
@@ -559,7 +559,7 @@ pub fn map_subresource_range(
 pub fn map_subresource_layers(
     base: &crate::TextureCopyBase,
     texture_dim: wgt::TextureDimension,
-    texture_aspect: crate::FormatAspect,
+    texture_aspect: crate::FormatAspects,
     layer_count: u32,
 ) -> (vk::ImageSubresourceLayers, vk::Offset3D) {
     let (base_array_layer, offset) = map_origin(base.origin, texture_dim);
@@ -618,15 +618,15 @@ pub fn map_comparison(fun: wgt::CompareFunction) -> vk::CompareOp {
     }
 }
 
-pub fn map_shader_stage(stage: wgt::ShaderStage) -> vk::ShaderStageFlags {
+pub fn map_shader_stage(stage: wgt::ShaderStages) -> vk::ShaderStageFlags {
     let mut flags = vk::ShaderStageFlags::empty();
-    if stage.contains(wgt::ShaderStage::VERTEX) {
+    if stage.contains(wgt::ShaderStages::VERTEX) {
         flags |= vk::ShaderStageFlags::VERTEX;
     }
-    if stage.contains(wgt::ShaderStage::FRAGMENT) {
+    if stage.contains(wgt::ShaderStages::FRAGMENT) {
         flags |= vk::ShaderStageFlags::FRAGMENT;
     }
-    if stage.contains(wgt::ShaderStage::COMPUTE) {
+    if stage.contains(wgt::ShaderStages::COMPUTE) {
         flags |= vk::ShaderStageFlags::COMPUTE;
     }
     flags
