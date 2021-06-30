@@ -1,3 +1,25 @@
+/*!
+# Vulkan API internals.
+
+## Stack memory
+
+Ash expects slices, which we don't generally have available.
+We cope with this requirement by the combination of the following ways:
+  - temporarily allocating `Vec` on heap, where overhead is permitted
+  - growing temporary local storage
+  - using `implace_it` on iterators
+
+## Framebuffers and Render passes
+
+Render passes are cached on the device and kept forever.
+
+Framebuffers are also cached on the device, but they are removed when
+any of the image views (they have) gets removed.
+If Vulkan supports image-less framebuffers,
+then the actual views are excluded from the framebuffer key.
+
+!*/
+
 mod adapter;
 mod command;
 mod conv;
