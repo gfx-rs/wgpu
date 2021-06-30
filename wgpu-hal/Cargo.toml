@@ -38,7 +38,7 @@ gpu-descriptor = { version = "0.1", optional = true }
 inplace_it = { version ="0.3.3", optional = true }
 renderdoc-sys = { version = "0.7.1", optional = true }
 # backend: Gles
-glow = { git = "https://github.com/grovesNL/glow", rev = "57177a01b1dd91a82ccfd2d7b687fcc36116157c", optional = true }
+glow = { git = "https://github.com/grovesNL/glow", rev = "0864897a28bbdd43f89f4fd8fdd4ed781b719f8a", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egl = { package = "khronos-egl", version = "4.1", features = ["dynamic"], optional = true }

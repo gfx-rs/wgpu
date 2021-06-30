@@ -294,12 +294,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let format_info = dst.format.describe();
-        assert_eq!(
-            format_info.block_dimensions,
-            (1, 1),
-            "Compressed texture copies are TODO"
-        );
         let (dst_raw, dst_target) = dst.inner.as_native();
         for copy in regions {
             self.cmd_buffer.commands.push(C::CopyBufferToTexture {
@@ -307,11 +301,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 src_target: src.target,
                 dst: dst_raw,
                 dst_target,
-                dst_info: super::TextureCopyInfo {
-                    external_format: dst.format_desc.external,
-                    data_type: dst.format_desc.data_type,
-                    texel_size: format_info.block_size,
-                },
+                dst_format: dst.format,
                 copy,
             })
         }
@@ -326,22 +316,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let format_info = src.format.describe();
-        assert_eq!(
-            format_info.block_dimensions,
-            (1, 1),
-            "Compressed texture copies are TODO"
-        );
         let (src_raw, src_target) = src.inner.as_native();
         for copy in regions {
             self.cmd_buffer.commands.push(C::CopyTextureToBuffer {
                 src: src_raw,
                 src_target,
-                src_info: super::TextureCopyInfo {
-                    external_format: src.format_desc.external,
-                    data_type: src.format_desc.data_type,
-                    texel_size: format_info.block_size,
-                },
+                src_format: src.format,
                 dst: dst.raw,
                 dst_target: dst.target,
                 copy,

@@ -665,6 +665,7 @@ impl super::Instance {
             alignments: phd_capabilities.to_hal_alignments(),
             downlevel: wgt::DownlevelCapabilities {
                 flags: downlevel_flags,
+                limits: wgt::DownlevelLimits {},
                 shader_model: wgt::ShaderModel::Sm5, //TODO?
             },
         };

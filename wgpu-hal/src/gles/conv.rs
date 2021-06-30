@@ -73,16 +73,24 @@ impl super::AdapterShared {
             | Tf::Bc6hRgbSfloat
             | Tf::Bc6hRgbUfloat
             | Tf::Bc7RgbaUnorm
-            | Tf::Bc7RgbaUnormSrgb
-            | Tf::Etc2RgbUnorm
-            | Tf::Etc2RgbUnormSrgb
-            | Tf::Etc2RgbA1Unorm
-            | Tf::Etc2RgbA1UnormSrgb
-            | Tf::EacRUnorm
-            | Tf::EacRSnorm
-            | Tf::EtcRgUnorm
-            | Tf::EtcRgSnorm
-            | Tf::Astc4x4RgbaUnorm
+            | Tf::Bc7RgbaUnormSrgb => unimplemented!(),
+            Tf::Etc2RgbUnorm => (glow::COMPRESSED_RGB8_ETC2, glow::RGB, 0),
+            Tf::Etc2RgbUnormSrgb => (glow::COMPRESSED_SRGB8_ETC2, glow::RGB, 0),
+            Tf::Etc2RgbA1Unorm => (
+                glow::COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2,
+                glow::RGBA,
+                0,
+            ),
+            Tf::Etc2RgbA1UnormSrgb => (
+                glow::COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2,
+                glow::RGBA,
+                0,
+            ),
+            Tf::EacRUnorm => (glow::COMPRESSED_R11_EAC, glow::RED, 0),
+            Tf::EacRSnorm => (glow::COMPRESSED_SIGNED_R11_EAC, glow::RED, 0),
+            Tf::EacRgUnorm => (glow::COMPRESSED_RG11_EAC, glow::RG, 0),
+            Tf::EacRgSnorm => (glow::COMPRESSED_SIGNED_RG11_EAC, glow::RG, 0),
+            Tf::Astc4x4RgbaUnorm
             | Tf::Astc4x4RgbaUnormSrgb
             | Tf::Astc5x4RgbaUnorm
             | Tf::Astc5x4RgbaUnormSrgb

@@ -177,7 +177,7 @@ impl super::Adapter {
             naga::back::glsl::Version::Embedded(value)
         };
 
-        let mut features = wgt::Features::empty();
+        let mut features = wgt::Features::empty() | wgt::Features::TEXTURE_COMPRESSION_ETC2;
         features.set(
             wgt::Features::DEPTH_CLAMPING,
             extensions.contains("GL_EXT_depth_clamp"),
@@ -394,8 +394,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Etc2RgbA1UnormSrgb
             | Tf::EacRUnorm
             | Tf::EacRSnorm
-            | Tf::EtcRgUnorm
-            | Tf::EtcRgSnorm
+            | Tf::EacRgUnorm
+            | Tf::EacRgSnorm
             | Tf::Astc4x4RgbaUnorm
             | Tf::Astc4x4RgbaUnormSrgb
             | Tf::Astc5x4RgbaUnorm

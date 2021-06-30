@@ -690,7 +690,7 @@ dependencies = [
 [[package]]
 name = "glow"
 version = "0.10.0"
-source = "git+https://github.com/grovesNL/glow?rev=57177a01b1dd91a82ccfd2d7b687fcc36116157c#57177a01b1dd91a82ccfd2d7b687fcc36116157c"
+source = "git+https://github.com/grovesNL/glow?rev=0864897a28bbdd43f89f4fd8fdd4ed781b719f8a#0864897a28bbdd43f89f4fd8fdd4ed781b719f8a"
 dependencies = [
  "js-sys",
  "slotmap",

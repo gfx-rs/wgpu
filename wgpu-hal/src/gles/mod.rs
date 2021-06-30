@@ -418,13 +418,6 @@ impl Fence {
     }
 }
 
-#[derive(Debug)]
-struct TextureCopyInfo {
-    external_format: u32,
-    data_type: u32,
-    texel_size: u8,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 struct StencilOps {
     pass: u32,
@@ -535,13 +528,13 @@ enum Command {
         src_target: BindTarget,
         dst: glow::Texture,
         dst_target: BindTarget,
-        dst_info: TextureCopyInfo,
+        dst_format: wgt::TextureFormat,
         copy: crate::BufferTextureCopy,
     },
     CopyTextureToBuffer {
         src: glow::Texture,
         src_target: BindTarget,
-        src_info: TextureCopyInfo,
+        src_format: wgt::TextureFormat,
         dst: glow::Buffer,
         dst_target: BindTarget,
         copy: crate::BufferTextureCopy,
