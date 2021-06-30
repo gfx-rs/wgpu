@@ -1673,8 +1673,9 @@ impl Parser {
         allow_deref: bool,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         let mut needs_deref = match ctx.expressions[handle] {
-            crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_) => {
-                allow_deref
+            crate::Expression::LocalVariable(_) => allow_deref,
+            crate::Expression::GlobalVariable(var) => {
+                ctx.global_vars[var].class != crate::StorageClass::Handle && allow_deref
             }
             _ => false,
         };

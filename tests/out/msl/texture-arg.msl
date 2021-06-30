@@ -1,0 +1,22 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+
+metal::float4 test(
+    metal::texture2d<float, metal::access::sample> Passed_Texture,
+    metal::sampler Passed_Sampler
+) {
+    metal::float4 _e7 = Passed_Texture.sample(Passed_Sampler, metal::float2(0.0, 0.0));
+    return _e7;
+}
+
+struct main1Output {
+    metal::float4 member [[color(0)]];
+};
+fragment main1Output main1(
+  metal::texture2d<float, metal::access::sample> Texture [[user(fake0)]]
+, metal::sampler Sampler [[user(fake0)]]
+) {
+    metal::float4 _e2 = test(Texture, Sampler);
+    return main1Output { _e2 };
+}
