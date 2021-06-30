@@ -964,7 +964,14 @@ impl<'a, W: Write> Writer<'a, W> {
             back::FunctionType::EntryPoint(_) => &[][..],
             back::FunctionType::Function(_) => &func.arguments,
         };
-        self.write_slice(arguments, |this, i, arg| {
+        let arguments: Vec<_> = arguments
+            .iter()
+            .filter(|arg| match self.module.types[arg.ty].inner {
+                TypeInner::Sampler { .. } => false,
+                _ => true,
+            })
+            .collect();
+        self.write_slice(&arguments, |this, i, arg| {
             // Write the argument type
             match this.module.types[arg.ty].inner {
                 // We treat images separately because they might require
@@ -989,8 +996,6 @@ impl<'a, W: Write> Writer<'a, W> {
                     // any spaces at the beginning or end
                     this.write_image_type(dim, arrayed, class)?;
                 }
-                // glsl has no concept of samplers so we just ignore it
-                TypeInner::Sampler { .. } => return Ok(false),
                 // All other types are written by `write_type`
                 _ => {
                     this.write_type(arg.ty)?;
@@ -1001,7 +1006,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // The leading space is important
             write!(this.out, " {}", &this.names[&ctx.argument_key(i)])?;
 
-            Ok(true)
+            Ok(())
         })?;
 
         // Close the parentheses and open braces to start the function body
@@ -1097,16 +1102,14 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Notes
     /// - Adds no newlines or leading/trailing whitespace
     /// - The last element won't have a trailing `,`
-    fn write_slice<T, F: FnMut(&mut Self, u32, &T) -> BackendResult<bool>>(
+    fn write_slice<T, F: FnMut(&mut Self, u32, &T) -> BackendResult>(
         &mut self,
         data: &[T],
         mut f: F,
     ) -> BackendResult {
         // Loop trough `data` invoking `f` for each element
         for (i, item) in data.iter().enumerate() {
-            if !f(self, i as u32, item)? {
-                continue;
-            }
+            f(self, i as u32, item)?;
 
             // Only write a comma if isn't the last element
             if i != data.len().saturating_sub(1) {
@@ -1151,8 +1154,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Write the comma separated constants
                 self.write_slice(components, |this, _, arg| {
-                    this.write_constant(&this.module.constants[*arg])?;
-                    Ok(true)
+                    this.write_constant(&this.module.constants[*arg])
                 })?;
 
                 write!(self.out, ")")?
@@ -1617,16 +1619,18 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.named_expressions.insert(expr, name);
                 }
                 write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
-                self.write_slice(arguments, |this, i, arg| {
-                    let arg_ty = this.module.functions[function].arguments[i as usize].ty;
-                    if let TypeInner::Sampler { .. } = this.module.types[arg_ty].inner {
-                        return Ok(false);
-                    }
-
-                    this.write_expr(*arg, ctx)?;
-
-                    Ok(true)
-                })?;
+                let arguments: Vec<_> = arguments
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, arg)| {
+                        let arg_ty = self.module.functions[function].arguments[i].ty;
+                        match self.module.types[arg_ty].inner {
+                            TypeInner::Sampler { .. } => None,
+                            _ => Some(*arg),
+                        }
+                    })
+                    .collect();
+                self.write_slice(&arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
                 writeln!(self.out, ");")?
             }
         }
@@ -1726,10 +1730,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_type(ty)?;
 
                 write!(self.out, "(")?;
-                self.write_slice(components, |this, _, arg| {
-                    this.write_expr(*arg, ctx)?;
-                    Ok(true)
-                })?;
+                self.write_slice(components, |this, _, arg| this.write_expr(*arg, ctx))?;
                 write!(self.out, ")")?
             }
             // Function arguments are written as the argument name
