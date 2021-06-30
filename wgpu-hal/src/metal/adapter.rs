@@ -215,8 +215,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Etc2RgbA1UnormSrgb
             | Tf::EacRUnorm
             | Tf::EacRSnorm
-            | Tf::EtcRgUnorm
-            | Tf::EtcRgSnorm => {
+            | Tf::EacRgUnorm
+            | Tf::EacRgSnorm => {
                 if pc.format_eac_etc {
                     Tfc::SAMPLED_LINEAR
                 } else {
@@ -880,6 +880,9 @@ impl super::PrivateCapabilities {
             wgt::DownlevelFlags::COMPARISON_SAMPLERS,
             self.mutable_comparison_samplers,
         );
+        downlevel
+            .flags
+            .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
         crate::Capabilities {
             limits: wgt::Limits {
@@ -905,8 +908,8 @@ impl super::PrivateCapabilities {
             alignments: crate::Alignments {
                 buffer_copy_offset: buffer_alignment,
                 buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),
-                storage_buffer_offset: buffer_alignment,
                 uniform_buffer_offset: buffer_alignment,
+                storage_buffer_offset: buffer_alignment,
             },
             downlevel,
         }
@@ -987,8 +990,8 @@ impl super::PrivateCapabilities {
             Tf::Etc2RgbA1UnormSrgb => ETC2_RGB8A1_sRGB,
             Tf::EacRUnorm => EAC_R11Unorm,
             Tf::EacRSnorm => EAC_R11Snorm,
-            Tf::EtcRgUnorm => EAC_RG11Unorm,
-            Tf::EtcRgSnorm => EAC_RG11Snorm,
+            Tf::EacRgUnorm => EAC_RG11Unorm,
+            Tf::EacRgSnorm => EAC_RG11Snorm,
             Tf::Astc4x4RgbaUnorm => ASTC_4x4_LDR,
             Tf::Astc4x4RgbaUnormSrgb => ASTC_4x4_sRGB,
             Tf::Astc5x4RgbaUnorm => ASTC_5x4_LDR,

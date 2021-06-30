@@ -5,13 +5,14 @@ use crate::{
         CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
         StateChange,
     },
+    device::MissingDownlevelFlags,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, Texture},
     track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
     validation::{check_buffer_usage, MissingBufferUsageError},
-    Label, DOWNLEVEL_ERROR_WARNING_MESSAGE,
+    Label,
 };
 
 use hal::CommandEncoder as _;
@@ -149,11 +150,6 @@ pub enum ComputePassErrorInner {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error("cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
-    #[error(
-        "Compute shaders are not supported by the underlying platform. {}",
-        DOWNLEVEL_ERROR_WARNING_MESSAGE
-    )]
-    ComputeShadersUnsupported,
     #[error(transparent)]
     Dispatch(#[from] DispatchError),
     #[error(transparent)]
@@ -162,6 +158,8 @@ pub enum ComputePassErrorInner {
     PushConstants(#[from] PushConstantUploadError),
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 /// Error encountered when performing a compute pass.
@@ -262,6 +260,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
@@ -269,21 +269,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.encoder.open();
 
+        let device = &device_guard[cmd_buf.device_id.value];
+
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(crate::device::trace::Command::RunComputePass {
                 base: BasePass::from_ref(base),
-            });
-        }
-
-        if !cmd_buf
-            .downlevel
-            .flags
-            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
-        {
-            return Err(ComputePassError {
-                scope: PassErrorScope::Pass(encoder_id),
-                inner: ComputePassErrorInner::ComputeShadersUnsupported,
             });
         }
 
@@ -515,6 +506,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     state.is_ready().map_pass_err(scope)?;
+
+                    device
+                        .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
+                        .map_pass_err(scope)?;
 
                     let indirect_buffer = state
                         .trackers

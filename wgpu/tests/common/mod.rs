@@ -66,6 +66,7 @@ pub fn lowest_reasonable_limits() -> Limits {
 fn lowest_downlevel_properties() -> DownlevelCapabilities {
     DownlevelCapabilities {
         flags: wgt::DownlevelFlags::empty(),
+        limits: wgt::DownlevelLimits {},
         shader_model: wgt::ShaderModel::Sm2,
     }
 }

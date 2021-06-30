@@ -273,12 +273,16 @@ impl framework::Example for Skybox {
 
         let skybox_format =
             if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
+                log::info!("Using ASTC_LDR");
                 wgpu::TextureFormat::Astc4x4RgbaUnormSrgb
             } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
+                log::info!("Using ETC2");
                 wgpu::TextureFormat::Etc2RgbUnormSrgb
             } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+                log::info!("Using BC");
                 wgpu::TextureFormat::Bc1RgbaUnormSrgb
             } else {
+                log::info!("Using plain");
                 wgpu::TextureFormat::Bgra8UnormSrgb
             };
 

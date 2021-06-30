@@ -15,6 +15,7 @@ license = "MIT OR Apache-2.0"
 default = []
 metal = ["naga/msl-out", "block", "foreign-types"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "inplace_it", "renderdoc-sys"]
+gles = ["naga/glsl-out", "glow", "egl", "libloading"]
 
 [dependencies]
 bitflags = "1.0"
@@ -26,7 +27,6 @@ wgt = { package = "wgpu-types", path = "../wgpu-types" }
 # backends common
 arrayvec = "0.5"
 fxhash = "0.2.1"
-libloading = { version = "0.7", optional = true }
 log = "0.4"
 # backend: Metal
 block = { version = "0.1", optional = true }
@@ -37,6 +37,12 @@ gpu-alloc = { version = "0.4", optional = true }
 gpu-descriptor = { version = "0.1", optional = true }
 inplace_it = { version ="0.3.3", optional = true }
 renderdoc-sys = { version = "0.7.1", optional = true }
+# backend: Gles
+glow = { git = "https://github.com/grovesNL/glow", rev = "0864897a28bbdd43f89f4fd8fdd4ed781b719f8a", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+egl = { package = "khronos-egl", version = "4.1", features = ["dynamic"], optional = true }
+libloading = { version = "0.7", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
@@ -48,11 +54,11 @@ core-graphics-types = "0.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "57b325602015ce6445749a4d8ee5d491edc818d7"
+rev = "68a2efd3c5db62c2c011ccbad84f58be5e539fe3"
 
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "57b325602015ce6445749a4d8ee5d491edc818d7"
+rev = "68a2efd3c5db62c2c011ccbad84f58be5e539fe3"
 features = ["wgsl-in"]
 
 [dev-dependencies]

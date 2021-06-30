@@ -61,10 +61,10 @@ impl super::Device {
             },
         };
 
-        let module = &stage.module.raw.module;
+        let module = &stage.module.naga.module;
         let (source, info) = naga::back::msl::write_string(
             module,
-            &stage.module.raw.info,
+            &stage.module.naga.info,
             &layout.naga_options,
             &pipeline_options,
         )
@@ -140,6 +140,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut options = mtl::MTLResourceOptions::empty();
         options |= if map_read || map_write {
+            // `crate::MemoryFlag::PREFER_COHERENT` is ignored here
             mtl::MTLResourceOptions::StorageModeShared
         } else {
             mtl::MTLResourceOptions::StorageModePrivate
@@ -363,11 +364,8 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> DeviceResult<super::BindGroupLayout> {
-        let mut map = desc.entries.to_vec();
-        map.sort_by_key(|e| e.binding);
-
         Ok(super::BindGroupLayout {
-            entries: Arc::new(map),
+            entries: Arc::from(desc.entries),
         })
     }
     unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
@@ -647,7 +645,7 @@ impl crate::Device<super::Api> for super::Device {
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         match shader {
-            crate::ShaderInput::Naga(raw) => Ok(super::ShaderModule { raw }),
+            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule { naga }),
             crate::ShaderInput::SpirV(_) => {
                 unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }

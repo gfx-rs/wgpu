@@ -658,7 +658,7 @@ impl NumericType {
             Tf::Bc4RUnorm | Tf::Bc4RSnorm | Tf::EacRUnorm | Tf::EacRSnorm => {
                 (NumericDimension::Scalar, Sk::Float)
             }
-            Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EtcRgUnorm | Tf::EtcRgSnorm => {
+            Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EacRgUnorm | Tf::EacRgSnorm => {
                 (NumericDimension::Vector(Vs::Bi), Sk::Float)
             }
             Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat | Tf::Etc2RgbUnorm | Tf::Etc2RgbUnormSrgb => {

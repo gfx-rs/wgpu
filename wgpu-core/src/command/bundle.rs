@@ -39,7 +39,10 @@ use crate::{
         StateChange,
     },
     conv,
-    device::{AttachmentData, Device, DeviceError, RenderPassContext, SHADER_STAGE_COUNT},
+    device::{
+        AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
+        SHADER_STAGE_COUNT,
+    },
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
@@ -403,6 +406,10 @@ impl RenderBundleEncoder {
                         indirect: true,
                         pipeline: state.pipeline.last_state,
                     };
+                    device
+                        .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
+                        .map_pass_err(scope)?;
+
                     let buffer = state
                         .trackers
                         .buffers
@@ -439,6 +446,10 @@ impl RenderBundleEncoder {
                         indirect: true,
                         pipeline: state.pipeline.last_state,
                     };
+                    device
+                        .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
+                        .map_pass_err(scope)?;
+
                     let buffer = state
                         .trackers
                         .buffers
@@ -1104,6 +1115,8 @@ pub(super) enum RenderBundleErrorInner {
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
     Draw(#[from] DrawError),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 impl<T> From<T> for RenderBundleErrorInner

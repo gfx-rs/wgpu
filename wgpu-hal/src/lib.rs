@@ -45,6 +45,8 @@
 compile_error!("Metal backend enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 
 mod empty;
+#[cfg(feature = "gles")]
+mod gles;
 #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
 mod metal;
 #[cfg(feature = "vulkan")]
@@ -53,6 +55,8 @@ mod vulkan;
 pub mod util;
 pub mod api {
     pub use super::empty::Api as Empty;
+    #[cfg(feature = "gles")]
+    pub use super::gles::Api as Gles;
     #[cfg(feature = "metal")]
     pub use super::metal::Api as Metal;
     #[cfg(feature = "vulkan")]
@@ -234,6 +238,7 @@ pub trait Device<A: Api>: Send + Sync {
     ) -> Result<A::CommandEncoder, DeviceError>;
     unsafe fn destroy_command_encoder(&self, pool: A::CommandEncoder);
 
+    /// Creates a bind group layout.
     unsafe fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor,
@@ -332,6 +337,8 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
 
     // copy operations
 
+    /// This is valid to call with `value == 0`.
+    /// Otherwise `wgt::Features::CLEAR_COMMANDS` is required.
     unsafe fn fill_buffer(&mut self, buffer: &A::Buffer, range: MemoryRange, value: u8);
 
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &A::Buffer, dst: &A::Buffer, regions: T)
@@ -549,8 +556,11 @@ impl From<wgt::TextureFormat> for FormatAspect {
 bitflags!(
     pub struct MemoryFlag: u32 {
         const TRANSIENT = 1;
+        const PREFER_COHERENT = 2;
     }
 );
+
+//TODO: it's not intuitive for the backends to consider `LOAD` being optional.
 
 bitflags!(
     pub struct AttachmentOp: u8 {
@@ -621,8 +631,8 @@ pub struct Alignments {
     /// The alignment of the row pitch of the texture data stored in a buffer that is
     /// used in a GPU copy operation.
     pub buffer_copy_pitch: wgt::BufferSize,
-    pub storage_buffer_offset: wgt::BufferSize,
     pub uniform_buffer_offset: wgt::BufferSize,
+    pub storage_buffer_offset: wgt::BufferSize,
 }
 
 #[derive(Clone, Debug)]
@@ -749,6 +759,10 @@ pub struct SamplerDescriptor<'a> {
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 
+/// BindGroupLayout descriptor.
+///
+/// Valid usage:
+/// - `entries` are sorted by ascending `wgt::BindGroupLayoutEntry::binding`
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     pub label: Label<'a>,
@@ -828,12 +842,19 @@ pub struct CommandEncoderDescriptor<'a, A: Api> {
 }
 
 /// Naga shader module.
-#[derive(Debug)]
 pub struct NagaShader {
     /// Shader module IR.
     pub module: naga::Module,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
+}
+
+// Custom implementation avoids the need to generate Debug impl code
+// for the whole Naga module and info.
+impl fmt::Debug for NagaShader {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "Naga shader")
+    }
 }
 
 /// Shader input.
@@ -1051,6 +1072,8 @@ pub struct DepthStencilAttachment<'a, A: Api> {
 #[derive(Clone, Debug)]
 pub struct RenderPassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
+    pub extent: wgt::Extent3d,
+    pub sample_count: u32,
     pub color_attachments: &'a [ColorAttachment<'a, A>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
 }

@@ -854,6 +854,7 @@ impl HalApi for hal::api::Dx11 {
         surface.dx11.as_mut().unwrap()
     }
 }
+*/
 
 #[cfg(gl)]
 impl HalApi for hal::api::Gles {
@@ -864,7 +865,7 @@ impl HalApi for hal::api::Gles {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.gl.as_mut().unwrap()
     }
-}*/
+}
 
 #[cfg(test)]
 fn _test_send_sync(global: &Global<IdentityManagerFactory>) {

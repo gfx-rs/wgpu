@@ -1,3 +1,18 @@
+/*!
+# Metal API internals.
+
+## Pipeline Layout
+
+In Metal, push constants, vertex buffers, and resources in the bind groups
+are all placed together in the native resource bindings, which work similarly to D3D11:
+there are tables of textures, buffers, and samplers.
+
+We put push constants first (if any) in the table, followed by bind group 0
+resources, followed by other bind groups. The vertex buffers are bound at the very
+end of the VS buffer table.
+
+!*/
+
 mod adapter;
 mod command;
 mod conv;
@@ -412,7 +427,7 @@ impl Sampler {
 #[derive(Debug)]
 pub struct BindGroupLayout {
     /// Sorted list of BGL entries.
-    entries: Arc<Vec<wgt::BindGroupLayoutEntry>>,
+    entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -555,7 +570,7 @@ unsafe impl Sync for BindGroup {}
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    raw: crate::NagaShader,
+    naga: crate::NagaShader,
 }
 
 #[derive(Debug, Default)]

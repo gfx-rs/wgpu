@@ -688,6 +688,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "glow"
+version = "0.10.0"
+source = "git+https://github.com/grovesNL/glow?rev=0864897a28bbdd43f89f4fd8fdd4ed781b719f8a#0864897a28bbdd43f89f4fd8fdd4ed781b719f8a"
+dependencies = [
+ "js-sys",
+ "slotmap",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "gpu-alloc"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -844,6 +855,16 @@ checksum = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 dependencies = [
  "winapi 0.2.8",
  "winapi-build",
+]
+
+[[package]]
+name = "khronos-egl"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c2352bd1d0bceb871cb9d40f24360c8133c11d7486b68b5381c1dd1a32015e3"
+dependencies = [
+ "libc",
+ "libloading 0.7.0",
 ]
 
 [[package]]
@@ -1019,7 +1040,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.5.0"
-source = "git+https://github.com/gfx-rs/naga?rev=57b325602015ce6445749a4d8ee5d491edc818d7#57b325602015ce6445749a4d8ee5d491edc818d7"
+source = "git+https://github.com/gfx-rs/naga?rev=68a2efd3c5db62c2c011ccbad84f58be5e539fe3#68a2efd3c5db62c2c011ccbad84f58be5e539fe3"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -1587,6 +1608,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f173ac3d1a7e3b28003f40de0b5ce7fe2710f9b9dc3fc38664cebee46b3b6527"
 
 [[package]]
+name = "slotmap"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "585cd5dffe4e9e06f6dfdf66708b70aca3f781bed561f4f667b2d9c0d4559e36"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1957,9 +1987,11 @@ dependencies = [
  "env_logger",
  "foreign-types",
  "fxhash",
+ "glow",
  "gpu-alloc",
  "gpu-descriptor",
  "inplace_it",
+ "khronos-egl",
  "libloading 0.7.0",
  "log",
  "metal",

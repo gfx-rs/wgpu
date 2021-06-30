@@ -351,7 +351,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let mut vk_clear_values = ArrayVec::<[vk::ClearValue; super::MAX_TOTAL_ATTACHMENTS]>::new();
         let mut vk_image_views = ArrayVec::<[vk::ImageView; super::MAX_TOTAL_ATTACHMENTS]>::new();
         let mut rp_key = super::RenderPassKey::default();
-        let mut fb_key = super::FramebufferKey::default();
+        let mut fb_key = super::FramebufferKey {
+            attachments: ArrayVec::default(),
+            extent: desc.extent,
+            sample_count: desc.sample_count,
+        };
         let caps = &self.device.private_caps;
 
         for cat in desc.color_attachments {
@@ -366,11 +370,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     .as_ref()
                     .map(|target| target.make_attachment_key(crate::AttachmentOp::STORE, caps)),
             });
-            fb_key.add(cat.target.view);
+            fb_key.attachments.push(cat.target.view.attachment.clone());
             if let Some(ref at) = cat.resolve_target {
                 vk_clear_values.push(mem::zeroed());
                 vk_image_views.push(at.view.raw);
-                fb_key.add(at.view);
+                fb_key.attachments.push(at.view.attachment.clone());
             }
         }
         if let Some(ref ds) = desc.depth_stencil_attachment {
@@ -385,26 +389,26 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 base: ds.target.make_attachment_key(ds.depth_ops, caps),
                 stencil_ops: ds.stencil_ops,
             });
-            fb_key.add(ds.target.view);
+            fb_key.attachments.push(ds.target.view.attachment.clone());
         }
         rp_key.sample_count = fb_key.sample_count;
 
         let render_area = vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
             extent: vk::Extent2D {
-                width: fb_key.extent.width,
-                height: fb_key.extent.height,
+                width: desc.extent.width,
+                height: desc.extent.height,
             },
         };
         let vk_viewports = [vk::Viewport {
             x: 0.0,
             y: if self.device.private_caps.flip_y_requires_shift {
-                fb_key.extent.height as f32
+                desc.extent.height as f32
             } else {
                 0.0
             },
-            width: fb_key.extent.width as f32,
-            height: -(fb_key.extent.height as f32),
+            width: desc.extent.width as f32,
+            height: -(desc.extent.height as f32),
             min_depth: 0.0,
             max_depth: 1.0,
         }];

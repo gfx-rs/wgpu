@@ -36,7 +36,7 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "57b325602015ce6445749a4d8ee5d491edc818d7"
+rev = "68a2efd3c5db62c2c011ccbad84f58be5e539fe3"
 features = ["wgsl-in"]
 
 [dependencies.wgt]
@@ -54,7 +54,7 @@ hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["metal"] }
 #Note: could also enable "vulkan" for Vulkan Portability
 
 [target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan", "gles"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan"] }

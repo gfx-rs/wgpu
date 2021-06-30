@@ -6,7 +6,10 @@ use crate::{
         PassErrorScope, QueryResetMap, QueryUseError, RenderCommand, RenderCommandError,
         StateChange,
     },
-    device::{AttachmentData, RenderPassCompatibilityError, RenderPassContext},
+    device::{
+        AttachmentData, MissingDownlevelFlags, MissingFeatures, RenderPassCompatibilityError,
+        RenderPassContext,
+    },
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
@@ -419,8 +422,10 @@ pub enum RenderPassErrorInner {
     SampleCountMismatch { actual: u32, expected: u32 },
     #[error("setting `values_offset` to be `None` is only for internal use in render bundles")]
     InvalidValuesOffset,
-    #[error("required device features not enabled: {0:?}")]
-    MissingDeviceFeatures(wgt::Features),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}", count.map_or_else(String::new, |v| format!("(using count {})", v)))]
     IndirectBufferOverrun {
         count: Option<NonZeroU32>,
@@ -480,17 +485,6 @@ where
             scope,
             inner: inner.into(),
         })
-    }
-}
-
-fn check_device_features(
-    actual: wgt::Features,
-    expected: wgt::Features,
-) -> Result<(), RenderPassErrorInner> {
-    if !actual.contains(expected) {
-        Err(RenderPassErrorInner::MissingDeviceFeatures(expected))
-    } else {
-        Ok(())
     }
 }
 
@@ -745,6 +739,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         let hal_desc = hal::RenderPassDescriptor {
             label,
+            extent,
+            sample_count,
             color_attachments: &colors,
             depth_stencil_attachment: depth_stencil,
         };
@@ -1175,6 +1171,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .inputs
                             .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
                         let vertex_state = &mut state.vertex.inputs[slot as usize];
+                        //TODO: where are we checking that the offset is in bound?
                         vertex_state.total_size = match size {
                             Some(s) => s.get(),
                             None => buffer.size - offset,
@@ -1400,12 +1397,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
 
                         if count.is_some() {
-                            check_device_features(
-                                device.features,
-                                wgt::Features::MULTI_DRAW_INDIRECT,
-                            )
-                            .map_pass_err(scope)?;
+                            device
+                                .require_features(wgt::Features::MULTI_DRAW_INDIRECT)
+                                .map_pass_err(scope)?;
                         }
+                        device
+                            .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
+                            .map_pass_err(scope)?;
 
                         let indirect_buffer = info
                             .trackers
@@ -1474,11 +1472,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             true => mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
                         } as u64;
 
-                        check_device_features(
-                            device.features,
-                            wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
-                        )
-                        .map_pass_err(scope)?;
+                        device
+                            .require_features(wgt::Features::MULTI_DRAW_INDIRECT_COUNT)
+                            .map_pass_err(scope)?;
+                        device
+                            .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
+                            .map_pass_err(scope)?;
 
                         let indirect_buffer = info
                             .trackers

@@ -8,6 +8,7 @@ use crate::{
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
+    DOWNLEVEL_ERROR_WARNING_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -253,6 +254,27 @@ pub enum CreateDeviceError {
     OutOfMemory,
 }
 
+impl<A: hal::Api> Device<A> {
+    pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
+        if self.features.contains(feature) {
+            Ok(())
+        } else {
+            Err(MissingFeatures(feature))
+        }
+    }
+
+    pub(crate) fn require_downlevel_flags(
+        &self,
+        flags: wgt::DownlevelFlags,
+    ) -> Result<(), MissingDownlevelFlags> {
+        if self.downlevel.flags.contains(flags) {
+            Ok(())
+        } else {
+            Err(MissingDownlevelFlags(flags))
+        }
+    }
+}
+
 impl<A: HalApi> Device<A> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
@@ -309,14 +331,6 @@ impl<A: HalApi> Device<A> {
             downlevel,
             pending_writes,
         })
-    }
-
-    pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
-        if self.features.contains(feature) {
-            Ok(())
-        } else {
-            Err(MissingFeatures(feature))
-        }
     }
 
     fn lock_life_internal<'this, 'token: 'this>(
@@ -1026,6 +1040,14 @@ impl<A: HalApi> Device<A> {
             if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::VERTEX) {
                 required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
             }
+            if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::FRAGMENT) {
+                self.require_downlevel_flags(wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE)
+                    .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
+                    .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                        binding: entry.binding,
+                        error,
+                    })?;
+            }
 
             self.require_features(required_features)
                 .map_err(binding_model::BindGroupLayoutEntryError::MissingFeatures)
@@ -1035,7 +1057,8 @@ impl<A: HalApi> Device<A> {
                 })?;
         }
 
-        let hal_bindings = entry_map.values().cloned().collect::<Vec<_>>();
+        let mut hal_bindings = entry_map.values().cloned().collect::<Vec<_>>();
+        hal_bindings.sort_by_key(|b| b.binding);
         let hal_desc = hal::BindGroupLayoutDescriptor {
             label,
             entries: &hal_bindings,
@@ -1728,13 +1751,7 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        if !self
-            .downlevel
-            .flags
-            .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
-        {
-            return Err(pipeline::CreateComputePipelineError::ComputeShadersUnsupported);
-        }
+        self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
         let mut derived_group_layouts =
             ArrayVec::<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>::new();
@@ -1856,6 +1873,16 @@ impl<A: HalApi> Device<A> {
             .as_ref()
             .map_or(&[][..], |fragment| &fragment.targets);
         let depth_stencil_state = desc.depth_stencil.as_ref();
+
+        if !color_targets.is_empty() && {
+            let first = &color_targets[0];
+            color_targets[1..]
+                .iter()
+                .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
+        } {
+            log::error!("Color targets: {:?}", color_targets);
+            self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLENDING)?;
+        }
 
         let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStage::empty();
@@ -2404,6 +2431,13 @@ impl From<hal::DeviceError> for DeviceError {
 #[error("Features {0:?} are required but not enabled on the device")]
 pub struct MissingFeatures(pub wgt::Features);
 
+#[derive(Clone, Debug, Error)]
+#[error(
+    "Downlevel flags {0:?} are required but not supported on the device.\n{}",
+    DOWNLEVEL_ERROR_WARNING_MESSAGE
+)]
+pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -2484,7 +2518,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
 
-        Ok(device.downlevel)
+        Ok(device.downlevel.clone())
     }
 
     pub fn device_create_buffer<A: HalApi>(
@@ -3606,7 +3640,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 encoder,
                 dev_stored,
                 device.limits.clone(),
-                device.downlevel,
+                device.downlevel.clone(),
                 device.features,
                 #[cfg(feature = "trace")]
                 device.trace.is_some(),

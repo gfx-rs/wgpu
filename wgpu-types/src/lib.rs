@@ -586,11 +586,24 @@ impl Default for Limits {
     }
 }
 
+/// Represents the sets of additional limits on an adapter,
+/// which take place when running on downlevel backends.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DownlevelLimits {}
+
+impl Default for DownlevelLimits {
+    fn default() -> Self {
+        DownlevelLimits {}
+    }
+}
+
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DownlevelCapabilities {
     /// Combined boolean flags.
     pub flags: DownlevelFlags,
+    /// Additional limits
+    pub limits: DownlevelLimits,
     /// Which collections of features shaders support. Defined in terms of D3D's shader models.
     pub shader_model: ShaderModel,
 }
@@ -599,6 +612,7 @@ impl Default for DownlevelCapabilities {
     fn default() -> Self {
         Self {
             flags: DownlevelFlags::COMPLIANT,
+            limits: DownlevelLimits::default(),
             shader_model: ShaderModel::Sm5,
         }
     }
@@ -609,8 +623,10 @@ impl DownlevelCapabilities {
     ///
     /// If this returns false, some parts of the API will result in validation errors where they would not normally.
     /// These parts can be determined by the values in this structure.
-    pub fn is_webgpu_compliant(self) -> bool {
-        self.flags.contains(DownlevelFlags::COMPLIANT) && self.shader_model >= ShaderModel::Sm5
+    pub fn is_webgpu_compliant(&self) -> bool {
+        self.flags.contains(DownlevelFlags::COMPLIANT)
+            && self.limits == DownlevelLimits::default()
+            && self.shader_model >= ShaderModel::Sm5
     }
 }
 
@@ -619,24 +635,30 @@ bitflags::bitflags! {
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
         const COMPUTE_SHADERS = 0x0000_0001;
-        /// Supports creating storage images.
-        const STORAGE_IMAGES = 0x0000_0002;
+        /// Supports binding storage buffers and textures to fragment shaders.
+        const FRAGMENT_WRITABLE_STORAGE = 0x0000_0002;
+        /// Supports indirect drawing and dispatching.
+        const INDIRECT_EXECUTION = 0x0000_0004;
+        /// Supports non-zero `base_vertex` parameter to indexed draw calls.
+        const BASE_VERTEX = 0x0000_0008;
         /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
-        const READ_ONLY_DEPTH_STENCIL = 0x0000_0004;
+        const READ_ONLY_DEPTH_STENCIL = 0x0000_0010;
         /// Supports:
         /// - copy_image_to_image
         /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
-        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0008;
+        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0020;
         /// Supports textures with mipmaps which have a non power of two size.
-        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0010;
+        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0040;
         /// Supports textures that are cube arrays.
-        const CUBE_ARRAY_TEXTURES = 0x0000_0020;
+        const CUBE_ARRAY_TEXTURES = 0x0000_0080;
         /// Supports comparison samplers.
-        const COMPARISON_SAMPLERS = 0x0000_0040;
+        const COMPARISON_SAMPLERS = 0x0000_0100;
+        /// Supports different blending modes per color target.
+        const INDEPENDENT_BLENDING = 0x0000_0200;
         /// Supports samplers with anisotropic filtering
         const ANISOTROPIC_FILTERING = 0x0001_0000;
         /// All flags are in their compliant state.
-        const COMPLIANT = 0x0000_007F;
+        const COMPLIANT = 0x0000_13FF;
     }
 }
 
@@ -1394,12 +1416,12 @@ pub enum TextureFormat {
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    EtcRgUnorm = 60,
+    EacRgUnorm = 60,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer R + 8 bit integer G.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    EtcRgSnorm = 61,
+    EacRgSnorm = 61,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
@@ -1648,8 +1670,8 @@ impl TextureFormat {
                 //Self::Etc2RgbA8UnormSrgb => (etc2, float, srgb, (4, 4), 16, basic),
                 Self::EacRUnorm => (etc2, float, linear, (4, 4), 8, basic),
                 Self::EacRSnorm => (etc2, float, linear, (4, 4), 8, basic),
-                Self::EtcRgUnorm => (etc2, float, linear, (4, 4), 16, basic),
-                Self::EtcRgSnorm => (etc2, float, linear, (4, 4), 16, basic),
+                Self::EacRgUnorm => (etc2, float, linear, (4, 4), 16, basic),
+                Self::EacRgSnorm => (etc2, float, linear, (4, 4), 16, basic),
 
                 // ASTC compressed textures
                 Self::Astc4x4RgbaUnorm => (astc_ldr, float, linear, (4, 4), 16, basic),

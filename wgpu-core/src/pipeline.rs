@@ -1,9 +1,9 @@
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
-    device::{DeviceError, MissingFeatures, RenderPassContext},
+    device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    validation, Label, LifeGuard, Stored, DOWNLEVEL_ERROR_WARNING_MESSAGE,
+    validation, Label, LifeGuard, Stored,
 };
 use std::borrow::Cow;
 use thiserror::Error;
@@ -109,11 +109,8 @@ pub enum CreateComputePipelineError {
     Stage(#[from] validation::StageError),
     #[error("Internal error: {0}")]
     Internal(String),
-    #[error(
-        "Compute shaders are not supported by the underlying platform. {}",
-        DOWNLEVEL_ERROR_WARNING_MESSAGE
-    )]
-    ComputeShadersUnsupported,
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 #[derive(Debug)]
@@ -258,6 +255,8 @@ pub enum CreateRenderPipelineError {
     ConservativeRasterizationNonFillPolygonMode,
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("error matching {stage:?} shader requirements against the pipeline")]
     Stage {
         stage: wgt::ShaderStage,

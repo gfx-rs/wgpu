@@ -31,35 +31,35 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(name: &str, backends: BackendBit) -> Self {
-        let mut flags = hal::InstanceFlag::empty();
-        if cfg!(debug_assertions) {
-            flags |= hal::InstanceFlag::VALIDATION;
-            flags |= hal::InstanceFlag::DEBUG;
-        }
-        let hal_desc = hal::InstanceDescriptor {
-            name: "wgpu",
-            flags,
-        };
-
-        let map = |backend: Backend| unsafe {
-            if backends.contains(backend.into()) {
-                hal::Instance::init(&hal_desc).ok()
+        fn init<A: HalApi>(mask: BackendBit) -> Option<A::Instance> {
+            if mask.contains(A::VARIANT.into()) {
+                let mut flags = hal::InstanceFlag::empty();
+                if cfg!(debug_assertions) {
+                    flags |= hal::InstanceFlag::VALIDATION;
+                    flags |= hal::InstanceFlag::DEBUG;
+                }
+                let hal_desc = hal::InstanceDescriptor {
+                    name: "wgpu",
+                    flags,
+                };
+                unsafe { hal::Instance::init(&hal_desc).ok() }
             } else {
                 None
             }
-        };
+        }
+
         Self {
             name: name.to_string(),
             #[cfg(vulkan)]
-            vulkan: map(Backend::Vulkan),
+            vulkan: init::<hal::api::Vulkan>(backends),
             #[cfg(metal)]
-            metal: map(Backend::Metal),
+            metal: init::<hal::api::Metal>(backends),
             #[cfg(dx12)]
-            dx12: map(Backend::Dx12),
+            dx12: init(Backend::Dx12, backends),
             #[cfg(dx11)]
-            dx11: map(Backend::Dx11),
+            dx11: init(Backend::Dx11, backends),
             #[cfg(gl)]
-            gl: map(Backend::Gl),
+            gl: init::<hal::api::Gles>(backends),
         }
     }
 
@@ -210,7 +210,13 @@ impl<A: HalApi> Adapter<A> {
 
         let caps = &self.raw.capabilities;
         if !caps.downlevel.is_webgpu_compliant() {
-            log::warn!("{}", DOWNLEVEL_WARNING_MESSAGE);
+            let missing_flags = wgt::DownlevelFlags::COMPLIANT - caps.downlevel.flags;
+            log::warn!(
+                "Missing downlevel flags: {:?}\n{}",
+                missing_flags,
+                DOWNLEVEL_WARNING_MESSAGE
+            );
+            log::info!("{:#?}", caps.downlevel);
         }
 
         // Verify feature preconditions
@@ -252,7 +258,7 @@ impl<A: HalApi> Adapter<A> {
                 ref_count: self.life_guard.add_ref(),
             },
             caps.alignments.clone(),
-            caps.downlevel,
+            caps.downlevel.clone(),
             desc,
             trace_path,
         )
@@ -653,7 +659,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.downlevel)
+            .map(|adapter| adapter.raw.capabilities.downlevel.clone())
             .map_err(|_| InvalidAdapter)
     }
 

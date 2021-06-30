@@ -287,6 +287,18 @@ impl super::Instance {
     }
 }
 
+impl Drop for super::InstanceShared {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(du) = self.debug_utils.take() {
+                du.extension
+                    .destroy_debug_utils_messenger(du.messenger, None);
+            }
+            self.raw.destroy_instance(None);
+        }
+    }
+}
+
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         let entry = match ash::Entry::new() {
@@ -638,8 +650,6 @@ impl crate::Surface<super::Api> for super::Surface {
                 dim: wgt::TextureDimension::D2,
                 aspects: crate::FormatAspect::COLOR,
                 format_info: sc.config.format.describe(),
-                sample_count: 1,
-                size: sc.config.extent,
                 raw_flags: vk::ImageCreateFlags::empty(),
             },
         };

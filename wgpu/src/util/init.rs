@@ -42,12 +42,12 @@ pub fn initialize_adapter_from_env(
     instance: &Instance,
     backend_bits: BackendBit,
 ) -> Option<Adapter> {
-    let adapters = instance.enumerate_adapters(backend_bits);
-
     let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
         .as_deref()
         .map(str::to_lowercase)
         .ok()?;
+
+    let adapters = instance.enumerate_adapters(backend_bits);
 
     let mut chosen_adapter = None;
     for adapter in adapters {

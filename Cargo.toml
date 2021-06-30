@@ -20,6 +20,9 @@ default-members = ["wgpu", "player", "wgpu-hal", "wgpu-info"]
 [patch."https://github.com/zakarumych/gpu-alloc"]
 #gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
 
+[patch."https://github.com/grovesNL/glow"]
+#glow = { path = "../glow" }
+
 [patch.crates-io]
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }

@@ -1,3 +1,25 @@
+/*!
+# Vulkan API internals.
+
+## Stack memory
+
+Ash expects slices, which we don't generally have available.
+We cope with this requirement by the combination of the following ways:
+  - temporarily allocating `Vec` on heap, where overhead is permitted
+  - growing temporary local storage
+  - using `implace_it` on iterators
+
+## Framebuffers and Render passes
+
+Render passes are cached on the device and kept forever.
+
+Framebuffers are also cached on the device, but they are removed when
+any of the image views (they have) gets removed.
+If Vulkan supports image-less framebuffers,
+then the actual views are excluded from the framebuffer key.
+
+!*/
+
 mod adapter;
 mod command;
 mod conv;
@@ -48,7 +70,6 @@ impl crate::Api for Api {
 
 struct DebugUtils {
     extension: ext::DebugUtils,
-    #[allow(dead_code)]
     messenger: vk::DebugUtilsMessengerEXT,
 }
 
@@ -181,24 +202,11 @@ struct FramebufferAttachment {
     view_format: wgt::TextureFormat,
 }
 
-#[derive(Clone, Eq, Default, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {
     attachments: ArrayVec<[FramebufferAttachment; MAX_TOTAL_ATTACHMENTS]>,
     extent: wgt::Extent3d,
     sample_count: u32,
-}
-
-impl FramebufferKey {
-    fn add(&mut self, view: &TextureView) {
-        self.extent.width = self.extent.width.max(view.render_size.width);
-        self.extent.height = self.extent.height.max(view.render_size.height);
-        self.extent.depth_or_array_layers = self
-            .extent
-            .depth_or_array_layers
-            .max(view.render_size.depth_or_array_layers);
-        self.sample_count = self.sample_count.max(view.sample_count);
-        self.attachments.push(view.attachment.clone());
-    }
 }
 
 struct DeviceShared {
@@ -243,8 +251,6 @@ pub struct Texture {
     dim: wgt::TextureDimension,
     aspects: crate::FormatAspect,
     format_info: wgt::TextureFormatInfo,
-    sample_count: u32,
-    size: wgt::Extent3d,
     raw_flags: vk::ImageCreateFlags,
 }
 
@@ -252,8 +258,6 @@ pub struct Texture {
 pub struct TextureView {
     raw: vk::ImageView,
     attachment: FramebufferAttachment,
-    sample_count: u32,
-    render_size: wgt::Extent3d,
 }
 
 impl TextureView {
@@ -271,7 +275,7 @@ pub struct Sampler {
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
     desc_count: gpu_descriptor::DescriptorTotalCount,
-    types: Vec<(vk::DescriptorType, u32)>,
+    types: Box<[(vk::DescriptorType, u32)]>,
 }
 
 #[derive(Debug)]

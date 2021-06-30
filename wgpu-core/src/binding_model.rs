@@ -1,5 +1,5 @@
 use crate::{
-    device::{DeviceError, MissingFeatures, SHADER_STAGE_COUNT},
+    device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     memory_init_tracker::MemoryInitTrackerAction,
@@ -28,6 +28,8 @@ pub enum BindGroupLayoutEntryError {
     ArrayUnsupported,
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 #[derive(Clone, Debug, Error)]

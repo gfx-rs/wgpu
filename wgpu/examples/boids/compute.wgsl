@@ -41,8 +41,6 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
   var cMassCount : i32 = 0;
   var cVelCount : i32 = 0;
 
-  var pos : vec2<f32>;
-  var vel : vec2<f32>;
   var i : u32 = 0u;
   loop {
     if (i >= total) {
@@ -52,8 +50,8 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
       continue;
     }
 
-    pos = particlesSrc.particles[i].pos;
-    vel = particlesSrc.particles[i].vel;
+    let pos = particlesSrc.particles[i].pos;
+    let vel = particlesSrc.particles[i].vel;
 
     if (distance(pos, vPos) < params.rule1Distance) {
       cMass = cMass + pos;
