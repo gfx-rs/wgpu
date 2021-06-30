@@ -218,7 +218,7 @@ impl Binder {
 }
 
 struct PushConstantChange {
-    stages: wgt::ShaderStage,
+    stages: wgt::ShaderStages,
     offset: u32,
     enable: bool,
 }
@@ -251,7 +251,7 @@ pub fn compute_nonoverlapping_ranges(
 
     let mut output_ranges = ArrayVec::new();
     let mut position = 0_u32;
-    let mut stages = wgt::ShaderStage::NONE;
+    let mut stages = wgt::ShaderStages::NONE;
 
     for bk in breaks {
         if bk.offset - position > 0 && !stages.is_empty() {

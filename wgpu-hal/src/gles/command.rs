@@ -72,7 +72,7 @@ impl super::CommandEncoder {
     fn rebind_vertex_data(&mut self, first_instance: u32) {
         if self
             .private_caps
-            .contains(super::PrivateCapability::VERTEX_BUFFER_LAYOUT)
+            .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
         {
             for (index, &(ref vb_desc, ref vb)) in self.state.vertex_buffers.iter().enumerate() {
                 if self.state.dirty_vbuf_mask & (1 << index) == 0 {
@@ -190,13 +190,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         if !self
             .private_caps
-            .contains(super::PrivateCapability::MEMORY_BARRIERS)
+            .contains(super::PrivateCapabilities::MEMORY_BARRIERS)
         {
             return;
         }
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
-            if !bar.usage.start.contains(crate::BufferUse::STORAGE_STORE) {
+            if !bar.usage.start.contains(crate::BufferUses::STORAGE_STORE) {
                 continue;
             }
             self.cmd_buffer
@@ -211,15 +211,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         if !self
             .private_caps
-            .contains(super::PrivateCapability::MEMORY_BARRIERS)
+            .contains(super::PrivateCapabilities::MEMORY_BARRIERS)
         {
             return;
         }
 
-        let mut combined_usage = crate::TextureUse::empty();
+        let mut combined_usage = crate::TextureUses::empty();
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
-            if !bar.usage.start.contains(crate::TextureUse::STORAGE_STORE) {
+            if !bar.usage.start.contains(crate::TextureUses::STORAGE_STORE) {
                 continue;
             }
             // unlike buffers, there is no need for a concrete texture
@@ -267,7 +267,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUse,
+        _src_usage: crate::TextureUses,
         dst: &super::Texture,
         regions: T,
     ) where
@@ -310,7 +310,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUse,
+        _src_usage: crate::TextureUses,
         dst: &super::Buffer,
         regions: T,
     ) where
@@ -390,30 +390,30 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     .resolve_attachments
                     .push((attachment, rat.view.clone()));
             }
-            if !cat.ops.contains(crate::AttachmentOp::STORE) {
+            if !cat.ops.contains(crate::AttachmentOps::STORE) {
                 self.state.invalidate_attachments.push(attachment);
             }
         }
         if let Some(ref dsat) = desc.depth_stencil_attachment {
             let aspects = dsat.target.view.aspects;
             let attachment = match aspects {
-                crate::FormatAspect::DEPTH => glow::DEPTH_ATTACHMENT,
-                crate::FormatAspect::STENCIL => glow::STENCIL_ATTACHMENT,
+                crate::FormatAspects::DEPTH => glow::DEPTH_ATTACHMENT,
+                crate::FormatAspects::STENCIL => glow::STENCIL_ATTACHMENT,
                 _ => glow::DEPTH_STENCIL_ATTACHMENT,
             };
             self.cmd_buffer.commands.push(C::BindAttachment {
                 attachment,
                 view: dsat.target.view.clone(),
             });
-            if aspects.contains(crate::FormatAspect::DEPTH)
-                && !dsat.depth_ops.contains(crate::AttachmentOp::STORE)
+            if aspects.contains(crate::FormatAspects::DEPTH)
+                && !dsat.depth_ops.contains(crate::AttachmentOps::STORE)
             {
                 self.state
                     .invalidate_attachments
                     .push(glow::DEPTH_ATTACHMENT);
             }
-            if aspects.contains(crate::FormatAspect::STENCIL)
-                && !dsat.stencil_ops.contains(crate::AttachmentOp::STORE)
+            if aspects.contains(crate::FormatAspects::STENCIL)
+                && !dsat.stencil_ops.contains(crate::AttachmentOps::STORE)
             {
                 self.state
                     .invalidate_attachments
@@ -439,7 +439,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         // issue the clears
         for (i, cat) in desc.color_attachments.iter().enumerate() {
-            if !cat.ops.contains(crate::AttachmentOp::LOAD) {
+            if !cat.ops.contains(crate::AttachmentOps::LOAD) {
                 let c = &cat.clear_value;
                 self.cmd_buffer
                     .commands
@@ -461,12 +461,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
         }
         if let Some(ref dsat) = desc.depth_stencil_attachment {
-            if !dsat.depth_ops.contains(crate::AttachmentOp::LOAD) {
+            if !dsat.depth_ops.contains(crate::AttachmentOps::LOAD) {
                 self.cmd_buffer
                     .commands
                     .push(C::ClearDepth(dsat.clear_value.0));
             }
-            if !dsat.stencil_ops.contains(crate::AttachmentOp::LOAD) {
+            if !dsat.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                 self.cmd_buffer
                     .commands
                     .push(C::ClearStencil(dsat.clear_value.1));
@@ -574,7 +574,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_push_constants(
         &mut self,
         _layout: &super::PipelineLayout,
-        _stages: wgt::ShaderStage,
+        _stages: wgt::ShaderStages,
         _offset: u32,
         _data: &[u32],
     ) {
@@ -604,7 +604,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         if self
             .private_caps
-            .contains(super::PrivateCapability::VERTEX_BUFFER_LAYOUT)
+            .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
         {
             for vat in pipeline.vertex_attributes.iter() {
                 let vb = &pipeline.vertex_buffers[vat.buffer_index as usize];
@@ -655,7 +655,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
 
         // set depth/stencil states
-        let mut aspects = crate::FormatAspect::empty();
+        let mut aspects = crate::FormatAspects::empty();
         if pipeline.depth_bias != self.state.depth_bias {
             self.state.depth_bias = pipeline.depth_bias;
             self.cmd_buffer
@@ -663,11 +663,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .push(C::SetDepthBias(pipeline.depth_bias));
         }
         if let Some(ref depth) = pipeline.depth {
-            aspects |= crate::FormatAspect::DEPTH;
+            aspects |= crate::FormatAspects::DEPTH;
             self.cmd_buffer.commands.push(C::SetDepth(depth.clone()));
         }
         if let Some(ref stencil) = pipeline.stencil {
-            aspects |= crate::FormatAspect::STENCIL;
+            aspects |= crate::FormatAspects::STENCIL;
             self.state.stencil = stencil.clone();
             self.rebind_stencil_func();
             if stencil.front.ops == stencil.back.ops

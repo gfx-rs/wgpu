@@ -110,7 +110,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     log::info!("Initializing the surface...");
 
-    let backend = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::BackendBit::PRIMARY);
+    let backend = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::PRIMARY);
 
     let instance = wgpu::Instance::new(backend);
     let (size, surface) = unsafe {
@@ -178,7 +178,7 @@ fn start<E: Example>(
 ) {
     let spawner = Spawner::new();
     let mut sc_desc = wgpu::SwapChainDescriptor {
-        usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: adapter.get_swap_chain_preferred_format(&surface).unwrap(),
         width: size.width,
         height: size.height,
@@ -407,7 +407,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsage::RENDER_ATTACHMENT | wgpu::TextureUsage::COPY_SRC,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             });
 
             let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -415,13 +415,13 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
             let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("image map buffer"),
                 size: params.width as u64 * params.height as u64 * 4,
-                usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             });
 
             let mut example = E::init(
                 &wgpu::SwapChainDescriptor {
-                    usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     width: params.width,
                     height: params.height,

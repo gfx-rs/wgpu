@@ -1,14 +1,14 @@
 use super::{PendingTransition, ResourceState, Unit};
 use crate::id::{BufferId, Valid};
-use hal::BufferUse;
+use hal::BufferUses;
 
-pub(crate) type BufferState = Unit<BufferUse>;
+pub(crate) type BufferState = Unit<BufferUses>;
 
 impl PendingTransition<BufferState> {
-    fn collapse(self) -> Result<BufferUse, Self> {
+    fn collapse(self) -> Result<BufferUses, Self> {
         if self.usage.start.is_empty()
             || self.usage.start == self.usage.end
-            || !BufferUse::WRITE_ALL.intersects(self.usage.start | self.usage.end)
+            || !BufferUses::WRITE_ALL.intersects(self.usage.start | self.usage.end)
         {
             Ok(self.usage.start | self.usage.end)
         } else {
@@ -21,13 +21,13 @@ impl Default for BufferState {
     fn default() -> Self {
         Self {
             first: None,
-            last: BufferUse::empty(),
+            last: BufferUses::empty(),
         }
     }
 }
 
 impl BufferState {
-    pub fn with_usage(usage: BufferUse) -> Self {
+    pub fn with_usage(usage: BufferUses) -> Self {
         Unit::new(usage)
     }
 }
@@ -35,7 +35,7 @@ impl BufferState {
 impl ResourceState for BufferState {
     type Id = BufferId;
     type Selector = ();
-    type Usage = BufferUse;
+    type Usage = BufferUses;
 
     fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(self.last)
@@ -49,7 +49,7 @@ impl ResourceState for BufferState {
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
-        if old != usage || !BufferUse::ORDERED.contains(usage) {
+        if old != usage || !BufferUses::ORDERED.contains(usage) {
             let pending = PendingTransition {
                 id,
                 selector: (),
@@ -102,7 +102,7 @@ impl ResourceState for BufferState {
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
         let new = other.port();
-        if old == new && BufferUse::ORDERED.contains(new) {
+        if old == new && BufferUses::ORDERED.contains(new) {
             if output.is_some() && self.first.is_none() {
                 self.first = Some(old);
             }
@@ -144,64 +144,64 @@ mod test {
     fn change_extend() {
         let mut bs = Unit {
             first: None,
-            last: BufferUse::INDEX,
+            last: BufferUses::INDEX,
         };
         let id = Id::dummy();
         assert_eq!(
-            bs.change(id, (), BufferUse::STORAGE_STORE, None),
+            bs.change(id, (), BufferUses::STORAGE_STORE, None),
             Err(PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUse::INDEX..BufferUse::STORAGE_STORE,
+                usage: BufferUses::INDEX..BufferUses::STORAGE_STORE,
             }),
         );
-        bs.change(id, (), BufferUse::VERTEX, None).unwrap();
-        bs.change(id, (), BufferUse::INDEX, None).unwrap();
-        assert_eq!(bs, Unit::new(BufferUse::VERTEX | BufferUse::INDEX));
+        bs.change(id, (), BufferUses::VERTEX, None).unwrap();
+        bs.change(id, (), BufferUses::INDEX, None).unwrap();
+        assert_eq!(bs, Unit::new(BufferUses::VERTEX | BufferUses::INDEX));
     }
 
     #[test]
     fn change_replace() {
         let mut bs = Unit {
             first: None,
-            last: BufferUse::STORAGE_STORE,
+            last: BufferUses::STORAGE_STORE,
         };
         let id = Id::dummy();
         let mut list = Vec::new();
-        bs.change(id, (), BufferUse::VERTEX, Some(&mut list))
+        bs.change(id, (), BufferUses::VERTEX, Some(&mut list))
             .unwrap();
         assert_eq!(
             &list,
             &[PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUse::STORAGE_STORE..BufferUse::VERTEX,
+                usage: BufferUses::STORAGE_STORE..BufferUses::VERTEX,
             }],
         );
         assert_eq!(
             bs,
             Unit {
-                first: Some(BufferUse::STORAGE_STORE),
-                last: BufferUse::VERTEX,
+                first: Some(BufferUses::STORAGE_STORE),
+                last: BufferUses::VERTEX,
             }
         );
 
         list.clear();
-        bs.change(id, (), BufferUse::STORAGE_STORE, Some(&mut list))
+        bs.change(id, (), BufferUses::STORAGE_STORE, Some(&mut list))
             .unwrap();
         assert_eq!(
             &list,
             &[PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUse::VERTEX..BufferUse::STORAGE_STORE,
+                usage: BufferUses::VERTEX..BufferUses::STORAGE_STORE,
             }],
         );
         assert_eq!(
             bs,
             Unit {
-                first: Some(BufferUse::STORAGE_STORE),
-                last: BufferUse::STORAGE_STORE,
+                first: Some(BufferUses::STORAGE_STORE),
+                last: BufferUses::STORAGE_STORE,
             }
         );
     }
@@ -210,24 +210,24 @@ mod test {
     fn prepend() {
         let mut bs = Unit {
             first: None,
-            last: BufferUse::VERTEX,
+            last: BufferUses::VERTEX,
         };
         let id = Id::dummy();
-        bs.prepend(id, (), BufferUse::INDEX).unwrap();
-        bs.prepend(id, (), BufferUse::INDEX).unwrap();
+        bs.prepend(id, (), BufferUses::INDEX).unwrap();
+        bs.prepend(id, (), BufferUses::INDEX).unwrap();
         assert_eq!(
-            bs.prepend(id, (), BufferUse::STORAGE_LOAD),
+            bs.prepend(id, (), BufferUses::STORAGE_LOAD),
             Err(PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUse::INDEX..BufferUse::STORAGE_LOAD,
+                usage: BufferUses::INDEX..BufferUses::STORAGE_LOAD,
             })
         );
         assert_eq!(
             bs,
             Unit {
-                first: Some(BufferUse::INDEX),
-                last: BufferUse::VERTEX,
+                first: Some(BufferUses::INDEX),
+                last: BufferUses::VERTEX,
             }
         );
     }

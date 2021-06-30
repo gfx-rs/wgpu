@@ -112,14 +112,14 @@ impl framework::Example for Example {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsage::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let index_data = create_indices();
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&index_data),
-            usage: wgpu::BufferUsage::INDEX,
+            usage: wgpu::BufferUsages::INDEX,
         });
 
         let red_texture_data = create_texture_data(Color::RED);
@@ -131,7 +131,7 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+            usage: wgpu::TextureUsages::SAMPLED | wgpu::TextureUsages::COPY_DST,
             label: None,
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -174,7 +174,7 @@ impl framework::Example for Example {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         view_dimension: wgpu::TextureViewDimension::D2,
@@ -184,7 +184,7 @@ impl framework::Example for Example {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler {
                         comparison: false,
                         filtering: true,
@@ -217,7 +217,7 @@ impl framework::Example for Example {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: if uniform_workaround {
                 &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStage::FRAGMENT,
+                    stages: wgpu::ShaderStages::FRAGMENT,
                     range: 0..4,
                 }]
             } else {
@@ -301,9 +301,9 @@ impl framework::Example for Example {
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..), self.index_format);
         if self.uniform_workaround {
-            rpass.set_push_constants(wgpu::ShaderStage::FRAGMENT, 0, bytemuck::cast_slice(&[0]));
+            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, bytemuck::cast_slice(&[0]));
             rpass.draw_indexed(0..6, 0, 0..1);
-            rpass.set_push_constants(wgpu::ShaderStage::FRAGMENT, 0, bytemuck::cast_slice(&[1]));
+            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, bytemuck::cast_slice(&[1]));
             rpass.draw_indexed(6..12, 0, 0..1);
         } else {
             rpass.draw_indexed(0..12, 0, 0..1);

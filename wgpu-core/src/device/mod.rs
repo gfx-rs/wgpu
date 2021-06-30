@@ -489,18 +489,18 @@ impl<A: HalApi> Device<A> {
             if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(resource::CreateBufferError::UnalignedSize);
             }
-            if !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+            if !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // we are going to be copying into it, internally
-                usage |= hal::BufferUse::COPY_DST;
+                usage |= hal::BufferUses::COPY_DST;
             }
         } else {
             // We are required to zero out (initialize) all memory.
             // This is done on demand using fill_buffer which requires write transfer usage!
-            usage |= hal::BufferUse::COPY_DST;
+            usage |= hal::BufferUses::COPY_DST;
         }
 
-        let mut memory_flags = hal::MemoryFlag::empty();
-        memory_flags.set(hal::MemoryFlag::TRANSIENT, transient);
+        let mut memory_flags = hal::MemoryFlags::empty();
+        memory_flags.set(hal::MemoryFlags::TRANSIENT, transient);
 
         let hal_desc = hal::BufferDescriptor {
             label: desc.label.borrow_option(),
@@ -542,7 +542,7 @@ impl<A: HalApi> Device<A> {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
                 if desc
                     .usage
-                    .intersects(wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST)
+                    .intersects(wgt::TextureUsages::COPY_SRC | wgt::TextureUsages::COPY_DST)
                 {
                     return Err(resource::CreateTextureError::CannotCopyD24Plus);
                 }
@@ -583,7 +583,7 @@ impl<A: HalApi> Device<A> {
             dimension: desc.dimension,
             format: desc.format,
             usage: hal_usage,
-            memory_flags: hal::MemoryFlag::empty(),
+            memory_flags: hal::MemoryFlags::empty(),
         };
         let raw = unsafe {
             self.raw
@@ -683,8 +683,8 @@ impl<A: HalApi> Device<A> {
             _ => {}
         }
 
-        let full_aspect = hal::FormatAspect::from(texture.desc.format);
-        let select_aspect = hal::FormatAspect::from(desc.range.aspect);
+        let full_aspect = hal::FormatAspects::from(texture.desc.format);
+        let select_aspect = hal::FormatAspects::from(desc.range.aspect);
         if (full_aspect & select_aspect).is_empty() {
             return Err(resource::CreateTextureViewError::InvalidAspect {
                 texture_format: texture.desc.format,
@@ -765,10 +765,10 @@ impl<A: HalApi> Device<A> {
             extent,
             samples: texture.desc.sample_count,
             // once a storage - forever a storage
-            sampled_internal_use: if texture.desc.usage.contains(wgt::TextureUsage::STORAGE) {
-                hal::TextureUse::SAMPLED | hal::TextureUse::STORAGE_LOAD
+            sampled_internal_use: if texture.desc.usage.contains(wgt::TextureUsages::STORAGE) {
+                hal::TextureUses::SAMPLED | hal::TextureUses::STORAGE_LOAD
             } else {
-                hal::TextureUse::SAMPLED
+                hal::TextureUses::SAMPLED
             },
             selector,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
@@ -1037,10 +1037,10 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
-            if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::VERTEX) {
+            if is_writable_storage && entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
             }
-            if is_writable_storage && entry.visibility.contains(wgt::ShaderStage::FRAGMENT) {
+            if is_writable_storage && entry.visibility.contains(wgt::ShaderStages::FRAGMENT) {
                 self.require_downlevel_flags(wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE)
                     .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
                     .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
@@ -1126,16 +1126,16 @@ impl<A: HalApi> Device<A> {
         };
         let (pub_usage, internal_use, range_limit) = match binding_ty {
             wgt::BufferBindingType::Uniform => (
-                wgt::BufferUsage::UNIFORM,
-                hal::BufferUse::UNIFORM,
+                wgt::BufferUsages::UNIFORM,
+                hal::BufferUses::UNIFORM,
                 limits.max_uniform_buffer_binding_size,
             ),
             wgt::BufferBindingType::Storage { read_only } => (
-                wgt::BufferUsage::STORAGE,
+                wgt::BufferUsages::STORAGE,
                 if read_only {
-                    hal::BufferUse::STORAGE_LOAD
+                    hal::BufferUses::STORAGE_LOAD
                 } else {
-                    hal::BufferUse::STORAGE_STORE
+                    hal::BufferUses::STORAGE_STORE
                 },
                 limits.max_storage_buffer_binding_size,
             ),
@@ -1481,10 +1481,10 @@ impl<A: HalApi> Device<A> {
         decl: &wgt::BindGroupLayoutEntry,
         view: &crate::resource::TextureView<A>,
         expected: &'static str,
-    ) -> Result<(wgt::TextureUsage, hal::TextureUse), binding_model::CreateBindGroupError> {
+    ) -> Result<(wgt::TextureUsages, hal::TextureUses), binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
-        if hal::FormatAspect::from(view.desc.format)
-            .contains(hal::FormatAspect::DEPTH | hal::FormatAspect::STENCIL)
+        if hal::FormatAspects::from(view.desc.format)
+            .contains(hal::FormatAspects::DEPTH | hal::FormatAspects::STENCIL)
         {
             return Err(Error::DepthStencilAspect);
         }
@@ -1531,7 +1531,7 @@ impl<A: HalApi> Device<A> {
                         view_dimension: view.desc.dimension,
                     });
                 }
-                Ok((wgt::TextureUsage::SAMPLED, view.sampled_internal_use))
+                Ok((wgt::TextureUsages::SAMPLED, view.sampled_internal_use))
             }
             wgt::BindingType::StorageTexture {
                 access,
@@ -1553,8 +1553,8 @@ impl<A: HalApi> Device<A> {
                     });
                 }
                 let internal_use = match access {
-                    wgt::StorageTextureAccess::ReadOnly => hal::TextureUse::STORAGE_LOAD,
-                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUse::STORAGE_STORE,
+                    wgt::StorageTextureAccess::ReadOnly => hal::TextureUses::STORAGE_LOAD,
+                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUses::STORAGE_STORE,
                     wgt::StorageTextureAccess::ReadWrite => {
                         if !view
                             .format_features
@@ -1564,10 +1564,10 @@ impl<A: HalApi> Device<A> {
                             return Err(Error::StorageReadWriteNotSupported(view.desc.format));
                         }
 
-                        hal::TextureUse::STORAGE_STORE | hal::TextureUse::STORAGE_LOAD
+                        hal::TextureUses::STORAGE_STORE | hal::TextureUses::STORAGE_LOAD
                     }
                 };
-                Ok((wgt::TextureUsage::STORAGE, internal_use))
+                Ok((wgt::TextureUsages::STORAGE, internal_use))
             }
             _ => Err(Error::WrongBindingType {
                 binding,
@@ -1598,7 +1598,7 @@ impl<A: HalApi> Device<A> {
             self.require_features(wgt::Features::PUSH_CONSTANTS)?;
         }
 
-        let mut used_stages = wgt::ShaderStage::empty();
+        let mut used_stages = wgt::ShaderStages::empty();
         for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
             if pc.stages.intersects(used_stages) {
                 return Err(Error::MoreThanOnePushConstantRangePerStage {
@@ -1764,7 +1764,7 @@ impl<A: HalApi> Device<A> {
             .map_err(|_| validation::StageError::InvalidModule)?;
 
         {
-            let flag = wgt::ShaderStage::COMPUTE;
+            let flag = wgt::ShaderStages::COMPUTE;
             let provided_layouts = match desc.layout {
                 Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
                     pipeline_layout_guard
@@ -1885,7 +1885,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let mut io = validation::StageIo::default();
-        let mut validated_stages = wgt::ShaderStage::empty();
+        let mut validated_stages = wgt::ShaderStages::empty();
 
         let mut vertex_strides = Vec::with_capacity(desc.vertex.buffers.len());
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
@@ -1988,14 +1988,14 @@ impl<A: HalApi> Device<A> {
                 let format_features = self.describe_format_features(adapter, cs.format)?;
                 if !format_features
                     .allowed_usages
-                    .contains(wgt::TextureUsage::RENDER_ATTACHMENT)
+                    .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
                 {
                     break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
                 }
                 if cs.blend.is_some() && !format_features.filterable {
                     break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                 }
-                if !hal::FormatAspect::from(cs.format).contains(hal::FormatAspect::COLOR) {
+                if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
                     break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
                 }
 
@@ -2011,17 +2011,17 @@ impl<A: HalApi> Device<A> {
                 if !self
                     .describe_format_features(adapter, ds.format)?
                     .allowed_usages
-                    .contains(wgt::TextureUsage::RENDER_ATTACHMENT)
+                    .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
                 {
                     break Some(pipeline::DepthStencilStateError::FormatNotRenderable(
                         ds.format,
                     ));
                 }
-                let aspect = hal::FormatAspect::from(ds.format);
-                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspect::DEPTH) {
+                let aspect = hal::FormatAspects::from(ds.format);
+                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspects::DEPTH) {
                     break Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
                 }
-                if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspect::STENCIL) {
+                if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspects::STENCIL) {
                     break Some(pipeline::DepthStencilStateError::FormatNotStencil(
                         ds.format,
                     ));
@@ -2051,7 +2051,7 @@ impl<A: HalApi> Device<A> {
 
         let vertex_stage = {
             let stage = &desc.vertex.stage;
-            let flag = wgt::ShaderStage::VERTEX;
+            let flag = wgt::ShaderStages::VERTEX;
 
             let shader_module = shader_module_guard.get(stage.module).map_err(|_| {
                 pipeline::CreateRenderPipelineError::Stage {
@@ -2097,7 +2097,7 @@ impl<A: HalApi> Device<A> {
 
         let fragment_stage = match desc.fragment {
             Some(ref fragment) => {
-                let flag = wgt::ShaderStage::FRAGMENT;
+                let flag = wgt::ShaderStages::FRAGMENT;
 
                 let shader_module =
                     shader_module_guard
@@ -2117,7 +2117,7 @@ impl<A: HalApi> Device<A> {
                     None => None,
                 };
 
-                if validated_stages == wgt::ShaderStage::VERTEX {
+                if validated_stages == wgt::ShaderStages::VERTEX {
                     if let Some(ref interface) = shader_module.interface {
                         io = interface
                             .check_stage(
@@ -2143,7 +2143,7 @@ impl<A: HalApi> Device<A> {
             None => None,
         };
 
-        if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
+        if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, state) in color_targets.iter().enumerate() {
                 match io.get(&(i as wgt::ShaderLocation)) {
                     Some(ref output) => {
@@ -2171,8 +2171,8 @@ impl<A: HalApi> Device<A> {
             }
         }
         let last_stage = match desc.fragment {
-            Some(_) => wgt::ShaderStage::FRAGMENT,
-            None => wgt::ShaderStage::VERTEX,
+            Some(_) => wgt::ShaderStages::FRAGMENT,
+            None => wgt::ShaderStages::VERTEX,
         };
         if desc.layout.is_none() && !validated_stages.contains(last_stage) {
             return Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage).into());
@@ -2543,8 +2543,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref trace) = device.trace {
                 let mut desc = desc.clone();
                 let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
-                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
-                    desc.usage |= wgt::BufferUsage::COPY_DST;
+                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+                    desc.usage |= wgt::BufferUsages::COPY_DST;
                 }
                 trace
                     .lock()
@@ -2558,8 +2558,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = buffer.life_guard.add_ref();
 
             let buffer_use = if !desc.mapped_at_creation {
-                hal::BufferUse::empty()
-            } else if desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+                hal::BufferUses::empty()
+            } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // buffer is mappable, so we are just doing that at start
                 let map_size = buffer.size;
                 let ptr = match map_buffer(&device.raw, &mut buffer, 0, map_size, HostMap::Write) {
@@ -2577,13 +2577,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     range: 0..map_size,
                     host: HostMap::Write,
                 };
-                hal::BufferUse::MAP_WRITE
+                hal::BufferUses::MAP_WRITE
             } else {
                 // buffer needs staging area for initialization only
                 let stage_desc = wgt::BufferDescriptor {
                     label: Some(Cow::Borrowed("<init_buffer>")),
                     size: desc.size,
-                    usage: wgt::BufferUsage::MAP_WRITE | wgt::BufferUsage::COPY_SRC,
+                    usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
                     mapped_at_creation: false,
                 };
                 let mut stage = match device.create_buffer(device_id, &stage_desc, true) {
@@ -2623,7 +2623,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     needs_flush: !mapping.is_coherent,
                     stage_buffer,
                 };
-                hal::BufferUse::COPY_DST
+                hal::BufferUses::COPY_DST
             };
 
             let id = fid.assign(buffer, &mut token);
@@ -2686,7 +2686,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let buffer = buffer_guard
             .get_mut(buffer_id)
             .map_err(|_| resource::BufferAccessError::Invalid)?;
-        check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_WRITE)?;
+        check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
         #[cfg(feature = "trace")]
@@ -2743,7 +2743,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let buffer = buffer_guard
             .get_mut(buffer_id)
             .map_err(|_| resource::BufferAccessError::Invalid)?;
-        check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_READ)?;
+        check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
         let raw_buf = buffer.raw.as_ref().unwrap();
@@ -4221,7 +4221,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     height: desc.height,
                     depth_or_array_layers: 1,
                 },
-                usage: conv::map_texture_usage(desc.usage, hal::FormatAspect::COLOR),
+                usage: conv::map_texture_usage(desc.usage, hal::FormatAspects::COLOR),
             };
 
             if let Err(error) = validate_swap_chain_descriptor(&mut config, &caps) {
@@ -4409,8 +4409,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (pub_usage, internal_use) = match op.host {
-            HostMap::Read => (wgt::BufferUsage::MAP_READ, hal::BufferUse::MAP_READ),
-            HostMap::Write => (wgt::BufferUsage::MAP_WRITE, hal::BufferUse::MAP_WRITE),
+            HostMap::Read => (wgt::BufferUsages::MAP_READ, hal::BufferUses::MAP_READ),
+            HostMap::Write => (wgt::BufferUsages::MAP_WRITE, hal::BufferUses::MAP_WRITE),
         };
 
         if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -4580,11 +4580,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
                 let transition_src = hal::BufferBarrier {
                     buffer: &stage_buffer,
-                    usage: hal::BufferUse::MAP_WRITE..hal::BufferUse::COPY_SRC,
+                    usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                 };
                 let transition_dst = hal::BufferBarrier {
                     buffer: raw_buf,
-                    usage: hal::BufferUse::empty()..hal::BufferUse::COPY_DST,
+                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
                 };
                 let encoder = device.pending_writes.activate();
                 unsafe {

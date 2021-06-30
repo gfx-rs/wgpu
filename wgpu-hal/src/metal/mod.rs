@@ -398,7 +398,7 @@ unsafe impl Sync for Texture {}
 #[derive(Debug)]
 pub struct TextureView {
     raw: mtl::Texture,
-    aspects: crate::FormatAspect,
+    aspects: crate::FormatAspects,
 }
 
 unsafe impl Send for TextureView {}

@@ -251,18 +251,18 @@ impl super::Adapter {
             max_push_constant_size: 0,
         };
 
-        let mut private_caps = super::PrivateCapability::empty();
+        let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
-            super::PrivateCapability::SHADER_BINDING_LAYOUT,
+            super::PrivateCapabilities::SHADER_BINDING_LAYOUT,
             ver >= (3, 1),
         );
         private_caps.set(
-            super::PrivateCapability::SHADER_TEXTURE_SHADOW_LOD,
+            super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD,
             extensions.contains("GL_EXT_texture_shadow_lod"),
         );
-        private_caps.set(super::PrivateCapability::MEMORY_BARRIERS, ver >= (3, 1));
+        private_caps.set(super::PrivateCapabilities::MEMORY_BARRIERS, ver >= (3, 1));
         private_caps.set(
-            super::PrivateCapability::VERTEX_BUFFER_LAYOUT,
+            super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT,
             ver >= (3, 1),
         );
 
@@ -345,8 +345,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
-    ) -> crate::TextureFormatCapability {
-        use crate::TextureFormatCapability as Tfc;
+    ) -> crate::TextureFormatCapabilities {
+        use crate::TextureFormatCapabilities as Tfc;
         use wgt::TextureFormat as Tf;
         // The storage types are sprinkled based on section
         // "TEXTURE IMAGE LOADS AND STORES" of GLES-3.2 spec.
@@ -450,7 +450,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     height: 4096,
                     depth_or_array_layers: 1,
                 },
-                usage: crate::TextureUse::COLOR_TARGET,
+                usage: crate::TextureUses::COLOR_TARGET,
             })
         } else {
             None

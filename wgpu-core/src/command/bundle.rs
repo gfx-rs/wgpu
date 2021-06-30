@@ -261,9 +261,9 @@ impl RenderBundleEncoder {
                     let buffer = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDEX)
+                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDEX)
                         .unwrap();
-                    check_buffer_usage(buffer.usage, wgt::BufferUsage::INDEX)
+                    check_buffer_usage(buffer.usage, wgt::BufferUsages::INDEX)
                         .map_pass_err(scope)?;
 
                     let end = match size {
@@ -288,9 +288,9 @@ impl RenderBundleEncoder {
                     let buffer = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::VERTEX)
+                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::VERTEX)
                         .unwrap();
-                    check_buffer_usage(buffer.usage, wgt::BufferUsage::VERTEX)
+                    check_buffer_usage(buffer.usage, wgt::BufferUsages::VERTEX)
                         .map_pass_err(scope)?;
 
                     let end = match size {
@@ -413,9 +413,9 @@ impl RenderBundleEncoder {
                     let buffer = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDIRECT)
+                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
                         .unwrap();
-                    check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
+                    check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(
@@ -453,10 +453,10 @@ impl RenderBundleEncoder {
                     let buffer = state
                         .trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUse::INDIRECT)
+                        .use_extend(&*buffer_guard, buffer_id, (), hal::BufferUses::INDIRECT)
                         .map_err(|err| RenderCommandError::Buffer(buffer_id, err))
                         .map_pass_err(scope)?;
-                    check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
+                    check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(
@@ -1221,7 +1221,7 @@ pub mod bundle_ffi {
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_set_push_constants(
         pass: &mut RenderBundleEncoder,
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         size_bytes: u32,
         data: *const u8,

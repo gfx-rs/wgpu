@@ -219,7 +219,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
-        src_usage: crate::TextureUse,
+        src_usage: crate::TextureUses,
         dst: &super::Texture,
         regions: T,
     ) where
@@ -278,7 +278,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &super::Texture,
-        src_usage: crate::TextureUse,
+        src_usage: crate::TextureUses,
         dst: &super::Buffer,
         regions: T,
     ) where
@@ -368,7 +368,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 resolve: cat
                     .resolve_target
                     .as_ref()
-                    .map(|target| target.make_attachment_key(crate::AttachmentOp::STORE, caps)),
+                    .map(|target| target.make_attachment_key(crate::AttachmentOps::STORE, caps)),
             });
             fb_key.attachments.push(cat.target.view.attachment.clone());
             if let Some(ref at) = cat.resolve_target {
@@ -469,7 +469,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_push_constants(
         &mut self,
         layout: &super::PipelineLayout,
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         data: &[u32],
     ) {
@@ -746,7 +746,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 #[test]
 fn check_dst_image_layout() {
     assert_eq!(
-        conv::derive_image_layout(crate::TextureUse::COPY_DST, crate::FormatAspect::empty()),
+        conv::derive_image_layout(crate::TextureUses::COPY_DST, crate::FormatAspects::empty()),
         DST_IMAGE_LAYOUT
     );
 }

@@ -87,10 +87,8 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
 
-    let instance = wgpu::Instance::new(wgpu::BackendBit::all());
-    let adapters: Vec<_> = instance
-        .enumerate_adapters(wgpu::BackendBit::all())
-        .collect();
+    let instance = wgpu::Instance::new(wgpu::Backends::all());
+    let adapters: Vec<_> = instance.enumerate_adapters(wgpu::Backends::all()).collect();
     let adapter_count = adapters.len();
 
     if args.is_empty() {

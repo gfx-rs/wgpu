@@ -34,7 +34,7 @@ impl Example {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: RENDER_TARGET_FORMAT,
-                usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::RENDER_ATTACHMENT,
+                usage: wgpu::TextureUsages::SAMPLED | wgpu::TextureUsages::RENDER_ATTACHMENT,
             })
             .create_view(&Default::default());
 
@@ -171,7 +171,7 @@ impl framework::Example for Example {
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Texture {
                                 sample_type: wgpu::TextureSampleType::Float { filterable: false },
                                 view_dimension: wgpu::TextureViewDimension::D2,
@@ -181,7 +181,7 @@ impl framework::Example for Example {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Sampler {
                                 filtering: false,
                                 comparison: false,

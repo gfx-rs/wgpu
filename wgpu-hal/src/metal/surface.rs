@@ -172,7 +172,7 @@ impl crate::Surface<super::Api> for super::Surface {
         self.raw_swapchain_format = caps.map_format(config.format);
 
         let render_layer = self.render_layer.lock();
-        let framebuffer_only = config.usage == crate::TextureUse::COLOR_TARGET;
+        let framebuffer_only = config.usage == crate::TextureUses::COLOR_TARGET;
         let display_sync = config.present_mode != wgt::PresentMode::Immediate;
         let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 

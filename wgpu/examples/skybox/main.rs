@@ -86,7 +86,7 @@ impl Skybox {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
         });
 
@@ -130,7 +130,7 @@ impl framework::Example for Skybox {
                     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Vertex"),
                         contents: bytemuck::cast_slice(&vertices),
-                        usage: wgpu::BufferUsage::VERTEX,
+                        usage: wgpu::BufferUsages::VERTEX,
                     });
                     entities.push(Entity {
                         vertex_count: vertices.len() as u32,
@@ -145,7 +145,7 @@ impl framework::Example for Skybox {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -155,7 +155,7 @@ impl framework::Example for Skybox {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         multisampled: false,
@@ -165,7 +165,7 @@ impl framework::Example for Skybox {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler {
                         comparison: false,
                         filtering: true,
@@ -191,7 +191,7 @@ impl framework::Example for Skybox {
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Buffer"),
             contents: bytemuck::cast_slice(&raw_uniforms),
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -324,7 +324,7 @@ impl framework::Example for Skybox {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: skybox_format,
-                usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+                usage: wgpu::TextureUsages::SAMPLED | wgpu::TextureUsages::COPY_DST,
                 label: None,
             },
             &image.data,
@@ -472,7 +472,7 @@ fn skybox() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
-            .backend_failures(wgpu::BackendBit::VULKAN),
+            .backend_failures(wgpu::Backends::VULKAN),
         tollerance: 2,
         max_outliers: 3,
     });

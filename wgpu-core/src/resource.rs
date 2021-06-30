@@ -118,7 +118,7 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 pub struct Buffer<A: hal::Api> {
     pub(crate) raw: Option<A::Buffer>,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) usage: wgt::BufferUsage,
+    pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: MemoryInitTracker,
     pub(crate) sync_mapped_writes: Option<hal::MemoryRange>,
@@ -137,7 +137,7 @@ pub enum CreateBufferError {
     #[error("Buffers cannot have empty usage flags")]
     EmptyUsage,
     #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
-    UsageMismatch(wgt::BufferUsage),
+    UsageMismatch(wgt::BufferUsages),
 }
 
 impl<A: hal::Api> Resource for Buffer<A> {
@@ -161,7 +161,7 @@ pub struct Texture<A: hal::Api> {
     pub(crate) raw: Option<A::Texture>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: wgt::TextureDescriptor<()>,
-    pub(crate) hal_usage: hal::TextureUse,
+    pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
@@ -201,7 +201,7 @@ pub enum CreateTextureError {
     #[error("texture descriptor mip level count ({0}) is invalid")]
     InvalidMipLevelCount(u32),
     #[error("The texture usages {0:?} are not allowed on a texture of type {1:?}")]
-    InvalidUsages(wgt::TextureUsage, wgt::TextureFormat),
+    InvalidUsages(wgt::TextureUsages, wgt::TextureFormat),
     #[error("Texture format {0:?} can't be used")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
 }
@@ -251,8 +251,8 @@ pub(crate) struct HalTextureViewDescriptor {
 }
 
 impl HalTextureViewDescriptor {
-    pub fn aspects(&self) -> hal::FormatAspect {
-        hal::FormatAspect::from(self.format) & hal::FormatAspect::from(self.range.aspect)
+    pub fn aspects(&self) -> hal::FormatAspects {
+        hal::FormatAspects::from(self.format) & hal::FormatAspects::from(self.range.aspect)
     }
 }
 
@@ -266,7 +266,7 @@ pub struct TextureView<A: hal::Api> {
     pub(crate) extent: wgt::Extent3d,
     pub(crate) samples: u32,
     /// Internal use of this texture view when used as `BindingType::Texture`.
-    pub(crate) sampled_internal_use: hal::TextureUse,
+    pub(crate) sampled_internal_use: hal::TextureUses,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }

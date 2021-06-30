@@ -175,7 +175,7 @@ impl super::Device {
 
         let mut name_binding_map = NameBindingMap::default();
         let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
-        let mut has_stages = wgt::ShaderStage::empty();
+        let mut has_stages = wgt::ShaderStages::empty();
         let mut shaders_to_delete = arrayvec::ArrayVec::<[_; 3]>::new();
 
         for (naga_stage, stage) in shaders {
@@ -191,7 +191,7 @@ impl super::Device {
         }
 
         // Create empty fragment shader if only vertex shader is present
-        if has_stages == wgt::ShaderStage::VERTEX {
+        if has_stages == wgt::ShaderStages::VERTEX {
             let version = match self.shared.shading_language_version {
                 naga::back::glsl::Version::Embedded(v) => v,
                 naga::back::glsl::Version::Desktop(_) => unreachable!(),
@@ -226,7 +226,7 @@ impl super::Device {
         if !self
             .shared
             .private_caps
-            .contains(super::PrivateCapability::SHADER_BINDING_LAYOUT)
+            .contains(super::PrivateCapabilities::SHADER_BINDING_LAYOUT)
         {
             // This remapping is only needed if we aren't able to put the binding layout
             // in the shader. We can't remap storage buffers this way.
@@ -300,7 +300,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::Buffer, crate::DeviceError> {
         let gl = &self.shared.context;
 
-        let target = if desc.usage.contains(crate::BufferUse::INDEX) {
+        let target = if desc.usage.contains(crate::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
             glow::ARRAY_BUFFER
@@ -308,10 +308,10 @@ impl crate::Device<super::Api> for super::Device {
 
         let is_host_visible = desc
             .usage
-            .intersects(crate::BufferUse::MAP_READ | crate::BufferUse::MAP_WRITE);
+            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE);
         let is_coherent = desc
             .memory_flags
-            .contains(crate::MemoryFlag::PREFER_COHERENT);
+            .contains(crate::MemoryFlags::PREFER_COHERENT);
         let mut map_flags = 0;
 
         if is_host_visible {
@@ -320,10 +320,10 @@ impl crate::Device<super::Api> for super::Device {
                 map_flags |= glow::MAP_COHERENT_BIT;
             }
         }
-        if desc.usage.contains(crate::BufferUse::MAP_READ) {
+        if desc.usage.contains(crate::BufferUses::MAP_READ) {
             map_flags |= glow::MAP_READ_BIT;
         }
-        if desc.usage.contains(crate::BufferUse::MAP_WRITE) {
+        if desc.usage.contains(crate::BufferUses::MAP_WRITE) {
             map_flags |= glow::MAP_WRITE_BIT;
         }
 
@@ -336,7 +336,7 @@ impl crate::Device<super::Api> for super::Device {
         gl.buffer_storage(target, raw_size, None, map_flags);
         gl.bind_buffer(target, None);
 
-        if !is_coherent && desc.usage.contains(crate::BufferUse::MAP_WRITE) {
+        if !is_coherent && desc.usage.contains(crate::BufferUses::MAP_WRITE) {
             map_flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
         }
         //TODO: do we need `glow::MAP_UNSYNCHRONIZED_BIT`?
@@ -413,9 +413,9 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         let gl = &self.shared.context;
 
-        let render_usage = crate::TextureUse::COLOR_TARGET
-            | crate::TextureUse::DEPTH_STENCIL_WRITE
-            | crate::TextureUse::DEPTH_STENCIL_READ;
+        let render_usage = crate::TextureUses::COLOR_TARGET
+            | crate::TextureUses::DEPTH_STENCIL_WRITE
+            | crate::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
         let inner = if render_usage.contains(desc.usage)
@@ -582,8 +582,8 @@ impl crate::Device<super::Api> for super::Device {
             //TODO: use `conv::map_view_dimension(desc.dimension)`?
             inner: texture.inner.clone(),
             sample_type: texture.format.describe().sample_type,
-            aspects: crate::FormatAspect::from(texture.format)
-                & crate::FormatAspect::from(desc.range.aspect),
+            aspects: crate::FormatAspects::from(texture.format)
+                & crate::FormatAspects::from(desc.range.aspect),
             mip_levels: desc.range.base_mip_level..end_mip_level,
             array_layers: desc.range.base_array_layer..end_array_layer,
         })
@@ -705,7 +705,7 @@ impl crate::Device<super::Api> for super::Device {
             glsl::WriterFlags::TEXTURE_SHADOW_LOD,
             self.shared
                 .private_caps
-                .contains(super::PrivateCapability::SHADER_TEXTURE_SHADOW_LOD),
+                .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
         let mut binding_map = glsl::BindingMap::default();
 

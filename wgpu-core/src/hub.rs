@@ -750,7 +750,7 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
+    pub fn new(name: &str, factory: G, backends: wgt::Backends) -> Self {
         profiling::scope!("new", "Global");
         Self {
             instance: Instance::new(name, backends),

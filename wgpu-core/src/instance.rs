@@ -5,7 +5,7 @@ use crate::{
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, BackendBit, PowerPreference, BIND_BUFFER_ALIGNMENT};
+use wgt::{Backend, Backends, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
 use hal::{Adapter as _, Instance as _};
 use thiserror::Error;
@@ -30,13 +30,13 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(name: &str, backends: BackendBit) -> Self {
-        fn init<A: HalApi>(mask: BackendBit) -> Option<A::Instance> {
+    pub fn new(name: &str, backends: Backends) -> Self {
+        fn init<A: HalApi>(mask: Backends) -> Option<A::Instance> {
             if mask.contains(A::VARIANT.into()) {
-                let mut flags = hal::InstanceFlag::empty();
+                let mut flags = hal::InstanceFlags::empty();
                 if cfg!(debug_assertions) {
-                    flags |= hal::InstanceFlag::VALIDATION;
-                    flags |= hal::InstanceFlag::DEBUG;
+                    flags |= hal::InstanceFlags::VALIDATION;
+                    flags |= hal::InstanceFlags::DEBUG;
                 }
                 let hal_desc = hal::InstanceDescriptor {
                     name: "wgpu",
@@ -161,32 +161,32 @@ impl<A: HalApi> Adapter<A> {
 
         let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
         allowed_usages.set(
-            wgt::TextureUsage::SAMPLED,
-            caps.contains(hal::TextureFormatCapability::SAMPLED),
+            wgt::TextureUsages::SAMPLED,
+            caps.contains(hal::TextureFormatCapabilities::SAMPLED),
         );
         allowed_usages.set(
-            wgt::TextureUsage::STORAGE,
-            caps.contains(hal::TextureFormatCapability::STORAGE),
+            wgt::TextureUsages::STORAGE,
+            caps.contains(hal::TextureFormatCapabilities::STORAGE),
         );
         allowed_usages.set(
-            wgt::TextureUsage::RENDER_ATTACHMENT,
+            wgt::TextureUsages::RENDER_ATTACHMENT,
             caps.intersects(
-                hal::TextureFormatCapability::COLOR_ATTACHMENT
-                    | hal::TextureFormatCapability::DEPTH_STENCIL_ATTACHMENT,
+                hal::TextureFormatCapabilities::COLOR_ATTACHMENT
+                    | hal::TextureFormatCapabilities::DEPTH_STENCIL_ATTACHMENT,
             ),
         );
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
         flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS,
-            caps.contains(hal::TextureFormatCapability::STORAGE_ATOMIC),
+            caps.contains(hal::TextureFormatCapabilities::STORAGE_ATOMIC),
         );
         flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-            caps.contains(hal::TextureFormatCapability::STORAGE_READ_WRITE),
+            caps.contains(hal::TextureFormatCapabilities::STORAGE_READ_WRITE),
         );
 
-        let filterable = caps.contains(hal::TextureFormatCapability::SAMPLED_LINEAR);
+        let filterable = caps.contains(hal::TextureFormatCapabilities::SAMPLED_LINEAR);
 
         wgt::TextureFormatFeatures {
             allowed_usages,
@@ -307,7 +307,7 @@ pub enum RequestDeviceError {
 
 pub enum AdapterInputs<'a, I> {
     IdSet(&'a [I], fn(&I) -> Backend),
-    Mask(BackendBit, fn(Backend) -> I),
+    Mask(Backends, fn(Backend) -> I),
 }
 
 impl<I: Clone> AdapterInputs<'_, I> {

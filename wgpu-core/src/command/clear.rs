@@ -13,7 +13,7 @@ use crate::{
 use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, BufferUsage, ImageSubresourceRange, TextureAspect, TextureUsage,
+    BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect, TextureUsages,
 };
 
 /// Error encountered while attempting a clear.
@@ -89,13 +89,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers
             .buffers
-            .use_replace(&*buffer_guard, dst, (), hal::BufferUse::COPY_DST)
+            .use_replace(&*buffer_guard, dst, (), hal::BufferUses::COPY_DST)
             .map_err(ClearError::InvalidBuffer)?;
         let dst_raw = dst_buffer
             .raw
             .as_ref()
             .ok_or(ClearError::InvalidBuffer(dst))?;
-        if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
+        if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(ClearError::MissingCopyDstUsageFlag(Some(dst), None));
         }
 
@@ -181,8 +181,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
         // Check if subresource aspects are valid.
-        let requested_aspects = hal::FormatAspect::from(subresource_range.aspect);
-        let clear_aspects = hal::FormatAspect::from(dst_texture.desc.format) & requested_aspects;
+        let requested_aspects = hal::FormatAspects::from(subresource_range.aspect);
+        let clear_aspects = hal::FormatAspects::from(dst_texture.desc.format) & requested_aspects;
         if clear_aspects.is_empty() {
             return Err(ClearError::MissingTextureAspect {
                 texture_format: dst_texture.desc.format,
@@ -229,14 +229,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     levels: subresource_range.base_mip_level..subresource_level_end,
                     layers: subresource_range.base_array_layer..subresource_layer_end,
                 },
-                hal::TextureUse::COPY_DST,
+                hal::TextureUses::COPY_DST,
             )
             .map_err(ClearError::InvalidTexture)?;
         let _dst_raw = dst_texture
             .raw
             .as_ref()
             .ok_or(ClearError::InvalidTexture(dst))?;
-        if !dst_texture.desc.usage.contains(TextureUsage::COPY_DST) {
+        if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(ClearError::MissingCopyDstUsageFlag(None, Some(dst)));
         }
 

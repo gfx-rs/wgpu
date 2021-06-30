@@ -43,7 +43,7 @@ impl Context {
         &self.0
     }
 
-    pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> Vec<wgc::id::AdapterId> {
+    pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
                 PhantomData
@@ -235,7 +235,7 @@ mod pass_impl {
         ) {
             wgpu_render_pass_set_vertex_buffer(self, slot, buffer.id, offset, size)
         }
-        fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
+        fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
             unsafe {
                 wgpu_render_pass_set_push_constants(
                     self,
@@ -446,7 +446,7 @@ mod pass_impl {
             wgpu_render_bundle_set_vertex_buffer(self, slot, buffer.id, offset, size)
         }
 
-        fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u8]) {
+        fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
             unsafe {
                 wgpu_render_bundle_set_push_constants(
                     self,
@@ -642,7 +642,7 @@ impl crate::Context for Context {
         Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
     type MapAsyncFuture = native_gpu_future::GpuFuture<Result<(), crate::BufferAsyncError>>;
 
-    fn init(backends: wgt::BackendBit) -> Self {
+    fn init(backends: wgt::Backends) -> Self {
         Self(wgc::hub::Global::new(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
@@ -666,7 +666,7 @@ impl crate::Context for Context {
                 power_preference: options.power_preference,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id),
             },
-            wgc::instance::AdapterInputs::Mask(wgt::BackendBit::all(), |_| PhantomData),
+            wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| PhantomData),
         );
         ready(id.ok())
     }
@@ -1127,7 +1127,7 @@ impl crate::Context for Context {
             if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
                 log::warn!(
                     "Shader translation error for stage {:?}: {}",
-                    wgt::ShaderStage::COMPUTE,
+                    wgt::ShaderStages::COMPUTE,
                     error
                 );
                 log::warn!("Please report it to https://github.com/gfx-rs/naga");

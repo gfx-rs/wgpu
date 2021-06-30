@@ -80,8 +80,8 @@ impl crate::Adapter<Api> for Context {
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
-    ) -> crate::TextureFormatCapability {
-        crate::TextureFormatCapability::empty()
+    ) -> crate::TextureFormatCapabilities {
+        crate::TextureFormatCapabilities::empty()
     }
     unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
         None
@@ -252,7 +252,7 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &Resource,
-        src_usage: crate::TextureUse,
+        src_usage: crate::TextureUses,
         dst: &Resource,
         regions: T,
     ) {
@@ -263,7 +263,7 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &Resource,
-        src_usage: crate::TextureUse,
+        src_usage: crate::TextureUses,
         dst: &Resource,
         regions: T,
     ) {
@@ -299,7 +299,7 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn set_push_constants(
         &mut self,
         layout: &Resource,
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         data: &[u32],
     ) {

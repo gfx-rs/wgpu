@@ -376,7 +376,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 extensions.push(ext::MetalSurface::name());
             }
 
-            if desc.flags.contains(crate::InstanceFlag::DEBUG) {
+            if desc.flags.contains(crate::InstanceFlags::DEBUG) {
                 extensions.push(ext::DebugUtils::name());
             }
 
@@ -412,7 +412,7 @@ impl crate::Instance<super::Api> for super::Instance {
         // Check requested layers against the available layers
         let layers = {
             let mut layers: Vec<&'static CStr> = Vec::new();
-            if desc.flags.contains(crate::InstanceFlag::VALIDATION) {
+            if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
                 layers.push(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
             }
 
@@ -648,7 +648,7 @@ impl crate::Surface<super::Api> for super::Surface {
                 block: None,
                 usage: sc.config.usage,
                 dim: wgt::TextureDimension::D2,
-                aspects: crate::FormatAspect::COLOR,
+                aspects: crate::FormatAspects::COLOR,
                 format_info: sc.config.format.describe(),
                 raw_flags: vk::ImageCreateFlags::empty(),
             },

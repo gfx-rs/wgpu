@@ -148,7 +148,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUse,
+        _src_usage: crate::TextureUses,
         dst: &super::Texture,
         regions: T,
     ) where
@@ -216,7 +216,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUse,
+        _src_usage: crate::TextureUses,
         dst: &super::Buffer,
         regions: T,
     ) where
@@ -323,14 +323,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 //Note: the selection of levels and slices is already handled by `TextureView`
                 at_descriptor.set_resolve_texture(Some(&resolve.view.raw));
             }
-            let load_action = if at.ops.contains(crate::AttachmentOp::LOAD) {
+            let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                 mtl::MTLLoadAction::Load
             } else {
                 at_descriptor.set_clear_color(conv::map_clear_color(&at.clear_value));
                 mtl::MTLLoadAction::Clear
             };
             let store_action = conv::map_store_action(
-                at.ops.contains(crate::AttachmentOp::STORE),
+                at.ops.contains(crate::AttachmentOps::STORE),
                 at.resolve_target.is_some(),
             );
             at_descriptor.set_load_action(load_action);
@@ -338,17 +338,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
 
         if let Some(ref at) = desc.depth_stencil_attachment {
-            if at.target.view.aspects.contains(crate::FormatAspect::DEPTH) {
+            if at.target.view.aspects.contains(crate::FormatAspects::DEPTH) {
                 let at_descriptor = descriptor.depth_attachment().unwrap();
                 at_descriptor.set_texture(Some(&at.target.view.raw));
 
-                let load_action = if at.depth_ops.contains(crate::AttachmentOp::LOAD) {
+                let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                     mtl::MTLLoadAction::Load
                 } else {
                     at_descriptor.set_clear_depth(at.clear_value.0 as f64);
                     mtl::MTLLoadAction::Clear
                 };
-                let store_action = if at.depth_ops.contains(crate::AttachmentOp::STORE) {
+                let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
                     mtl::MTLStoreAction::Store
                 } else {
                     mtl::MTLStoreAction::DontCare
@@ -360,18 +360,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .target
                 .view
                 .aspects
-                .contains(crate::FormatAspect::STENCIL)
+                .contains(crate::FormatAspects::STENCIL)
             {
                 let at_descriptor = descriptor.stencil_attachment().unwrap();
                 at_descriptor.set_texture(Some(&at.target.view.raw));
 
-                let load_action = if at.depth_ops.contains(crate::AttachmentOp::LOAD) {
+                let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                     mtl::MTLLoadAction::Load
                 } else {
                     at_descriptor.set_clear_stencil(at.clear_value.1);
                     mtl::MTLLoadAction::Clear
                 };
-                let store_action = if at.depth_ops.contains(crate::AttachmentOp::STORE) {
+                let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
                     mtl::MTLStoreAction::Store
                 } else {
                     mtl::MTLStoreAction::DontCare
@@ -563,7 +563,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_push_constants(
         &mut self,
         _layout: &super::PipelineLayout,
-        _stages: wgt::ShaderStage,
+        _stages: wgt::ShaderStages,
         _offset: u32,
         _data: &[u32],
     ) {

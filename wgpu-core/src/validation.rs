@@ -114,15 +114,15 @@ pub struct Interface {
 #[derive(Clone, Debug, Error)]
 #[error("buffer usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingBufferUsageError {
-    pub(crate) actual: wgt::BufferUsage,
-    pub(crate) expected: wgt::BufferUsage,
+    pub(crate) actual: wgt::BufferUsages,
+    pub(crate) expected: wgt::BufferUsages,
 }
 
 /// Checks that the given buffer usage contains the required buffer usage,
 /// returns an error otherwise.
 pub fn check_buffer_usage(
-    actual: wgt::BufferUsage,
-    expected: wgt::BufferUsage,
+    actual: wgt::BufferUsages,
+    expected: wgt::BufferUsages,
 ) -> Result<(), MissingBufferUsageError> {
     if !actual.contains(expected) {
         Err(MissingBufferUsageError { actual, expected })
@@ -134,15 +134,15 @@ pub fn check_buffer_usage(
 #[derive(Clone, Debug, Error)]
 #[error("texture usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingTextureUsageError {
-    pub(crate) actual: wgt::TextureUsage,
-    pub(crate) expected: wgt::TextureUsage,
+    pub(crate) actual: wgt::TextureUsages,
+    pub(crate) expected: wgt::TextureUsages,
 }
 
 /// Checks that the given texture usage contains the required texture usage,
 /// returns an error otherwise.
 pub fn check_texture_usage(
-    actual: wgt::TextureUsage,
-    expected: wgt::TextureUsage,
+    actual: wgt::TextureUsages,
+    expected: wgt::TextureUsages,
 ) -> Result<(), MissingTextureUsageError> {
     if !actual.contains(expected) {
         Err(MissingTextureUsageError { actual, expected })
@@ -864,15 +864,15 @@ impl Interface {
         given_layouts: Option<&[&BindEntryMap]>,
         derived_layouts: &mut [BindEntryMap],
         entry_point_name: &str,
-        stage_bit: wgt::ShaderStage,
+        stage_bit: wgt::ShaderStages,
         inputs: StageIo,
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
         let shader_stage = match stage_bit {
-            wgt::ShaderStage::VERTEX => naga::ShaderStage::Vertex,
-            wgt::ShaderStage::FRAGMENT => naga::ShaderStage::Fragment,
-            wgt::ShaderStage::COMPUTE => naga::ShaderStage::Compute,
+            wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
+            wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
+            wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
             _ => unreachable!(),
         };
         let pair = (shader_stage, entry_point_name.to_string());

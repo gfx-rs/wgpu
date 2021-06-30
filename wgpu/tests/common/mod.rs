@@ -3,7 +3,7 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use wgt::{BackendBit, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
+use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
 use wgpu::{util, Adapter, Device, Instance, Queue};
 
@@ -77,12 +77,7 @@ pub struct TestParameters {
     pub required_limits: Limits,
     pub required_downlevel_properties: DownlevelCapabilities,
     // Backends where test should fail.
-    pub failures: Vec<(
-        Option<wgpu::BackendBit>,
-        Option<usize>,
-        Option<String>,
-        bool,
-    )>,
+    pub failures: Vec<(Option<wgpu::Backends>, Option<usize>, Option<String>, bool)>,
 }
 
 impl Default for TestParameters {
@@ -97,7 +92,7 @@ impl Default for TestParameters {
 }
 
 bitflags::bitflags! {
-    pub struct FailureReason: u8 {
+    pub struct FailureReasons: u8 {
         const BACKEND = 0x1;
         const VENDOR = 0x2;
         const ADAPTER = 0x4;
@@ -131,7 +126,7 @@ impl TestParameters {
     }
 
     /// Mark the test as always failing on a specific backend, equivilant to specific_failure(backend, None, None)
-    pub fn backend_failures(mut self, backends: wgpu::BackendBit) -> Self {
+    pub fn backend_failures(mut self, backends: wgpu::Backends) -> Self {
         self.failures.push((Some(backends), None, None, false));
         self
     }
@@ -139,13 +134,13 @@ impl TestParameters {
     /// Determines if a test should fail under a particular set of conditions. If any of these are None, that means that it will match anything in that field.
     ///
     /// ex.
-    /// `specific_failure(Some(wgpu::BackendBit::DX11 | wgpu::BackendBit::DX12), None, Some("RTX"), false)`
+    /// `specific_failure(Some(wgpu::Backends::DX11 | wgpu::Backends::DX12), None, Some("RTX"), false)`
     /// means that this test will fail on all cards with RTX in their name on either D3D backend, no matter the vendor ID.
     ///
     /// If segfault is set to true, the test won't be run at all due to avoid segfaults.
     pub fn specific_failure(
         mut self,
-        backends: Option<BackendBit>,
+        backends: Option<Backends>,
         vendor: Option<usize>,
         device: Option<&'static str>,
         segfault: bool,
@@ -164,7 +159,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     // We don't actually care if it fails
     let _ = env_logger::try_init();
 
-    let backend_bits = util::backend_bits_from_env().unwrap_or_else(BackendBit::all);
+    let backend_bits = util::backend_bits_from_env().unwrap_or_else(Backends::all);
     let instance = Instance::new(backend_bits);
     let adapter = pollster::block_on(util::initialize_adapter_from_env_or_default(
         &instance,
@@ -228,7 +223,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
                 backend_failure.is_none() && vendor_failure.is_none() && adapter_failure.is_none();
 
             let expect_failure_backend = backend_failure
-                .map(|f| f.contains(wgpu::BackendBit::from(adapter_info.backend)))
+                .map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)))
                 .unwrap_or(true);
             let expect_failure_vendor = vendor_failure
                 .map(|v| v == adapter_info.vendor)
@@ -240,12 +235,12 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
             if expect_failure_backend && expect_failure_vendor && expect_failure_adapter {
                 if always {
-                    Some((FailureReason::ALWAYS, *segfault))
+                    Some((FailureReasons::ALWAYS, *segfault))
                 } else {
-                    let mut reason = FailureReason::empty();
-                    reason.set(FailureReason::BACKEND, expect_failure_backend);
-                    reason.set(FailureReason::VENDOR, expect_failure_vendor);
-                    reason.set(FailureReason::ADAPTER, expect_failure_adapter);
+                    let mut reason = FailureReasons::empty();
+                    reason.set(FailureReasons::BACKEND, expect_failure_backend);
+                    reason.set(FailureReasons::VENDOR, expect_failure_vendor);
+                    reason.set(FailureReasons::ADAPTER, expect_failure_adapter);
                     Some((reason, *segfault))
                 }
             } else {

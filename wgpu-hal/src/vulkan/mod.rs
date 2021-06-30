@@ -75,7 +75,7 @@ struct DebugUtils {
 
 struct InstanceShared {
     raw: ash::Instance,
-    flags: crate::InstanceFlag,
+    flags: crate::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
 }
@@ -158,7 +158,7 @@ struct AttachmentKey {
     layout_pre: vk::ImageLayout,
     layout_in: vk::ImageLayout,
     layout_post: vk::ImageLayout,
-    ops: crate::AttachmentOp,
+    ops: crate::AttachmentOps,
 }
 
 impl AttachmentKey {
@@ -169,7 +169,7 @@ impl AttachmentKey {
             layout_pre: vk::ImageLayout::GENERAL,
             layout_in,
             layout_post: vk::ImageLayout::GENERAL,
-            ops: crate::AttachmentOp::all(),
+            ops: crate::AttachmentOps::all(),
         }
     }
 }
@@ -183,7 +183,7 @@ struct ColorAttachmentKey {
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct DepthStencilAttachmentKey {
     base: AttachmentKey,
-    stencil_ops: crate::AttachmentOp,
+    stencil_ops: crate::AttachmentOps,
 }
 
 #[derive(Clone, Eq, Default, Hash, PartialEq)]
@@ -197,7 +197,7 @@ struct RenderPassKey {
 struct FramebufferAttachment {
     /// Can be NULL if the framebuffer is image-less
     raw: vk::ImageView,
-    texture_usage: crate::TextureUse,
+    texture_usage: crate::TextureUses,
     raw_image_flags: vk::ImageCreateFlags,
     view_format: wgt::TextureFormat,
 }
@@ -247,9 +247,9 @@ pub struct Buffer {
 pub struct Texture {
     raw: vk::Image,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    usage: crate::TextureUse,
+    usage: crate::TextureUses,
     dim: wgt::TextureDimension,
-    aspects: crate::FormatAspect,
+    aspects: crate::FormatAspects,
     format_info: wgt::TextureFormatInfo,
     raw_flags: vk::ImageCreateFlags,
 }
@@ -261,7 +261,7 @@ pub struct TextureView {
 }
 
 impl TextureView {
-    fn aspects(&self) -> crate::FormatAspect {
+    fn aspects(&self) -> crate::FormatAspects {
         self.attachment.view_format.into()
     }
 }

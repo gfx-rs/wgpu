@@ -1,13 +1,13 @@
 #[test]
 fn initialize() {
     let _ = wgpu::Instance::new(
-        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::BackendBit::all),
+        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
     );
 }
 
 fn request_adapter_inner(power: wgt::PowerPreference) {
     let instance = wgpu::Instance::new(
-        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::BackendBit::all),
+        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
     );
 
     let _adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {

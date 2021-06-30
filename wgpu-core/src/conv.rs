@@ -20,73 +20,76 @@ pub fn is_valid_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     }
 }
 
-pub fn map_buffer_usage(usage: wgt::BufferUsage) -> hal::BufferUse {
-    let mut u = hal::BufferUse::empty();
+pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
+    let mut u = hal::BufferUses::empty();
     u.set(
-        hal::BufferUse::MAP_READ,
-        usage.contains(wgt::BufferUsage::MAP_READ),
+        hal::BufferUses::MAP_READ,
+        usage.contains(wgt::BufferUsages::MAP_READ),
     );
     u.set(
-        hal::BufferUse::MAP_WRITE,
-        usage.contains(wgt::BufferUsage::MAP_WRITE),
+        hal::BufferUses::MAP_WRITE,
+        usage.contains(wgt::BufferUsages::MAP_WRITE),
     );
     u.set(
-        hal::BufferUse::COPY_SRC,
-        usage.contains(wgt::BufferUsage::COPY_SRC),
+        hal::BufferUses::COPY_SRC,
+        usage.contains(wgt::BufferUsages::COPY_SRC),
     );
     u.set(
-        hal::BufferUse::COPY_DST,
-        usage.contains(wgt::BufferUsage::COPY_DST),
+        hal::BufferUses::COPY_DST,
+        usage.contains(wgt::BufferUsages::COPY_DST),
     );
     u.set(
-        hal::BufferUse::INDEX,
-        usage.contains(wgt::BufferUsage::INDEX),
+        hal::BufferUses::INDEX,
+        usage.contains(wgt::BufferUsages::INDEX),
     );
     u.set(
-        hal::BufferUse::VERTEX,
-        usage.contains(wgt::BufferUsage::VERTEX),
+        hal::BufferUses::VERTEX,
+        usage.contains(wgt::BufferUsages::VERTEX),
     );
     u.set(
-        hal::BufferUse::UNIFORM,
-        usage.contains(wgt::BufferUsage::UNIFORM),
+        hal::BufferUses::UNIFORM,
+        usage.contains(wgt::BufferUsages::UNIFORM),
     );
     u.set(
-        hal::BufferUse::STORAGE_LOAD | hal::BufferUse::STORAGE_STORE,
-        usage.contains(wgt::BufferUsage::STORAGE),
+        hal::BufferUses::STORAGE_LOAD | hal::BufferUses::STORAGE_STORE,
+        usage.contains(wgt::BufferUsages::STORAGE),
     );
     u.set(
-        hal::BufferUse::INDIRECT,
-        usage.contains(wgt::BufferUsage::INDIRECT),
+        hal::BufferUses::INDIRECT,
+        usage.contains(wgt::BufferUsages::INDIRECT),
     );
     u
 }
 
-pub fn map_texture_usage(usage: wgt::TextureUsage, aspect: hal::FormatAspect) -> hal::TextureUse {
-    let mut u = hal::TextureUse::empty();
+pub fn map_texture_usage(
+    usage: wgt::TextureUsages,
+    aspect: hal::FormatAspects,
+) -> hal::TextureUses {
+    let mut u = hal::TextureUses::empty();
     u.set(
-        hal::TextureUse::COPY_SRC,
-        usage.contains(wgt::TextureUsage::COPY_SRC),
+        hal::TextureUses::COPY_SRC,
+        usage.contains(wgt::TextureUsages::COPY_SRC),
     );
     u.set(
-        hal::TextureUse::COPY_DST,
-        usage.contains(wgt::TextureUsage::COPY_DST),
+        hal::TextureUses::COPY_DST,
+        usage.contains(wgt::TextureUsages::COPY_DST),
     );
     u.set(
-        hal::TextureUse::SAMPLED,
-        usage.contains(wgt::TextureUsage::SAMPLED),
+        hal::TextureUses::SAMPLED,
+        usage.contains(wgt::TextureUsages::SAMPLED),
     );
     u.set(
-        hal::TextureUse::STORAGE_LOAD | hal::TextureUse::STORAGE_STORE,
-        usage.contains(wgt::TextureUsage::STORAGE),
+        hal::TextureUses::STORAGE_LOAD | hal::TextureUses::STORAGE_STORE,
+        usage.contains(wgt::TextureUsages::STORAGE),
     );
-    let is_color = aspect.contains(hal::FormatAspect::COLOR);
+    let is_color = aspect.contains(hal::FormatAspects::COLOR);
     u.set(
-        hal::TextureUse::COLOR_TARGET,
-        usage.contains(wgt::TextureUsage::RENDER_ATTACHMENT) && is_color,
+        hal::TextureUses::COLOR_TARGET,
+        usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) && is_color,
     );
     u.set(
-        hal::TextureUse::DEPTH_STENCIL_READ | hal::TextureUse::DEPTH_STENCIL_WRITE,
-        usage.contains(wgt::TextureUsage::RENDER_ATTACHMENT) && !is_color,
+        hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::DEPTH_STENCIL_WRITE,
+        usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) && !is_color,
     );
     u
 }

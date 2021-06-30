@@ -558,14 +558,14 @@ pub enum UsageConflict {
     )]
     Buffer {
         id: id::BufferId,
-        combined_use: hal::BufferUse,
+        combined_use: hal::BufferUses,
     },
     #[error("Attempted to use texture {id:?} mips {mip_levels:?} layers {array_layers:?} as a combination of {combined_use:?} within a usage scope.")]
     Texture {
         id: id::TextureId,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
-        combined_use: hal::TextureUse,
+        combined_use: hal::TextureUses,
     },
 }
 

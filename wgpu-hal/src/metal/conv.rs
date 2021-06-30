@@ -1,5 +1,5 @@
-pub fn map_texture_usage(usage: crate::TextureUse) -> mtl::MTLTextureUsage {
-    use crate::TextureUse as Tu;
+pub fn map_texture_usage(usage: crate::TextureUses) -> mtl::MTLTextureUsage {
+    use crate::TextureUses as Tu;
 
     let mut mtl_usage = mtl::MTLTextureUsage::Unknown;
 
@@ -104,19 +104,19 @@ pub fn map_primitive_topology(
     }
 }
 
-pub fn map_color_write(mask: wgt::ColorWrite) -> mtl::MTLColorWriteMask {
+pub fn map_color_write(mask: wgt::ColorWrites) -> mtl::MTLColorWriteMask {
     let mut raw_mask = mtl::MTLColorWriteMask::empty();
 
-    if mask.contains(wgt::ColorWrite::RED) {
+    if mask.contains(wgt::ColorWrites::RED) {
         raw_mask |= mtl::MTLColorWriteMask::Red;
     }
-    if mask.contains(wgt::ColorWrite::GREEN) {
+    if mask.contains(wgt::ColorWrites::GREEN) {
         raw_mask |= mtl::MTLColorWriteMask::Green;
     }
-    if mask.contains(wgt::ColorWrite::BLUE) {
+    if mask.contains(wgt::ColorWrites::BLUE) {
         raw_mask |= mtl::MTLColorWriteMask::Blue;
     }
-    if mask.contains(wgt::ColorWrite::ALPHA) {
+    if mask.contains(wgt::ColorWrites::ALPHA) {
         raw_mask |= mtl::MTLColorWriteMask::Alpha;
     }
 

@@ -554,17 +554,17 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut alloc_usage = if desc
             .usage
-            .intersects(crate::BufferUse::MAP_READ | crate::BufferUse::MAP_WRITE)
+            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE)
         {
             let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
-            //TODO: find a way to use `crate::MemoryFlag::PREFER_COHERENT`
+            //TODO: find a way to use `crate::MemoryFlags::PREFER_COHERENT`
             flags.set(
                 gpu_alloc::UsageFlags::DOWNLOAD,
-                desc.usage.contains(crate::BufferUse::MAP_READ),
+                desc.usage.contains(crate::BufferUses::MAP_READ),
             );
             flags.set(
                 gpu_alloc::UsageFlags::UPLOAD,
-                desc.usage.contains(crate::BufferUse::MAP_WRITE),
+                desc.usage.contains(crate::BufferUses::MAP_WRITE),
             );
             flags
         } else {
@@ -572,7 +572,7 @@ impl crate::Device<super::Api> for super::Device {
         };
         alloc_usage.set(
             gpu_alloc::UsageFlags::TRANSIENT,
-            desc.memory_flags.contains(crate::MemoryFlag::TRANSIENT),
+            desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
 
         let block = self.mem_allocator.lock().alloc(
@@ -696,7 +696,7 @@ impl crate::Device<super::Api> for super::Device {
             block: Some(block),
             usage: desc.usage,
             dim: desc.dimension,
-            aspects: crate::FormatAspect::from(desc.format),
+            aspects: crate::FormatAspects::from(desc.format),
             format_info: desc.format.describe(),
             raw_flags,
         })
@@ -1198,7 +1198,7 @@ impl crate::Device<super::Api> for super::Device {
             };
             compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
                 base: super::AttachmentKey::compatible(vk_format, vk_layout),
-                stencil_ops: crate::AttachmentOp::all(),
+                stencil_ops: crate::AttachmentOps::all(),
             });
 
             if ds.is_depth_enabled() {

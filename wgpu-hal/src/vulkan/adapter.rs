@@ -790,7 +790,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,
-                self.instance.flags.contains(crate::InstanceFlag::DEBUG),
+                self.instance.flags.contains(crate::InstanceFlags::DEBUG),
             );
             spv::Options {
                 lang_version: (1, 0),
@@ -866,8 +866,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,
-    ) -> crate::TextureFormatCapability {
-        use crate::TextureFormatCapability as Tfc;
+    ) -> crate::TextureFormatCapabilities {
+        use crate::TextureFormatCapabilities as Tfc;
         let vk_format = self.private_caps.map_texture_format(format);
         let properties = self
             .instance

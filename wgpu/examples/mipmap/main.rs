@@ -225,9 +225,9 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: TEXTURE_FORMAT,
-            usage: wgpu::TextureUsage::SAMPLED
-                | wgpu::TextureUsage::RENDER_ATTACHMENT
-                | wgpu::TextureUsage::COPY_DST,
+            usage: wgpu::TextureUsages::SAMPLED
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_DST,
             label: None,
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -236,7 +236,7 @@ impl framework::Example for Example {
         let temp_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Temporary Buffer"),
             contents: texels.as_slice(),
-            usage: wgpu::BufferUsage::COPY_SRC,
+            usage: wgpu::BufferUsages::COPY_SRC,
         });
         init_encoder.copy_buffer_to_texture(
             wgpu::ImageCopyBuffer {
@@ -267,7 +267,7 @@ impl framework::Example for Example {
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(mx_ref),
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         // Create the render pipeline
@@ -355,7 +355,7 @@ impl framework::Example for Example {
                 size: mip_passes as wgpu::BufferAddress
                     * 3
                     * mem::size_of::<u64>() as wgpu::BufferAddress,
-                usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             });
 
@@ -483,7 +483,7 @@ fn mipmap() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
-            .backend_failures(wgpu::BackendBit::VULKAN),
+            .backend_failures(wgpu::Backends::VULKAN),
         tollerance: 25,
         max_outliers: 3000, // Mipmap sampling is highly variant between impls. This is currently bounded by AMD on mac
     });

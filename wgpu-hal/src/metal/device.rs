@@ -135,12 +135,12 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self) {}
 
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
-        let map_read = desc.usage.contains(crate::BufferUse::MAP_READ);
-        let map_write = desc.usage.contains(crate::BufferUse::MAP_WRITE);
+        let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
+        let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
         let mut options = mtl::MTLResourceOptions::empty();
         options |= if map_read || map_write {
-            // `crate::MemoryFlag::PREFER_COHERENT` is ignored here
+            // `crate::MemoryFlags::PREFER_COHERENT` is ignored here
             mtl::MTLResourceOptions::StorageModeShared
         } else {
             mtl::MTLResourceOptions::StorageModePrivate
@@ -290,7 +290,7 @@ impl crate::Device<super::Api> for super::Device {
             raw
         };
 
-        let aspects = crate::FormatAspect::from(desc.format);
+        let aspects = crate::FormatAspects::from(desc.format);
         Ok(super::TextureView { raw, aspects })
     }
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
@@ -717,11 +717,11 @@ impl crate::Device<super::Api> for super::Device {
         let depth_stencil = match desc.depth_stencil {
             Some(ref ds) => {
                 let raw_format = self.shared.private_caps.map_format(ds.format);
-                let aspects = crate::FormatAspect::from(ds.format);
-                if aspects.contains(crate::FormatAspect::DEPTH) {
+                let aspects = crate::FormatAspects::from(ds.format);
+                if aspects.contains(crate::FormatAspects::DEPTH) {
                     descriptor.set_depth_attachment_pixel_format(raw_format);
                 }
-                if aspects.contains(crate::FormatAspect::STENCIL) {
+                if aspects.contains(crate::FormatAspects::STENCIL) {
                     descriptor.set_stencil_attachment_pixel_format(raw_format);
                 }
 
@@ -744,7 +744,10 @@ impl crate::Device<super::Api> for super::Device {
                 desc.vertex_buffers.len(),
                 desc.layout.total_counters.vs.buffers
             );
-            return Err(crate::PipelineError::Linkage(wgt::ShaderStage::VERTEX, msg));
+            return Err(crate::PipelineError::Linkage(
+                wgt::ShaderStages::VERTEX,
+                msg,
+            ));
         }
 
         if !desc.vertex_buffers.is_empty() {
@@ -788,7 +791,7 @@ impl crate::Device<super::Api> for super::Device {
             .new_render_pipeline_state(&descriptor)
             .map_err(|e| {
                 crate::PipelineError::Linkage(
-                    wgt::ShaderStage::VERTEX | wgt::ShaderStage::FRAGMENT,
+                    wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
                     format!("new_render_pipeline_state: {:?}", e),
                 )
             })?;
@@ -849,7 +852,7 @@ impl crate::Device<super::Api> for super::Device {
             .new_compute_pipeline_state(&descriptor)
             .map_err(|e| {
                 crate::PipelineError::Linkage(
-                    wgt::ShaderStage::COMPUTE,
+                    wgt::ShaderStages::COMPUTE,
                     format!("new_compute_pipeline_state: {:?}", e),
                 )
             })?;

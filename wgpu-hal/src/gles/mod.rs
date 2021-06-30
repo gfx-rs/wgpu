@@ -111,7 +111,7 @@ impl crate::Api for Api {
 bitflags::bitflags! {
     /// Flags that affect internal code paths but do not
     /// change the exposed feature set.
-    struct PrivateCapability: u32 {
+    struct PrivateCapabilities: u32 {
         /// Support explicit layouts in shader.
         const SHADER_BINDING_LAYOUT = 0x0001;
         /// Support extended shadow sampling instructions.
@@ -147,7 +147,7 @@ struct TextureFormatDesc {
 
 struct AdapterShared {
     context: glow::Context,
-    private_caps: PrivateCapability,
+    private_caps: PrivateCapabilities,
     shading_language_version: naga::back::glsl::Version,
 }
 
@@ -213,7 +213,7 @@ pub struct Texture {
 pub struct TextureView {
     inner: TextureInner,
     sample_type: wgt::TextureSampleType,
-    aspects: crate::FormatAspect,
+    aspects: crate::FormatAspects,
     mip_levels: Range<u32>,
     array_layers: Range<u32>,
 }
@@ -358,7 +358,7 @@ struct BlendDesc {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 struct ColorTargetDesc {
-    mask: wgt::ColorWrite,
+    mask: wgt::ColorWrites,
     blend: Option<BlendDesc>,
 }
 
@@ -565,8 +565,8 @@ enum Command {
     ClearColorI(u32, [i32; 4]),
     ClearDepth(f32),
     ClearStencil(u32),
-    BufferBarrier(glow::Buffer, crate::BufferUse),
-    TextureBarrier(crate::TextureUse),
+    BufferBarrier(glow::Buffer, crate::BufferUses),
+    TextureBarrier(crate::TextureUses),
     SetViewport {
         rect: crate::Rect<i32>,
         depth: Range<f32>,
@@ -585,7 +585,7 @@ enum Command {
     },
     SetDepth(DepthState),
     SetDepthBias(wgt::DepthBiasState),
-    ConfigureDepthStencil(crate::FormatAspect),
+    ConfigureDepthStencil(crate::FormatAspects),
     SetVertexAttribute {
         buffer: Option<glow::Buffer>,
         buffer_desc: VertexBufferDesc,
@@ -641,5 +641,5 @@ pub struct CommandBuffer {
 pub struct CommandEncoder {
     cmd_buffer: CommandBuffer,
     state: command::State,
-    private_caps: PrivateCapability,
+    private_caps: PrivateCapabilities,
 }

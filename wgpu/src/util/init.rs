@@ -1,21 +1,21 @@
-use wgt::{BackendBit, PowerPreference, RequestAdapterOptions};
+use wgt::{Backends, PowerPreference, RequestAdapterOptions};
 
 use crate::{Adapter, Instance};
 
 /// Get a set of backend bits from the environment variable WGPU_BACKEND.
-pub fn backend_bits_from_env() -> Option<BackendBit> {
+pub fn backend_bits_from_env() -> Option<Backends> {
     Some(
         match std::env::var("WGPU_BACKEND")
             .as_deref()
             .map(str::to_lowercase)
             .as_deref()
         {
-            Ok("vulkan") => BackendBit::VULKAN,
-            Ok("dx12") => BackendBit::DX12,
-            Ok("dx11") => BackendBit::DX11,
-            Ok("metal") => BackendBit::METAL,
-            Ok("gl") => BackendBit::GL,
-            Ok("webgpu") => BackendBit::BROWSER_WEBGPU,
+            Ok("vulkan") => Backends::VULKAN,
+            Ok("dx12") => Backends::DX12,
+            Ok("dx11") => Backends::DX11,
+            Ok("metal") => Backends::METAL,
+            Ok("gl") => Backends::GL,
+            Ok("webgpu") => Backends::BROWSER_WEBGPU,
             _ => return None,
         },
     )
@@ -38,10 +38,7 @@ pub fn power_preference_from_env() -> Option<PowerPreference> {
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn initialize_adapter_from_env(
-    instance: &Instance,
-    backend_bits: BackendBit,
-) -> Option<Adapter> {
+pub fn initialize_adapter_from_env(instance: &Instance, backend_bits: Backends) -> Option<Adapter> {
     let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
         .as_deref()
         .map(str::to_lowercase)
@@ -66,7 +63,7 @@ pub fn initialize_adapter_from_env(
 #[cfg(target_arch = "wasm32")]
 pub fn initialize_adapter_from_env(
     _instance: &Instance,
-    _backend_bits: BackendBit,
+    _backend_bits: Backends,
 ) -> Option<Adapter> {
     None
 }
@@ -74,7 +71,7 @@ pub fn initialize_adapter_from_env(
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable and if it doesn't exist fall back on a default adapter.
 pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
-    backend_bits: wgt::BackendBit,
+    backend_bits: wgt::Backends,
 ) -> Option<Adapter> {
     match initialize_adapter_from_env(&instance, backend_bits) {
         Some(a) => Some(a),

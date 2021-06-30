@@ -6,10 +6,10 @@ pub mod db {
     }
 }
 
-pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStage {
+pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {
     match stage {
-        naga::ShaderStage::Vertex => wgt::ShaderStage::VERTEX,
-        naga::ShaderStage::Fragment => wgt::ShaderStage::FRAGMENT,
-        naga::ShaderStage::Compute => wgt::ShaderStage::COMPUTE,
+        naga::ShaderStage::Vertex => wgt::ShaderStages::VERTEX,
+        naga::ShaderStage::Fragment => wgt::ShaderStages::FRAGMENT,
+        naga::ShaderStage::Compute => wgt::ShaderStages::COMPUTE,
     }
 }

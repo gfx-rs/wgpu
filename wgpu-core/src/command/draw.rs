@@ -12,7 +12,7 @@ use wgt::{BufferAddress, BufferSize, Color};
 use std::num::NonZeroU32;
 use thiserror::Error;
 
-pub type BufferError = UseExtendError<hal::BufferUse>;
+pub type BufferError = UseExtendError<hal::BufferUses>;
 
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -149,7 +149,7 @@ pub enum RenderCommand {
     },
     SetScissor(Rect<u32>),
     SetPushConstant {
-        stages: wgt::ShaderStage,
+        stages: wgt::ShaderStages,
         offset: u32,
         size_bytes: u32,
         /// None means there is no data and the data should be an array of zeros.
