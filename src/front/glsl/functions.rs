@@ -152,7 +152,7 @@ impl Program<'_> {
                         Ok(Some(args[0].0))
                     }
                     "texture" => {
-                        if args.len() != 2 {
+                        if !(2..=3).contains(&args.len()) {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
                         if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
@@ -163,7 +163,7 @@ impl Program<'_> {
                                     coordinate: args[1].0,
                                     array_index: None, //TODO
                                     offset: None,      //TODO
-                                    level: SampleLevel::Auto,
+                                    level: args.get(2).map_or(SampleLevel::Auto, |&(expr, _)| SampleLevel::Bias(expr)),
                                     depth_ref: None,
                                 },
                                 body,

@@ -271,6 +271,7 @@ fn textures() {
         layout(set = 1, binding = 2) uniform sampler tex_sampler;
         void main() {
             o_color = texture(sampler2D(tex, tex_sampler), v_uv);
+            o_color.a = texture(sampler2D(tex, tex_sampler), v_uv, 2.0).a;
         }
         "#,
         &entry_points,
