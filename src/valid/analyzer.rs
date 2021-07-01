@@ -168,11 +168,11 @@ enum GlobalOrArgument {
 }
 
 impl crate::Expression {
-    fn to_global_or_argument(&self) -> Option<GlobalOrArgument> {
-        Some(match *self {
+    fn to_global_or_argument(&self) -> Result<GlobalOrArgument, ExpressionError> {
+        Ok(match *self {
             crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
             crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
-            _ => return None,
+            _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
         })
     }
 }
@@ -315,12 +315,9 @@ impl FunctionInfo {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
                 GlobalOrArgument::Argument(i) => {
                     let handle = arguments[i as usize];
-                    expression_arena[handle].to_global_or_argument().ok_or(
-                        FunctionError::Expression {
-                            handle,
-                            error: ExpressionError::ExpectedGlobalOrArgument,
-                        },
-                    )?
+                    expression_arena[handle]
+                        .to_global_or_argument()
+                        .map_err(|error| FunctionError::Expression { handle, error })?
                 }
             };
 
@@ -328,12 +325,9 @@ impl FunctionInfo {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
                 GlobalOrArgument::Argument(i) => {
                     let handle = arguments[i as usize];
-                    expression_arena[handle].to_global_or_argument().ok_or(
-                        FunctionError::Expression {
-                            handle,
-                            error: ExpressionError::ExpectedGlobalOrArgument,
-                        },
-                    )?
+                    expression_arena[handle]
+                        .to_global_or_argument()
+                        .map_err(|error| FunctionError::Expression { handle, error })?
                 }
             };
 
@@ -466,24 +460,14 @@ impl FunctionInfo {
                 level,
                 depth_ref,
             } => {
-                let image_storage = expression_arena[image]
-                    .to_global_or_argument()
-                    .ok_or(ExpressionError::ExpectedGlobalOrArgument)?;
-                let sampler_storage = expression_arena[sampler]
-                    .to_global_or_argument()
-                    .ok_or(ExpressionError::ExpectedGlobalOrArgument)?;
+                let image_storage = expression_arena[image].to_global_or_argument()?;
+                let sampler_storage = expression_arena[sampler].to_global_or_argument()?;
 
                 match (image_storage, sampler_storage) {
                     (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
                         self.sampling_set.insert(SamplingKey { image, sampler });
                     }
-                    (GlobalOrArgument::Argument(_), _) => {
-                        self.sampling.insert(Sampling {
-                            image: image_storage,
-                            sampler: sampler_storage,
-                        });
-                    }
-                    (_, GlobalOrArgument::Argument(_)) => {
+                    _ => {
                         self.sampling.insert(Sampling {
                             image: image_storage,
                             sampler: sampler_storage,

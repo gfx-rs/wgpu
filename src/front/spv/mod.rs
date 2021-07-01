@@ -372,7 +372,7 @@ impl Default for Options {
 }
 
 struct FunctionInfo {
-    parameters_sampling: Vec<Option<image::SamplingFlags>>,
+    parameters_sampling: Vec<image::SamplingFlags>,
 }
 
 pub struct Parser<I> {
@@ -2314,24 +2314,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     for (i, arg) in arguments.iter().enumerate() {
                         let callee_info = &self.function_info[handle.index()];
 
-                        if let Some(flags) = callee_info.parameters_sampling.get(i).and_then(|e| *e)
-                        {
-                            match expressions[*arg] {
-                                crate::Expression::GlobalVariable(handle) => {
-                                    *self.handle_sampling.get_mut(&handle).unwrap() |= flags
+                        let flags = match callee_info.parameters_sampling.get(i) {
+                            Some(&flags) => flags,
+                            _ => continue,
+                        };
+
+                        if flags.is_empty() {
+                            continue;
+                        }
+
+                        match expressions[*arg] {
+                            crate::Expression::GlobalVariable(handle) => {
+                                if let Some(sampling) = self.handle_sampling.get_mut(&handle) {
+                                    *sampling |= flags
                                 }
-                                crate::Expression::FunctionArgument(i) => {
-                                    if let Some(handle) = function {
-                                        let function_info =
-                                            self.function_info.get_mut(handle.index()).unwrap();
-                                        let caller_flags = function_info.parameters_sampling
-                                            [i as usize]
-                                            .get_or_insert(image::SamplingFlags::empty());
-                                        *caller_flags |= flags;
-                                    }
-                                }
-                                ref other => return Err(Error::InvalidGlobalVar(other.clone())),
                             }
+                            crate::Expression::FunctionArgument(i) => {
+                                if let Some(handle) = function {
+                                    let function_info =
+                                        self.function_info.get_mut(handle.index()).unwrap();
+                                    function_info.parameters_sampling[i as usize] |= flags;
+                                }
+                            }
+                            ref other => return Err(Error::InvalidGlobalVar(other.clone())),
                         }
                     }
 

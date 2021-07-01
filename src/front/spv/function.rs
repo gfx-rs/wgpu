@@ -136,7 +136,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let mut flow_graph = FlowGraph::new();
 
         let mut function_info = FunctionInfo {
-            parameters_sampling: vec![None; fun.arguments.len()],
+            parameters_sampling: vec![super::image::SamplingFlags::empty(); fun.arguments.len()],
         };
 
         // Scan the blocks and add them as nodes

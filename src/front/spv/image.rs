@@ -456,8 +456,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 global_arena[handle].ty
             }
             crate::Expression::FunctionArgument(i) => {
-                let flags = function_info.parameters_sampling[i as usize]
-                    .get_or_insert(SamplingFlags::empty());
+                let flags = &mut function_info.parameters_sampling[i as usize];
                 *flags |= sampling_bit;
 
                 arguments[i as usize].ty
@@ -469,8 +468,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 *self.handle_sampling.get_mut(&handle).unwrap() |= sampling_bit
             }
             crate::Expression::FunctionArgument(i) => {
-                let flags = function_info.parameters_sampling[i as usize]
-                    .get_or_insert(SamplingFlags::empty());
+                let flags = &mut function_info.parameters_sampling[i as usize];
                 *flags |= sampling_bit;
             }
             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
