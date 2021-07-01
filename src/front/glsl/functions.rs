@@ -419,30 +419,57 @@ impl Program<'_> {
                         if args.len() != 3 {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
-                        Ok(Some(
-                            if let Some(ScalarKind::Bool) =
-                                self.resolve_type(ctx, args[2].0, args[2].1)?.scalar_kind()
-                            {
-                                ctx.add_expression(
-                                    Expression::Select {
-                                        condition: args[2].0,
-                                        accept: args[0].0,
-                                        reject: args[1].0,
+
+                        let (mut arg, arg_meta) = args[0];
+                        let (mut arg1, arg1_meta) = args[1];
+                        let (mut selector, selector_meta) = args[2];
+
+                        ctx.binary_implicit_conversion(
+                            self, &mut arg, arg_meta, &mut arg1, arg1_meta,
+                        )?;
+                        ctx.binary_implicit_conversion(
+                            self,
+                            &mut arg,
+                            arg_meta,
+                            &mut selector,
+                            selector_meta,
+                        )?;
+
+                        let is_vector = match *self.resolve_type(ctx, selector, selector_meta)? {
+                            TypeInner::Vector { .. } => true,
+                            _ => false,
+                        };
+                        match *self.resolve_type(ctx, args[0].0, args[0].1)? {
+                            TypeInner::Vector { size, .. } if !is_vector => {
+                                selector = ctx.add_expression(
+                                    Expression::Splat {
+                                        size,
+                                        value: selector,
                                     },
                                     body,
                                 )
-                            } else {
-                                ctx.add_expression(
-                                    Expression::Math {
-                                        fun: MathFunction::Mix,
-                                        arg: args[0].0,
-                                        arg1: Some(args[1].0),
-                                        arg2: Some(args[2].0),
-                                    },
-                                    body,
-                                )
+                            }
+                            _ => {}
+                        };
+
+                        let expr = match self
+                            .resolve_type(ctx, selector, selector_meta)?
+                            .scalar_kind()
+                        {
+                            Some(ScalarKind::Bool) => Expression::Select {
+                                condition: selector,
+                                accept: arg,
+                                reject: arg1,
                             },
-                        ))
+                            _ => Expression::Math {
+                                fun: MathFunction::Mix,
+                                arg,
+                                arg1: Some(arg1),
+                                arg2: Some(selector),
+                            },
+                        };
+
+                        Ok(Some(ctx.add_expression(expr, body)))
                     }
                     "clamp" => {
                         if args.len() != 3 {
