@@ -538,7 +538,11 @@ impl<'function> Context<'function> {
                         _ => self.add_expression(Expression::Binary { left, op, right }, body),
                     },
                     (&TypeInner::Vector { size, .. }, &TypeInner::Scalar { .. }) => match op {
-                        BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Divide => {
+                        BinaryOperator::Add
+                        | BinaryOperator::Subtract
+                        | BinaryOperator::Divide
+                        | BinaryOperator::ShiftLeft
+                        | BinaryOperator::ShiftRight => {
                             let scalar_vector =
                                 self.add_expression(Expression::Splat { size, value: right }, body);
 
