@@ -391,6 +391,14 @@ impl Program<'_> {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
+
+                        let (mut arg0, arg0_meta) = args[0];
+                        let (mut arg1, arg1_meta) = args[1];
+
+                        ctx.binary_implicit_conversion(
+                            self, &mut arg0, arg0_meta, &mut arg1, arg1_meta,
+                        )?;
+
                         Ok(Some(ctx.add_expression(
                             Expression::Math {
                                 fun: match name.as_str() {
@@ -408,8 +416,8 @@ impl Program<'_> {
                                     "ldexp" => MathFunction::Ldexp,
                                     _ => unreachable!(),
                                 },
-                                arg: args[0].0,
-                                arg1: Some(args[1].0),
+                                arg: arg0,
+                                arg1: Some(arg1),
                                 arg2: None,
                             },
                             body,
@@ -476,16 +484,26 @@ impl Program<'_> {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
 
-                        let (arg0, arg0_meta) = args[0];
+                        let (mut arg0, arg0_meta) = args[0];
+                        let (mut arg1, arg1_meta) = args[1];
+                        let (mut arg2, arg2_meta) = args[2];
+
                         let vector_size = match *(self.resolve_type(ctx, arg0, arg0_meta)?) {
-                            TypeInner::Vector{ size, .. } => Some(size),
+                            TypeInner::Vector { size, .. } => Some(size),
                             _ => None,
                         };
 
-                        let (mut arg1, arg1_meta) = args[1];
-                        ctx.implicit_splat(self, &mut arg1, arg1_meta, vector_size)?;
+                        ctx.binary_implicit_conversion(
+                            self, &mut arg0, arg0_meta, &mut arg1, arg1_meta,
+                        )?;
+                        ctx.binary_implicit_conversion(
+                            self, &mut arg1, arg1_meta, &mut arg2, arg2_meta,
+                        )?;
+                        ctx.binary_implicit_conversion(
+                            self, &mut arg2, arg2_meta, &mut arg0, arg0_meta,
+                        )?;
 
-                        let (mut arg2, arg2_meta) = args[2];
+                        ctx.implicit_splat(self, &mut arg1, arg1_meta, vector_size)?;
                         ctx.implicit_splat(self, &mut arg2, arg2_meta, vector_size)?;
 
                         Ok(Some(ctx.add_expression(
