@@ -55,6 +55,7 @@ pub const RESERVED: &[&str] = &[
     "vec_step",
     "visible",
     "as_type",
+    "this",
     // qualifiers
     "mutable",
     "static",
