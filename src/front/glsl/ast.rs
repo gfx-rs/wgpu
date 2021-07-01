@@ -883,6 +883,25 @@ impl<'function> Context<'function> {
 
         Ok(())
     }
+
+    pub fn implicit_splat(
+        &mut self,
+        program: &mut Program,
+        expr: &mut Handle<Expression>,
+        meta: SourceMetadata,
+        vector_size: Option<VectorSize>,
+    ) -> Result<(), ErrorKind> {
+        let expr_type = program.resolve_type(self, *expr, meta)?;
+
+        if let (&TypeInner::Scalar { .. }, Some(size)) = (expr_type, vector_size) {
+            *expr = self.expressions.append(Expression::Splat {
+                size,
+                value: *expr,
+            })
+        }
+
+        Ok(())
+    }
 }
 
 pub fn type_power(kind: ScalarKind) -> Option<u32> {

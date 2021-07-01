@@ -444,14 +444,40 @@ impl Program<'_> {
                             },
                         ))
                     }
-                    "clamp" | "faceforward" | "refract" | "fma" | "smoothstep" => {
+                    "clamp" => {
+                        if args.len() != 3 {
+                            return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                        }
+
+                        let (arg0, arg0_meta) = args[0];
+                        let vector_size = match *(self.resolve_type(ctx, arg0, arg0_meta)?) {
+                            TypeInner::Vector{ size, .. } => Some(size),
+                            _ => None,
+                        };
+
+                        let (mut arg1, arg1_meta) = args[1];
+                        ctx.implicit_splat(self, &mut arg1, arg1_meta, vector_size)?;
+
+                        let (mut arg2, arg2_meta) = args[2];
+                        ctx.implicit_splat(self, &mut arg2, arg2_meta, vector_size)?;
+
+                        Ok(Some(ctx.add_expression(
+                            Expression::Math {
+                                fun: MathFunction::Clamp,
+                                arg: arg0,
+                                arg1: Some(arg1),
+                                arg2: Some(arg2),
+                            },
+                            body,
+                        )))
+                    }
+                    "faceforward" | "refract" | "fma" | "smoothstep" => {
                         if args.len() != 3 {
                             return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
                         }
                         Ok(Some(ctx.add_expression(
                             Expression::Math {
                                 fun: match name.as_str() {
-                                    "clamp" => MathFunction::Clamp,
                                     "faceforward" => MathFunction::FaceForward,
                                     "refract" => MathFunction::Refract,
                                     "fma" => MathFunction::Fma,
