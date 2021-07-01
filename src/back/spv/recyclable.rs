@@ -29,46 +29,16 @@ pub trait Recyclable {
 
 // Stock values for various collections.
 
-/// Maximum extra capacity that a recycled vector is allowed to have. If the
-/// actual capacity is larger, we re-allocate the vector storage with lower
-/// capacity.
-const MAX_EXTRA_CAPACITY_PERCENT: usize = 200;
-
-/// Minimum extra capacity to keep when re-allocating the vector storage.
-const MIN_EXTRA_CAPACITY_PERCENT: usize = 20;
-
-/// Minimum sensible length to consider for re-allocation.
-const MIN_LENGTH: usize = 16;
-
 impl<T> Recyclable for Vec<T> {
     fn recycle(mut self) -> Self {
-        let extra_capacity = (self.capacity() - self.len()) * 100 / self.len().max(MIN_LENGTH);
-
-        if extra_capacity > MAX_EXTRA_CAPACITY_PERCENT {
-            //TODO: use `shrink_to` when it's stable
-            self = Vec::with_capacity(self.len() + self.len() * MIN_EXTRA_CAPACITY_PERCENT / 100);
-        } else {
-            self.clear();
-        }
-
+        self.clear();
         self
     }
 }
 
 impl<K, V, S: Clone> Recyclable for std::collections::HashMap<K, V, S> {
     fn recycle(mut self) -> Self {
-        let extra_capacity = (self.capacity() - self.len()) * 100 / self.len().max(MIN_LENGTH);
-
-        if extra_capacity > MAX_EXTRA_CAPACITY_PERCENT {
-            //TODO: use `shrink_to` when it's stable
-            self = Self::with_capacity_and_hasher(
-                self.len() + self.len() * MIN_EXTRA_CAPACITY_PERCENT / 100,
-                self.hasher().clone(),
-            );
-        } else {
-            self.clear();
-        }
-
+        self.clear();
         self
     }
 }
