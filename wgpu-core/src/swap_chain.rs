@@ -267,11 +267,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .ok_or(SwapChainError::AlreadyAcquired)?;
 
             drop(swap_chain_guard);
-            device.suspect_texture_view_for_destruction(view_id.value, &mut token);
 
-            let (mut view_guard, _) = hub.texture_views.write(&mut token);
-            let view = &mut view_guard[view_id.value];
-            let _ = view.life_guard.ref_count.take();
+            let (view, _) = hub.texture_views.unregister(view_id.value.0, &mut token);
+            if let Some(view) = view {
+                device.schedule_rogue_texture_view_for_destruction(view_id.value, view, &mut token);
+            }
 
             suf_texture
         };

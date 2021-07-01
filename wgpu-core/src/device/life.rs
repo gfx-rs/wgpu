@@ -16,7 +16,7 @@ use hal::Device as _;
 use parking_lot::Mutex;
 use thiserror::Error;
 
-use std::sync::atomic::Ordering;
+use std::{mem, sync::atomic::Ordering};
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
@@ -305,6 +305,27 @@ impl<A: hal::Api> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
+    pub(super) fn schedule_texture_view_for_destruction(
+        &mut self,
+        id: id::Valid<id::TextureViewId>,
+        view: resource::TextureView<A>,
+    ) {
+        match view.source {
+            resource::TextureViewSource::Native(source_id) => {
+                self.suspected_resources.textures.push(source_id.value);
+            }
+            resource::TextureViewSource::SwapChain { .. } => {}
+        };
+
+        let submit_index = view.life_guard.submission_index.load(Ordering::Acquire);
+        self.active
+            .iter_mut()
+            .find(|a| a.index == submit_index)
+            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+            .texture_views
+            .push((id, view.raw));
+    }
+
     pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<A, G>,
@@ -362,7 +383,8 @@ impl<A: HalApi> LifetimeTracker<A> {
             let (mut guard, _) = hub.texture_views.write(token);
             let mut trackers = trackers.lock();
 
-            for id in self.suspected_resources.texture_views.drain(..) {
+            let mut list = mem::take(&mut self.suspected_resources.texture_views);
+            for id in list.drain(..) {
                 if trackers.views.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
                     if let Some(t) = trace {
@@ -370,23 +392,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.texture_views.unregister_locked(id.0, &mut *guard) {
-                        match res.source {
-                            resource::TextureViewSource::Native(source_id) => {
-                                self.suspected_resources.textures.push(source_id.value);
-                            }
-                            resource::TextureViewSource::SwapChain { .. } => {}
-                        };
-
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .texture_views
-                            .push((id, res.raw));
+                        self.schedule_texture_view_for_destruction(id, res);
                     }
                 }
             }
+            self.suspected_resources.texture_views = list;
         }
 
         if !self.suspected_resources.textures.is_empty() {
