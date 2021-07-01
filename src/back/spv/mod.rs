@@ -1,6 +1,7 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend
 !*/
 
+mod block;
 mod helpers;
 mod index;
 mod instructions;
@@ -10,7 +11,7 @@ mod writer;
 
 pub use spirv::Capability;
 
-use crate::{arena::Handle, back::IndexBoundsCheckPolicy};
+use crate::{arena::Handle, back::IndexBoundsCheckPolicy, proc::TypeResolution};
 
 use spirv::Word;
 use std::ops;
@@ -205,6 +206,58 @@ struct LookupFunctionType {
     return_type_id: Word,
 }
 
+fn make_local(inner: &crate::TypeInner) -> Option<LocalType> {
+    Some(match *inner {
+        crate::TypeInner::Scalar { kind, width } => LocalType::Value {
+            vector_size: None,
+            kind,
+            width,
+            pointer_class: None,
+        },
+        crate::TypeInner::Vector { size, kind, width } => LocalType::Value {
+            vector_size: Some(size),
+            kind,
+            width,
+            pointer_class: None,
+        },
+        crate::TypeInner::Matrix {
+            columns,
+            rows,
+            width,
+        } => LocalType::Matrix {
+            columns,
+            rows,
+            width,
+        },
+        crate::TypeInner::Pointer { base, class } => LocalType::Pointer {
+            base,
+            class: helpers::map_storage_class(class),
+        },
+        crate::TypeInner::ValuePointer {
+            size,
+            kind,
+            width,
+            class,
+        } => LocalType::Value {
+            vector_size: size,
+            kind,
+            width,
+            pointer_class: Some(helpers::map_storage_class(class)),
+        },
+        crate::TypeInner::Image {
+            dim,
+            arrayed,
+            class,
+        } => LocalType::Image {
+            dim,
+            arrayed,
+            class,
+        },
+        crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
+        _ => return None,
+    })
+}
+
 #[derive(Debug)]
 enum Dimension {
     Scalar,
@@ -278,6 +331,31 @@ struct BlockContext<'w> {
 
     /// The `Writer`'s temporary vector, for convenience.
     temp_list: Vec<Word>,
+}
+
+impl BlockContext<'_> {
+    fn gen_id(&mut self) -> Word {
+        self.writer.id_gen.next()
+    }
+
+    fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Result<Word, Error> {
+        self.writer.get_expression_type_id(tr)
+    }
+
+    fn get_index_constant(&mut self, index: Word) -> Result<Word, Error> {
+        self.writer
+            .get_constant_scalar(crate::ScalarValue::Uint(index as _), 4)
+    }
+
+    fn cached(&self, expression: Handle<crate::Expression>) -> Word {
+        self.writer.cached[expression]
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct LoopContext {
+    continuing_id: Option<Word>,
+    break_id: Option<Word>,
 }
 
 pub struct Writer {
