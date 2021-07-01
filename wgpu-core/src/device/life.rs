@@ -230,6 +230,15 @@ impl<A: hal::Api> LifetimeTracker<A> {
             }
         }
 
+        self.active.alloc().init(ActiveSubmission {
+            index,
+            last_resources,
+            mapped: Vec::new(),
+            encoders,
+        });
+    }
+
+    pub fn post_submit(&mut self) {
         self.suspected_resources.buffers.extend(
             self.future_suspected_buffers
                 .drain(..)
@@ -240,13 +249,6 @@ impl<A: hal::Api> LifetimeTracker<A> {
                 .drain(..)
                 .map(|stored| stored.value),
         );
-
-        self.active.alloc().init(ActiveSubmission {
-            index,
-            last_resources,
-            mapped: Vec::new(),
-            encoders,
-        });
     }
 
     pub(crate) fn map(&mut self, value: id::Valid<id::BufferId>, ref_count: RefCount) {
@@ -310,13 +312,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         id: id::Valid<id::TextureViewId>,
         view: resource::TextureView<A>,
     ) {
-        match view.source {
-            resource::TextureViewSource::Native(source_id) => {
-                self.suspected_resources.textures.push(source_id.value);
-            }
-            resource::TextureViewSource::SwapChain { .. } => {}
-        };
-
         let submit_index = view.life_guard.submission_index.load(Ordering::Acquire);
         self.active
             .iter_mut()
@@ -392,6 +387,12 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.texture_views.unregister_locked(id.0, &mut *guard) {
+                        match res.source {
+                            resource::TextureViewSource::Native(ref source_id) => {
+                                self.suspected_resources.textures.push(source_id.value);
+                            }
+                            resource::TextureViewSource::SwapChain { .. } => {}
+                        };
                         self.schedule_texture_view_for_destruction(id, res);
                     }
                 }
