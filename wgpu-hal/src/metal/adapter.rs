@@ -834,6 +834,11 @@ impl super::PrivateCapabilities {
                     || device.supports_family(MTLGPUFamily::Mac2)
                     || device.supports_family(MTLGPUFamily::MacCatalyst1)
                     || device.supports_family(MTLGPUFamily::MacCatalyst2)),
+            supports_mutability: if os_is_mac {
+                Self::version_at_least(major, minor, 10, 13)
+            } else {
+                Self::version_at_least(major, minor, 11, 0)
+            },
         }
     }
 

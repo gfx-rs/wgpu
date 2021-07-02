@@ -14,6 +14,7 @@ struct CompiledShader {
     function: mtl::Function,
     wg_size: mtl::MTLSize,
     sized_bindings: Vec<naga::ResourceBinding>,
+    immutable_buffer_mask: usize,
 }
 
 fn create_stencil_desc(
@@ -83,32 +84,13 @@ impl super::Device {
                 crate::PipelineError::Linkage(stage_bit, format!("Metal: {}", err))
             })?;
 
-        // collect sizes indices
-        let mut sized_bindings = Vec::new();
-        for (_handle, var) in module.global_variables.iter() {
-            if let naga::TypeInner::Struct { ref members, .. } = module.types[var.ty].inner {
-                if let Some(member) = members.last() {
-                    if let naga::TypeInner::Array {
-                        size: naga::ArraySize::Dynamic,
-                        ..
-                    } = module.types[member.ty].inner
-                    {
-                        // Note: unwraps are fine, since the MSL is already generated
-                        let br = var.binding.clone().unwrap();
-                        sized_bindings.push(br);
-                    }
-                }
-            }
-        }
-
-        let (ep, internal_name) = module
+        let ep_index = module
             .entry_points
             .iter()
-            .zip(info.entry_point_names)
-            .find(|&(ep, _)| ep.stage == naga_stage && ep.name == stage.entry_point)
+            .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
-
-        let name = internal_name
+        let ep = &module.entry_points[ep_index];
+        let name = info.entry_point_names[ep_index]
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
         let wg_size = mtl::MTLSize {
@@ -122,12 +104,59 @@ impl super::Device {
             crate::PipelineError::EntryPoint(naga_stage)
         })?;
 
+        // collect sizes indices and immutable buffers
+        let ep_info = &stage.module.naga.info.get_entry_point(ep_index);
+        let mut sized_bindings = Vec::new();
+        let mut immutable_buffer_mask = 0;
+        for (var_handle, var) in module.global_variables.iter() {
+            if let naga::TypeInner::Struct { ref members, .. } = module.types[var.ty].inner {
+                let br = match var.binding {
+                    Some(ref br) => br.clone(),
+                    None => continue,
+                };
+                // check for an immutable buffer
+                if !ep_info[var_handle].is_empty()
+                    && !var.storage_access.contains(naga::StorageAccess::STORE)
+                {
+                    let psm = &layout.naga_options.per_stage_map[naga_stage];
+                    let slot = psm.resources[&br].buffer.unwrap();
+                    immutable_buffer_mask |= 1 << slot;
+                }
+                // check for the unsized buffer
+                if let Some(member) = members.last() {
+                    if let naga::TypeInner::Array {
+                        size: naga::ArraySize::Dynamic,
+                        ..
+                    } = module.types[member.ty].inner
+                    {
+                        // Note: unwraps are fine, since the MSL is already generated
+                        sized_bindings.push(br);
+                    }
+                }
+            }
+        }
+
         Ok(CompiledShader {
             library,
             function,
             wg_size,
             sized_bindings,
+            immutable_buffer_mask,
         })
+    }
+
+    fn set_buffers_mutability(
+        buffers: &mtl::PipelineBufferDescriptorArrayRef,
+        mut immutable_mask: usize,
+    ) {
+        while immutable_mask != 0 {
+            let slot = immutable_mask.trailing_zeros();
+            immutable_mask ^= 1 << slot;
+            buffers
+                .object_at(slot as u64)
+                .unwrap()
+                .set_mutability(mtl::MTLMutability::Immutable);
+        }
     }
 }
 
@@ -669,18 +698,30 @@ impl crate::Device<super::Api> for super::Device {
         )?;
 
         descriptor.set_vertex_function(Some(&vs.function));
+        if self.shared.private_caps.supports_mutability {
+            Self::set_buffers_mutability(
+                descriptor.vertex_buffers().unwrap(),
+                vs.immutable_buffer_mask,
+            );
+        }
 
         // Fragment shader
         let (fs_lib, fs_sized_bindings) = match desc.fragment_stage {
             Some(ref stage) => {
-                let compiled = self.load_shader(
+                let fs = self.load_shader(
                     stage,
                     desc.layout,
                     primitive_class,
                     naga::ShaderStage::Fragment,
                 )?;
-                descriptor.set_fragment_function(Some(&compiled.function));
-                (Some(compiled.library), compiled.sized_bindings)
+                descriptor.set_fragment_function(Some(&fs.function));
+                if self.shared.private_caps.supports_mutability {
+                    Self::set_buffers_mutability(
+                        descriptor.fragment_buffers().unwrap(),
+                        fs.immutable_buffer_mask,
+                    );
+                }
+                (Some(fs.library), fs.sized_bindings)
             }
             None => {
                 // TODO: This is a workaround for what appears to be a Metal validation bug
@@ -840,6 +881,10 @@ impl crate::Device<super::Api> for super::Device {
             naga::ShaderStage::Compute,
         )?;
         descriptor.set_compute_function(Some(&cs.function));
+
+        if self.shared.private_caps.supports_mutability {
+            Self::set_buffers_mutability(descriptor.buffers().unwrap(), cs.immutable_buffer_mask);
+        }
 
         if let Some(name) = desc.label {
             descriptor.set_label(name);
