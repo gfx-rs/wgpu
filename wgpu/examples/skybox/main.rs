@@ -512,7 +512,7 @@ fn skybox_astc() {
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 5,    // TODO
+        tolerance: 5,     // TODO
         max_outliers: 10, // TODO
     });
 }
