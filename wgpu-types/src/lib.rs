@@ -480,11 +480,18 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SPIRV_SHADER_PASSTHROUGH = 0x0000_0800_0000_0000;
+    }
+}
 
-        /// Features which are part of the upstream WebGPU standard.
-        const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
-        /// Features that are only available when targeting native (not web).
-        const ALL_NATIVE = 0xFFFF_FFFF_FFFF_0000;
+impl Features {
+    /// Mask of all features which are part of the upstream WebGPU standard.
+    pub const fn all_webgpu_mask() -> Self {
+        Self::from_bits_truncate(0x0000_0000_0000_FFFF)
+    }
+
+    /// Mask of all features that are only available when targeting native (not web).
+    pub const fn all_native_mask() -> Self {
+        Self::from_bits_truncate(0xFFFF_FFFF_FFFF_0000)
     }
 }
 
@@ -611,7 +618,7 @@ pub struct DownlevelCapabilities {
 impl Default for DownlevelCapabilities {
     fn default() -> Self {
         Self {
-            flags: DownlevelFlags::COMPLIANT,
+            flags: DownlevelFlags::compliant(),
             limits: DownlevelLimits::default(),
             shader_model: ShaderModel::Sm5,
         }
@@ -624,7 +631,7 @@ impl DownlevelCapabilities {
     /// If this returns false, some parts of the API will result in validation errors where they would not normally.
     /// These parts can be determined by the values in this structure.
     pub fn is_webgpu_compliant(&self) -> bool {
-        self.flags.contains(DownlevelFlags::COMPLIANT)
+        self.flags.contains(DownlevelFlags::compliant())
             && self.limits == DownlevelLimits::default()
             && self.shader_model >= ShaderModel::Sm5
     }
@@ -657,8 +664,16 @@ bitflags::bitflags! {
         const INDEPENDENT_BLENDING = 0x0000_0200;
         /// Supports samplers with anisotropic filtering
         const ANISOTROPIC_FILTERING = 0x0001_0000;
-        /// All flags are in their compliant state.
-        const COMPLIANT = 0x0000_13FF;
+    }
+}
+
+impl DownlevelFlags {
+    /// All flags that indicate if the backend is WebGPU compliant
+    pub const fn compliant() -> Self {
+        // We use manual bit twiddling to make this a const fn as `Sub` and `.remove` aren't const
+
+        // WebGPU doesn't actually require aniso
+        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits)
     }
 }
 
