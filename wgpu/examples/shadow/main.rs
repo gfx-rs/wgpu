@@ -829,8 +829,8 @@ fn shadow() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default(),
+        base_test_parameters: framework::test_common::TestParameters::default().downlevel_flags(wgpu::DownlevelFlags::COMPARISON_SAMPLERS),
         tollerance: 2,
-        max_outliers: 5,
+        max_outliers: 500, // bounded by rpi4
     });
 }

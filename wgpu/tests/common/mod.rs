@@ -5,7 +5,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
-use wgpu::{util, Adapter, Device, Instance, Queue};
+use wgpu::{util, Adapter, Device, DownlevelFlags, Instance, Queue};
 
 pub mod image;
 
@@ -116,6 +116,11 @@ impl TestParameters {
     /// Set the list
     pub fn limits(mut self, limits: Limits) -> Self {
         self.required_limits = limits;
+        self
+    }
+
+    pub fn downlevel_flags(mut self, downlevel_flags: DownlevelFlags) -> Self {
+        self.required_downlevel_properties.flags |= downlevel_flags;
         self
     }
 
