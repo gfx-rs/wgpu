@@ -70,7 +70,7 @@ pub fn compare_image_output(
     width: u32,
     height: u32,
     data: &[u8],
-    tollerance: u8,
+    tolerance: u8,
     max_outliers: usize,
 ) {
     let comparison_data = read_png(&path, width, height);
@@ -94,9 +94,9 @@ pub fn compare_image_output(
         let outliers: usize = difference_data
             .chunks_exact(4)
             .map(|colors| {
-                (colors[0] > tollerance) as usize
-                    + (colors[1] > tollerance) as usize
-                    + (colors[2] > tollerance) as usize
+                (colors[0] > tolerance) as usize
+                    + (colors[1] > tolerance) as usize
+                    + (colors[2] > tolerance) as usize
             })
             .sum();
 

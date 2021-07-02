@@ -388,7 +388,7 @@ fn cube() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tollerance: 1,
+        tolerance: 1,
         max_outliers: 500, // Bounded by rpi4
     });
 }
@@ -401,7 +401,7 @@ fn cube_lines() {
         height: 768,
         optional_features: wgpu::Features::NON_FILL_POLYGON_MODE,
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tollerance: 2,
+        tolerance: 2,
         max_outliers: 500, // Bounded by rpi4 & intel 620 on GL
     });
 }

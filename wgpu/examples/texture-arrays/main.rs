@@ -328,7 +328,7 @@ fn texture_arrays_constant() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
-        tollerance: 0,
+        tolerance: 0,
         max_outliers: 0,
     });
 }
@@ -343,7 +343,7 @@ fn texture_arrays_uniform() {
         optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
             | wgpu::Features::PUSH_CONSTANTS,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
-        tollerance: 0,
+        tolerance: 0,
         max_outliers: 0,
     });
 }
@@ -357,7 +357,7 @@ fn texture_arrays_non_uniform() {
         height: 768,
         optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
-        tollerance: 0,
+        tolerance: 0,
         max_outliers: 0,
     });
 }
@@ -372,7 +372,7 @@ fn texture_arrays_unsized_non_uniform() {
         optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::UNSIZED_BINDING_ARRAY,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
-        tollerance: 0,
+        tolerance: 0,
         max_outliers: 0,
     });
 }

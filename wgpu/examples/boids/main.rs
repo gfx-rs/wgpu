@@ -327,7 +327,7 @@ fn boids() {
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS),
-        tollerance: 0,
+        tolerance: 0,
         max_outliers: 600, // Currently bounded by rpi4
     });
 }

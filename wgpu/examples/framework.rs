@@ -372,7 +372,7 @@ pub struct FrameworkRefTest {
     pub height: u32,
     pub optional_features: wgpu::Features,
     pub base_test_parameters: test_common::TestParameters,
-    pub tollerance: u8,
+    pub tolerance: u8,
     pub max_outliers: usize,
 }
 
@@ -472,7 +472,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                 params.width,
                 params.height,
                 &bytes,
-                params.tollerance,
+                params.tolerance,
                 params.max_outliers,
             );
         },

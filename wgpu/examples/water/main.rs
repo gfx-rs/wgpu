@@ -797,8 +797,9 @@ fn water() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default().downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
-        tollerance: 5,
+        base_test_parameters: framework::test_common::TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
+        tolerance: 5,
         max_outliers: 10,
     });
 }
