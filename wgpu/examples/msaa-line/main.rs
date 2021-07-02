@@ -291,7 +291,7 @@ fn msaa_line() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tollerance: 64,
+        tolerance: 64,
         max_outliers: 1 << 16, // MSAA is comically different between vendors, 32k is a decent limit
     });
 }

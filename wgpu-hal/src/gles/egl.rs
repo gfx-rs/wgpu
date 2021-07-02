@@ -265,7 +265,8 @@ impl Inner {
             egl::CONTEXT_CLIENT_VERSION,
             3, // Request GLES 3.0 or higher
         ];
-        if flags.contains(crate::InstanceFlags::DEBUG) && !cfg!(target_os = "android") {
+        // Debug requires EGL 1.5+
+        if flags.contains(crate::InstanceFlags::DEBUG) && version >= (1, 5) {
             log::info!("\tEGL context: +debug");
             //TODO: figure out why this is needed
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);

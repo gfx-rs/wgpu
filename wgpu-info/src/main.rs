@@ -85,6 +85,8 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
 }
 
 fn main() {
+    env_logger::init();
+
     let args: Vec<_> = std::env::args().skip(1).collect();
 
     let instance = wgpu::Instance::new(wgpu::Backends::all());

@@ -358,7 +358,7 @@ fn bunnymark() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tollerance: 1,
+        tolerance: 1,
         max_outliers: 50,
     });
 }

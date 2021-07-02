@@ -2010,6 +2010,7 @@ dependencies = [
 name = "wgpu-info"
 version = "0.9.0"
 dependencies = [
+ "env_logger",
  "wgpu",
 ]
 

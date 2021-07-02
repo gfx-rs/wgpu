@@ -321,7 +321,7 @@ fn conservative_raster() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tollerance: 0,
+        tolerance: 0,
         max_outliers: 0,
     });
 }

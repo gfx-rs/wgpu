@@ -5,7 +5,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
-use wgpu::{util, Adapter, Device, Instance, Queue};
+use wgpu::{util, Adapter, Device, DownlevelFlags, Instance, Queue};
 
 pub mod image;
 
@@ -119,6 +119,11 @@ impl TestParameters {
         self
     }
 
+    pub fn downlevel_flags(mut self, downlevel_flags: DownlevelFlags) -> Self {
+        self.required_downlevel_properties.flags |= downlevel_flags;
+        self
+    }
+
     /// Mark the test as always failing, equivilant to specific_failure(None, None, None)
     pub fn failure(mut self) -> Self {
         self.failures.push((None, None, None, false));
@@ -126,7 +131,7 @@ impl TestParameters {
     }
 
     /// Mark the test as always failing on a specific backend, equivilant to specific_failure(backend, None, None)
-    pub fn backend_failures(mut self, backends: wgpu::Backends) -> Self {
+    pub fn backend_failure(mut self, backends: wgpu::Backends) -> Self {
         self.failures.push((Some(backends), None, None, false));
         self
     }
