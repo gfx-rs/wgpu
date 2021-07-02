@@ -3,6 +3,10 @@ use parking_lot::Mutex;
 
 use std::{ffi::CStr, os::raw, ptr, sync::Arc};
 
+const EGL_CONTEXT_FLAGS_KHR: i32 = 0x30FC;
+const EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR: i32 = 0x0001;
+const EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR: i32 = 0x0004;
+const EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT: i32 = 0x30BF;
 const EGL_PLATFORM_WAYLAND_KHR: u32 = 0x31D8;
 const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
 
@@ -260,23 +264,47 @@ impl Inner {
         let (config, supports_native_window) = choose_config(&egl, display)?;
         egl.bind_api(egl::OPENGL_ES_API).unwrap();
 
+        let needs_robustness = true;
+        let mut khr_context_flags = 0;
+        let supports_khr_context = display_extensions.contains("EGL_KHR_create_context");
+
         //TODO: make it so `Device` == EGL Context
         let mut context_attributes = vec![
             egl::CONTEXT_CLIENT_VERSION,
             3, // Request GLES 3.0 or higher
         ];
-        // Debug requires EGL 1.5+
-        if flags.contains(crate::InstanceFlags::DEBUG) && version >= (1, 5) {
-            log::info!("\tEGL context: +debug");
-            //TODO: figure out why this is needed
-            context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
-            context_attributes.push(egl::TRUE as _);
+        if flags.contains(crate::InstanceFlags::DEBUG) {
+            if version >= (1, 5) {
+                log::info!("\tEGL context: +debug");
+                context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
+                context_attributes.push(egl::TRUE as _);
+            } else if supports_khr_context {
+                log::info!("\tEGL context: +debug KHR");
+                khr_context_flags |= EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR;
+            } else {
+                log::info!("\tEGL context: -debug");
+            }
         }
-        if display_extensions.contains("EGL_EXT_create_context_robustness") {
-            log::info!("\tEGL context: +robust access");
-            context_attributes.push(egl::CONTEXT_OPENGL_ROBUST_ACCESS);
-            context_attributes.push(egl::TRUE as _);
+        if needs_robustness {
+            if version >= (1, 5) {
+                log::info!("\tEGL context: +robust access");
+                context_attributes.push(egl::CONTEXT_OPENGL_ROBUST_ACCESS);
+                context_attributes.push(egl::TRUE as _);
+            } else if !display_extensions.contains("EGL_EXT_create_context_robustness") {
+                log::info!("\tEGL context: -robust access");
+            } else if supports_khr_context {
+                log::info!("\tEGL context: +robust access KHR");
+                khr_context_flags |= EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR;
+            } else {
+                log::info!("\tEGL context: +robust access EXT");
+                context_attributes.push(EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT);
+                context_attributes.push(egl::TRUE as _);
+            }
             //TODO do we need `egl::CONTEXT_OPENGL_NOTIFICATION_STRATEGY_EXT`?
+        }
+        if khr_context_flags != 0 {
+            context_attributes.push(EGL_CONTEXT_FLAGS_KHR);
+            context_attributes.push(khr_context_flags);
         }
         context_attributes.push(egl::NONE);
         let context = match egl.create_context(display, config, None, &context_attributes) {
