@@ -131,7 +131,7 @@ impl TestParameters {
     }
 
     /// Mark the test as always failing on a specific backend, equivilant to specific_failure(backend, None, None)
-    pub fn backend_failures(mut self, backends: wgpu::Backends) -> Self {
+    pub fn backend_failure(mut self, backends: wgpu::Backends) -> Self {
         self.failures.push((Some(backends), None, None, false));
         self
     }
