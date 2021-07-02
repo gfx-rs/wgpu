@@ -72,7 +72,7 @@ validate-hlsl: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
 		fragment="" \
 		compute="" \
 		. $${config}; \
-		DXC_PARAMS="-Wno-parentheses-equality -Zi -Qembed_debug;" \
+		DXC_PARAMS="-Wno-parentheses-equality -Zi -Qembed_debug"; \
 		[ ! -z "$${vertex}" ] && echo "Vertex Stage:" && dxc $${file} -T $${vertex} -E $${vertex_name} $${DXC_PARAMS} > /dev/null; \
 		[ ! -z "$${fragment}" ] && echo "Fragment Stage:" && dxc $${file} -T $${fragment} -E $${fragment_name} $${DXC_PARAMS} > /dev/null; \
 		[ ! -z "$${compute}" ] && echo "Compute Stage:" && dxc $${file} -T $${compute} -E $${compute_name} $${DXC_PARAMS} > /dev/null; \
