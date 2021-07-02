@@ -41,7 +41,7 @@ wgpu features a set of unit, integration, and example based tests. All framework
 To run the test suite, run the following command:
 
 ```
-cargo run --bin wgpu-info -- cargo test
+cargo run --bin wgpu-info -- cargo test --no-fail-fast
 ```
 
 To run any individual test on a specific adapter, populate the following environment variables:
@@ -51,7 +51,7 @@ To run any individual test on a specific adapter, populate the following environ
 Then to run an example's reftests, run:
 
 ```
-cargo test --example <example-name>
+cargo test --example <example-name> --no-fail-fast
 ```
 
 Or run a part of the integration test suite:
