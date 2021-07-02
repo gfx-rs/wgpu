@@ -1,0 +1,58 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 34
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %28 "main" %26
+OpExecutionMode %28 OriginUpperLeft
+OpSource GLSL 450
+OpName %9 "Texture"
+OpName %11 "Sampler"
+OpName %16 "test"
+OpName %28 "main"
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 0
+OpDecorate %11 DescriptorSet 0
+OpDecorate %11 Binding 1
+OpDecorate %26 Location 0
+%2 = OpTypeVoid
+%4 = OpTypeFloat 32
+%3 = OpConstant  %4  0.0
+%5 = OpTypeImage %4 2D 0 0 0 1 Unknown
+%6 = OpTypeSampler
+%7 = OpTypeVector %4 4
+%8 = OpTypeVector %4 2
+%10 = OpTypePointer UniformConstant %5
+%9 = OpVariable  %10  UniformConstant
+%12 = OpTypePointer UniformConstant %6
+%11 = OpVariable  %12  UniformConstant
+%17 = OpTypeFunction %7 %10 %12
+%21 = OpTypeSampledImage %5
+%27 = OpTypePointer Output %7
+%26 = OpVariable  %27  Output
+%29 = OpTypeFunction %2
+%16 = OpFunction  %7  None %17
+%14 = OpFunctionParameter  %10
+%15 = OpFunctionParameter  %12
+%13 = OpLabel
+OpBranch %18
+%18 = OpLabel
+%19 = OpCompositeConstruct  %8  %3 %3
+%20 = OpLoad  %5  %14
+%22 = OpLoad  %6  %15
+%23 = OpSampledImage  %21  %20 %22
+%24 = OpImageSampleImplicitLod  %7  %23 %19
+OpReturnValue %24
+OpFunctionEnd
+%28 = OpFunction  %2  None %29
+%25 = OpLabel
+%30 = OpLoad  %5  %9
+%31 = OpLoad  %6  %11
+OpBranch %32
+%32 = OpLabel
+%33 = OpFunctionCall  %7  %16 %9 %11
+OpStore %26 %33
+OpReturn
+OpFunctionEnd

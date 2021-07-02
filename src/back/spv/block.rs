@@ -703,7 +703,7 @@ impl<'w> BlockContext<'w> {
                 array_index,
                 index,
             } => {
-                let image_id = self.get_expression_global(image);
+                let image_id = self.get_image_id(block, image)?;
                 let coordinate_id =
                     self.write_texture_coordinates(coordinate, array_index, block)?;
 
@@ -773,7 +773,7 @@ impl<'w> BlockContext<'w> {
             } => {
                 use super::instructions::SampleLod;
                 // image
-                let image_id = self.get_expression_global(image);
+                let image_id = self.get_image_id(block, image)?;
                 let image_type = self.fun_info[image].ty.handle().unwrap();
                 // Vulkan doesn't know about our `Depth` class, and it returns `vec4<f32>`,
                 // so we need to grab the first component out of it.
@@ -800,7 +800,7 @@ impl<'w> BlockContext<'w> {
                 let sampled_image_type_id =
                     self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }))?;
 
-                let sampler_id = self.get_expression_global(sampler);
+                let sampler_id = self.get_image_id(block, sampler)?;
                 let coordinate_id =
                     self.write_texture_coordinates(coordinate, array_index, block)?;
 
@@ -960,7 +960,7 @@ impl<'w> BlockContext<'w> {
             crate::Expression::ImageQuery { image, query } => {
                 use crate::{ImageClass as Ic, ImageDimension as Id, ImageQuery as Iq};
 
-                let image_id = self.get_expression_global(image);
+                let image_id = self.get_image_id(block, image)?;
                 let image_type = self.fun_info[image].ty.handle().unwrap();
                 let (dim, arrayed, class) = match self.ir_module.types[image_type].inner {
                     crate::TypeInner::Image {
@@ -1233,8 +1233,12 @@ impl<'w> BlockContext<'w> {
         Ok(pointer)
     }
 
-    fn get_expression_global(&self, expr_handle: Handle<crate::Expression>) -> Word {
-        match self.ir_function.expressions[expr_handle] {
+    fn get_image_id(
+        &mut self,
+        block: &mut Block,
+        expr_handle: Handle<crate::Expression>,
+    ) -> Result<Word, Error> {
+        Ok(match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
                 let id = self.writer.global_variables[handle.index()].handle_id;
                 if id == 0 {
@@ -1242,8 +1246,19 @@ impl<'w> BlockContext<'w> {
                 }
                 id
             }
+            crate::Expression::FunctionArgument(i) => {
+                let result_type_id = self.get_type_id(LookupType::Handle(
+                    self.ir_function.arguments[i as usize].ty,
+                ))?;
+                let pointer_id = self.function.parameter_id(i);
+                let id = self.gen_id();
+                block
+                    .body
+                    .push(Instruction::load(result_type_id, id, pointer_id, None));
+                id
+            }
             ref other => unreachable!("Unexpected global expression {:?}", other),
-        }
+        })
     }
 
     pub(super) fn write_block(
@@ -1516,7 +1531,7 @@ impl<'w> BlockContext<'w> {
                     array_index,
                     value,
                 } => {
-                    let image_id = self.get_expression_global(image);
+                    let image_id = self.get_image_id(&mut block, image)?;
                     let coordinate_id =
                         self.write_texture_coordinates(coordinate, array_index, &mut block)?;
                     let value_id = self.cached(value);

@@ -175,7 +175,7 @@ impl Writer {
         self.get_type_id(lookup_ty)
     }
 
-    fn get_pointer_id(
+    pub(super) fn get_pointer_id(
         &mut self,
         arena: &Arena<crate::Type>,
         handle: Handle<crate::Type>,
@@ -269,7 +269,18 @@ impl Writer {
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
-            let argument_type_id = self.get_type_id(LookupType::Handle(argument.ty))?;
+            let handle_ty = match ir_module.types[argument.ty].inner {
+                crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => true,
+                _ => false,
+            };
+            let argument_type_id = match handle_ty {
+                true => self.get_pointer_id(
+                    &ir_module.types,
+                    argument.ty,
+                    spirv::StorageClass::UniformConstant,
+                )?,
+                false => self.get_type_id(LookupType::Handle(argument.ty))?,
+            };
             if let Some(ref mut list) = varying_ids {
                 let id = if let Some(ref binding) = argument.binding {
                     let name = argument.name.as_ref().map(AsRef::as_ref);

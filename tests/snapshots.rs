@@ -382,7 +382,7 @@ fn convert_wgsl() {
         ("bounds-check-zero", Targets::SPIRV),
         (
             "texture-arg",
-            Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
     ];
 
