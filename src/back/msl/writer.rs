@@ -2007,15 +2007,27 @@ impl<W: Write> Writer<W> {
             let mut ep_error = None;
             let mut supports_array_length = false;
 
-            // skip this entry point if any global bindings are missing
+            // skip this entry point if any global bindings are missing,
+            // or their types are incompatible.
             if !options.fake_missing_bindings {
                 for (var_handle, var) in module.global_variables.iter() {
                     if fun_info[var_handle].is_empty() {
                         continue;
                     }
                     if let Some(ref br) = var.binding {
-                        if let Err(e) = options.resolve_resource_binding(ep.stage, br) {
-                            ep_error = Some(e);
+                        let good = match options.per_stage_map[ep.stage].resources.get(br) {
+                            Some(target) => match module.types[var.ty].inner {
+                                crate::TypeInner::Struct {
+                                    top_level: true, ..
+                                } => target.buffer.is_some(),
+                                crate::TypeInner::Image { .. } => target.texture.is_some(),
+                                crate::TypeInner::Sampler { .. } => target.sampler.is_some(),
+                                _ => false,
+                            },
+                            None => false,
+                        };
+                        if !good {
+                            ep_error = Some(super::EntryPointError::MissingBinding(br.clone()));
                             break;
                         }
                     }

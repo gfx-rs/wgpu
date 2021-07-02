@@ -898,10 +898,9 @@ impl<'function> Context<'function> {
         let expr_type = program.resolve_type(self, *expr, meta)?;
 
         if let (&TypeInner::Scalar { .. }, Some(size)) = (expr_type, vector_size) {
-            *expr = self.expressions.append(Expression::Splat {
-                size,
-                value: *expr,
-            })
+            *expr = self
+                .expressions
+                .append(Expression::Splat { size, value: *expr })
         }
 
         Ok(())
