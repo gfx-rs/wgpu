@@ -333,30 +333,22 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    fn lock_life_internal<'this, 'token: 'this>(
-        tracker: &'this Mutex<life::LifetimeTracker<A>>,
-        _token: &mut Token<'token, Self>,
-    ) -> MutexGuard<'this, life::LifetimeTracker<A>> {
-        tracker.lock()
-    }
-
     fn lock_life<'this, 'token: 'this>(
         &'this self,
         //TODO: fix this - the token has to be borrowed for the lock
-        token: &mut Token<'token, Self>,
+        _token: &mut Token<'token, Self>,
     ) -> MutexGuard<'this, life::LifetimeTracker<A>> {
-        Self::lock_life_internal(&self.life_tracker, token)
+        self.life_tracker.lock()
     }
 
-    pub(crate) fn suspect_texture_view_for_destruction<'this, 'token: 'this>(
+    pub(crate) fn schedule_rogue_texture_view_for_destruction<'this, 'token: 'this>(
         &'this self,
         view_id: id::Valid<id::TextureViewId>,
+        view: resource::TextureView<A>,
         token: &mut Token<'token, Self>,
     ) {
         self.lock_life(token)
-            .suspected_resources
-            .texture_views
-            .push(view_id);
+            .schedule_texture_view_for_destruction(view_id, view);
     }
 
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(

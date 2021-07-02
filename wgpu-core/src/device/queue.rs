@@ -808,14 +808,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            let callbacks = match device.maintain(&hub, false, &mut token) {
-                Ok(callbacks) => callbacks,
-                Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
-                Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
-            };
-
-            device.temp_suspected.clear();
-
             profiling::scope!("cleanup");
             if let Some(pending_execution) = device.pending_writes.post_submit(
                 &device.command_allocator,
@@ -824,11 +816,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ) {
                 active_executions.push(pending_execution);
             }
-            super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
+
+            // this will register the new submission to the life time tracker
+            let mut pending_write_resources = mem::take(&mut device.pending_writes.temp_resources);
+            device.lock_life(&mut token).track_submission(
                 submit_index,
-                device.pending_writes.temp_resources.drain(..),
+                pending_write_resources.drain(..),
                 active_executions,
             );
+
+            // This will schedule destruction of all resources that are no longer needed
+            // by the user but used in the command stream, among other things.
+            let callbacks = match device.maintain(&hub, false, &mut token) {
+                Ok(callbacks) => callbacks,
+                Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
+                Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
+            };
+
+            device.pending_writes.temp_resources = pending_write_resources;
+            device.temp_suspected.clear();
+            device.lock_life(&mut token).post_submit();
 
             callbacks
         };
