@@ -209,6 +209,7 @@ struct PrivateCapabilities {
     can_set_next_drawable_timeout: bool,
     supports_arrays_of_textures: bool,
     supports_arrays_of_textures_write: bool,
+    supports_mutability: bool,
 }
 
 #[derive(Clone, Debug)]
