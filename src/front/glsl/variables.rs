@@ -100,7 +100,26 @@ impl Program<'_> {
                 },
                 BuiltIn::Position,
                 true,
+                PrologueStage::empty(),
+            ),
+            "gl_FragCoord" => add_builtin(
+                TypeInner::Vector {
+                    size: VectorSize::Quad,
+                    kind: ScalarKind::Float,
+                    width: 4,
+                },
+                BuiltIn::Position,
+                false,
                 PrologueStage::FRAGMENT,
+            ),
+            "gl_FragDepth" => add_builtin(
+                TypeInner::Scalar {
+                    kind: ScalarKind::Float,
+                    width: 4,
+                },
+                BuiltIn::FragDepth,
+                true,
+                PrologueStage::empty(),
             ),
             "gl_VertexIndex" => add_builtin(
                 TypeInner::Scalar {
