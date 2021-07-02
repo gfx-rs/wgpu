@@ -765,6 +765,8 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> Result<super::Sampler, crate::DeviceError> {
+        let lod_range = desc.lod_clamp.clone().unwrap_or(0.0..16.0);
+
         let mut vk_info = vk::SamplerCreateInfo::builder()
             .flags(vk::SamplerCreateFlags::empty())
             .mag_filter(conv::map_filter_mode(desc.mag_filter))
@@ -772,16 +774,16 @@ impl crate::Device<super::Api> for super::Device {
             .mipmap_mode(conv::map_mip_filter_mode(desc.mipmap_filter))
             .address_mode_u(conv::map_address_mode(desc.address_modes[0]))
             .address_mode_v(conv::map_address_mode(desc.address_modes[1]))
-            .address_mode_w(conv::map_address_mode(desc.address_modes[2]));
+            .address_mode_w(conv::map_address_mode(desc.address_modes[2]))
+            .min_lod(lod_range.start)
+            .max_lod(lod_range.end);
 
         if let Some(fun) = desc.compare {
             vk_info = vk_info
                 .compare_enable(true)
                 .compare_op(conv::map_comparison(fun));
         }
-        if let Some(ref range) = desc.lod_clamp {
-            vk_info = vk_info.min_lod(range.start).max_lod(range.end);
-        }
+
         if let Some(aniso) = desc.anisotropy_clamp {
             if self
                 .shared
