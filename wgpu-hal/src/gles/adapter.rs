@@ -208,10 +208,10 @@ impl super::Adapter {
 
         let min_uniform_buffer_offset_alignment =
             gl.get_parameter_i32(glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT);
-        let min_storage_buffer_offset_alignment = if cfg!(target_arch = "wasm32") {
-            256
+        let min_storage_buffer_offset_alignment = if ver >= (3, 1) {
+            gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT) as u32
         } else {
-            gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT)
+            256
         };
         let max_uniform_buffers_per_shader_stage =
             gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS)
