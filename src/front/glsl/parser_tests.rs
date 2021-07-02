@@ -673,3 +673,21 @@ fn swizzles() {
     )
     .unwrap_err();
 }
+
+#[test]
+fn vector_indexing() {
+    let mut entry_points = crate::FastHashMap::default();
+    entry_points.insert("".to_string(), ShaderStage::Fragment);
+
+    parse_program(
+        r#"
+        #  version 450
+        float main(int index) {
+            vec4 v = vec4(1.0, 2.0, 3.0, 4.0);
+            return v[index] + 1.0;
+        }
+        "#,
+        &entry_points,
+    )
+    .unwrap();
+}

@@ -485,12 +485,15 @@ impl<'function> Context<'function> {
                         self.add_expression(Expression::Access { base, index }, body)
                     });
 
-                if let TypeInner::Pointer { .. } = *program.resolve_type(self, pointer, meta)? {
-                    if !lhs {
-                        return Ok((
-                            Some(self.add_expression(Expression::Load { pointer }, body)),
-                            meta,
-                        ));
+                if !lhs {
+                    match *program.resolve_type(self, pointer, meta)? {
+                        TypeInner::Pointer { .. } | TypeInner::ValuePointer { .. } => {
+                            return Ok((
+                                Some(self.add_expression(Expression::Load { pointer }, body)),
+                                meta,
+                            ));
+                        },
+                        _ => {},
                     }
                 }
 
