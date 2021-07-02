@@ -484,7 +484,7 @@ fn mipmap() {
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
             .backend_failure(wgpu::Backends::GL),
-        tolerance: 25,
-        max_outliers: 3000, // Mipmap sampling is highly variant between impls. This is currently bounded by AMD on mac
+        tolerance: 50,
+        max_outliers: 5000, // Mipmap sampling is highly variant between impls. This is currently bounded by lavapipe
     });
 }
