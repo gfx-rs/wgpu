@@ -63,6 +63,17 @@ impl crate::Api for Api {
 
 pub struct Instance {}
 
+impl Instance {
+    pub fn create_surface_from_layer(
+        &self,
+        layer: &mtl::MetalLayerRef,
+    ) -> Surface {
+        unsafe {
+            Surface::from_layer(layer)
+        }
+    }
+}
+
 impl crate::Instance<Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         //TODO: enable `METAL_DEVICE_WRAPPER_TYPE` environment based on the flags?

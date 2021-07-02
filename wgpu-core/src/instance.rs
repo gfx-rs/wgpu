@@ -376,7 +376,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
-    /*TODO: raw CALayer handling
     #[cfg(metal)]
     pub fn instance_create_surface_metal(
         &self,
@@ -396,7 +395,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
         id.0
-    }*/
+    }
 
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("drop", "Surface");
