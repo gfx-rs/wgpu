@@ -1,13 +1,35 @@
 use crate::{
-    proc::ensure_block_returns, Arena, BinaryOperator, Block, EntryPoint, Expression, Function,
+    proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint, Expression, Function,
     FunctionArgument, FunctionResult, Handle, ImageQuery, LocalVariable, MathFunction,
-    RelationalFunction, SampleLevel, ScalarKind, Statement, StructMember, SwizzleComponent, Type,
+    RelationalFunction, SampleLevel, ScalarKind, ScalarValue, Statement, StructMember, SwizzleComponent, Type,
     TypeInner, VectorSize,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
 
 impl Program<'_> {
+    fn add_constant_value(
+        &mut self,
+        scalar_kind: ScalarKind,
+        value: u64,
+    ) -> Handle<Constant> {
+        let value = match scalar_kind {
+            ScalarKind::Uint => ScalarValue::Uint(value),
+            ScalarKind::Sint => ScalarValue::Sint(value as i64),
+            ScalarKind::Float => ScalarValue::Float(value as f64),
+            _ => unreachable!(),
+        };
+
+        self.module.constants.fetch_or_append(Constant {
+            name: None,
+            specialization: None,
+            inner: ConstantInner::Scalar {
+                width: 4,
+                value,
+            },
+        })
+    }
+
     pub fn function_call(
         &mut self,
         ctx: &mut Context,
@@ -24,13 +46,40 @@ impl Program<'_> {
         match fc {
             FunctionCallKind::TypeConstructor(ty) => {
                 let h = if args.len() == 1 {
-                    let is_vec = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
-                        TypeInner::Vector { .. } => true,
-                        _ => false,
+                    let expr_type = self.resolve_type(ctx, args[0].0, args[0].1)?;
+
+                    let vector_size = match *expr_type {
+                        TypeInner::Vector{ size, .. } => Some(size),
+                        _ => None,
                     };
 
+                    // Special case: if casting from a bool, we need to use Select and not As.
+                    match self.module.types[ty].inner.scalar_kind() {
+                        Some(result_scalar_kind) if expr_type.scalar_kind() == Some(ScalarKind::Bool) && result_scalar_kind != ScalarKind::Bool => {
+                            let c0 = self.add_constant_value(result_scalar_kind, 0u64);
+                            let c1 = self.add_constant_value(result_scalar_kind, 1u64);
+                            let mut reject = ctx.add_expression(Expression::Constant(c0), body);
+                            let mut accept = ctx.add_expression(Expression::Constant(c1), body);
+
+                            ctx.implicit_splat(self, &mut reject, meta, vector_size)?;
+                            ctx.implicit_splat(self, &mut accept, meta, vector_size)?;
+
+                            let h = ctx.add_expression(
+                                Expression::Select {
+                                    accept,
+                                    reject,
+                                    condition: args[0].0,
+                                },
+                                body,
+                            );
+
+                            return Ok(Some(h));
+                        }
+                        _ => {}
+                    }
+
                     match self.module.types[ty].inner {
-                        TypeInner::Vector { size, kind, .. } if !is_vec => {
+                        TypeInner::Vector { size, kind, .. } if vector_size.is_none() => {
                             let (mut value, meta) = args[0];
                             ctx.implicit_conversion(self, &mut value, meta, kind)?;
 
