@@ -73,19 +73,19 @@ env_logger = "0.8"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "68a2efd3c5db62c2c011ccbad84f58be5e539fe3"
+rev = "0b9af95793e319817e74a30601cbcd4bad9bb3e6"
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "68a2efd3c5db62c2c011ccbad84f58be5e539fe3"
+rev = "0b9af95793e319817e74a30601cbcd4bad9bb3e6"
 features = ["wgsl-in"]
 
 # used to generate SPIR-V for the Web target
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "68a2efd3c5db62c2c011ccbad84f58be5e539fe3"
+rev = "0b9af95793e319817e74a30601cbcd4bad9bb3e6"
 features = ["wgsl-in", "spv-out"]
 
 [[example]]
