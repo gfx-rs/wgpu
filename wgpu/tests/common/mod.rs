@@ -227,25 +227,33 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
             let always =
                 backend_failure.is_none() && vendor_failure.is_none() && adapter_failure.is_none();
 
-            let expect_failure_backend = backend_failure
-                .map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)))
-                .unwrap_or(true);
-            let expect_failure_vendor = vendor_failure
-                .map(|v| v == adapter_info.vendor)
-                .unwrap_or(true);
+            let expect_failure_backend =
+                backend_failure.map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)));
+            let expect_failure_vendor = vendor_failure.map(|v| v == adapter_info.vendor);
             let expect_failure_adapter = adapter_failure
                 .as_deref()
-                .map(|f| adapter_lowercase_name.contains(f))
-                .unwrap_or(true);
+                .map(|f| adapter_lowercase_name.contains(f));
 
-            if expect_failure_backend && expect_failure_vendor && expect_failure_adapter {
+            if expect_failure_backend.unwrap_or(true)
+                && expect_failure_vendor.unwrap_or(true)
+                && expect_failure_adapter.unwrap_or(true)
+            {
                 if always {
                     Some((FailureReasons::ALWAYS, *segfault))
                 } else {
                     let mut reason = FailureReasons::empty();
-                    reason.set(FailureReasons::BACKEND, expect_failure_backend);
-                    reason.set(FailureReasons::VENDOR, expect_failure_vendor);
-                    reason.set(FailureReasons::ADAPTER, expect_failure_adapter);
+                    reason.set(
+                        FailureReasons::BACKEND,
+                        expect_failure_backend.unwrap_or(false),
+                    );
+                    reason.set(
+                        FailureReasons::VENDOR,
+                        expect_failure_vendor.unwrap_or(false),
+                    );
+                    reason.set(
+                        FailureReasons::ADAPTER,
+                        expect_failure_adapter.unwrap_or(false),
+                    );
                     Some((reason, *segfault))
                 }
             } else {

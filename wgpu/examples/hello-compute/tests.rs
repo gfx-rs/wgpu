@@ -74,7 +74,7 @@ fn test_compute_overflow() {
 #[test]
 fn test_multithreaded_compute() {
     initialize_test(
-        TestParameters::default().backend_failures(wgpu::Backends::GL),
+        TestParameters::default().backend_failure(wgpu::Backends::GL),
         |ctx| {
             use std::{sync::mpsc, thread, time::Duration};
 

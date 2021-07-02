@@ -483,7 +483,7 @@ fn mipmap() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
-            .backend_failures(wgpu::Backends::VULKAN | wgpu::Backends::GL),
+            .backend_failure(wgpu::Backends::GL),
         tolerance: 25,
         max_outliers: 3000, // Mipmap sampling is highly variant between impls. This is currently bounded by AMD on mac
     });
