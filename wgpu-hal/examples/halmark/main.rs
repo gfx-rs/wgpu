@@ -41,10 +41,10 @@ struct ExecutionContext<A: hal::Api> {
 impl<A: hal::Api> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
         device.wait(&self.fence, self.fence_value, !0).unwrap();
+        self.encoder.reset_all(self.used_cmd_bufs.drain(..));
         for view in self.used_views.drain(..) {
             device.destroy_texture_view(view);
         }
-        self.encoder.reset_all(self.used_cmd_bufs.drain(..));
         self.frames_recorded = 0;
     }
 }
@@ -431,11 +431,14 @@ impl<A: hal::Api> Example<A> {
             unsafe { device.create_bind_group(&local_group_desc).unwrap() }
         };
 
+        let init_fence_value = 1;
         let fence = unsafe {
             let mut fence = device.create_fence().unwrap();
             let init_cmd = cmd_encoder.end_encoding().unwrap();
-            queue.submit(&[&init_cmd], Some((&mut fence, 1))).unwrap();
-            device.wait(&fence, 1, !0).unwrap();
+            queue
+                .submit(&[&init_cmd], Some((&mut fence, init_fence_value)))
+                .unwrap();
+            device.wait(&fence, init_fence_value, !0).unwrap();
             device.destroy_buffer(staging_buffer);
             cmd_encoder.reset_all(iter::once(init_cmd));
             fence
@@ -464,7 +467,7 @@ impl<A: hal::Api> Example<A> {
             contexts: vec![ExecutionContext {
                 encoder: cmd_encoder,
                 fence,
-                fence_value: 1,
+                fence_value: init_fence_value + 1,
                 used_views: Vec::new(),
                 used_cmd_bufs: Vec::new(),
                 frames_recorded: 0,
@@ -512,6 +515,8 @@ impl<A: hal::Api> Example<A> {
             self.surface.unconfigure(&self.device);
             self.device.exit();
             self.instance.destroy_surface(self.surface);
+            drop(self.adapter);
+            drop(self.queue);
         }
     }
 

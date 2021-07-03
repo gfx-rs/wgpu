@@ -287,14 +287,21 @@ impl super::Instance {
     }
 }
 
-impl Drop for super::InstanceShared {
+impl Drop for super::Instance {
     fn drop(&mut self) {
-        unsafe {
-            if let Some(du) = self.debug_utils.take() {
-                du.extension
-                    .destroy_debug_utils_messenger(du.messenger, None);
+        match Arc::get_mut(&mut self.shared) {
+            Some(shared) => unsafe {
+                if let Some(du) = shared.debug_utils.take() {
+                    du.extension
+                        .destroy_debug_utils_messenger(du.messenger, None);
+                }
+            },
+            None => {
+                log::error!("Unable to drop Instance: something created from it is still alive");
             }
-            self.raw.destroy_instance(None);
+        }
+        unsafe {
+            self.shared.raw.destroy_instance(None);
         }
     }
 }
