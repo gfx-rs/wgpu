@@ -830,7 +830,8 @@ fn shadow() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
-            .downlevel_flags(wgpu::DownlevelFlags::COMPARISON_SAMPLERS),
+            .downlevel_flags(wgpu::DownlevelFlags::COMPARISON_SAMPLERS)
+            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("V3D"), false), // rpi4 on VK doesn't work: https://gitlab.freedesktop.org/mesa/mesa/-/issues/3916
         tolerance: 2,
         max_outliers: 500, // bounded by rpi4
     });

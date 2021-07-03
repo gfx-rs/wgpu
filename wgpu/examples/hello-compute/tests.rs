@@ -9,12 +9,7 @@ use common::{initialize_test, TestParameters};
 #[test]
 fn test_compute_1() {
     initialize_test(
-        TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("V3D"),
-            false,
-        ),
+        TestParameters::default().specific_failure(None, None, Some("V3D"), false),
         |ctx| {
             let input = &[1, 2, 3, 4];
 
@@ -31,12 +26,7 @@ fn test_compute_1() {
 #[test]
 fn test_compute_2() {
     initialize_test(
-        TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("V3D"),
-            false,
-        ),
+        TestParameters::default().specific_failure(None, None, Some("V3D"), false),
         |ctx| {
             let input = &[5, 23, 10, 9];
 
@@ -53,12 +43,7 @@ fn test_compute_2() {
 #[test]
 fn test_compute_overflow() {
     initialize_test(
-        TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("V3D"),
-            false,
-        ),
+        TestParameters::default().specific_failure(None, None, Some("V3D"), false),
         |ctx| {
             let input = &[77031, 837799, 8400511, 63728127];
             pollster::block_on(assert_execute_gpu(
@@ -74,7 +59,9 @@ fn test_compute_overflow() {
 #[test]
 fn test_multithreaded_compute() {
     initialize_test(
-        TestParameters::default().backend_failure(wgpu::Backends::GL),
+        TestParameters::default()
+            .backend_failure(wgpu::Backends::GL)
+            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("V3D"), false),
         |ctx| {
             use std::{sync::mpsc, thread, time::Duration};
 
