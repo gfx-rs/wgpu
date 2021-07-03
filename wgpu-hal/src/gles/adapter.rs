@@ -115,7 +115,7 @@ impl super::Adapter {
             "mali",
             "intel",
         ];
-        let strings_that_imply_cpu = ["mesa offscreen", "swiftshader", "lavapipe"];
+        let strings_that_imply_cpu = ["mesa offscreen", "swiftshader", "llvmpipe"];
 
         //TODO: handle Intel Iris XE as discreet
         let inferred_device_type = if vendor.contains("qualcomm")
