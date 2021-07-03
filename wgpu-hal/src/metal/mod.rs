@@ -64,13 +64,8 @@ impl crate::Api for Api {
 pub struct Instance {}
 
 impl Instance {
-    pub fn create_surface_from_layer(
-        &self,
-        layer: &mtl::MetalLayerRef,
-    ) -> Surface {
-        unsafe {
-            Surface::from_layer(layer)
-        }
+    pub fn create_surface_from_layer(&self, layer: &mtl::MetalLayerRef) -> Surface {
+        unsafe { Surface::from_layer(layer) }
     }
 }
 
