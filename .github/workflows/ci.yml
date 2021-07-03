@@ -112,30 +112,37 @@ jobs:
             wrapper_features:
     steps:
       - uses: actions/checkout@v2
-      - if: matrix.channel == 'nightly'
-        name: Install latest nightly
+      - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: ${{ matrix.channel }}
           override: true
+
       - if: matrix.clippy_params != ''
         run: rustup component add clippy
-        # prepare
+
+        # prepare #
       - if: matrix.prepare_command != ''
         run: ${{ matrix.prepare_command }}
-        # regular build
+
+        # regular build #
+
+        # build 
       - if: matrix.additional_core_features != ''
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features ${{ matrix.additional_core_features }}
+
       - if: matrix.additional_player_features != ''
         run: cargo check --manifest-path player/Cargo.toml --features ${{ matrix.additional_player_features }}
       - run: cargo check --manifest-path wgpu/Cargo.toml --examples --features ${{ matrix.wrapper_features }},
+      
         # clippy
       - if: matrix.clippy_params != ''
         run: cargo clippy ${{ matrix.clippy_params }}
+
       - if: matrix.channel == 'nightly'
         run: cargo test -p wgpu-core -- --nocapture
-      # - if: matrix.channel == 'nightly'
-        # run: cargo run --bin wgpu-info -- cargo test -p wgpu -- --nocapture
+      - if: matrix.channel == 'nightly'
+        run: cargo run --bin wgpu-info -- cargo test -p wgpu -- --nocapture --test-threads=1 # GLES is currently non-multithreadable
 
 
   docs:
