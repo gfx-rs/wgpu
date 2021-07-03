@@ -50,6 +50,10 @@ impl Context {
             }))
     }
 
+    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+        self.0.generate_report()
+    }
+
     /*TODO: raw surface
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub unsafe fn create_surface_from_core_animation_layer(

@@ -254,6 +254,18 @@ fn start<E: Example>(
                 | WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                WindowEvent::KeyboardInput {
+                    input:
+                        event::KeyboardInput {
+                            virtual_keycode: Some(event::VirtualKeyCode::R),
+                            state: event::ElementState::Pressed,
+                            ..
+                        },
+                    ..
+                } => {
+                    println!("{:#?}", instance.generate_report());
+                }
                 _ => {
                     example.update(event);
                 }
