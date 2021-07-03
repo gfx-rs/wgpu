@@ -10,6 +10,7 @@ const MAX_BUNNIES: usize = 1 << 20;
 const BUNNY_SIZE: f32 = 0.15 * 256.0;
 const GRAVITY: f32 = -9.8 * 100.0;
 const MAX_VELOCITY: f32 = 750.0;
+const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -34,7 +35,7 @@ struct ExecutionContext<A: hal::Api> {
     fence_value: hal::FenceValue,
     used_views: Vec<A::TextureView>,
     used_cmd_bufs: Vec<A::CommandBuffer>,
-    bunnies_recorded: usize,
+    frames_recorded: usize,
 }
 
 impl<A: hal::Api> ExecutionContext<A> {
@@ -44,7 +45,7 @@ impl<A: hal::Api> ExecutionContext<A> {
             device.destroy_texture_view(view);
         }
         self.encoder.reset_all(self.used_cmd_bufs.drain(..));
-        self.bunnies_recorded = 0;
+        self.frames_recorded = 0;
     }
 }
 
@@ -466,7 +467,7 @@ impl<A: hal::Api> Example<A> {
                 fence_value: 1,
                 used_views: Vec::new(),
                 used_cmd_bufs: Vec::new(),
-                bunnies_recorded: 0,
+                frames_recorded: 0,
             }],
             context_index: 0,
             extent: [window_size.0, window_size.1],
@@ -641,8 +642,8 @@ impl<A: hal::Api> Example<A> {
             }
         }
 
-        ctx.bunnies_recorded += self.bunnies.len();
-        let do_fence = ctx.bunnies_recorded > MAX_BUNNIES;
+        ctx.frames_recorded += 1;
+        let do_fence = ctx.frames_recorded > COMMAND_BUFFER_PER_CONTEXT;
 
         unsafe {
             ctx.encoder.end_render_pass();
@@ -673,7 +674,7 @@ impl<A: hal::Api> Example<A> {
                         fence_value: 0,
                         used_views: Vec::new(),
                         used_cmd_bufs: Vec::new(),
-                        bunnies_recorded: 0,
+                        frames_recorded: 0,
                     }
                 });
             }
