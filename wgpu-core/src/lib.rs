@@ -81,15 +81,6 @@ impl RefCount {
         unsafe { self.0.as_ref() }.load(Ordering::Acquire)
     }
 
-    /// This works like `std::mem::drop`, except that it returns a boolean which is true if and only
-    /// if we deallocated the underlying memory, i.e. if this was the last clone of this `RefCount`
-    /// to be dropped. This is useful for loom testing because it allows us to verify that we
-    /// deallocated the underlying memory exactly once.
-    #[cfg(test)]
-    fn rich_drop_outer(self) -> bool {
-        unsafe { std::mem::ManuallyDrop::new(self).rich_drop_inner() }
-    }
-
     /// This function exists to allow `Self::rich_drop_outer` and `Drop::drop` to share the same
     /// logic. To use this safely from outside of `Drop::drop`, the calling function must move
     /// `Self` into a `ManuallyDrop`.
@@ -191,7 +182,7 @@ support enough features to be a fully compliant implementation of WebGPU. A subs
 If you are running this program on native and not in a browser and wish to limit the features you use to the supported subset, \
 call Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \
 platform supports.";
-const DOWNLEVEL_ERROR_WARNING_MESSAGE: &str = "This is not an invalid use of WebGPU: the underlying API or device does not \
+const DOWNLEVEL_ERROR_MESSAGE: &str = "This is not an invalid use of WebGPU: the underlying API or device does not \
 support enough features to be a fully compliant implementation. A subset of the features can still be used. \
 If you are running this program on native and not in a browser and wish to work around this issue, call \
 Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \

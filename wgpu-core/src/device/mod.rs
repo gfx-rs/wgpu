@@ -8,7 +8,7 @@ use crate::{
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
-    DOWNLEVEL_ERROR_WARNING_MESSAGE,
+    DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -2426,7 +2426,7 @@ pub struct MissingFeatures(pub wgt::Features);
 #[derive(Clone, Debug, Error)]
 #[error(
     "Downlevel flags {0:?} are required but not supported on the device.\n{}",
-    DOWNLEVEL_ERROR_WARNING_MESSAGE
+    DOWNLEVEL_ERROR_MESSAGE
 )]
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 
