@@ -14,6 +14,52 @@ pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 type HalInstance<A> = <A as hal::Api>::Instance;
 type HalSurface<A> = <A as hal::Api>::Surface;
 
+#[derive(Clone, Debug, Error)]
+#[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
+pub struct FailedLimit {
+    name: &'static str,
+    requested: u32,
+    allowed: u32,
+}
+
+fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {
+    use std::cmp::Ordering;
+    let mut failed = Vec::new();
+
+    macro_rules! compare {
+        ($name:ident, $ordering:ident) => {
+            match requested.$name.cmp(&allowed.$name) {
+                Ordering::$ordering | Ordering::Equal => (),
+                _ => failed.push(FailedLimit {
+                    name: stringify!($name),
+                    requested: requested.$name,
+                    allowed: allowed.$name,
+                }),
+            }
+        };
+    }
+
+    compare!(max_texture_dimension_1d, Less);
+    compare!(max_texture_dimension_2d, Less);
+    compare!(max_texture_dimension_3d, Less);
+    compare!(max_texture_array_layers, Less);
+    compare!(max_bind_groups, Less);
+    compare!(max_dynamic_uniform_buffers_per_pipeline_layout, Less);
+    compare!(max_dynamic_storage_buffers_per_pipeline_layout, Less);
+    compare!(max_sampled_textures_per_shader_stage, Less);
+    compare!(max_samplers_per_shader_stage, Less);
+    compare!(max_storage_buffers_per_shader_stage, Less);
+    compare!(max_storage_textures_per_shader_stage, Less);
+    compare!(max_uniform_buffers_per_shader_stage, Less);
+    compare!(max_uniform_buffer_binding_size, Less);
+    compare!(max_storage_buffer_binding_size, Less);
+    compare!(max_vertex_buffers, Less);
+    compare!(max_vertex_attributes, Less);
+    compare!(max_vertex_buffer_array_stride, Less);
+    compare!(max_push_constant_size, Less);
+    failed
+}
+
 pub struct Instance {
     #[allow(dead_code)]
     name: String,
@@ -247,8 +293,8 @@ impl<A: HalApi> Adapter<A> {
             BIND_BUFFER_ALIGNMENT % caps.alignments.uniform_buffer_offset,
             "Adapter uniform buffer offset alignment not compatible with WGPU"
         );
-        if caps.limits < desc.limits {
-            return Err(RequestDeviceError::LimitsExceeded);
+        if let Some(failed) = check_limits(&desc.limits, &caps.limits).pop() {
+            return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
         Device::new(
@@ -295,8 +341,8 @@ pub enum RequestDeviceError {
     DeviceLost,
     #[error("device initialization failed due to implementation specific errors")]
     Internal,
-    #[error("some of the requested device limits are not supported")]
-    LimitsExceeded,
+    #[error(transparent)]
+    LimitsExceeded(#[from] FailedLimit),
     #[error("device has no queue supporting graphics")]
     NoGraphicsQueue,
     #[error("not enough memory left")]
