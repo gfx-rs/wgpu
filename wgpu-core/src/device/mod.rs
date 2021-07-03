@@ -980,6 +980,7 @@ impl<A: HalApi> Device<A> {
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();
+            let mut required_downlevel_flags = wgt::DownlevelFlags::empty();
             let (array_feature, is_writable_storage) = match entry.ty {
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
@@ -1029,6 +1030,9 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
+            if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
+                required_downlevel_flags |= wgt::DownlevelFlags::VERTEX_ACCESSABLE_STORAGE_BUFFERS;
+            }
             if is_writable_storage && entry.visibility.contains(wgt::ShaderStages::VERTEX) {
                 required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
             }
@@ -1043,6 +1047,13 @@ impl<A: HalApi> Device<A> {
 
             self.require_features(required_features)
                 .map_err(binding_model::BindGroupLayoutEntryError::MissingFeatures)
+                .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                    binding: entry.binding,
+                    error,
+                })?;
+
+            self.require_downlevel_flags(required_downlevel_flags)
+                .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
                 .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
                     binding: entry.binding,
                     error,

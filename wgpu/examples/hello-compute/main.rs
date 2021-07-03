@@ -47,7 +47,7 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
             &wgpu::DeviceDescriptor {
                 label: None,
                 features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
+                limits: wgpu::Limits::downlevel_limits(),
             },
             None,
         )

@@ -114,6 +114,7 @@ impl super::Adapter {
             "igp",
             "mali",
             "intel",
+            "v3d",
         ];
         let strings_that_imply_cpu = ["mesa offscreen", "swiftshader", "llvmpipe"];
 
@@ -144,6 +145,8 @@ impl super::Adapter {
             0x5143
         } else if vendor.contains("intel") {
             0x8086
+        } else if vendor.contains("broadcom") {
+            0x14e4
         } else {
             0
         };
@@ -184,6 +187,11 @@ impl super::Adapter {
         );
         features.set(wgt::Features::VERTEX_WRITABLE_STORAGE, ver >= (3, 1));
 
+        let vertex_shader_storage_blocks =
+            gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS);
+        let fragment_shader_storage_blocks =
+            gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS);
+
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::DEVICE_LOCAL_IMAGE_COPIES
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
@@ -202,6 +210,10 @@ impl super::Adapter {
             wgt::DownlevelFlags::INDEPENDENT_BLENDING,
             ver >= (3, 2) || extensions.contains("GL_EXT_draw_buffers_indexed"),
         );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::VERTEX_ACCESSABLE_STORAGE_BUFFERS,
+            vertex_shader_storage_blocks > 0,
+        );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
         let max_texture_3d_size = gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) as u32;
@@ -216,10 +228,12 @@ impl super::Adapter {
         let max_uniform_buffers_per_shader_stage =
             gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS)
                 .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS)) as u32;
-        let max_storage_buffers_per_shader_stage = gl
-            .get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS)
-            .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS))
-            as u32;
+        let max_storage_buffers_per_shader_stage = if vertex_shader_storage_blocks > 0 {
+            vertex_shader_storage_blocks.min(fragment_shader_storage_blocks) as u32
+        } else {
+            fragment_shader_storage_blocks
+        };
+
         let max_storage_textures_per_shader_stage =
             gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) as u32;
 
