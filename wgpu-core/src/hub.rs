@@ -15,7 +15,7 @@ use wgt::Backend;
 
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{fmt::Debug, marker::PhantomData, ops};
+use std::{fmt::Debug, marker::PhantomData, mem, ops};
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
@@ -71,6 +71,20 @@ enum Element<T> {
     Vacant,
     Occupied(T, Epoch),
     Error(Epoch, String),
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct StorageReport {
+    pub num_occupied: usize,
+    pub num_vacant: usize,
+    pub num_error: usize,
+    pub element_size: usize,
+}
+
+impl StorageReport {
+    pub fn is_empty(&self) -> bool {
+        self.num_occupied + self.num_vacant + self.num_error == 0
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -211,6 +225,21 @@ impl<T, I: id::TypedId> Storage<T, I> {
                 }
                 _ => None,
             })
+    }
+
+    fn generate_report(&self) -> StorageReport {
+        let mut report = StorageReport {
+            element_size: mem::size_of::<T>(),
+            ..Default::default()
+        };
+        for element in self.map.iter() {
+            match *element {
+                Element::Occupied(..) => report.num_occupied += 1,
+                Element::Vacant => report.num_vacant += 1,
+                Element::Error(..) => report.num_error += 1,
+            }
+        }
+        report
     }
 }
 
@@ -526,6 +555,32 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
     }
 }
 
+#[derive(Debug)]
+pub struct HubReport {
+    pub adapters: StorageReport,
+    pub devices: StorageReport,
+    pub swap_chains: StorageReport,
+    pub pipeline_layouts: StorageReport,
+    pub shader_modules: StorageReport,
+    pub bind_group_layouts: StorageReport,
+    pub bind_groups: StorageReport,
+    pub command_buffers: StorageReport,
+    pub render_bundles: StorageReport,
+    pub render_pipelines: StorageReport,
+    pub compute_pipelines: StorageReport,
+    pub query_sets: StorageReport,
+    pub buffers: StorageReport,
+    pub textures: StorageReport,
+    pub texture_views: StorageReport,
+    pub samplers: StorageReport,
+}
+
+impl HubReport {
+    pub fn is_empty(&self) -> bool {
+        self.adapters.is_empty()
+    }
+}
+
 pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
     pub adapters: Registry<Adapter<A>, id::AdapterId, F>,
     pub devices: Registry<Device<A>, id::DeviceId, F>,
@@ -566,9 +621,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             samplers: Registry::new(A::VARIANT, factory),
         }
     }
-}
 
-impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     //TODO: instead of having a hacky `with_adapters` parameter,
     // we should have `clear_device(device_id)` that specifically destroys
     // everything related to a logical device.
@@ -711,6 +764,27 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             self.adapters.data.write().map.clear();
         }
     }
+
+    pub fn generate_report(&self) -> HubReport {
+        HubReport {
+            adapters: self.adapters.data.read().generate_report(),
+            devices: self.devices.data.read().generate_report(),
+            swap_chains: self.swap_chains.data.read().generate_report(),
+            pipeline_layouts: self.pipeline_layouts.data.read().generate_report(),
+            shader_modules: self.shader_modules.data.read().generate_report(),
+            bind_group_layouts: self.bind_group_layouts.data.read().generate_report(),
+            bind_groups: self.bind_groups.data.read().generate_report(),
+            command_buffers: self.command_buffers.data.read().generate_report(),
+            render_bundles: self.render_bundles.data.read().generate_report(),
+            render_pipelines: self.render_pipelines.data.read().generate_report(),
+            compute_pipelines: self.compute_pipelines.data.read().generate_report(),
+            query_sets: self.query_sets.data.read().generate_report(),
+            buffers: self.buffers.data.read().generate_report(),
+            textures: self.textures.data.read().generate_report(),
+            texture_views: self.texture_views.data.read().generate_report(),
+            samplers: self.samplers.data.read().generate_report(),
+        }
+    }
 }
 
 pub struct Hubs<F: GlobalIdentityHandlerFactory> {
@@ -743,6 +817,21 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     }
 }
 
+#[derive(Debug)]
+pub struct GlobalReport {
+    pub surfaces: StorageReport,
+    #[cfg(vulkan)]
+    pub vulkan: Option<HubReport>,
+    #[cfg(metal)]
+    pub metal: Option<HubReport>,
+    #[cfg(dx12)]
+    pub dx12: Option<HubReport>,
+    #[cfg(dx11)]
+    pub dx11: Option<HubReport>,
+    #[cfg(gl)]
+    pub gl: Option<HubReport>,
+}
+
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
     pub surfaces: Registry<Surface, id::SurfaceId, G>,
@@ -764,6 +853,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         // this is used for tests, which keep the adapter
         hub.clear(&mut *surface_guard, false);
+    }
+
+    pub fn generate_report(&self) -> GlobalReport {
+        GlobalReport {
+            surfaces: self.surfaces.data.read().generate_report(),
+            #[cfg(vulkan)]
+            vulkan: if self.instance.vulkan.is_some() {
+                Some(self.hubs.vulkan.generate_report())
+            } else {
+                None
+            },
+            #[cfg(metal)]
+            metal: if self.instance.metal.is_some() {
+                Some(self.hubs.metal.generate_report())
+            } else {
+                None
+            },
+            #[cfg(dx12)]
+            dx12: if self.instance.dx12.is_some() {
+                Some(self.hubs.dx12.generate_report())
+            } else {
+                None
+            },
+            #[cfg(dx11)]
+            dx11: if self.instance.dx11.is_some() {
+                Some(self.hubs.dx11.generate_report())
+            } else {
+                None
+            },
+            #[cfg(gl)]
+            gl: if self.instance.gl.is_some() {
+                Some(self.hubs.gl.generate_report())
+            } else {
+                None
+            },
+        }
     }
 }
 

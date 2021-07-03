@@ -1454,6 +1454,12 @@ impl Instance {
     pub fn poll_all(&self, force_wait: bool) {
         self.context.instance_poll_all_devices(force_wait);
     }
+
+    /// Generates memory report.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+        self.context.generate_report()
+    }
 }
 
 impl Adapter {
