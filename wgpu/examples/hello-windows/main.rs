@@ -85,7 +85,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
             &wgpu::DeviceDescriptor {
                 label: None,
                 features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
+                limits: wgpu::Limits::downlevel_defaults(),
             },
             None,
         )

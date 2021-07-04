@@ -460,7 +460,9 @@ impl crate::Instance<super::Api> for Instance {
     ) -> Result<Surface, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 
+        #[cfg_attr(target_os = "android", allow(unused_mut))]
         let mut inner = self.inner.lock();
+        #[cfg_attr(target_os = "android", allow(unused_mut))]
         let mut wl_window = None;
         #[cfg(not(any(target_os = "android", target_os = "macos")))]
         let (mut temp_xlib_handle, mut temp_xcb_handle);

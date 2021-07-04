@@ -500,7 +500,7 @@ fn skybox_etc2() {
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
         base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 5,
-        max_outliers: 50, // Bounded by rpi4
+        max_outliers: 100, // Bounded by llvmpipe
     });
 }
 
@@ -512,7 +512,7 @@ fn skybox_astc() {
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 5,     // TODO
-        max_outliers: 10, // TODO
+        tolerance: 5,
+        max_outliers: 300, // Bounded by rp4 on vk
     });
 }

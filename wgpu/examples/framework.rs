@@ -41,7 +41,7 @@ pub trait Example: 'static + Sized {
         wgpu::Features::empty()
     }
     fn required_limits() -> wgpu::Limits {
-        wgpu::Limits::default()
+        wgpu::Limits::downlevel_defaults() // These downlevel limits will allow the code to run on all possible hardware
     }
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,

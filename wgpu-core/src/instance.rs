@@ -60,6 +60,15 @@ fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLim
     failed
 }
 
+#[test]
+fn downlevel_default_limits_less_than_default_limits() {
+    let res = check_limits(&wgt::Limits::downlevel_defaults(), &wgt::Limits::default());
+    assert!(
+        res.is_empty(),
+        "Downlevel limits are greater than default limits",
+    )
+}
+
 pub struct Instance {
     #[allow(dead_code)]
     name: String,

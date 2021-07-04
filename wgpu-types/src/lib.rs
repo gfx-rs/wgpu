@@ -497,6 +497,20 @@ impl Features {
 
 /// Represents the sets of limits an adapter/device supports.
 ///
+/// We provide two different defaults.
+/// - [`Limits::downlevel_defaults()]. This is a set of limits that is guarenteed to
+///   work on all backends, including "downlevel" backends such
+///   as OpenGL and D3D11. For most applications we recommend using these
+///   limits, assuming they are high enough for your application.
+/// - [`Limits::default()`]. This is the set of limits that is guarenteed to
+///   work on all modern backends and is guarenteed to be supported by WebGPU.
+///   Applications needing more modern features can use this as a reasonable set of
+///   limits if they are targetting only desktop and modern mobile devices.
+///
+/// We recommend starting with the most restrictive limits you can and manually
+/// increasing the limits you need boosted. This will let you stay running on
+/// all hardware that supports the limits you need.
+///
 /// Limits "better" than the default must be supported by the adapter and requested when requesting
 /// a device. If limits "better" than the adapter supports are requested, requesting a device will panic.
 /// Once a device is requested, you may only use resources up to the limits requested _even_ if the
@@ -593,6 +607,32 @@ impl Default for Limits {
     }
 }
 
+impl Limits {
+    /// These default limits are guarenteed to be compatible with GLES3, WebGL, and D3D11
+    pub fn downlevel_defaults() -> Self {
+        Self {
+            max_texture_dimension_1d: 2096,
+            max_texture_dimension_2d: 2096,
+            max_texture_dimension_3d: 256,
+            max_texture_array_layers: 256,
+            max_bind_groups: 4,
+            max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+            max_dynamic_storage_buffers_per_pipeline_layout: 4,
+            max_sampled_textures_per_shader_stage: 16,
+            max_samplers_per_shader_stage: 16,
+            max_storage_buffers_per_shader_stage: 4,
+            max_storage_textures_per_shader_stage: 4,
+            max_uniform_buffers_per_shader_stage: 12,
+            max_uniform_buffer_binding_size: 16384,
+            max_storage_buffer_binding_size: 128 << 20,
+            max_vertex_buffers: 8,
+            max_vertex_attributes: 16,
+            max_vertex_buffer_array_stride: 2048,
+            max_push_constant_size: 0,
+        }
+    }
+}
+
 /// Represents the sets of additional limits on an adapter,
 /// which take place when running on downlevel backends.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -662,8 +702,15 @@ bitflags::bitflags! {
         const COMPARISON_SAMPLERS = 0x0000_0100;
         /// Supports different blending modes per color target.
         const INDEPENDENT_BLENDING = 0x0000_0200;
-        /// Supports samplers with anisotropic filtering
-        const ANISOTROPIC_FILTERING = 0x0001_0000;
+        /// Supports attaching storage buffers to vertex shaders.
+        const VERTEX_ACCESSABLE_STORAGE_BUFFERS = 0x0000_0400;
+
+
+        /// Supports samplers with anisotropic filtering. Note this isn't actually required by WebGPU,
+        /// the implementation is allowed to completely ignore aniso clamp. This flag is here for native backends
+        /// so they can comunicate to the user of aniso is enabled.
+        const ANISOTROPIC_FILTERING = 0x8000_0000;
+
     }
 }
 

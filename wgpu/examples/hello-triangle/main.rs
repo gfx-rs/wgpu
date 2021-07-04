@@ -24,7 +24,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             &wgpu::DeviceDescriptor {
                 label: None,
                 features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
+                limits: wgpu::Limits::downlevel_defaults(),
             },
             None,
         )

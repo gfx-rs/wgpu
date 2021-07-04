@@ -402,6 +402,6 @@ fn cube_lines() {
         optional_features: wgpu::Features::NON_FILL_POLYGON_MODE,
         base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 2,
-        max_outliers: 500, // Bounded by rpi4 & intel 620 on GL
+        max_outliers: 600, // Bounded by rpi4 on GL
     });
 }

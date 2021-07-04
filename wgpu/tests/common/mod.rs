@@ -71,13 +71,20 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
     }
 }
 
+pub struct FailureCase {
+    backends: Option<wgpu::Backends>,
+    vendor: Option<usize>,
+    adapter: Option<String>,
+    segfault: bool,
+}
+
 // This information determines if a test should run.
 pub struct TestParameters {
     pub required_features: Features,
     pub required_limits: Limits,
     pub required_downlevel_properties: DownlevelCapabilities,
     // Backends where test should fail.
-    pub failures: Vec<(Option<wgpu::Backends>, Option<usize>, Option<String>, bool)>,
+    pub failures: Vec<FailureCase>,
 }
 
 impl Default for TestParameters {
@@ -126,13 +133,23 @@ impl TestParameters {
 
     /// Mark the test as always failing, equivilant to specific_failure(None, None, None)
     pub fn failure(mut self) -> Self {
-        self.failures.push((None, None, None, false));
+        self.failures.push(FailureCase {
+            backends: None,
+            vendor: None,
+            adapter: None,
+            segfault: false,
+        });
         self
     }
 
     /// Mark the test as always failing on a specific backend, equivilant to specific_failure(backend, None, None)
     pub fn backend_failure(mut self, backends: wgpu::Backends) -> Self {
-        self.failures.push((Some(backends), None, None, false));
+        self.failures.push(FailureCase {
+            backends: Some(backends),
+            vendor: None,
+            adapter: None,
+            segfault: false,
+        });
         self
     }
 
@@ -150,12 +167,12 @@ impl TestParameters {
         device: Option<&'static str>,
         segfault: bool,
     ) -> Self {
-        self.failures.push((
+        self.failures.push(FailureCase {
             backends,
             vendor,
-            device.as_ref().map(AsRef::as_ref).map(str::to_lowercase),
+            adapter: device.as_ref().map(AsRef::as_ref).map(str::to_lowercase),
             segfault,
-        ));
+        });
         self
     }
 }
@@ -222,45 +239,45 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         queue,
     };
 
-    let failure_reason = parameters.failures.iter().find_map(
-        |(backend_failure, vendor_failure, adapter_failure, segfault)| {
-            let always =
-                backend_failure.is_none() && vendor_failure.is_none() && adapter_failure.is_none();
+    let failure_reason = parameters.failures.iter().find_map(|failure| {
+        let always =
+            failure.backends.is_none() && failure.vendor.is_none() && failure.adapter.is_none();
 
-            let expect_failure_backend =
-                backend_failure.map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)));
-            let expect_failure_vendor = vendor_failure.map(|v| v == adapter_info.vendor);
-            let expect_failure_adapter = adapter_failure
-                .as_deref()
-                .map(|f| adapter_lowercase_name.contains(f));
+        let expect_failure_backend = failure
+            .backends
+            .map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)));
+        let expect_failure_vendor = failure.vendor.map(|v| v == adapter_info.vendor);
+        let expect_failure_adapter = failure
+            .adapter
+            .as_deref()
+            .map(|f| adapter_lowercase_name.contains(f));
 
-            if expect_failure_backend.unwrap_or(true)
-                && expect_failure_vendor.unwrap_or(true)
-                && expect_failure_adapter.unwrap_or(true)
-            {
-                if always {
-                    Some((FailureReasons::ALWAYS, *segfault))
-                } else {
-                    let mut reason = FailureReasons::empty();
-                    reason.set(
-                        FailureReasons::BACKEND,
-                        expect_failure_backend.unwrap_or(false),
-                    );
-                    reason.set(
-                        FailureReasons::VENDOR,
-                        expect_failure_vendor.unwrap_or(false),
-                    );
-                    reason.set(
-                        FailureReasons::ADAPTER,
-                        expect_failure_adapter.unwrap_or(false),
-                    );
-                    Some((reason, *segfault))
-                }
+        if expect_failure_backend.unwrap_or(true)
+            && expect_failure_vendor.unwrap_or(true)
+            && expect_failure_adapter.unwrap_or(true)
+        {
+            if always {
+                Some((FailureReasons::ALWAYS, failure.segfault))
             } else {
-                None
+                let mut reason = FailureReasons::empty();
+                reason.set(
+                    FailureReasons::BACKEND,
+                    expect_failure_backend.unwrap_or(false),
+                );
+                reason.set(
+                    FailureReasons::VENDOR,
+                    expect_failure_vendor.unwrap_or(false),
+                );
+                reason.set(
+                    FailureReasons::ADAPTER,
+                    expect_failure_adapter.unwrap_or(false),
+                );
+                Some((reason, failure.segfault))
             }
-        },
-    );
+        } else {
+            None
+        }
+    });
 
     if let Some((reason, true)) = failure_reason {
         println!(
