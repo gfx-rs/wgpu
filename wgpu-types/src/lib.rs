@@ -497,13 +497,13 @@ impl Features {
 
 /// Represents the sets of limits an adapter/device supports.
 ///
-/// We provide two different defaults. 
-/// - [`Limits::downlevel_limits()]. This is a set of limits that is guarenteed to
+/// We provide two different defaults.
+/// - [`Limits::downlevel_defaults()]. This is a set of limits that is guarenteed to
 ///   work on all backends, including "downlevel" backends such
 ///   as OpenGL and D3D11. For most applications we recommend using these
 ///   limits, assuming they are high enough for your application.
 /// - [`Limits::default()`]. This is the set of limits that is guarenteed to
-///   work on all modern backends and is guarenteed to be supported by WebGPU. 
+///   work on all modern backends and is guarenteed to be supported by WebGPU.
 ///   Applications needing more modern features can use this as a reasonable set of
 ///   limits if they are targetting only desktop and modern mobile devices.
 ///
@@ -609,7 +609,7 @@ impl Default for Limits {
 
 impl Limits {
     /// These default limits are guarenteed to be compatible with GLES3, WebGL, and D3D11
-    pub fn downlevel_limits() -> Self {
+    pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2096,
             max_texture_dimension_2d: 2096,
@@ -702,10 +702,15 @@ bitflags::bitflags! {
         const COMPARISON_SAMPLERS = 0x0000_0100;
         /// Supports different blending modes per color target.
         const INDEPENDENT_BLENDING = 0x0000_0200;
-        /// Supports samplers with anisotropic filtering.
-        const ANISOTROPIC_FILTERING = 0x0000_0400;
         /// Supports attaching storage buffers to vertex shaders.
-        const VERTEX_ACCESSABLE_STORAGE_BUFFERS = 0x0000_0800;
+        const VERTEX_ACCESSABLE_STORAGE_BUFFERS = 0x0000_0400;
+
+
+        /// Supports samplers with anisotropic filtering. Note this isn't actually required by WebGPU,
+        /// the implementation is allowed to completely ignore aniso clamp. This flag is here for native backends
+        /// so they can comunicate to the user of aniso is enabled.
+        const ANISOTROPIC_FILTERING = 0x8000_0000;
+
     }
 }
 
