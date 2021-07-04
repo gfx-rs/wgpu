@@ -21,6 +21,7 @@ pub struct PhysicalDeviceFeatures {
     vulkan_1_2: Option<vk::PhysicalDeviceVulkan12Features>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
     imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
+    timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -165,6 +166,7 @@ impl PhysicalDeviceFeatures {
                         )
                         //.sampler_filter_minmax(requested_features.contains(wgt::Features::SAMPLER_REDUCTION))
                         .imageless_framebuffer(private_caps.imageless_framebuffers)
+                        .timeline_semaphore(private_caps.timeline_semaphores)
                         .build(),
                 )
             } else {
@@ -216,6 +218,16 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder()
                         .imageless_framebuffer(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            timeline_semaphore: if enabled_extensions.contains(&vk::KhrTimelineSemaphoreFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder()
+                        .timeline_semaphore(true)
                         .build(),
                 )
             } else {
@@ -539,6 +551,15 @@ impl super::InstanceShared {
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
+            // `VK_KHR_timeline_semaphore` is promoted to 1.2, but has no changes, so we can keep using the extension unconditionally.
+            if capabilities.supports_extension(vk::KhrTimelineSemaphoreFn::name()) {
+                features.timeline_semaphore =
+                    Some(vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder().build());
+
+                let mut_ref = features.timeline_semaphore.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
             unsafe {
                 get_device_properties.get_physical_device_features2_khr(phd, &mut features2);
             }
@@ -560,6 +581,7 @@ impl super::InstanceShared {
             null_p_next(&mut features.vulkan_1_2);
             null_p_next(&mut features.descriptor_indexing);
             null_p_next(&mut features.imageless_framebuffer);
+            null_p_next(&mut features.timeline_semaphore);
         }
 
         (capabilities, features)
@@ -637,12 +659,16 @@ impl super::Instance {
         let private_caps = super::PrivateCapabilities {
             flip_y_requires_shift: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
-            imageless_framebuffers: phd_features
-                .vulkan_1_2
-                .map_or(false, |features| features.imageless_framebuffer == vk::TRUE)
-                || phd_capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()),
+            imageless_framebuffers: match phd_features.vulkan_1_2 {
+                Some(features) => features.imageless_framebuffer == vk::TRUE,
+                None => phd_capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()),
+            },
             image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
+            timeline_semaphores: match phd_features.vulkan_1_2 {
+                Some(features) => features.timeline_semaphore == vk::TRUE,
+                None => phd_capabilities.supports_extension(vk::KhrTimelineSemaphoreFn::name()),
+            },
             texture_d24: unsafe {
                 self.shared
                     .raw

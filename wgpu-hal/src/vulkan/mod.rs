@@ -18,6 +18,11 @@ any of the image views (they have) gets removed.
 If Vulkan supports image-less framebuffers,
 then the actual views are excluded from the framebuffer key.
 
+## Fences
+
+If timeline semaphores are available, they are used 1:1 with wgpu-hal fences.
+Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
+
 !*/
 
 mod adapter;
@@ -147,6 +152,7 @@ struct PrivateCapabilities {
     flip_y_requires_shift: bool,
     imageless_framebuffers: bool,
     image_view_usage: bool,
+    timeline_semaphores: bool,
     texture_d24: bool,
     texture_d24_s8: bool,
     non_coherent_map_mask: wgt::BufferAddress,
