@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::{
     fmt,
     future::Future,
@@ -1262,8 +1264,8 @@ impl crate::Context for Context {
 
     unsafe fn device_create_shader_module_spirv(
         &self,
-        device: &Self::DeviceId,
-        desc: &crate::ShaderModuleDescriptorSpirV,
+        _device: &Self::DeviceId,
+        _desc: &crate::ShaderModuleDescriptorSpirV,
     ) -> Self::ShaderModuleId {
         unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
     }
@@ -1289,7 +1291,7 @@ impl crate::Context for Context {
                         if let Some(s) = size {
                             mapped_buffer_binding.size(s.get() as f64);
                         }
-                        JsValue::from(mapped_buffer_binding.clone())
+                        JsValue::from(mapped_buffer_binding)
                     }
                     crate::BindingResource::BufferArray(..) => {
                         panic!("Web backend does not support arrays of buffers")
@@ -1498,7 +1500,6 @@ impl crate::Context for Context {
         _device: &Self::DeviceId,
         _desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Self::QuerySetId {
-        ()
     }
 
     fn device_create_command_encoder(

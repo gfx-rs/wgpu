@@ -49,14 +49,14 @@ fn create_indices() -> Vec<u16> {
 
 #[derive(Copy, Clone)]
 enum Color {
-    RED,
-    GREEN,
+    Red,
+    Green,
 }
 
 fn create_texture_data(color: Color) -> [u8; 4] {
     match color {
-        Color::RED => [255, 0, 0, 255],
-        Color::GREEN => [0, 255, 0, 255],
+        Color::Red => [255, 0, 0, 255],
+        Color::Green => [0, 255, 0, 255],
     }
 }
 
@@ -122,8 +122,8 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let red_texture_data = create_texture_data(Color::RED);
-        let green_texture_data = create_texture_data(Color::GREEN);
+        let red_texture_data = create_texture_data(Color::Red);
+        let green_texture_data = create_texture_data(Color::Green);
 
         let texture_descriptor = wgpu::TextureDescriptor {
             size: wgpu::Extent3d::default(),
@@ -253,11 +253,11 @@ impl framework::Example for Example {
         });
 
         Self {
+            pipeline,
+            bind_group,
             vertex_buffer,
             index_buffer,
             index_format,
-            bind_group,
-            pipeline,
             uniform_workaround,
         }
     }
@@ -340,8 +340,7 @@ fn texture_arrays_uniform() {
         image_path: "/examples/texture-arrays/screenshot.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
-            | wgpu::Features::PUSH_CONSTANTS,
+        optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::PUSH_CONSTANTS,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
         tolerance: 0,
         max_outliers: 0,
@@ -355,7 +354,8 @@ fn texture_arrays_non_uniform() {
         image_path: "/examples/texture-arrays/screenshot.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY
+            | wgpu::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
         tolerance: 0,
         max_outliers: 0,
@@ -369,7 +369,8 @@ fn texture_arrays_unsized_non_uniform() {
         image_path: "/examples/texture-arrays/screenshot.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+        optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY
+            | wgpu::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::UNSIZED_BINDING_ARRAY,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
         tolerance: 0,
