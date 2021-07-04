@@ -128,6 +128,119 @@ fn negative_index() {
     );
 }
 
+#[test]
+fn bad_texture() {
+    check(
+        r#"
+            [[group(0), binding(0)]] var sampler : sampler;
+
+            [[stage(fragment)]]
+            fn main() -> [[location(0)]] vec4<f32> {
+                let a = 3;
+                return textureSample(a, sampler, vec2<f32>(0.0));
+            }
+        "#,
+        r#"error: expected an image, but found 'a' which is not an image
+  ┌─ wgsl:7:38
+  │
+7 │                 return textureSample(a, sampler, vec2<f32>(0.0));
+  │                                      ^ not an image
+
+"#
+    );
+}
+
+#[test]
+fn bad_type_cast() {
+    check(
+        r#"
+            fn x() -> i32 {
+                return i32(vec2<f32>(0.0));
+            }
+        "#,
+        r#"error: cannot cast a vec2<f32> to a i32
+  ┌─ wgsl:3:27
+  │
+3 │                 return i32(vec2<f32>(0.0));
+  │                           ^^^^^^^^^^^^^^^^ cannot cast a vec2<f32> to a i32
+
+"#,
+    );
+}
+
+#[test]
+fn bad_texture_sample_type() {
+    check(
+        r#"
+            [[group(0), binding(0)]] var sampler : sampler;
+            [[group(0), binding(1)]] var texture : texture_2d<bool>;
+
+            [[stage(fragment)]]
+            fn main() -> [[location(0)]] vec4<f32> {
+                return textureSample(texture, sampler, vec2<f32>(0.0));
+            }
+        "#,
+        r#"error: texture sample type must be one of f32, i32 or u32, but found bool
+  ┌─ wgsl:3:63
+  │
+3 │             [[group(0), binding(1)]] var texture : texture_2d<bool>;
+  │                                                               ^^^^ must be one of f32, i32 or u32
+
+"#
+    );
+}
+
+#[test]
+fn bad_for_initializer() {
+    check(
+        r#"
+            fn x() {
+                for ({};;) {}
+            }
+        "#,
+        r#"error: for(;;) initializer is not an assignment or a function call: '{}'
+  ┌─ wgsl:3:22
+  │
+3 │                 for ({};;) {}
+  │                      ^^ not an assignment or function call
+
+"#,
+    );
+}
+
+#[test]
+fn unknown_storage_class() {
+    check(
+        r#"
+            [[group(0), binding(0)]] var<bad> texture: texture_2d<f32>;
+        "#,
+        r#"error: unknown storage class: 'bad'
+  ┌─ wgsl:2:42
+  │
+2 │             [[group(0), binding(0)]] var<bad> texture: texture_2d<f32>;
+  │                                          ^^^ unknown storage class
+
+"#,
+    );
+}
+
+#[test]
+fn unknown_attribute() {
+    check(
+        r#"
+            [[a]]
+            fn x() {}
+        "#,
+        r#"error: unknown attribute: 'a'
+  ┌─ wgsl:2:15
+  │
+2 │             [[a]]
+  │               ^ unknown attribute
+
+"#
+    );
+}
+
 macro_rules! check_validation_error {
     // We want to support an optional guard expression after the pattern, so
     // that we can check values we can't match against, like strings.

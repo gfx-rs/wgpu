@@ -104,17 +104,15 @@ pub enum Error<'a> {
     BadScalarWidth(Span, &'a str),
     #[error("")]
     BadAccessor(Span),
-    #[error("bad texture`")]
+    #[error("")]
     BadTexture(Span),
-    #[error("bad texture coordinate")]
-    BadCoordinate,
-    #[error("invalid type cast")]
+    #[error("")]
     BadTypeCast {
         span: Span,
         from_type: String,
         to_type: String,
     },
-    #[error("bad texture sample type. Only f32, i32 and u32 are valid")]
+    #[error("")]
     BadTextureSampleType {
         span: Span,
         kind: crate::ScalarKind,
@@ -122,15 +120,11 @@ pub enum Error<'a> {
     },
     #[error(transparent)]
     InvalidResolve(ResolveError),
-    #[error("for(;;) initializer is not an assignment or a function call")]
+    #[error("")]
     InvalidForInitializer(Span),
-    #[error("resource type {0:?} is invalid")]
-    InvalidResourceType(Handle<crate::Type>),
-    #[error("unknown import: `{0}`")]
-    UnknownImport(&'a str),
-    #[error("unknown storage class")]
+    #[error("")]
     UnknownStorageClass(Span),
-    #[error("unknown attribute")]
+    #[error("")]
     UnknownAttribute(Span),
     #[error("unknown scalar kind: `{0}`")]
     UnknownScalarKind(&'a str),
