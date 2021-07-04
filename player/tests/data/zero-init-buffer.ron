@@ -86,7 +86,7 @@
                 label: None,
                 flags: (bits: 3),
             ),
-            data: "buffer-zero-init-for-binding.wgsl",
+            data: "zero-init-buffer-for-binding.wgsl",
         ),
         CreateBuffer(Id(3, 1, Empty), (
             label: Some("used in binding"),
