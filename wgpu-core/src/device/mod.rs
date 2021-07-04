@@ -3618,16 +3618,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 value: id::Valid(device_id),
                 ref_count: device.life_guard.add_ref(),
             };
-
-            let hal_desc = hal::CommandEncoderDescriptor {
-                label: None,
-                queue: &device.queue,
-            };
-            let encoder = match unsafe { device.raw.create_command_encoder(&hal_desc) } {
+            let encoder = match device
+                .command_allocator
+                .lock()
+                .acquire_encoder(&device.raw, &device.queue)
+            {
                 Ok(raw) => raw,
                 Err(_) => break DeviceError::OutOfMemory,
             };
-
             let command_buffer = command::CommandBuffer::new(
                 encoder,
                 dev_stored,
