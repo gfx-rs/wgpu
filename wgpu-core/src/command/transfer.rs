@@ -378,7 +378,7 @@ fn record_dst_texture_init_requirement<A: HalApi>(
                 id,
                 range: TextureInitRange {
                     mip_range: base.mip_level..base.mip_level + 1,
-                    layer_range,
+                    layer_range
                 },
                 kind: dst_init_kind,
             }),
@@ -615,6 +615,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TransferError::CopyToForbiddenTextureFormat(dst_texture.desc.format).into(),
             );
         }
+    	record_dst_texture_init_requirement(
+            &mut cmd_buf.texture_memory_init_actions,
+            dst_texture,
+            destination.texture,
+            copy_size,
+            &dst_base,
+        );
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();

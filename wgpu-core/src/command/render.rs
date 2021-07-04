@@ -13,7 +13,9 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    init_tracker::MemoryInitKind,
+    init_tracker::{
+        MemoryInitKind, TextureInitRange, TextureInitTrackerAction,
+    },
     pipeline::PipelineFlags,
     resource::{Texture, TextureView},
     track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
@@ -74,7 +76,7 @@ pub struct PassChannel<V> {
     pub load_op: LoadOp,
     /// Operation to perform to the output attachment at the end of a renderpass.
     pub store_op: StoreOp,
-    /// If load_op is [`LoadOp::Clear`], the attachement will be cleared to this color.
+    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this color.
     pub clear_value: V,
     /// If true, the relevant channel is not changed by a renderpass, and the corresponding attachment
     /// can be used inside the pass by other read-only usages.
@@ -538,6 +540,42 @@ struct RenderPassInfo<'a, A: hal::Api> {
 }
 
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
+    fn add_pass_init_actions<V>(
+        channel: &PassChannel<V>,
+        cmd_buf: &mut CommandBuffer<A>,
+        view: &TextureView<A>,
+    ) {
+        if channel.load_op == LoadOp::Load {
+            cmd_buf
+                .texture_memory_init_actions
+                .push(TextureInitTrackerAction {
+                    id: view.parent_id.value.0,
+                    range: TextureInitRange::from(view.selector.clone()),
+                    // Note that this is needed even if the target is discarded,
+                    kind: MemoryInitKind::NeedsInitializedMemory,
+                });
+        } else if channel.store_op == StoreOp::Store {
+            // Clear + Store
+            cmd_buf
+                .texture_memory_init_actions
+                .push(TextureInitTrackerAction {
+                    id: view.parent_id.value.0,
+                    range: TextureInitRange::from(view.selector.clone()),
+                    kind: MemoryInitKind::ImplicitlyInitialized,
+                });
+        }
+        if channel.store_op == StoreOp::Discard {
+            // TODO: Discard probably needs to be inserted into command buffer itself
+            // cmd_buf
+            //     .texture_memory_init_actions
+            //     .push(TextureInitTrackerAction {
+            //         id,
+            //         range: TextureInitRange::from(view.selector.clone()),
+            //         kind: MemoryInitKind::DiscardMemory,
+            //     });
+        }
+    }
+
     fn start(
         label: Option<&str>,
         color_attachments: &[RenderPassColorAttachment],
@@ -599,6 +637,63 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 ));
             }
 
+            if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
+                Self::add_pass_init_actions(&at.stencil, cmd_buf, view);
+            } else if !ds_aspects.contains(hal::FormatAspects::STENCIL) {
+                Self::add_pass_init_actions(&at.depth, cmd_buf, view);
+            } else if at.stencil.load_op == at.depth.load_op
+                && at.stencil.store_op == at.depth.store_op
+            {
+                Self::add_pass_init_actions(&at.depth, cmd_buf, view);
+            } else {
+                // This is the only place (anywhere in wgpu) where Stencil & Depth init state can diverge.
+                // To safe us the overhead of tracking init state of texture aspects everywhere,
+                // we're going to cheat a little bit in order to keep the init state of both Stencil and Depth aspects in sync.
+                // The expectation is that we hit this path extremely rarely!
+
+                // Diverging LoadOp, i.e. Load + Clear:
+                // Record MemoryInitKind::NeedsInitializedMemory for the entire surface, a bit wasteful on unit but no negative effect!
+                // Rationale: If the loaded channel is uninitialized it needs clearing, the cleared channel doesn't care. (If everything is already initialized nothing special happens)
+                // (possible  minor optimization: Clear caused by NeedsInitializedMemory should know that it doesn't need to clear the aspect that was set to C)
+                let need_init_beforehand =
+                    at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
+                if need_init_beforehand {
+                    cmd_buf
+                        .texture_memory_init_actions
+                        .push(TextureInitTrackerAction {
+                            id: view.parent_id.value.0,
+                            range: TextureInitRange::from(view.selector.clone()),
+                            kind: MemoryInitKind::NeedsInitializedMemory,
+                        });
+                }
+
+                // Diverging Store, i.e. Discard + Store:
+                // Immediately zero out channel that is set to discard after we're done with the render pass.
+                // This allows us to set the entire surface to MemoryInitKind::ImplicitlyInitialized (if it isn't already set to NeedsInitializedMemory).
+                // (possible optimization: Delay and potentially drop this zeroing)
+                if at.depth.store_op != at.stencil.store_op {
+                    if !need_init_beforehand {
+                        cmd_buf
+                            .texture_memory_init_actions
+                            .push(TextureInitTrackerAction {
+                                id: view.parent_id.value.0,
+                                range: TextureInitRange::from(view.selector.clone()),
+                                kind: MemoryInitKind::ImplicitlyInitialized,
+                            });
+                    }
+                    // TODO: Record that we need to clear out the discarded channel
+                } else if at.depth.store_op == StoreOp::Discard {
+                    // TODO: Discard probably needs to be inserted into command buffer itself
+                    // cmd_buf
+                    //     .texture_memory_init_actions
+                    //     .push(TextureInitTrackerAction {
+                    //         id: source_id.value.0,
+                    //         range: TextureInitRange::from(view.selector.clone()),
+                    //         kind: MemoryInitKind::DiscardMemory,
+                    //     });
+                }
+            }
+
             let usage = if at.is_read_only(ds_aspects)? {
                 is_ds_read_only = true;
                 hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::RESOURCE
@@ -636,6 +731,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 ));
             }
 
+            Self::add_pass_init_actions(&at.channel, cmd_buf, color_view);
             render_attachments
                 .push(color_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
@@ -659,6 +755,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     return Err(RenderPassErrorInner::InvalidResolveTargetSampleCount);
                 }
 
+                cmd_buf
+                    .texture_memory_init_actions
+                    .push(TextureInitTrackerAction {
+                        id: resolve_view.parent_id.value.0,
+                        range: TextureInitRange::from(resolve_view.selector.clone()),
+                        kind: MemoryInitKind::ImplicitlyInitialized,
+                    });
                 render_attachments
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
@@ -895,6 +998,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         cmd_buf.buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {
                                 match buffer_guard.get(action.id) {
+                                    Ok(buffer) => buffer.initialization_status.check_action(action),
+                                    Err(_) => None,
+                                }
+                            }),
+                        );
+                        cmd_buf.texture_memory_init_actions.extend(
+                            bind_group.used_texture_ranges.iter().filter_map(|action| {
+                                match texture_guard.get(action.id) {
                                     Ok(buffer) => buffer.initialization_status.check_action(action),
                                     Err(_) => None,
                                 }
@@ -1626,6 +1737,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .buffer_memory_init_actions
                                 .iter()
                                 .filter_map(|action| match buffer_guard.get(action.id) {
+                                    Ok(buffer) => buffer.initialization_status.check_action(action),
+                                    Err(_) => None,
+                                }),
+                        );
+                        cmd_buf.texture_memory_init_actions.extend(
+                            bundle
+                                .texture_memory_init_actions
+                                .iter()
+                                .filter_map(|action| match texture_guard.get(action.id) {
                                     Ok(buffer) => buffer.initialization_status.check_action(action),
                                     Err(_) => None,
                                 }),
