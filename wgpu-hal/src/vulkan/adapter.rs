@@ -801,6 +801,17 @@ impl crate::Adapter<super::Api> for super::Adapter {
         } else {
             None
         };
+        let timeline_semaphore_fn = if enabled_extensions.contains(&khr::TimelineSemaphore::name())
+        {
+            Some(super::ExtensionFn::Extension(khr::TimelineSemaphore::new(
+                &self.instance.entry,
+                &self.instance.raw,
+            )))
+        } else if self.phd_capabilities.properties.api_version >= vk::API_VERSION_1_2 {
+            Some(super::ExtensionFn::Promoted)
+        } else {
+            None
+        };
 
         let naga_options = {
             use naga::back::spv;
@@ -834,6 +845,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             instance: Arc::clone(&self.instance),
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
+                timeline_semaphore: timeline_semaphore_fn,
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             downlevel_flags: self.downlevel_flags,

@@ -125,7 +125,7 @@ impl super::Instance {
         }
 
         let surface = {
-            let xlib_loader = khr::XlibSurface::new(&self.entry, &self.shared.raw);
+            let xlib_loader = khr::XlibSurface::new(&self.shared.entry, &self.shared.raw);
             let info = vk::XlibSurfaceCreateInfoKHR::builder()
                 .flags(vk::XlibSurfaceCreateFlagsKHR::empty())
                 .window(window)
@@ -149,7 +149,7 @@ impl super::Instance {
         }
 
         let surface = {
-            let xcb_loader = khr::XcbSurface::new(&self.entry, &self.shared.raw);
+            let xcb_loader = khr::XcbSurface::new(&self.shared.entry, &self.shared.raw);
             let info = vk::XcbSurfaceCreateInfoKHR::builder()
                 .flags(vk::XcbSurfaceCreateFlagsKHR::empty())
                 .window(window)
@@ -173,7 +173,7 @@ impl super::Instance {
         }
 
         let surface = {
-            let w_loader = khr::WaylandSurface::new(&self.entry, &self.shared.raw);
+            let w_loader = khr::WaylandSurface::new(&self.shared.entry, &self.shared.raw);
             let info = vk::WaylandSurfaceCreateInfoKHR::builder()
                 .flags(vk::WaylandSurfaceCreateFlagsKHR::empty())
                 .display(display)
@@ -188,7 +188,7 @@ impl super::Instance {
     #[allow(dead_code)]
     fn create_surface_android(&self, window: *const c_void) -> super::Surface {
         let surface = {
-            let a_loader = khr::AndroidSurface::new(&self.entry, &self.shared.raw);
+            let a_loader = khr::AndroidSurface::new(&self.shared.entry, &self.shared.raw);
             let info = vk::AndroidSurfaceCreateInfoKHR::builder()
                 .flags(vk::AndroidSurfaceCreateFlagsKHR::empty())
                 .window(window as *mut _);
@@ -214,7 +214,7 @@ impl super::Instance {
                 .flags(vk::Win32SurfaceCreateFlagsKHR::empty())
                 .hinstance(hinstance)
                 .hwnd(hwnd);
-            let win32_loader = khr::Win32Surface::new(&self.entry, &self.shared.raw);
+            let win32_loader = khr::Win32Surface::new(&self.shared.entry, &self.shared.raw);
             unsafe {
                 win32_loader
                     .create_win32_surface(&info, None)
@@ -277,7 +277,7 @@ impl super::Instance {
     }
 
     fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> super::Surface {
-        let functor = khr::Surface::new(&self.entry, &self.shared.raw);
+        let functor = khr::Surface::new(&self.shared.entry, &self.shared.raw);
         super::Surface {
             raw: surface,
             functor,
@@ -287,21 +287,14 @@ impl super::Instance {
     }
 }
 
-impl Drop for super::Instance {
+impl Drop for super::InstanceShared {
     fn drop(&mut self) {
-        match Arc::get_mut(&mut self.shared) {
-            Some(shared) => unsafe {
-                if let Some(du) = shared.debug_utils.take() {
-                    du.extension
-                        .destroy_debug_utils_messenger(du.messenger, None);
-                }
-            },
-            None => {
-                log::error!("Unable to drop Instance: something created from it is still alive");
-            }
-        }
         unsafe {
-            self.shared.raw.destroy_instance(None);
+            if let Some(du) = self.debug_utils.take() {
+                du.extension
+                    .destroy_debug_utils_messenger(du.messenger, None);
+            }
+            self.raw.destroy_instance(None);
         }
     }
 }
@@ -495,9 +488,9 @@ impl crate::Instance<super::Api> for super::Instance {
                 flags: desc.flags,
                 debug_utils,
                 get_physical_device_properties,
+                entry,
             }),
             extensions,
-            entry,
         })
     }
 
