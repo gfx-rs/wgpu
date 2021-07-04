@@ -1,7 +1,11 @@
 use super::conv;
 
 use arrayvec::ArrayVec;
-use ash::{extensions::khr, version::DeviceV1_0, vk};
+use ash::{
+    extensions::khr,
+    version::{DeviceV1_0, DeviceV1_2},
+    vk,
+};
 use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
 
@@ -1390,26 +1394,49 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn destroy_query_set(&self, set: super::QuerySet) {
         self.shared.raw.destroy_query_pool(set.raw, None);
     }
+
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
-        Ok(super::Fence {
-            last_completed: 0,
-            active: Vec::new(),
-            free: Vec::new(),
+        Ok(if self.shared.private_caps.timeline_semaphores {
+            let mut sem_type_info =
+                vk::SemaphoreTypeCreateInfo::builder().semaphore_type(vk::SemaphoreType::TIMELINE);
+            let vk_info = vk::SemaphoreCreateInfo::builder().push_next(&mut sem_type_info);
+            let raw = self.shared.raw.create_semaphore(&vk_info, None)?;
+            super::Fence::TimelineSemaphore(raw)
+        } else {
+            super::Fence::FencePool {
+                last_completed: 0,
+                active: Vec::new(),
+                free: Vec::new(),
+            }
         })
     }
     unsafe fn destroy_fence(&self, fence: super::Fence) {
-        for (_, raw) in fence.active {
-            self.shared.raw.destroy_fence(raw, None);
-        }
-        for raw in fence.free {
-            self.shared.raw.destroy_fence(raw, None);
+        match fence {
+            super::Fence::TimelineSemaphore(raw) => {
+                self.shared.raw.destroy_semaphore(raw, None);
+            }
+            super::Fence::FencePool {
+                active,
+                free,
+                last_completed: _,
+            } => {
+                for (_, raw) in active {
+                    self.shared.raw.destroy_fence(raw, None);
+                }
+                for raw in free {
+                    self.shared.raw.destroy_fence(raw, None);
+                }
+            }
         }
     }
     unsafe fn get_fence_value(
         &self,
         fence: &super::Fence,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
-        fence.get_latest(&self.shared.raw)
+        fence.get_latest(
+            &self.shared.raw,
+            self.shared.extension_fns.timeline_semaphore.as_ref(),
+        )
     }
     unsafe fn wait(
         &self,
@@ -1417,21 +1444,50 @@ impl crate::Device<super::Api> for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if wait_value <= fence.last_completed {
-            Ok(true)
-        } else {
-            match fence.active.iter().find(|&&(value, _)| value >= wait_value) {
-                Some(&(_, raw)) => {
-                    let timeout_us = timeout_ms as u64 * super::MILLIS_TO_NANOS;
-                    match self.shared.raw.wait_for_fences(&[raw], true, timeout_us) {
-                        Ok(()) => Ok(true),
-                        Err(vk::Result::TIMEOUT) => Ok(false),
-                        Err(other) => Err(other.into()),
+        let timeout_us = timeout_ms as u64 * super::MILLIS_TO_NANOS;
+        match *fence {
+            super::Fence::TimelineSemaphore(raw) => {
+                let semaphores = [raw];
+                let values = [wait_value];
+                let vk_info = vk::SemaphoreWaitInfo::builder()
+                    .semaphores(&semaphores)
+                    .values(&values);
+                let result = match self.shared.extension_fns.timeline_semaphore {
+                    Some(super::ExtensionFn::Extension(ref ext)) => {
+                        ext.wait_semaphores(self.shared.raw.handle(), &vk_info, timeout_us)
                     }
+                    Some(super::ExtensionFn::Promoted) => {
+                        self.shared.raw.wait_semaphores(&vk_info, timeout_us)
+                    }
+                    None => unreachable!(),
+                };
+                match result {
+                    Ok(()) => Ok(true),
+                    Err(vk::Result::TIMEOUT) => Ok(false),
+                    Err(other) => Err(other.into()),
                 }
-                None => {
-                    log::error!("No signals reached value {}", wait_value);
-                    Err(crate::DeviceError::Lost)
+            }
+            super::Fence::FencePool {
+                last_completed,
+                ref active,
+                free: _,
+            } => {
+                if wait_value <= last_completed {
+                    Ok(true)
+                } else {
+                    match active.iter().find(|&&(value, _)| value >= wait_value) {
+                        Some(&(_, raw)) => {
+                            match self.shared.raw.wait_for_fences(&[raw], true, timeout_us) {
+                                Ok(()) => Ok(true),
+                                Err(vk::Result::TIMEOUT) => Ok(false),
+                                Err(other) => Err(other.into()),
+                            }
+                        }
+                        None => {
+                            log::error!("No signals reached value {}", wait_value);
+                            Err(crate::DeviceError::Lost)
+                        }
+                    }
                 }
             }
         }

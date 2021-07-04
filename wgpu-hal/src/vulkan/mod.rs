@@ -18,6 +18,11 @@ any of the image views (they have) gets removed.
 If Vulkan supports image-less framebuffers,
 then the actual views are excluded from the framebuffer key.
 
+## Fences
+
+If timeline semaphores are available, they are used 1:1 with wgpu-hal fences.
+Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
+
 !*/
 
 mod adapter;
@@ -31,7 +36,7 @@ use std::{borrow::Borrow, ffi::CStr, sync::Arc};
 use arrayvec::ArrayVec;
 use ash::{
     extensions::{ext, khr},
-    version::DeviceV1_0,
+    version::{DeviceV1_0, DeviceV1_2},
     vk,
 };
 use parking_lot::Mutex;
@@ -78,12 +83,12 @@ struct InstanceShared {
     flags: crate::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
+    entry: ash::Entry,
 }
 
 pub struct Instance {
     shared: Arc<InstanceShared>,
     extensions: Vec<&'static CStr>,
-    entry: ash::Entry,
 }
 
 struct Swapchain {
@@ -135,6 +140,7 @@ enum ExtensionFn<T> {
 
 struct DeviceExtensionFunctions {
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
+    timeline_semaphore: Option<ExtensionFn<khr::TimelineSemaphore>>,
 }
 
 /// Set of internal capabilities, which don't show up in the exposed
@@ -147,6 +153,7 @@ struct PrivateCapabilities {
     flip_y_requires_shift: bool,
     imageless_framebuffers: bool,
     image_view_usage: bool,
+    timeline_semaphores: bool,
     texture_d24: bool,
     texture_d24_s8: bool,
     non_coherent_map_mask: wgt::BufferAddress,
@@ -349,17 +356,23 @@ pub struct QuerySet {
 }
 
 #[derive(Debug)]
-pub struct Fence {
-    last_completed: crate::FenceValue,
-    /// The pending fence values have to be ascending.
-    active: Vec<(crate::FenceValue, vk::Fence)>,
-    free: Vec<vk::Fence>,
+pub enum Fence {
+    TimelineSemaphore(vk::Semaphore),
+    FencePool {
+        last_completed: crate::FenceValue,
+        /// The pending fence values have to be ascending.
+        active: Vec<(crate::FenceValue, vk::Fence)>,
+        free: Vec<vk::Fence>,
+    },
 }
 
 impl Fence {
-    fn get_latest(&self, device: &ash::Device) -> Result<crate::FenceValue, crate::DeviceError> {
-        let mut max_value = self.last_completed;
-        for &(value, raw) in self.active.iter() {
+    fn check_active(
+        device: &ash::Device,
+        mut max_value: crate::FenceValue,
+        active: &[(crate::FenceValue, vk::Fence)],
+    ) -> Result<crate::FenceValue, crate::DeviceError> {
+        for &(value, raw) in active.iter() {
             unsafe {
                 if value > max_value && device.get_fence_status(raw)? {
                     max_value = value;
@@ -369,21 +382,52 @@ impl Fence {
         Ok(max_value)
     }
 
+    fn get_latest(
+        &self,
+        device: &ash::Device,
+        extension: Option<&ExtensionFn<khr::TimelineSemaphore>>,
+    ) -> Result<crate::FenceValue, crate::DeviceError> {
+        match *self {
+            Self::TimelineSemaphore(raw) => unsafe {
+                Ok(match *extension.unwrap() {
+                    ExtensionFn::Extension(ref ext) => {
+                        ext.get_semaphore_counter_value(device.handle(), raw)?
+                    }
+                    ExtensionFn::Promoted => device.get_semaphore_counter_value(raw)?,
+                })
+            },
+            Self::FencePool {
+                last_completed,
+                ref active,
+                free: _,
+            } => Self::check_active(device, last_completed, active),
+        }
+    }
+
     fn maintain(&mut self, device: &ash::Device) -> Result<(), crate::DeviceError> {
-        let latest = self.get_latest(device)?;
-        let base_free = self.free.len();
-        for &(value, raw) in self.active.iter() {
-            if value <= latest {
-                self.free.push(raw);
+        match *self {
+            Self::TimelineSemaphore(_) => {}
+            Self::FencePool {
+                ref mut last_completed,
+                ref mut active,
+                ref mut free,
+            } => {
+                let latest = Self::check_active(device, *last_completed, active)?;
+                let base_free = free.len();
+                for &(value, raw) in active.iter() {
+                    if value <= latest {
+                        free.push(raw);
+                    }
+                }
+                if free.len() != base_free {
+                    active.retain(|&(value, _)| value > latest);
+                    unsafe {
+                        device.reset_fences(&free[base_free..])?;
+                    }
+                }
+                *last_completed = latest;
             }
         }
-        if self.free.len() != base_free {
-            self.active.retain(|&(value, _)| value > latest);
-            unsafe {
-                device.reset_fences(&self.free[base_free..])?;
-            }
-        }
-        self.last_completed = latest;
         Ok(())
     }
 }
@@ -394,35 +438,49 @@ impl crate::Queue<Api> for Queue {
         command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
-        let fence_raw = match signal_fence {
-            Some((fence, value)) => {
-                fence.maintain(&self.device.raw)?;
-                let raw = match fence.free.pop() {
-                    Some(raw) => raw,
-                    None => {
-                        let vk_info = vk::FenceCreateInfo::builder().build();
-                        self.device.raw.create_fence(&vk_info, None)?
-                    }
-                };
-                fence.active.push((value, raw));
-                raw
-            }
-            None => vk::Fence::null(),
-        };
-
         let vk_cmd_buffers = command_buffers
             .iter()
             .map(|cmd| cmd.raw)
             .collect::<Vec<_>>();
-        //TODO: semaphores
 
-        let vk_info = vk::SubmitInfo::builder()
-            .command_buffers(&vk_cmd_buffers)
-            .build();
+        let mut vk_info = vk::SubmitInfo::builder().command_buffers(&vk_cmd_buffers);
+
+        let mut fence_raw = vk::Fence::null();
+        let mut vk_timeline_info;
+        let signal_values;
+        let signal_semaphores;
+        if let Some((fence, value)) = signal_fence {
+            fence.maintain(&self.device.raw)?;
+            match *fence {
+                Fence::TimelineSemaphore(raw) => {
+                    signal_values = [value];
+                    signal_semaphores = [raw];
+                    vk_timeline_info = vk::TimelineSemaphoreSubmitInfo::builder()
+                        .signal_semaphore_values(&signal_values);
+                    vk_info = vk_info
+                        .signal_semaphores(&signal_semaphores)
+                        .push_next(&mut vk_timeline_info);
+                }
+                Fence::FencePool {
+                    ref mut active,
+                    ref mut free,
+                    ..
+                } => {
+                    fence_raw = match free.pop() {
+                        Some(raw) => raw,
+                        None => {
+                            let vk_info = vk::FenceCreateInfo::builder().build();
+                            self.device.raw.create_fence(&vk_info, None)?
+                        }
+                    };
+                    active.push((value, fence_raw));
+                }
+            }
+        }
 
         self.device
             .raw
-            .queue_submit(self.raw, &[vk_info], fence_raw)?;
+            .queue_submit(self.raw, &[vk_info.build()], fence_raw)?;
         Ok(())
     }
 
