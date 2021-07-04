@@ -125,7 +125,7 @@ struct EntryPointContext {
 #[derive(Default)]
 struct Function {
     signature: Option<Instruction>,
-    parameters: Vec<Instruction>,
+    parameters: Vec<FunctionArgument>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
     blocks: Vec<TerminatedBlock>,
     entry_point_context: Option<EntryPointContext>,
@@ -143,7 +143,10 @@ impl Function {
     fn parameter_id(&self, index: u32) -> Word {
         match self.entry_point_context {
             Some(ref context) => context.argument_ids[index as usize],
-            None => self.parameters[index as usize].result_id.unwrap(),
+            None => self.parameters[index as usize]
+                .instruction
+                .result_id
+                .unwrap(),
         }
     }
 }
@@ -308,6 +311,12 @@ struct GlobalVariable {
     /// For `StorageClass::Handle` variables, this ID is recorded in the function
     /// prelude block (and reset before every function) as `OpLoad` of the variable.
     /// It is then used for all the global ops, such as `OpImageSample`.
+    handle_id: Word,
+}
+
+struct FunctionArgument {
+    /// Actual instruction of the argument.
+    instruction: Instruction,
     handle_id: Word,
 }
 

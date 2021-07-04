@@ -1,9 +1,9 @@
 use super::{
     helpers::{contains_builtin, map_storage_class},
     make_local, Block, BlockContext, CachedExpressions, EntryPointContext, Error, Function,
-    GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable, LogicalLayout,
-    LookupFunctionType, LookupType, LoopContext, Options, PhysicalLayout, ResultMember, Writer,
-    WriterFlags, BITS_PER_BYTE,
+    FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
+    LogicalLayout, LookupFunctionType, LookupType, LoopContext, Options, PhysicalLayout,
+    ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
     arena::{Arena, Handle},
@@ -25,8 +25,8 @@ fn map_dim(dim: crate::ImageDimension) -> spirv::Dim {
 impl Function {
     fn to_words(&self, sink: &mut impl Extend<Word>) {
         self.signature.as_ref().unwrap().to_words(sink);
-        for instruction in self.parameters.iter() {
-            instruction.to_words(sink);
+        for argument in self.parameters.iter() {
+            argument.instruction.to_words(sink);
         }
         for (index, block) in self.blocks.iter().enumerate() {
             Instruction::label(block.label_id).to_words(sink);
@@ -269,10 +269,7 @@ impl Writer {
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
-            let handle_ty = match ir_module.types[argument.ty].inner {
-                crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => true,
-                _ => false,
-            };
+            let handle_ty = ir_module.types[argument.ty].inner.is_handle();
             let argument_type_id = match handle_ty {
                 true => self.get_pointer_id(
                     &ir_module.types,
@@ -321,9 +318,23 @@ impl Writer {
                 };
                 ep_context.argument_ids.push(id);
             } else {
-                let id = self.id_gen.next();
-                let instruction = Instruction::function_parameter(argument_type_id, id);
-                function.parameters.push(instruction);
+                let argument_id = self.id_gen.next();
+                let instruction = Instruction::function_parameter(argument_type_id, argument_id);
+                function.parameters.push(FunctionArgument {
+                    instruction,
+                    handle_id: if handle_ty {
+                        let id = self.id_gen.next();
+                        prelude.body.push(Instruction::load(
+                            self.get_type_id(LookupType::Handle(argument.ty))?,
+                            id,
+                            argument_id,
+                            None,
+                        ));
+                        id
+                    } else {
+                        0
+                    },
+                });
                 parameter_type_ids.push(argument_type_id);
             };
         }

@@ -175,3 +175,13 @@ fn vector_size_str(size: crate::VectorSize) -> &'static str {
         crate::VectorSize::Quad => "4",
     }
 }
+
+impl crate::TypeInner {
+    #[allow(unused)]
+    fn is_handle(&self) -> bool {
+        match *self {
+            crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => true,
+            _ => false,
+        }
+    }
+}
