@@ -1,8 +1,8 @@
-use super::{conv, HResultPair as _};
+use super::{conv, HResult as _, HResultPair as _};
 use std::{mem, sync::Arc};
 use winapi::{
-    shared::{dxgi, dxgi1_2, winerror},
-    um::d3d12,
+    shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
+    um::{d3d12, winuser},
 };
 
 impl Drop for super::Adapter {
@@ -314,6 +314,64 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
-        None
+        let current_extent = {
+            let mut rect: windef::RECT = mem::zeroed();
+            if winuser::GetClientRect(surface.wnd_handle, &mut rect) != 0 {
+                Some(wgt::Extent3d {
+                    width: (rect.right - rect.left) as u32,
+                    height: (rect.bottom - rect.top) as u32,
+                    depth_or_array_layers: 1,
+                })
+            } else {
+                log::warn!("Unable to get the window client rect");
+                None
+            }
+        };
+
+        let mut present_modes = vec![wgt::PresentMode::Fifo];
+        #[allow(trivial_casts)]
+        if let Ok(factory5) = surface.factory.cast::<dxgi1_5::IDXGIFactory5>().check() {
+            let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
+            let hr = factory5.CheckFeatureSupport(
+                dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+                &mut allow_tearing as *mut _ as *mut _,
+                mem::size_of::<minwindef::BOOL>() as _,
+            );
+
+            factory5.destroy();
+            match hr.to_error() {
+                Some(err) => log::warn!("Unable to check for tearing support: {}", err),
+                None => present_modes.push(wgt::PresentMode::Immediate),
+            }
+        }
+
+        Some(crate::SurfaceCapabilities {
+            formats: vec![
+                wgt::TextureFormat::Bgra8UnormSrgb,
+                wgt::TextureFormat::Bgra8Unorm,
+                wgt::TextureFormat::Rgba8UnormSrgb,
+                wgt::TextureFormat::Rgba8Unorm,
+                wgt::TextureFormat::Rgb10a2Unorm,
+                wgt::TextureFormat::Rgba16Float,
+            ],
+            // we currently use a flip effect which supports 2..=16 buffers
+            swap_chain_sizes: 2..=16,
+            current_extent,
+            // TODO: figure out the exact bounds
+            extents: wgt::Extent3d {
+                width: 16,
+                height: 16,
+                depth_or_array_layers: 1,
+            }..=wgt::Extent3d {
+                width: 4096,
+                height: 4096,
+                depth_or_array_layers: 1,
+            },
+            usage: crate::TextureUses::COLOR_TARGET
+                | crate::TextureUses::COPY_SRC
+                | crate::TextureUses::COPY_DST,
+            present_modes,
+            composite_alpha_modes: vec![crate::CompositeAlphaMode::Opaque],
+        })
     }
 }
