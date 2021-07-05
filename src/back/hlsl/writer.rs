@@ -89,6 +89,13 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        // Save all entry point output types
+        let ep_results = module
+            .entry_points
+            .iter()
+            .map(|ep| (ep.stage, ep.function.result.clone()))
+            .collect::<Vec<(ShaderStage, Option<crate::FunctionResult>)>>();
+
         // Write all structs
         for (handle, ty) in module.types.iter() {
             if let crate::TypeInner::Struct {
@@ -97,7 +104,26 @@ impl<'a, W: Write> Writer<'a, W> {
                 ..
             } = ty.inner
             {
-                self.write_struct(module, handle, top_level, members)?;
+                let ep_result = ep_results.iter().find(|e| {
+                    if let Some(ref result) = e.1 {
+                        result.ty == handle
+                    } else {
+                        false
+                    }
+                });
+
+                if let Some(result) = ep_result {
+                    self.write_struct(
+                        module,
+                        handle,
+                        top_level,
+                        members,
+                        Some(result.0),
+                        Some(true),
+                    )?;
+                } else {
+                    self.write_struct(module, handle, top_level, members, None, None)?;
+                }
                 writeln!(self.out)?;
             }
         }
@@ -170,13 +196,22 @@ impl<'a, W: Write> Writer<'a, W> {
         })
     }
 
-    fn write_binding(&mut self, binding: &crate::Binding) -> BackendResult {
+    fn write_binding(
+        &mut self,
+        binding: &crate::Binding,
+        stage: Option<ShaderStage>,
+        output: Option<bool>,
+    ) -> BackendResult {
         match *binding {
             crate::Binding::BuiltIn(builtin) => {
                 write!(self.out, " : {}", builtin_str(builtin))?;
             }
             crate::Binding::Location { location, .. } => {
-                write!(self.out, " : {}{}", LOCATION_SEMANTIC, location)?;
+                if stage == Some(crate::ShaderStage::Fragment) && output == Some(true) {
+                    write!(self.out, " : SV_Target{}", location)?;
+                } else {
+                    write!(self.out, " : {}{}", LOCATION_SEMANTIC, location)?;
+                }
             }
         }
 
@@ -220,7 +255,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_type(module, member.ty)?;
                 write!(self.out, " {}", &member.name)?;
                 if let Some(ref binding) = member.binding {
-                    self.write_binding(binding)?;
+                    self.write_binding(binding, Some(stage), Some(false))?;
                 }
                 write!(self.out, ";")?;
                 writeln!(self.out)?;
@@ -370,6 +405,8 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::Type>,
         _block: bool,
         members: &[crate::StructMember],
+        shader_stage: Option<ShaderStage>,
+        out: Option<bool>,
     ) -> BackendResult {
         // Write struct name
         write!(self.out, "struct {}", self.names[&NameKey::Type(handle)])?;
@@ -415,7 +452,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
 
             if let Some(ref binding) = member.binding {
-                self.write_binding(binding)?;
+                self.write_binding(binding, shader_stage, out)?;
             };
             write!(self.out, ";")?;
             writeln!(self.out)?;
@@ -1159,6 +1196,19 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "(")?;
                 self.write_expr(module, value, func_ctx)?;
                 write!(self.out, ".{})", number_of_components)?
+            }
+            Expression::Select {
+                condition,
+                accept,
+                reject,
+            } => {
+                write!(self.out, "(")?;
+                self.write_expr(module, condition, func_ctx)?;
+                write!(self.out, " ? ")?;
+                self.write_expr(module, accept, func_ctx)?;
+                write!(self.out, " : ")?;
+                self.write_expr(module, reject, func_ctx)?;
+                write!(self.out, ")")?
             }
             // Nothing to do here, since call expression already cached
             Expression::Call(_) => {}
