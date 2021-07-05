@@ -492,8 +492,8 @@ impl<'function> Context<'function> {
                                 Some(self.add_expression(Expression::Load { pointer }, body)),
                                 meta,
                             ));
-                        },
-                        _ => {},
+                        }
+                        _ => {}
                     }
                 }
 

@@ -146,7 +146,7 @@ fn bad_texture() {
 7 │                 return textureSample(a, sampler, vec2<f32>(0.0));
   │                                      ^ not an image
 
-"#
+"#,
     );
 }
 
@@ -186,7 +186,7 @@ fn bad_texture_sample_type() {
 3 │             [[group(0), binding(1)]] var texture : texture_2d<bool>;
   │                                                               ^^^^ must be one of f32, i32 or u32
 
-"#
+"#,
     );
 }
 
@@ -237,7 +237,7 @@ fn unknown_attribute() {
 2 │             [[a]]
   │               ^ unknown attribute
 
-"#
+"#,
     );
 }
 
@@ -253,7 +253,7 @@ fn unknown_built_in() {
 2 │             fn x([[builtin(unknown_built_in)]] y: u32) {}
   │                            ^^^^^^^^^^^^^^^^ unknown builtin
 
-"#
+"#,
     );
 }
 
@@ -269,7 +269,7 @@ fn unknown_access() {
 2 │             var<storage> x: [[access(unknown_access)]] array<u32>;
   │                                      ^^^^^^^^^^^^^^ unknown access
 
-"#
+"#,
     );
 }
 
@@ -285,7 +285,7 @@ fn unknown_shader_stage() {
 2 │             [[stage(geometry)]] fn main() {}
   │                     ^^^^^^^^ unknown shader stage
 
-"#
+"#,
     );
 }
 
@@ -303,7 +303,7 @@ fn unknown_ident() {
 3 │                 let a = b;
   │                         ^ unknown identifier
 
-"#
+"#,
     );
 }
 
@@ -321,7 +321,7 @@ fn unknown_scalar_type() {
   │
   = note: Valid scalar types are f16, f32, f64, i8, i16, i32, i64, u8, u16, u32, u64, bool
 
-"#
+"#,
     );
 }
 
@@ -337,7 +337,7 @@ fn unknown_type() {
 2 │             let a: Vec<f32>;
   │                    ^^^ unknown type
 
-"#
+"#,
     );
 }
 
@@ -353,7 +353,7 @@ fn unknown_storage_format() {
 2 │             let storage: [[access(read)]] texture_storage_1d<rgba>;
   │                                                              ^^^^ unknown storage format
 
-"#
+"#,
     );
 }
 
@@ -369,7 +369,7 @@ fn unknown_conservative_depth() {
 2 │             [[early_depth_test(abc)]] fn main() {}
   │                                ^^^ unknown conservative depth
 
-"#
+"#,
     );
 }
 
@@ -385,7 +385,7 @@ fn zero_array_stride() {
 2 │             type zero = [[stride(0)]] array<f32>;
   │                                  ^ array stride must not be zero
 
-"#
+"#,
     );
 }
 
@@ -403,7 +403,7 @@ fn struct_member_zero_size() {
 3 │                 [[size(0)]] data: array<f32>;
   │                        ^ struct member size or alignment must not be 0
 
-"#
+"#,
     );
 }
 
@@ -421,7 +421,7 @@ fn struct_member_zero_align() {
 3 │                 [[align(0)]] data: array<f32>;
   │                         ^ struct member size or alignment must not be 0
 
-"#
+"#,
     );
 }
 
@@ -437,7 +437,7 @@ fn inconsistent_binding() {
 2 │         fn foo([[builtin(vertex_index), location(0)]] x: u32) {}
   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ input/output binding is not consistent
 
-"#
+"#,
     );
 }
 

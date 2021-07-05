@@ -124,7 +124,8 @@ pub enum Error<'a> {
     ZeroSizeOrAlign(Span),
     InconsistentBinding(Span),
     UnknownLocalFunction(Span),
-    LetTypeMismatch(Span, Handle<crate::Type>),
+    InitializationTypeMismatch(Span, Handle<crate::Type>),
+    MissingType(Span),
     Other,
 }
 
@@ -326,8 +327,13 @@ impl<'a> Error<'a> {
                 labels: vec![(span.clone(), "unknown local function".into())],
                 notes: vec![],
             },
-            Error::LetTypeMismatch(ref name_span, ref expected_ty) => ParseError {
+            Error::InitializationTypeMismatch(ref name_span, ref expected_ty) => ParseError {
                 message: format!("the type of `{}` is expected to be {:?}", &source[name_span.clone()], expected_ty),
+                labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                notes: vec![],
+            },
+            Error::MissingType(ref name_span) => ParseError {
+                message: format!("variable `{}` needs a type", &source[name_span.clone()]),
                 labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
                 notes: vec![],
             },
@@ -2567,7 +2573,7 @@ impl Parser {
                             given_inner,
                             expr_inner
                         );
-                        return Err(Error::LetTypeMismatch(name_span, ty));
+                        return Err(Error::InitializationTypeMismatch(name_span, ty));
                     }
                 }
                 block.extend(emitter.finish(context.expressions));
@@ -2583,24 +2589,69 @@ impl Parser {
                     Variable(Handle<crate::Expression>),
                 }
 
-                let (name, _name_span, ty, _access) =
-                    self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
+                let (name, name_span) = lexer.next_ident_with_span()?;
+                let given_ty = if lexer.skip(Token::Separator(':')) {
+                    let (ty, _access) =
+                        self.parse_type_decl(lexer, None, context.types, context.constants)?;
+                    Some(ty)
+                } else {
+                    None
+                };
 
-                let init = if lexer.skip(Token::Operation('=')) {
+                let (init, ty) = if lexer.skip(Token::Operation('=')) {
                     emitter.start(context.expressions);
                     let value = self.parse_general_expression(
                         lexer,
                         context.as_expression(block, &mut emitter),
                     )?;
                     block.extend(emitter.finish(context.expressions));
-                    match context.expressions[value] {
+
+                    // prepare the typifier, but work around mutable borrowing...
+                    let _ = context
+                        .as_expression(block, &mut emitter)
+                        .resolve_type(value)?;
+
+                    //TODO: share more of this code with `let` arm
+                    let ty = match given_ty {
+                        Some(ty) => {
+                            let expr_inner = context.typifier.get(value, context.types);
+                            let given_inner = &context.types[ty].inner;
+                            if given_inner != expr_inner {
+                                log::error!(
+                                    "Given type {:?} doesn't match expected {:?}",
+                                    given_inner,
+                                    expr_inner
+                                );
+                                return Err(Error::InitializationTypeMismatch(name_span, ty));
+                            }
+                            ty
+                        }
+                        None => {
+                            // register the type, if needed
+                            match context.typifier[value].clone() {
+                                TypeResolution::Handle(ty) => ty,
+                                TypeResolution::Value(inner) => context
+                                    .types
+                                    .fetch_or_append(crate::Type { name: None, inner }),
+                            }
+                        }
+                    };
+
+                    let init = match context.expressions[value] {
                         crate::Expression::Constant(handle) if is_uniform_control_flow => {
                             Init::Constant(handle)
                         }
                         _ => Init::Variable(value),
-                    }
+                    };
+                    (init, ty)
                 } else {
-                    Init::Empty
+                    match given_ty {
+                        Some(ty) => (Init::Empty, ty),
+                        None => {
+                            log::error!("Variable '{}' without an initializer needs a type", name);
+                            return Err(Error::MissingType(name_span));
+                        }
+                    }
                 };
 
                 lexer.expect(Token::Separator(';'))?;
@@ -3186,7 +3237,7 @@ impl Parser {
                     crate::ConstantInner::Composite { ty, components: _ } => ty == explicit_ty,
                 };
                 if !type_match {
-                    return Err(Error::LetTypeMismatch(name_span, explicit_ty));
+                    return Err(Error::InitializationTypeMismatch(name_span, explicit_ty));
                 }
                 //TODO: check `ty` against `const_handle`.
                 lexer.expect(Token::Separator(';'))?;

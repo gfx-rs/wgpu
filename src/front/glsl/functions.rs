@@ -1,18 +1,14 @@
 use crate::{
-    proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint, Expression, Function,
-    FunctionArgument, FunctionResult, Handle, ImageQuery, LocalVariable, MathFunction,
-    RelationalFunction, SampleLevel, ScalarKind, ScalarValue, Statement, StructMember, SwizzleComponent, Type,
-    TypeInner, VectorSize,
+    proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
+    Expression, Function, FunctionArgument, FunctionResult, Handle, ImageQuery, LocalVariable,
+    MathFunction, RelationalFunction, SampleLevel, ScalarKind, ScalarValue, Statement,
+    StructMember, SwizzleComponent, Type, TypeInner, VectorSize,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
 
 impl Program<'_> {
-    fn add_constant_value(
-        &mut self,
-        scalar_kind: ScalarKind,
-        value: u64,
-    ) -> Handle<Constant> {
+    fn add_constant_value(&mut self, scalar_kind: ScalarKind, value: u64) -> Handle<Constant> {
         let value = match scalar_kind {
             ScalarKind::Uint => ScalarValue::Uint(value),
             ScalarKind::Sint => ScalarValue::Sint(value as i64),
@@ -23,10 +19,7 @@ impl Program<'_> {
         self.module.constants.fetch_or_append(Constant {
             name: None,
             specialization: None,
-            inner: ConstantInner::Scalar {
-                width: 4,
-                value,
-            },
+            inner: ConstantInner::Scalar { width: 4, value },
         })
     }
 
@@ -49,13 +42,16 @@ impl Program<'_> {
                     let expr_type = self.resolve_type(ctx, args[0].0, args[0].1)?;
 
                     let vector_size = match *expr_type {
-                        TypeInner::Vector{ size, .. } => Some(size),
+                        TypeInner::Vector { size, .. } => Some(size),
                         _ => None,
                     };
 
                     // Special case: if casting from a bool, we need to use Select and not As.
                     match self.module.types[ty].inner.scalar_kind() {
-                        Some(result_scalar_kind) if expr_type.scalar_kind() == Some(ScalarKind::Bool) && result_scalar_kind != ScalarKind::Bool => {
+                        Some(result_scalar_kind)
+                            if expr_type.scalar_kind() == Some(ScalarKind::Bool)
+                                && result_scalar_kind != ScalarKind::Bool =>
+                        {
                             let c0 = self.add_constant_value(result_scalar_kind, 0u64);
                             let c1 = self.add_constant_value(result_scalar_kind, 1u64);
                             let mut reject = ctx.add_expression(Expression::Constant(c0), body);

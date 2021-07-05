@@ -11,6 +11,7 @@ use crate::{
     arena::{Arena, Handle},
     proc::{ResolveContext, ResolveError, TypeResolution},
 };
+use std::ops;
 
 /// Helper class to emit expressions
 #[allow(dead_code)]
@@ -83,5 +84,12 @@ impl Typifier {
             }
         }
         Ok(())
+    }
+}
+
+impl ops::Index<Handle<crate::Expression>> for Typifier {
+    type Output = TypeResolution;
+    fn index(&self, handle: Handle<crate::Expression>) -> &Self::Output {
+        &self.resolutions[handle.index()]
     }
 }
