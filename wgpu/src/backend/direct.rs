@@ -1001,7 +1001,7 @@ impl crate::Context for Context {
             .bind_group_layouts
             .iter()
             .map(|bgl| bgl.id)
-            .collect::<ArrayVec<[_; hal::MAX_BIND_GROUPS]>>();
+            .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
@@ -1033,7 +1033,7 @@ impl crate::Context for Context {
     ) -> Self::RenderPipelineId {
         use wgc::pipeline as pipe;
 
-        let vertex_buffers: ArrayVec<[_; hal::MAX_VERTEX_BUFFERS]> = desc
+        let vertex_buffers: ArrayVec<_, { hal::MAX_VERTEX_BUFFERS }> = desc
             .vertex
             .buffers
             .iter()
@@ -1768,7 +1768,7 @@ impl crate::Context for Context {
                 resolve_target: ca.resolve_target.map(|rt| rt.id),
                 channel: map_pass_channel(Some(&ca.ops)),
             })
-            .collect::<ArrayVec<[_; hal::MAX_COLOR_TARGETS]>>();
+            .collect::<ArrayVec<_, { hal::MAX_COLOR_TARGETS }>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::RenderPassDepthStencilAttachment {

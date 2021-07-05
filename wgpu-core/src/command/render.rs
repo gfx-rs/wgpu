@@ -154,7 +154,7 @@ pub struct RenderPassDescriptor<'a> {
 pub struct RenderPass {
     base: BasePass<RenderCommand>,
     parent_id: id::CommandEncoderId,
-    color_targets: ArrayVec<[RenderPassColorAttachment; hal::MAX_COLOR_TARGETS]>,
+    color_targets: ArrayVec<RenderPassColorAttachment, { hal::MAX_COLOR_TARGETS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
 }
 
@@ -277,7 +277,7 @@ impl VertexBufferState {
 
 #[derive(Debug, Default)]
 struct VertexState {
-    inputs: ArrayVec<[VertexBufferState; hal::MAX_VERTEX_BUFFERS]>,
+    inputs: ArrayVec<VertexBufferState, { hal::MAX_VERTEX_BUFFERS }>,
     /// Length of the shortest vertex rate vertex buffer
     vertex_limit: u32,
     /// Buffer slot which the shortest vertex rate vertex buffer is bound to
@@ -495,7 +495,7 @@ struct RenderAttachment<'a> {
     new_use: hal::TextureUses,
 }
 
-type AttachmentDataVec<T> = ArrayVec<[T; hal::MAX_COLOR_TARGETS + hal::MAX_COLOR_TARGETS + 1]>;
+type AttachmentDataVec<T> = ArrayVec<T, { hal::MAX_COLOR_TARGETS + hal::MAX_COLOR_TARGETS + 1 }>;
 
 struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
@@ -552,7 +552,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             Ok(())
         };
 
-        let mut colors = ArrayVec::<[hal::ColorAttachment<A>; hal::MAX_COLOR_TARGETS]>::new();
+        let mut colors = ArrayVec::<hal::ColorAttachment<A>, { hal::MAX_COLOR_TARGETS }>::new();
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {

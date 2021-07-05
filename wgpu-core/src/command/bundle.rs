@@ -906,7 +906,7 @@ impl BindState {
 
 #[derive(Debug)]
 struct PushConstantState {
-    ranges: ArrayVec<[wgt::PushConstantRange; SHADER_STAGE_COUNT]>,
+    ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
     is_dirty: bool,
 }
 impl PushConstantState {
@@ -944,8 +944,8 @@ struct VertexLimitState {
 struct State {
     trackers: TrackerSet,
     index: IndexState,
-    vertex: ArrayVec<[VertexState; hal::MAX_VERTEX_BUFFERS]>,
-    bind: ArrayVec<[BindState; hal::MAX_BIND_GROUPS]>,
+    vertex: ArrayVec<VertexState, { hal::MAX_VERTEX_BUFFERS }>,
+    bind: ArrayVec<BindState, { hal::MAX_BIND_GROUPS }>,
     push_constant_ranges: PushConstantState,
     raw_dynamic_offsets: Vec<wgt::DynamicOffset>,
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,

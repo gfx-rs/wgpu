@@ -228,13 +228,13 @@ struct PushConstantChange {
 /// to every possible value.
 pub fn compute_nonoverlapping_ranges(
     ranges: &[wgt::PushConstantRange],
-) -> ArrayVec<[wgt::PushConstantRange; SHADER_STAGE_COUNT * 2]> {
+) -> ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT * 2 }> {
     if ranges.is_empty() {
         return ArrayVec::new();
     }
     debug_assert!(ranges.len() <= SHADER_STAGE_COUNT);
 
-    let mut breaks: ArrayVec<[PushConstantChange; SHADER_STAGE_COUNT * 2]> = ArrayVec::new();
+    let mut breaks: ArrayVec<PushConstantChange, { SHADER_STAGE_COUNT * 2 }> = ArrayVec::new();
     for range in ranges {
         breaks.push(PushConstantChange {
             stages: range.stages,

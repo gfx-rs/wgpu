@@ -18,7 +18,7 @@ pub struct TextureSelector {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct TextureState {
-    mips: ArrayVec<[PlaneStates; hal::MAX_MIP_LEVELS as usize]>,
+    mips: ArrayVec<PlaneStates, { hal::MAX_MIP_LEVELS as usize }>,
     /// True if we have the information about all the subresources here
     full: bool,
 }

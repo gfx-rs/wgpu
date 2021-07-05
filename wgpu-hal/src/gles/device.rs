@@ -176,7 +176,7 @@ impl super::Device {
         let mut name_binding_map = NameBindingMap::default();
         let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
         let mut has_stages = wgt::ShaderStages::empty();
-        let mut shaders_to_delete = arrayvec::ArrayVec::<[_; 3]>::new();
+        let mut shaders_to_delete = arrayvec::ArrayVec::<_, 3>::new();
 
         for (naga_stage, stage) in shaders {
             has_stages |= map_naga_stage(naga_stage);

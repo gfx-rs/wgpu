@@ -496,8 +496,8 @@ pub struct PipelineLayout<A: hal::Api> {
     pub(crate) raw: A::PipelineLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) bind_group_layout_ids: ArrayVec<[Valid<BindGroupLayoutId>; hal::MAX_BIND_GROUPS]>,
-    pub(crate) push_constant_ranges: ArrayVec<[wgt::PushConstantRange; SHADER_STAGE_COUNT]>,
+    pub(crate) bind_group_layout_ids: ArrayVec<Valid<BindGroupLayoutId>, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
 }
 
 impl<A: hal::Api> PipelineLayout<A> {

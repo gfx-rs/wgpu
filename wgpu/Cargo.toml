@@ -47,7 +47,7 @@ package = "wgpu-hal"
 path = "../wgpu-hal"
 
 [dependencies]
-arrayvec = "0.5"
+arrayvec = "0.7"
 log = "0.4"
 parking_lot = "0.11"
 raw-window-handle = "0.3"

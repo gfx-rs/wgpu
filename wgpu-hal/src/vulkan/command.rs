@@ -348,8 +348,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
-        let mut vk_clear_values = ArrayVec::<[vk::ClearValue; super::MAX_TOTAL_ATTACHMENTS]>::new();
-        let mut vk_image_views = ArrayVec::<[vk::ImageView; super::MAX_TOTAL_ATTACHMENTS]>::new();
+        let mut vk_clear_values =
+            ArrayVec::<vk::ClearValue, { super::MAX_TOTAL_ATTACHMENTS }>::new();
+        let mut vk_image_views = ArrayVec::<vk::ImageView, { super::MAX_TOTAL_ATTACHMENTS }>::new();
         let mut rp_key = super::RenderPassKey::default();
         let mut fb_key = super::FramebufferKey {
             attachments: ArrayVec::default(),

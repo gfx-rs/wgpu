@@ -469,7 +469,7 @@ struct PrimitiveState {
     clamp_depth: bool,
 }
 
-type InvalidatedAttachments = arrayvec::ArrayVec<[u32; crate::MAX_COLOR_TARGETS + 2]>;
+type InvalidatedAttachments = arrayvec::ArrayVec<u32, { crate::MAX_COLOR_TARGETS + 2 }>;
 
 #[derive(Debug)]
 enum Command {
