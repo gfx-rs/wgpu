@@ -44,6 +44,8 @@
 #[cfg(all(feature = "metal", not(any(target_os = "macos", target_os = "ios"))))]
 compile_error!("Metal backend enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 
+#[cfg(all(feature = "dx12", windows))]
+mod dx12;
 mod empty;
 #[cfg(feature = "gles")]
 mod gles;
@@ -54,6 +56,8 @@ mod vulkan;
 
 pub mod util;
 pub mod api {
+    #[cfg(feature = "dx12")]
+    pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
     #[cfg(feature = "gles")]
     pub use super::gles::Api as Gles;

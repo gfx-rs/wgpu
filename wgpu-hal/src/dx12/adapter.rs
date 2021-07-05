@@ -1,0 +1,319 @@
+use super::{conv, HResultPair as _};
+use std::{mem, sync::Arc};
+use winapi::{
+    shared::{dxgi, dxgi1_2, winerror},
+    um::d3d12,
+};
+
+impl Drop for super::Adapter {
+    fn drop(&mut self) {
+        unsafe {
+            self.raw.destroy();
+        }
+    }
+}
+
+impl super::Adapter {
+    #[allow(trivial_casts)]
+    pub(super) fn expose(
+        adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
+        library: &Arc<native::D3D12Lib>,
+    ) -> Option<crate::ExposedAdapter<super::Api>> {
+        // Create the device so that we can get the capabilities.
+        let device = match library.create_device(adapter, native::FeatureLevel::L11_0) {
+            Ok(pair) => match pair.check() {
+                Ok(device) => device,
+                Err(err) => {
+                    log::warn!("Device creation failed: {}", err);
+                    return None;
+                }
+            },
+            Err(err) => {
+                log::warn!("Device creation function is not found: {:?}", err);
+                return None;
+            }
+        };
+
+        // We have found a possible adapter.
+        // Acquire the device information.
+        let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
+        unsafe {
+            adapter.GetDesc2(&mut desc);
+        }
+
+        let device_name = {
+            use std::{ffi::OsString, os::windows::ffi::OsStringExt};
+            let len = desc.Description.iter().take_while(|&&c| c != 0).count();
+            let name = OsString::from_wide(&desc.Description[..len]);
+            name.to_string_lossy().into_owned()
+        };
+
+        let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE =
+            unsafe { mem::zeroed() };
+        assert_eq!(0, unsafe {
+            device.CheckFeatureSupport(
+                d3d12::D3D12_FEATURE_ARCHITECTURE,
+                &mut features_architecture as *mut _ as *mut _,
+                mem::size_of::<d3d12::D3D12_FEATURE_DATA_ARCHITECTURE>() as _,
+            )
+        });
+
+        let mut workarounds = super::Workarounds::default();
+
+        let info = wgt::AdapterInfo {
+            backend: wgt::Backend::Dx12,
+            name: device_name,
+            vendor: desc.VendorId as usize,
+            device: desc.DeviceId as usize,
+            device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+                workarounds.avoid_cpu_descriptor_overwrites = true;
+                wgt::DeviceType::VirtualGpu
+            } else if features_architecture.CacheCoherentUMA != 0 {
+                wgt::DeviceType::IntegratedGpu
+            } else {
+                wgt::DeviceType::DiscreteGpu
+            },
+        };
+
+        let mut options: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
+        assert_eq!(0, unsafe {
+            device.CheckFeatureSupport(
+                d3d12::D3D12_FEATURE_D3D12_OPTIONS,
+                &mut options as *mut _ as *mut _,
+                mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _,
+            )
+        });
+
+        let _depth_bounds_test_supported = {
+            let mut features2: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2 = unsafe { mem::zeroed() };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    d3d12::D3D12_FEATURE_D3D12_OPTIONS2,
+                    &mut features2 as *mut _ as *mut _,
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2>() as _,
+                )
+            };
+            hr == 0 && features2.DepthBoundsTestSupported != 0
+        };
+
+        let private_caps = super::PrivateCapabilities {
+            heterogeneous_resource_heaps: options.ResourceHeapTier
+                != d3d12::D3D12_RESOURCE_HEAP_TIER_1,
+            memory_architecture: if features_architecture.UMA != 0 {
+                super::MemoryArchitecture::Unified {
+                    cache_coherent: features_architecture.CacheCoherentUMA != 0,
+                }
+            } else {
+                super::MemoryArchitecture::NonUnified
+            },
+        };
+
+        // Theoretically vram limited, but in practice 2^20 is the limit
+        let tier3_practical_descriptor_limit = 1 << 20;
+
+        let (full_heap_count, _uav_count) = match options.ResourceBindingTier {
+            d3d12::D3D12_RESOURCE_BINDING_TIER_1 => (
+                d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
+                8, // conservative, is 64 on feature level 11.1
+            ),
+            d3d12::D3D12_RESOURCE_BINDING_TIER_2 => (
+                d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
+                64,
+            ),
+            d3d12::D3D12_RESOURCE_BINDING_TIER_3 => (
+                tier3_practical_descriptor_limit,
+                tier3_practical_descriptor_limit,
+            ),
+            other => {
+                log::warn!("Unknown resource binding tier {}", other);
+                (
+                    d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
+                    8,
+                )
+            }
+        };
+
+        let mut features = wgt::Features::empty()
+            | wgt::Features::DEPTH_CLAMPING
+            //TODO: Naga part
+            //| wgt::Features::TEXTURE_BINDING_ARRAY
+            //| wgt::Features::BUFFER_BINDING_ARRAY
+            //| wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
+            //| wgt::Features::UNSIZED_BINDING_ARRAY
+            | wgt::Features::MULTI_DRAW_INDIRECT
+            | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
+            | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
+            | wgt::Features::NON_FILL_POLYGON_MODE
+            |wgt::Features::VERTEX_WRITABLE_STORAGE;
+
+        features.set(
+            wgt::Features::CONSERVATIVE_RASTERIZATION,
+            options.ConservativeRasterizationTier
+                != d3d12::D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED,
+        );
+
+        let base = wgt::Limits::default();
+
+        Some(crate::ExposedAdapter {
+            adapter: super::Adapter {
+                raw: adapter,
+                device,
+                library: Arc::clone(library),
+                private_caps,
+                workarounds,
+            },
+            info,
+            features,
+            capabilities: crate::Capabilities {
+                limits: wgt::Limits {
+                    max_texture_dimension_1d: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
+                    max_texture_dimension_2d: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION
+                        .min(d3d12::D3D12_REQ_TEXTURECUBE_DIMENSION),
+                    max_texture_dimension_3d: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                    max_texture_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
+                    max_bind_groups: crate::MAX_BIND_GROUPS as u32,
+                    // dynamic offsets take a root constant, so we expose the minimum here
+                    max_dynamic_uniform_buffers_per_pipeline_layout: base
+                        .max_dynamic_uniform_buffers_per_pipeline_layout,
+                    max_dynamic_storage_buffers_per_pipeline_layout: base
+                        .max_dynamic_storage_buffers_per_pipeline_layout,
+                    max_sampled_textures_per_shader_stage: match options.ResourceBindingTier {
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
+                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
+                        | _ => full_heap_count,
+                    },
+                    max_samplers_per_shader_stage: match options.ResourceBindingTier {
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
+                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
+                        | _ => d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
+                    },
+                    // these both account towards `uav_count`, but we can't express the limit as as sum
+                    max_storage_buffers_per_shader_stage: base.max_storage_buffers_per_shader_stage,
+                    max_storage_textures_per_shader_stage: base
+                        .max_storage_textures_per_shader_stage,
+                    max_uniform_buffers_per_shader_stage: full_heap_count,
+                    max_uniform_buffer_binding_size: d3d12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT
+                        * 16,
+                    max_storage_buffer_binding_size: !0,
+                    max_vertex_buffers: d3d12::D3D12_VS_INPUT_REGISTER_COUNT
+                        .min(crate::MAX_VERTEX_BUFFERS as u32),
+                    max_vertex_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+                    max_vertex_buffer_array_stride: d3d12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
+                    max_push_constant_size: 0,
+                },
+                alignments: crate::Alignments {
+                    buffer_copy_offset: wgt::BufferSize::new(
+                        d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64,
+                    )
+                    .unwrap(),
+                    buffer_copy_pitch: wgt::BufferSize::new(
+                        d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u64,
+                    )
+                    .unwrap(),
+                    uniform_buffer_offset: wgt::BufferSize::new(
+                        d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64,
+                    )
+                    .unwrap(),
+                    storage_buffer_offset: wgt::BufferSize::new(4).unwrap(), //TODO?
+                },
+                downlevel: wgt::DownlevelCapabilities::default(),
+            },
+        })
+    }
+}
+
+impl crate::Adapter<super::Api> for super::Adapter {
+    unsafe fn open(
+        &self,
+        _features: wgt::Features,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        let queue = self
+            .device
+            .create_command_queue(
+                native::CmdListType::Direct,
+                native::Priority::Normal,
+                native::CommandQueueFlags::empty(),
+                0,
+            )
+            .check()
+            .map_err(|err| {
+                log::warn!("Queue creation failed: {}", err);
+                crate::DeviceError::OutOfMemory
+            })?;
+
+        Ok(crate::OpenDevice {
+            device: super::Device { raw: self.device },
+            queue: super::Queue { raw: queue },
+        })
+    }
+
+    #[allow(trivial_casts)]
+    unsafe fn texture_format_capabilities(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> crate::TextureFormatCapabilities {
+        use crate::TextureFormatCapabilities as Tfc;
+
+        let info = format.describe();
+        let is_compressed = info.block_dimensions != (1, 1);
+        let raw_format = conv::map_texture_format(format);
+
+        let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+            Format: raw_format,
+            Support1: mem::zeroed(),
+            Support2: mem::zeroed(),
+        };
+        assert_eq!(
+            winerror::S_OK,
+            self.device.CheckFeatureSupport(
+                d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
+                &mut data as *mut _ as *mut _,
+                mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
+            )
+        );
+
+        let mut caps = Tfc::COPY_SRC | Tfc::COPY_DST;
+        let can_image = 0
+            != data.Support1
+                & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
+                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
+                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
+                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
+        caps.set(Tfc::SAMPLED, can_image);
+        caps.set(
+            Tfc::SAMPLED_LINEAR,
+            data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0,
+        );
+        caps.set(
+            Tfc::COLOR_ATTACHMENT,
+            data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0,
+        );
+        caps.set(
+            Tfc::COLOR_ATTACHMENT_BLEND,
+            data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0,
+        );
+        caps.set(
+            Tfc::DEPTH_STENCIL_ATTACHMENT,
+            data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL != 0,
+        );
+        caps.set(
+            Tfc::STORAGE,
+            data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW != 0,
+        );
+        caps.set(
+            Tfc::STORAGE_READ_WRITE,
+            data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0,
+        );
+
+        caps
+    }
+
+    unsafe fn surface_capabilities(
+        &self,
+        surface: &super::Surface,
+    ) -> Option<crate::SurfaceCapabilities> {
+        None
+    }
+}

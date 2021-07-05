@@ -445,6 +445,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "d3d12"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "091ed1b25fe47c7ff129fc440c23650b6114f36aa00bc7212cc8041879294428"
+dependencies = [
+ "bitflags",
+ "libloading 0.7.0",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "darling"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1984,6 +1995,7 @@ dependencies = [
  "bitflags",
  "block",
  "core-graphics-types",
+ "d3d12",
  "env_logger",
  "foreign-types",
  "fxhash",

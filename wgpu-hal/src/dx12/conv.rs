@@ -1,0 +1,97 @@
+use winapi::shared::dxgiformat;
+
+pub(super) fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
+    use wgt::TextureFormat as Tf;
+    use winapi::shared::dxgiformat::*;
+
+    match format {
+        Tf::R8Unorm => DXGI_FORMAT_R8_UNORM,
+        Tf::R8Snorm => DXGI_FORMAT_R8_SNORM,
+        Tf::R8Uint => DXGI_FORMAT_R8_UINT,
+        Tf::R8Sint => DXGI_FORMAT_R8_SINT,
+        Tf::R16Uint => DXGI_FORMAT_R16_UINT,
+        Tf::R16Sint => DXGI_FORMAT_R16_SINT,
+        Tf::R16Float => DXGI_FORMAT_R16_FLOAT,
+        Tf::Rg8Unorm => DXGI_FORMAT_R8G8_UNORM,
+        Tf::Rg8Snorm => DXGI_FORMAT_R8G8_SNORM,
+        Tf::Rg8Uint => DXGI_FORMAT_R8G8_UINT,
+        Tf::Rg8Sint => DXGI_FORMAT_R8G8_SINT,
+        Tf::R32Uint => DXGI_FORMAT_R32_UINT,
+        Tf::R32Sint => DXGI_FORMAT_R32_SINT,
+        Tf::R32Float => DXGI_FORMAT_R32_FLOAT,
+        Tf::Rg16Uint => DXGI_FORMAT_R16G16_UINT,
+        Tf::Rg16Sint => DXGI_FORMAT_R16G16_SINT,
+        Tf::Rg16Float => DXGI_FORMAT_R16G16_FLOAT,
+        Tf::Rgba8Unorm => DXGI_FORMAT_R8G8B8A8_UNORM,
+        Tf::Rgba8UnormSrgb => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        Tf::Bgra8UnormSrgb => DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
+        Tf::Rgba8Snorm => DXGI_FORMAT_R8G8B8A8_SNORM,
+        Tf::Bgra8Unorm => DXGI_FORMAT_B8G8R8A8_UNORM,
+        Tf::Rgba8Uint => DXGI_FORMAT_R8G8B8A8_UINT,
+        Tf::Rgba8Sint => DXGI_FORMAT_R8G8B8A8_SINT,
+        Tf::Rgb10a2Unorm => DXGI_FORMAT_R10G10B10A2_UNORM,
+        Tf::Rg11b10Float => DXGI_FORMAT_R11G11B10_FLOAT,
+        Tf::Rg32Uint => DXGI_FORMAT_R32G32_UINT,
+        Tf::Rg32Sint => DXGI_FORMAT_R32G32_SINT,
+        Tf::Rg32Float => DXGI_FORMAT_R32G32_FLOAT,
+        Tf::Rgba16Uint => DXGI_FORMAT_R16G16B16A16_UINT,
+        Tf::Rgba16Sint => DXGI_FORMAT_R16G16B16A16_SINT,
+        Tf::Rgba16Float => DXGI_FORMAT_R16G16B16A16_FLOAT,
+        Tf::Rgba32Uint => DXGI_FORMAT_R32G32B32A32_UINT,
+        Tf::Rgba32Sint => DXGI_FORMAT_R32G32B32A32_SINT,
+        Tf::Rgba32Float => DXGI_FORMAT_R32G32B32A32_FLOAT,
+        Tf::Depth32Float => DXGI_FORMAT_D32_FLOAT,
+        Tf::Depth24Plus => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        Tf::Depth24PlusStencil8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        Tf::Bc1RgbaUnorm => DXGI_FORMAT_BC1_UNORM,
+        Tf::Bc1RgbaUnormSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
+        Tf::Bc2RgbaUnorm => DXGI_FORMAT_BC2_UNORM,
+        Tf::Bc2RgbaUnormSrgb => DXGI_FORMAT_BC2_UNORM_SRGB,
+        Tf::Bc3RgbaUnorm => DXGI_FORMAT_BC3_UNORM,
+        Tf::Bc3RgbaUnormSrgb => DXGI_FORMAT_BC3_UNORM_SRGB,
+        Tf::Bc4RUnorm => DXGI_FORMAT_BC4_UNORM,
+        Tf::Bc4RSnorm => DXGI_FORMAT_BC4_SNORM,
+        Tf::Bc5RgUnorm => DXGI_FORMAT_BC5_UNORM,
+        Tf::Bc5RgSnorm => DXGI_FORMAT_BC5_SNORM,
+        Tf::Bc6hRgbUfloat => DXGI_FORMAT_BC6H_UF16,
+        Tf::Bc6hRgbSfloat => DXGI_FORMAT_BC6H_SF16,
+        Tf::Bc7RgbaUnorm => DXGI_FORMAT_BC7_UNORM,
+        Tf::Bc7RgbaUnormSrgb => DXGI_FORMAT_BC7_UNORM_SRGB,
+        Tf::Etc2RgbUnorm
+        | Tf::Etc2RgbUnormSrgb
+        | Tf::Etc2RgbA1Unorm
+        | Tf::Etc2RgbA1UnormSrgb
+        | Tf::EacRUnorm
+        | Tf::EacRSnorm
+        | Tf::EacRgUnorm
+        | Tf::EacRgSnorm
+        | Tf::Astc4x4RgbaUnorm
+        | Tf::Astc4x4RgbaUnormSrgb
+        | Tf::Astc5x4RgbaUnorm
+        | Tf::Astc5x4RgbaUnormSrgb
+        | Tf::Astc5x5RgbaUnorm
+        | Tf::Astc5x5RgbaUnormSrgb
+        | Tf::Astc6x5RgbaUnorm
+        | Tf::Astc6x5RgbaUnormSrgb
+        | Tf::Astc6x6RgbaUnorm
+        | Tf::Astc6x6RgbaUnormSrgb
+        | Tf::Astc8x5RgbaUnorm
+        | Tf::Astc8x5RgbaUnormSrgb
+        | Tf::Astc8x6RgbaUnorm
+        | Tf::Astc8x6RgbaUnormSrgb
+        | Tf::Astc10x5RgbaUnorm
+        | Tf::Astc10x5RgbaUnormSrgb
+        | Tf::Astc10x6RgbaUnorm
+        | Tf::Astc10x6RgbaUnormSrgb
+        | Tf::Astc8x8RgbaUnorm
+        | Tf::Astc8x8RgbaUnormSrgb
+        | Tf::Astc10x8RgbaUnorm
+        | Tf::Astc10x8RgbaUnormSrgb
+        | Tf::Astc10x10RgbaUnorm
+        | Tf::Astc10x10RgbaUnormSrgb
+        | Tf::Astc12x10RgbaUnorm
+        | Tf::Astc12x10RgbaUnormSrgb
+        | Tf::Astc12x12RgbaUnorm
+        | Tf::Astc12x12RgbaUnormSrgb => unreachable!(),
+    }
+}

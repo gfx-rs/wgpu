@@ -204,7 +204,9 @@ impl super::Adapter {
             vertex_shader_storage_blocks.min(fragment_shader_storage_blocks)
         };
 
-        let mut features = wgt::Features::empty() | wgt::Features::TEXTURE_COMPRESSION_ETC2;
+        let mut features = wgt::Features::empty()
+            | wgt::Features::TEXTURE_COMPRESSION_ETC2
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         features.set(
             wgt::Features::DEPTH_CLAMPING,
             extensions.contains("GL_EXT_depth_clamp"),
