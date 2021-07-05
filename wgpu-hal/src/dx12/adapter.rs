@@ -1,8 +1,9 @@
-use super::{conv, HResult as _, HResultPair as _};
+use super::{conv, HResult as _};
 use std::{mem, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
     um::{d3d12, winuser},
+    Interface,
 };
 
 impl Drop for super::Adapter {
@@ -21,7 +22,7 @@ impl super::Adapter {
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = match library.create_device(adapter, native::FeatureLevel::L11_0) {
-            Ok(pair) => match pair.check() {
+            Ok(pair) => match pair.to_result() {
                 Ok(device) => device,
                 Err(err) => {
                     log::warn!("Device creation failed: {}", err);
@@ -237,16 +238,26 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 native::CommandQueueFlags::empty(),
                 0,
             )
-            .check()
-            .map_err(|err| {
-                log::warn!("Queue creation failed: {}", err);
-                crate::DeviceError::OutOfMemory
-            })?;
+            .to_device_result("Queue creation")?;
+
+        let mut idle_fence = native::Fence::null();
+        let hr = self.device.CreateFence(
+            0,
+            d3d12::D3D12_FENCE_FLAG_NONE,
+            &d3d12::ID3D12Fence::uuidof(),
+            idle_fence.mut_void(),
+        );
+        hr.to_device_result("Idle fence creation")?;
 
         Ok(crate::OpenDevice {
             device: super::Device {
                 raw: self.device,
                 present_queue: queue,
+                idler: super::Idler {
+                    fence: idle_fence,
+                    event: native::Event::create(false, false),
+                },
+                private_caps: self.private_caps,
             },
             queue: super::Queue { raw: queue },
         })
@@ -333,7 +344,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let mut present_modes = vec![wgt::PresentMode::Fifo];
         #[allow(trivial_casts)]
-        if let Ok(factory5) = surface.factory.cast::<dxgi1_5::IDXGIFactory5>().check() {
+        if let Ok(factory5) = surface.factory.cast::<dxgi1_5::IDXGIFactory5>().to_result() {
             let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
             let hr = factory5.CheckFeatureSupport(
                 dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
@@ -342,9 +353,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             );
 
             factory5.destroy();
-            match hr.to_error() {
-                Some(err) => log::warn!("Unable to check for tearing support: {}", err),
-                None => present_modes.push(wgt::PresentMode::Immediate),
+            match hr.to_result() {
+                Err(err) => log::warn!("Unable to check for tearing support: {}", err),
+                Ok(()) => present_modes.push(wgt::PresentMode::Immediate),
             }
         }
 

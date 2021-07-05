@@ -16,7 +16,7 @@ default = []
 metal = ["naga/msl-out", "block", "foreign-types"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "inplace_it", "renderdoc-sys"]
 gles = ["naga/glsl-out", "glow", "egl", "libloading"]
-dx12 = ["native", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
+dx12 = ["naga/hlsl-out", "native", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
 
 [dependencies]
 bitflags = "1.0"

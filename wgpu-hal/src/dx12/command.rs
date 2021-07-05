@@ -23,9 +23,16 @@ impl crate::CommandEncoder<super::Api> for super::Encoder {
     {
     }
 
-    unsafe fn fill_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange, value: u8) {}
+    unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {
+    }
 
-    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
+    unsafe fn copy_buffer_to_buffer<T>(
+        &mut self,
+        src: &super::Buffer,
+        dst: &super::Buffer,
+        regions: T,
+    ) {
+    }
 
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
@@ -36,13 +43,19 @@ impl crate::CommandEncoder<super::Api> for super::Encoder {
     ) {
     }
 
-    unsafe fn copy_buffer_to_texture<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
+    unsafe fn copy_buffer_to_texture<T>(
+        &mut self,
+        src: &super::Buffer,
+        dst: &Resource,
+        regions: T,
+    ) {
+    }
 
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &Resource,
         src_usage: crate::TextureUses,
-        dst: &Resource,
+        dst: &super::Buffer,
         regions: T,
     ) {
     }
@@ -55,7 +68,7 @@ impl crate::CommandEncoder<super::Api> for super::Encoder {
         &mut self,
         set: &Resource,
         range: Range<u32>,
-        buffer: &Resource,
+        buffer: &super::Buffer,
         offset: wgt::BufferAddress,
         stride: wgt::BufferSize,
     ) {
@@ -125,32 +138,32 @@ impl crate::CommandEncoder<super::Api> for super::Encoder {
     }
     unsafe fn draw_indirect(
         &mut self,
-        buffer: &Resource,
+        buffer: &super::Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
     }
     unsafe fn draw_indexed_indirect(
         &mut self,
-        buffer: &Resource,
+        buffer: &super::Buffer,
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
     }
     unsafe fn draw_indirect_count(
         &mut self,
-        buffer: &Resource,
+        buffer: &super::Buffer,
         offset: wgt::BufferAddress,
-        count_buffer: &Resource,
+        count_buffer: &super::Buffer,
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
     }
     unsafe fn draw_indexed_indirect_count(
         &mut self,
-        buffer: &Resource,
+        buffer: &super::Buffer,
         offset: wgt::BufferAddress,
-        count_buffer: &Resource,
+        count_buffer: &super::Buffer,
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
@@ -164,5 +177,5 @@ impl crate::CommandEncoder<super::Api> for super::Encoder {
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
-    unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
+    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {}
 }

@@ -36,7 +36,7 @@ impl crate::Api for Api {
     type CommandEncoder = Encoder;
     type CommandBuffer = Resource;
 
-    type Buffer = Resource;
+    type Buffer = Buffer;
     type Texture = Resource;
     type SurfaceTexture = Resource;
     type TextureView = Resource;
@@ -52,36 +52,42 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
-trait HResult {
-    fn to_error(self) -> Option<Cow<'static, str>>;
+trait HResult<O> {
+    fn to_result(self) -> Result<O, Cow<'static, str>>;
+    fn to_device_result(self, description: &str) -> Result<O, crate::DeviceError>;
 }
-impl HResult for i32 {
-    fn to_error(self) -> Option<Cow<'static, str>> {
+impl HResult<()> for i32 {
+    fn to_result(self) -> Result<(), Cow<'static, str>> {
         if self >= 0 {
-            return None;
+            return Ok(());
         }
         let description = match self {
             winerror::E_UNEXPECTED => "unexpected",
             winerror::E_NOTIMPL => "not implemented",
             winerror::E_OUTOFMEMORY => "out of memory",
             winerror::E_INVALIDARG => "invalid argument",
-            _ => return Some(Cow::Owned(format!("0x{:X}", self as u32))),
+            _ => return Err(Cow::Owned(format!("0x{:X}", self as u32))),
         };
-        Some(Cow::Borrowed(description))
+        Err(Cow::Borrowed(description))
+    }
+    fn to_device_result(self, description: &str) -> Result<(), crate::DeviceError> {
+        self.to_result().map_err(|err| {
+            log::error!("{} failed: {}", description, err);
+            if self == winerror::E_OUTOFMEMORY {
+                crate::DeviceError::OutOfMemory
+            } else {
+                crate::DeviceError::Lost
+            }
+        })
     }
 }
 
-trait HResultPair {
-    type Object;
-    fn check(self) -> Result<Self::Object, Cow<'static, str>>;
-}
-impl<T> HResultPair for (T, i32) {
-    type Object = T;
-    fn check(self) -> Result<T, Cow<'static, str>> {
-        match self.1.to_error() {
-            None => Ok(self.0),
-            Some(err) => Err(err),
-        }
+impl<T> HResult<T> for (T, i32) {
+    fn to_result(self) -> Result<T, Cow<'static, str>> {
+        self.1.to_result().map(|()| self.0)
+    }
+    fn to_device_result(self, description: &str) -> Result<T, crate::DeviceError> {
+        self.1.to_device_result(description).map(|()| self.0)
     }
 }
 
@@ -190,9 +196,17 @@ pub struct Adapter {
 unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
 
+/// Helper structure for waiting for GPU.
+struct Idler {
+    fence: native::Fence,
+    event: native::Event,
+}
+
 pub struct Device {
     raw: native::Device,
     present_queue: native::CommandQueue,
+    idler: Idler,
+    private_caps: PrivateCapabilities,
 }
 
 unsafe impl Send for Device {}
@@ -205,6 +219,14 @@ pub struct Queue {
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
+#[derive(Debug)]
+pub struct Buffer {
+    resource: native::Resource,
+}
+
+unsafe impl Send for Buffer {}
+unsafe impl Sync for Buffer {}
+
 impl crate::Instance<Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         let lib_main = native::D3D12Lib::new().map_err(|_| crate::InstanceError)?;
@@ -215,7 +237,7 @@ impl crate::Instance<Api> for Instance {
         if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
             // Enable debug layer
             match lib_main.get_debug_interface() {
-                Ok(pair) => match pair.check() {
+                Ok(pair) => match pair.to_result() {
                     Ok(debug_controller) => {
                         debug_controller.enable_layer();
                         debug_controller.Release();
@@ -233,7 +255,7 @@ impl crate::Instance<Api> for Instance {
             // `CreateDXGIFactory2` if the debug interface is actually available. So
             // we check for whether it exists first.
             match lib_dxgi.get_debug_interface1() {
-                Ok(pair) => match pair.check() {
+                Ok(pair) => match pair.to_result() {
                     Ok(debug_controller) => {
                         debug_controller.destroy();
                         factory_flags |= native::FactoryCreationFlags::DEBUG;
@@ -250,7 +272,7 @@ impl crate::Instance<Api> for Instance {
 
         // Create DXGI factory
         let factory = match lib_dxgi.create_factory2(factory_flags) {
-            Ok(pair) => match pair.check() {
+            Ok(pair) => match pair.to_result() {
                 Ok(factory) => factory,
                 Err(err) => {
                     log::warn!("Failed to create DXGI factory: {}", err);
@@ -289,7 +311,7 @@ impl crate::Instance<Api> for Instance {
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
         // Try to use high performance order by default (returns None on Windows < 1803)
-        let factory6 = match self.factory.cast::<dxgi1_6::IDXGIFactory6>().check() {
+        let factory6 = match self.factory.cast::<dxgi1_6::IDXGIFactory6>().to_result() {
             Ok(f6) => {
                 // It's okay to decrement the refcount here because we
                 // have another reference to the factory already owned by `self`.
@@ -318,7 +340,7 @@ impl crate::Instance<Api> for Instance {
                     if hr == winerror::DXGI_ERROR_NOT_FOUND {
                         break;
                     }
-                    if let Some(err) = hr.to_error() {
+                    if let Err(err) = hr.to_result() {
                         log::error!("Failed enumerating adapters: {}", err);
                         break;
                     }
@@ -334,12 +356,12 @@ impl crate::Instance<Api> for Instance {
                     if hr == winerror::DXGI_ERROR_NOT_FOUND {
                         break;
                     }
-                    if let Some(err) = hr.to_error() {
+                    if let Err(err) = hr.to_result() {
                         log::error!("Failed enumerating adapters: {}", err);
                         break;
                     }
 
-                    match adapter1.cast::<dxgi1_2::IDXGIAdapter2>().check() {
+                    match adapter1.cast::<dxgi1_2::IDXGIAdapter2>().to_result() {
                         Ok(adapter2) => {
                             adapter1.destroy();
                             adapter2
@@ -398,7 +420,7 @@ impl crate::Surface<Api> for Surface {
         let swap_chain = match self.swap_chain.take() {
             Some(sc) => {
                 // can't have image resources in flight used by GPU
-                //device.wait_idle().unwrap();
+                let _ = device.wait_idle();
 
                 let raw = sc.release_resources();
                 let result = raw.ResizeBuffers(
@@ -408,7 +430,7 @@ impl crate::Surface<Api> for Surface {
                     non_srgb_format,
                     flags,
                 );
-                if let Some(err) = result.to_error() {
+                if let Err(err) = result.to_result() {
                     log::error!("ResizeBuffers failed: {}", err);
                     return Err(crate::SurfaceError::Other("window is in use"));
                 }
@@ -443,12 +465,12 @@ impl crate::Surface<Api> for Surface {
                     swap_chain1.mut_void() as *mut *mut _,
                 );
 
-                if let Some(err) = hr.to_error() {
+                if let Err(err) = hr.to_result() {
                     log::error!("SwapChain creation error: {}", err);
                     return Err(crate::SurfaceError::Other("swap chain creation"));
                 }
 
-                match swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>().check() {
+                match swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>().to_result() {
                     Ok(swap_chain3) => {
                         swap_chain1.destroy();
                         swap_chain3
@@ -495,7 +517,7 @@ impl crate::Surface<Api> for Surface {
             let _ = sc.wait(winbase::INFINITE);
             //TODO: this shouldn't be needed,
             // but it complains that the queue is still used otherwise
-            //let _ = device.wait_idle();
+            let _ = device.wait_idle();
             let raw = sc.release_resources();
             raw.destroy();
         }

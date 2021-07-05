@@ -1,4 +1,7 @@
-use winapi::shared::{dxgi1_2, dxgiformat};
+use winapi::{
+    shared::{dxgi1_2, dxgiformat},
+    um::d3d12,
+};
 
 pub(super) fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
     use wgt::TextureFormat as Tf;
@@ -113,4 +116,15 @@ pub fn map_acomposite_alpha_mode(mode: crate::CompositeAlphaMode) -> dxgi1_2::DX
         Cam::PreMultiplied => dxgi1_2::DXGI_ALPHA_MODE_PREMULTIPLIED,
         Cam::PostMultiplied => dxgi1_2::DXGI_ALPHA_MODE_STRAIGHT,
     }
+}
+
+pub fn map_buffer_usage_to_resource_flags(usage: crate::BufferUses) -> d3d12::D3D12_RESOURCE_FLAGS {
+    let mut flags = 0;
+    if usage.contains(crate::BufferUses::STORAGE_STORE) {
+        flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    }
+    if !usage.intersects(crate::BufferUses::UNIFORM | crate::BufferUses::STORAGE_LOAD) {
+        flags |= d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+    }
+    flags
 }
