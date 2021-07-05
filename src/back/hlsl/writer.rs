@@ -188,7 +188,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out)?;
             }
 
-            entry_points_info.push((ep.stage, name))
+            entry_points_info.push(name);
         }
 
         Ok(super::ReflectionInfo {

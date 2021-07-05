@@ -284,8 +284,8 @@ fn write_output_hlsl(
     // This file contains an info about profiles (shader stages) contains inside generated shader
     // This info will be passed to dxc
     let mut config_str = String::from("");
-    for (stage, name) in reflection_info.entry_points.iter() {
-        let stage_str = match stage {
+    for (index, ep) in module.entry_points.iter().enumerate() {
+        let stage_str = match ep.stage {
             naga::ShaderStage::Vertex => "vertex",
             naga::ShaderStage::Fragment => "fragment",
             naga::ShaderStage::Compute => "compute",
@@ -294,9 +294,9 @@ fn write_output_hlsl(
             "{}{}={}\n{}_name={}\n",
             config_str,
             stage_str,
-            options.shader_model.to_profile_string(*stage),
+            options.shader_model.to_profile_string(ep.stage),
             stage_str,
-            name
+            &reflection_info.entry_points[index]
         );
     }
     fs::write(
