@@ -241,6 +241,240 @@ fn unknown_attribute() {
     );
 }
 
+#[test]
+fn unknown_built_in() {
+    check(
+        r#"
+            fn x([[builtin(unknown_built_in)]] y: u32) {}
+        "#,
+        r#"error: unknown builtin: 'unknown_built_in'
+  ┌─ wgsl:2:28
+  │
+2 │             fn x([[builtin(unknown_built_in)]] y: u32) {}
+  │                            ^^^^^^^^^^^^^^^^ unknown builtin
+
+"#
+    );
+}
+
+#[test]
+fn unknown_access() {
+    check(
+        r#"
+            var<storage> x: [[access(unknown_access)]] array<u32>;
+        "#,
+        r#"error: unknown access: 'unknown_access'
+  ┌─ wgsl:2:38
+  │
+2 │             var<storage> x: [[access(unknown_access)]] array<u32>;
+  │                                      ^^^^^^^^^^^^^^ unknown access
+
+"#
+    );
+}
+
+#[test]
+fn unknown_shader_stage() {
+    check(
+        r#"
+            [[stage(geometry)]] fn main() {}
+        "#,
+        r#"error: unknown shader stage: 'geometry'
+  ┌─ wgsl:2:21
+  │
+2 │             [[stage(geometry)]] fn main() {}
+  │                     ^^^^^^^^ unknown shader stage
+
+"#
+    );
+}
+
+#[test]
+fn unknown_ident() {
+    check(
+        r#"
+            fn main() {
+                let a = b;
+            }
+        "#,
+        r#"error: no definition in scope for identifier: 'b'
+  ┌─ wgsl:3:25
+  │
+3 │                 let a = b;
+  │                         ^ unknown identifier
+
+"#
+    );
+}
+
+#[test]
+fn unknown_scalar_type() {
+    check(
+        r#"
+            let a: vec2<something>;
+        "#,
+        r#"error: unknown scalar type: 'something'
+  ┌─ wgsl:2:25
+  │
+2 │             let a: vec2<something>;
+  │                         ^^^^^^^^^ unknown scalar type
+  │
+  = note: Valid scalar types are f16, f32, f64, i8, i16, i32, i64, u8, u16, u32, u64, bool
+
+"#
+    );
+}
+
+#[test]
+fn unknown_type() {
+    check(
+        r#"
+            let a: Vec<f32>;
+        "#,
+        r#"error: unknown type: 'Vec'
+  ┌─ wgsl:2:20
+  │
+2 │             let a: Vec<f32>;
+  │                    ^^^ unknown type
+
+"#
+    );
+}
+
+#[test]
+fn unknown_storage_format() {
+    check(
+        r#"
+            let storage: [[access(read)]] texture_storage_1d<rgba>;
+        "#,
+        r#"error: unknown storage format: 'rgba'
+  ┌─ wgsl:2:62
+  │
+2 │             let storage: [[access(read)]] texture_storage_1d<rgba>;
+  │                                                              ^^^^ unknown storage format
+
+"#
+    );
+}
+
+#[test]
+fn unknown_conservative_depth() {
+    check(
+        r#"
+            [[early_depth_test(abc)]] fn main() {}
+        "#,
+        r#"error: unknown conservative depth: 'abc'
+  ┌─ wgsl:2:32
+  │
+2 │             [[early_depth_test(abc)]] fn main() {}
+  │                                ^^^ unknown conservative depth
+
+"#
+    );
+}
+
+#[test]
+fn zero_array_stride() {
+    check(
+        r#"
+            type zero = [[stride(0)]] array<f32>;
+        "#,
+        r#"error: array stride must not be zero
+  ┌─ wgsl:2:34
+  │
+2 │             type zero = [[stride(0)]] array<f32>;
+  │                                  ^ array stride must not be zero
+
+"#
+    );
+}
+
+#[test]
+fn struct_member_zero_size() {
+    check(
+        r#"
+            struct Bar {
+                [[size(0)]] data: array<f32>;
+            };
+        "#,
+        r#"error: struct member size or alignment must not be 0
+  ┌─ wgsl:3:24
+  │
+3 │                 [[size(0)]] data: array<f32>;
+  │                        ^ struct member size or alignment must not be 0
+
+"#
+    );
+}
+
+#[test]
+fn struct_member_zero_align() {
+    check(
+        r#"
+            struct Bar {
+                [[align(0)]] data: array<f32>;
+            };
+        "#,
+        r#"error: struct member size or alignment must not be 0
+  ┌─ wgsl:3:25
+  │
+3 │                 [[align(0)]] data: array<f32>;
+  │                         ^ struct member size or alignment must not be 0
+
+"#
+    );
+}
+
+#[test]
+fn inconsistent_binding() {
+    check(
+        r#"
+        fn foo([[builtin(vertex_index), location(0)]] x: u32) {}
+        "#,
+        r#"error: input/output binding is not consistent
+  ┌─ wgsl:2:16
+  │
+2 │         fn foo([[builtin(vertex_index), location(0)]] x: u32) {}
+  │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ input/output binding is not consistent
+
+"#
+    );
+}
+
+#[test]
+fn unknown_local_function() {
+    check(
+        r#"
+            fn x() {
+                for (a();;) {}
+            }
+        "#,
+        r#"error: unknown local function `a`
+  ┌─ wgsl:3:22
+  │
+3 │                 for (a();;) {}
+  │                      ^ unknown local function
+
+"#,
+    );
+}
+
+#[test]
+fn let_type_mismatch() {
+    check(
+        r#"
+            let x: i32 = 1.0;
+        "#,
+        r#"error: the type of `x` is expected to be [1]
+  ┌─ wgsl:2:17
+  │
+2 │             let x: i32 = 1.0;
+  │                 ^ definition of `x`
+
+"#,
+    );
+}
+
 macro_rules! check_validation_error {
     // We want to support an optional guard expression after the pattern, so
     // that we can check values we can't match against, like strings.

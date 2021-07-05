@@ -88,84 +88,43 @@ pub enum ExpectedToken<'a> {
     StructAttribute,
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug)]
 pub enum Error<'a> {
-    #[error("")]
     Unexpected(TokenSpan<'a>, ExpectedToken<'a>),
-    #[error("")]
     BadU32(Span, ParseIntError),
-    #[error("")]
     BadI32(Span, ParseIntError),
-    #[error("")]
     BadFloat(Span, ParseFloatError),
-    #[error("")]
     BadU32Constant(Span),
-    #[error("")]
     BadScalarWidth(Span, &'a str),
-    #[error("")]
     BadAccessor(Span),
-    #[error("")]
     BadTexture(Span),
-    #[error("")]
     BadTypeCast {
         span: Span,
         from_type: String,
         to_type: String,
     },
-    #[error("")]
     BadTextureSampleType {
         span: Span,
         kind: crate::ScalarKind,
         width: u8,
     },
-    #[error(transparent)]
     InvalidResolve(ResolveError),
-    #[error("")]
     InvalidForInitializer(Span),
-    #[error("")]
     UnknownStorageClass(Span),
-    #[error("")]
     UnknownAttribute(Span),
-    #[error("unknown scalar kind: `{0}`")]
-    UnknownScalarKind(&'a str),
-    #[error("unknown builtin")]
     UnknownBuiltin(Span),
-    #[error("unknown access: `{0}`")]
-    UnknownAccess(&'a str),
-    #[error("unknown shader stage")]
+    UnknownAccess(Span),
     UnknownShaderStage(Span),
-    #[error("unknown identifier: `{1}`")]
     UnknownIdent(Span, &'a str),
-    #[error("unknown scalar type")]
     UnknownScalarType(Span),
-    #[error("unknown type")]
     UnknownType(Span),
-    #[error("unknown function: `{0}`")]
-    UnknownFunction(&'a str),
-    #[error("unknown storage format")]
     UnknownStorageFormat(Span),
-    #[error("unknown conservative depth")]
     UnknownConservativeDepth(Span),
-    #[error("array stride must not be 0")]
     ZeroStride(Span),
-    #[error("struct member size or alignment must not be 0")]
     ZeroSizeOrAlign(Span),
-    #[error("not a composite type: {0:?}")]
-    NotCompositeType(Handle<crate::Type>),
-    #[error("Input/output binding is not consistent: location {0:?}, built-in {1:?}, interpolation {2:?}, and sampling {3:?}")]
-    InconsistentBinding(
-        Option<u32>,
-        Option<crate::BuiltIn>,
-        Option<crate::Interpolation>,
-        Option<crate::Sampling>,
-    ),
-    #[error("call to local `{0}(..)` can't be resolved")]
-    UnknownLocalFunction(&'a str),
-    #[error("builtin {0:?} is not implemented")]
-    UnimplementedBuiltin(crate::BuiltIn),
-    #[error("expression {0} doesn't match its given type {1:?}")]
-    LetTypeMismatch(&'a str, Handle<crate::Type>),
-    #[error("other error")]
+    InconsistentBinding(Span),
+    UnknownLocalFunction(Span),
+    LetTypeMismatch(Span, Handle<crate::Type>),
     Other,
 }
 
@@ -189,7 +148,7 @@ impl<'a> Error<'a> {
                                 Token::LogicalOperation(c) => format!("logical operation ('{}')", c),
                                 Token::ShiftOperation(c) => format!("bitshift ('{}{}')", c, c),
                                 Token::Arrow => "->".to_string(),
-                                Token::Unknown(c) => format!("unkown ('{}')", c),
+                                Token::Unknown(c) => format!("unknown ('{}')", c),
                                 Token::UnterminatedString => "unterminated string".to_string(),
                                 Token::Trivia => "trivia".to_string(),
                                 Token::End => "end".to_string(),
@@ -297,6 +256,11 @@ impl<'a> Error<'a> {
                     notes: vec![],
                 }
             },
+            Error::InvalidResolve(ref resolve_error) => ParseError {
+                message: resolve_error.to_string(),
+                labels: vec![],
+                notes: vec![],
+            },
             Error::InvalidForInitializer(ref bad_span) => ParseError {
                 message: format!("for(;;) initializer is not an assignment or a function call: '{}'", &source[bad_span.clone()]),
                 labels: vec![(bad_span.clone(), "not an assignment or function call".into())],
@@ -315,6 +279,11 @@ impl<'a> Error<'a> {
             Error::UnknownBuiltin(ref bad_span) => ParseError {
                 message: format!("unknown builtin: '{}'", &source[bad_span.clone()]),
                 labels: vec![(bad_span.clone(), "unknown builtin".into())],
+                notes: vec![],
+            },
+            Error::UnknownAccess(ref bad_span) => ParseError {
+                message: format!("unknown access: '{}'", &source[bad_span.clone()]),
+                labels: vec![(bad_span.clone(), "unknown access".into())],
                 notes: vec![],
             },
             Error::UnknownShaderStage(ref bad_span) => ParseError {
@@ -347,9 +316,23 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span.clone(), "struct member size or alignment must not be 0".into())],
                 notes: vec![],
             },
-
-            ref error => ParseError {
-                message: error.to_string(),
+            Error::InconsistentBinding(ref span) => ParseError {
+                message: "input/output binding is not consistent".to_string(),
+                labels: vec![(span.clone(), "input/output binding is not consistent".into())],
+                notes: vec![],
+            },
+            Error::UnknownLocalFunction(ref span) => ParseError {
+                message: format!("unknown local function `{}`", &source[span.clone()]),
+                labels: vec![(span.clone(), "unknown local function".into())],
+                notes: vec![],
+            },
+            Error::LetTypeMismatch(ref name_span, ref expected_ty) => ParseError {
+                message: format!("the type of `{}` is expected to be {:?}", &source[name_span.clone()], expected_ty),
+                labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                notes: vec![],
+            },
+            Error::Other => ParseError {
+                message: "other error".to_string(),
                 labels: vec![],
                 notes: vec![],
             },
@@ -897,7 +880,7 @@ impl BindingParser {
         Ok(())
     }
 
-    fn finish<'a>(self) -> Result<Option<crate::Binding>, Error<'a>> {
+    fn finish<'a>(self, span: Span) -> Result<Option<crate::Binding>, Error<'a>> {
         match (
             self.location,
             self.built_in,
@@ -917,12 +900,7 @@ impl BindingParser {
                 }))
             }
             (None, Some(bi), None, None) => Ok(Some(crate::Binding::BuiltIn(bi))),
-            (location, built_in, interpolation, sampling) => Err(Error::InconsistentBinding(
-                location,
-                built_in,
-                interpolation,
-                sampling,
-            )),
+            (_, _, _, _) => Err(Error::InconsistentBinding(span)),
         }
     }
 }
@@ -1986,11 +1964,11 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<(&'a str, Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
-        let name = lexer.next_ident()?;
+    ) -> Result<(&'a str, Span, Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
+        let (name, name_span) = lexer.next_ident_with_span()?;
         lexer.expect(Token::Separator(':'))?;
         let (ty, access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
-        Ok((name, ty, access))
+        Ok((name, name_span, ty, access))
     }
 
     fn parse_variable_decl<'a>(
@@ -2040,6 +2018,7 @@ impl Parser {
         lexer.expect(Token::Paren('{'))?;
         loop {
             let (mut size, mut align) = (None, None);
+            let bind_start = lexer.current_byte_offset();
             let mut bind_parser = BindingParser::default();
             if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Attribute);
@@ -2089,6 +2068,8 @@ impl Parser {
                 self.scopes.pop();
             }
 
+            let bind_end = lexer.current_byte_offset();
+
             let name = match lexer.next() {
                 (Token::Word(word), _) => word,
                 (Token::Paren('}'), _) => {
@@ -2110,7 +2091,7 @@ impl Parser {
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
                 ty,
-                binding: bind_parser.finish()?,
+                binding: bind_parser.finish(bind_start..bind_end)?,
                 offset: range.start,
             });
         }
@@ -2453,11 +2434,12 @@ impl Parser {
                 match lexer.next() {
                     (Token::Word("access"), _) => {
                         lexer.expect(Token::Paren('('))?;
-                        attribute.access = match lexer.next_ident()? {
+                        let (ident, span) = lexer.next_ident_with_span()?;
+                        attribute.access = match ident {
                             "read" => crate::StorageAccess::LOAD,
                             "write" => crate::StorageAccess::STORE,
                             "read_write" => crate::StorageAccess::all(),
-                            other => return Err(Error::UnknownAccess(other)),
+                            _ => return Err(Error::UnknownAccess(span)),
                         };
                         lexer.expect(Token::Paren(')'))?;
                     }
@@ -2495,6 +2477,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ident: &'a str,
+        ident_span: Span,
         mut context: ExpressionContext<'a, '_, 'out>,
     ) -> Result<(), Error<'a>> {
         context.emitter.start(context.expressions);
@@ -2511,7 +2494,7 @@ impl Parser {
             None => {
                 let (function, arguments) = self
                     .parse_local_function_call(lexer, ident, context.reborrow())?
-                    .ok_or(Error::UnknownLocalFunction(ident))?;
+                    .ok_or(Error::UnknownLocalFunction(ident_span))?;
                 crate::Statement::Call {
                     function,
                     arguments,
@@ -2533,7 +2516,7 @@ impl Parser {
         block: &'out mut crate::Block,
         is_uniform_control_flow: bool,
     ) -> Result<(), Error<'a>> {
-        let word = match lexer.next() {
+        let (word, word_span) = match lexer.next() {
             (Token::Separator(';'), _) => return Ok(()),
             (Token::Paren('{'), _) => {
                 self.scopes.push(Scope::Block);
@@ -2550,7 +2533,7 @@ impl Parser {
                 block.push(crate::Statement::Block(statements));
                 return Ok(());
             }
-            (Token::Word(word), _) => word,
+            (Token::Word(word), span) => (word, span),
             other => return Err(Error::Unexpected(other, ExpectedToken::Statement)),
         };
 
@@ -2559,7 +2542,7 @@ impl Parser {
         match word {
             "let" => {
                 emitter.start(context.expressions);
-                let name = lexer.next_ident()?;
+                let (name, name_span) = lexer.next_ident_with_span()?;
                 let given_ty = if lexer.skip(Token::Separator(':')) {
                     let (ty, _access) =
                         self.parse_type_decl(lexer, None, context.types, context.constants)?;
@@ -2584,7 +2567,7 @@ impl Parser {
                             given_inner,
                             expr_inner
                         );
-                        return Err(Error::LetTypeMismatch(name, ty));
+                        return Err(Error::LetTypeMismatch(name_span, ty));
                     }
                 }
                 block.extend(emitter.finish(context.expressions));
@@ -2600,7 +2583,7 @@ impl Parser {
                     Variable(Handle<crate::Expression>),
                 }
 
-                let (name, ty, _access) =
+                let (name, _name_span, ty, _access) =
                     self.parse_variable_ident_decl(lexer, context.types, context.constants)?;
 
                 let init = if lexer.skip(Token::Operation('=')) {
@@ -2833,10 +2816,11 @@ impl Parser {
                 if let Token::Word(ident) = lexer.peek().0 {
                     // manually parse the next statement here instead of calling parse_statement
                     // because the statement is not terminated with a semicolon
-                    let _ = lexer.next();
+                    let (_, ident_span) = lexer.next();
                     self.parse_statement_restricted(
                         lexer,
                         ident,
+                        ident_span,
                         context.as_expression(&mut continuing, &mut emitter),
                     )?;
                 }
@@ -2902,6 +2886,7 @@ impl Parser {
                 self.parse_statement_restricted(
                     lexer,
                     ident,
+                    word_span,
                     context.as_expression(block, &mut emitter),
                 )?;
                 lexer.expect(Token::Separator(';'))?;
@@ -2936,6 +2921,8 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
     ) -> Result<Option<crate::Binding>, Error<'a>> {
+        let start = lexer.current_byte_offset();
+
         if !lexer.skip(Token::DoubleParen('[')) {
             return Ok(None);
         }
@@ -2953,8 +2940,11 @@ impl Parser {
                 other => return Err(Error::Unexpected(other, ExpectedToken::AttributeSeparator)),
             }
         }
+
+        let end = lexer.current_byte_offset();
+
         self.scopes.pop();
-        bind_parser.finish()
+        bind_parser.finish(start..end)
     }
 
     fn parse_function_decl<'a>(
@@ -2985,7 +2975,7 @@ impl Parser {
                 ));
             }
             let binding = self.parse_varying_binding(lexer)?;
-            let (param_name, param_type, _access) =
+            let (param_name, _param_name_span, param_type, _access) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
             let param_index = arguments.len() as u32;
             let expression_token =
@@ -3170,7 +3160,7 @@ impl Parser {
                 lexer.expect(Token::Separator(';'))?;
             }
             (Token::Word("let"), _) => {
-                let (name, explicit_ty, _access) = self.parse_variable_ident_decl(
+                let (name, name_span, explicit_ty, _access) = self.parse_variable_ident_decl(
                     lexer,
                     &mut module.types,
                     &mut module.constants,
@@ -3196,7 +3186,7 @@ impl Parser {
                     crate::ConstantInner::Composite { ty, components: _ } => ty == explicit_ty,
                 };
                 if !type_match {
-                    return Err(Error::LetTypeMismatch(name, explicit_ty));
+                    return Err(Error::LetTypeMismatch(name_span, explicit_ty));
                 }
                 //TODO: check `ty` against `const_handle`.
                 lexer.expect(Token::Separator(';'))?;

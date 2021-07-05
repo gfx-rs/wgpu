@@ -241,7 +241,7 @@ impl super::Validator {
                 // the type of an `AccessIndex` expression referring to a
                 // dynamically sized array appearing as the final member of a
                 // top-level `Struct`. But such pointers cannot be passed to
-                // functions, stored in varibles, etc. So, we mark them as not
+                // functions, stored in variables, etc. So, we mark them as not
                 // `DATA`.
                 let base_info = &self.types[base.index()];
                 let data_flag = if base_info.flags.contains(TypeFlags::SIZED) {

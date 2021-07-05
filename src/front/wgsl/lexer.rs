@@ -197,7 +197,7 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    fn current_byte_offset(&self) -> usize {
+    pub(super) fn current_byte_offset(&self) -> usize {
         self.source.len() - self.input.len()
     }
 
