@@ -110,9 +110,9 @@ impl Instance {
             #[cfg(metal)]
             metal: init::<hal::api::Metal>(backends),
             #[cfg(dx12)]
-            dx12: init(Backend::Dx12, backends),
+            dx12: init::<hal::api::Dx12>(backends),
             #[cfg(dx11)]
-            dx11: init(Backend::Dx11, backends),
+            dx11: init::<hal::api::Dx11>(backends),
             #[cfg(gl)]
             gl: init::<hal::api::Gles>(backends),
         }

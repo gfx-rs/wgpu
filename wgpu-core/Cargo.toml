@@ -57,7 +57,7 @@ hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["metal"] }
 hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan", "gles"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan", "dx12"] }
 
 [build-dependencies]
 cfg_aliases = "0.1"

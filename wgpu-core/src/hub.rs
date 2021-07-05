@@ -957,7 +957,6 @@ impl HalApi for hal::api::Metal {
     }
 }
 
-/*
 #[cfg(dx12)]
 impl HalApi for hal::api::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
@@ -969,6 +968,7 @@ impl HalApi for hal::api::Dx12 {
     }
 }
 
+/*
 #[cfg(dx11)]
 impl HalApi for hal::api::Dx11 {
     const VARIANT: Backend = Backend::Dx11;

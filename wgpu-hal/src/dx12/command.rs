@@ -1,7 +1,7 @@
 use super::Resource;
 use std::ops::Range;
 
-impl crate::CommandEncoder<super::Api> for super::Encoder {
+impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         Ok(())
     }

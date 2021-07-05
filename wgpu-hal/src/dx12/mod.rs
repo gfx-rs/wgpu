@@ -22,7 +22,6 @@ use winapi::{
 #[derive(Clone)]
 pub struct Api;
 //TODO: remove these temporaries
-pub struct Encoder;
 #[derive(Debug)]
 pub struct Resource;
 
@@ -33,7 +32,7 @@ impl crate::Api for Api {
     type Device = Device;
 
     type Queue = Queue;
-    type CommandEncoder = Encoder;
+    type CommandEncoder = CommandEncoder;
     type CommandBuffer = Resource;
 
     type Buffer = Buffer;
@@ -226,6 +225,8 @@ pub struct Buffer {
 
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
+
+pub struct CommandEncoder {}
 
 impl crate::Instance<Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {

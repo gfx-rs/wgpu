@@ -7,7 +7,7 @@ use winapi::{
 };
 
 //TODO: remove this
-use super::{Encoder, Resource};
+use super::Resource;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -142,10 +142,10 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<super::Api>,
-    ) -> DeviceResult<Encoder> {
-        Ok(Encoder)
+    ) -> Result<super::CommandEncoder, crate::DeviceError> {
+        Ok(super::CommandEncoder {})
     }
-    unsafe fn destroy_command_encoder(&self, encoder: Encoder) {}
+    unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
