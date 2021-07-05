@@ -1,4 +1,4 @@
-use winapi::shared::dxgiformat;
+use winapi::shared::{dxgi1_2, dxgiformat};
 
 pub(super) fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
     use wgt::TextureFormat as Tf;
@@ -93,5 +93,24 @@ pub(super) fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI
         | Tf::Astc12x10RgbaUnormSrgb
         | Tf::Astc12x12RgbaUnorm
         | Tf::Astc12x12RgbaUnormSrgb => unreachable!(),
+    }
+}
+
+pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
+    // NOTE: DXGI doesn't allow sRGB format on the swapchain, but
+    //       creating RTV of swapchain buffers with sRGB works
+    match format {
+        wgt::TextureFormat::Bgra8UnormSrgb => dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM,
+        wgt::TextureFormat::Rgba8UnormSrgb => dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM,
+        _ => map_texture_format(format),
+    }
+}
+
+pub fn map_acomposite_alpha_mode(mode: crate::CompositeAlphaMode) -> dxgi1_2::DXGI_ALPHA_MODE {
+    use crate::CompositeAlphaMode as Cam;
+    match mode {
+        Cam::Opaque => dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
+        Cam::PreMultiplied => dxgi1_2::DXGI_ALPHA_MODE_PREMULTIPLIED,
+        Cam::PostMultiplied => dxgi1_2::DXGI_ALPHA_MODE_STRAIGHT,
     }
 }

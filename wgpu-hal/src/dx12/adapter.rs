@@ -244,7 +244,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             })?;
 
         Ok(crate::OpenDevice {
-            device: super::Device { raw: self.device },
+            device: super::Device {
+                raw: self.device,
+                present_queue: queue,
+            },
             queue: super::Queue { raw: queue },
         })
     }
@@ -371,7 +374,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | crate::TextureUses::COPY_SRC
                 | crate::TextureUses::COPY_DST,
             present_modes,
-            composite_alpha_modes: vec![crate::CompositeAlphaMode::Opaque],
+            composite_alpha_modes: vec![
+                crate::CompositeAlphaMode::Opaque,
+                crate::CompositeAlphaMode::PreMultiplied,
+                crate::CompositeAlphaMode::PostMultiplied,
+            ],
         })
     }
 }
