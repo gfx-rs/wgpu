@@ -1,6 +1,6 @@
 struct VertexOutput {
     float4 position : SV_Position;
-    float varying : LOC1;
+    linear float varying : LOC1;
 };
 
 struct FragmentOutput {

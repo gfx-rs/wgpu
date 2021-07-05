@@ -362,7 +362,7 @@ fn convert_wgsl() {
         ),
         (
             "interpolate",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         (

@@ -1,7 +1,7 @@
 static const float c_scale = 1.2;
 
 struct VertexOutput {
-    float2 uv : LOC0;
+    linear float2 uv : LOC0;
     float4 position : SV_Position;
 };
 

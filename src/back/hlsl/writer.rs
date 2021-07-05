@@ -49,7 +49,7 @@ impl<'a, W: Write> Writer<'a, W> {
             names: crate::FastHashMap::default(),
             namer: proc::Namer::default(),
             options,
-            ep_inputs: Vec::with_capacity(3),
+            ep_inputs: Vec::new(),
             named_expressions: crate::NamedExpressions::default(),
         }
     }
@@ -139,8 +139,8 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Write all entry points wrapped structs
-        for (index, ep) in module.entry_points.iter().enumerate() {
-            self.write_ep_input_struct(module, &ep.function, ep.stage, &ep.name, index)?;
+        for ep in module.entry_points.iter() {
+            self.write_ep_input_struct(module, &ep.function, ep.stage, &ep.name)?;
         }
 
         // Write all regular functions
@@ -196,7 +196,7 @@ impl<'a, W: Write> Writer<'a, W> {
         })
     }
 
-    fn write_binding(
+    fn write_semantic(
         &mut self,
         binding: &crate::Binding,
         stage: Option<ShaderStage>,
@@ -224,7 +224,6 @@ impl<'a, W: Write> Writer<'a, W> {
         func: &crate::Function,
         stage: ShaderStage,
         entry_point_name: &str,
-        index: usize,
     ) -> BackendResult {
         if !func.arguments.is_empty() {
             let struct_name_prefix = match stage {
@@ -255,7 +254,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_type(module, member.ty)?;
                 write!(self.out, " {}", &member.name)?;
                 if let Some(ref binding) = member.binding {
-                    self.write_binding(binding, Some(stage), Some(false))?;
+                    self.write_semantic(binding, Some(stage), Some(false))?;
                 }
                 write!(self.out, ";")?;
                 writeln!(self.out)?;
@@ -272,7 +271,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 members,
             };
 
-            self.ep_inputs.insert(index, Some(ep_input));
+            self.ep_inputs.push(Some(ep_input));
+        } else {
+            self.ep_inputs.push(None);
         }
 
         Ok(())
@@ -288,6 +289,10 @@ impl<'a, W: Write> Writer<'a, W> {
     ) -> BackendResult {
         let global = &module.global_variables[handle];
         let inner = &module.types[global.ty].inner;
+
+        if let Some(storage_access) = storage_access(global.storage_access) {
+            write!(self.out, "{} ", storage_access)?;
+        }
 
         let (storage_class, register_ty) = match *inner {
             TypeInner::Image { .. } => ("", "t"),
@@ -311,9 +316,11 @@ impl<'a, W: Write> Writer<'a, W> {
         if let Some(ref binding) = global.binding {
             writeln!(self.out, " : register({}{});", register_ty, binding.binding)?;
         } else {
+            write!(self.out, " = ")?;
             if let Some(init) = global.init {
-                write!(self.out, " = ")?;
                 self.write_constant(module, init)?;
+            } else {
+                self.write_default_init(module, global.ty)?;
             }
             writeln!(self.out, ";")?;
         }
@@ -441,6 +448,24 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_array_size(module, size)?;
                 }
                 _ => {
+                    // Write interpolation modifier before type
+                    if let Some(crate::Binding::Location {
+                        interpolation,
+                        sampling,
+                        ..
+                    }) = member.binding
+                    {
+                        if let Some(interpolation) = interpolation {
+                            write!(self.out, "{} ", interpolation_str(interpolation))?
+                        }
+
+                        if let Some(sampling) = sampling {
+                            if let Some(str) = sampling_str(sampling) {
+                                write!(self.out, "{} ", str)?
+                            }
+                        }
+                    }
+
                     // Write the member type and name
                     self.write_type(module, member.ty)?;
                     write!(
@@ -452,7 +477,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
 
             if let Some(ref binding) = member.binding {
-                self.write_binding(binding, shader_stage, out)?;
+                self.write_semantic(binding, shader_stage, out)?;
             };
             write!(self.out, ";")?;
             writeln!(self.out)?;
@@ -623,16 +648,8 @@ impl<'a, W: Write> Writer<'a, W> {
         };
         if let Some(ref result) = func.result {
             if let Some(ref binding) = result.binding {
-                match *binding {
-                    crate::Binding::BuiltIn(builtin) => {
-                        write!(self.out, " : {}", builtin_str(builtin))?;
-                    }
-                    crate::Binding::Location { location, .. } => {
-                        if stage == Some(ShaderStage::Fragment) {
-                            write!(self.out, " : SV_Target{}", location)?;
-                        }
-                    }
-                }
+                let output = stage.is_some();
+                self.write_semantic(binding, stage, Some(output))?;
             }
         }
 
@@ -649,15 +666,18 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_type(module, local.ty)?;
             write!(self.out, " {}", self.names[&func_ctx.name_key(handle)])?;
 
+            write!(self.out, " = ")?;
             // Write the local initializer if needed
             if let Some(init) = local.init {
                 // Put the equal signal only if there's a initializer
                 // The leading and trailing spaces aren't needed but help with readability
-                write!(self.out, " = ")?;
 
                 // Write the constant
                 // `write_constant` adds no trailing or leading space/newline
                 self.write_constant(module, init)?;
+            } else {
+                // Zero initialize local variables
+                self.write_default_init(module, local.ty)?;
             }
 
             // Finish the local with `;` and add a newline (only for readability)
@@ -783,7 +803,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         variable_name
                     )?;
                     self.write_expr(module, expr, func_ctx)?;
-                    writeln!(self.out)?;
+                    writeln!(self.out, ";")?;
                     writeln!(
                         self.out,
                         "{}return {};",
@@ -904,7 +924,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                 }
                 if is_struct {
-                    write!(self.out, " }};")?
+                    write!(self.out, " }}")?
                 } else {
                     write!(self.out, ")")?
                 }
@@ -993,7 +1013,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 level: _,       // TODO:
                 depth_ref: _,   // TODO:
             } => {
-                // TODO: others
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ".Sample(")?;
                 self.write_expr(module, sampler, func_ctx)?;
@@ -1331,6 +1350,15 @@ impl<'a, W: Write> Writer<'a, W> {
 
         Ok(())
     }
+
+    /// Helper function that write default zero initialization
+    fn write_default_init(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
+        write!(self.out, "(")?;
+        self.write_type(module, ty)?;
+        write!(self.out, ")0")?;
+
+        Ok(())
+    }
 }
 
 fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
@@ -1386,5 +1414,45 @@ fn scalar_kind_str(kind: crate::ScalarKind, width: crate::Bytes) -> Result<&'sta
             _ => Err(Error::UnsupportedScalar(kind, width)),
         },
         Sk::Bool => Ok("bool"),
+    }
+}
+
+fn storage_access(storage_access: crate::StorageAccess) -> Option<&'static str> {
+    if storage_access == crate::StorageAccess::LOAD {
+        Some("ByteAddressBuffer")
+    } else if storage_access.is_all() {
+        Some("RWByteAddressBuffer")
+    } else {
+        None
+    }
+}
+
+fn number_of_components(vector_size: crate::VectorSize) -> usize {
+    match vector_size {
+        crate::VectorSize::Bi => 2,
+        crate::VectorSize::Tri => 3,
+        crate::VectorSize::Quad => 4,
+    }
+}
+
+/// Helper function that returns the string corresponding to the HLSL interpolation qualifier
+fn interpolation_str(interpolation: crate::Interpolation) -> &'static str {
+    use crate::Interpolation as I;
+
+    match interpolation {
+        I::Perspective => "linear",
+        I::Linear => "noperspective",
+        I::Flat => "nointerpolation",
+    }
+}
+
+/// Return the HLSL auxiliary qualifier for the given sampling value.
+fn sampling_str(sampling: crate::Sampling) -> Option<&'static str> {
+    use crate::Sampling as S;
+
+    match sampling {
+        S::Center => None,
+        S::Centroid => Some("centroid"),
+        S::Sample => Some("sample"),
     }
 }
