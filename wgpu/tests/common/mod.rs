@@ -75,7 +75,7 @@ pub struct FailureCase {
     backends: Option<wgpu::Backends>,
     vendor: Option<usize>,
     adapter: Option<String>,
-    segfault: bool,
+    skip: bool,
 }
 
 // This information determines if a test should run.
@@ -137,7 +137,7 @@ impl TestParameters {
             backends: None,
             vendor: None,
             adapter: None,
-            segfault: false,
+            skip: false,
         });
         self
     }
@@ -148,7 +148,7 @@ impl TestParameters {
             backends: Some(backends),
             vendor: None,
             adapter: None,
-            segfault: false,
+            skip: false,
         });
         self
     }
@@ -165,13 +165,13 @@ impl TestParameters {
         backends: Option<Backends>,
         vendor: Option<usize>,
         device: Option<&'static str>,
-        segfault: bool,
+        skip: bool,
     ) -> Self {
         self.failures.push(FailureCase {
             backends,
             vendor,
             adapter: device.as_ref().map(AsRef::as_ref).map(str::to_lowercase),
-            segfault,
+            skip,
         });
         self
     }
@@ -257,7 +257,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
             && expect_failure_adapter.unwrap_or(true)
         {
             if always {
-                Some((FailureReasons::ALWAYS, failure.segfault))
+                Some((FailureReasons::ALWAYS, failure.skip))
             } else {
                 let mut reason = FailureReasons::empty();
                 reason.set(
@@ -272,7 +272,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
                     FailureReasons::ADAPTER,
                     expect_failure_adapter.unwrap_or(false),
                 );
-                Some((reason, failure.segfault))
+                Some((reason, failure.skip))
             }
         } else {
             None
@@ -280,10 +280,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     });
 
     if let Some((reason, true)) = failure_reason {
-        println!(
-            "EXPECTED TEST FAILURE SKIPPED DUE TO SEGFAULT: {:?}",
-            reason
-        );
+        println!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
         return;
     }
 
@@ -297,7 +294,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
             // Print out reason for the failure
             println!("GOT EXPECTED TEST FAILURE: {:?}", reason);
         }
-    } else if let Some(reason) = failure_reason {
+    } else if let Some((reason, _)) = failure_reason {
         // We expected to fail, but things passed
         panic!("UNEXPECTED TEST PASS: {:?}", reason);
     } else {
