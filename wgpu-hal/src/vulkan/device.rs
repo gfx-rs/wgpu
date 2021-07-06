@@ -169,13 +169,13 @@ impl super::DeviceShared {
                     .attachments
                     .iter()
                     .map(|at| at.raw)
-                    .collect::<ArrayVec<[_; super::MAX_TOTAL_ATTACHMENTS]>>();
+                    .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
                 let vk_view_formats = e
                     .key()
                     .attachments
                     .iter()
                     .map(|at| self.private_caps.map_texture_format(at.view_format))
-                    .collect::<ArrayVec<[_; super::MAX_TOTAL_ATTACHMENTS]>>();
+                    .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
                 let vk_image_infos = e
                     .key()
                     .attachments
@@ -191,7 +191,7 @@ impl super::DeviceShared {
                             .view_formats(&vk_view_formats[i..i + 1])
                             .build()
                     })
-                    .collect::<ArrayVec<[_; super::MAX_TOTAL_ATTACHMENTS]>>();
+                    .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
 
                 let mut vk_attachment_info = vk::FramebufferAttachmentsCreateInfo::builder()
                     .attachment_image_infos(&vk_image_infos)
@@ -377,7 +377,7 @@ impl
                 ty,
                 descriptor_count: count,
             })
-            .collect::<ArrayVec<[_; 8]>>();
+            .collect::<ArrayVec<_, 8>>();
 
         let mut vk_flags = vk::DescriptorPoolCreateFlags::empty();
         if flags.contains(gpu_descriptor::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
@@ -1121,7 +1121,7 @@ impl crate::Device<super::Api> for super::Device {
             sample_count: desc.multisample.count,
             ..Default::default()
         };
-        let mut stages = ArrayVec::<[_; 2]>::new();
+        let mut stages = ArrayVec::<_, 2>::new();
         let mut vertex_buffers = Vec::with_capacity(desc.vertex_buffers.len());
         let mut vertex_attributes = Vec::new();
 

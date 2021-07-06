@@ -195,7 +195,7 @@ struct DepthStencilAttachmentKey {
 
 #[derive(Clone, Eq, Default, Hash, PartialEq)]
 struct RenderPassKey {
-    colors: ArrayVec<[ColorAttachmentKey; crate::MAX_COLOR_TARGETS]>,
+    colors: ArrayVec<ColorAttachmentKey, { crate::MAX_COLOR_TARGETS }>,
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
 }
@@ -211,7 +211,7 @@ struct FramebufferAttachment {
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {
-    attachments: ArrayVec<[FramebufferAttachment; MAX_TOTAL_ATTACHMENTS]>,
+    attachments: ArrayVec<FramebufferAttachment, { MAX_TOTAL_ATTACHMENTS }>,
     extent: wgt::Extent3d,
     sample_count: u32,
 }

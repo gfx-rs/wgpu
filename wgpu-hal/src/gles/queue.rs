@@ -576,7 +576,7 @@ impl super::Queue {
             C::SetDrawColorBuffers(count) => {
                 let indices = (0..count as u32)
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
-                    .collect::<ArrayVec<[_; crate::MAX_COLOR_TARGETS]>>();
+                    .collect::<ArrayVec<_, { crate::MAX_COLOR_TARGETS }>>();
                 gl.draw_buffers(&indices);
                 for draw_buffer in 0..count as u32 {
                     gl.disable_draw_buffer(glow::BLEND, draw_buffer);

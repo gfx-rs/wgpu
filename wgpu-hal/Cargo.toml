@@ -25,7 +25,7 @@ thiserror = "1"
 wgt = { package = "wgpu-types", path = "../wgpu-types" }
 
 # backends common
-arrayvec = "0.5"
+arrayvec = "0.7"
 fxhash = "0.2.1"
 log = "0.4"
 # backend: Metal

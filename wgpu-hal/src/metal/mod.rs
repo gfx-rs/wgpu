@@ -504,7 +504,7 @@ struct PushConstantsInfo {
 #[derive(Debug)]
 pub struct PipelineLayout {
     naga_options: naga::back::msl::Options,
-    bind_group_infos: ArrayVec<[BindGroupLayoutInfo; crate::MAX_BIND_GROUPS]>,
+    bind_group_infos: ArrayVec<BindGroupLayoutInfo, { crate::MAX_BIND_GROUPS }>,
     push_constants_infos: MultiStageData<Option<PushConstantsInfo>>,
     total_counters: MultiStageResourceCounters,
 }

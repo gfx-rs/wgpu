@@ -45,8 +45,8 @@ pub enum HostMap {
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
-    pub colors: ArrayVec<[T; hal::MAX_COLOR_TARGETS]>,
-    pub resolves: ArrayVec<[T; hal::MAX_COLOR_TARGETS]>,
+    pub colors: ArrayVec<T, { hal::MAX_COLOR_TARGETS }>,
+    pub resolves: ArrayVec<T, { hal::MAX_COLOR_TARGETS }>,
     pub depth_stencil: Option<T>,
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
@@ -70,8 +70,8 @@ pub(crate) struct RenderPassContext {
 pub enum RenderPassCompatibilityError {
     #[error("Incompatible color attachment: {0:?} != {1:?}")]
     IncompatibleColorAttachment(
-        ArrayVec<[TextureFormat; hal::MAX_COLOR_TARGETS]>,
-        ArrayVec<[TextureFormat; hal::MAX_COLOR_TARGETS]>,
+        ArrayVec<TextureFormat, { hal::MAX_COLOR_TARGETS }>,
+        ArrayVec<TextureFormat, { hal::MAX_COLOR_TARGETS }>,
     ),
     #[error("Incompatible depth-stencil attachment: {0:?} != {1:?}")]
     IncompatibleDepthStencilAttachment(Option<TextureFormat>, Option<TextureFormat>),
@@ -962,7 +962,7 @@ impl<A: HalApi> Device<A> {
     fn get_introspection_bind_group_layouts<'a>(
         pipeline_layout: &binding_model::PipelineLayout<A>,
         bgl_guard: &'a Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
-    ) -> ArrayVec<[&'a binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]> {
+    ) -> ArrayVec<&'a binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }> {
         pipeline_layout
             .bind_group_layout_ids
             .iter()
@@ -1690,7 +1690,7 @@ impl<A: HalApi> Device<A> {
         &self,
         self_id: id::DeviceId,
         implicit_context: Option<ImplicitPipelineContext>,
-        mut derived_group_layouts: ArrayVec<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>,
+        mut derived_group_layouts: ArrayVec<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>,
         bgl_guard: &mut Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
         pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<A>, id::PipelineLayoutId>,
     ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
@@ -1757,7 +1757,7 @@ impl<A: HalApi> Device<A> {
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
 
         let mut derived_group_layouts =
-            ArrayVec::<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>::new();
+            ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();
 
         let io = validation::StageIo::default();
         let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
@@ -1869,7 +1869,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let mut derived_group_layouts =
-            ArrayVec::<[binding_model::BindEntryMap; hal::MAX_BIND_GROUPS]>::new();
+            ArrayVec::<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>::new();
 
         let color_targets = desc
             .fragment
@@ -2446,7 +2446,7 @@ pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImplicitPipelineContext {
     pub root_id: id::PipelineLayoutId,
-    pub group_ids: ArrayVec<[id::BindGroupLayoutId; hal::MAX_BIND_GROUPS]>,
+    pub group_ids: ArrayVec<id::BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,
 }
 
 pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
