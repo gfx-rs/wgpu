@@ -728,11 +728,31 @@ impl<A: HalApi> Device<A> {
             });
         }
 
+        // filter the usages based on the other criteria
+        let usage = {
+            let mask_copy = !(hal::TextureUses::COPY_SRC | hal::TextureUses::COPY_DST);
+            let mask_dimension = match view_dim {
+                wgt::TextureViewDimension::Cube |
+                wgt::TextureViewDimension::CubeArray => hal::TextureUses::SAMPLED,
+                wgt::TextureViewDimension::D3 => {
+                    hal::TextureUses::SAMPLED | hal::TextureUses::STORAGE_LOAD | hal::TextureUses::STORAGE_STORE
+                }
+                _ => hal::TextureUses::all(),
+            };
+            let mask_mip_level = if end_layer != desc.range.base_array_layer + 1 {
+                hal::TextureUses::SAMPLED
+            } else {
+                hal::TextureUses::all()
+            };
+            texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
+        };
+
+        log::debug!("Create view for texture {:?} filters usages to {:?}", texture_id, usage);
         let hal_desc = hal::TextureViewDescriptor {
             label: desc.label.borrow_option(),
             format,
             dimension: view_dim,
-            usage: texture.hal_usage, // pass-through
+            usage,
             range: desc.range.clone(),
         };
 

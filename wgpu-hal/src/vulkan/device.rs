@@ -725,7 +725,7 @@ impl crate::Device<super::Api> for super::Device {
             .subresource_range(conv::map_subresource_range(&desc.range, texture.aspects));
 
         let mut image_view_info;
-        if self.shared.private_caps.image_view_usage {
+        if self.shared.private_caps.image_view_usage && !desc.usage.is_empty() {
             image_view_info = vk::ImageViewUsageCreateInfo::builder()
                 .usage(conv::map_texture_usage(desc.usage))
                 .build();
