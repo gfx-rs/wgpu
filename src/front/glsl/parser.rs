@@ -1118,14 +1118,48 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             TokenValue::TypeName(_) => {
                 let Token { value, mut meta } = self.bump()?;
 
-                let handle = if let TokenValue::TypeName(ty) = value {
+                let mut handle = if let TokenValue::TypeName(ty) = value {
                     self.program.module.types.fetch_or_append(ty)
                 } else {
                     unreachable!()
                 };
 
+                let maybe_size = self.parse_array_specifier()?;
+
                 self.expect(TokenValue::LeftParen)?;
                 let args = self.parse_function_call_args(ctx, body, &mut meta)?;
+
+                if let Some(array_size) = maybe_size {
+                    let stride = self.program.module.types[handle]
+                        .inner
+                        .span(&self.program.module.constants);
+
+                    let size = match array_size {
+                        ArraySize::Constant(size) => ArraySize::Constant(size),
+                        ArraySize::Dynamic => {
+                            let constant =
+                                self.program.module.constants.fetch_or_append(Constant {
+                                    name: None,
+                                    specialization: None,
+                                    inner: ConstantInner::Scalar {
+                                        width: 4,
+                                        value: ScalarValue::Sint(args.len() as i64),
+                                    },
+                                });
+
+                            ArraySize::Constant(constant)
+                        }
+                    };
+
+                    handle = self.program.module.types.fetch_or_append(Type {
+                        name: None,
+                        inner: TypeInner::Array {
+                            base: handle,
+                            size,
+                            stride,
+                        },
+                    })
+                }
 
                 ctx.hir_exprs.append(HirExpr {
                     kind: HirExprKind::Call(FunctionCall {
