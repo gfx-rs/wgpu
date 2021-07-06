@@ -14,8 +14,8 @@ var r_data: Data;
 [[stage(vertex)]]
 fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
     // hacky way to draw a large triangle
-    var tmp1: i32 = i32(vertex_index) / 2;
-    var tmp2: i32 = i32(vertex_index) & 1;
+    var tmp1 = i32(vertex_index) / 2;
+    var tmp2 = i32(vertex_index) & 1;
     let pos = vec4<f32>(
         f32(tmp1) * 4.0 - 1.0,
         f32(tmp2) * 4.0 - 1.0,

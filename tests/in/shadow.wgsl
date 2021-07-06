@@ -43,7 +43,7 @@ fn fs_main(
 ) -> [[location(0)]] vec4<f32> {
     let normal: vec3<f32> = normalize(raw_normal);
     // accumulate color
-    var color: vec3<f32> = c_ambient;
+    var color = c_ambient;
     var i: u32 = 0u;
     loop {
         if (i >= min(u_globals.num_lights.x, c_max_lights)) {

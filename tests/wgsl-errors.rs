@@ -475,6 +475,42 @@ fn let_type_mismatch() {
     );
 }
 
+#[test]
+fn local_var_type_mismatch() {
+    check(
+        r#"
+            fn foo() {
+                var x: f32 = 1;
+            }
+        "#,
+        r#"error: the type of `x` is expected to be [1]
+  ┌─ wgsl:3:21
+  │
+3 │                 var x: f32 = 1;
+  │                     ^ definition of `x`
+
+"#,
+    );
+}
+
+#[test]
+fn local_var_missing_type() {
+    check(
+        r#"
+            fn foo() {
+                var x;
+            }
+        "#,
+        r#"error: variable `x` needs a type
+  ┌─ wgsl:3:21
+  │
+3 │                 var x;
+  │                     ^ definition of `x`
+
+"#,
+    );
+}
+
 macro_rules! check_validation_error {
     // We want to support an optional guard expression after the pattern, so
     // that we can check values we can't match against, like strings.
