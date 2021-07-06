@@ -268,6 +268,14 @@ enum Dimension {
     Matrix,
 }
 
+/// A map from evaluated [`Expression`s] to their SPIR-V ids.
+///
+/// When we emit code to evaluate a given `Expression`, we record the
+/// SPIR-V id of its value here, under its `Handle<Expression>` index.
+///
+/// A `CachedExpressions` value can be indexed by a `Handle<Expression>` value.
+///
+/// [emit]: index.html#expression-evaluation-time-and-scope
 #[derive(Default)]
 struct CachedExpressions {
     ids: Vec<Word>,
@@ -338,6 +346,9 @@ struct BlockContext<'w> {
     /// The [`back::spv::Function`] to which we are contributing SPIR-V instructions.
     function: &'w mut Function,
 
+    /// SPIR-V ids for expressions we've evaluated.
+    cached: CachedExpressions,
+
     /// The `Writer`'s temporary vector, for convenience.
     temp_list: Vec<Word>,
 }
@@ -357,7 +368,7 @@ impl BlockContext<'_> {
     }
 
     fn cached(&self, expression: Handle<crate::Expression>) -> Word {
-        self.writer.cached[expression]
+        self.cached[expression]
     }
 }
 
@@ -386,7 +397,11 @@ pub struct Writer {
     constant_ids: Vec<Word>,
     cached_constants: crate::FastHashMap<(crate::ScalarValue, crate::Bytes), Word>,
     global_variables: Vec<GlobalVariable>,
-    cached: CachedExpressions,
+
+    // Cached expressions are only meaningful within a BlockContext, but we
+    // retain the table here between functions to save heap allocations.
+    saved_cached: CachedExpressions,
+
     gl450_ext_inst_id: Word,
     // Just a temporary list of SPIR-V ids
     temp_list: Vec<Word>,

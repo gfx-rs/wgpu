@@ -82,7 +82,7 @@ impl Writer {
             constant_ids: Vec::new(),
             cached_constants: crate::FastHashMap::default(),
             global_variables: Vec::new(),
-            cached: CachedExpressions::default(),
+            saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
             temp_list: Vec::new(),
         })
@@ -131,7 +131,7 @@ impl Writer {
             constant_ids: take(&mut self.constant_ids).recycle(),
             cached_constants: take(&mut self.cached_constants).recycle(),
             global_variables: take(&mut self.global_variables).recycle(),
-            cached: take(&mut self.cached).recycle(),
+            saved_cached: take(&mut self.saved_cached).recycle(),
             temp_list: take(&mut self.temp_list).recycle(),
         };
 
@@ -429,13 +429,16 @@ impl Writer {
             ir_function,
             fun_info: info,
             function: &mut function,
+            // Re-use the cached expression table from prior functions.
+            cached: std::mem::take(&mut self.saved_cached),
+
             // Steal the Writer's temp list for a bit.
             temp_list: std::mem::take(&mut self.temp_list),
             writer: self,
         };
 
         // fill up the pre-emitted expressions
-        context.writer.cached.reset(ir_function.expressions.len());
+        context.cached.reset(ir_function.expressions.len());
         for (handle, expr) in ir_function.expressions.iter() {
             if expr.needs_pre_emit() {
                 context.cache_expression_value(handle, &mut prelude)?;
@@ -449,8 +452,11 @@ impl Writer {
         context.write_block(main_id, &ir_function.body, None, LoopContext::default())?;
 
         // Consume the `BlockContext`, ending its borrows and letting the
-        // `Writer` steal back its temp_list.
-        let BlockContext { temp_list, .. } = context;
+        // `Writer` steal back its cached expression table and temp_list.
+        let BlockContext {
+            cached, temp_list, ..
+        } = context;
+        self.saved_cached = cached;
         self.temp_list = temp_list;
 
         function.to_words(&mut self.logical_layout.function_definitions);

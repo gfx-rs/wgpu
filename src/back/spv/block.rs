@@ -197,7 +197,7 @@ impl<'w> BlockContext<'w> {
 
             // The chain rule: if this `Access...`'s `base` operand was
             // previously omitted, then omit this one, too.
-            _ => self.writer.cached.ids[expr_handle.index()] == 0,
+            _ => self.cached.ids[expr_handle.index()] == 0,
         }
     }
 
@@ -1150,7 +1150,7 @@ impl<'w> BlockContext<'w> {
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
         };
 
-        self.writer.cached[expr_handle] = id;
+        self.cached[expr_handle] = id;
         Ok(())
     }
 
@@ -1578,7 +1578,7 @@ impl<'w> BlockContext<'w> {
 
                     let type_id = match result {
                         Some(expr) => {
-                            self.writer.cached[expr] = id;
+                            self.cached[expr] = id;
                             self.writer.lookup_function_call.insert(expr, id);
                             let ty_handle = self.ir_module.functions[local_function]
                                 .result
