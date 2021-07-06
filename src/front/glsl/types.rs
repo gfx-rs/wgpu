@@ -1,4 +1,4 @@
-use crate::{ScalarKind, Type, TypeInner, VectorSize};
+use crate::{ImageClass, ImageDimension, ScalarKind, Type, TypeInner, VectorSize};
 
 pub fn parse_type(type_name: &str) -> Option<Type> {
     match type_name {
@@ -37,20 +37,11 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                 width: 4,
             },
         }),
-        "texture2D" => Some(Type {
+        "sampler" | "samplerShadow" => Some(Type {
             name: None,
-            inner: TypeInner::Image {
-                dim: crate::ImageDimension::D2,
-                arrayed: false,
-                class: crate::ImageClass::Sampled {
-                    kind: ScalarKind::Float,
-                    multi: false,
-                },
+            inner: TypeInner::Sampler {
+                comparison: type_name == "samplerShadow",
             },
-        }),
-        "sampler" => Some(Type {
-            name: None,
-            inner: TypeInner::Sampler { comparison: false },
         }),
         word => {
             fn kind_width_parse(ty: &str) -> Option<(ScalarKind, u8)> {
@@ -114,7 +105,56 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                 })
             };
 
-            vec_parse(word).or_else(|| mat_parse(word))
+            let texture_parse = |word: &str| {
+                let mut iter = word.split("texture");
+
+                let texture_kind = |ty| {
+                    Some(match ty {
+                        "" => ScalarKind::Float,
+                        "i" => ScalarKind::Sint,
+                        "u" => ScalarKind::Uint,
+                        _ => return None,
+                    })
+                };
+
+                let kind = iter.next()?;
+                let size = iter.next()?;
+                let kind = texture_kind(kind)?;
+
+                let sampled = |multi| ImageClass::Sampled { kind, multi };
+
+                let (dim, arrayed, class) = match size {
+                    "1D" => (ImageDimension::D1, false, sampled(false)),
+                    "1DArray" => (ImageDimension::D1, false, sampled(false)),
+                    "2D" => (ImageDimension::D2, false, sampled(false)),
+                    "2DArray" => (ImageDimension::D2, false, sampled(false)),
+                    "2DMS" => (ImageDimension::D2, true, sampled(true)),
+                    "2DMSArray" => (ImageDimension::D2, true, sampled(true)),
+                    "3D" => (ImageDimension::D3, false, sampled(false)),
+                    "Cube" => (ImageDimension::Cube, false, sampled(false)),
+                    "CubeArray" => (ImageDimension::D2, false, sampled(false)),
+                    "1DShadow" => (ImageDimension::D1, false, ImageClass::Depth),
+                    "1DArrayShadow" => (ImageDimension::D1, true, ImageClass::Depth),
+                    "2DShadow" => (ImageDimension::D2, false, ImageClass::Depth),
+                    "2DArrayShadow" => (ImageDimension::D2, true, ImageClass::Depth),
+                    "CubeShadow" => (ImageDimension::Cube, false, ImageClass::Depth),
+                    "CubeArrayShadow" => (ImageDimension::Cube, true, ImageClass::Depth),
+                    _ => return None,
+                };
+
+                Some(Type {
+                    name: None,
+                    inner: TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class,
+                    },
+                })
+            };
+
+            vec_parse(word)
+                .or_else(|| mat_parse(word))
+                .or_else(|| texture_parse(word))
         }
     }
 }

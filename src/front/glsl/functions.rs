@@ -189,7 +189,21 @@ impl Program<'_> {
             }
             FunctionCallKind::Function(name) => {
                 match name.as_str() {
-                    "sampler2D" => {
+                    "sampler1D"
+                    | "sampler1DArray"
+                    | "sampler2D"
+                    | "sampler2DArray"
+                    | "sampler2DMS"
+                    | "sampler2DMSArray"
+                    | "sampler3D"
+                    | "samplerCube"
+                    | "samplerCubeArray"
+                    | "sampler1DShadow"
+                    | "sampler1DArrayShadow"
+                    | "sampler2DShadow"
+                    | "sampler2DArrayShadow"
+                    | "samplerCubeShadow"
+                    | "samplerCubeArrayShadow" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
