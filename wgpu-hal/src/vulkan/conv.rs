@@ -523,7 +523,7 @@ pub fn map_buffer_usage_to_barrier(
         access |= vk::AccessFlags::VERTEX_ATTRIBUTE_READ;
     }
     if usage.contains(crate::BufferUses::INDIRECT) {
-        stages |= vk::PipelineStageFlags::VERTEX_INPUT;
+        stages |= vk::PipelineStageFlags::DRAW_INDIRECT;
         access |= vk::AccessFlags::INDIRECT_COMMAND_READ;
     }
 
