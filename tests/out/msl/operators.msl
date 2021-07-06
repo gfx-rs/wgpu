@@ -18,9 +18,18 @@ int unary(
     }
 }
 
+metal::float4 selection(
+) {
+    metal::float4 vector1_ = metal::float4(1.0);
+    metal::float4 vector2_ = metal::float4(1.0);
+    int a = true ? 0 : 1;
+    return true ? vector1_ : vector2_;
+}
+
 kernel void main1(
 ) {
     metal::float4 _e0 = splat();
     int _e1 = unary();
+    metal::float4 _e2 = selection();
     return;
 }

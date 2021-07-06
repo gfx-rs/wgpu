@@ -14,10 +14,19 @@ int unary()
     }
 }
 
+float4 selection()
+{
+    float4 vector1_ = float4(1.0.xxxx);
+    float4 vector2_ = float4(1.0.xxxx);
+    int a = (true ? 0 : 1);
+    return (true ? vector1_ : vector2_);
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
     const float4 _e0 = splat();
     const int _e1 = unary();
+    const float4 _e2 = selection();
     return;
 }

@@ -933,9 +933,42 @@ impl<'w> BlockContext<'w> {
                 reject,
             } => {
                 let id = self.gen_id();
-                let condition_id = self.cached(condition);
+                let mut condition_id = self.cached(condition);
                 let accept_id = self.cached(accept);
                 let reject_id = self.cached(reject);
+
+                let condition_ty = self.fun_info[condition]
+                    .ty
+                    .inner_with(&self.ir_module.types);
+                let object_ty = self.fun_info[accept].ty.inner_with(&self.ir_module.types);
+
+                if let (
+                    &crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Bool,
+                        width,
+                    },
+                    &crate::TypeInner::Vector { size, .. },
+                ) = (condition_ty, object_ty)
+                {
+                    self.temp_list.clear();
+                    self.temp_list.resize(size as usize, condition_id);
+
+                    let bool_vector_type_id =
+                        self.get_type_id(LookupType::Local(LocalType::Value {
+                            vector_size: Some(size),
+                            kind: crate::ScalarKind::Bool,
+                            width,
+                            pointer_class: None,
+                        }))?;
+
+                    let id = self.gen_id();
+                    block.body.push(Instruction::composite_construct(
+                        bool_vector_type_id,
+                        id,
+                        &self.temp_list,
+                    ));
+                    condition_id = id
+                }
 
                 let instruction =
                     Instruction::select(result_type_id, id, condition_id, accept_id, reject_id);

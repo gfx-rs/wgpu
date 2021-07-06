@@ -2,8 +2,7 @@
 
 precision highp float;
 
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-
+layout(location = 0) out vec4 _fs2p_location0;
 
 vec4 splat() {
     vec2 a = (((vec2(1.0) + vec2(2.0)) - vec2(3.0)) / vec2(4.0));
@@ -19,17 +18,18 @@ int unary() {
     }
 }
 
-vec4 selection() {
-    vec4 vector1_ = vec4(1.0);
-    vec4 vector2_ = vec4(1.0);
-    int a = (true ? 0 : 1);
-    return (true ? vector1_ : vector2_);
+int unary1() {
+    if ((! true)) {
+        return 1;
+    } else {
+        return (~ 1);
+    }
 }
 
 void main() {
-    vec4 _expr0 = splat();
-    int _expr1 = unary();
-    vec4 _expr2 = selection();
+    vec4 vector1_ = vec4(1.0);
+    vec4 vector2_ = vec4(1.0);
+    _fs2p_location0 = (true ? vector1_ : vector2_);
     return;
 }
 

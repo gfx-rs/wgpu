@@ -1,12 +1,12 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 50
+; Bound: 61
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %45 "main"
-OpExecutionMode %45 LocalSize 1 1 1
+OpEntryPoint GLCompute %55 "main"
+OpExecutionMode %55 LocalSize 1 1 1
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  1.0
@@ -19,52 +19,66 @@ OpExecutionMode %45 LocalSize 1 1 1
 %11 = OpConstant  %9  1
 %13 = OpTypeBool
 %12 = OpConstantTrue  %13
-%14 = OpTypeVector %4 4
-%17 = OpTypeFunction %14
-%19 = OpTypeVector %4 2
-%27 = OpTypeVector %9 4
-%36 = OpTypeFunction %9
-%43 = OpConstantNull  %9
-%46 = OpTypeFunction %2
-%16 = OpFunction  %14  None %17
-%15 = OpLabel
-OpBranch %18
-%18 = OpLabel
-%20 = OpCompositeConstruct  %19  %5 %5
-%21 = OpCompositeConstruct  %19  %3 %3
-%22 = OpFAdd  %19  %21 %20
-%23 = OpCompositeConstruct  %19  %6 %6
-%24 = OpFSub  %19  %22 %23
-%25 = OpCompositeConstruct  %19  %7 %7
-%26 = OpFDiv  %19  %24 %25
-%28 = OpCompositeConstruct  %27  %8 %8 %8 %8
-%29 = OpCompositeConstruct  %27  %10 %10 %10 %10
-%30 = OpSMod  %27  %28 %29
-%31 = OpVectorShuffle  %14  %26 %26 0 1 0 1
-%32 = OpConvertSToF  %14  %30
-%33 = OpFAdd  %14  %31 %32
-OpReturnValue %33
+%14 = OpConstant  %9  0
+%15 = OpTypeVector %4 4
+%18 = OpTypeFunction %15
+%20 = OpTypeVector %4 2
+%28 = OpTypeVector %9 4
+%37 = OpTypeFunction %9
+%44 = OpConstantNull  %9
+%52 = OpTypeVector %13 4
+%56 = OpTypeFunction %2
+%17 = OpFunction  %15  None %18
+%16 = OpLabel
+OpBranch %19
+%19 = OpLabel
+%21 = OpCompositeConstruct  %20  %5 %5
+%22 = OpCompositeConstruct  %20  %3 %3
+%23 = OpFAdd  %20  %22 %21
+%24 = OpCompositeConstruct  %20  %6 %6
+%25 = OpFSub  %20  %23 %24
+%26 = OpCompositeConstruct  %20  %7 %7
+%27 = OpFDiv  %20  %25 %26
+%29 = OpCompositeConstruct  %28  %8 %8 %8 %8
+%30 = OpCompositeConstruct  %28  %10 %10 %10 %10
+%31 = OpSMod  %28  %29 %30
+%32 = OpVectorShuffle  %15  %27 %27 0 1 0 1
+%33 = OpConvertSToF  %15  %31
+%34 = OpFAdd  %15  %32 %33
+OpReturnValue %34
 OpFunctionEnd
-%35 = OpFunction  %9  None %36
-%34 = OpLabel
-OpBranch %37
-%37 = OpLabel
-%38 = OpLogicalNot  %13  %12
-OpSelectionMerge %39 None
-OpBranchConditional %38 %40 %41
-%40 = OpLabel
-OpReturnValue %11
+%36 = OpFunction  %9  None %37
+%35 = OpLabel
+OpBranch %38
+%38 = OpLabel
+%39 = OpLogicalNot  %13  %12
+OpSelectionMerge %40 None
+OpBranchConditional %39 %41 %42
 %41 = OpLabel
-%42 = OpNot  %9  %11
-OpReturnValue %42
-%39 = OpLabel
+OpReturnValue %11
+%42 = OpLabel
+%43 = OpNot  %9  %11
 OpReturnValue %43
+%40 = OpLabel
+OpReturnValue %44
 OpFunctionEnd
-%45 = OpFunction  %2  None %46
-%44 = OpLabel
+%46 = OpFunction  %15  None %18
+%45 = OpLabel
 OpBranch %47
 %47 = OpLabel
-%48 = OpFunctionCall  %14  %16
-%49 = OpFunctionCall  %9  %35
+%48 = OpCompositeConstruct  %15  %3 %3 %3 %3
+%49 = OpCompositeConstruct  %15  %3 %3 %3 %3
+%50 = OpSelect  %9  %12 %14 %11
+%53 = OpCompositeConstruct  %52  %12 %12 %12 %12
+%51 = OpSelect  %15  %53 %48 %49
+OpReturnValue %51
+OpFunctionEnd
+%55 = OpFunction  %2  None %56
+%54 = OpLabel
+OpBranch %57
+%57 = OpLabel
+%58 = OpFunctionCall  %15  %17
+%59 = OpFunctionCall  %9  %36
+%60 = OpFunctionCall  %15  %46
 OpReturn
 OpFunctionEnd

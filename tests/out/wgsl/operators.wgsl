@@ -12,9 +12,17 @@ fn unary() -> i32 {
     }
 }
 
+fn selection() -> vec4<f32> {
+    let vector1_: vec4<f32> = vec4<f32>(1.0);
+    let vector2_: vec4<f32> = vec4<f32>(1.0);
+    let a: i32 = select(0, 1, true);
+    return select(vector1_, vector2_, true);
+}
+
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn main() {
     let _e0: vec4<f32> = splat();
     let _e1: i32 = unary();
+    let _e2: vec4<f32> = selection();
     return;
 }

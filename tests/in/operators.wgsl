@@ -9,8 +9,17 @@ fn unary() -> i32 {
     if (!true) { return a; } else { return ~a; };
 }
 
+fn selection() -> vec4<f32> {
+    let vector1 = vec4<f32>(1.0);
+    let vector2 = vec4<f32>(1.0);
+    let condition = true;
+    let a = select(0, 1, condition);
+    return select(vector1, vector2, condition);
+}
+
 [[stage(compute), workgroup_size(1)]]
 fn main() {
     let a = splat();
     let b = unary();
+    let c = selection();
 }
