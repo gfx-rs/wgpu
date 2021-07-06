@@ -445,8 +445,42 @@ impl Program<'_> {
                             body,
                         )))
                     }
-                    "pow" | "dot" | "max" | "min" | "reflect" | "cross" | "outerProduct"
-                    | "distance" | "step" | "modf" | "frexp" | "ldexp" => {
+                    "max" => {
+                        if args.len() != 2 {
+                            return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                        }
+
+                        let (mut arg0, arg0_meta) = args[0];
+                        let (mut arg1, arg1_meta) = args[1];
+
+                        let arg0_size = match *self.resolve_type(ctx, arg0, arg0_meta)? {
+                            TypeInner::Vector { size, .. } => Some(size),
+                            _ => None,
+                        };
+                        let arg1_size = match *self.resolve_type(ctx, arg1, arg1_meta)? {
+                            TypeInner::Vector { size, .. } => Some(size),
+                            _ => None,
+                        };
+
+                        ctx.binary_implicit_conversion(
+                            self, &mut arg0, arg0_meta, &mut arg1, arg1_meta,
+                        )?;
+
+                        ctx.implicit_splat(self, &mut arg0, arg0_meta, arg1_size)?;
+                        ctx.implicit_splat(self, &mut arg1, arg1_meta, arg0_size)?;
+
+                        Ok(Some(ctx.add_expression(
+                            Expression::Math {
+                                fun: MathFunction::Max,
+                                arg: arg0,
+                                arg1: Some(arg1),
+                                arg2: None,
+                            },
+                            body,
+                        )))
+                    }
+                    "pow" | "dot" | "min" | "reflect" | "cross" | "outerProduct" | "distance"
+                    | "step" | "modf" | "frexp" | "ldexp" => {
                         if args.len() != 2 {
                             return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                         }
@@ -463,7 +497,6 @@ impl Program<'_> {
                                 fun: match name.as_str() {
                                     "pow" => MathFunction::Pow,
                                     "dot" => MathFunction::Dot,
-                                    "max" => MathFunction::Max,
                                     "min" => MathFunction::Min,
                                     "reflect" => MathFunction::Reflect,
                                     "cross" => MathFunction::Cross,
