@@ -88,8 +88,7 @@ impl super::Device {
             Some(count) => count.get(),
             None => !0,
         };
-        #[allow(non_snake_case)]
-        let ArraySize = match desc.range.array_layer_count {
+        let array_size = match desc.range.array_layer_count {
             Some(count) => count.get(),
             None => texture.size.depth_or_array_layers - desc.range.base_array_layer,
         };
@@ -133,7 +132,7 @@ impl super::Device {
                 raw_desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
                 *raw_desc.u.Texture2DMSArray_mut() = d3d12::D3D12_TEX2DMS_ARRAY_SRV {
                     FirstArraySlice: desc.range.base_array_layer,
-                    ArraySize,
+                    ArraySize: array_size,
                 }
             }
             wgt::TextureViewDimension::D2Array => {
@@ -142,7 +141,7 @@ impl super::Device {
                     MostDetailedMip: desc.range.base_mip_level,
                     MipLevels,
                     FirstArraySlice: desc.range.base_array_layer,
-                    ArraySize,
+                    ArraySize: array_size,
                     PlaneSlice: 0,
                     ResourceMinLODClamp: 0.0,
                 }
@@ -169,7 +168,7 @@ impl super::Device {
                     MostDetailedMip: desc.range.base_mip_level,
                     MipLevels,
                     First2DArrayFace: desc.range.base_array_layer,
-                    NumCubes: ArraySize / 6,
+                    NumCubes: array_size / 6,
                     ResourceMinLODClamp: 0.0,
                 }
             }
@@ -178,6 +177,243 @@ impl super::Device {
         let handle = self.srv_uav_pool.lock().alloc_handle();
         self.raw
             .CreateShaderResourceView(texture.resource.as_mut_ptr(), &raw_desc, handle.raw);
+        handle
+    }
+
+    unsafe fn view_texture_as_unoredered_access(
+        &self,
+        texture: &super::Texture,
+        desc: &crate::TextureViewDescriptor,
+    ) -> descriptor::Handle {
+        let mut raw_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+            Format: conv::map_texture_format(desc.format),
+            ViewDimension: 0,
+            u: mem::zeroed(),
+        };
+
+        let array_size = match desc.range.array_layer_count {
+            Some(count) => count.get(),
+            None => texture.size.depth_or_array_layers - desc.range.base_array_layer,
+        };
+
+        match desc.dimension {
+            wgt::TextureViewDimension::D1 => {
+                raw_desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1D;
+                *raw_desc.u.Texture1D_mut() = d3d12::D3D12_TEX1D_UAV {
+                    MipSlice: desc.range.base_mip_level,
+                }
+            }
+            /*
+            wgt::TextureViewDimension::D1Array => {
+                raw_desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1DARRAY;
+                *raw_desc.u.Texture1DArray_mut() = d3d12::D3D12_TEX1D_ARRAY_UAV {
+                    MipSlice: desc.range.base_mip_level,
+                    FirstArraySlice: desc.range.base_array_layer,
+                    ArraySize,
+                }
+            }*/
+            wgt::TextureViewDimension::D2 => {
+                raw_desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2D;
+                *raw_desc.u.Texture2D_mut() = d3d12::D3D12_TEX2D_UAV {
+                    MipSlice: desc.range.base_mip_level,
+                    PlaneSlice: 0,
+                }
+            }
+            wgt::TextureViewDimension::D2Array => {
+                raw_desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+                *raw_desc.u.Texture2DArray_mut() = d3d12::D3D12_TEX2D_ARRAY_UAV {
+                    MipSlice: desc.range.base_mip_level,
+                    FirstArraySlice: desc.range.base_array_layer,
+                    ArraySize: array_size,
+                    PlaneSlice: 0,
+                }
+            }
+            wgt::TextureViewDimension::D3 => {
+                raw_desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE3D;
+                *raw_desc.u.Texture3D_mut() = d3d12::D3D12_TEX3D_UAV {
+                    MipSlice: desc.range.base_mip_level,
+                    FirstWSlice: desc.range.base_array_layer,
+                    WSize: array_size,
+                }
+            }
+            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                panic!("Unable to view texture as cube UAV")
+            }
+        }
+
+        let handle = self.srv_uav_pool.lock().alloc_handle();
+        self.raw.CreateUnorderedAccessView(
+            texture.resource.as_mut_ptr(),
+            ptr::null_mut(),
+            &raw_desc,
+            handle.raw,
+        );
+        handle
+    }
+
+    unsafe fn view_texture_as_render_target(
+        &self,
+        texture: &super::Texture,
+        desc: &crate::TextureViewDescriptor,
+    ) -> descriptor::Handle {
+        let mut raw_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+            Format: conv::map_texture_format(desc.format),
+            ViewDimension: 0,
+            u: mem::zeroed(),
+        };
+
+        let array_size = match desc.range.array_layer_count {
+            Some(count) => count.get(),
+            None => texture.size.depth_or_array_layers - desc.range.base_array_layer,
+        };
+
+        match desc.dimension {
+            wgt::TextureViewDimension::D1 => {
+                raw_desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE1D;
+                *raw_desc.u.Texture1D_mut() = d3d12::D3D12_TEX1D_RTV {
+                    MipSlice: desc.range.base_mip_level,
+                }
+            }
+            /*
+            wgt::TextureViewDimension::D1Array => {
+                raw_desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+                *raw_desc.u.Texture1DArray_mut() = d3d12::D3D12_TEX1D_ARRAY_RTV {
+                    MipSlice: desc.range.base_mip_level,
+                    FirstArraySlice: desc.range.base_array_layer,
+                    ArraySize,
+                }
+            }*/
+            wgt::TextureViewDimension::D2 if texture.sample_count > 1 => {
+                raw_desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DMS;
+                *raw_desc.u.Texture2DMS_mut() = d3d12::D3D12_TEX2DMS_RTV {
+                    UnusedField_NothingToDefine: 0,
+                }
+            }
+            wgt::TextureViewDimension::D2 => {
+                raw_desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2D;
+                *raw_desc.u.Texture2D_mut() = d3d12::D3D12_TEX2D_RTV {
+                    MipSlice: desc.range.base_mip_level,
+                    PlaneSlice: 0,
+                }
+            }
+            wgt::TextureViewDimension::D2Array if texture.sample_count > 1 => {
+                raw_desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                *raw_desc.u.Texture2DMSArray_mut() = d3d12::D3D12_TEX2DMS_ARRAY_RTV {
+                    FirstArraySlice: desc.range.base_array_layer,
+                    ArraySize: array_size,
+                }
+            }
+            wgt::TextureViewDimension::D2Array => {
+                raw_desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+                *raw_desc.u.Texture2DArray_mut() = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                    MipSlice: desc.range.base_mip_level,
+                    FirstArraySlice: desc.range.base_array_layer,
+                    ArraySize: array_size,
+                    PlaneSlice: 0,
+                }
+            }
+            wgt::TextureViewDimension::D3 => {
+                raw_desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE3D;
+                *raw_desc.u.Texture3D_mut() = d3d12::D3D12_TEX3D_RTV {
+                    MipSlice: desc.range.base_mip_level,
+                    FirstWSlice: desc.range.base_array_layer,
+                    WSize: array_size,
+                }
+            }
+            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                panic!("Unable to view texture as cube RTV")
+            }
+        }
+
+        let handle = self.rtv_pool.lock().alloc_handle();
+        self.raw
+            .CreateRenderTargetView(texture.resource.as_mut_ptr(), &raw_desc, handle.raw);
+        handle
+    }
+
+    unsafe fn view_texture_as_depth_stencil(
+        &self,
+        texture: &super::Texture,
+        desc: &crate::TextureViewDescriptor,
+        read_only: bool,
+    ) -> descriptor::Handle {
+        let mut raw_desc = d3d12::D3D12_DEPTH_STENCIL_VIEW_DESC {
+            Format: conv::map_texture_format(desc.format),
+            ViewDimension: 0,
+            Flags: if read_only {
+                let aspects = crate::FormatAspects::from(desc.format);
+                let mut flags = 0;
+                if aspects.contains(crate::FormatAspects::DEPTH) {
+                    flags |= d3d12::D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+                }
+                if aspects.contains(crate::FormatAspects::STENCIL) {
+                    flags |= d3d12::D3D12_DSV_FLAG_READ_ONLY_STENCIL;
+                }
+                flags
+            } else {
+                d3d12::D3D12_DSV_FLAG_NONE
+            },
+            u: mem::zeroed(),
+        };
+
+        let array_size = match desc.range.array_layer_count {
+            Some(count) => count.get(),
+            None => texture.size.depth_or_array_layers - desc.range.base_array_layer,
+        };
+
+        match desc.dimension {
+            wgt::TextureViewDimension::D1 => {
+                raw_desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE1D;
+                *raw_desc.u.Texture1D_mut() = d3d12::D3D12_TEX1D_DSV {
+                    MipSlice: desc.range.base_mip_level,
+                }
+            }
+            /*
+            wgt::TextureViewDimension::D1Array => {
+                raw_desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+                *raw_desc.u.Texture1DArray_mut() = d3d12::D3D12_TEX1D_ARRAY_DSV {
+                    MipSlice: desc.range.base_mip_level,
+                    FirstArraySlice: desc.range.base_array_layer,
+                    ArraySize,
+                }
+            }*/
+            wgt::TextureViewDimension::D2 if texture.sample_count > 1 => {
+                raw_desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DMS;
+                *raw_desc.u.Texture2DMS_mut() = d3d12::D3D12_TEX2DMS_DSV {
+                    UnusedField_NothingToDefine: 0,
+                }
+            }
+            wgt::TextureViewDimension::D2 => {
+                raw_desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2D;
+                *raw_desc.u.Texture2D_mut() = d3d12::D3D12_TEX2D_DSV {
+                    MipSlice: desc.range.base_mip_level,
+                }
+            }
+            wgt::TextureViewDimension::D2Array if texture.sample_count > 1 => {
+                raw_desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                *raw_desc.u.Texture2DMSArray_mut() = d3d12::D3D12_TEX2DMS_ARRAY_DSV {
+                    FirstArraySlice: desc.range.base_array_layer,
+                    ArraySize: array_size,
+                }
+            }
+            wgt::TextureViewDimension::D2Array => {
+                raw_desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+                *raw_desc.u.Texture2DArray_mut() = d3d12::D3D12_TEX2D_ARRAY_DSV {
+                    MipSlice: desc.range.base_mip_level,
+                    FirstArraySlice: desc.range.base_array_layer,
+                    ArraySize: array_size,
+                }
+            }
+            wgt::TextureViewDimension::D3
+            | wgt::TextureViewDimension::Cube
+            | wgt::TextureViewDimension::CubeArray => {
+                panic!("Unable to view texture as cube or 3D RTV")
+            }
+        }
+
+        let handle = self.dsv_pool.lock().alloc_handle();
+        self.raw
+            .CreateDepthStencilView(texture.resource.as_mut_ptr(), &raw_desc, handle.raw);
         handle
     }
 }
@@ -361,37 +597,55 @@ impl crate::Device<super::Api> for super::Device {
             } else {
                 None
             },
-            handle_rtv: if desc.usage.intersects(crate::TextureUses::COLOR_TARGET) {
-                unimplemented!()
-            } else {
-                None
-            },
-            handle_dsv: if desc.usage.intersects(
-                crate::TextureUses::DEPTH_STENCIL_READ | crate::TextureUses::DEPTH_STENCIL_WRITE,
-            ) {
-                unimplemented!()
-            } else {
-                None
-            },
             handle_uav: if desc.usage.intersects(crate::TextureUses::STORAGE_STORE) {
-                unimplemented!()
+                Some(self.view_texture_as_unoredered_access(texture, desc))
+            } else {
+                None
+            },
+            handle_rtv: if desc.usage.intersects(crate::TextureUses::COLOR_TARGET) {
+                Some(self.view_texture_as_render_target(texture, desc))
+            } else {
+                None
+            },
+            handle_dsv_ro: if desc
+                .usage
+                .intersects(crate::TextureUses::DEPTH_STENCIL_READ)
+            {
+                Some(self.view_texture_as_depth_stencil(texture, desc, true))
+            } else {
+                None
+            },
+            handle_dsv_rw: if desc
+                .usage
+                .intersects(crate::TextureUses::DEPTH_STENCIL_WRITE)
+            {
+                Some(self.view_texture_as_depth_stencil(texture, desc, false))
             } else {
                 None
             },
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
-        if let Some(handle) = view.handle_srv {
-            self.srv_uav_pool.lock().free_handle(handle);
-        }
-        if let Some(handle) = view.handle_uav {
-            self.srv_uav_pool.lock().free_handle(handle);
+        if view.handle_srv.is_some() || view.handle_uav.is_some() {
+            let mut pool = self.srv_uav_pool.lock();
+            if let Some(handle) = view.handle_srv {
+                pool.free_handle(handle);
+            }
+            if let Some(handle) = view.handle_uav {
+                pool.free_handle(handle);
+            }
         }
         if let Some(handle) = view.handle_rtv {
             self.rtv_pool.lock().free_handle(handle);
         }
-        if let Some(handle) = view.handle_dsv {
-            self.dsv_pool.lock().free_handle(handle);
+        if view.handle_dsv_ro.is_some() || view.handle_dsv_rw.is_some() {
+            let mut pool = self.dsv_pool.lock();
+            if let Some(handle) = view.handle_dsv_ro {
+                pool.free_handle(handle);
+            }
+            if let Some(handle) = view.handle_dsv_rw {
+                pool.free_handle(handle);
+            }
         }
     }
 

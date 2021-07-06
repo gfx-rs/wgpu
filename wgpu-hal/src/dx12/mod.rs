@@ -207,9 +207,10 @@ unsafe impl Sync for Texture {}
 #[derive(Debug)]
 pub struct TextureView {
     handle_srv: Option<descriptor::Handle>,
-    handle_rtv: Option<descriptor::Handle>,
-    handle_dsv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
+    handle_rtv: Option<descriptor::Handle>,
+    handle_dsv_ro: Option<descriptor::Handle>,
+    handle_dsv_rw: Option<descriptor::Handle>,
 }
 
 unsafe impl Send for TextureView {}
