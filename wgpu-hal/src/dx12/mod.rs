@@ -10,8 +10,10 @@
 mod adapter;
 mod command;
 mod conv;
+mod descriptor;
 mod device;
 
+use parking_lot::Mutex;
 use std::{borrow::Cow, ptr, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, dxgitype, windef, winerror},
@@ -36,9 +38,9 @@ impl crate::Api for Api {
     type CommandBuffer = Resource;
 
     type Buffer = Buffer;
-    type Texture = Resource;
-    type SurfaceTexture = Resource;
-    type TextureView = Resource;
+    type Texture = Texture;
+    type SurfaceTexture = Texture;
+    type TextureView = TextureView;
     type Sampler = Resource;
     type QuerySet = Resource;
     type Fence = Resource;
@@ -107,46 +109,6 @@ impl Drop for Instance {
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
-#[derive(Copy, Clone)]
-struct DualHandle {
-    cpu: native::CpuDescriptor,
-    gpu: native::GpuDescriptor,
-    /// How large the block allocated to this handle is.
-    size: u64,
-}
-
-type DescriptorIndex = u64;
-
-struct DescriptorHeap {
-    raw: native::DescriptorHeap,
-    handle_size: u64,
-    total_handles: u64,
-    start: DualHandle,
-}
-
-impl DescriptorHeap {
-    fn at(&self, index: DescriptorIndex, size: u64) -> DualHandle {
-        assert!(index < self.total_handles);
-        DualHandle {
-            cpu: self.cpu_descriptor_at(index),
-            gpu: self.gpu_descriptor_at(index),
-            size,
-        }
-    }
-
-    fn cpu_descriptor_at(&self, index: u64) -> native::CpuDescriptor {
-        native::CpuDescriptor {
-            ptr: self.start.cpu.ptr + (self.handle_size * index) as usize,
-        }
-    }
-
-    fn gpu_descriptor_at(&self, index: u64) -> native::GpuDescriptor {
-        native::GpuDescriptor {
-            ptr: self.start.gpu.ptr + self.handle_size * index,
-        }
-    }
-}
-
 struct SwapChain {
     raw: native::WeakPtr<dxgi1_4::IDXGISwapChain3>,
     // need to associate raw image pointers with the swapchain so they can be properly released
@@ -206,6 +168,10 @@ pub struct Device {
     present_queue: native::CommandQueue,
     idler: Idler,
     private_caps: PrivateCapabilities,
+    // CPU only pools
+    rtv_pool: Mutex<descriptor::CpuPool>,
+    dsv_pool: Mutex<descriptor::CpuPool>,
+    srv_uav_pool: Mutex<descriptor::CpuPool>,
 }
 
 unsafe impl Send for Device {}
@@ -218,6 +184,8 @@ pub struct Queue {
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
+pub struct CommandEncoder {}
+
 #[derive(Debug)]
 pub struct Buffer {
     resource: native::Resource,
@@ -226,7 +194,26 @@ pub struct Buffer {
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
-pub struct CommandEncoder {}
+#[derive(Debug)]
+pub struct Texture {
+    resource: native::Resource,
+    size: wgt::Extent3d,
+    sample_count: u32,
+}
+
+unsafe impl Send for Texture {}
+unsafe impl Sync for Texture {}
+
+#[derive(Debug)]
+pub struct TextureView {
+    handle_srv: Option<descriptor::Handle>,
+    handle_rtv: Option<descriptor::Handle>,
+    handle_dsv: Option<descriptor::Handle>,
+    handle_uav: Option<descriptor::Handle>,
+}
+
+unsafe impl Send for TextureView {}
+unsafe impl Sync for TextureView {}
 
 impl crate::Instance<Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
@@ -530,7 +517,7 @@ impl crate::Surface<Api> for Surface {
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
     }
-    unsafe fn discard_texture(&mut self, texture: Resource) {}
+    unsafe fn discard_texture(&mut self, texture: Texture) {}
 }
 
 impl crate::Queue<Api> for Queue {
@@ -544,7 +531,7 @@ impl crate::Queue<Api> for Queue {
     unsafe fn present(
         &mut self,
         surface: &mut Surface,
-        texture: Resource,
+        texture: Texture,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }

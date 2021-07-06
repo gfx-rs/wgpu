@@ -128,3 +128,34 @@ pub fn map_buffer_usage_to_resource_flags(usage: crate::BufferUses) -> d3d12::D3
     }
     flags
 }
+
+pub fn map_texture_dimension(dim: wgt::TextureDimension) -> d3d12::D3D12_RESOURCE_DIMENSION {
+    match dim {
+        wgt::TextureDimension::D1 => d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE1D,
+        wgt::TextureDimension::D2 => d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        wgt::TextureDimension::D3 => d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE3D,
+    }
+}
+
+pub fn map_texture_usage_to_resource_flags(
+    usage: crate::TextureUses,
+) -> d3d12::D3D12_RESOURCE_FLAGS {
+    let mut flags = 0;
+
+    if usage.contains(crate::TextureUses::COLOR_TARGET) {
+        flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    }
+    if usage.intersects(
+        crate::TextureUses::DEPTH_STENCIL_READ | crate::TextureUses::DEPTH_STENCIL_WRITE,
+    ) {
+        flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    }
+    if usage.contains(crate::TextureUses::STORAGE_STORE) {
+        flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    }
+    if !usage.intersects(crate::TextureUses::SAMPLED | crate::TextureUses::STORAGE_LOAD) {
+        flags |= d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+    }
+
+    flags
+}

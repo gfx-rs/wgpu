@@ -36,9 +36,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
-        src: &Resource,
+        src: &super::Texture,
         src_usage: crate::TextureUses,
-        dst: &Resource,
+        dst: &super::Texture,
         regions: T,
     ) {
     }
@@ -46,14 +46,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_buffer_to_texture<T>(
         &mut self,
         src: &super::Buffer,
-        dst: &Resource,
+        dst: &super::Texture,
         regions: T,
     ) {
     }
 
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
-        src: &Resource,
+        src: &super::Texture,
         src_usage: crate::TextureUses,
         dst: &super::Buffer,
         regions: T,

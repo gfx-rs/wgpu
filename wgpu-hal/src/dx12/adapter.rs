@@ -3,7 +3,6 @@ use std::{mem, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
     um::{d3d12, winuser},
-    Interface,
 };
 
 impl Drop for super::Adapter {
@@ -136,6 +135,7 @@ impl super::Adapter {
 
         let mut features = wgt::Features::empty()
             | wgt::Features::DEPTH_CLAMPING
+            | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
             //TODO: Naga part
             //| wgt::Features::TEXTURE_BINDING_ARRAY
             //| wgt::Features::BUFFER_BINDING_ARRAY
@@ -240,25 +240,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             )
             .to_device_result("Queue creation")?;
 
-        let mut idle_fence = native::Fence::null();
-        let hr = self.device.CreateFence(
-            0,
-            d3d12::D3D12_FENCE_FLAG_NONE,
-            &d3d12::ID3D12Fence::uuidof(),
-            idle_fence.mut_void(),
-        );
-        hr.to_device_result("Idle fence creation")?;
-
+        let device = super::Device::new(self.device, queue, self.private_caps)?;
         Ok(crate::OpenDevice {
-            device: super::Device {
-                raw: self.device,
-                present_queue: queue,
-                idler: super::Idler {
-                    fence: idle_fence,
-                    event: native::Event::create(false, false),
-                },
-                private_caps: self.private_caps,
-            },
+            device,
             queue: super::Queue { raw: queue },
         })
     }

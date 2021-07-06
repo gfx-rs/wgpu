@@ -1992,6 +1992,7 @@ version = "0.9.0"
 dependencies = [
  "arrayvec",
  "ash",
+ "bit-set",
  "bitflags",
  "block",
  "core-graphics-types",
