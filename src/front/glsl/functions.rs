@@ -795,7 +795,7 @@ impl Program<'_> {
                                         Expression::Swizzle { .. }
                                     )
                                 {
-                                    let ty = self.module.types.append(Type {
+                                    let ty = self.module.types.fetch_or_append(Type {
                                         name: None,
                                         inner: TypeInner::Vector { size, kind, width },
                                     });
