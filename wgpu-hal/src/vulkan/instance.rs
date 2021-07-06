@@ -264,7 +264,7 @@ impl super::Instance {
         };
 
         let surface = {
-            let metal_loader = ext::MetalSurface::new(&self.entry, &self.shared.raw);
+            let metal_loader = ext::MetalSurface::new(&self.shared.entry, &self.shared.raw);
             let vk_info = vk::MetalSurfaceCreateInfoEXT::builder()
                 .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
                 .layer(layer as *mut _)
