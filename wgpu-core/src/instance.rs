@@ -118,6 +118,46 @@ impl Instance {
         }
     }
 
+    pub fn from_hal<A: HalApi>(name: &str, raw_instance: A::Instance) -> Self {
+        #[cfg(vulkan)]
+        let mut vulkan_instance = None;
+        #[cfg(metal)]
+        let mut metal_instance = None;
+        #[cfg(dx12)]
+        let mut dx12_instance = None;
+        #[cfg(dx11)]
+        let mut dx11_instance = None;
+        #[cfg(gl)]
+        let mut gl_instance = None;
+        match A::VARIANT {
+            #[cfg(vulkan)]
+            Backend::Vulkan => vulkan_instance = Some(raw_instance),
+            #[cfg(metal)]
+            Backend::Metal => metal_instance = Some(raw_instance),
+            #[cfg(dx12)]
+            Backend::Dx12 => dx12_instance = Some(raw_instance),
+            #[cfg(dx11)]
+            Backend::Dx11 => dx11_instance = Some(raw_instance),
+            #[cfg(gl)]
+            Backend::Gl => vulkan_instance = Some(raw_instance),
+            _ => unreachable!(),
+        }
+
+        Self {
+            name: name.to_string(),
+            #[cfg(vulkan)]
+            vulkan: vulkan_instance,
+            #[cfg(metal)]
+            metal: metal_instance,
+            #[cfg(dx12)]
+            dx12: dx12_instance,
+            #[cfg(dx11)]
+            dx11: dx11_instance,
+            #[cfg(gl)]
+            gl: gl_instance,
+        }
+    }
+
     pub(crate) fn destroy_surface(&self, surface: Surface) {
         backends_map! {
             let map = |(surface_backend, self_backend)| {

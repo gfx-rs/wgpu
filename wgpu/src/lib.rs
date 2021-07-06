@@ -1388,6 +1388,13 @@ impl Instance {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn from_hal<A: wgc::hub::HalApi>(raw_instance: A::Instance) -> Self {
+        Instance {
+            context: Arc::new(C::from_hal(raw_instance)),
+        }
+    }
+
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
     /// # Arguments

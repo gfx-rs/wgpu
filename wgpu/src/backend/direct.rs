@@ -39,6 +39,14 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
+    pub(crate) fn from_hal<A: wgc::hub::HalApi>(raw_instance: A::Instance) -> Self {
+        Self(wgc::hub::Global::from_hal(
+            "wgpu",
+            wgc::hub::IdentityManagerFactory,
+            handles,
+        ))
+    }
+
     pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
         &self.0
     }

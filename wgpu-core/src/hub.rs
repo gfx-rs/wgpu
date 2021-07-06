@@ -848,6 +848,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    pub fn from_hal<A: HalApi>(name: &str, factory: G, raw_instance: A::Instance) -> Self {
+        profiling::scope!("new", "Global");
+        Self {
+            instance: Instance::from_hal::<A>(name, raw_instance),
+            surfaces: Registry::without_backend(&factory, "Surface"),
+            hubs: Hubs::new(&factory),
+        }
+    }
+
     pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
         let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
