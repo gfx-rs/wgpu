@@ -1,6 +1,6 @@
 use super::{
     ast::{
-        Context, FunctionCall, FunctionCallKind, GlobalLookup, GlobalLookupKind, HirExpr,
+        self, Context, FunctionCall, FunctionCallKind, GlobalLookup, GlobalLookupKind, HirExpr,
         HirExprKind, ParameterQualifier, Profile, StorageQualifier, StructLayout, TypeQualifier,
     },
     error::ErrorKind,
@@ -591,9 +591,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 .map::<Result<_>, _>(|_| {
                     let (mut expr, init_meta) = self.parse_initializer(ty, ctx.ctx, ctx.body)?;
 
-                    if let Some(kind) = self.program.module.types[ty].inner.scalar_kind() {
-                        ctx.ctx
-                            .implicit_conversion(self.program, &mut expr, init_meta, kind)?;
+                    let scalar_components =
+                        ast::scalar_components(&self.program.module.types[ty].inner);
+                    if let Some((kind, width)) = scalar_components {
+                        ctx.ctx.implicit_conversion(
+                            self.program,
+                            &mut expr,
+                            init_meta,
+                            kind,
+                            width,
+                        )?;
                     }
 
                     meta = meta.union(&init_meta);

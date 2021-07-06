@@ -75,9 +75,9 @@ impl Program<'_> {
                     }
 
                     match self.module.types[ty].inner {
-                        TypeInner::Vector { size, kind, .. } if vector_size.is_none() => {
+                        TypeInner::Vector { size, kind, width } if vector_size.is_none() => {
                             let (mut value, meta) = args[0];
-                            ctx.implicit_conversion(self, &mut value, meta, kind)?;
+                            ctx.implicit_conversion(self, &mut value, meta, kind, width)?;
 
                             ctx.add_expression(Expression::Splat { size, value }, body)
                         }
@@ -108,13 +108,23 @@ impl Program<'_> {
                                 body,
                             )
                         }
-                        TypeInner::Matrix { columns, rows, .. } => {
+                        TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        } => {
                             // TODO: casts
                             // `Expression::As` doesn't support matrix width
                             // casts so we need to do some extra work for casts
 
                             let (mut value, meta) = args[0];
-                            ctx.implicit_conversion(self, &mut value, meta, ScalarKind::Float)?;
+                            ctx.implicit_conversion(
+                                self,
+                                &mut value,
+                                meta,
+                                ScalarKind::Float,
+                                width,
+                            )?;
                             let column = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
                                 TypeInner::Scalar { .. } => ctx
                                     .add_expression(Expression::Splat { size: rows, value }, body),
@@ -176,8 +186,9 @@ impl Program<'_> {
                     let mut components = Vec::with_capacity(args.len());
 
                     for (mut arg, meta) in args.iter().copied() {
-                        if let Some(kind) = self.module.types[ty].inner.scalar_kind() {
-                            ctx.implicit_conversion(self, &mut arg, meta, kind)?;
+                        let scalar_components = scalar_components(&self.module.types[ty].inner);
+                        if let Some((kind, width)) = scalar_components {
+                            ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
                         }
                         components.push(arg)
                     }
@@ -773,8 +784,10 @@ impl Program<'_> {
                                 }
                             }
 
-                            if let Some(kind) = self.module.types[*parameter].inner.scalar_kind() {
-                                ctx.implicit_conversion(self, &mut handle, meta, kind)?;
+                            let scalar_components =
+                                scalar_components(&self.module.types[*parameter].inner);
+                            if let Some((kind, width)) = scalar_components {
+                                ctx.implicit_conversion(self, &mut handle, meta, kind, width)?;
                             }
 
                             arguments.push(handle)

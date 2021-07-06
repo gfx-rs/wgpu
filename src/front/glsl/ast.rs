@@ -644,16 +644,10 @@ impl<'function> Context<'function> {
                 let (pointer, ptr_meta) = self.lower_expect(program, tgt, true, body)?;
                 let (mut value, value_meta) = self.lower_expect(program, value, false, body)?;
 
-                let ptr_kind = match *program.resolve_type(self, pointer, ptr_meta)? {
-                    TypeInner::Pointer { base, .. } => {
-                        program.module.types[base].inner.scalar_kind()
-                    }
-                    TypeInner::ValuePointer { kind, .. } => Some(kind),
-                    ref ty => ty.scalar_kind(),
-                };
+                let scalar_components = self.expr_scalar_components(program, pointer, ptr_meta)?;
 
-                if let Some(kind) = ptr_kind {
-                    self.implicit_conversion(program, &mut value, value_meta, kind)?;
+                if let Some((kind, width)) = scalar_components {
+                    self.implicit_conversion(program, &mut value, value_meta, kind, width)?;
                 }
 
                 if let Expression::Swizzle {
@@ -808,13 +802,14 @@ impl<'function> Context<'function> {
         Ok((Some(handle), meta))
     }
 
-    pub fn expr_scalar_kind(
+    pub fn expr_scalar_components(
         &mut self,
         program: &mut Program,
         expr: Handle<Expression>,
         meta: SourceMetadata,
-    ) -> Result<Option<ScalarKind>, ErrorKind> {
-        Ok(program.resolve_type(self, expr, meta)?.scalar_kind())
+    ) -> Result<Option<(ScalarKind, crate::Bytes)>, ErrorKind> {
+        let ty = program.resolve_type(self, expr, meta)?;
+        Ok(scalar_components(ty))
     }
 
     pub fn expr_power(
@@ -824,8 +819,8 @@ impl<'function> Context<'function> {
         meta: SourceMetadata,
     ) -> Result<Option<u32>, ErrorKind> {
         Ok(self
-            .expr_scalar_kind(program, expr, meta)?
-            .and_then(type_power))
+            .expr_scalar_components(program, expr, meta)?
+            .and_then(|(kind, _)| type_power(kind)))
     }
 
     pub fn get_expression(&self, expr: Handle<Expression>) -> &Expression {
@@ -838,6 +833,7 @@ impl<'function> Context<'function> {
         expr: &mut Handle<Expression>,
         meta: SourceMetadata,
         kind: ScalarKind,
+        width: crate::Bytes,
     ) -> Result<(), ErrorKind> {
         if let (Some(tgt_power), Some(expr_power)) =
             (type_power(kind), self.expr_power(program, *expr, meta)?)
@@ -846,7 +842,7 @@ impl<'function> Context<'function> {
                 *expr = self.expressions.append(Expression::As {
                     expr: *expr,
                     kind,
-                    convert: None,
+                    convert: Some(width),
                 })
             }
         }
@@ -862,19 +858,22 @@ impl<'function> Context<'function> {
         right: &mut Handle<Expression>,
         right_meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
-        let left_kind = self.expr_scalar_kind(program, *left, left_meta)?;
-        let right_kind = self.expr_scalar_kind(program, *right, right_meta)?;
+        let left_components = self.expr_scalar_components(program, *left, left_meta)?;
+        let right_components = self.expr_scalar_components(program, *right, right_meta)?;
 
-        if let (Some((left_power, left_kind)), Some((right_power, right_kind))) = (
-            left_kind.and_then(|kind| Some((type_power(kind)?, kind))),
-            right_kind.and_then(|kind| Some((type_power(kind)?, kind))),
+        if let (
+            Some((left_power, left_width, left_kind)),
+            Some((right_power, right_width, right_kind)),
+        ) = (
+            left_components.and_then(|(kind, width)| Some((type_power(kind)?, width, kind))),
+            right_components.and_then(|(kind, width)| Some((type_power(kind)?, width, kind))),
         ) {
             match left_power.cmp(&right_power) {
                 std::cmp::Ordering::Less => {
                     *left = self.expressions.append(Expression::As {
                         expr: *left,
                         kind: right_kind,
-                        convert: None,
+                        convert: Some(right_width),
                     })
                 }
                 std::cmp::Ordering::Equal => {}
@@ -882,7 +881,7 @@ impl<'function> Context<'function> {
                     *right = self.expressions.append(Expression::As {
                         expr: *right,
                         kind: left_kind,
-                        convert: None,
+                        convert: Some(left_width),
                     })
                 }
             }
@@ -907,6 +906,16 @@ impl<'function> Context<'function> {
         }
 
         Ok(())
+    }
+}
+
+pub fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, crate::Bytes)> {
+    match *ty {
+        TypeInner::Scalar { kind, width } => Some((kind, width)),
+        TypeInner::Vector { kind, width, .. } => Some((kind, width)),
+        TypeInner::Matrix { width, .. } => Some((ScalarKind::Float, width)),
+        TypeInner::ValuePointer { kind, width, .. } => Some((kind, width)),
+        _ => None,
     }
 }
 
