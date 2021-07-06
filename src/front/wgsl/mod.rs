@@ -2233,7 +2233,11 @@ impl Parser {
                 lexer.expect_generic_paren('>')?;
                 let stride = match attribute.stride {
                     Some(stride) => stride.get(),
-                    None => type_arena[base].inner.span(const_arena),
+                    None => {
+                        self.layouter.update(type_arena, const_arena).unwrap();
+                        let layout = &self.layouter[base];
+                        Layouter::round_up(layout.alignment, layout.size)
+                    }
                 };
 
                 crate::TypeInner::Array { base, size, stride }
