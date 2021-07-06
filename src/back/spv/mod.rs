@@ -366,10 +366,6 @@ impl BlockContext<'_> {
         self.writer
             .get_constant_scalar(crate::ScalarValue::Uint(index as _), 4)
     }
-
-    fn cached(&self, expression: Handle<crate::Expression>) -> Word {
-        self.cached[expression]
-    }
 }
 
 #[derive(Clone, Copy, Default)]

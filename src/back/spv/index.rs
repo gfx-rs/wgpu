@@ -177,7 +177,7 @@ impl<'w> BlockContext<'w> {
         index: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
-        let index_id = self.cached(index);
+        let index_id = self.cached[index];
 
         // Get the sequence's maximum valid index. Return early if we've already
         // done the bounds check.
@@ -237,7 +237,7 @@ impl<'w> BlockContext<'w> {
         index: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
-        let index_id = self.cached(index);
+        let index_id = self.cached[index];
 
         // Get the sequence's length. Return early if we've already done the
         // bounds check.
@@ -367,7 +367,7 @@ impl<'w> BlockContext<'w> {
                 self.write_index_comparison(base, index, block)?
             }
             IndexBoundsCheckPolicy::UndefinedBehavior => {
-                BoundsCheckResult::Computed(self.cached(index))
+                BoundsCheckResult::Computed(self.cached[index])
             }
         })
     }
@@ -384,8 +384,8 @@ impl<'w> BlockContext<'w> {
     ) -> Result<Word, Error> {
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty)?;
 
-        let base_id = self.cached(base);
-        let index_id = self.cached(index);
+        let base_id = self.cached[base];
+        let index_id = self.cached[index];
 
         let result_id = match self.write_bounds_check(base, index, block)? {
             BoundsCheckResult::KnownInBounds(known_index) => {
