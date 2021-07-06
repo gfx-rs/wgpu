@@ -696,20 +696,54 @@ impl Program<'_> {
                                 let decl_inner = &self.module.types[*decl_arg].inner;
                                 let call_inner = self.resolve_type(ctx, call_arg.0, call_arg.1)?;
 
-                                if decl_inner != call_inner {
-                                    exact = false;
+                                if decl_inner == call_inner {
+                                    continue;
+                                }
 
-                                    match (
-                                        decl_inner.scalar_kind().and_then(type_power),
-                                        call_inner.scalar_kind().and_then(type_power),
-                                    ) {
-                                        (Some(decl_power), Some(call_power)) => {
-                                            if decl_power < call_power {
-                                                continue 'outer;
-                                            }
-                                        }
-                                        _ => continue 'outer,
+                                exact = false;
+
+                                let (decl_kind, call_kind) = match (decl_inner, call_inner) {
+                                    (
+                                        &TypeInner::Scalar {
+                                            kind: decl_kind, ..
+                                        },
+                                        &TypeInner::Scalar {
+                                            kind: call_kind, ..
+                                        },
+                                    ) => (decl_kind, call_kind),
+                                    (
+                                        &TypeInner::Vector {
+                                            kind: decl_kind,
+                                            size: decl_size,
+                                            ..
+                                        },
+                                        &TypeInner::Vector {
+                                            kind: call_kind,
+                                            size: call_size,
+                                            ..
+                                        },
+                                    ) if decl_size == call_size => (decl_kind, call_kind),
+                                    (
+                                        &TypeInner::Matrix {
+                                            rows: decl_rows,
+                                            columns: decl_columns,
+                                            ..
+                                        },
+                                        &TypeInner::Matrix {
+                                            rows: call_rows,
+                                            columns: call_columns,
+                                            ..
+                                        },
+                                    ) if decl_columns == call_columns && decl_rows == call_rows => {
+                                        (ScalarKind::Float, ScalarKind::Float)
                                     }
+                                    _ => continue 'outer,
+                                };
+
+                                match (type_power(decl_kind), type_power(call_kind)) {
+                                    (Some(decl_power), Some(call_power))
+                                        if decl_power > call_power => {}
+                                    _ => continue 'outer,
                                 }
                             }
 
