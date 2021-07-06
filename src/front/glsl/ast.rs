@@ -511,9 +511,19 @@ impl<'function> Context<'function> {
                 let (mut left, left_meta) = self.lower_expect(program, left, false, body)?;
                 let (mut right, right_meta) = self.lower_expect(program, right, false, body)?;
 
-                self.binary_implicit_conversion(
-                    program, &mut left, left_meta, &mut right, right_meta,
-                )?;
+                match op {
+                    BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => self
+                        .implicit_conversion(
+                            program,
+                            &mut right,
+                            right_meta,
+                            ScalarKind::Uint,
+                            4,
+                        )?,
+                    _ => self.binary_implicit_conversion(
+                        program, &mut left, left_meta, &mut right, right_meta,
+                    )?,
+                }
 
                 program.typifier_grow(self, left, left_meta)?;
                 program.typifier_grow(self, right, right_meta)?;
