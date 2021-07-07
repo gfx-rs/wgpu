@@ -200,3 +200,36 @@ pub fn map_border_color(border_color: Option<wgt::SamplerBorderColor>) -> [f32; 
         Some(Sbc::OpaqueWhite) => [1.0; 4],
     }
 }
+
+pub fn map_visibility(visibility: wgt::ShaderStages) -> native::ShaderVisibility {
+    match visibility {
+        wgt::ShaderStages::VERTEX => native::ShaderVisibility::VS,
+        wgt::ShaderStages::FRAGMENT => native::ShaderVisibility::PS,
+        _ => native::ShaderVisibility::All,
+    }
+}
+
+pub fn map_binding_type(ty: &wgt::BindingType) -> native::DescriptorRangeType {
+    use wgt::BindingType as Bt;
+    match *ty {
+        Bt::Sampler { .. } => native::DescriptorRangeType::Sampler,
+        Bt::Buffer {
+            ty: wgt::BufferBindingType::Uniform,
+            ..
+        } => native::DescriptorRangeType::CBV,
+        Bt::Buffer {
+            ty: wgt::BufferBindingType::Storage { read_only: true },
+            ..
+        }
+        | Bt::Texture { .. }
+        | Bt::StorageTexture {
+            access: wgt::StorageTextureAccess::ReadOnly,
+            ..
+        } => native::DescriptorRangeType::SRV,
+        Bt::Buffer {
+            ty: wgt::BufferBindingType::Storage { read_only: false },
+            ..
+        }
+        | Bt::StorageTexture { .. } => native::DescriptorRangeType::UAV,
+    }
+}

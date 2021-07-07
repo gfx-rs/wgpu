@@ -46,9 +46,9 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
 
-    type BindGroupLayout = Resource;
-    type BindGroup = Resource;
-    type PipelineLayout = Resource;
+    type BindGroupLayout = BindGroupLayout;
+    type BindGroup = BindGroup;
+    type PipelineLayout = PipelineLayout;
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
@@ -166,6 +166,8 @@ pub struct Device {
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
     sampler_pool: Mutex<descriptor::CpuPool>,
+    // library
+    library: Arc<native::D3D12Lib>,
 }
 
 unsafe impl Send for Device {}
@@ -240,6 +242,42 @@ pub struct Fence {
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
+
+pub struct BindGroupLayout {
+    /// Sorted list of entries.
+    entries: Vec<wgt::BindGroupLayoutEntry>,
+}
+
+#[derive(Debug)]
+pub struct BindGroup {}
+
+bitflags::bitflags! {
+    struct TableTypes: u8 {
+        const SRV_CBV_UAV = 0x1;
+        const SAMPLERS = 0x2;
+    }
+}
+
+type RootSignatureOffset = usize;
+
+pub struct RootElement {
+    types: TableTypes,
+    offset: RootSignatureOffset,
+}
+
+pub struct PipelineLayout {
+    raw: native::RootSignature,
+    /// A root offset per parameter.
+    parameter_offsets: Vec<u32>,
+    /// Total number of root slots occupied by the layout.
+    total_slots: u32,
+    // Storing for each associated bind group, which tables we created
+    // in the root signature. This is required for binding descriptor sets.
+    elements: arrayvec::ArrayVec<[RootElement; crate::MAX_BIND_GROUPS]>,
+}
+
+unsafe impl Send for PipelineLayout {}
+unsafe impl Sync for PipelineLayout {}
 
 impl SwapChain {
     unsafe fn release_resources(self) -> native::WeakPtr<dxgi1_4::IDXGISwapChain3> {

@@ -1,6 +1,6 @@
 use super::{conv, descriptor, HResult as _};
 use parking_lot::Mutex;
-use std::{iter, mem, ptr};
+use std::{iter, mem, ptr, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, winerror},
     um::{d3d12, d3d12sdklayers, synchapi, winbase},
@@ -21,6 +21,7 @@ impl super::Device {
         raw: native::Device,
         present_queue: native::CommandQueue,
         private_caps: super::PrivateCapabilities,
+        library: &Arc<native::D3D12Lib>,
     ) -> Result<Self, crate::DeviceError> {
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
@@ -57,6 +58,7 @@ impl super::Device {
                 raw,
                 native::DescriptorHeapType::Sampler,
             )),
+            library: Arc::clone(library),
         })
     }
 
@@ -713,24 +715,237 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
-    ) -> Result<Resource, crate::DeviceError> {
-        Ok(Resource)
+    ) -> Result<super::BindGroupLayout, crate::DeviceError> {
+        Ok(super::BindGroupLayout {
+            entries: desc.entries.to_vec(),
+        })
     }
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
+    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {
+        // just drop
+    }
     unsafe fn create_pipeline_layout(
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> Result<Resource, crate::DeviceError> {
-        Ok(Resource)
+    ) -> Result<super::PipelineLayout, crate::DeviceError> {
+        // Pipeline layouts are implemented as RootSignature for D3D12.
+        //
+        // Push Constants are implemented as root constants.
+        //
+        // Each descriptor set layout will be one table entry of the root signature.
+        // We have the additional restriction that SRV/CBV/UAV and samplers need to be
+        // separated, so each set layout will actually occupy up to 2 entries!
+        // SRV/CBV/UAV tables are added to the signature first, then Sampler tables,
+        // and finally dynamic uniform descriptors.
+        //
+        // Dynamic uniform buffers are implemented as root descriptors.
+        // This allows to handle the dynamic offsets properly, which would not be feasible
+        // with a combination of root constant and descriptor table.
+        //
+        // Root signature layout:
+        //     Root Constants: Register: Offest/4, Space: 0
+        //     ...
+        // DescriptorTable0: Space: 1 (SrvCbvUav)
+        // DescriptorTable0: Space: 1 (Sampler)
+        // Root Descriptors 0
+        // DescriptorTable1: Space: 2 (SrvCbvUav)
+        // Root Descriptors 1
+        //     ...
+
+        let mut root_offset = 0u32;
+        let root_constants: &[()] = &[];
+
+        // Number of elements in the root signature.
+        let total_parameters = root_constants.len() + desc.bind_group_layouts.len() * 2;
+        // Guarantees that no re-allocation is done, and our pointers are valid
+        let mut parameters = Vec::with_capacity(total_parameters);
+        let mut parameter_offsets = Vec::with_capacity(total_parameters);
+
+        let root_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
+        // Collect the whole number of bindings we will create upfront.
+        // It allows us to preallocate enough storage to avoid reallocation,
+        // which could cause invalid pointers.
+        let total_non_dynamic_entries = desc
+            .bind_group_layouts
+            .iter()
+            .flat_map(|bgl| {
+                bgl.entries.iter().map(|entry| match entry.ty {
+                    wgt::BindingType::Buffer {
+                        has_dynamic_offset: true,
+                        ..
+                    } => 0,
+                    _ => 1,
+                })
+            })
+            .sum();
+        let mut ranges = Vec::with_capacity(total_non_dynamic_entries);
+
+        let mut root_elements =
+            arrayvec::ArrayVec::<[super::RootElement; crate::MAX_BIND_GROUPS]>::default();
+        for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
+            let space = root_space_offset + index as u32;
+            let mut types = super::TableTypes::empty();
+            let root_table_offset = root_offset as usize;
+
+            let mut visibility_view_static = wgt::ShaderStages::empty();
+            let mut visibility_view_dynamic = wgt::ShaderStages::empty();
+            let mut visibility_sampler = wgt::ShaderStages::empty();
+            for entry in bgl.entries.iter() {
+                match entry.ty {
+                    wgt::BindingType::Sampler { .. } => visibility_sampler |= entry.visibility,
+                    wgt::BindingType::Buffer {
+                        has_dynamic_offset: true,
+                        ..
+                    } => visibility_view_dynamic |= entry.visibility,
+                    _ => visibility_view_static |= entry.visibility,
+                }
+            }
+
+            // SRV/CBV/UAV descriptor tables
+            let mut range_base = ranges.len();
+            for entry in bgl.entries.iter() {
+                let range_ty = match entry.ty {
+                    wgt::BindingType::Buffer {
+                        has_dynamic_offset: true,
+                        ..
+                    }
+                    | wgt::BindingType::Sampler { .. } => continue,
+                    ref other => conv::map_binding_type(other),
+                };
+                ranges.push(native::DescriptorRange::new(
+                    range_ty,
+                    entry.count.map_or(1, |count| count.get()),
+                    native::Binding {
+                        register: entry.binding,
+                        space,
+                    },
+                    d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                ));
+            }
+            if ranges.len() > range_base {
+                parameter_offsets.push(root_offset);
+                parameters.push(native::RootParameter::descriptor_table(
+                    conv::map_visibility(visibility_view_static),
+                    &ranges[range_base..],
+                ));
+                types |= super::TableTypes::SRV_CBV_UAV;
+                root_offset += 1;
+            }
+
+            // Sampler descriptor tables
+            range_base = ranges.len();
+            for entry in bgl.entries.iter() {
+                let range_ty = match entry.ty {
+                    wgt::BindingType::Sampler { .. } => native::DescriptorRangeType::Sampler,
+                    _ => continue,
+                };
+                ranges.push(native::DescriptorRange::new(
+                    range_ty,
+                    entry.count.map_or(1, |count| count.get()),
+                    native::Binding {
+                        register: entry.binding,
+                        space,
+                    },
+                    d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                ));
+            }
+            if ranges.len() > range_base {
+                parameter_offsets.push(root_offset);
+                parameters.push(native::RootParameter::descriptor_table(
+                    conv::map_visibility(visibility_sampler),
+                    &ranges[range_base..],
+                ));
+                types |= super::TableTypes::SAMPLERS;
+                root_offset += 1;
+            }
+
+            // Root (dynamic) descriptor tables
+            let dynamic_buffers_visibility = conv::map_visibility(visibility_view_dynamic);
+            for entry in bgl.entries.iter() {
+                let buffer_ty = match entry.ty {
+                    wgt::BindingType::Buffer {
+                        has_dynamic_offset: true,
+                        ty,
+                        ..
+                    } => ty,
+                    _ => continue,
+                };
+                let binding = native::Binding {
+                    register: entry.binding,
+                    space,
+                };
+                let param = match buffer_ty {
+                    wgt::BufferBindingType::Uniform => {
+                        native::RootParameter::cbv_descriptor(dynamic_buffers_visibility, binding)
+                    }
+                    wgt::BufferBindingType::Storage { read_only: true } => {
+                        native::RootParameter::srv_descriptor(dynamic_buffers_visibility, binding)
+                    }
+                    wgt::BufferBindingType::Storage { read_only: false } => {
+                        native::RootParameter::uav_descriptor(dynamic_buffers_visibility, binding)
+                    }
+                };
+                parameter_offsets.push(root_offset);
+                parameters.push(param);
+                root_offset += 2; // root view costs 2 words
+            }
+
+            root_elements.push(super::RootElement {
+                types,
+                offset: root_table_offset,
+            });
+        }
+
+        // Ensure that we didn't reallocate!
+        debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
+        assert_eq!(parameters.len(), parameter_offsets.len());
+
+        let (blob, error) = self
+            .library
+            .serialize_root_signature(
+                native::RootSignatureVersion::V1_0,
+                &parameters,
+                &[],
+                native::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
+            )
+            .map_err(|e| {
+                log::error!("Unable to find serialization function: {:?}", e);
+                crate::DeviceError::Lost
+            })?
+            .to_device_result("Root signature serialization")?;
+
+        if !error.is_null() {
+            log::error!(
+                "Root signature serialization error: {:?}",
+                error.as_c_str().to_str().unwrap()
+            );
+            error.destroy();
+            return Err(crate::DeviceError::Lost);
+        }
+
+        let raw = self
+            .raw
+            .create_root_signature(blob, 0)
+            .to_device_result("Root signature creation")?;
+        blob.destroy();
+
+        Ok(super::PipelineLayout {
+            raw,
+            parameter_offsets,
+            total_slots: root_offset,
+            elements: root_elements,
+        })
     }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
+        pipeline_layout.raw.destroy();
+    }
+
     unsafe fn create_bind_group(
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,
-    ) -> Result<Resource, crate::DeviceError> {
-        Ok(Resource)
+    ) -> Result<super::BindGroup, crate::DeviceError> {
+        Ok(super::BindGroup {})
     }
-    unsafe fn destroy_bind_group(&self, group: Resource) {}
+    unsafe fn destroy_bind_group(&self, group: super::BindGroup) {}
 
     unsafe fn create_shader_module(
         &self,
