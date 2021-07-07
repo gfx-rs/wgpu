@@ -133,12 +133,6 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                     "3D" => (ImageDimension::D3, false, sampled(false)),
                     "Cube" => (ImageDimension::Cube, false, sampled(false)),
                     "CubeArray" => (ImageDimension::D2, false, sampled(false)),
-                    "1DShadow" => (ImageDimension::D1, false, ImageClass::Depth),
-                    "1DArrayShadow" => (ImageDimension::D1, true, ImageClass::Depth),
-                    "2DShadow" => (ImageDimension::D2, false, ImageClass::Depth),
-                    "2DArrayShadow" => (ImageDimension::D2, true, ImageClass::Depth),
-                    "CubeShadow" => (ImageDimension::Cube, false, ImageClass::Depth),
-                    "CubeArrayShadow" => (ImageDimension::Cube, true, ImageClass::Depth),
                     _ => return None,
                 };
 
