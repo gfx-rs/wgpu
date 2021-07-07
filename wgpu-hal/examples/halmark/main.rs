@@ -699,7 +699,19 @@ type Api = hal::api::Metal;
 type Api = hal::api::Vulkan;
 #[cfg(all(feature = "gles", not(feature = "metal"), not(feature = "vulkan")))]
 type Api = hal::api::Gles;
-#[cfg(not(any(feature = "metal", feature = "vulkan", feature = "gles")))]
+#[cfg(all(
+    feature = "dx12",
+    not(feature = "metal"),
+    not(feature = "vulkan"),
+    not(feature = "gles")
+))]
+type Api = hal::api::Dx12;
+#[cfg(not(any(
+    feature = "metal",
+    feature = "vulkan",
+    feature = "gles",
+    feature = "dx12"
+)))]
 type Api = hal::api::Empty;
 
 fn main() {
