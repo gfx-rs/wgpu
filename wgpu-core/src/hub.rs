@@ -848,10 +848,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn from_hal<A: HalApi>(name: &str, factory: G, raw_instance: A::Instance) -> Self {
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-hal Instance for every backend.
+    pub unsafe fn from_hal_instance(name: &str, factory: G, raw_instance: hal::RawInstance) -> Self {
         profiling::scope!("new", "Global");
         Self {
-            instance: Instance::from_hal::<A>(name, raw_instance),
+            instance: Instance::from_hal(name, raw_instance),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }

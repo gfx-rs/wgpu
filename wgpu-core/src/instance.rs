@@ -69,6 +69,7 @@ fn downlevel_default_limits_less_than_default_limits() {
     )
 }
 
+#[derive(Default)]
 pub struct Instance {
     #[allow(dead_code)]
     name: String,
@@ -118,44 +119,30 @@ impl Instance {
         }
     }
 
-    pub fn from_hal<A: HalApi>(name: &str, raw_instance: A::Instance) -> Self {
-        #[cfg(vulkan)]
-        let mut vulkan_instance = None;
-        #[cfg(metal)]
-        let mut metal_instance = None;
-        #[cfg(dx12)]
-        let mut dx12_instance = None;
-        #[cfg(dx11)]
-        let mut dx11_instance = None;
-        #[cfg(gl)]
-        let mut gl_instance = None;
-        match A::VARIANT {
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-hal Instance for every backend.
+    pub unsafe fn from_hal(name: &str, raw_instance: hal::RawInstance) -> Self {
+        let mut this = Self {
+            name: name.to_owned(),
+            ..Default::default()
+        };
+
+        match raw_instance {
             #[cfg(vulkan)]
-            Backend::Vulkan => vulkan_instance = Some(raw_instance),
+            hal::RawInstance::Vulkan(instance) => this.vulkan = Some(instance),
             #[cfg(metal)]
-            Backend::Metal => metal_instance = Some(raw_instance),
+            hal::RawInstance::Metal(instance) => this.metal = Some(instance),
             #[cfg(dx12)]
-            Backend::Dx12 => dx12_instance = Some(raw_instance),
+            hal::RawInstance::Dx12(instance) => this.dx12 = Some(instance),
             #[cfg(dx11)]
-            Backend::Dx11 => dx11_instance = Some(raw_instance),
+            hal::RawInstance::Dx11(instance) => this.dx11 = Some(instance),
             #[cfg(gl)]
-            Backend::Gl => vulkan_instance = Some(raw_instance),
+            hal::RawInstance::Gles(instance) => this.gl = Some(instance),
             _ => unreachable!(),
         }
 
-        Self {
-            name: name.to_string(),
-            #[cfg(vulkan)]
-            vulkan: vulkan_instance,
-            #[cfg(metal)]
-            metal: metal_instance,
-            #[cfg(dx12)]
-            dx12: dx12_instance,
-            #[cfg(dx11)]
-            dx11: dx11_instance,
-            #[cfg(gl)]
-            gl: gl_instance,
-        }
+        this
     }
 
     pub(crate) fn destroy_surface(&self, surface: Surface) {

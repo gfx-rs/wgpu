@@ -39,11 +39,11 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    pub(crate) fn from_hal<A: wgc::hub::HalApi>(raw_instance: A::Instance) -> Self {
-        Self(wgc::hub::Global::from_hal(
+    pub unsafe fn from_hal_instance(raw_instance: hal::RawInstance) -> Self {
+        Self(wgc::hub::Global::from_hal_instance(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
-            handles,
+            raw_instance,
         ))
     }
 

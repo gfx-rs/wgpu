@@ -1388,10 +1388,19 @@ impl Instance {
         }
     }
 
+    /// Create an new instance of wgpu from a wgpu-hal instance.
+    ///
+    /// # Arguments
+    ///
+    /// - `raw_instance` - wgpu-hal instance.
+    ///
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-hal Instance for every backend.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn from_hal<A: wgc::hub::HalApi>(raw_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal(raw_instance: hal::RawInstance) -> Self {
         Instance {
-            context: Arc::new(C::from_hal(raw_instance)),
+            context: Arc::new(C::from_hal_instance(raw_instance)),
         }
     }
 
