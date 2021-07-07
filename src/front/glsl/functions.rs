@@ -276,6 +276,76 @@ impl Program<'_> {
                             ))
                         }
                     }
+                    "textureProj" => {
+                        if !(2..=3).contains(&args.len()) {
+                            return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                        }
+                        let level = args.get(2).map_or(SampleLevel::Auto, |&(expr, _)| {
+                            let exact = ctx.add_expression(
+                                Expression::As {
+                                    kind: ScalarKind::Float,
+                                    expr,
+                                    convert: Some(4),
+                                },
+                                body,
+                            );
+                            SampleLevel::Bias(exact)
+                        });
+                        let dim = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
+                            TypeInner::Image { dim, .. } => match dim {
+                                crate::ImageDimension::D1 => 1,
+                                crate::ImageDimension::D2 => 2,
+                                crate::ImageDimension::D3 => 3,
+                                crate::ImageDimension::Cube => {
+                                    return Err(ErrorKind::SemanticError(
+                                        meta,
+                                        "textureProj doesn't accept cube texture".into(),
+                                    ))
+                                }
+                            },
+                            _ => {
+                                return Err(ErrorKind::SemanticError(
+                                    meta,
+                                    "Bad call to textureProj".into(),
+                                ))
+                            }
+                        };
+                        match *self.resolve_type(ctx, args[1].0, args[1].1)? {
+                            TypeInner::Vector { size, .. } => {
+                                if !(size as usize + 1 == dim || size == VectorSize::Quad) {
+                                    return Err(ErrorKind::SemanticError(
+                                        meta,
+                                        "Bad call to textureProj".into(),
+                                    ));
+                                }
+                            }
+                            _ => {
+                                return Err(ErrorKind::SemanticError(
+                                    meta,
+                                    "Bad call to textureProj".into(),
+                                ))
+                            }
+                        }
+                        if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
+                            Ok(Some(ctx.add_expression(
+                                Expression::ImageSample {
+                                    image: args[0].0,
+                                    sampler,
+                                    coordinate: args[1].0,
+                                    array_index: None, //TODO
+                                    offset: None,      //TODO
+                                    level,
+                                    depth_ref: None,
+                                },
+                                body,
+                            )))
+                        } else {
+                            Err(ErrorKind::SemanticError(
+                                meta,
+                                "Bad call to textureProj".into(),
+                            ))
+                        }
+                    }
                     "textureSize" => {
                         if !(1..=2).contains(&args.len()) {
                             return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
