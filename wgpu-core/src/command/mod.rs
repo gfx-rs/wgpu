@@ -19,10 +19,10 @@ pub use self::transfer::*;
 
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::FastHashMap;
+use crate::init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction};
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     resource::{Buffer, Texture},
     track::{BufferState, ResourceTracker, TextureState, TrackerSet},
     Label, Stored,
@@ -169,6 +169,7 @@ pub struct CommandBuffer<A: hal::Api> {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     limits: wgt::Limits,
     support_clear_buffer_texture: bool,
     #[cfg(feature = "trace")]
@@ -196,6 +197,7 @@ impl<A: HalApi> CommandBuffer<A> {
             device_id,
             trackers: TrackerSet::new(A::VARIANT),
             buffer_memory_init_actions: Default::default(),
+            texture_memory_init_actions: Default::default(),
             limits,
             support_clear_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
             #[cfg(feature = "trace")]

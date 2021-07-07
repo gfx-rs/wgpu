@@ -3335,6 +3335,28 @@ pub struct ImageSubresourceRange {
     pub array_layer_count: Option<NonZeroU32>,
 }
 
+impl ImageSubresourceRange {
+    /// Returns the mip level range of a subresource range describes for a specific texture.
+    pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+        self.base_mip_level
+            ..self.base_mip_level
+                + match self.mip_level_count {
+                    Some(mip_level_count) => mip_level_count.get(),
+                    None => texture_desc.mip_level_count,
+                }
+    }
+
+    /// Returns the layer range of a subresource range describes for a specific texture.
+    pub fn layer_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+        self.base_array_layer
+            ..self.base_array_layer
+                + match self.array_layer_count {
+                    Some(array_layer_count) => array_layer_count.get(),
+                    None => texture_desc.size.depth_or_array_layers,
+                }
+    }
+}
+
 /// Color variation to use when sampler addressing mode is [`AddressMode::ClampToBorder`]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]

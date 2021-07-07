@@ -16,6 +16,7 @@ use crate::{
     device::DeviceError,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
+    init_tracker::TextureInitTracker,
     resource,
     track::TextureSelector,
     LifeGuard, Stored,
@@ -151,6 +152,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         flags: wgt::TextureFormatFeatureFlags::empty(),
                         filterable: false,
                     },
+                    initialization_status: TextureInitTracker::new(1, 1),
                     full_range: TextureSelector {
                         layers: 0..1,
                         levels: 0..1,

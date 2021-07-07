@@ -3,7 +3,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
-    init_tracker::BufferInitTrackerAction,
+    init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     track::{TrackerSet, UsageConflict, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
@@ -716,6 +716,7 @@ pub struct BindGroup<A: hal::Api> {
     pub(crate) life_guard: LifeGuard,
     pub(crate) used: TrackerSet,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,
+    pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction>,
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
 }
 

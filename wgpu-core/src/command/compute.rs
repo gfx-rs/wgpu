@@ -371,6 +371,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             },
                         ),
                     );
+                    cmd_buf.texture_memory_init_actions.extend(
+                        bind_group.used_texture_ranges.iter().filter_map(|action| {
+                            match texture_guard.get(action.id) {
+                                Ok(buffer) => buffer.initialization_status.check_action(action),
+                                Err(_) => None,
+                            }
+                        }),
+                    );
                     let pipeline_layout_id = state.binder.pipeline_layout_id;
                     let entries = state.binder.assign_group(
                         index as usize,
