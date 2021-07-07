@@ -41,9 +41,9 @@ impl crate::Api for Api {
     type Texture = Texture;
     type SurfaceTexture = Texture;
     type TextureView = TextureView;
-    type Sampler = Resource;
-    type QuerySet = Resource;
-    type Fence = Resource;
+    type Sampler = Sampler;
+    type QuerySet = QuerySet;
+    type Fence = Fence;
 
     type BindGroupLayout = Resource;
     type BindGroup = Resource;
@@ -215,6 +215,23 @@ pub struct TextureView {
 
 unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
+
+#[derive(Debug)]
+pub struct Sampler {}
+
+unsafe impl Send for Sampler {}
+unsafe impl Sync for Sampler {}
+
+#[derive(Debug)]
+pub struct QuerySet {}
+
+#[derive(Debug)]
+pub struct Fence {
+    raw: native::Fence,
+}
+
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
 
 impl crate::Instance<Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
@@ -525,7 +542,7 @@ impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &mut self,
         command_buffers: &[&Resource],
-        signal_fence: Option<(&mut Resource, crate::FenceValue)>,
+        signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         Ok(())
     }

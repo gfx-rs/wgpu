@@ -2,15 +2,13 @@ use super::{conv, descriptor, HResult as _};
 use parking_lot::Mutex;
 use std::{iter, mem, ptr};
 use winapi::{
-    shared::{dxgiformat, dxgitype},
+    shared::{dxgiformat, dxgitype, winerror},
     um::{d3d12, d3d12sdklayers, synchapi, winbase},
     Interface,
 };
 
 //TODO: remove this
 use super::Resource;
-
-type DeviceResult<T> = Result<T, crate::DeviceError>;
 
 const D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING: u32 = 0x1688;
 
@@ -649,10 +647,13 @@ impl crate::Device<super::Api> for super::Device {
         }
     }
 
-    unsafe fn create_sampler(&self, desc: &crate::SamplerDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
+    unsafe fn create_sampler(
+        &self,
+        desc: &crate::SamplerDescriptor,
+    ) -> Result<super::Sampler, crate::DeviceError> {
+        Ok(super::Sampler {})
     }
-    unsafe fn destroy_sampler(&self, sampler: Resource) {}
+    unsafe fn destroy_sampler(&self, sampler: super::Sampler) {}
 
     unsafe fn create_command_encoder(
         &self,
@@ -665,21 +666,21 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
-    ) -> DeviceResult<Resource> {
+    ) -> Result<Resource, crate::DeviceError> {
         Ok(Resource)
     }
     unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
     unsafe fn create_pipeline_layout(
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> DeviceResult<Resource> {
+    ) -> Result<Resource, crate::DeviceError> {
         Ok(Resource)
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
     unsafe fn create_bind_group(
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,
-    ) -> DeviceResult<Resource> {
+    ) -> Result<Resource, crate::DeviceError> {
         Ok(Resource)
     }
     unsafe fn destroy_bind_group(&self, group: Resource) {}
@@ -710,24 +711,52 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn create_query_set(
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
-    ) -> DeviceResult<Resource> {
-        Ok(Resource)
+    ) -> Result<super::QuerySet, crate::DeviceError> {
+        Ok(super::QuerySet {})
     }
-    unsafe fn destroy_query_set(&self, set: Resource) {}
-    unsafe fn create_fence(&self) -> DeviceResult<Resource> {
-        Ok(Resource)
+    unsafe fn destroy_query_set(&self, set: super::QuerySet) {}
+
+    unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
+        let mut raw = native::Fence::null();
+        let hr = self.raw.CreateFence(
+            0,
+            d3d12::D3D12_FENCE_FLAG_NONE,
+            &d3d12::ID3D12Fence::uuidof(),
+            raw.mut_void(),
+        );
+        hr.to_device_result("Fence creation")?;
+        Ok(super::Fence { raw })
     }
-    unsafe fn destroy_fence(&self, fence: Resource) {}
-    unsafe fn get_fence_value(&self, fence: &Resource) -> DeviceResult<crate::FenceValue> {
-        Ok(0)
+    unsafe fn destroy_fence(&self, fence: super::Fence) {
+        fence.raw.destroy();
+    }
+    unsafe fn get_fence_value(
+        &self,
+        fence: &super::Fence,
+    ) -> Result<crate::FenceValue, crate::DeviceError> {
+        Ok(fence.raw.GetCompletedValue())
     }
     unsafe fn wait(
         &self,
-        fence: &Resource,
+        fence: &super::Fence,
         value: crate::FenceValue,
         timeout_ms: u32,
-    ) -> DeviceResult<bool> {
-        Ok(true)
+    ) -> Result<bool, crate::DeviceError> {
+        if fence.raw.GetCompletedValue() >= value {
+            return Ok(true);
+        }
+        let hr = fence.raw.set_event_on_completion(self.idler.event, value);
+        hr.to_device_result("Set event")?;
+
+        match synchapi::WaitForSingleObject(self.idler.event.0, timeout_ms) {
+            winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => Err(crate::DeviceError::Lost),
+            winbase::WAIT_OBJECT_0 => Ok(true),
+            winerror::WAIT_TIMEOUT => Ok(false),
+            other => {
+                log::error!("Unexpected wait status: 0x{:x}", other);
+                Err(crate::DeviceError::Lost)
+            }
+        }
     }
 
     unsafe fn start_capture(&self) -> bool {
