@@ -69,23 +69,10 @@ fn downlevel_default_limits_less_than_default_limits() {
     )
 }
 
-pub enum RawInstance {
-    #[cfg(vulkan)]
-    Vulkan(HalInstance<hal::api::Vulkan>),
-    #[cfg(metal)]
-    Metal(HalInstance<hal::api::Metal>),
-    #[cfg(dx12)]
-    Dx12(HalInstance<hal::api::Dx12>),
-    #[cfg(dx11)]
-    Dx11(HalInstance<hal::api::Dx11>),
-    #[cfg(gl)]
-    Gles(HalInstance<hal::api::Gles>),
-}
-
 #[derive(Default)]
 pub struct Instance {
     #[allow(dead_code)]
-    name: String,
+    pub name: String,
     #[cfg(vulkan)]
     pub vulkan: Option<HalInstance<hal::api::Vulkan>>,
     #[cfg(metal)]
@@ -130,33 +117,6 @@ impl Instance {
             #[cfg(gl)]
             gl: init::<hal::api::Gles>(backends),
         }
-    }
-
-    /// # Safety
-    ///
-    /// Refer to the creation of wgpu-hal Instance for every backend.
-    pub unsafe fn from_hal(name: &str, raw_instance: RawInstance) -> Self {
-        let mut this = Self {
-            name: name.to_owned(),
-            ..Default::default()
-        };
-
-        match raw_instance {
-            #[cfg(vulkan)]
-            RawInstance::Vulkan(instance) => this.vulkan = Some(instance),
-            #[cfg(metal)]
-            RawInstance::Metal(instance) => this.metal = Some(instance),
-            #[cfg(dx12)]
-            RawInstance::Dx12(instance) => this.dx12 = Some(instance),
-            #[cfg(dx11)]
-            RawInstance::Dx11(instance) => this.dx11 = Some(instance),
-            #[cfg(gl)]
-            RawInstance::Gles(instance) => this.gl = Some(instance),
-            #[allow(unreachable_patterns)]
-            _ => unreachable!(),
-        }
-
-        this
     }
 
     pub(crate) fn destroy_surface(&self, surface: Surface) {
