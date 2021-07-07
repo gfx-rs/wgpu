@@ -159,3 +159,44 @@ pub fn map_texture_usage_to_resource_flags(
 
     flags
 }
+
+pub fn map_address_mode(mode: wgt::AddressMode) -> d3d12::D3D12_TEXTURE_ADDRESS_MODE {
+    use wgt::AddressMode as Am;
+    match mode {
+        Am::Repeat => d3d12::D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        Am::MirrorRepeat => d3d12::D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
+        Am::ClampToEdge => d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        Am::ClampToBorder => d3d12::D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        //Am::MirrorClamp => d3d12::D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE,
+    }
+}
+
+pub fn map_filter_mode(mode: wgt::FilterMode) -> d3d12::D3D12_FILTER_TYPE {
+    match mode {
+        wgt::FilterMode::Nearest => d3d12::D3D12_FILTER_TYPE_POINT,
+        wgt::FilterMode::Linear => d3d12::D3D12_FILTER_TYPE_LINEAR,
+    }
+}
+
+pub fn map_comparison(func: wgt::CompareFunction) -> d3d12::D3D12_COMPARISON_FUNC {
+    use wgt::CompareFunction as Cf;
+    match func {
+        Cf::Never => d3d12::D3D12_COMPARISON_FUNC_NEVER,
+        Cf::Less => d3d12::D3D12_COMPARISON_FUNC_LESS,
+        Cf::LessEqual => d3d12::D3D12_COMPARISON_FUNC_LESS_EQUAL,
+        Cf::Equal => d3d12::D3D12_COMPARISON_FUNC_EQUAL,
+        Cf::GreaterEqual => d3d12::D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+        Cf::Greater => d3d12::D3D12_COMPARISON_FUNC_GREATER,
+        Cf::NotEqual => d3d12::D3D12_COMPARISON_FUNC_NOT_EQUAL,
+        Cf::Always => d3d12::D3D12_COMPARISON_FUNC_ALWAYS,
+    }
+}
+
+pub fn map_border_color(border_color: Option<wgt::SamplerBorderColor>) -> [f32; 4] {
+    use wgt::SamplerBorderColor as Sbc;
+    match border_color {
+        Some(Sbc::TransparentBlack) | None => [0.0; 4],
+        Some(Sbc::OpaqueBlack) => [0.0, 0.0, 0.0, 1.0],
+        Some(Sbc::OpaqueWhite) => [1.0; 4],
+    }
+}

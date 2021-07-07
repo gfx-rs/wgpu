@@ -165,6 +165,7 @@ pub struct Device {
     rtv_pool: Mutex<descriptor::CpuPool>,
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
+    sampler_pool: Mutex<descriptor::CpuPool>,
 }
 
 unsafe impl Send for Device {}
@@ -177,7 +178,13 @@ pub struct Queue {
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
-pub struct CommandEncoder {}
+pub struct CommandEncoder {
+    allocator: native::CommandAllocator,
+    list: Option<native::GraphicsCommandList>,
+}
+
+unsafe impl Send for CommandEncoder {}
+unsafe impl Sync for CommandEncoder {}
 
 #[derive(Debug)]
 pub struct Buffer {
@@ -210,13 +217,21 @@ unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
 
 #[derive(Debug)]
-pub struct Sampler {}
+pub struct Sampler {
+    handle: descriptor::Handle,
+}
 
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 
 #[derive(Debug)]
-pub struct QuerySet {}
+pub struct QuerySet {
+    raw: native::QueryHeap,
+    ty: wgt::QueryType,
+}
+
+unsafe impl Send for QuerySet {}
+unsafe impl Sync for QuerySet {}
 
 #[derive(Debug)]
 pub struct Fence {

@@ -53,6 +53,10 @@ impl super::Device {
                 raw,
                 native::DescriptorHeapType::CbvSrvUav,
             )),
+            sampler_pool: Mutex::new(descriptor::CpuPool::new(
+                raw,
+                native::DescriptorHeapType::Sampler,
+            )),
         })
     }
 
@@ -418,11 +422,10 @@ impl super::Device {
 
 impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self) {
-        //self.heap_srv_cbv_uav.0.destroy();
-        //self.samplers.destroy();
         self.rtv_pool.into_inner().destroy();
         self.dsv_pool.into_inner().destroy();
         self.srv_uav_pool.into_inner().destroy();
+        self.sampler_pool.into_inner().destroy();
 
         //self.descriptor_updater.lock().destroy();
 
@@ -651,17 +654,61 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> Result<super::Sampler, crate::DeviceError> {
-        Ok(super::Sampler {})
+        let handle = self.sampler_pool.lock().alloc_handle();
+
+        let reduction = match desc.compare {
+            Some(_) => d3d12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
+            None => d3d12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
+        };
+        let filter = conv::map_filter_mode(desc.min_filter) << d3d12::D3D12_MIN_FILTER_SHIFT
+            | conv::map_filter_mode(desc.mag_filter) << d3d12::D3D12_MAG_FILTER_SHIFT
+            | conv::map_filter_mode(desc.mipmap_filter) << d3d12::D3D12_MIP_FILTER_SHIFT
+            | reduction << d3d12::D3D12_FILTER_REDUCTION_TYPE_SHIFT
+            | desc
+                .anisotropy_clamp
+                .map_or(0, |_| d3d12::D3D12_FILTER_ANISOTROPIC);
+
+        self.raw.create_sampler(
+            handle.raw,
+            filter,
+            [
+                conv::map_address_mode(desc.address_modes[0]),
+                conv::map_address_mode(desc.address_modes[1]),
+                conv::map_address_mode(desc.address_modes[2]),
+            ],
+            0.0,
+            desc.anisotropy_clamp.map_or(0, |aniso| aniso.get() as u32),
+            conv::map_comparison(desc.compare.unwrap_or(wgt::CompareFunction::Always)),
+            conv::map_border_color(desc.border_color),
+            desc.lod_clamp.clone().unwrap_or(0.0..16.0),
+        );
+
+        Ok(super::Sampler { handle })
     }
-    unsafe fn destroy_sampler(&self, sampler: super::Sampler) {}
+    unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
+        self.sampler_pool.lock().free_handle(sampler.handle);
+    }
 
     unsafe fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<super::Api>,
     ) -> Result<super::CommandEncoder, crate::DeviceError> {
-        Ok(super::CommandEncoder {})
+        let allocator = self
+            .raw
+            .create_command_allocator(native::CmdListType::Direct)
+            .to_device_result("Command allocator creation")?;
+        Ok(super::CommandEncoder {
+            allocator,
+            list: None,
+        })
     }
-    unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {}
+    unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
+        if let Some(list) = encoder.list {
+            list.close();
+            list.destroy();
+        }
+        encoder.allocator.destroy();
+    }
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -712,9 +759,22 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Result<super::QuerySet, crate::DeviceError> {
-        Ok(super::QuerySet {})
+        let heap_ty = match desc.ty {
+            wgt::QueryType::Occlusion => native::QueryHeapType::Occlusion,
+            wgt::QueryType::PipelineStatistics(_) => native::QueryHeapType::PipelineStatistics,
+            wgt::QueryType::Timestamp => native::QueryHeapType::Timestamp,
+        };
+
+        let raw = self
+            .raw
+            .create_query_heap(heap_ty, desc.count, 0)
+            .to_device_result("Query heap creation")?;
+
+        Ok(super::QuerySet { raw, ty: desc.ty })
     }
-    unsafe fn destroy_query_set(&self, set: super::QuerySet) {}
+    unsafe fn destroy_query_set(&self, set: super::QuerySet) {
+        set.raw.destroy();
+    }
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         let mut raw = native::Fence::null();
