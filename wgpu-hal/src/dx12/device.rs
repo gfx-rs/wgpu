@@ -1,6 +1,6 @@
 use super::{conv, descriptor, HResult as _};
 use parking_lot::Mutex;
-use std::{iter, mem, ptr, sync::Arc};
+use std::{mem, ptr, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, winerror},
     um::{d3d12, d3d12sdklayers, synchapi, winbase},
@@ -11,10 +11,6 @@ use winapi::{
 use super::Resource;
 
 const D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING: u32 = 0x1688;
-
-fn wide_cstr(name: &str) -> Vec<u16> {
-    name.encode_utf16().chain(iter::once(0)).collect()
-}
 
 impl super::Device {
     pub(super) fn new(
@@ -571,7 +567,7 @@ impl crate::Device<super::Api> for super::Device {
         );
 
         if let Some(label) = desc.label {
-            let cwstr = wide_cstr(label);
+            let cwstr = conv::map_label(label);
             resource.SetName(cwstr.as_ptr());
         }
 
@@ -701,12 +697,17 @@ impl crate::Device<super::Api> for super::Device {
             .to_device_result("Command allocator creation")?;
         Ok(super::CommandEncoder {
             allocator,
+            device: self.raw,
             list: None,
+            free_lists: Vec::new(),
         })
     }
     unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
         if let Some(list) = encoder.list {
             list.close();
+            list.destroy();
+        }
+        for list in encoder.free_lists {
             list.destroy();
         }
         encoder.allocator.destroy();

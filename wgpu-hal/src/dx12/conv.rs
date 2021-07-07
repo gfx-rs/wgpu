@@ -1,3 +1,4 @@
+use std::iter;
 use winapi::{
     shared::{dxgi1_2, dxgiformat},
     um::d3d12,
@@ -232,4 +233,8 @@ pub fn map_binding_type(ty: &wgt::BindingType) -> native::DescriptorRangeType {
         }
         | Bt::StorageTexture { .. } => native::DescriptorRangeType::UAV,
     }
+}
+
+pub fn map_label(name: &str) -> Vec<u16> {
+    name.encode_utf16().chain(iter::once(0)).collect()
 }

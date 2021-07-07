@@ -36,7 +36,7 @@ impl crate::Api for Api {
 
     type Queue = Queue;
     type CommandEncoder = CommandEncoder;
-    type CommandBuffer = Resource;
+    type CommandBuffer = CommandBuffer;
 
     type Buffer = Buffer;
     type Texture = Texture;
@@ -182,11 +182,20 @@ unsafe impl Sync for Queue {}
 
 pub struct CommandEncoder {
     allocator: native::CommandAllocator,
+    device: native::Device,
     list: Option<native::GraphicsCommandList>,
+    free_lists: Vec<native::GraphicsCommandList>,
 }
 
 unsafe impl Send for CommandEncoder {}
 unsafe impl Sync for CommandEncoder {}
+
+pub struct CommandBuffer {
+    raw: native::GraphicsCommandList,
+}
+
+unsafe impl Send for CommandBuffer {}
+unsafe impl Sync for CommandBuffer {}
 
 #[derive(Debug)]
 pub struct Buffer {
@@ -434,7 +443,7 @@ impl crate::Surface<Api> for Surface {
 impl crate::Queue<Api> for Queue {
     unsafe fn submit(
         &mut self,
-        command_buffers: &[&Resource],
+        command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
         Ok(())

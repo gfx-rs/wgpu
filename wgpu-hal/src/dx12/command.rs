@@ -1,15 +1,47 @@
-use super::Resource;
+use super::{conv, HResult as _, Resource};
 use std::ops::Range;
 
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
+        let list = match self.free_lists.pop() {
+            Some(list) => {
+                list.reset(self.allocator, native::PipelineState::null());
+                list
+            }
+            None => self
+                .device
+                .create_graphics_command_list(
+                    native::CmdListType::Direct,
+                    self.allocator,
+                    native::PipelineState::null(),
+                    0,
+                )
+                .to_device_result("Create command list")?,
+        };
+
+        if let Some(label) = label {
+            let cwstr = conv::map_label(label);
+            list.SetName(cwstr.as_ptr());
+        }
+        self.list = Some(list);
         Ok(())
     }
-    unsafe fn discard_encoding(&mut self) {}
-    unsafe fn end_encoding(&mut self) -> Result<Resource, crate::DeviceError> {
-        Ok(Resource)
+    unsafe fn discard_encoding(&mut self) {
+        if let Some(list) = self.list.take() {
+            list.close();
+            self.free_lists.push(list);
+        }
     }
-    unsafe fn reset_all<I>(&mut self, command_buffers: I) {}
+    unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
+        let raw = self.list.take().unwrap();
+        raw.close();
+        Ok(super::CommandBuffer { raw })
+    }
+    unsafe fn reset_all<I: Iterator<Item = super::CommandBuffer>>(&mut self, command_buffers: I) {
+        for cmd_buf in command_buffers {
+            self.free_lists.push(cmd_buf.raw);
+        }
+    }
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
