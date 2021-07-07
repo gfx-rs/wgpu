@@ -180,11 +180,23 @@ pub struct Queue {
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
+#[derive(Default)]
+struct Temp {
+    barriers: Vec<d3d12::D3D12_RESOURCE_BARRIER>,
+}
+
+impl Temp {
+    fn clear(&mut self) {
+        self.barriers.clear();
+    }
+}
+
 pub struct CommandEncoder {
     allocator: native::CommandAllocator,
     device: native::Device,
     list: Option<native::GraphicsCommandList>,
     free_lists: Vec<native::GraphicsCommandList>,
+    temp: Temp,
 }
 
 unsafe impl Send for CommandEncoder {}
@@ -209,11 +221,19 @@ unsafe impl Sync for Buffer {}
 pub struct Texture {
     resource: native::Resource,
     size: wgt::Extent3d,
+    array_layer_count: u32,
+    mip_level_count: u32,
     sample_count: u32,
 }
 
 unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
+
+impl Texture {
+    fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
+        mip_level + (array_layer + plane * self.array_layer_count) * self.mip_level_count
+    }
+}
 
 #[derive(Debug)]
 pub struct TextureView {

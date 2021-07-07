@@ -575,6 +575,13 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Texture {
             resource,
             size: desc.size,
+            array_layer_count: match desc.dimension {
+                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+                    desc.size.depth_or_array_layers
+                }
+                wgt::TextureDimension::D3 => 1,
+            },
+            mip_level_count: desc.mip_level_count,
             sample_count: desc.sample_count,
         })
     }
@@ -700,6 +707,7 @@ impl crate::Device<super::Api> for super::Device {
             device: self.raw,
             list: None,
             free_lists: Vec::new(),
+            temp: super::Temp::default(),
         })
     }
     unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {

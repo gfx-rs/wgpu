@@ -238,3 +238,66 @@ pub fn map_binding_type(ty: &wgt::BindingType) -> native::DescriptorRangeType {
 pub fn map_label(name: &str) -> Vec<u16> {
     name.encode_utf16().chain(iter::once(0)).collect()
 }
+
+pub fn map_buffer_usage_to_state(usage: crate::BufferUses) -> d3d12::D3D12_RESOURCE_STATES {
+    use crate::BufferUses as Bu;
+    let mut state = d3d12::D3D12_RESOURCE_STATE_COMMON;
+
+    if usage.intersects(Bu::COPY_SRC) {
+        state |= d3d12::D3D12_RESOURCE_STATE_COPY_SOURCE;
+    }
+    if usage.intersects(Bu::COPY_DST) {
+        state |= d3d12::D3D12_RESOURCE_STATE_COPY_DEST;
+    }
+    if usage.intersects(Bu::INDEX) {
+        state |= d3d12::D3D12_RESOURCE_STATE_INDEX_BUFFER;
+    }
+    if usage.intersects(Bu::VERTEX | Bu::UNIFORM) {
+        state |= d3d12::D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    }
+    if usage.intersects(Bu::STORAGE_LOAD) {
+        state |= d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            | d3d12::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    }
+    if usage.intersects(Bu::STORAGE_STORE) {
+        state |= d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+    if usage.intersects(Bu::INDIRECT) {
+        state |= d3d12::D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+    }
+    state
+}
+
+pub fn map_texture_usage_to_state(usage: crate::TextureUses) -> d3d12::D3D12_RESOURCE_STATES {
+    use crate::TextureUses as Tu;
+    let mut state = d3d12::D3D12_RESOURCE_STATE_COMMON;
+    //Note: `RESOLVE_SOURCE` and `RESOLVE_DEST` are not used here
+    //Note: `PRESENT` is the same as `COMMON`
+    if usage == crate::TextureUses::UNINITIALIZED {
+        return state;
+    }
+
+    if usage.intersects(Tu::COPY_SRC) {
+        state |= d3d12::D3D12_RESOURCE_STATE_COPY_SOURCE;
+    }
+    if usage.intersects(Tu::COPY_DST) {
+        state |= d3d12::D3D12_RESOURCE_STATE_COPY_DEST;
+    }
+    if usage.intersects(Tu::SAMPLED | Tu::STORAGE_LOAD) {
+        state |= d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            | d3d12::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    }
+    if usage.intersects(Tu::COLOR_TARGET) {
+        state |= d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET;
+    }
+    if usage.intersects(Tu::DEPTH_STENCIL_READ) {
+        state |= d3d12::D3D12_RESOURCE_STATE_DEPTH_READ;
+    }
+    if usage.intersects(Tu::DEPTH_STENCIL_WRITE) {
+        state |= d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    }
+    if usage.intersects(Tu::STORAGE_STORE) {
+        state |= d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+    state
+}

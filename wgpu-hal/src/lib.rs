@@ -620,6 +620,7 @@ bitflags::bitflags! {
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
         const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits;
+        //TODO: remove this
         const UNINITIALIZED = 0xFFFF;
     }
 }

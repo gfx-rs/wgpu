@@ -50,7 +50,12 @@ unsafe extern "system" fn output_debug_string_handler(
         None => return excpt::EXCEPTION_CONTINUE_SEARCH,
     };
 
-    log::log!(level, "D3D12: {}", message,);
+    log::log!(level, "{}", message,);
+
+    if cfg!(debug_assertions) && level == log::Level::Error {
+        std::process::exit(1);
+    }
+
     excpt::EXCEPTION_CONTINUE_EXECUTION
 }
 
