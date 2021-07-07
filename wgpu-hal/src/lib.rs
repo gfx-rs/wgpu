@@ -1083,19 +1083,6 @@ pub struct ComputePassDescriptor<'a> {
     pub label: Label<'a>,
 }
 
-pub enum RawInstance {
-    #[cfg(feature = "vulkan")]
-    Vulkan(vulkan::Instance),
-    #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-    Metal(metal::Instance),
-    #[cfg(feature = "dx12")]
-    Dx12(dx12::Instance),
-    #[cfg(feature = "dx11")]
-    Dx11(dx11::Instance),
-    #[cfg(feature = "gles")]
-    Gles(gles::Instance),
-}
-
 #[test]
 fn test_default_limits() {
     let limits = wgt::Limits::default();

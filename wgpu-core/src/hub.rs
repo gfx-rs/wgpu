@@ -3,7 +3,7 @@ use crate::{
     command::{CommandBuffer, RenderBundle},
     device::Device,
     id,
-    instance::{Adapter, Instance, Surface},
+    instance::{Adapter, Instance, RawInstance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, QuerySet, Sampler, Texture, TextureView},
     swap_chain::SwapChain,
@@ -851,7 +851,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
-    pub unsafe fn from_hal_instance(name: &str, factory: G, raw_instance: hal::RawInstance) -> Self {
+    pub unsafe fn from_hal_instance(name: &str, factory: G, raw_instance: RawInstance) -> Self {
         profiling::scope!("new", "Global");
         Self {
             instance: Instance::from_hal(name, raw_instance),

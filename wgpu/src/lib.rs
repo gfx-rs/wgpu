@@ -24,6 +24,7 @@ use std::{
 
 use parking_lot::Mutex;
 
+pub use wgc::instance::RawInstance;
 pub use wgt::{
     AdapterInfo, AddressMode, Backend, Backends, BindGroupLayoutEntry, BindingType, BlendComponent,
     BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType, BufferSize,
@@ -1398,7 +1399,7 @@ impl Instance {
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
     #[cfg(not(target_arch = "wasm32"))]
-    pub unsafe fn from_hal(raw_instance: hal::RawInstance) -> Self {
+    pub unsafe fn from_hal(raw_instance: RawInstance) -> Self {
         Instance {
             context: Arc::new(C::from_hal_instance(raw_instance)),
         }

@@ -39,7 +39,7 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    pub unsafe fn from_hal_instance(raw_instance: hal::RawInstance) -> Self {
+    pub unsafe fn from_hal_instance(raw_instance: wgc::instance::RawInstance) -> Self {
         Self(wgc::hub::Global::from_hal_instance(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
