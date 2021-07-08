@@ -876,6 +876,23 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 writeln!(self.out, "continue;")?
             }
+            Statement::Barrier(barrier) => {
+                if barrier.contains(crate::Barrier::STORAGE) {
+                    writeln!(
+                        self.out,
+                        "{}DeviceMemoryBarrierWithGroupSync();",
+                        INDENT.repeat(indent)
+                    )?;
+                }
+
+                if barrier.contains(crate::Barrier::WORK_GROUP) {
+                    writeln!(
+                        self.out,
+                        "{}GroupMemoryBarrierWithGroupSync();",
+                        INDENT.repeat(indent)
+                    )?;
+                }
+            }
             _ => return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt))),
         }
 

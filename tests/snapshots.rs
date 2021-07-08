@@ -368,7 +368,7 @@ fn convert_wgsl() {
         ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         (
             "control-flow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
             "standard",
