@@ -93,6 +93,8 @@ impl<T> HResult<T> for (T, i32) {
     }
 }
 
+const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
+
 pub struct Instance {
     factory: native::Factory4,
     library: Arc<native::D3D12Lib>,
@@ -166,6 +168,8 @@ pub struct Device {
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
     sampler_pool: Mutex<descriptor::CpuPool>,
+    // aux resources
+    zero_buffer: native::Resource,
     // library
     library: Arc<native::D3D12Lib>,
 }
@@ -194,6 +198,7 @@ impl Temp {
 pub struct CommandEncoder {
     allocator: native::CommandAllocator,
     device: native::Device,
+    zero_buffer: native::Resource,
     list: Option<native::GraphicsCommandList>,
     free_lists: Vec<native::GraphicsCommandList>,
     temp: Temp,

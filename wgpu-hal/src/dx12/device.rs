@@ -1,6 +1,6 @@
 use super::{conv, descriptor, HResult as _};
 use parking_lot::Mutex;
-use std::{mem, ptr, sync::Arc};
+use std::{mem, ptr, slice, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, winerror},
     um::{d3d12, d3d12sdklayers, synchapi, winbase},
@@ -30,6 +30,53 @@ impl super::Device {
         };
         hr.into_device_result("Idle fence creation")?;
 
+        let mut zero_buffer = native::Resource::null();
+        unsafe {
+            let raw_desc = d3d12::D3D12_RESOURCE_DESC {
+                Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
+                Alignment: 0,
+                Width: super::ZERO_BUFFER_SIZE,
+                Height: 1,
+                DepthOrArraySize: 1,
+                MipLevels: 1,
+                Format: dxgiformat::DXGI_FORMAT_UNKNOWN,
+                SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+                Flags: d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE,
+            };
+
+            let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
+                Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
+                CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
+                MemoryPoolPreference: d3d12::D3D12_MEMORY_POOL_L0,
+                CreationNodeMask: 0,
+                VisibleNodeMask: 0,
+            };
+
+            let hr = raw.CreateCommittedResource(
+                &heap_properties,
+                d3d12::D3D12_HEAP_FLAG_NONE,
+                &raw_desc,
+                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                ptr::null(),
+                &d3d12::ID3D12Resource::uuidof(),
+                zero_buffer.mut_void(),
+            );
+
+            hr.into_device_result("Zero buffer creation")?;
+
+            let range = d3d12::D3D12_RANGE { Begin: 0, End: 0 };
+            let mut ptr = std::ptr::null_mut();
+            (*zero_buffer)
+                .Map(0, &range, &mut ptr)
+                .into_device_result("Map zero buffer")?;
+            slice::from_raw_parts_mut(ptr as *mut u8, super::ZERO_BUFFER_SIZE as usize).fill(0);
+            (*zero_buffer).Unmap(0, &range);
+        };
+
         Ok(super::Device {
             raw,
             present_queue,
@@ -54,6 +101,7 @@ impl super::Device {
                 raw,
                 native::DescriptorHeapType::Sampler,
             )),
+            zero_buffer,
             library: Arc::clone(library),
         })
     }
@@ -424,6 +472,7 @@ impl crate::Device<super::Api> for super::Device {
         self.dsv_pool.into_inner().destroy();
         self.srv_uav_pool.into_inner().destroy();
         self.sampler_pool.into_inner().destroy();
+        self.zero_buffer.destroy();
 
         //self.descriptor_updater.lock().destroy();
 
@@ -701,6 +750,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::CommandEncoder {
             allocator,
             device: self.raw,
+            zero_buffer: self.zero_buffer,
             list: None,
             free_lists: Vec::new(),
             temp: super::Temp::default(),

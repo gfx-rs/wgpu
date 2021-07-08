@@ -170,13 +170,21 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
-    unsafe fn fill_buffer(
-        &mut self,
-        _buffer: &super::Buffer,
-        _range: crate::MemoryRange,
-        _value: u8,
-    ) {
-        //TODO
+    unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {
+        assert_eq!(value, 0, "Only zero is supported!");
+        let list = self.list.unwrap();
+        let mut offset = range.start;
+        while offset < range.end {
+            let size = super::ZERO_BUFFER_SIZE.min(range.end - offset);
+            list.CopyBufferRegion(
+                buffer.resource.as_mut_ptr(),
+                offset,
+                self.zero_buffer.as_mut_ptr(),
+                0,
+                size,
+            );
+            offset += size;
+        }
     }
 
     unsafe fn copy_buffer_to_buffer<T>(
