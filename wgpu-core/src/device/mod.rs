@@ -732,10 +732,13 @@ impl<A: HalApi> Device<A> {
         let usage = {
             let mask_copy = !(hal::TextureUses::COPY_SRC | hal::TextureUses::COPY_DST);
             let mask_dimension = match view_dim {
-                wgt::TextureViewDimension::Cube |
-                wgt::TextureViewDimension::CubeArray => hal::TextureUses::SAMPLED,
+                wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                    hal::TextureUses::SAMPLED
+                }
                 wgt::TextureViewDimension::D3 => {
-                    hal::TextureUses::SAMPLED | hal::TextureUses::STORAGE_LOAD | hal::TextureUses::STORAGE_STORE
+                    hal::TextureUses::SAMPLED
+                        | hal::TextureUses::STORAGE_LOAD
+                        | hal::TextureUses::STORAGE_STORE
                 }
                 _ => hal::TextureUses::all(),
             };
@@ -747,7 +750,11 @@ impl<A: HalApi> Device<A> {
             texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
 
-        log::debug!("Create view for texture {:?} filters usages to {:?}", texture_id, usage);
+        log::debug!(
+            "Create view for texture {:?} filters usages to {:?}",
+            texture_id,
+            usage
+        );
         let hal_desc = hal::TextureViewDescriptor {
             label: desc.label.borrow_option(),
             format,

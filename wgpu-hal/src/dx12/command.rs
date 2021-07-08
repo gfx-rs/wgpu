@@ -210,59 +210,26 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
 
         for r in regions {
-            let (
-                depth,
-                array_layer_count,
-                src_z,
-                src_base_array_layer,
-                dst_z,
-                dst_base_array_layer,
-            ) = match src.dimension {
-                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => (
-                    1,
-                    r.size.depth_or_array_layers,
-                    0,
-                    r.src_base.origin.z,
-                    0,
-                    r.dst_base.origin.z,
-                ),
-                wgt::TextureDimension::D3 => (
-                    r.size.depth_or_array_layers,
-                    1,
-                    r.src_base.origin.z,
-                    0,
-                    r.dst_base.origin.z,
-                    0,
-                ),
-            };
             let src_box = d3d12::D3D12_BOX {
                 left: r.src_base.origin.x,
                 top: r.src_base.origin.y,
                 right: r.src_base.origin.x + r.size.width,
                 bottom: r.src_base.origin.y + r.size.height,
-                front: src_z,
-                back: src_z + depth,
+                front: r.src_base.origin.z,
+                back: r.src_base.origin.z + r.size.depth,
             };
-            for rel_array_layer in 0..array_layer_count {
-                *src_location.u.SubresourceIndex_mut() = src.calc_subresource(
-                    r.src_base.mip_level,
-                    src_base_array_layer + rel_array_layer,
-                    0,
-                );
-                *dst_location.u.SubresourceIndex_mut() = dst.calc_subresource(
-                    r.dst_base.mip_level,
-                    dst_base_array_layer + rel_array_layer,
-                    0,
-                );
-                list.CopyTextureRegion(
-                    &dst_location,
-                    r.dst_base.origin.x,
-                    r.dst_base.origin.y,
-                    dst_z,
-                    &src_location,
-                    &src_box,
-                );
-            }
+            *src_location.u.SubresourceIndex_mut() =
+                src.calc_subresource(r.src_base.mip_level, r.src_base.array_layer, 0);
+            *dst_location.u.SubresourceIndex_mut() =
+                dst.calc_subresource(r.dst_base.mip_level, r.dst_base.array_layer, 0);
+            list.CopyTextureRegion(
+                &dst_location,
+                r.dst_base.origin.x,
+                r.dst_base.origin.y,
+                r.dst_base.origin.z,
+                &src_location,
+                &src_box,
+            );
         }
     }
 
@@ -285,14 +252,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        for r in regions {
-            let (_base_array_layer, _array_layer_count) = match src.dimension {
-                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                    (r.texture_base.origin.z, r.size.depth_or_array_layers)
-                }
-                wgt::TextureDimension::D3 => (0, 1),
-            };
-        }
+        for _r in regions {}
     }
 
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {}

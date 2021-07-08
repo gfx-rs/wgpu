@@ -255,7 +255,6 @@ pub struct Texture {
     raw: vk::Image,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     usage: crate::TextureUses,
-    dim: wgt::TextureDimension,
     aspects: crate::FormatAspects,
     format_info: wgt::TextureFormatInfo,
     raw_flags: vk::ImageCreateFlags,

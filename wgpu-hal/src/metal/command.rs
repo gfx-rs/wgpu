@@ -156,22 +156,20 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let encoder = self.enter_blit();
         for copy in regions {
-            let (src_slice, src_origin) = conv::map_origin(&copy.src_base.origin, src.raw_type);
-            let (dst_slice, dst_origin) = conv::map_origin(&copy.dst_base.origin, dst.raw_type);
-            let (slice_count, extent) = conv::map_extent(&copy.size, src.raw_type);
-            for slice in 0..slice_count {
-                encoder.copy_from_texture(
-                    &src.raw,
-                    src_slice + slice,
-                    copy.src_base.mip_level as u64,
-                    src_origin,
-                    extent,
-                    &dst.raw,
-                    dst_slice + slice,
-                    copy.dst_base.mip_level as u64,
-                    dst_origin,
-                );
-            }
+            let src_origin = conv::map_origin(&copy.src_base.origin);
+            let dst_origin = conv::map_origin(&copy.dst_base.origin);
+            let extent = conv::map_copy_extent(&copy.size);
+            encoder.copy_from_texture(
+                &src.raw,
+                copy.src_base.array_layer as u64,
+                copy.src_base.mip_level as u64,
+                src_origin,
+                extent,
+                &dst.raw,
+                copy.dst_base.array_layer as u64,
+                copy.dst_base.mip_level as u64,
+                dst_origin,
+            );
         }
     }
 
@@ -185,8 +183,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let encoder = self.enter_blit();
         for copy in regions {
-            let (dst_slice, dst_origin) = conv::map_origin(&copy.texture_base.origin, dst.raw_type);
-            let (slice_count, extent) = conv::map_extent(&copy.size, dst.raw_type);
+            let dst_origin = conv::map_origin(&copy.texture_base.origin);
+            let extent = conv::map_copy_extent(&copy.size);
             let bytes_per_row = copy
                 .buffer_layout
                 .bytes_per_row
@@ -195,21 +193,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .buffer_layout
                 .rows_per_image
                 .map_or(0, |v| v.get() as u64 * bytes_per_row);
-            for slice in 0..slice_count {
-                let offset = copy.buffer_layout.offset + bytes_per_image * slice;
-                encoder.copy_from_buffer_to_texture(
-                    &src.raw,
-                    offset,
-                    bytes_per_row,
-                    bytes_per_image,
-                    extent,
-                    &dst.raw,
-                    dst_slice + slice,
-                    copy.texture_base.mip_level as u64,
-                    dst_origin,
-                    mtl::MTLBlitOption::empty(),
-                );
-            }
+            encoder.copy_from_buffer_to_texture(
+                &src.raw,
+                copy.buffer_layout.offset,
+                bytes_per_row,
+                bytes_per_image,
+                extent,
+                &dst.raw,
+                copy.texture_base.array_layer as u64,
+                copy.texture_base.mip_level as u64,
+                dst_origin,
+                mtl::MTLBlitOption::empty(),
+            );
         }
     }
 
@@ -224,8 +219,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let encoder = self.enter_blit();
         for copy in regions {
-            let (src_slice, src_origin) = conv::map_origin(&copy.texture_base.origin, src.raw_type);
-            let (slice_count, extent) = conv::map_extent(&copy.size, src.raw_type);
+            let src_origin = conv::map_origin(&copy.texture_base.origin);
+            let extent = conv::map_copy_extent(&copy.size);
             let bytes_per_row = copy
                 .buffer_layout
                 .bytes_per_row
@@ -234,21 +229,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .buffer_layout
                 .rows_per_image
                 .map_or(0, |v| v.get() as u64 * bytes_per_row);
-            for slice in 0..slice_count {
-                let offset = copy.buffer_layout.offset + bytes_per_image * slice;
-                encoder.copy_from_texture_to_buffer(
-                    &src.raw,
-                    src_slice + slice,
-                    copy.texture_base.mip_level as u64,
-                    src_origin,
-                    extent,
-                    &dst.raw,
-                    offset,
-                    bytes_per_row,
-                    bytes_per_image,
-                    mtl::MTLBlitOption::empty(),
-                );
-            }
+            encoder.copy_from_texture_to_buffer(
+                &src.raw,
+                copy.texture_base.array_layer as u64,
+                copy.texture_base.mip_level as u64,
+                src_origin,
+                extent,
+                &dst.raw,
+                copy.buffer_layout.offset,
+                bytes_per_row,
+                bytes_per_image,
+                mtl::MTLBlitOption::empty(),
+            );
         }
     }
 

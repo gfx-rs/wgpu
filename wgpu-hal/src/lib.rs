@@ -351,6 +351,8 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     where
         T: Iterator<Item = BufferCopy>;
 
+    /// Copy from one texture to another.
+    /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
@@ -361,11 +363,15 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     ) where
         T: Iterator<Item = TextureCopy>;
 
+    /// Copy from buffer to texture.
+    /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     unsafe fn copy_buffer_to_texture<T>(&mut self, src: &A::Buffer, dst: &A::Texture, regions: T)
     where
         T: Iterator<Item = BufferTextureCopy>;
 
+    /// Copy from texture to buffer.
+    /// Works with a single array layer.
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &A::Texture,
@@ -1006,26 +1012,33 @@ pub struct BufferCopy {
 
 #[derive(Clone, Debug)]
 pub struct TextureCopyBase {
-    pub origin: wgt::Origin3d,
     pub mip_level: u32,
+    pub array_layer: u32,
+    /// Origin within a texture.
+    /// Note: for 1D and 2D textures, Z must be 0.
+    pub origin: wgt::Origin3d,
     pub aspect: FormatAspects,
 }
 
-//TODO: all the copy operations really want to separate
-// array layers from Z, so this should not use `wgt::Extent3d`,
-// and potentially work with a single layer at a time.
+#[derive(Clone, Copy, Debug)]
+pub struct CopyExtent {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+}
+
 #[derive(Clone, Debug)]
 pub struct TextureCopy {
     pub src_base: TextureCopyBase,
     pub dst_base: TextureCopyBase,
-    pub size: wgt::Extent3d,
+    pub size: CopyExtent,
 }
 
 #[derive(Clone, Debug)]
 pub struct BufferTextureCopy {
     pub buffer_layout: wgt::ImageDataLayout,
     pub texture_base: TextureCopyBase,
-    pub size: wgt::Extent3d,
+    pub size: CopyExtent,
 }
 
 #[derive(Debug)]

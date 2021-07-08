@@ -352,42 +352,6 @@ pub fn map_aspects(aspects: crate::FormatAspects) -> vk::ImageAspectFlags {
     flags
 }
 
-pub fn map_origin(
-    origin: wgt::Origin3d,
-    texture_dim: wgt::TextureDimension,
-) -> (u32, vk::Offset3D) {
-    let (z, array_layer) = match texture_dim {
-        wgt::TextureDimension::D3 => (origin.z as i32, 0),
-        _ => (0, origin.z),
-    };
-    (
-        array_layer,
-        vk::Offset3D {
-            x: origin.x as i32,
-            y: origin.y as i32,
-            z,
-        },
-    )
-}
-
-pub fn map_extent(
-    extent: wgt::Extent3d,
-    texture_dim: wgt::TextureDimension,
-) -> (u32, vk::Extent3D) {
-    let (depth, array_layers) = match texture_dim {
-        wgt::TextureDimension::D3 => (extent.depth_or_array_layers, 1),
-        _ => (1, extent.depth_or_array_layers),
-    };
-    (
-        array_layers,
-        vk::Extent3D {
-            width: extent.width,
-            height: extent.height,
-            depth,
-        },
-    )
-}
-
 pub fn map_attachment_ops(
     op: crate::AttachmentOps,
 ) -> (vk::AttachmentLoadOp, vk::AttachmentStoreOp) {
@@ -541,6 +505,14 @@ pub fn map_view_dimension(dim: wgt::TextureViewDimension) -> vk::ImageViewType {
     }
 }
 
+pub fn map_copy_extent(extent: &crate::CopyExtent) -> vk::Extent3D {
+    vk::Extent3D {
+        width: extent.width,
+        height: extent.height,
+        depth: extent.depth,
+    }
+}
+
 pub fn map_subresource_range(
     range: &wgt::ImageSubresourceRange,
     texture_aspect: crate::FormatAspects,
@@ -560,16 +532,18 @@ pub fn map_subresource_range(
 
 pub fn map_subresource_layers(
     base: &crate::TextureCopyBase,
-    texture_dim: wgt::TextureDimension,
     texture_aspect: crate::FormatAspects,
-    layer_count: u32,
 ) -> (vk::ImageSubresourceLayers, vk::Offset3D) {
-    let (base_array_layer, offset) = map_origin(base.origin, texture_dim);
+    let offset = vk::Offset3D {
+        x: base.origin.x as i32,
+        y: base.origin.y as i32,
+        z: base.origin.z as i32,
+    };
     let subresource = vk::ImageSubresourceLayers {
         aspect_mask: map_aspects(base.aspect & texture_aspect),
         mip_level: base.mip_level,
-        base_array_layer,
-        layer_count,
+        base_array_layer: base.array_layer,
+        layer_count: 1,
     };
     (subresource, offset)
 }

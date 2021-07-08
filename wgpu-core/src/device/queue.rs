@@ -433,10 +433,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let (selector, texture_base, texture_format) =
+        let (selector, dst_base, texture_format) =
             extract_texture_selector(destination, size, &*texture_guard)?;
         let format_desc = texture_format.describe();
-        validate_linear_texture_data(
+        let (_, bytes_per_array_layer) = validate_linear_texture_data(
             data_layout,
             texture_format,
             data.len() as wgt::BufferAddress,
@@ -495,7 +495,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
-        let max_image_extent =
+        let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
         dst.life_guard.use_at(device.active_submission_index + 1);
 
@@ -542,33 +542,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(DeviceError::from)?;
         }
 
-        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
-        // the virtual size. We have passed validation, so it's safe to use the
-        // image extent data directly. We want the provided copy size to be no larger than
-        // the virtual size.
-        let region = hal::BufferTextureCopy {
-            buffer_layout: wgt::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: NonZeroU32::new(stage_bytes_per_row),
-                rows_per_image: NonZeroU32::new(block_rows_per_image),
-            },
-            texture_base,
-            size: wgt::Extent3d {
-                width: size.width.min(max_image_extent.width),
-                height: size.height.min(max_image_extent.height),
-                depth_or_array_layers: size.depth_or_array_layers,
-            },
-        };
-
+        let regions = (0..array_layer_count).map(|rel_array_layer| {
+            let mut texture_base = dst_base.clone();
+            texture_base.array_layer += rel_array_layer;
+            hal::BufferTextureCopy {
+                buffer_layout: wgt::ImageDataLayout {
+                    offset: rel_array_layer as u64 * bytes_per_array_layer,
+                    bytes_per_row: NonZeroU32::new(stage_bytes_per_row),
+                    rows_per_image: NonZeroU32::new(block_rows_per_image),
+                },
+                texture_base,
+                size: hal_copy_size,
+            }
+        });
         let barrier = hal::BufferBarrier {
             buffer: &stage.buffer,
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         };
+
         let encoder = device.pending_writes.activate();
         unsafe {
             encoder.transition_buffers(iter::once(barrier));
             encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
-            encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, iter::once(region));
+            encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
         }
 
         device.pending_writes.consume(stage);

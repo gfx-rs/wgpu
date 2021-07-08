@@ -302,9 +302,14 @@ impl<A: hal::Api> Example<A> {
                 texture_base: hal::TextureCopyBase {
                     origin: wgt::Origin3d::ZERO,
                     mip_level: 0,
+                    array_layer: 0,
                     aspect: hal::FormatAspects::COLOR,
                 },
-                size: texture_desc.size,
+                size: hal::CopyExtent {
+                    width: 1,
+                    height: 1,
+                    depth: 1,
+                },
             };
             unsafe {
                 cmd_encoder.transition_buffers(iter::once(buffer_barrier));

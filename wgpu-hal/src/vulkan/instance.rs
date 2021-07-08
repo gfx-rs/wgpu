@@ -647,7 +647,6 @@ impl crate::Surface<super::Api> for super::Surface {
                 raw: sc.images[index as usize],
                 block: None,
                 usage: sc.config.usage,
-                dim: wgt::TextureDimension::D2,
                 aspects: crate::FormatAspects::COLOR,
                 format_info: sc.config.format.describe(),
                 raw_flags: vk::ImageCreateFlags::empty(),

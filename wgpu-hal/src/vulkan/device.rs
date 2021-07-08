@@ -654,7 +654,11 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        let (array_layer_count, vk_extent) = conv::map_extent(desc.size, desc.dimension);
+        let (depth, array_layer_count) = match desc.dimension {
+            wgt::TextureDimension::D3 => (desc.size.depth_or_array_layers, 1),
+            _ => (1, desc.size.depth_or_array_layers),
+        };
+
         let mut raw_flags = vk::ImageCreateFlags::empty();
         if desc.dimension == wgt::TextureDimension::D2 && desc.size.depth_or_array_layers % 6 == 0 {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
@@ -664,7 +668,11 @@ impl crate::Device<super::Api> for super::Device {
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
             .format(self.shared.private_caps.map_texture_format(desc.format))
-            .extent(vk_extent)
+            .extent(vk::Extent3D {
+                width: desc.size.width,
+                height: desc.size.height,
+                depth,
+            })
             .mip_levels(desc.mip_level_count)
             .array_layers(array_layer_count)
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
@@ -699,7 +707,6 @@ impl crate::Device<super::Api> for super::Device {
             raw,
             block: Some(block),
             usage: desc.usage,
-            dim: desc.dimension,
             aspects: crate::FormatAspects::from(desc.format),
             format_info: desc.format.describe(),
             raw_flags,
