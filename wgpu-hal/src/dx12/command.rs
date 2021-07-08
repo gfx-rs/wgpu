@@ -2,6 +2,17 @@ use super::{conv, HResult as _, Resource};
 use std::{mem, ops::Range};
 use winapi::um::d3d12;
 
+fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> d3d12::D3D12_BOX {
+    d3d12::D3D12_BOX {
+        left: origin.x,
+        top: origin.y,
+        right: origin.x + size.width,
+        bottom: origin.y + size.height,
+        front: origin.z,
+        back: origin.z + size.depth,
+    }
+}
+
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         let list = match self.free_lists.pop() {
@@ -17,7 +28,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     native::PipelineState::null(),
                     0,
                 )
-                .to_device_result("Create command list")?,
+                .into_device_result("Create command list")?,
         };
 
         if let Some(label) = label {
@@ -135,9 +146,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                                 barrier.range.base_array_layer + rel_array_layer,
                                 0,
                             );
+                            self.temp.barriers.push(raw);
                         }
                     }
-                    self.temp.barriers.push(raw);
                 }
             } else if barrier.usage.start == crate::TextureUses::STORAGE_STORE {
                 let mut raw = d3d12::D3D12_RESOURCE_BARRIER {
@@ -210,18 +221,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
 
         for r in regions {
-            let src_box = d3d12::D3D12_BOX {
-                left: r.src_base.origin.x,
-                top: r.src_base.origin.y,
-                right: r.src_base.origin.x + r.size.width,
-                bottom: r.src_base.origin.y + r.size.height,
-                front: r.src_base.origin.z,
-                back: r.src_base.origin.z + r.size.depth,
-            };
-            *src_location.u.SubresourceIndex_mut() =
-                src.calc_subresource(r.src_base.mip_level, r.src_base.array_layer, 0);
-            *dst_location.u.SubresourceIndex_mut() =
-                dst.calc_subresource(r.dst_base.mip_level, r.dst_base.array_layer, 0);
+            let src_box = make_box(&r.src_base.origin, &r.size);
+            *src_location.u.SubresourceIndex_mut() = src.calc_subresource_for_copy(&r.src_base);
+            *dst_location.u.SubresourceIndex_mut() = dst.calc_subresource_for_copy(&r.dst_base);
+
             list.CopyTextureRegion(
                 &dst_location,
                 r.dst_base.origin.x,
@@ -241,6 +244,45 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
+        let list = self.list.unwrap();
+        let mut src_location = d3d12::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: src.resource.as_mut_ptr(),
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            u: mem::zeroed(),
+        };
+        let mut dst_location = d3d12::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: dst.resource.as_mut_ptr(),
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            u: mem::zeroed(),
+        };
+        let raw_format = conv::map_texture_format(dst.format);
+
+        for r in regions {
+            let src_box = make_box(&wgt::Origin3d::ZERO, &r.size);
+            *src_location.u.PlacedFootprint_mut() = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                Offset: r.buffer_layout.offset,
+                Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
+                    Format: raw_format,
+                    Width: r.size.width,
+                    Height: r
+                        .buffer_layout
+                        .rows_per_image
+                        .map_or(r.size.height, |count| count.get()),
+                    Depth: r.size.depth,
+                    RowPitch: r.buffer_layout.bytes_per_row.map_or(0, |count| count.get()),
+                },
+            };
+            *dst_location.u.SubresourceIndex_mut() = dst.calc_subresource_for_copy(&r.texture_base);
+
+            list.CopyTextureRegion(
+                &dst_location,
+                r.texture_base.origin.x,
+                r.texture_base.origin.y,
+                r.texture_base.origin.z,
+                &src_location,
+                &src_box,
+            );
+        }
     }
 
     unsafe fn copy_texture_to_buffer<T>(
@@ -252,7 +294,38 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        for _r in regions {}
+        let list = self.list.unwrap();
+        let mut src_location = d3d12::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: src.resource.as_mut_ptr(),
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            u: mem::zeroed(),
+        };
+        let mut dst_location = d3d12::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: dst.resource.as_mut_ptr(),
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            u: mem::zeroed(),
+        };
+        let raw_format = conv::map_texture_format(src.format);
+
+        for r in regions {
+            let dst_box = make_box(&r.texture_base.origin, &r.size);
+            *src_location.u.SubresourceIndex_mut() = src.calc_subresource_for_copy(&r.texture_base);
+            *dst_location.u.PlacedFootprint_mut() = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                Offset: r.buffer_layout.offset,
+                Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
+                    Format: raw_format,
+                    Width: r.size.width,
+                    Height: r
+                        .buffer_layout
+                        .rows_per_image
+                        .map_or(r.size.height, |count| count.get()),
+                    Depth: r.size.depth,
+                    RowPitch: r.buffer_layout.bytes_per_row.map_or(0, |count| count.get()),
+                },
+            };
+
+            list.CopyTextureRegion(&src_location, 0, 0, 0, &dst_location, &dst_box);
+        }
     }
 
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {}

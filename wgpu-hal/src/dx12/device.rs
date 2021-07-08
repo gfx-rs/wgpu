@@ -28,7 +28,7 @@ impl super::Device {
                 idle_fence.mut_void(),
             )
         };
-        hr.to_device_result("Idle fence creation")?;
+        hr.into_device_result("Idle fence creation")?;
 
         Ok(super::Device {
             raw,
@@ -66,7 +66,7 @@ impl super::Device {
             .idler
             .fence
             .set_event_on_completion(self.idler.event, value);
-        hr.to_device_result("Set event")?;
+        hr.into_device_result("Set event")?;
         synchapi::WaitForSingleObject(self.idler.event.0, winbase::INFINITE);
         Ok(())
     }
@@ -431,7 +431,7 @@ impl crate::Device<super::Api> for super::Device {
         if let Ok(debug_device) = self
             .raw
             .cast::<d3d12sdklayers::ID3D12DebugDevice>()
-            .to_result()
+            .into_result()
         {
             debug_device.ReportLiveDeviceObjects(d3d12sdklayers::D3D12_RLDO_DETAIL);
             debug_device.destroy();
@@ -494,7 +494,7 @@ impl crate::Device<super::Api> for super::Device {
             resource.mut_void(),
         );
 
-        hr.to_device_result("Buffer creation")?;
+        hr.into_device_result("Buffer creation")?;
         Ok(super::Buffer { resource })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -507,7 +507,7 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let mut ptr = ptr::null_mut();
         let hr = (*buffer.resource).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr);
-        hr.to_device_result("Map buffer")?;
+        hr.into_device_result("Map buffer")?;
         Ok(crate::BufferMapping {
             ptr: ptr::NonNull::new(ptr.offset(range.start as isize) as *mut _).unwrap(),
             //TODO: double-check this. Documentation is a bit misleading -
@@ -571,9 +571,10 @@ impl crate::Device<super::Api> for super::Device {
             resource.SetName(cwstr.as_ptr());
         }
 
-        hr.to_device_result("Texture creation")?;
+        hr.into_device_result("Texture creation")?;
         Ok(super::Texture {
             resource,
+            format: desc.format,
             dimension: desc.dimension,
             size: desc.size,
             mip_level_count: desc.mip_level_count,
@@ -696,7 +697,7 @@ impl crate::Device<super::Api> for super::Device {
         let allocator = self
             .raw
             .create_command_allocator(native::CmdListType::Direct)
-            .to_device_result("Command allocator creation")?;
+            .into_device_result("Command allocator creation")?;
         Ok(super::CommandEncoder {
             allocator,
             device: self.raw,
@@ -915,7 +916,7 @@ impl crate::Device<super::Api> for super::Device {
                 log::error!("Unable to find serialization function: {:?}", e);
                 crate::DeviceError::Lost
             })?
-            .to_device_result("Root signature serialization")?;
+            .into_device_result("Root signature serialization")?;
 
         if !error.is_null() {
             log::error!(
@@ -929,7 +930,7 @@ impl crate::Device<super::Api> for super::Device {
         let raw = self
             .raw
             .create_root_signature(blob, 0)
-            .to_device_result("Root signature creation")?;
+            .into_device_result("Root signature creation")?;
         blob.destroy();
 
         Ok(super::PipelineLayout {
@@ -987,7 +988,7 @@ impl crate::Device<super::Api> for super::Device {
         let raw = self
             .raw
             .create_query_heap(heap_ty, desc.count, 0)
-            .to_device_result("Query heap creation")?;
+            .into_device_result("Query heap creation")?;
 
         Ok(super::QuerySet { raw, ty: desc.ty })
     }
@@ -1003,7 +1004,7 @@ impl crate::Device<super::Api> for super::Device {
             &d3d12::ID3D12Fence::uuidof(),
             raw.mut_void(),
         );
-        hr.to_device_result("Fence creation")?;
+        hr.into_device_result("Fence creation")?;
         Ok(super::Fence { raw })
     }
     unsafe fn destroy_fence(&self, fence: super::Fence) {
@@ -1025,7 +1026,7 @@ impl crate::Device<super::Api> for super::Device {
             return Ok(true);
         }
         let hr = fence.raw.set_event_on_completion(self.idler.event, value);
-        hr.to_device_result("Set event")?;
+        hr.into_device_result("Set event")?;
 
         match synchapi::WaitForSingleObject(self.idler.event.0, timeout_ms) {
             winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => Err(crate::DeviceError::Lost),

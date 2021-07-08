@@ -21,7 +21,7 @@ impl super::Adapter {
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = match library.create_device(adapter, native::FeatureLevel::L11_0) {
-            Ok(pair) => match pair.to_result() {
+            Ok(pair) => match pair.into_result() {
                 Ok(device) => device,
                 Err(err) => {
                     log::warn!("Device creation failed: {}", err);
@@ -180,15 +180,11 @@ impl super::Adapter {
                         .max_dynamic_storage_buffers_per_pipeline_layout,
                     max_sampled_textures_per_shader_stage: match options.ResourceBindingTier {
                         d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
-                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
-                        | _ => full_heap_count,
+                        _ => full_heap_count,
                     },
                     max_samplers_per_shader_stage: match options.ResourceBindingTier {
                         d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
-                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
-                        | _ => d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
+                        _ => d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
                     },
                     // these both account towards `uav_count`, but we can't express the limit as as sum
                     max_storage_buffers_per_shader_stage: base.max_storage_buffers_per_shader_stage,
@@ -238,7 +234,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 native::CommandQueueFlags::empty(),
                 0,
             )
-            .to_device_result("Queue creation")?;
+            .into_device_result("Queue creation")?;
 
         let device = super::Device::new(self.device, queue, self.private_caps, &self.library)?;
         Ok(crate::OpenDevice {
@@ -328,7 +324,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let mut present_modes = vec![wgt::PresentMode::Fifo];
         #[allow(trivial_casts)]
-        if let Ok(factory5) = surface.factory.cast::<dxgi1_5::IDXGIFactory5>().to_result() {
+        if let Ok(factory5) = surface
+            .factory
+            .cast::<dxgi1_5::IDXGIFactory5>()
+            .into_result()
+        {
             let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
             let hr = factory5.CheckFeatureSupport(
                 dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
@@ -337,7 +337,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             );
 
             factory5.destroy();
-            match hr.to_result() {
+            match hr.into_result() {
                 Err(err) => log::warn!("Unable to check for tearing support: {}", err),
                 Ok(()) => present_modes.push(wgt::PresentMode::Immediate),
             }

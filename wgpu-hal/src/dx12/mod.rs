@@ -55,11 +55,11 @@ impl crate::Api for Api {
 }
 
 trait HResult<O> {
-    fn to_result(self) -> Result<O, Cow<'static, str>>;
-    fn to_device_result(self, description: &str) -> Result<O, crate::DeviceError>;
+    fn into_result(self) -> Result<O, Cow<'static, str>>;
+    fn into_device_result(self, description: &str) -> Result<O, crate::DeviceError>;
 }
 impl HResult<()> for i32 {
-    fn to_result(self) -> Result<(), Cow<'static, str>> {
+    fn into_result(self) -> Result<(), Cow<'static, str>> {
         if self >= 0 {
             return Ok(());
         }
@@ -72,8 +72,8 @@ impl HResult<()> for i32 {
         };
         Err(Cow::Borrowed(description))
     }
-    fn to_device_result(self, description: &str) -> Result<(), crate::DeviceError> {
-        self.to_result().map_err(|err| {
+    fn into_device_result(self, description: &str) -> Result<(), crate::DeviceError> {
+        self.into_result().map_err(|err| {
             log::error!("{} failed: {}", description, err);
             if self == winerror::E_OUTOFMEMORY {
                 crate::DeviceError::OutOfMemory
@@ -85,11 +85,11 @@ impl HResult<()> for i32 {
 }
 
 impl<T> HResult<T> for (T, i32) {
-    fn to_result(self) -> Result<T, Cow<'static, str>> {
-        self.1.to_result().map(|()| self.0)
+    fn into_result(self) -> Result<T, Cow<'static, str>> {
+        self.1.into_result().map(|()| self.0)
     }
-    fn to_device_result(self, description: &str) -> Result<T, crate::DeviceError> {
-        self.1.to_device_result(description).map(|()| self.0)
+    fn into_device_result(self, description: &str) -> Result<T, crate::DeviceError> {
+        self.1.into_device_result(description).map(|()| self.0)
     }
 }
 
@@ -220,6 +220,7 @@ unsafe impl Sync for Buffer {}
 #[derive(Debug)]
 pub struct Texture {
     resource: native::Resource,
+    format: wgt::TextureFormat,
     dimension: wgt::TextureDimension,
     size: wgt::Extent3d,
     mip_level_count: u32,
@@ -241,6 +242,10 @@ impl Texture {
 
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
         mip_level + (array_layer + plane * self.array_layer_count()) * self.mip_level_count
+    }
+
+    fn calc_subresource_for_copy(&self, base: &crate::TextureCopyBase) -> u32 {
+        self.calc_subresource(base.mip_level, base.array_layer, 0)
     }
 }
 
@@ -367,7 +372,7 @@ impl crate::Surface<Api> for Surface {
                     non_srgb_format,
                     flags,
                 );
-                if let Err(err) = result.to_result() {
+                if let Err(err) = result.into_result() {
                     log::error!("ResizeBuffers failed: {}", err);
                     return Err(crate::SurfaceError::Other("window is in use"));
                 }
@@ -402,12 +407,12 @@ impl crate::Surface<Api> for Surface {
                     swap_chain1.mut_void() as *mut *mut _,
                 );
 
-                if let Err(err) = hr.to_result() {
+                if let Err(err) = hr.into_result() {
                     log::error!("SwapChain creation error: {}", err);
                     return Err(crate::SurfaceError::Other("swap chain creation"));
                 }
 
-                match swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>().to_result() {
+                match swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>().into_result() {
                     Ok(swap_chain3) => {
                         swap_chain1.destroy();
                         swap_chain3

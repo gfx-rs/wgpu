@@ -41,7 +41,7 @@ unsafe extern "system" fn output_debug_string_handler(
         Some(msg) => {
             match MESSAGE_PREFIXES
                 .iter()
-                .find(|&(prefix, level)| msg.starts_with(prefix))
+                .find(|&&(prefix, level)| msg.starts_with(prefix))
             {
                 Some(&(prefix, level)) => (&msg[prefix.len() + 2..], level),
                 None => (msg, log::Level::Debug),
@@ -78,7 +78,7 @@ impl crate::Instance<super::Api> for super::Instance {
         if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
             // Enable debug layer
             match lib_main.get_debug_interface() {
-                Ok(pair) => match pair.to_result() {
+                Ok(pair) => match pair.into_result() {
                     Ok(debug_controller) => {
                         debug_controller.enable_layer();
                         debug_controller.Release();
@@ -96,7 +96,7 @@ impl crate::Instance<super::Api> for super::Instance {
             // `CreateDXGIFactory2` if the debug interface is actually available. So
             // we check for whether it exists first.
             match lib_dxgi.get_debug_interface1() {
-                Ok(pair) => match pair.to_result() {
+                Ok(pair) => match pair.into_result() {
                     Ok(debug_controller) => {
                         debug_controller.destroy();
                         factory_flags |= native::FactoryCreationFlags::DEBUG;
@@ -116,7 +116,7 @@ impl crate::Instance<super::Api> for super::Instance {
 
         // Create DXGI factory
         let factory = match lib_dxgi.create_factory2(factory_flags) {
-            Ok(pair) => match pair.to_result() {
+            Ok(pair) => match pair.into_result() {
                 Ok(factory) => factory,
                 Err(err) => {
                     log::warn!("Failed to create DXGI factory: {}", err);
@@ -155,7 +155,7 @@ impl crate::Instance<super::Api> for super::Instance {
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
         // Try to use high performance order by default (returns None on Windows < 1803)
-        let factory6 = match self.factory.cast::<dxgi1_6::IDXGIFactory6>().to_result() {
+        let factory6 = match self.factory.cast::<dxgi1_6::IDXGIFactory6>().into_result() {
             Ok(f6) => {
                 // It's okay to decrement the refcount here because we
                 // have another reference to the factory already owned by `self`.
@@ -184,7 +184,7 @@ impl crate::Instance<super::Api> for super::Instance {
                     if hr == winerror::DXGI_ERROR_NOT_FOUND {
                         break;
                     }
-                    if let Err(err) = hr.to_result() {
+                    if let Err(err) = hr.into_result() {
                         log::error!("Failed enumerating adapters: {}", err);
                         break;
                     }
@@ -200,12 +200,12 @@ impl crate::Instance<super::Api> for super::Instance {
                     if hr == winerror::DXGI_ERROR_NOT_FOUND {
                         break;
                     }
-                    if let Err(err) = hr.to_result() {
+                    if let Err(err) = hr.into_result() {
                         log::error!("Failed enumerating adapters: {}", err);
                         break;
                     }
 
-                    match adapter1.cast::<dxgi1_2::IDXGIAdapter2>().to_result() {
+                    match adapter1.cast::<dxgi1_2::IDXGIAdapter2>().into_result() {
                         Ok(adapter2) => {
                             adapter1.destroy();
                             adapter2
