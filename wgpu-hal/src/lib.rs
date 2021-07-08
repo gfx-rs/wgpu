@@ -1011,6 +1011,9 @@ pub struct TextureCopyBase {
     pub aspect: FormatAspects,
 }
 
+//TODO: all the copy operations really want to separate
+// array layers from Z, so this should not use `wgt::Extent3d`,
+// and potentially work with a single layer at a time.
 #[derive(Clone, Debug)]
 pub struct TextureCopy {
     pub src_base: TextureCopyBase,

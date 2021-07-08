@@ -220,8 +220,8 @@ unsafe impl Sync for Buffer {}
 #[derive(Debug)]
 pub struct Texture {
     resource: native::Resource,
+    dimension: wgt::TextureDimension,
     size: wgt::Extent3d,
-    array_layer_count: u32,
     mip_level_count: u32,
     sample_count: u32,
 }
@@ -230,8 +230,17 @@ unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
 impl Texture {
+    fn array_layer_count(&self) -> u32 {
+        match self.dimension {
+            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+                self.size.depth_or_array_layers
+            }
+            wgt::TextureDimension::D3 => 1,
+        }
+    }
+
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
-        mip_level + (array_layer + plane * self.array_layer_count) * self.mip_level_count
+        mip_level + (array_layer + plane * self.array_layer_count()) * self.mip_level_count
     }
 }
 

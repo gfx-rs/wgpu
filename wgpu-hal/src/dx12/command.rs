@@ -115,14 +115,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 };
                 let array_layer_count = match barrier.range.array_layer_count {
                     Some(count) => count.get(),
-                    None => barrier.texture.array_layer_count - barrier.range.base_array_layer,
+                    None => barrier.texture.array_layer_count() - barrier.range.base_array_layer,
                 };
 
                 if barrier.range.aspect == wgt::TextureAspect::All
                     && barrier.range.base_mip_level + mip_level_count
                         == barrier.texture.mip_level_count
                     && barrier.range.base_array_layer + array_layer_count
-                        == barrier.texture.array_layer_count
+                        == barrier.texture.array_layer_count()
                 {
                     // Only one barrier if it affects the whole image.
                     self.temp.barriers.push(raw);
@@ -159,7 +159,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
-    unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {
+    unsafe fn fill_buffer(
+        &mut self,
+        _buffer: &super::Buffer,
+        _range: crate::MemoryRange,
+        _value: u8,
+    ) {
+        //TODO
     }
 
     unsafe fn copy_buffer_to_buffer<T>(
@@ -167,16 +173,97 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         src: &super::Buffer,
         dst: &super::Buffer,
         regions: T,
-    ) {
+    ) where
+        T: Iterator<Item = crate::BufferCopy>,
+    {
+        let list = self.list.unwrap();
+        for r in regions {
+            list.CopyBufferRegion(
+                dst.resource.as_mut_ptr(),
+                r.dst_offset,
+                src.resource.as_mut_ptr(),
+                r.src_offset,
+                r.size.get(),
+            );
+        }
     }
 
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
-        src_usage: crate::TextureUses,
+        _src_usage: crate::TextureUses,
         dst: &super::Texture,
         regions: T,
-    ) {
+    ) where
+        T: Iterator<Item = crate::TextureCopy>,
+    {
+        let list = self.list.unwrap();
+        let mut src_location = d3d12::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: src.resource.as_mut_ptr(),
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            u: mem::zeroed(),
+        };
+        let mut dst_location = d3d12::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: dst.resource.as_mut_ptr(),
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            u: mem::zeroed(),
+        };
+
+        for r in regions {
+            let (
+                depth,
+                array_layer_count,
+                src_z,
+                src_base_array_layer,
+                dst_z,
+                dst_base_array_layer,
+            ) = match src.dimension {
+                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => (
+                    1,
+                    r.size.depth_or_array_layers,
+                    0,
+                    r.src_base.origin.z,
+                    0,
+                    r.dst_base.origin.z,
+                ),
+                wgt::TextureDimension::D3 => (
+                    r.size.depth_or_array_layers,
+                    1,
+                    r.src_base.origin.z,
+                    0,
+                    r.dst_base.origin.z,
+                    0,
+                ),
+            };
+            let src_box = d3d12::D3D12_BOX {
+                left: r.src_base.origin.x,
+                top: r.src_base.origin.y,
+                right: r.src_base.origin.x + r.size.width,
+                bottom: r.src_base.origin.y + r.size.height,
+                front: src_z,
+                back: src_z + depth,
+            };
+            for rel_array_layer in 0..array_layer_count {
+                *src_location.u.SubresourceIndex_mut() = src.calc_subresource(
+                    r.src_base.mip_level,
+                    src_base_array_layer + rel_array_layer,
+                    0,
+                );
+                *dst_location.u.SubresourceIndex_mut() = dst.calc_subresource(
+                    r.dst_base.mip_level,
+                    dst_base_array_layer + rel_array_layer,
+                    0,
+                );
+                list.CopyTextureRegion(
+                    &dst_location,
+                    r.dst_base.origin.x,
+                    r.dst_base.origin.y,
+                    dst_z,
+                    &src_location,
+                    &src_box,
+                );
+            }
+        }
     }
 
     unsafe fn copy_buffer_to_texture<T>(
@@ -184,7 +271,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         src: &super::Buffer,
         dst: &super::Texture,
         regions: T,
-    ) {
+    ) where
+        T: Iterator<Item = crate::BufferTextureCopy>,
+    {
     }
 
     unsafe fn copy_texture_to_buffer<T>(
@@ -193,7 +282,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         src_usage: crate::TextureUses,
         dst: &super::Buffer,
         regions: T,
-    ) {
+    ) where
+        T: Iterator<Item = crate::BufferTextureCopy>,
+    {
+        for r in regions {
+            let (_base_array_layer, _array_layer_count) = match src.dimension {
+                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+                    (r.texture_base.origin.z, r.size.depth_or_array_layers)
+                }
+                wgt::TextureDimension::D3 => (0, 1),
+            };
+        }
     }
 
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {}

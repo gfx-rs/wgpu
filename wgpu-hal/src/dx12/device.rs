@@ -574,13 +574,8 @@ impl crate::Device<super::Api> for super::Device {
         hr.to_device_result("Texture creation")?;
         Ok(super::Texture {
             resource,
+            dimension: desc.dimension,
             size: desc.size,
-            array_layer_count: match desc.dimension {
-                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                    desc.size.depth_or_array_layers
-                }
-                wgt::TextureDimension::D3 => 1,
-            },
             mip_level_count: desc.mip_level_count,
             sample_count: desc.sample_count,
         })
