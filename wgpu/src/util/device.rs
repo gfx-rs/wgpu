@@ -26,6 +26,9 @@ pub trait DeviceExt {
     ///
     /// Example:
     /// Layer0Mip0 Layer0Mip1 Layer0Mip2 ... Layer1Mip0 Layer1Mip1 Layer1Mip2 ...
+    ///
+    /// Implicitly adds the `COPY_DST` usage if it is not present in the descriptor,
+    /// as it is required to be able to upload the data to the gpu.
     fn create_texture_with_data(
         &self,
         queue: &crate::Queue,
@@ -79,7 +82,14 @@ impl DeviceExt for crate::Device {
         desc: &crate::TextureDescriptor,
         data: &[u8],
     ) -> crate::Texture {
-        let texture = self.create_texture(desc);
+        let texture = if desc.usage.contains(crate::TextureUsages::COPY_DST) {
+            self.create_texture(desc)
+        } else {
+            // Implicitly add the COPY_DST usage
+            let mut desc = desc.to_owned();
+            desc.usage |= crate::TextureUsages::COPY_DST;
+            self.create_texture(&desc)
+        };
 
         let format_info = desc.format.describe();
         let layer_iterations = desc.array_layer_count();
