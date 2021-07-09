@@ -393,6 +393,30 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.begin_debug_marker(label);
             self.has_pass_label = true;
         }
+
+        self.temp.barriers.clear();
+
+        let mut color_views = [native::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_TARGETS];
+        for (cv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
+            *cv = cat.target.view.handle_rtv.unwrap().raw;
+        }
+        let ds_view = match desc.depth_stencil_attachment {
+            None => ptr::null(),
+            Some(ref ds) => {
+                if ds.target.usage == crate::TextureUses::DEPTH_STENCIL_WRITE {
+                    &ds.target.view.handle_dsv_rw.as_ref().unwrap().raw
+                } else {
+                    &ds.target.view.handle_dsv_ro.as_ref().unwrap().raw
+                }
+            }
+        };
+
+        self.list.unwrap().OMSetRenderTargets(
+            desc.color_attachments.len() as u32,
+            color_views.as_ptr(),
+            0,
+            ds_view,
+        );
     }
     unsafe fn end_render_pass(&mut self) {
         if self.has_pass_label {
