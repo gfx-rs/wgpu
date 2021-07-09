@@ -204,7 +204,7 @@ bitflags::bitflags! {
         ///
         /// Supported Platforms:
         /// - Vulkan (works)
-        /// - DX12 (future)
+        /// - DX12 (works)
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 0x0000_0000_0000_0004;
@@ -219,7 +219,7 @@ bitflags::bitflags! {
         ///
         /// Supported Platforms:
         /// - Vulkan (works)
-        /// - DX12 (future)
+        /// - DX12 (works)
         ///
         /// This is a web and native feature.
         const PIPELINE_STATISTICS_QUERY = 0x0000_0000_0000_0008;

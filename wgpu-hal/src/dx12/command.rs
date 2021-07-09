@@ -338,10 +338,26 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
-    unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {}
-    unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {}
-    unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {}
-    unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {}
+    unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
+        self.list
+            .unwrap()
+            .BeginQuery(set.raw.as_mut_ptr(), set.raw_ty, index);
+    }
+    unsafe fn end_query(&mut self, set: &super::QuerySet, index: u32) {
+        self.list
+            .unwrap()
+            .EndQuery(set.raw.as_mut_ptr(), set.raw_ty, index);
+    }
+    unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {
+        self.list.unwrap().EndQuery(
+            set.raw.as_mut_ptr(),
+            d3d12::D3D12_QUERY_TYPE_TIMESTAMP,
+            index,
+        );
+    }
+    unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {
+        // nothing to do here
+    }
     unsafe fn copy_query_results(
         &mut self,
         set: &super::QuerySet,
@@ -350,6 +366,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         stride: wgt::BufferSize,
     ) {
+        self.list.unwrap().ResolveQueryData(
+            set.raw.as_mut_ptr(),
+            set.raw_ty,
+            range.start,
+            range.end - range.start,
+            buffer.resource.as_mut_ptr(),
+            offset,
+        );
     }
 
     // render

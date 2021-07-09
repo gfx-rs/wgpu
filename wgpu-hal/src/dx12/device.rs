@@ -1059,10 +1059,19 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Result<super::QuerySet, crate::DeviceError> {
-        let heap_ty = match desc.ty {
-            wgt::QueryType::Occlusion => native::QueryHeapType::Occlusion,
-            wgt::QueryType::PipelineStatistics(_) => native::QueryHeapType::PipelineStatistics,
-            wgt::QueryType::Timestamp => native::QueryHeapType::Timestamp,
+        let (heap_ty, raw_ty) = match desc.ty {
+            wgt::QueryType::Occlusion => (
+                native::QueryHeapType::Occlusion,
+                d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION,
+            ),
+            wgt::QueryType::PipelineStatistics(_) => (
+                native::QueryHeapType::PipelineStatistics,
+                d3d12::D3D12_QUERY_TYPE_TIMESTAMP,
+            ),
+            wgt::QueryType::Timestamp => (
+                native::QueryHeapType::Timestamp,
+                d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS,
+            ),
         };
 
         let raw = self
@@ -1070,7 +1079,7 @@ impl crate::Device<super::Api> for super::Device {
             .create_query_heap(heap_ty, desc.count, 0)
             .into_device_result("Query heap creation")?;
 
-        Ok(super::QuerySet { raw, ty: desc.ty })
+        Ok(super::QuerySet { raw, raw_ty })
     }
     unsafe fn destroy_query_set(&self, set: super::QuerySet) {
         set.raw.destroy();

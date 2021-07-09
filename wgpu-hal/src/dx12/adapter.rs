@@ -145,7 +145,9 @@ impl super::Adapter {
             | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::NON_FILL_POLYGON_MODE
-            |wgt::Features::VERTEX_WRITABLE_STORAGE;
+            | wgt::Features::VERTEX_WRITABLE_STORAGE
+            | wgt::Features::TIMESTAMP_QUERY
+            | wgt::Features::PIPELINE_STATISTICS_QUERY;
 
         features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,

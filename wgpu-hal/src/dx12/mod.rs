@@ -302,7 +302,7 @@ unsafe impl Sync for Sampler {}
 #[derive(Debug)]
 pub struct QuerySet {
     raw: native::QueryHeap,
-    ty: wgt::QueryType,
+    raw_ty: d3d12::D3D12_QUERY_TYPE,
 }
 
 unsafe impl Send for QuerySet {}
