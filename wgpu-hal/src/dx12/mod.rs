@@ -228,6 +228,7 @@ pub struct CommandEncoder {
     shared: Arc<DeviceShared>,
     list: Option<native::GraphicsCommandList>,
     free_lists: Vec<native::GraphicsCommandList>,
+    has_pass_label: bool,
     temp: Temp,
 }
 

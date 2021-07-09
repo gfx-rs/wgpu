@@ -568,16 +568,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .raw
             .cmd_set_stencil_reference(self.active, vk::StencilFaceFlags::all(), value);
     }
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {
-        let vk_constants = [
-            color.r as f32,
-            color.g as f32,
-            color.b as f32,
-            color.a as f32,
-        ];
-        self.device
-            .raw
-            .cmd_set_blend_constants(self.active, &vk_constants);
+    unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
+        self.device.raw.cmd_set_blend_constants(self.active, color);
     }
 
     unsafe fn draw(

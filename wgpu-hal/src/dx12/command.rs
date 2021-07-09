@@ -46,6 +46,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
         self.list = Some(list);
         self.temp.clear();
+        self.has_pass_label = false;
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {
@@ -387,8 +388,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {}
-    unsafe fn end_render_pass(&mut self) {}
+    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+        if let Some(label) = desc.label {
+            self.begin_debug_marker(label);
+            self.has_pass_label = true;
+        }
+    }
+    unsafe fn end_render_pass(&mut self) {
+        if self.has_pass_label {
+            self.end_debug_marker();
+            self.has_pass_label = false;
+        }
+    }
 
     unsafe fn set_bind_group(
         &mut self,
@@ -437,10 +448,32 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         binding: crate::BufferBinding<'a, super::Api>,
     ) {
     }
-    unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}
-    unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {}
-    unsafe fn set_stencil_reference(&mut self, value: u32) {}
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {}
+    unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
+        let raw_vp = d3d12::D3D12_VIEWPORT {
+            TopLeftX: rect.x,
+            TopLeftY: rect.y,
+            Width: rect.w,
+            Height: rect.h,
+            MinDepth: depth_range.start,
+            MaxDepth: depth_range.end,
+        };
+        self.list.unwrap().RSSetViewports(1, &raw_vp);
+    }
+    unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {
+        let raw_rect = d3d12::D3D12_RECT {
+            left: rect.x as i32,
+            top: rect.y as i32,
+            right: (rect.x + rect.w) as i32,
+            bottom: (rect.y + rect.h) as i32,
+        };
+        self.list.unwrap().RSSetScissorRects(1, &raw_rect);
+    }
+    unsafe fn set_stencil_reference(&mut self, value: u32) {
+        self.list.unwrap().set_stencil_reference(value);
+    }
+    unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
+        self.list.unwrap().set_blend_factor(*color);
+    }
 
     unsafe fn draw(
         &mut self,
@@ -536,8 +569,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {}
-    unsafe fn end_compute_pass(&mut self) {}
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+        if let Some(label) = desc.label {
+            self.begin_debug_marker(label);
+            self.has_pass_label = true;
+        }
+    }
+    unsafe fn end_compute_pass(&mut self) {
+        if self.has_pass_label {
+            self.end_debug_marker();
+            self.has_pass_label = false;
+        }
+    }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
 

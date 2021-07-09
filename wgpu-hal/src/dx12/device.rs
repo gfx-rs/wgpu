@@ -783,6 +783,7 @@ impl crate::Device<super::Api> for super::Device {
             shared: Arc::clone(&self.shared),
             list: None,
             free_lists: Vec::new(),
+            has_pass_label: false,
             temp: super::Temp::default(),
         })
     }

@@ -1206,8 +1206,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::SetBlendConstant(ref color) => {
                         state.blend_constant = OptionalState::Set;
+                        let array = [
+                            color.r as f32,
+                            color.g as f32,
+                            color.b as f32,
+                            color.a as f32,
+                        ];
                         unsafe {
-                            raw.set_blend_constants(color);
+                            raw.set_blend_constants(&array);
                         }
                     }
                     RenderCommand::SetStencilReference(value) => {

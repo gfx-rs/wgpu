@@ -673,14 +673,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.set_stencil_front_back_reference_value(value, value);
     }
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {
+    unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.set_blend_color(
-            color.r as f32,
-            color.g as f32,
-            color.b as f32,
-            color.a as f32,
-        );
+        encoder.set_blend_color(color[0], color[1], color[2], color[3]);
     }
 
     unsafe fn draw(

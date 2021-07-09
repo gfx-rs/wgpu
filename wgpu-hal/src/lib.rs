@@ -437,7 +437,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
     unsafe fn set_stencil_reference(&mut self, value: u32);
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color);
+    unsafe fn set_blend_constants(&mut self, color: &[f32; 4]);
 
     unsafe fn draw(
         &mut self,
