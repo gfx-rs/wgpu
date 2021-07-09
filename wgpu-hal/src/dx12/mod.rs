@@ -211,11 +211,13 @@ unsafe impl Sync for Queue {}
 
 #[derive(Default)]
 struct Temp {
+    marker: Vec<u16>,
     barriers: Vec<d3d12::D3D12_RESOURCE_BARRIER>,
 }
 
 impl Temp {
     fn clear(&mut self) {
+        self.marker.clear();
         self.barriers.clear();
     }
 }

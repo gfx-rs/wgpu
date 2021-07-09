@@ -13,6 +13,15 @@ fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> d3d12::D3D12_BO
     }
 }
 
+impl super::Temp {
+    fn prepare_marker(&mut self, marker: &str) -> (&[u16], u32) {
+        self.marker.clear();
+        self.marker.extend(marker.encode_utf16());
+        self.marker.push(0);
+        (&self.marker, self.marker.len() as u32 * 2)
+    }
+}
+
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         let list = match self.free_lists.pop() {
@@ -398,9 +407,21 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
     }
 
-    unsafe fn insert_debug_marker(&mut self, label: &str) {}
-    unsafe fn begin_debug_marker(&mut self, group_label: &str) {}
-    unsafe fn end_debug_marker(&mut self) {}
+    unsafe fn insert_debug_marker(&mut self, label: &str) {
+        let (wide_label, size) = self.temp.prepare_marker(label);
+        self.list
+            .unwrap()
+            .SetMarker(0, wide_label.as_ptr() as *const _, size);
+    }
+    unsafe fn begin_debug_marker(&mut self, group_label: &str) {
+        let (wide_label, size) = self.temp.prepare_marker(group_label);
+        self.list
+            .unwrap()
+            .BeginEvent(0, wide_label.as_ptr() as *const _, size);
+    }
+    unsafe fn end_debug_marker(&mut self) {
+        self.list.unwrap().EndEvent()
+    }
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &Resource) {}
 

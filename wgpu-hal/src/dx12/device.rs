@@ -1013,6 +1013,11 @@ impl crate::Device<super::Api> for super::Device {
             .into_device_result("Root signature creation")?;
         blob.destroy();
 
+        if let Some(label) = desc.label {
+            let cwstr = conv::map_label(label);
+            raw.SetName(cwstr.as_ptr());
+        }
+
         Ok(super::PipelineLayout {
             raw,
             parameter_offsets,
@@ -1078,6 +1083,11 @@ impl crate::Device<super::Api> for super::Device {
             .raw
             .create_query_heap(heap_ty, desc.count, 0)
             .into_device_result("Query heap creation")?;
+
+        if let Some(label) = desc.label {
+            let cwstr = conv::map_label(label);
+            raw.SetName(cwstr.as_ptr());
+        }
 
         Ok(super::QuerySet { raw, raw_ty })
     }
