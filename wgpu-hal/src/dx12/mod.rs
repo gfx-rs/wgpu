@@ -14,10 +14,11 @@ mod descriptor;
 mod device;
 mod instance;
 
+use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use std::{borrow::Cow, ptr, sync::Arc};
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_4, dxgitype, windef, winerror},
+    shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
     um::{d3d12, synchapi, winbase, winnt},
     Interface as _,
 };
@@ -222,13 +223,32 @@ impl Temp {
     }
 }
 
+struct PassResolve {
+    src: (native::Resource, u32),
+    dst: (native::Resource, u32),
+    format: dxgiformat::DXGI_FORMAT,
+}
+
+#[derive(Default)]
+struct PassState {
+    has_label: bool,
+    resolves: ArrayVec<[PassResolve; crate::MAX_COLOR_TARGETS]>,
+}
+
+impl PassState {
+    fn clear(&mut self) {
+        self.has_label = false;
+        self.resolves.clear();
+    }
+}
+
 pub struct CommandEncoder {
     allocator: native::CommandAllocator,
     device: native::Device,
     shared: Arc<DeviceShared>,
     list: Option<native::GraphicsCommandList>,
     free_lists: Vec<native::GraphicsCommandList>,
-    has_pass_label: bool,
+    pass: PassState,
     temp: Temp,
 }
 
@@ -284,6 +304,8 @@ impl Texture {
 
 #[derive(Debug)]
 pub struct TextureView {
+    raw_format: dxgiformat::DXGI_FORMAT,
+    target_base: (native::Resource, u32),
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
     handle_rtv: Option<descriptor::Handle>,
@@ -349,7 +371,7 @@ pub struct PipelineLayout {
     total_slots: u32,
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    elements: arrayvec::ArrayVec<RootElement, crate::MAX_BIND_GROUPS>,
+    elements: ArrayVec<RootElement, crate::MAX_BIND_GROUPS>,
 }
 
 unsafe impl Send for PipelineLayout {}

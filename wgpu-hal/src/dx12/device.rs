@@ -670,6 +670,12 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
         Ok(super::TextureView {
+            //Note: this mapping also happens in all of the `view_texture_as_*`
+            raw_format: conv::map_texture_format(desc.format),
+            target_base: (
+                texture.resource,
+                texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
+            ),
             handle_srv: if desc
                 .usage
                 .intersects(crate::TextureUses::SAMPLED | crate::TextureUses::STORAGE_LOAD)
@@ -783,7 +789,7 @@ impl crate::Device<super::Api> for super::Device {
             shared: Arc::clone(&self.shared),
             list: None,
             free_lists: Vec::new(),
-            has_pass_label: false,
+            pass: super::PassState::default(),
             temp: super::Temp::default(),
         })
     }

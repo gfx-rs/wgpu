@@ -46,7 +46,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
         self.list = Some(list);
         self.temp.clear();
-        self.has_pass_label = false;
+        self.pass.clear();
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {
@@ -391,14 +391,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
         if let Some(label) = desc.label {
             self.begin_debug_marker(label);
-            self.has_pass_label = true;
+            self.pass.has_label = true;
         }
 
         self.temp.barriers.clear();
 
         let mut color_views = [native::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_TARGETS];
-        for (cv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
-            *cv = cat.target.view.handle_rtv.unwrap().raw;
+        for (rtv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
+            *rtv = cat.target.view.handle_rtv.unwrap().raw;
         }
         let ds_view = match desc.depth_stencil_attachment {
             None => ptr::null(),
@@ -411,18 +411,107 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
         };
 
-        self.list.unwrap().OMSetRenderTargets(
+        let list = self.list.unwrap();
+        list.OMSetRenderTargets(
             desc.color_attachments.len() as u32,
             color_views.as_ptr(),
             0,
             ds_view,
         );
+
+        self.pass.resolves.clear();
+        for (rtv, cat) in color_views.iter().zip(desc.color_attachments.iter()) {
+            if !cat.ops.contains(crate::AttachmentOps::LOAD) {
+                let value = [
+                    cat.clear_value.r as f32,
+                    cat.clear_value.g as f32,
+                    cat.clear_value.b as f32,
+                    cat.clear_value.a as f32,
+                ];
+                list.clear_render_target_view(*rtv, value, &[]);
+            }
+            if let Some(ref target) = cat.resolve_target {
+                self.pass.resolves.push(super::PassResolve {
+                    src: cat.target.view.target_base,
+                    dst: target.view.target_base,
+                    format: target.view.raw_format,
+                });
+            }
+        }
+        if let Some(ref ds) = desc.depth_stencil_attachment {
+            let mut flags = native::ClearFlags::empty();
+            if !ds.depth_ops.contains(crate::AttachmentOps::LOAD) {
+                flags |= native::ClearFlags::DEPTH;
+            }
+            if !ds.stencil_ops.contains(crate::AttachmentOps::LOAD) {
+                flags |= native::ClearFlags::STENCIL;
+            }
+
+            if !ds_view.is_null() {
+                list.clear_depth_stencil_view(
+                    *ds_view,
+                    flags,
+                    ds.clear_value.0,
+                    ds.clear_value.1 as u8,
+                    &[],
+                );
+            }
+        }
     }
     unsafe fn end_render_pass(&mut self) {
-        if self.has_pass_label {
-            self.end_debug_marker();
-            self.has_pass_label = false;
+        if !self.pass.resolves.is_empty() {
+            let list = self.list.unwrap();
+            self.temp.barriers.clear();
+
+            // All the targets are expected to be in `COLOR_TARGET` state,
+            // but D3D12 has special source/destination states for the resolves.
+            for resolve in self.pass.resolves.iter() {
+                let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
+                    Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                    Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                    u: mem::zeroed(),
+                };
+                //Note: this assumes `D3D12_RESOURCE_STATE_RENDER_TARGET`.
+                // If it's not the case, we can include the `TextureUses` in `PassResove`.
+                *barrier.u.Transition_mut() = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                    pResource: resolve.src.0.as_mut_ptr(),
+                    Subresource: resolve.src.1,
+                    StateBefore: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    StateAfter: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                };
+                self.temp.barriers.push(barrier);
+                *barrier.u.Transition_mut() = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                    pResource: resolve.dst.0.as_mut_ptr(),
+                    Subresource: resolve.dst.1,
+                    StateBefore: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    StateAfter: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                };
+                self.temp.barriers.push(barrier);
+            }
+            list.ResourceBarrier(self.temp.barriers.len() as u32, self.temp.barriers.as_ptr());
+
+            for resolve in self.pass.resolves.iter() {
+                list.ResolveSubresource(
+                    resolve.dst.0.as_mut_ptr(),
+                    resolve.dst.1,
+                    resolve.src.0.as_mut_ptr(),
+                    resolve.src.1,
+                    resolve.format,
+                );
+            }
+
+            // Flip all the barriers to reverse, back into `COLOR_TARGET`.
+            for barrier in self.temp.barriers.iter_mut() {
+                let transition = barrier.u.Transition_mut();
+                mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
+            }
+            list.ResourceBarrier(self.temp.barriers.len() as u32, self.temp.barriers.as_ptr());
         }
+
+        if self.pass.has_label {
+            self.end_debug_marker();
+        }
+        self.pass.clear();
     }
 
     unsafe fn set_bind_group(
@@ -596,14 +685,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
         if let Some(label) = desc.label {
             self.begin_debug_marker(label);
-            self.has_pass_label = true;
+            self.pass.has_label = true;
         }
     }
     unsafe fn end_compute_pass(&mut self) {
-        if self.has_pass_label {
+        if self.pass.has_label {
             self.end_debug_marker();
-            self.has_pass_label = false;
         }
+        self.pass.clear();
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
