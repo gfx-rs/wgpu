@@ -162,20 +162,16 @@ struct PrivateCapabilities {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct AttachmentKey {
     format: vk::Format,
-    layout_pre: vk::ImageLayout,
-    layout_in: vk::ImageLayout,
-    layout_post: vk::ImageLayout,
+    layout: vk::ImageLayout,
     ops: crate::AttachmentOps,
 }
 
 impl AttachmentKey {
     /// Returns an attachment key for a compatible attachment.
-    fn compatible(format: vk::Format, layout_in: vk::ImageLayout) -> Self {
+    fn compatible(format: vk::Format, layout: vk::ImageLayout) -> Self {
         Self {
             format,
-            layout_pre: vk::ImageLayout::GENERAL,
-            layout_in,
-            layout_post: vk::ImageLayout::GENERAL,
+            layout,
             ops: crate::AttachmentOps::all(),
         }
     }

@@ -593,11 +593,18 @@ impl<A: hal::Api> Example<A> {
 
         let ctx = &mut self.contexts[self.context_index];
 
+        let surface_tex = unsafe { self.surface.acquire_texture(!0).unwrap().unwrap().texture };
+
+        let target_barrier0 = hal::TextureBarrier {
+            texture: surface_tex.borrow(),
+            range: wgt::ImageSubresourceRange::default(),
+            usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::COLOR_TARGET,
+        };
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
+            ctx.encoder.transition_textures(iter::once(target_barrier0));
         }
 
-        let surface_tex = unsafe { self.surface.acquire_texture(!0).unwrap().unwrap().texture };
         let surface_view_desc = hal::TextureViewDescriptor {
             label: None,
             format: self.surface_format,
@@ -622,7 +629,6 @@ impl<A: hal::Api> Example<A> {
                 target: hal::Attachment {
                     view: &surface_tex_view,
                     usage: hal::TextureUses::COLOR_TARGET,
-                    boundary_usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::empty(),
                 },
                 resolve_target: None,
                 ops: hal::AttachmentOps::STORE,
@@ -655,8 +661,17 @@ impl<A: hal::Api> Example<A> {
         ctx.frames_recorded += 1;
         let do_fence = ctx.frames_recorded > COMMAND_BUFFER_PER_CONTEXT;
 
+        let target_barrier1 = hal::TextureBarrier {
+            texture: surface_tex.borrow(),
+            range: wgt::ImageSubresourceRange::default(),
+            usage: hal::TextureUses::COLOR_TARGET..hal::TextureUses::empty(),
+        };
         unsafe {
             ctx.encoder.end_render_pass();
+            ctx.encoder.transition_textures(iter::once(target_barrier1));
+        }
+
+        unsafe {
             let cmd_buf = ctx.encoder.end_encoding().unwrap();
             let fence_param = if do_fence {
                 Some((&mut ctx.fence, ctx.fence_value))

@@ -74,7 +74,7 @@ impl super::DeviceShared {
                 for cat in e.key().colors.iter() {
                     color_refs.push(vk::AttachmentReference {
                         attachment: vk_attachments.len() as u32,
-                        layout: cat.base.layout_in,
+                        layout: cat.base.layout,
                     });
                     vk_attachments.push({
                         let (load_op, store_op) = conv::map_attachment_ops(cat.base.ops);
@@ -83,14 +83,14 @@ impl super::DeviceShared {
                             .samples(samples)
                             .load_op(load_op)
                             .store_op(store_op)
-                            .initial_layout(cat.base.layout_pre)
-                            .final_layout(cat.base.layout_post)
+                            .initial_layout(cat.base.layout)
+                            .final_layout(cat.base.layout)
                             .build()
                     });
                     let at_ref = if let Some(ref rat) = cat.resolve {
                         let at_ref = vk::AttachmentReference {
                             attachment: vk_attachments.len() as u32,
-                            layout: rat.layout_in,
+                            layout: rat.layout,
                         };
                         let (load_op, store_op) = conv::map_attachment_ops(rat.ops);
                         let vk_attachment = vk::AttachmentDescription::builder()
@@ -98,8 +98,8 @@ impl super::DeviceShared {
                             .samples(vk::SampleCountFlags::TYPE_1)
                             .load_op(load_op)
                             .store_op(store_op)
-                            .initial_layout(rat.layout_pre)
-                            .final_layout(rat.layout_post)
+                            .initial_layout(rat.layout)
+                            .final_layout(rat.layout)
                             .build();
                         vk_attachments.push(vk_attachment);
                         at_ref
@@ -115,7 +115,7 @@ impl super::DeviceShared {
                 if let Some(ref ds) = e.key().depth_stencil {
                     ds_ref = Some(vk::AttachmentReference {
                         attachment: vk_attachments.len() as u32,
-                        layout: ds.base.layout_in,
+                        layout: ds.base.layout,
                     });
                     let (load_op, store_op) = conv::map_attachment_ops(ds.base.ops);
                     let (stencil_load_op, stencil_store_op) =
@@ -127,8 +127,8 @@ impl super::DeviceShared {
                         .store_op(store_op)
                         .stencil_load_op(stencil_load_op)
                         .stencil_store_op(stencil_store_op)
-                        .initial_layout(ds.base.layout_pre)
-                        .final_layout(ds.base.layout_post)
+                        .initial_layout(ds.base.layout)
+                        .final_layout(ds.base.layout)
                         .build();
                     vk_attachments.push(vk_attachment);
                 }

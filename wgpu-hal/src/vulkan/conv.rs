@@ -119,9 +119,7 @@ impl crate::Attachment<'_, super::Api> {
         let aspects = self.view.aspects();
         super::AttachmentKey {
             format: caps.map_texture_format(self.view.attachment.view_format),
-            layout_pre: derive_image_layout(self.boundary_usage.start, aspects),
-            layout_in: derive_image_layout(self.usage, aspects),
-            layout_post: derive_image_layout(self.boundary_usage.end, aspects),
+            layout: derive_image_layout(self.usage, aspects),
             ops,
         }
     }
@@ -250,7 +248,7 @@ pub fn map_texture_usage_to_barrier(
         access |= vk::AccessFlags::SHADER_WRITE;
     }
 
-    if usage == crate::TextureUses::UNINITIALIZED {
+    if usage == crate::TextureUses::UNINITIALIZED || usage.is_empty() {
         (
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::AccessFlags::empty(),

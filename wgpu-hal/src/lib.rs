@@ -1044,13 +1044,9 @@ pub struct BufferTextureCopy {
 #[derive(Debug)]
 pub struct Attachment<'a, A: Api> {
     pub view: &'a A::TextureView,
-    /// Contains either a single mutating usage as a target, or a valid combination
-    /// of read-only usages.
+    /// Contains either a single mutating usage as a target,
+    /// or a valid combination of read-only usages.
     pub usage: TextureUses,
-    /// Defines the boundary usages for the attachment.
-    /// It is expected to begin a render pass with `boundary_usage.start` usage,
-    /// and will end it with `boundary_usage.end` usage.
-    pub boundary_usage: Range<TextureUses>,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1059,7 +1055,6 @@ impl<A: Api> Clone for Attachment<'_, A> {
         Self {
             view: self.view,
             usage: self.usage,
-            boundary_usage: self.boundary_usage.clone(),
         }
     }
 }

@@ -349,7 +349,7 @@ pub struct PipelineLayout {
     total_slots: u32,
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    elements: arrayvec::ArrayVec<[RootElement; crate::MAX_BIND_GROUPS]>,
+    elements: arrayvec::ArrayVec<RootElement, crate::MAX_BIND_GROUPS>,
 }
 
 unsafe impl Send for PipelineLayout {}
