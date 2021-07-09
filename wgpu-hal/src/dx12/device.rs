@@ -77,6 +77,36 @@ impl super::Device {
             (*zero_buffer).Unmap(0, &range);
         };
 
+        let shared = super::DeviceShared {
+            zero_buffer,
+            cmd_signatures: super::CommandSignatures {
+                draw: raw
+                    .create_command_signature(
+                        native::RootSignature::null(),
+                        &[native::IndirectArgument::draw()],
+                        mem::size_of::<wgt::DrawIndirectArgs>() as u32,
+                        0,
+                    )
+                    .into_device_result("Command (draw) signature creation")?,
+                draw_indexed: raw
+                    .create_command_signature(
+                        native::RootSignature::null(),
+                        &[native::IndirectArgument::draw_indexed()],
+                        mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                        0,
+                    )
+                    .into_device_result("Command (draw_indexed) signature creation")?,
+                dispatch: raw
+                    .create_command_signature(
+                        native::RootSignature::null(),
+                        &[native::IndirectArgument::dispatch()],
+                        mem::size_of::<wgt::DispatchIndirectArgs>() as u32,
+                        0,
+                    )
+                    .into_device_result("Command (dispatch) signature creation")?,
+            },
+        };
+
         Ok(super::Device {
             raw,
             present_queue,
@@ -85,6 +115,7 @@ impl super::Device {
                 event: native::Event::create(false, false),
             },
             private_caps,
+            shared: Arc::new(shared),
             rtv_pool: Mutex::new(descriptor::CpuPool::new(
                 raw,
                 native::DescriptorHeapType::Rtv,
@@ -101,7 +132,6 @@ impl super::Device {
                 raw,
                 native::DescriptorHeapType::Sampler,
             )),
-            zero_buffer,
             library: Arc::clone(library),
         })
     }
@@ -472,7 +502,7 @@ impl crate::Device<super::Api> for super::Device {
         self.dsv_pool.into_inner().destroy();
         self.srv_uav_pool.into_inner().destroy();
         self.sampler_pool.into_inner().destroy();
-        self.zero_buffer.destroy();
+        self.shared.destroy();
 
         //self.descriptor_updater.lock().destroy();
 
@@ -750,7 +780,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::CommandEncoder {
             allocator,
             device: self.raw,
-            zero_buffer: self.zero_buffer,
+            shared: Arc::clone(&self.shared),
             list: None,
             free_lists: Vec::new(),
             temp: super::Temp::default(),

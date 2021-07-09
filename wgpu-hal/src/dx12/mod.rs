@@ -158,18 +158,43 @@ struct Idler {
     event: native::Event,
 }
 
+struct CommandSignatures {
+    draw: native::CommandSignature,
+    draw_indexed: native::CommandSignature,
+    dispatch: native::CommandSignature,
+}
+
+impl CommandSignatures {
+    unsafe fn destroy(&self) {
+        self.draw.destroy();
+        self.draw_indexed.destroy();
+        self.dispatch.destroy();
+    }
+}
+
+struct DeviceShared {
+    zero_buffer: native::Resource,
+    cmd_signatures: CommandSignatures,
+}
+
+impl DeviceShared {
+    unsafe fn destroy(&self) {
+        self.zero_buffer.destroy();
+        self.cmd_signatures.destroy();
+    }
+}
+
 pub struct Device {
     raw: native::Device,
     present_queue: native::CommandQueue,
     idler: Idler,
     private_caps: PrivateCapabilities,
+    shared: Arc<DeviceShared>,
     // CPU only pools
     rtv_pool: Mutex<descriptor::CpuPool>,
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
     sampler_pool: Mutex<descriptor::CpuPool>,
-    // aux resources
-    zero_buffer: native::Resource,
     // library
     library: Arc<native::D3D12Lib>,
 }
@@ -198,7 +223,7 @@ impl Temp {
 pub struct CommandEncoder {
     allocator: native::CommandAllocator,
     device: native::Device,
-    zero_buffer: native::Resource,
+    shared: Arc<DeviceShared>,
     list: Option<native::GraphicsCommandList>,
     free_lists: Vec<native::GraphicsCommandList>,
     temp: Temp,

@@ -1,5 +1,5 @@
 use super::{conv, HResult as _, Resource};
-use std::{mem, ops::Range};
+use std::{mem, ops::Range, ptr};
 use winapi::um::d3d12;
 
 fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> d3d12::D3D12_BOX {
@@ -179,7 +179,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             list.CopyBufferRegion(
                 buffer.resource.as_mut_ptr(),
                 offset,
-                self.zero_buffer.as_mut_ptr(),
+                self.shared.zero_buffer.as_mut_ptr(),
                 0,
                 size,
             );
@@ -277,7 +277,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         .rows_per_image
                         .map_or(r.size.height, |count| count.get()),
                     Depth: r.size.depth,
-                    RowPitch: r.buffer_layout.bytes_per_row.map_or(0, |count| count.get()),
+                    RowPitch: r.buffer_layout.bytes_per_row.map_or(0, |count| {
+                        count.get().max(d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
+                    }),
                 },
             };
             *dst_location.u.SubresourceIndex_mut() = dst.calc_subresource_for_copy(&r.texture_base);
@@ -402,6 +404,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_instance: u32,
         instance_count: u32,
     ) {
+        self.list
+            .unwrap()
+            .draw(vertex_count, instance_count, start_vertex, start_instance);
     }
     unsafe fn draw_indexed(
         &mut self,
@@ -411,6 +416,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_instance: u32,
         instance_count: u32,
     ) {
+        self.list.unwrap().draw_indexed(
+            index_count,
+            instance_count,
+            start_index,
+            base_vertex,
+            start_instance,
+        );
     }
     unsafe fn draw_indirect(
         &mut self,
@@ -418,6 +430,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        self.list.unwrap().ExecuteIndirect(
+            self.shared.cmd_signatures.draw.as_mut_ptr(),
+            draw_count,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            ptr::null_mut(),
+            0,
+        );
     }
     unsafe fn draw_indexed_indirect(
         &mut self,
@@ -425,6 +445,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        self.list.unwrap().ExecuteIndirect(
+            self.shared.cmd_signatures.draw_indexed.as_mut_ptr(),
+            draw_count,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            ptr::null_mut(),
+            0,
+        );
     }
     unsafe fn draw_indirect_count(
         &mut self,
@@ -434,6 +462,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
+        self.list.unwrap().ExecuteIndirect(
+            self.shared.cmd_signatures.draw.as_mut_ptr(),
+            max_count,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            count_buffer.resource.as_mut_ptr(),
+            count_offset,
+        );
     }
     unsafe fn draw_indexed_indirect_count(
         &mut self,
@@ -443,6 +479,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
+        self.list.unwrap().ExecuteIndirect(
+            self.shared.cmd_signatures.draw_indexed.as_mut_ptr(),
+            max_count,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            count_buffer.resource.as_mut_ptr(),
+            count_offset,
+        );
     }
 
     // compute
@@ -452,6 +496,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
 
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {}
-    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {}
+    unsafe fn dispatch(&mut self, count: [u32; 3]) {
+        self.list.unwrap().dispatch(count);
+    }
+    unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+        self.list.unwrap().ExecuteIndirect(
+            self.shared.cmd_signatures.dispatch.as_mut_ptr(),
+            1,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            ptr::null_mut(),
+            0,
+        );
+    }
 }
