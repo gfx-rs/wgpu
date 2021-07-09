@@ -1142,23 +1142,7 @@ impl crate::Context for Context {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
             }
             crate::ShaderSource::Wgsl(ref code) => {
-                use naga::{back::spv, front::wgsl, valid::Validator};
-                let module = wgsl::parse_str(code).unwrap();
-                let options = spv::Options {
-                    lang_version: (1, 0),
-                    flags: spv::WriterFlags::empty(),
-                    capabilities: None,
-                    index_bounds_check_policy:
-                        naga::back::IndexBoundsCheckPolicy::UndefinedBehavior,
-                };
-                let analysis = Validator::new(
-                    naga::valid::ValidationFlags::empty(),
-                    naga::valid::Capabilities::all(),
-                )
-                .validate(&module)
-                .unwrap();
-                let words = spv::write_vec(&module, &analysis, &options).unwrap();
-                web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&words[..]))
+                web_sys::GpuShaderModuleDescriptor::new(&js_sys::JsString::from(&**code))
             }
         };
         if let Some(ref label) = desc.label {
