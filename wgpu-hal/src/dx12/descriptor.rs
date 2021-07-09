@@ -1,4 +1,7 @@
+use super::HResult as _;
 use bit_set::BitSet;
+use parking_lot::Mutex;
+use range_alloc::RangeAllocator;
 use std::fmt;
 
 const HEAP_SIZE_FIXED: usize = 64;
@@ -13,14 +16,42 @@ pub(super) struct DualHandle {
 
 type DescriptorIndex = u64;
 
-struct LinearHeap {
-    raw: native::DescriptorHeap,
+pub(super) struct GeneralHeap {
+    pub raw: native::DescriptorHeap,
     handle_size: u64,
     total_handles: u64,
     start: DualHandle,
+    ranges: Mutex<RangeAllocator<DescriptorIndex>>,
 }
 
-impl LinearHeap {
+impl GeneralHeap {
+    pub(super) fn new(
+        device: native::Device,
+        raw_type: native::DescriptorHeapType,
+        total_handles: u64,
+    ) -> Result<Self, crate::DeviceError> {
+        let raw = device
+            .create_descriptor_heap(
+                total_handles as u32,
+                raw_type,
+                native::DescriptorHeapFlags::SHADER_VISIBLE,
+                0,
+            )
+            .into_device_result("Descriptor heap creation")?;
+
+        Ok(Self {
+            raw,
+            handle_size: device.get_descriptor_increment_size(raw_type) as u64,
+            total_handles,
+            start: DualHandle {
+                cpu: raw.start_cpu_descriptor(),
+                gpu: raw.start_gpu_descriptor(),
+                size: 0,
+            },
+            ranges: Mutex::new(RangeAllocator::new(0..total_handles)),
+        })
+    }
+
     pub(super) fn at(&self, index: DescriptorIndex, size: u64) -> DualHandle {
         assert!(index < self.total_handles);
         DualHandle {

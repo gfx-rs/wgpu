@@ -77,6 +77,10 @@ impl super::Device {
             (*zero_buffer).Unmap(0, &range);
         };
 
+        // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+        let capacity_views = 1_000_000;
+        let capacity_samplers = 2_048;
+
         let shared = super::DeviceShared {
             zero_buffer,
             cmd_signatures: super::CommandSignatures {
@@ -105,6 +109,16 @@ impl super::Device {
                     )
                     .into_device_result("Command (dispatch) signature creation")?,
             },
+            heap_views: descriptor::GeneralHeap::new(
+                raw,
+                native::DescriptorHeapType::CbvSrvUav,
+                capacity_samplers,
+            )?,
+            heap_samplers: descriptor::GeneralHeap::new(
+                raw,
+                native::DescriptorHeapType::Sampler,
+                capacity_samplers,
+            )?,
         };
 
         Ok(super::Device {

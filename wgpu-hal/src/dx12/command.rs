@@ -22,6 +22,27 @@ impl super::Temp {
     }
 }
 
+impl super::CommandEncoder {
+    unsafe fn begin_pass(&mut self, label: crate::Label) {
+        let list = self.list.unwrap();
+        if let Some(label) = label {
+            let (wide_label, size) = self.temp.prepare_marker(label);
+            list.BeginEvent(0, wide_label.as_ptr() as *const _, size);
+            self.pass.has_label = true;
+        }
+        list.set_descriptor_heaps(&[self.shared.heap_views.raw, self.shared.heap_samplers.raw]);
+    }
+
+    unsafe fn end_pass(&mut self) {
+        let list = self.list.unwrap();
+        list.set_descriptor_heaps(&[native::DescriptorHeap::null(); 2]);
+        if self.pass.has_label {
+            list.EndEvent();
+        }
+        self.pass.clear();
+    }
+}
+
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         let list = match self.free_lists.pop() {
@@ -44,6 +65,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             let cwstr = conv::map_label(label);
             list.SetName(cwstr.as_ptr());
         }
+
         self.list = Some(list);
         self.temp.clear();
         self.pass.clear();
@@ -389,12 +411,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
-        if let Some(label) = desc.label {
-            self.begin_debug_marker(label);
-            self.pass.has_label = true;
-        }
-
-        self.temp.barriers.clear();
+        self.begin_pass(desc.label);
 
         let mut color_views = [native::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_TARGETS];
         for (rtv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
@@ -508,10 +525,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             list.ResourceBarrier(self.temp.barriers.len() as u32, self.temp.barriers.as_ptr());
         }
 
-        if self.pass.has_label {
-            self.end_debug_marker();
-        }
-        self.pass.clear();
+        self.end_pass();
     }
 
     unsafe fn set_bind_group(
@@ -524,10 +538,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
     unsafe fn set_push_constants(
         &mut self,
-        layout: &super::PipelineLayout,
-        stages: wgt::ShaderStages,
-        offset: u32,
-        data: &[u32],
+        _layout: &super::PipelineLayout,
+        _stages: wgt::ShaderStages,
+        _offset: u32,
+        _data: &[u32],
     ) {
     }
 
@@ -683,16 +697,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     // compute
 
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
-        if let Some(label) = desc.label {
-            self.begin_debug_marker(label);
-            self.pass.has_label = true;
-        }
+        self.begin_pass(desc.label);
     }
     unsafe fn end_compute_pass(&mut self) {
-        if self.pass.has_label {
-            self.end_debug_marker();
-        }
-        self.pass.clear();
+        self.end_pass();
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}

@@ -176,12 +176,16 @@ impl CommandSignatures {
 struct DeviceShared {
     zero_buffer: native::Resource,
     cmd_signatures: CommandSignatures,
+    heap_views: descriptor::GeneralHeap,
+    heap_samplers: descriptor::GeneralHeap,
 }
 
 impl DeviceShared {
     unsafe fn destroy(&self) {
         self.zero_buffer.destroy();
         self.cmd_signatures.destroy();
+        self.heap_views.raw.destroy();
+        self.heap_samplers.raw.destroy();
     }
 }
 
