@@ -541,11 +541,14 @@ impl crate::Instance<super::Api> for Instance {
                 egl::SINGLE_BUFFER as usize
             },
         ];
-        if inner.version >= (1, 5) {
-            // Always enable sRGB in EGL 1.5
-            attributes.push(egl::GL_COLORSPACE as usize);
-            attributes.push(egl::GL_COLORSPACE_SRGB as usize);
-        }
+        // sRGB caused color problems, making the render lighter colored than the vulkan version
+        // so we comment this out for now.
+        //
+        // if inner.version >= (1, 5) {
+        //     // Always enable sRGB in EGL 1.5
+        //     attributes.push(egl::GL_COLORSPACE as usize);
+        //     attributes.push(egl::GL_COLORSPACE_SRGB as usize);
+        // }
         attributes.push(egl::ATTRIB_NONE);
 
         let raw = if let Some(egl) = inner.egl.upcast::<egl::EGL1_5>() {

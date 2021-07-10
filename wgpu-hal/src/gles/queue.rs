@@ -533,7 +533,7 @@ impl super::Queue {
                         0,
                     );
                 }
-                gl.color_mask(true, true, true, true);
+                gl.color_mask(true, true, true, false);
                 gl.depth_mask(true);
                 gl.stencil_mask(!0);
                 gl.disable(glow::DEPTH_TEST);
