@@ -16,7 +16,7 @@ mod instance;
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{borrow::Cow, ptr, sync::Arc};
+use std::{borrow::Cow, fmt, mem, ptr, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
     um::{d3d12, synchapi, winbase, winnt},
@@ -233,16 +233,36 @@ struct PassResolve {
     format: dxgiformat::DXGI_FORMAT,
 }
 
-#[derive(Default)]
+enum PassKind {
+    Render,
+    Compute,
+    Transfer,
+}
+
 struct PassState {
     has_label: bool,
     resolves: ArrayVec<[PassResolve; crate::MAX_COLOR_TARGETS]>,
+    vertex_buffers: [d3d12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
+    dirty_vertex_buffers: usize,
+    kind: PassKind,
 }
 
 impl PassState {
+    fn new() -> Self {
+        PassState {
+            has_label: false,
+            resolves: ArrayVec::new(),
+            vertex_buffers: [unsafe { mem::zeroed() }; crate::MAX_VERTEX_BUFFERS],
+            dirty_vertex_buffers: 0,
+            kind: PassKind::Transfer,
+        }
+    }
+
     fn clear(&mut self) {
         self.has_label = false;
         self.resolves.clear();
+        self.dirty_vertex_buffers = 0;
+        self.kind = PassKind::Transfer;
     }
 }
 
@@ -269,10 +289,24 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct Buffer {
     resource: native::Resource,
+    size: wgt::BufferAddress,
 }
 
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
+
+impl crate::BufferBinding<'_, Api> {
+    fn resolve_size(&self) -> wgt::BufferAddress {
+        match self.size {
+            Some(size) => size.get(),
+            None => self.buffer.size - self.offset,
+        }
+    }
+
+    fn resolve_address(&self) -> wgt::BufferAddress {
+        self.buffer.resource.gpu_virtual_address() + self.offset
+    }
+}
 
 #[derive(Debug)]
 pub struct Texture {
@@ -350,8 +384,27 @@ pub struct BindGroupLayout {
     entries: Vec<wgt::BindGroupLayoutEntry>,
 }
 
-#[derive(Debug)]
-pub struct BindGroup {}
+enum BufferViewKind {
+    Constant,
+    ShaderResource,
+    UnorderedAccess,
+}
+
+pub struct BindGroup {
+    gpu_views: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE,
+    gpu_samplers: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE,
+    dynamic_buffers: Vec<native::GpuAddress>,
+}
+
+impl fmt::Debug for BindGroup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BindGroup")
+            .field("gpu_views", &self.gpu_views.ptr)
+            .field("gpu_samplers", &self.gpu_samplers.ptr)
+            .field("dynamic_buffers", &self.dynamic_buffers)
+            .finish()
+    }
+}
 
 bitflags::bitflags! {
     struct TableTypes: u8 {
@@ -360,22 +413,17 @@ bitflags::bitflags! {
     }
 }
 
-type RootSignatureOffset = usize;
-
-pub struct RootElement {
-    types: TableTypes,
-    offset: RootSignatureOffset,
+struct BindGroupInfo {
+    base_root_index: u32,
+    tables: TableTypes,
+    dynamic_buffers: Vec<BufferViewKind>,
 }
 
 pub struct PipelineLayout {
     raw: native::RootSignature,
-    /// A root offset per parameter.
-    parameter_offsets: Vec<u32>,
-    /// Total number of root slots occupied by the layout.
-    total_slots: u32,
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    elements: ArrayVec<RootElement, crate::MAX_BIND_GROUPS>,
+    bind_group_infos: ArrayVec<BindGroupInfo, crate::MAX_BIND_GROUPS>,
 }
 
 unsafe impl Send for PipelineLayout {}

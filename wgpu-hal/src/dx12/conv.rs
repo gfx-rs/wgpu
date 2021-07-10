@@ -110,6 +110,13 @@ pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> dxgiformat::DXGI
     }
 }
 
+pub fn map_index_format(format: wgt::IndexFormat) -> dxgiformat::DXGI_FORMAT {
+    match format {
+        wgt::IndexFormat::Uint16 => dxgiformat::DXGI_FORMAT_R16_UINT,
+        wgt::IndexFormat::Uint32 => dxgiformat::DXGI_FORMAT_R32_UINT,
+    }
+}
+
 pub fn map_acomposite_alpha_mode(mode: crate::CompositeAlphaMode) -> dxgi1_2::DXGI_ALPHA_MODE {
     use crate::CompositeAlphaMode as Cam;
     match mode {

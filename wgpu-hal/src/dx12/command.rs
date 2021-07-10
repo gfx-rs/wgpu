@@ -23,8 +23,9 @@ impl super::Temp {
 }
 
 impl super::CommandEncoder {
-    unsafe fn begin_pass(&mut self, label: crate::Label) {
+    unsafe fn begin_pass(&mut self, kind: super::PassKind, label: crate::Label) {
         let list = self.list.unwrap();
+        self.pass.kind = kind;
         if let Some(label) = label {
             let (wide_label, size) = self.temp.prepare_marker(label);
             list.BeginEvent(0, wide_label.as_ptr() as *const _, size);
@@ -40,6 +41,19 @@ impl super::CommandEncoder {
             list.EndEvent();
         }
         self.pass.clear();
+    }
+
+    unsafe fn prepare_draw(&mut self) {
+        let list = self.list.unwrap();
+        while self.pass.dirty_vertex_buffers != 0 {
+            let index = self.pass.dirty_vertex_buffers.trailing_zeros();
+            self.pass.dirty_vertex_buffers ^= 1 << index;
+            list.IASetVertexBuffers(
+                index,
+                1,
+                self.pass.vertex_buffers.as_ptr().offset(index as isize),
+            );
+        }
     }
 }
 
@@ -411,7 +425,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
-        self.begin_pass(desc.label);
+        self.begin_pass(super::PassKind::Render, desc.label);
 
         let mut color_views = [native::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_TARGETS];
         for (rtv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
@@ -535,6 +549,70 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
+        use super::PassKind as Pk;
+
+        let list = self.list.unwrap();
+        let info = &layout.bind_group_infos[index as usize];
+        let mut root_index = info.base_root_index;
+
+        // Bind CBV/SRC/UAV descriptor tables
+        if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
+            match self.pass.kind {
+                Pk::Render => list.set_graphics_root_descriptor_table(root_index, group.gpu_views),
+                Pk::Compute => list.set_compute_root_descriptor_table(root_index, group.gpu_views),
+                Pk::Transfer => (),
+            }
+            root_index += 1;
+        }
+
+        // Bind Sampler descriptor tables.
+        if info.tables.contains(super::TableTypes::SAMPLERS) {
+            match self.pass.kind {
+                Pk::Render => {
+                    list.set_graphics_root_descriptor_table(root_index, group.gpu_samplers)
+                }
+                Pk::Compute => {
+                    list.set_compute_root_descriptor_table(root_index, group.gpu_samplers)
+                }
+                Pk::Transfer => (),
+            }
+            root_index += 1;
+        }
+
+        // Bind root descriptors
+        for ((kind, &gpu_base), &offset) in info
+            .dynamic_buffers
+            .iter()
+            .zip(group.dynamic_buffers.iter())
+            .zip(dynamic_offsets)
+        {
+            let gpu_address = gpu_base + offset as wgt::BufferAddress;
+            match self.pass.kind {
+                Pk::Render => match *kind {
+                    super::BufferViewKind::Constant => {
+                        list.set_graphics_root_constant_buffer_view(root_index, gpu_address)
+                    }
+                    super::BufferViewKind::ShaderResource => {
+                        list.set_graphics_root_shader_resource_view(root_index, gpu_address)
+                    }
+                    super::BufferViewKind::UnorderedAccess => {
+                        list.set_graphics_root_unordered_access_view(root_index, gpu_address)
+                    }
+                },
+                Pk::Compute => match *kind {
+                    super::BufferViewKind::Constant => {
+                        list.set_compute_root_constant_buffer_view(root_index, gpu_address)
+                    }
+                    super::BufferViewKind::ShaderResource => {
+                        list.set_compute_root_shader_resource_view(root_index, gpu_address)
+                    }
+                    super::BufferViewKind::UnorderedAccess => {
+                        list.set_compute_root_unordered_access_view(root_index, gpu_address)
+                    }
+                },
+                Pk::Transfer => (),
+            }
+        }
     }
     unsafe fn set_push_constants(
         &mut self,
@@ -568,13 +646,23 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         binding: crate::BufferBinding<'a, super::Api>,
         format: wgt::IndexFormat,
     ) {
+        self.list.unwrap().set_index_buffer(
+            binding.resolve_address(),
+            binding.resolve_size() as u32,
+            conv::map_index_format(format),
+        );
     }
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
         binding: crate::BufferBinding<'a, super::Api>,
     ) {
+        let vb = &mut self.pass.vertex_buffers[index as usize];
+        vb.BufferLocation = binding.resolve_address();
+        vb.SizeInBytes = binding.resolve_size() as u32;
+        self.pass.dirty_vertex_buffers |= 1 << index;
     }
+
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
         let raw_vp = d3d12::D3D12_VIEWPORT {
             TopLeftX: rect.x,
@@ -609,6 +697,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_instance: u32,
         instance_count: u32,
     ) {
+        self.prepare_draw();
         self.list
             .unwrap()
             .draw(vertex_count, instance_count, start_vertex, start_instance);
@@ -621,6 +710,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_instance: u32,
         instance_count: u32,
     ) {
+        self.prepare_draw();
         self.list.unwrap().draw_indexed(
             index_count,
             instance_count,
@@ -635,6 +725,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        self.prepare_draw();
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.draw.as_mut_ptr(),
             draw_count,
@@ -650,6 +741,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
+        self.prepare_draw();
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.draw_indexed.as_mut_ptr(),
             draw_count,
@@ -667,6 +759,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
+        self.prepare_draw();
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.draw.as_mut_ptr(),
             max_count,
@@ -684,6 +777,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
+        self.prepare_draw();
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.draw_indexed.as_mut_ptr(),
             max_count,
@@ -697,7 +791,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     // compute
 
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
-        self.begin_pass(desc.label);
+        self.begin_pass(super::PassKind::Compute, desc.label);
     }
     unsafe fn end_compute_pass(&mut self) {
         self.end_pass();

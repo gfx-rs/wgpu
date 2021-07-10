@@ -588,7 +588,10 @@ impl crate::Device<super::Api> for super::Device {
         );
 
         hr.into_device_result("Buffer creation")?;
-        Ok(super::Buffer { resource })
+        Ok(super::Buffer {
+            resource,
+            size: desc.size,
+        })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         buffer.resource.destroy();
@@ -803,7 +806,7 @@ impl crate::Device<super::Api> for super::Device {
             shared: Arc::clone(&self.shared),
             list: None,
             free_lists: Vec::new(),
-            pass: super::PassState::default(),
+            pass: super::PassState::new(),
             temp: super::Temp::default(),
         })
     }
@@ -864,7 +867,6 @@ impl crate::Device<super::Api> for super::Device {
         let total_parameters = root_constants.len() + desc.bind_group_layouts.len() * 2;
         // Guarantees that no re-allocation is done, and our pointers are valid
         let mut parameters = Vec::with_capacity(total_parameters);
-        let mut parameter_offsets = Vec::with_capacity(total_parameters);
 
         let root_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
         // Collect the whole number of bindings we will create upfront.
@@ -885,12 +887,15 @@ impl crate::Device<super::Api> for super::Device {
             .sum();
         let mut ranges = Vec::with_capacity(total_non_dynamic_entries);
 
-        let mut root_elements =
-            arrayvec::ArrayVec::<[super::RootElement; crate::MAX_BIND_GROUPS]>::default();
+        let mut bind_group_infos =
+            arrayvec::ArrayVec::<[super::BindGroupInfo; crate::MAX_BIND_GROUPS]>::default();
         for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
             let space = root_space_offset + index as u32;
-            let mut types = super::TableTypes::empty();
-            let root_table_offset = root_offset as usize;
+            let mut info = super::BindGroupInfo {
+                tables: super::TableTypes::empty(),
+                base_root_index: parameters.len() as u32,
+                dynamic_buffers: Vec::new(),
+            };
 
             let mut visibility_view_static = wgt::ShaderStages::empty();
             let mut visibility_view_dynamic = wgt::ShaderStages::empty();
@@ -928,12 +933,11 @@ impl crate::Device<super::Api> for super::Device {
                 ));
             }
             if ranges.len() > range_base {
-                parameter_offsets.push(root_offset);
                 parameters.push(native::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_view_static),
                     &ranges[range_base..],
                 ));
-                types |= super::TableTypes::SRV_CBV_UAV;
+                info.tables |= super::TableTypes::SRV_CBV_UAV;
                 root_offset += 1;
             }
 
@@ -955,12 +959,11 @@ impl crate::Device<super::Api> for super::Device {
                 ));
             }
             if ranges.len() > range_base {
-                parameter_offsets.push(root_offset);
                 parameters.push(native::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_sampler),
                     &ranges[range_base..],
                 ));
-                types |= super::TableTypes::SAMPLERS;
+                info.tables |= super::TableTypes::SAMPLERS;
                 root_offset += 1;
             }
 
@@ -979,31 +982,30 @@ impl crate::Device<super::Api> for super::Device {
                     register: entry.binding,
                     space,
                 };
-                let param = match buffer_ty {
-                    wgt::BufferBindingType::Uniform => {
-                        native::RootParameter::cbv_descriptor(dynamic_buffers_visibility, binding)
-                    }
-                    wgt::BufferBindingType::Storage { read_only: true } => {
-                        native::RootParameter::srv_descriptor(dynamic_buffers_visibility, binding)
-                    }
-                    wgt::BufferBindingType::Storage { read_only: false } => {
-                        native::RootParameter::uav_descriptor(dynamic_buffers_visibility, binding)
-                    }
+                let (kind, param) = match buffer_ty {
+                    wgt::BufferBindingType::Uniform => (
+                        super::BufferViewKind::Constant,
+                        native::RootParameter::cbv_descriptor(dynamic_buffers_visibility, binding),
+                    ),
+                    wgt::BufferBindingType::Storage { read_only: true } => (
+                        super::BufferViewKind::ShaderResource,
+                        native::RootParameter::srv_descriptor(dynamic_buffers_visibility, binding),
+                    ),
+                    wgt::BufferBindingType::Storage { read_only: false } => (
+                        super::BufferViewKind::UnorderedAccess,
+                        native::RootParameter::uav_descriptor(dynamic_buffers_visibility, binding),
+                    ),
                 };
-                parameter_offsets.push(root_offset);
+                info.dynamic_buffers.push(kind);
                 parameters.push(param);
                 root_offset += 2; // root view costs 2 words
             }
 
-            root_elements.push(super::RootElement {
-                types,
-                offset: root_table_offset,
-            });
+            bind_group_infos.push(info);
         }
 
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
-        assert_eq!(parameters.len(), parameter_offsets.len());
 
         let (blob, error) = self
             .library
@@ -1041,9 +1043,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::PipelineLayout {
             raw,
-            parameter_offsets,
-            total_slots: root_offset,
-            elements: root_elements,
+            bind_group_infos,
         })
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
@@ -1054,7 +1054,11 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,
     ) -> Result<super::BindGroup, crate::DeviceError> {
-        Ok(super::BindGroup {})
+        Ok(super::BindGroup {
+            gpu_views: unimplemented!(),
+            gpu_samplers: unimplemented!(),
+            dynamic_buffers: Vec::new(),
+        })
     }
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {}
 
