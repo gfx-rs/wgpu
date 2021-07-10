@@ -542,7 +542,7 @@ impl framework::Example for Example {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 1, // lights
-                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                                 has_dynamic_offset: false,

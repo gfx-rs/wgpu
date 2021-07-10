@@ -976,22 +976,33 @@ impl<A: HalApi> Device<A> {
         label: Option<&str>,
         entry_map: binding_model::BindEntryMap,
     ) -> Result<binding_model::BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
+        #[derive(PartialEq)]
+        enum WritableStorage {
+            Yes,
+            No,
+        }
+
         for entry in entry_map.values() {
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();
-            let mut required_downlevel_flags = wgt::DownlevelFlags::empty();
-            let (array_feature, is_writable_storage) = match entry.ty {
+            let (array_feature, writable_storage) = match entry.ty {
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: _,
-                } => (Some(wgt::Features::BUFFER_BINDING_ARRAY), false),
+                } => (
+                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                    WritableStorage::No,
+                ),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
                     min_binding_size: _,
-                } => (Some(wgt::Features::BUFFER_BINDING_ARRAY), false),
+                } => (
+                    Some(wgt::Features::BUFFER_BINDING_ARRAY),
+                    WritableStorage::No,
+                ),
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Storage { read_only },
                     ..
@@ -1000,22 +1011,28 @@ impl<A: HalApi> Device<A> {
                         wgt::Features::BUFFER_BINDING_ARRAY
                             | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
                     ),
-                    !read_only,
+                    match read_only {
+                        true => WritableStorage::No,
+                        false => WritableStorage::Yes,
+                    },
                 ),
-                Bt::Sampler { .. } => (None, false),
-                Bt::Texture { .. } => (Some(wgt::Features::TEXTURE_BINDING_ARRAY), false),
+                Bt::Sampler { .. } => (None, WritableStorage::No),
+                Bt::Texture { .. } => (
+                    Some(wgt::Features::TEXTURE_BINDING_ARRAY),
+                    WritableStorage::No,
+                ),
                 Bt::StorageTexture { access, .. } => (
                     Some(
                         wgt::Features::TEXTURE_BINDING_ARRAY
                             | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
                     ),
                     match access {
-                        wgt::StorageTextureAccess::ReadOnly => false,
-                        wgt::StorageTextureAccess::WriteOnly => true,
+                        wgt::StorageTextureAccess::ReadOnly => WritableStorage::No,
+                        wgt::StorageTextureAccess::WriteOnly => WritableStorage::Yes,
                         wgt::StorageTextureAccess::ReadWrite => {
                             required_features |=
                                 wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                            true
+                            WritableStorage::Yes
                         }
                     },
                 ),
@@ -1030,13 +1047,14 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
-            if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
-                required_downlevel_flags |= wgt::DownlevelFlags::VERTEX_ACCESSABLE_STORAGE_BUFFERS;
-            }
-            if is_writable_storage && entry.visibility.contains(wgt::ShaderStages::VERTEX) {
+            if writable_storage == WritableStorage::Yes
+                && entry.visibility.contains(wgt::ShaderStages::VERTEX)
+            {
                 required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
             }
-            if is_writable_storage && entry.visibility.contains(wgt::ShaderStages::FRAGMENT) {
+            if writable_storage == WritableStorage::Yes
+                && entry.visibility.contains(wgt::ShaderStages::FRAGMENT)
+            {
                 self.require_downlevel_flags(wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE)
                     .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
                     .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
@@ -1047,13 +1065,6 @@ impl<A: HalApi> Device<A> {
 
             self.require_features(required_features)
                 .map_err(binding_model::BindGroupLayoutEntryError::MissingFeatures)
-                .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
-                    binding: entry.binding,
-                    error,
-                })?;
-
-            self.require_downlevel_flags(required_downlevel_flags)
-                .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
                 .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
                     binding: entry.binding,
                     error,

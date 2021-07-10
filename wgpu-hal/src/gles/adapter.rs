@@ -180,17 +180,39 @@ impl super::Adapter {
             naga::back::glsl::Version::Embedded(value)
         };
 
+        let vertex_shader_storage_blocks =
+            gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) as u32;
+        let fragment_shader_storage_blocks =
+            gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS) as u32;
+
+        let vertex_shader_storage_textures =
+            gl.get_parameter_i32(glow::MAX_VERTEX_IMAGE_UNIFORMS) as u32;
+        let fragment_shader_storage_textures =
+            gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) as u32;
+
+        // WORKAROUND:
+        // In order to work around an issue with GL on RPI4 and similar, we ignore a zero vertex ssbo count if there are vertex sstos. (more info: https://github.com/gfx-rs/wgpu/pull/1607#issuecomment-874938961)
+        // The hardware does not want us to write to these SSBOs, but GLES cannot express that. We detect this case and disable writing to SSBOs.
+        let vertex_ssbo_false_zero =
+            vertex_shader_storage_blocks == 0 && vertex_shader_storage_textures != 0;
+
+        let max_storage_buffers_per_shader_stage = if vertex_ssbo_false_zero {
+            // We only care about fragment here as the 0 is a lie.
+            log::warn!("Max vertex shader SSBO == 0 and SSTO != 0. Interpreting as false zero.");
+            fragment_shader_storage_blocks
+        } else {
+            vertex_shader_storage_blocks.min(fragment_shader_storage_blocks)
+        };
+
         let mut features = wgt::Features::empty() | wgt::Features::TEXTURE_COMPRESSION_ETC2;
         features.set(
             wgt::Features::DEPTH_CLAMPING,
             extensions.contains("GL_EXT_depth_clamp"),
         );
-        features.set(wgt::Features::VERTEX_WRITABLE_STORAGE, ver >= (3, 1));
-
-        let vertex_shader_storage_blocks =
-            gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS);
-        let fragment_shader_storage_blocks =
-            gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS);
+        features.set(
+            wgt::Features::VERTEX_WRITABLE_STORAGE,
+            ver >= (3, 1) && !vertex_ssbo_false_zero,
+        );
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::DEVICE_LOCAL_IMAGE_COPIES
@@ -210,10 +232,6 @@ impl super::Adapter {
             wgt::DownlevelFlags::INDEPENDENT_BLENDING,
             ver >= (3, 2) || extensions.contains("GL_EXT_draw_buffers_indexed"),
         );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::VERTEX_ACCESSABLE_STORAGE_BUFFERS,
-            vertex_shader_storage_blocks > 0,
-        );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
         let max_texture_3d_size = gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) as u32;
@@ -228,14 +246,6 @@ impl super::Adapter {
         let max_uniform_buffers_per_shader_stage =
             gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS)
                 .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS)) as u32;
-        let max_storage_buffers_per_shader_stage = if vertex_shader_storage_blocks > 0 {
-            vertex_shader_storage_blocks.min(fragment_shader_storage_blocks)
-        } else {
-            fragment_shader_storage_blocks
-        } as u32;
-
-        let max_storage_textures_per_shader_stage =
-            gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) as u32;
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
@@ -248,7 +258,8 @@ impl super::Adapter {
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
             max_samplers_per_shader_stage: super::MAX_SAMPLERS as u32,
             max_storage_buffers_per_shader_stage,
-            max_storage_textures_per_shader_stage,
+            max_storage_textures_per_shader_stage: vertex_shader_storage_textures
+                .min(fragment_shader_storage_textures),
             max_uniform_buffers_per_shader_stage,
             max_uniform_buffer_binding_size: gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
                 as u32,

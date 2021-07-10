@@ -702,8 +702,6 @@ bitflags::bitflags! {
         const COMPARISON_SAMPLERS = 0x0000_0100;
         /// Supports different blending modes per color target.
         const INDEPENDENT_BLENDING = 0x0000_0200;
-        /// Supports attaching storage buffers to vertex shaders.
-        const VERTEX_ACCESSABLE_STORAGE_BUFFERS = 0x0000_0400;
 
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by WebGPU,
