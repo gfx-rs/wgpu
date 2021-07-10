@@ -39,11 +39,11 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(raw_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self(wgc::hub::Global::from_hal_instance::<A>(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
-            raw_instance,
+            hal_instance,
         ))
     }
 
@@ -56,6 +56,16 @@ impl Context {
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
                 PhantomData
             }))
+    }
+
+    pub fn adapter_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_adapter: hal::ExposedAdapter<A>,
+    ) -> wgc::id::AdapterId {
+        self.0.adapter_from_hal(
+            hal_adapter,
+            PhantomData, // todo: remove useless argument
+        )
     }
 
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {

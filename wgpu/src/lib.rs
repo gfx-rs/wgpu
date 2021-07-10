@@ -1392,15 +1392,15 @@ impl Instance {
     ///
     /// # Arguments
     ///
-    /// - `raw_instance` - wgpu-hal instance.
+    /// - `hal_instance` - wgpu-hal instance.
     ///
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
     #[cfg(not(target_arch = "wasm32"))]
-    pub unsafe fn from_hal<A: wgc::hub::HalApi>(raw_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Instance {
-            context: Arc::new(C::from_hal_instance::<A>(raw_instance)),
+            context: Arc::new(C::from_hal_instance::<A>(hal_instance)),
         }
     }
 
@@ -1433,6 +1433,21 @@ impl Instance {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
         async move { adapter.await.map(|id| Adapter { context, id }) }
+    }
+
+    /// Converts a wgpu-hal adapter to a wgpu [`Adapter`].
+    ///
+    /// # Safety
+    ///
+    /// Refer to the creation of ExposedAdapter for every backend.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn adapter_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_adapter: hal::ExposedAdapter<A>,
+    ) -> Adapter {
+        let context = Arc::clone(&self.context);
+        let id = context.adapter_from_hal(hal_adapter);
+        Adapter { context, id }
     }
 
     /// Creates a surface from a raw window handle.

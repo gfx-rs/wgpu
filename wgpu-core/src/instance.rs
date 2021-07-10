@@ -652,6 +652,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Err(RequestAdapterError::NotFound)
     }
 
+    pub fn adapter_from_hal<A: HalApi>(
+        &self,
+        hal_adapter: hal::ExposedAdapter<A>,
+        input: Input<G, AdapterId>, // todo: remove useless parameter
+    ) -> AdapterId {
+        profiling::scope!("adapter_from_hal", "Instance");
+
+        fn create_adapter<G: GlobalIdentityHandlerFactory, A: HalApi>(
+            this: &Global<G>,
+            hal_adapter: hal::ExposedAdapter<A>,
+            input: Input<G, AdapterId>,
+        ) -> AdapterId {
+            let adapter = Adapter::new(hal_adapter);
+            HalApi::hub(this)
+                .adapters
+                .prepare(input)
+                .assign(adapter, &mut Token::root())
+                .0
+        }
+
+        match A::VARIANT {
+            #[cfg(vulkan)]
+            Backend::Vulkan => create_adapter(&self, hal_adapter, input),
+            #[cfg(metal)]
+            Backend::Metal => create_adapter(&self, hal_adapter, input),
+            #[cfg(dx12)]
+            Backend::Dx12 => create_adapter(&self, hal_adapter, input),
+            #[cfg(dx11)]
+            Backend::Dx11 => create_adapter(&self, hal_adapter, input),
+            #[cfg(gl)]
+            Backend::Gl => create_adapter(&self, hal_adapter, input),
+            _ => unreachable!(),
+        }
+    }
+
     pub fn adapter_get_info<A: HalApi>(
         &self,
         adapter_id: AdapterId,

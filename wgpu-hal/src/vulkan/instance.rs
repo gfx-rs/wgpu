@@ -117,7 +117,7 @@ impl super::Instance {
     pub fn required_extensions(
         entry: &ash::Entry,
         driver_api_version: u32,
-        with_debug: bool,
+        flags: crate::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
         let instance_extensions = entry
             .enumerate_instance_extension_properties()
@@ -150,7 +150,7 @@ impl super::Instance {
             extensions.push(ext::MetalSurface::name());
         }
 
-        if with_debug {
+        if flags.contains(crate::InstanceFlags::DEBUG) {
             extensions.push(ext::DebugUtils::name());
         }
 
@@ -461,7 +461,7 @@ impl crate::Instance<super::Api> for super::Instance {
         let extensions = Self::required_extensions(
             &entry,
             driver_api_version,
-            desc.flags.contains(crate::InstanceFlags::DEBUG),
+            desc.flags,
         )?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {

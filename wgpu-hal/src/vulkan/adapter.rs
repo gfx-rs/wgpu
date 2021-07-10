@@ -589,7 +589,7 @@ impl super::InstanceShared {
 }
 
 impl super::Instance {
-    pub(super) fn expose_adapter(
+    pub fn expose_adapter(
         &self,
         phd: vk::PhysicalDevice,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
