@@ -324,6 +324,17 @@ struct GlobalVariable {
     handle_id: Word,
 }
 
+impl GlobalVariable {
+    fn new(id: Word) -> GlobalVariable {
+        GlobalVariable { id, handle_id: 0 }
+    }
+
+    /// Prepare `self` for use within a single function.
+    fn reset_for_function(&mut self) {
+        self.handle_id = 0;
+    }
+}
+
 struct FunctionArgument {
     /// Actual instruction of the argument.
     instruction: Instruction,

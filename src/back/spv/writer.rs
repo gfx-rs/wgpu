@@ -422,7 +422,7 @@ impl Writer {
 
         // fill up the `GlobalVariable::handle_id`
         for gv in self.global_variables.iter_mut() {
-            gv.handle_id = 0;
+            gv.reset_for_function();
         }
         for (handle, var) in ir_module.global_variables.iter() {
             // Handle globals are pre-emitted and should be loaded automatically.
@@ -1248,8 +1248,7 @@ impl Writer {
         for (_, var) in ir_module.global_variables.iter() {
             let (instruction, id) = self.write_global_variable(ir_module, var)?;
             instruction.to_words(&mut self.logical_layout.declarations);
-            self.global_variables
-                .push(GlobalVariable { id, handle_id: 0 });
+            self.global_variables.push(GlobalVariable::new(id));
         }
 
         // all functions
