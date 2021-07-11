@@ -825,13 +825,56 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> Result<super::BindGroupLayout, crate::DeviceError> {
+        let (mut num_buffer_views, mut num_samplers, mut num_texture_views) = (0, 0, 0);
+        for entry in desc.entries.iter() {
+            match entry.ty {
+                wgt::BindingType::Buffer {
+                    has_dynamic_offset: true,
+                    ..
+                } => {}
+                wgt::BindingType::Buffer { .. } => num_buffer_views += 1,
+                wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
+                    num_texture_views += 1
+                }
+                wgt::BindingType::Sampler { .. } => num_samplers += 1,
+            }
+        }
+
+        let num_views = num_buffer_views + num_texture_views;
         Ok(super::BindGroupLayout {
             entries: desc.entries.to_vec(),
+            cpu_heap_views: if num_views != 0 {
+                let heap = descriptor::CpuHeap::new(
+                    self.raw,
+                    native::DescriptorHeapType::CbvSrvUav,
+                    num_views,
+                )?;
+                Some(heap)
+            } else {
+                None
+            },
+            cpu_heap_samplers: if num_samplers != 0 {
+                let heap = descriptor::CpuHeap::new(
+                    self.raw,
+                    native::DescriptorHeapType::Sampler,
+                    num_samplers,
+                )?;
+                Some(heap)
+            } else {
+                None
+            },
+            copy_counts: vec![1; num_views.max(num_samplers) as usize],
         })
     }
-    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {
-        // just drop
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
+        if let Some(cpu_heap) = bg_layout.cpu_heap_views {
+            cpu_heap.destroy();
+        }
+        if let Some(cpu_heap) = bg_layout.cpu_heap_samplers {
+            cpu_heap.destroy();
+        }
     }
+
     unsafe fn create_pipeline_layout(
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
@@ -1054,13 +1097,151 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BindGroupDescriptor<super::Api>,
     ) -> Result<super::BindGroup, crate::DeviceError> {
+        let mut cpu_views = desc
+            .layout
+            .cpu_heap_views
+            .as_ref()
+            .map(|cpu_heap| cpu_heap.inner.lock());
+        if let Some(ref mut inner) = cpu_views {
+            inner.stage.clear();
+        }
+        let mut cpu_samplers = desc
+            .layout
+            .cpu_heap_samplers
+            .as_ref()
+            .map(|cpu_heap| cpu_heap.inner.lock());
+        if let Some(ref mut inner) = cpu_samplers {
+            inner.stage.clear();
+        }
+        let mut dynamic_buffers = Vec::new();
+
+        for (layout, entry) in desc.layout.entries.iter().zip(desc.entries.iter()) {
+            match layout.ty {
+                wgt::BindingType::Buffer {
+                    has_dynamic_offset,
+                    ty,
+                    ..
+                } => {
+                    let data = &desc.buffers[entry.resource_index as usize];
+                    let gpu_address = data.resolve_address();
+                    let size = data.resolve_size() as u32;
+                    let inner = cpu_views.as_mut().unwrap();
+                    let cpu_index = inner.stage.len() as u32;
+                    let handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
+                    match ty {
+                        _ if has_dynamic_offset => {
+                            dynamic_buffers.push(gpu_address);
+                        }
+                        wgt::BufferBindingType::Uniform => {
+                            let mask = d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
+                            let raw_desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                                BufferLocation: gpu_address,
+                                SizeInBytes: size,
+                            };
+                            self.raw.CreateConstantBufferView(&raw_desc, handle);
+                        }
+                        wgt::BufferBindingType::Storage { read_only: true } => {
+                            let mut raw_desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                                ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
+                                u: mem::zeroed(),
+                            };
+                            *raw_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
+                                FirstElement: data.offset,
+                                NumElements: size / 4,
+                                StructureByteStride: 0,
+                                Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
+                            };
+                            self.raw.CreateShaderResourceView(
+                                data.buffer.resource.as_mut_ptr(),
+                                &raw_desc,
+                                handle,
+                            );
+                        }
+                        wgt::BufferBindingType::Storage { read_only: false } => {
+                            let mut raw_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
+                                u: mem::zeroed(),
+                            };
+                            *raw_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
+                                FirstElement: data.offset,
+                                NumElements: size / 4,
+                                StructureByteStride: 0,
+                                CounterOffsetInBytes: 0,
+                                Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
+                            };
+                            self.raw.CreateUnorderedAccessView(
+                                data.buffer.resource.as_mut_ptr(),
+                                ptr::null_mut(),
+                                &raw_desc,
+                                handle,
+                            );
+                        }
+                    }
+                    inner.stage.push(handle);
+                }
+                wgt::BindingType::Texture { .. }
+                | wgt::BindingType::StorageTexture {
+                    access: wgt::StorageTextureAccess::ReadOnly,
+                    ..
+                } => {
+                    let data = &desc.textures[entry.resource_index as usize];
+                    let handle = data.view.handle_srv.unwrap();
+                    cpu_views.as_mut().unwrap().stage.push(handle.raw);
+                }
+                wgt::BindingType::StorageTexture { .. } => {
+                    let data = &desc.textures[entry.resource_index as usize];
+                    let handle = data.view.handle_uav.unwrap();
+                    cpu_views.as_mut().unwrap().stage.push(handle.raw);
+                }
+                wgt::BindingType::Sampler { .. } => {
+                    let data = &desc.samplers[entry.resource_index as usize];
+                    cpu_samplers.as_mut().unwrap().stage.push(data.handle.raw);
+                }
+            }
+        }
+
+        let handle_views = match cpu_views {
+            Some(inner) => {
+                let dual = descriptor::upload(
+                    self.raw,
+                    &*inner,
+                    &self.shared.heap_views,
+                    &desc.layout.copy_counts,
+                )?;
+                Some(dual)
+            }
+            None => None,
+        };
+        let handle_samplers = match cpu_samplers {
+            Some(inner) => {
+                let dual = descriptor::upload(
+                    self.raw,
+                    &*inner,
+                    &self.shared.heap_samplers,
+                    &desc.layout.copy_counts,
+                )?;
+                Some(dual)
+            }
+            None => None,
+        };
+
         Ok(super::BindGroup {
-            gpu_views: unimplemented!(),
-            gpu_samplers: unimplemented!(),
-            dynamic_buffers: Vec::new(),
+            handle_views,
+            handle_samplers,
+            dynamic_buffers,
         })
     }
-    unsafe fn destroy_bind_group(&self, group: super::BindGroup) {}
+    unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
+        if let Some(dual) = group.handle_views {
+            let _ = self.shared.heap_views.free_slice(dual);
+        }
+        if let Some(dual) = group.handle_samplers {
+            let _ = self.shared.heap_samplers.free_slice(dual);
+        }
+    }
 
     unsafe fn create_shader_module(
         &self,

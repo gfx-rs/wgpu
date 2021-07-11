@@ -557,9 +557,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         // Bind CBV/SRC/UAV descriptor tables
         if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
+            let descriptor = group.handle_views.unwrap().gpu;
             match self.pass.kind {
-                Pk::Render => list.set_graphics_root_descriptor_table(root_index, group.gpu_views),
-                Pk::Compute => list.set_compute_root_descriptor_table(root_index, group.gpu_views),
+                Pk::Render => list.set_graphics_root_descriptor_table(root_index, descriptor),
+                Pk::Compute => list.set_compute_root_descriptor_table(root_index, descriptor),
                 Pk::Transfer => (),
             }
             root_index += 1;
@@ -567,13 +568,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         // Bind Sampler descriptor tables.
         if info.tables.contains(super::TableTypes::SAMPLERS) {
+            let descriptor = group.handle_samplers.unwrap().gpu;
             match self.pass.kind {
-                Pk::Render => {
-                    list.set_graphics_root_descriptor_table(root_index, group.gpu_samplers)
-                }
-                Pk::Compute => {
-                    list.set_compute_root_descriptor_table(root_index, group.gpu_samplers)
-                }
+                Pk::Render => list.set_graphics_root_descriptor_table(root_index, descriptor),
+                Pk::Compute => list.set_compute_root_descriptor_table(root_index, descriptor),
                 Pk::Transfer => (),
             }
             root_index += 1;

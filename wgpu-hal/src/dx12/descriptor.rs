@@ -9,15 +9,26 @@ const HEAP_SIZE_FIXED: usize = 64;
 #[derive(Copy, Clone)]
 pub(super) struct DualHandle {
     cpu: native::CpuDescriptor,
-    gpu: native::GpuDescriptor,
+    pub gpu: native::GpuDescriptor,
     /// How large the block allocated to this handle is.
-    size: u64,
+    count: u64,
+}
+
+impl fmt::Debug for DualHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DualHandle")
+            .field("cpu", &self.cpu.ptr)
+            .field("gpu", &self.gpu.ptr)
+            .field("count", &self.count)
+            .finish()
+    }
 }
 
 type DescriptorIndex = u64;
 
 pub(super) struct GeneralHeap {
     pub raw: native::DescriptorHeap,
+    ty: native::DescriptorHeapType,
     handle_size: u64,
     total_handles: u64,
     start: DualHandle,
@@ -27,13 +38,13 @@ pub(super) struct GeneralHeap {
 impl GeneralHeap {
     pub(super) fn new(
         device: native::Device,
-        raw_type: native::DescriptorHeapType,
+        ty: native::DescriptorHeapType,
         total_handles: u64,
     ) -> Result<Self, crate::DeviceError> {
         let raw = device
             .create_descriptor_heap(
                 total_handles as u32,
-                raw_type,
+                ty,
                 native::DescriptorHeapFlags::SHADER_VISIBLE,
                 0,
             )
@@ -41,36 +52,52 @@ impl GeneralHeap {
 
         Ok(Self {
             raw,
-            handle_size: device.get_descriptor_increment_size(raw_type) as u64,
+            ty,
+            handle_size: device.get_descriptor_increment_size(ty) as u64,
             total_handles,
             start: DualHandle {
                 cpu: raw.start_cpu_descriptor(),
                 gpu: raw.start_gpu_descriptor(),
-                size: 0,
+                count: 0,
             },
             ranges: Mutex::new(RangeAllocator::new(0..total_handles)),
         })
     }
 
-    pub(super) fn at(&self, index: DescriptorIndex, size: u64) -> DualHandle {
+    pub(super) fn at(&self, index: DescriptorIndex, count: u64) -> DualHandle {
         assert!(index < self.total_handles);
         DualHandle {
             cpu: self.cpu_descriptor_at(index),
             gpu: self.gpu_descriptor_at(index),
-            size,
+            count,
         }
     }
 
-    pub(super) fn cpu_descriptor_at(&self, index: u64) -> native::CpuDescriptor {
+    fn cpu_descriptor_at(&self, index: u64) -> native::CpuDescriptor {
         native::CpuDescriptor {
             ptr: self.start.cpu.ptr + (self.handle_size * index) as usize,
         }
     }
 
-    pub(super) fn gpu_descriptor_at(&self, index: u64) -> native::GpuDescriptor {
+    fn gpu_descriptor_at(&self, index: u64) -> native::GpuDescriptor {
         native::GpuDescriptor {
             ptr: self.start.gpu.ptr + self.handle_size * index,
         }
+    }
+
+    pub(super) fn allocate_slice(&self, count: u64) -> Result<DescriptorIndex, crate::DeviceError> {
+        let range = self.ranges.lock().allocate_range(count).map_err(|err| {
+            log::error!("Unable to allocate descriptors: {:?}", err);
+            crate::DeviceError::OutOfMemory
+        })?;
+        Ok(range.start)
+    }
+
+    /// Free handles previously given out by this `DescriptorHeapSlice`.
+    /// Do not use this with handles not given out by this `DescriptorHeapSlice`.
+    pub(crate) fn free_slice(&self, handle: DualHandle) {
+        let start = (handle.gpu.ptr - self.start.gpu.ptr) / self.handle_size;
+        self.ranges.lock().free_range(start..start + handle.count);
     }
 }
 
@@ -198,4 +225,82 @@ impl CpuPool {
             heap.destroy();
         }
     }
+}
+
+pub(super) struct CpuHeapInner {
+    pub raw: native::DescriptorHeap,
+    pub stage: Vec<native::CpuDescriptor>,
+}
+
+pub(super) struct CpuHeap {
+    pub inner: Mutex<CpuHeapInner>,
+    start: native::CpuDescriptor,
+    handle_size: u32,
+    total: u32,
+}
+
+unsafe impl Send for CpuHeap {}
+unsafe impl Sync for CpuHeap {}
+
+impl CpuHeap {
+    pub(super) fn new(
+        device: native::Device,
+        ty: native::DescriptorHeapType,
+        total: u32,
+    ) -> Result<Self, crate::DeviceError> {
+        let handle_size = device.get_descriptor_increment_size(ty);
+        let raw = device
+            .create_descriptor_heap(total, ty, native::DescriptorHeapFlags::empty(), 0)
+            .into_device_result("CPU descriptor heap creation")?;
+
+        Ok(Self {
+            inner: Mutex::new(CpuHeapInner {
+                raw,
+                stage: Vec::new(),
+            }),
+            start: raw.start_cpu_descriptor(),
+            handle_size,
+            total,
+        })
+    }
+
+    pub(super) fn at(&self, index: u32) -> native::CpuDescriptor {
+        native::CpuDescriptor {
+            ptr: self.start.ptr + (self.handle_size * index) as usize,
+        }
+    }
+
+    pub(super) unsafe fn destroy(self) {
+        self.inner.into_inner().raw.destroy();
+    }
+}
+
+impl fmt::Debug for CpuHeap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CpuHeap")
+            .field("start", &self.start.ptr)
+            .field("handle_size", &self.handle_size)
+            .field("total", &self.total)
+            .finish()
+    }
+}
+
+pub(super) unsafe fn upload(
+    device: native::Device,
+    src: &CpuHeapInner,
+    dst: &GeneralHeap,
+    dummy_copy_counts: &[u32],
+) -> Result<DualHandle, crate::DeviceError> {
+    let count = src.stage.len() as u32;
+    let index = dst.allocate_slice(count as u64)?;
+    device.CopyDescriptors(
+        1,
+        &dst.cpu_descriptor_at(index),
+        &count,
+        count,
+        src.stage.as_ptr(),
+        dummy_copy_counts.as_ptr(),
+        dst.ty as u32,
+    );
+    Ok(dst.at(index, count as u64))
 }

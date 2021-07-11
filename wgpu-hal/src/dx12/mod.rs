@@ -16,7 +16,7 @@ mod instance;
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{borrow::Cow, fmt, mem, ptr, sync::Arc};
+use std::{borrow::Cow, mem, ptr, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
     um::{d3d12, synchapi, winbase, winnt},
@@ -147,6 +147,8 @@ pub struct Adapter {
     device: native::Device,
     library: Arc<native::D3D12Lib>,
     private_caps: PrivateCapabilities,
+    //Note: this isn't used right now, but we'll need it later.
+    #[allow(unused)]
     workarounds: Workarounds,
 }
 
@@ -382,6 +384,9 @@ unsafe impl Sync for Fence {}
 pub struct BindGroupLayout {
     /// Sorted list of entries.
     entries: Vec<wgt::BindGroupLayoutEntry>,
+    cpu_heap_views: Option<descriptor::CpuHeap>,
+    cpu_heap_samplers: Option<descriptor::CpuHeap>,
+    copy_counts: Vec<u32>, // all 1's
 }
 
 enum BufferViewKind {
@@ -390,20 +395,11 @@ enum BufferViewKind {
     UnorderedAccess,
 }
 
+#[derive(Debug)]
 pub struct BindGroup {
-    gpu_views: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE,
-    gpu_samplers: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE,
+    handle_views: Option<descriptor::DualHandle>,
+    handle_samplers: Option<descriptor::DualHandle>,
     dynamic_buffers: Vec<native::GpuAddress>,
-}
-
-impl fmt::Debug for BindGroup {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BindGroup")
-            .field("gpu_views", &self.gpu_views.ptr)
-            .field("gpu_samplers", &self.gpu_samplers.ptr)
-            .field("dynamic_buffers", &self.dynamic_buffers)
-            .finish()
-    }
 }
 
 bitflags::bitflags! {
