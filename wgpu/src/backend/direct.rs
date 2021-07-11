@@ -58,7 +58,7 @@ impl Context {
             }))
     }
 
-    pub fn adapter_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {

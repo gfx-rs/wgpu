@@ -662,7 +662,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Err(RequestAdapterError::NotFound)
     }
 
-    pub fn adapter_from_hal<A: HalApi>(
+    /// # Safety
+    ///
+    /// `hal_adapter` must be created from this global internal instance handle.
+    pub unsafe fn adapter_from_hal<A: HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
         input: Input<G, AdapterId>,
@@ -805,7 +808,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     /// # Safety
     ///
-    /// `hal_device` must be created from `adapter_id` or its internal handle. 
+    /// `hal_device` must be created from `adapter_id` or its internal handle.  
     /// `desc` must be a subset of `hal_device` features and limits.
     pub unsafe fn device_from_hal<A: HalApi>(
         &self,
