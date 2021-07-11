@@ -251,9 +251,10 @@ impl<A: HalApi> Adapter<A> {
         }
     }
 
-    fn create_device(
+    fn device_from_open(
         &self,
         self_id: AdapterId,
+        open: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
@@ -284,11 +285,6 @@ impl<A: HalApi> Adapter<A> {
             log::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
         }
 
-        let gpu = unsafe { self.raw.adapter.open(desc.features) }.map_err(|err| match err {
-            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
-            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
-        })?;
-
         if let Some(_) = desc.label {
             //TODO
         }
@@ -308,7 +304,7 @@ impl<A: HalApi> Adapter<A> {
         }
 
         Device::new(
-            gpu,
+            open,
             Stored {
                 value: Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -319,6 +315,20 @@ impl<A: HalApi> Adapter<A> {
             trace_path,
         )
         .or(Err(RequestDeviceError::OutOfMemory))
+    }
+
+    fn create_device(
+        &self,
+        self_id: AdapterId,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+    ) -> Result<Device<A>, RequestDeviceError> {
+        let open = unsafe { self.raw.adapter.open(desc.features) }.map_err(|err| match err {
+            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
+            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
+        })?;
+
+        self.device_from_open(self_id, open, desc, trace_path)
     }
 }
 
@@ -655,34 +665,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_from_hal<A: HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
-        input: Input<G, AdapterId>, // todo: remove useless parameter
+        input: Input<G, AdapterId>,
     ) -> AdapterId {
         profiling::scope!("adapter_from_hal", "Instance");
 
-        fn create_adapter<G: GlobalIdentityHandlerFactory, A: HalApi>(
-            this: &Global<G>,
-            hal_adapter: hal::ExposedAdapter<A>,
-            input: Input<G, AdapterId>,
-        ) -> AdapterId {
-            let adapter = Adapter::new(hal_adapter);
-            HalApi::hub(this)
-                .adapters
-                .prepare(input)
-                .assign(adapter, &mut Token::root())
-                .0
-        }
+        let mut token = Token::root();
+        let fid = A::hub(&self).adapters.prepare(input);
 
         match A::VARIANT {
             #[cfg(vulkan)]
-            Backend::Vulkan => create_adapter(&self, hal_adapter, input),
+            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter), &mut token).0,
             #[cfg(metal)]
-            Backend::Metal => create_adapter(&self, hal_adapter, input),
+            Backend::Metal => fid.assign(Adapter::new(hal_adapter), &mut token).0,
             #[cfg(dx12)]
-            Backend::Dx12 => create_adapter(&self, hal_adapter, input),
+            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter), &mut token).0,
             #[cfg(dx11)]
-            Backend::Dx11 => create_adapter(&self, hal_adapter, input),
+            Backend::Dx11 => fid.assign(Adapter::new(hal_adapter), &mut token).0,
             #[cfg(gl)]
-            Backend::Gl => create_adapter(&self, hal_adapter, input),
+            Backend::Gl => fid.assign(Adapter::new(hal_adapter), &mut token).0,
             _ => unreachable!(),
         }
     }
@@ -792,6 +792,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
             let device = match adapter.create_device(adapter_id, desc, trace_path) {
+                Ok(device) => device,
+                Err(e) => break e,
+            };
+            let id = fid.assign(device, &mut token);
+            return (id.0, None);
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
+    }
+
+    /// # Safety
+    ///
+    /// `hal_device` must be created from `adapter_id` or its internal handle. 
+    /// `desc` must be a subset of `hal_device` features and limits.
+    pub unsafe fn device_from_hal<A: HalApi>(
+        &self,
+        adapter_id: AdapterId,
+        hal_device: hal::OpenDevice<A>,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+        id_in: Input<G, DeviceId>,
+    ) -> (DeviceId, Option<RequestDeviceError>) {
+        profiling::scope!("request_device", "Adapter");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.devices.prepare(id_in);
+
+        let error = loop {
+            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+            let adapter = match adapter_guard.get(adapter_id) {
+                Ok(adapter) => adapter,
+                Err(_) => break RequestDeviceError::InvalidAdapter,
+            };
+            let device = match adapter.device_from_open(adapter_id, hal_device, desc, trace_path) {
                 Ok(device) => device,
                 Err(e) => break e,
             };

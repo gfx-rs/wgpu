@@ -1435,11 +1435,11 @@ impl Instance {
         async move { adapter.await.map(|id| Adapter { context, id }) }
     }
 
-    /// Converts a wgpu-hal adapter to a wgpu [`Adapter`].
+    /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
     ///
     /// # Safety
     ///
-    /// Refer to the creation of ExposedAdapter for every backend.
+    /// `hal_adapter` must be created from this instance internal handle.
     #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
@@ -1531,6 +1531,36 @@ impl Adapter {
                 )
             })
         }
+    }
+
+    /// Create a wgpu [`Device`] and [`Queue`] from a wgpu-hal `OpenDevice`
+    ///
+    /// # Safety
+    ///
+    /// `hal_device` must be created from this adapter internal handle. 
+    /// `desc.features` must be a subset of `hal_device` features.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn device_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_device: hal::OpenDevice<A>,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+    ) -> Result<(Device, Queue), RequestDeviceError> {
+        let context = Arc::clone(&self.context);
+        C::device_from_hal(&*self.context, &self.id, hal_device, desc, trace_path).map(
+            |(device_id, queue_id)| {
+                (
+                    Device {
+                        context: Arc::clone(&context),
+                        id: device_id,
+                    },
+                    Queue {
+                        context,
+                        id: queue_id,
+                    },
+                )
+            },
+        )
     }
 
     /// Returns an optimal texture format to use for the [`SwapChain`] with this adapter.

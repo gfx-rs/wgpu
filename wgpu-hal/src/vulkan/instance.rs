@@ -178,7 +178,7 @@ impl super::Instance {
 
     pub unsafe fn from_raw(
         entry: ash::Entry,
-        vk_instance: ash::Instance,
+        raw_instance: ash::Instance,
         driver_api_version: u32,
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
@@ -192,7 +192,7 @@ impl super::Instance {
         }
 
         let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
-            let extension = ext::DebugUtils::new(&entry, &vk_instance);
+            let extension = ext::DebugUtils::new(&entry, &raw_instance);
             let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                 .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
                 .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
@@ -215,14 +215,14 @@ impl super::Instance {
             .map(|_| {
                 vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| {
                     mem::transmute(
-                        entry.get_instance_proc_addr(vk_instance.handle(), name.as_ptr()),
+                        entry.get_instance_proc_addr(raw_instance.handle(), name.as_ptr()),
                     )
                 })
             });
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
-                raw: vk_instance,
+                raw: raw_instance,
                 _drop_guard: drop_guard,
                 flags,
                 debug_utils,
