@@ -55,8 +55,8 @@ pub enum LoadOp {
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub enum StoreOp {
-    /// Clear the render target. If you don't care about the contents of the target, this can be faster.
-    Clear = 0,
+    /// Discards the content of the render target. If you don't care about the contents of the target, this can be faster.
+    Discard = 0,
     /// Store the result of the renderpass.
     Store = 1,
 }
@@ -88,7 +88,7 @@ impl<V> PassChannel<V> {
         };
         match self.store_op {
             StoreOp::Store => ops |= hal::AttachmentOps::STORE,
-            StoreOp::Clear => (),
+            StoreOp::Discard => (),
         };
         ops
     }
