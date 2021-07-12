@@ -2522,8 +2522,9 @@ impl Extent3d {
 pub struct TextureDescriptor<L> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
-    /// Size of the texture. For a regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures, Z is the
-    /// number of 2D textures in that array.
+    /// Size of the texture. All components must be greater than zero. For a
+    /// regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures,
+    /// Z is the number of 2D textures in that array.
     pub size: Extent3d,
     /// Mip count of texture. For a texture with no extra mips, this must be 1.
     pub mip_level_count: u32,
@@ -3012,7 +3013,7 @@ pub struct BindGroupLayoutEntry {
     pub ty: BindingType,
     /// If this value is Some, indicates this entry is an array. Array size must be 1 or greater.
     ///
-    /// If this value is Some and `ty` is `BindingType::Texture`, [`Features::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported.
+    /// If this value is Some and `ty` is `BindingType::Texture`, [`Features::TEXTURE_BINDING_ARRAY`] must be supported.
     ///
     /// If this value is Some and `ty` is any other variant, bind group creation will fail.
     #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]

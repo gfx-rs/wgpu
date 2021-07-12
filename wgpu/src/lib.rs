@@ -585,7 +585,8 @@ impl MapContext {
 
 /// Handle to a GPU-accessible buffer.
 ///
-/// Created with [`Device::create_buffer`] or [DeviceExt::create_buffer_init](util::DeviceExt::create_buffer_init)
+/// Created with [`Device::create_buffer`] or
+/// [`DeviceExt::create_buffer_init`](util::DeviceExt::create_buffer_init).
 #[derive(Debug)]
 pub struct Buffer {
     context: Arc<C>,
@@ -993,7 +994,7 @@ pub enum BindingResource<'a> {
     TextureView(&'a TextureView),
     /// Binding is backed by an array of textures.
     ///
-    /// [`Features::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
+    /// [`Features::TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
     ///
     /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
@@ -1584,7 +1585,7 @@ impl Device {
     /// This function passes binary data to the backend as-is and can potentially result in a
     /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid SPIR-V.
     ///
-    /// See also [`crate::include_spirv_raw!`] and [`crate::make_spirv_raw`].
+    /// See also [`include_spirv_raw!`] and [`util::make_spirv_raw`].
     pub unsafe fn create_shader_module_spirv(
         &self,
         desc: &ShaderModuleDescriptorSpirV,
@@ -2245,7 +2246,7 @@ impl CommandEncoder {
     /// Issue a timestamp command at this point in the queue.
     /// The timestamp will be written to the specified query set, at the specified index.
     ///
-    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
@@ -2263,7 +2264,7 @@ impl CommandEncoder {
 impl CommandEncoder {
     /// Resolve a query set, writing the results into the supplied destination buffer.
     ///
-    /// Queries may be between 8 and 40 bytes each. See [`PipelineStatisticsType`] for more information.
+    /// Queries may be between 8 and 40 bytes each. See [`PipelineStatisticsTypes`] for more information.
     pub fn resolve_query_set(
         &mut self,
         query_set: &QuerySet,
@@ -2332,7 +2333,7 @@ impl<'a> RenderPass<'a> {
     /// [`RenderPass`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [`VertexStateDescriptor::vertex_buffers`].
+    /// [`VertexState::buffers`].
     ///
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
@@ -2651,7 +2652,7 @@ impl<'a> RenderPass<'a> {
     /// Issue a timestamp command at this point in the queue. The
     /// timestamp will be written to the specified query set, at the specified index.
     ///
-    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
@@ -2757,7 +2758,7 @@ impl<'a> ComputePass<'a> {
 impl<'a> ComputePass<'a> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
-    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
@@ -2842,7 +2843,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// [`RenderBundleEncoder`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [`VertexStateDescriptor::vertex_buffers`].
+    /// [`VertexState::buffers`].
     ///
     /// [`draw`]: RenderBundleEncoder::draw
     /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
