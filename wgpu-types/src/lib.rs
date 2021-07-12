@@ -2522,8 +2522,9 @@ impl Extent3d {
 pub struct TextureDescriptor<L> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
-    /// Size of the texture. For a regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures, Z is the
-    /// number of 2D textures in that array.
+    /// Size of the texture. All components must be greater than zero. For a
+    /// regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures,
+    /// Z is the number of 2D textures in that array.
     pub size: Extent3d,
     /// Mip count of texture. For a texture with no extra mips, this must be 1.
     pub mip_level_count: u32,
