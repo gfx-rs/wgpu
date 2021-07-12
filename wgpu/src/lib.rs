@@ -2245,7 +2245,7 @@ impl CommandEncoder {
     /// Issue a timestamp command at this point in the queue.
     /// The timestamp will be written to the specified query set, at the specified index.
     ///
-    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
@@ -2651,7 +2651,7 @@ impl<'a> RenderPass<'a> {
     /// Issue a timestamp command at this point in the queue. The
     /// timestamp will be written to the specified query set, at the specified index.
     ///
-    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
@@ -2757,7 +2757,7 @@ impl<'a> ComputePass<'a> {
 impl<'a> ComputePass<'a> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
-    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
