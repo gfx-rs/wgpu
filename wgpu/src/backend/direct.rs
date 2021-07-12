@@ -561,7 +561,7 @@ fn map_pass_channel<V: Copy + Default>(
             store_op: if store {
                 wgc::command::StoreOp::Store
             } else {
-                wgc::command::StoreOp::Clear
+                wgc::command::StoreOp::Discard
             },
             clear_value,
             read_only: false,
@@ -574,7 +574,7 @@ fn map_pass_channel<V: Copy + Default>(
             store_op: if store {
                 wgc::command::StoreOp::Store
             } else {
-                wgc::command::StoreOp::Clear
+                wgc::command::StoreOp::Discard
             },
             clear_value: V::default(),
             read_only: false,
