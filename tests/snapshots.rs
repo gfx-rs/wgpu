@@ -291,10 +291,11 @@ fn write_output_hlsl(
             naga::ShaderStage::Compute => "compute",
         };
         config_str = format!(
-            "{}{}={}\n{}_name={}\n",
+            "{}{}={}_{}\n{}_name={}\n",
             config_str,
             stage_str,
-            options.shader_model.to_profile_string(ep.stage),
+            ep.stage.to_hlsl_str(),
+            options.shader_model.to_str(),
             stage_str,
             &reflection_info.entry_points[index]
         );

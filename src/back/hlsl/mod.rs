@@ -16,20 +16,22 @@ pub enum ShaderModel {
 }
 
 impl ShaderModel {
-    pub fn to_profile_string(self, stage: crate::ShaderStage) -> String {
-        let stage_prefix = match stage {
-            crate::ShaderStage::Vertex => "vs_",
-            crate::ShaderStage::Fragment => "ps_",
-            crate::ShaderStage::Compute => "cs_",
-        };
-
-        let version = match self {
+    pub fn to_str(self) -> &'static str {
+        match self {
             Self::V5_0 => "5_0",
             Self::V5_1 => "5_1",
             Self::V6_0 => "6_0",
-        };
+        }
+    }
+}
 
-        format!("{}{}", stage_prefix, version)
+impl crate::ShaderStage {
+    pub fn to_hlsl_str(self) -> &'static str {
+        match self {
+            Self::Vertex => "vs",
+            Self::Fragment => "ps",
+            Self::Compute => "cs",
+        }
     }
 }
 
