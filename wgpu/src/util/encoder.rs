@@ -29,7 +29,7 @@ pub trait RenderEncoder<'a> {
     /// [`RenderEncoder`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [VertexStateDescriptor::vertex_buffers](crate::VertexStateDescriptor::vertex_buffers).
+    /// [VertexState::buffers](crate::VertexState::buffers).
     ///
     /// [`draw`]: RenderEncoder::draw
     /// [`draw_indexed`]: RenderEncoder::draw_indexed

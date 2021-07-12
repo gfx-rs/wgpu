@@ -2332,7 +2332,7 @@ impl<'a> RenderPass<'a> {
     /// [`RenderPass`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [`VertexStateDescriptor::vertex_buffers`].
+    /// [`VertexState::buffers`].
     ///
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
@@ -2842,7 +2842,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// [`RenderBundleEncoder`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [`VertexStateDescriptor::vertex_buffers`].
+    /// [`VertexState::buffers`].
     ///
     /// [`draw`]: RenderBundleEncoder::draw
     /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
