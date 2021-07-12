@@ -133,6 +133,7 @@ impl crate::Instance<super::Api> for super::Instance {
             factory,
             library: Arc::new(lib_main),
             lib_dxgi,
+            flags: desc.flags,
         })
     }
 
@@ -218,7 +219,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 }
             };
 
-            adapters.extend(super::Adapter::expose(raw, &self.library));
+            adapters.extend(super::Adapter::expose(raw, &self.library, self.flags));
         }
         adapters
     }

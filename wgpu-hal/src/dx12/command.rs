@@ -1,4 +1,4 @@
-use super::{conv, HResult as _, Resource};
+use super::{conv, HResult as _};
 use std::{mem, ops::Range, ptr};
 use winapi::um::d3d12;
 
@@ -637,7 +637,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.list.unwrap().EndEvent()
     }
 
-    unsafe fn set_render_pipeline(&mut self, pipeline: &Resource) {}
+    unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {}
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
@@ -795,7 +795,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.end_pass();
     }
 
-    unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {}
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
         self.list.unwrap().dispatch(count);

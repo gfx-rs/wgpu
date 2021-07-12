@@ -16,7 +16,7 @@ mod instance;
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{borrow::Cow, mem, ptr, sync::Arc};
+use std::{borrow::Cow, mem, num::NonZeroU32, ptr, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
     um::{d3d12, synchapi, winbase, winnt},
@@ -25,9 +25,6 @@ use winapi::{
 
 #[derive(Clone)]
 pub struct Api;
-//TODO: remove these temporaries
-#[derive(Debug)]
-pub struct Resource;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -50,9 +47,9 @@ impl crate::Api for Api {
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
     type PipelineLayout = PipelineLayout;
-    type ShaderModule = Resource;
-    type RenderPipeline = Resource;
-    type ComputePipeline = Resource;
+    type ShaderModule = ShaderModule;
+    type RenderPipeline = RenderPipeline;
+    type ComputePipeline = ComputePipeline;
 }
 
 trait HResult<O> {
@@ -100,6 +97,7 @@ pub struct Instance {
     factory: native::Factory4,
     library: Arc<native::D3D12Lib>,
     lib_dxgi: native::DxgiLib,
+    flags: crate::InstanceFlags,
 }
 
 unsafe impl Send for Instance {}
@@ -133,6 +131,7 @@ enum MemoryArchitecture {
 struct PrivateCapabilities {
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
+    shader_debug_info: bool,
 }
 
 #[derive(Default)]
@@ -176,6 +175,7 @@ impl CommandSignatures {
 }
 
 struct DeviceShared {
+    features: wgt::Features,
     zero_buffer: native::Resource,
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,
@@ -420,10 +420,32 @@ pub struct PipelineLayout {
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
     bind_group_infos: ArrayVec<BindGroupInfo, crate::MAX_BIND_GROUPS>,
+    naga_options: naga::back::hlsl::Options,
 }
 
 unsafe impl Send for PipelineLayout {}
 unsafe impl Sync for PipelineLayout {}
+
+#[derive(Debug)]
+pub struct ShaderModule {
+    naga: crate::NagaShader,
+}
+
+pub struct RenderPipeline {
+    raw: native::PipelineState,
+    topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
+    vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
+}
+
+unsafe impl Send for RenderPipeline {}
+unsafe impl Sync for RenderPipeline {}
+
+pub struct ComputePipeline {
+    raw: native::PipelineState,
+}
+
+unsafe impl Send for ComputePipeline {}
+unsafe impl Sync for ComputePipeline {}
 
 impl SwapChain {
     unsafe fn release_resources(self) -> native::WeakPtr<dxgi1_4::IDXGISwapChain3> {

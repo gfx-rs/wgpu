@@ -18,6 +18,7 @@ impl super::Adapter {
     pub(super) fn expose(
         adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
         library: &Arc<native::D3D12Lib>,
+        instance_flags: crate::InstanceFlags,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = match library.create_device(adapter, native::FeatureLevel::L11_0) {
@@ -106,6 +107,7 @@ impl super::Adapter {
             } else {
                 super::MemoryArchitecture::NonUnified
             },
+            shader_debug_info: instance_flags.contains(crate::InstanceFlags::DEBUG),
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
@@ -226,7 +228,7 @@ impl super::Adapter {
 impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
-        _features: wgt::Features,
+        features: wgt::Features,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = self
             .device
@@ -238,7 +240,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
             )
             .into_device_result("Queue creation")?;
 
-        let device = super::Device::new(self.device, queue, self.private_caps, &self.library)?;
+        let device = super::Device::new(
+            self.device,
+            queue,
+            features,
+            self.private_caps,
+            &self.library,
+        )?;
         Ok(crate::OpenDevice {
             device,
             queue: super::Queue { raw: queue },

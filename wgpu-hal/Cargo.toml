@@ -59,11 +59,11 @@ core-graphics-types = "0.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "0b9af95793e319817e74a30601cbcd4bad9bb3e6"
+rev = "458db0b"
 
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "0b9af95793e319817e74a30601cbcd4bad9bb3e6"
+rev = "458db0b"
 features = ["wgsl-in"]
 
 [dev-dependencies]

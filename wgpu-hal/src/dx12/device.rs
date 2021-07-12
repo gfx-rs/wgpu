@@ -1,14 +1,11 @@
 use super::{conv, descriptor, HResult as _};
 use parking_lot::Mutex;
-use std::{mem, ptr, slice, sync::Arc};
+use std::{ffi, mem, ptr, slice, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, winerror},
-    um::{d3d12, d3d12sdklayers, synchapi, winbase},
+    um::{d3d12, d3d12sdklayers, d3dcompiler, synchapi, winbase},
     Interface,
 };
-
-//TODO: remove this
-use super::Resource;
 
 const D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING: u32 = 0x1688;
 
@@ -16,6 +13,7 @@ impl super::Device {
     pub(super) fn new(
         raw: native::Device,
         present_queue: native::CommandQueue,
+        features: wgt::Features,
         private_caps: super::PrivateCapabilities,
         library: &Arc<native::D3D12Lib>,
     ) -> Result<Self, crate::DeviceError> {
@@ -82,6 +80,7 @@ impl super::Device {
         let capacity_samplers = 2_048;
 
         let shared = super::DeviceShared {
+            features,
             zero_buffer,
             cmd_signatures: super::CommandSignatures {
                 draw: raw
@@ -507,6 +506,79 @@ impl super::Device {
         self.raw
             .CreateDepthStencilView(texture.resource.as_mut_ptr(), &raw_desc, handle.raw);
         handle
+    }
+
+    fn load_shader(
+        &self,
+        stage: &crate::ProgrammableStage<super::Api>,
+        layout: &super::PipelineLayout,
+        naga_stage: naga::ShaderStage,
+    ) -> Result<native::Blob, crate::PipelineError> {
+        use naga::back::hlsl;
+
+        let stage_bit = crate::util::map_naga_stage(naga_stage);
+        let module = &stage.module.naga.module;
+        //TODO: reuse the writer
+        let mut source = String::new();
+        let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
+        let reflection_info = writer
+            .write(module, &stage.module.naga.info)
+            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {:?}", e)))?;
+
+        let full_stage = format!(
+            "{}_{}\0",
+            naga_stage.to_hlsl_str(),
+            layout.naga_options.shader_model.to_str()
+        );
+        let raw_ep = ffi::CString::new(stage.entry_point).unwrap();
+
+        let mut shader_data = native::Blob::null();
+        let mut error = native::Blob::null();
+        let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
+        if self.private_caps.shader_debug_info {
+            compile_flags |= d3dcompiler::D3DCOMPILE_DEBUG;
+        }
+        if self
+            .shared
+            .features
+            .contains(wgt::Features::UNSIZED_BINDING_ARRAY)
+        {
+            compile_flags |= d3dcompiler::D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+        }
+
+        let hr = unsafe {
+            d3dcompiler::D3DCompile(
+                source.as_ptr() as *const _,
+                source.len(),
+                ptr::null(),
+                ptr::null(),
+                ptr::null_mut(),
+                raw_ep.as_ptr(),
+                full_stage.as_ptr() as *const i8,
+                compile_flags,
+                0,
+                shader_data.mut_void() as *mut *mut _,
+                error.mut_void() as *mut *mut _,
+            )
+        };
+
+        match hr.into_result() {
+            Ok(()) => Ok(shader_data),
+            Err(e) => {
+                let message = unsafe {
+                    let slice = slice::from_raw_parts(
+                        error.GetBufferPointer() as *const u8,
+                        error.GetBufferSize(),
+                    );
+                    String::from_utf8_lossy(slice)
+                };
+                let full_msg = format!("D3DCompile error ({}): {}", e, message);
+                unsafe {
+                    error.destroy();
+                }
+                Err(crate::PipelineError::Linkage(stage_bit, full_msg))
+            }
+        }
     }
 }
 
@@ -1087,6 +1159,9 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::PipelineLayout {
             raw,
             bind_group_infos,
+            naga_options: naga::back::hlsl::Options {
+                shader_model: naga::back::hlsl::ShaderModel::V5_1,
+            },
         })
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
@@ -1247,24 +1322,58 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
-    ) -> Result<Resource, crate::ShaderError> {
-        Ok(Resource)
+    ) -> Result<super::ShaderModule, crate::ShaderError> {
+        match shader {
+            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule { naga }),
+            crate::ShaderInput::SpirV(_) => {
+                panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
+        }
     }
-    unsafe fn destroy_shader_module(&self, module: Resource) {}
+    unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {
+        // just drop
+    }
+
     unsafe fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
-    ) -> Result<Resource, crate::PipelineError> {
-        Ok(Resource)
+    ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        unimplemented!()
     }
-    unsafe fn destroy_render_pipeline(&self, pipeline: Resource) {}
+    unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
+        pipeline.raw.destroy();
+    }
+
     unsafe fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<super::Api>,
-    ) -> Result<Resource, crate::PipelineError> {
-        Ok(Resource)
+    ) -> Result<super::ComputePipeline, crate::PipelineError> {
+        let cs = self.load_shader(&desc.stage, desc.layout, naga::ShaderStage::Compute)?;
+
+        let pair = self.raw.create_compute_pipeline_state(
+            desc.layout.raw,
+            native::Shader::from_blob(cs),
+            0,
+            native::CachedPSO::null(),
+            native::PipelineStateFlags::empty(),
+        );
+
+        cs.destroy();
+
+        let raw = pair.into_result().map_err(|err| {
+            crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.into_owned())
+        })?;
+
+        if let Some(name) = desc.label {
+            let cwstr = conv::map_label(name);
+            raw.SetName(cwstr.as_ptr());
+        }
+
+        Ok(super::ComputePipeline { raw })
     }
-    unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
+    unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
+        pipeline.raw.destroy();
+    }
 
     unsafe fn create_query_set(
         &self,
