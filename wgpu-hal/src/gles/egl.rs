@@ -5,7 +5,6 @@ use std::{ffi::CStr, os::raw, ptr, sync::Arc};
 
 const EGL_CONTEXT_FLAGS_KHR: i32 = 0x30FC;
 const EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR: i32 = 0x0001;
-const EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR: i32 = 0x0004;
 const EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT: i32 = 0x30BF;
 const EGL_PLATFORM_WAYLAND_KHR: u32 = 0x31D8;
 const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
@@ -290,16 +289,14 @@ impl Inner {
                 log::info!("\tEGL context: +robust access");
                 context_attributes.push(egl::CONTEXT_OPENGL_ROBUST_ACCESS);
                 context_attributes.push(egl::TRUE as _);
-            } else if !display_extensions.contains("EGL_EXT_create_context_robustness") {
-                log::info!("\tEGL context: -robust access");
-            } else if supports_khr_context {
-                log::info!("\tEGL context: +robust access KHR");
-                khr_context_flags |= EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR;
-            } else {
+            } else if display_extensions.contains("EGL_EXT_create_context_robustness") {
                 log::info!("\tEGL context: +robust access EXT");
                 context_attributes.push(EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT);
                 context_attributes.push(egl::TRUE as _);
+            } else {
+                log::info!("\tEGL context: -robust access");
             }
+
             //TODO do we need `egl::CONTEXT_OPENGL_NOTIFICATION_STRATEGY_EXT`?
         }
         if khr_context_flags != 0 {
