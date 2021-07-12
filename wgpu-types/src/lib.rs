@@ -2738,6 +2738,15 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 }
 
 /// Layout of a texture in a buffer's memory.
+///
+/// The bytes per row and rows per image can be hard to figure out so here are some examples:
+///
+/// | Resolution | Format | Bytes per block | Pixels per block | Bytes per row                          | Rows per image               |
+/// |------------|--------|-----------------|------------------|----------------------------------------|------------------------------|
+/// | 256x256    | RGBA8  | 4               | 1 * 1 * 1        | 256 * 4 = Some(1024)                   | None                         |
+/// | 32x16x8    | RGBA8  | 4               | 1 * 1 * 1        | 32 * 4 = 128 padded to 256 = Some(256) | None                         |
+/// | 256x256    | BC3    | 16              | 4 * 4 * 1        | 16 * (256 / 4) = 1024 = Some(1024)     | None                         |
+/// | 64x64x8    | BC3    | 16              | 4 * 4 * 1        | 16 * (64 / 4) = 256 = Some(256)        | 64 / 4 = 16 = Some(16)       |
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -2746,18 +2755,28 @@ pub struct ImageDataLayout {
     /// Offset into the buffer that is the start of the texture. Must be a multiple of texture block size.
     /// For non-compressed textures, this is 1.
     pub offset: BufferAddress,
-    /// Bytes per "row" of the image. This represents one row of pixels in the x direction. Compressed
-    /// textures include multiple rows of pixels in each "row".
-    /// Required if there are multiple rows (i.e. height or depth is more than one pixel or pixel block for compressed textures)
+    /// Bytes per "row" in an image.
     ///
-    /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`] and [`CommandEncoder::copy_texture_to_buffer`].
+    /// A row is one row of pixels or of compressed blocks in the x direction.
+    ///
+    /// This value is required if there are multiple rows (i.e. height or depth is more than one pixel or pixel block for compressed textures)
+    ///
+    /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`] and [`CommandEncoder::copy_texture_to_buffer`]. You must manually pad
+    /// the image such that this is a multiple of 256. It will not affect the image data.
+    ///
     /// [`Queue::write_texture`] does not have this requirement.
     ///
     /// Must be a multiple of the texture block size. For non-compressed textures, this is 1.
     pub bytes_per_row: Option<NonZeroU32>,
-    /// Rows that make up a single "image". Each "image" is one layer in the z direction of a 3D image. May be larger
-    /// than `copy_size.y`.
-    /// Required if there are multiple images (i.e. the depth is more than one)
+    /// "Rows" that make up a single "image".
+    ///
+    /// A row is one row of pixels or of compressed blocks in the x direction.
+    ///
+    /// An image is one layer in the z direction of a 3D image or 2DArray texture.
+    ///
+    /// The amount of rows per image may be larger than the actual amount of rows of data.
+    ///
+    /// Required if there are multiple images (i.e. the depth is more than one).
     pub rows_per_image: Option<NonZeroU32>,
 }
 
