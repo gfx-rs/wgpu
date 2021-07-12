@@ -993,7 +993,7 @@ pub enum BindingResource<'a> {
     TextureView(&'a TextureView),
     /// Binding is backed by an array of textures.
     ///
-    /// [`Features::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
+    /// [`Features::TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
     ///
     /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
