@@ -4,7 +4,7 @@ use wgt::{BufferAddress, DynamicOffset, IndexFormat};
 
 use crate::{BindGroup, Buffer, BufferSlice, RenderBundleEncoder, RenderPass, RenderPipeline};
 
-/// Methods shared by `RenderPass` and `RenderBundleEncoder`
+/// Methods shared by [`RenderPass`] and [`RenderBundleEncoder`].
 pub trait RenderEncoder<'a> {
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
@@ -19,36 +19,36 @@ pub trait RenderEncoder<'a> {
 
     /// Sets the active index buffer.
     ///
-    /// Subsequent calls to [`draw_indexed`](RenderBundleEncoder::draw_indexed) on this [`RenderBundleEncoder`] will
+    /// Subsequent calls to [`draw_indexed`](RenderEncoder::draw_indexed) on this [`RenderEncoder`] will
     /// use `buffer` as the source index buffer.
     fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat);
 
     /// Assign a vertex buffer to a slot.
     ///
     /// Subsequent calls to [`draw`] and [`draw_indexed`] on this
-    /// [`RenderBundleEncoder`] will use `buffer` as one of the source vertex buffers.
+    /// [`RenderEncoder`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
     /// [VertexStateDescriptor::vertex_buffers](crate::VertexStateDescriptor::vertex_buffers).
     ///
-    /// [`draw`]: RenderBundleEncoder::draw
-    /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
+    /// [`draw`]: RenderEncoder::draw
+    /// [`draw_indexed`]: RenderEncoder::draw_indexed
     fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>);
 
     /// Draws primitives from the active vertex buffer(s).
     ///
-    /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// The active vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
-    /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// The active index buffer can be set with [`RenderEncoder::set_index_buffer`], while the active
+    /// vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
-    /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// The active vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` is the following:
     ///
@@ -66,8 +66,8 @@ pub trait RenderEncoder<'a> {
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`.
     ///
-    /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// The active index buffer can be set with [`RenderEncoder::set_index_buffer`], while the active
+    /// vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` is the following:
     ///
