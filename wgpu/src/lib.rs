@@ -1388,6 +1388,22 @@ impl Instance {
         }
     }
 
+    /// Create an new instance of wgpu from a wgpu-hal instance.
+    ///
+    /// # Arguments
+    ///
+    /// - `hal_instance` - wgpu-hal instance.
+    ///
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-hal Instance for every backend.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+        Instance {
+            context: Arc::new(C::from_hal_instance::<A>(hal_instance)),
+        }
+    }
+
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
     /// # Arguments
@@ -1417,6 +1433,21 @@ impl Instance {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
         async move { adapter.await.map(|id| Adapter { context, id }) }
+    }
+
+    /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
+    ///
+    /// # Safety
+    ///
+    /// `hal_adapter` must be created from this instance internal handle.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn adapter_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_adapter: hal::ExposedAdapter<A>,
+    ) -> Adapter {
+        let context = Arc::clone(&self.context);
+        let id = context.adapter_from_hal(hal_adapter);
+        Adapter { context, id }
     }
 
     /// Creates a surface from a raw window handle.
@@ -1500,6 +1531,36 @@ impl Adapter {
                 )
             })
         }
+    }
+
+    /// Create a wgpu [`Device`] and [`Queue`] from a wgpu-hal `OpenDevice`
+    ///
+    /// # Safety
+    ///
+    /// `hal_device` must be created from this adapter internal handle. 
+    /// `desc.features` must be a subset of `hal_device` features.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn device_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_device: hal::OpenDevice<A>,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+    ) -> Result<(Device, Queue), RequestDeviceError> {
+        let context = Arc::clone(&self.context);
+        C::device_from_hal(&*self.context, &self.id, hal_device, desc, trace_path).map(
+            |(device_id, queue_id)| {
+                (
+                    Device {
+                        context: Arc::clone(&context),
+                        id: device_id,
+                    },
+                    Queue {
+                        context,
+                        id: queue_id,
+                    },
+                )
+            },
+        )
     }
 
     /// Returns an optimal texture format to use for the [`SwapChain`] with this adapter.

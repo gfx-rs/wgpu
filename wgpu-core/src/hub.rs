@@ -848,6 +848,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-hal Instance for every backend.
+    pub unsafe fn from_hal_instance<A: HalApi>(
+        name: &str,
+        factory: G,
+        hal_instance: A::Instance,
+    ) -> Self {
+        profiling::scope!("new", "Global");
+        Self {
+            instance: A::instance_from_hal(name, hal_instance),
+            surfaces: Registry::without_backend(&factory, "Surface"),
+            hubs: Hubs::new(&factory),
+        }
+    }
+
     pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
         let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
@@ -931,6 +947,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
 
 pub trait HalApi: hal::Api {
     const VARIANT: Backend;
+    fn instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
@@ -938,6 +955,13 @@ pub trait HalApi: hal::Api {
 #[cfg(vulkan)]
 impl HalApi for hal::api::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
+    fn instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
+        Instance {
+            name: name.to_owned(),
+            vulkan: Some(hal_instance),
+            ..Default::default()
+        }
+    }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.vulkan
     }
@@ -949,6 +973,12 @@ impl HalApi for hal::api::Vulkan {
 #[cfg(metal)]
 impl HalApi for hal::api::Metal {
     const VARIANT: Backend = Backend::Metal;
+    fn instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
+        Instance {
+            name: name.to_owned(),
+            metal: Some(hal_instance),
+        }
+    }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
     }
@@ -984,6 +1014,13 @@ impl HalApi for hal::api::Dx11 {
 #[cfg(gl)]
 impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;
+    fn instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
+        Instance {
+            name: name.to_owned(),
+            gl: Some(hal_instance),
+            ..Default::default()
+        }
+    }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.gl
     }

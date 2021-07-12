@@ -39,6 +39,14 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
+    pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+        Self(wgc::hub::Global::from_hal_instance::<A>(
+            "wgpu",
+            wgc::hub::IdentityManagerFactory,
+            hal_instance,
+        ))
+    }
+
     pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
         &self.0
     }
@@ -48,6 +56,39 @@ impl Context {
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
                 PhantomData
             }))
+    }
+
+    pub unsafe fn adapter_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_adapter: hal::ExposedAdapter<A>,
+    ) -> wgc::id::AdapterId {
+        self.0.adapter_from_hal(hal_adapter, PhantomData)
+    }
+
+    pub unsafe fn device_from_hal<A: wgc::hub::HalApi>(
+        &self,
+        adapter: &wgc::id::AdapterId,
+        hal_device: hal::OpenDevice<A>,
+        desc: &crate::DeviceDescriptor,
+        trace_dir: Option<&std::path::Path>,
+    ) -> Result<(Device, wgc::id::QueueId), crate::RequestDeviceError> {
+        let global = &self.0;
+        let (device_id, error) = global.device_from_hal(
+            *adapter,
+            hal_device,
+            &desc.map_label(|l| l.map(Borrowed)),
+            trace_dir,
+            PhantomData,
+        );
+        if let Some(err) = error {
+            self.handle_error_fatal(err, "Adapter::device_from_hal");
+        }
+        let device = Device {
+            id: device_id,
+            error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+            features: desc.features,
+        };
+        Ok((device, device_id))
     }
 
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
@@ -589,7 +630,7 @@ fn map_pass_channel<V: Copy + Default>(
 }
 
 #[derive(Debug)]
-pub(crate) struct Device {
+pub struct Device {
     id: wgc::id::DeviceId,
     error_sink: ErrorSink,
     features: Features,
