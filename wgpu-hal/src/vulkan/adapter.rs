@@ -437,6 +437,7 @@ impl PhysicalDeviceCapabilities {
             }
 
             extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
+            extensions.push(vk::KhrTimelineSemaphoreFn::name());
 
             if requested_features.intersects(indexing_features()) {
                 extensions.push(vk::ExtDescriptorIndexingFn::name());
