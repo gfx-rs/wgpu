@@ -585,7 +585,8 @@ impl MapContext {
 
 /// Handle to a GPU-accessible buffer.
 ///
-/// Created with [`Device::create_buffer`] or [DeviceExt::create_buffer_init](util::DeviceExt::create_buffer_init)
+/// Created with [`Device::create_buffer`] or
+/// [`DeviceExt::create_buffer_init`](util::DeviceExt::create_buffer_init).
 #[derive(Debug)]
 pub struct Buffer {
     context: Arc<C>,
@@ -1584,7 +1585,7 @@ impl Device {
     /// This function passes binary data to the backend as-is and can potentially result in a
     /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid SPIR-V.
     ///
-    /// See also [`crate::include_spirv_raw!`] and [`crate::make_spirv_raw`].
+    /// See also [`include_spirv_raw!`] and [`util::make_spirv_raw`].
     pub unsafe fn create_shader_module_spirv(
         &self,
         desc: &ShaderModuleDescriptorSpirV,
@@ -2263,7 +2264,7 @@ impl CommandEncoder {
 impl CommandEncoder {
     /// Resolve a query set, writing the results into the supplied destination buffer.
     ///
-    /// Queries may be between 8 and 40 bytes each. See [`PipelineStatisticsType`] for more information.
+    /// Queries may be between 8 and 40 bytes each. See [`PipelineStatisticsTypes`] for more information.
     pub fn resolve_query_set(
         &mut self,
         query_set: &QuerySet,

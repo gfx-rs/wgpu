@@ -1,13 +1,13 @@
 //! Convenience macros
 
-/// Macro to produce an array of [VertexAttribute](crate::VertexAttribute).
+/// Macro to produce an array of [`VertexAttribute`](crate::VertexAttribute).
 ///
 /// Output has type: `[VertexAttribute; _]`. Usage is as follows:
 /// ```
 /// # use wgpu::vertex_attr_array;
 /// let attrs = vertex_attr_array![0 => Float32x2, 1 => Float32, 2 => Uint16x4];
 /// ```
-/// This example specifies a list of three [VertexAttribute](crate::VertexAttribute),
+/// This example specifies a list of three [`VertexAttribute`](crate::VertexAttribute),
 /// each with the given `shader_location` and `format`.
 /// Offsets are calculated automatically.
 #[macro_export]
@@ -57,9 +57,11 @@ macro_rules! include_spirv {
     };
 }
 
-/// Macro to load raw SPIR-V data statically, for use with [`wgpu::Features::SPIRV_SHADER_PASSTHROUGH`].
+/// Macro to load raw SPIR-V data statically, for use with [`Features::SPIRV_SHADER_PASSTHROUGH`].
 ///
 /// It ensures the word alignment as well as the magic number.
+///
+/// [`Features::SPIRV_SHADER_PASSTHROUGH`]: crate::Features::SPIRV_SHADER_PASSTHROUGH
 #[macro_export]
 macro_rules! include_spirv_raw {
     ($($token:tt)*) => {
