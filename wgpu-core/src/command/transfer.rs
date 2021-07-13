@@ -120,27 +120,34 @@ pub(crate) fn extract_texture_selector<A: hal::Api>(
         });
     }
 
-    let layers = match texture.desc.dimension {
-        wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-            copy_texture.origin.z..copy_texture.origin.z + copy_size.depth_or_array_layers
-        }
-        wgt::TextureDimension::D3 => 0..1,
+    let (layers, origin_z) = match texture.desc.dimension {
+        wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => (
+            copy_texture.origin.z..copy_texture.origin.z + copy_size.depth_or_array_layers,
+            0,
+        ),
+        wgt::TextureDimension::D3 => (0..1, copy_texture.origin.z),
+    };
+    let base = hal::TextureCopyBase {
+        origin: wgt::Origin3d {
+            x: copy_texture.origin.x,
+            y: copy_texture.origin.y,
+            z: origin_z,
+        },
+        // this value will be incremented per copied layer
+        array_layer: layers.start,
+        mip_level: copy_texture.mip_level,
+        aspect: copy_aspect,
     };
     let selector = TextureSelector {
         levels: copy_texture.mip_level..copy_texture.mip_level + 1,
         layers,
-    };
-    let base = hal::TextureCopyBase {
-        origin: copy_texture.origin,
-        mip_level: copy_texture.mip_level,
-        aspect: copy_aspect,
     };
 
     Ok((selector, base, format))
 }
 
 /// Function copied with some modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#copy-between-buffer-texture>
-/// If successful, returns number of buffer bytes required for this copy.
+/// If successful, returns (number of buffer bytes required for this copy, number of bytes between array layers).
 pub(crate) fn validate_linear_texture_data(
     layout: &wgt::ImageDataLayout,
     format: wgt::TextureFormat,
@@ -149,7 +156,7 @@ pub(crate) fn validate_linear_texture_data(
     bytes_per_block: BufferAddress,
     copy_size: &Extent3d,
     need_copy_aligned_rows: bool,
-) -> Result<BufferAddress, TransferError> {
+) -> Result<(BufferAddress, BufferAddress), TransferError> {
     // Convert all inputs to BufferAddress (u64) to prevent overflow issues
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
@@ -202,10 +209,10 @@ pub(crate) fn validate_linear_texture_data(
     }
 
     let bytes_in_last_row = block_size * width_in_blocks;
+    let bytes_per_image = bytes_per_row * block_rows_per_image;
     let required_bytes_in_copy = if copy_width == 0 || copy_height == 0 || copy_depth == 0 {
         0
     } else {
-        let bytes_per_image = bytes_per_row * block_rows_per_image;
         let bytes_in_last_slice = bytes_per_row * (height_in_blocks - 1) + bytes_in_last_row;
         bytes_per_image * (copy_depth - 1) + bytes_in_last_slice
     };
@@ -227,17 +234,17 @@ pub(crate) fn validate_linear_texture_data(
     if copy_height > 1 && bytes_per_row < bytes_in_last_row {
         return Err(TransferError::InvalidBytesPerRow);
     }
-    Ok(required_bytes_in_copy)
+    Ok((required_bytes_in_copy, bytes_per_image))
 }
 
 /// Function copied with minor modifications from webgpu standard <https://gpuweb.github.io/gpuweb/#valid-texture-copy-range>
-/// Returns the (virtual) mip level extent.
+/// Returns the HAL copy extent and the layer count.
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &ImageCopyTexture,
     desc: &wgt::TextureDescriptor<()>,
     texture_side: CopySide,
     copy_size: &Extent3d,
-) -> Result<Extent3d, TransferError> {
+) -> Result<(hal::CopyExtent, u32), TransferError> {
     let (block_width, block_height) = desc.format.describe().block_dimensions;
     let block_width = block_width as u32;
     let block_height = block_height as u32;
@@ -295,7 +302,28 @@ pub(crate) fn validate_texture_copy_range(
         return Err(TransferError::UnalignedCopyHeight);
     }
 
-    Ok(extent_virtual)
+    let (depth, array_layer_count) = match desc.dimension {
+        wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+            (1, copy_size.depth_or_array_layers)
+        }
+        wgt::TextureDimension::D3 => (
+            copy_size
+                .depth_or_array_layers
+                .min(extent_virtual.depth_or_array_layers),
+            1,
+        ),
+    };
+
+    // WebGPU uses the physical size of the texture for copies whereas vulkan uses
+    // the virtual size. We have passed validation, so it's safe to use the
+    // image extent data directly. We want the provided copy size to be no larger than
+    // the virtual size.
+    let copy_extent = hal::CopyExtent {
+        width: copy_size.width.min(extent_virtual.width),
+        height: copy_size.width.min(extent_virtual.height),
+        depth,
+    };
+    Ok((copy_extent, array_layer_count))
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -505,13 +533,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_texture));
 
         let format_desc = dst_texture.desc.format.describe();
-        let max_image_extent = validate_texture_copy_range(
+        let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
             destination,
             &dst_texture.desc,
             CopySide::Destination,
             copy_size,
         )?;
-        let required_buffer_bytes_in_copy = validate_linear_texture_data(
+        let (required_buffer_bytes_in_copy, bytes_per_array_layer) = validate_linear_texture_data(
             &source.layout,
             dst_texture.desc.format,
             src_buffer.size,
@@ -538,24 +566,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
-        // the virtual size. We have passed validation, so it's safe to use the
-        // image extent data directly. We want the provided copy size to be no larger than
-        // the virtual size.
-        let region = hal::BufferTextureCopy {
-            buffer_layout: source.layout,
-            texture_base: dst_base,
-            size: Extent3d {
-                width: copy_size.width.min(max_image_extent.width),
-                height: copy_size.height.min(max_image_extent.height),
-                depth_or_array_layers: copy_size.depth_or_array_layers,
-            },
-        };
+        let regions = (0..array_layer_count).map(|rel_array_layer| {
+            let mut texture_base = dst_base.clone();
+            texture_base.array_layer += rel_array_layer;
+            let mut buffer_layout = source.layout;
+            buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
+            hal::BufferTextureCopy {
+                buffer_layout,
+                texture_base,
+                size: hal_copy_size,
+            }
+        });
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(src_barriers);
             cmd_buf_raw.transition_textures(dst_barriers);
-            cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, iter::once(region));
+            cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, regions);
         }
         Ok(())
     }
@@ -635,9 +661,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_buffer));
 
         let format_desc = src_texture.desc.format.describe();
-        let max_image_extent =
+        let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
-        let required_buffer_bytes_in_copy = validate_linear_texture_data(
+        let (required_buffer_bytes_in_copy, bytes_per_array_layer) = validate_linear_texture_data(
             &destination.layout,
             src_texture.desc.format,
             dst_buffer.size,
@@ -667,19 +693,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }),
         );
 
-        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
-        // the virtual size. We have passed validation, so it's safe to use the
-        // image extent data directly. We want the provided copy size to be no larger than
-        // the virtual size.
-        let region = hal::BufferTextureCopy {
-            buffer_layout: destination.layout,
-            texture_base: src_base,
-            size: Extent3d {
-                width: copy_size.width.min(max_image_extent.width),
-                height: copy_size.height.min(max_image_extent.height),
-                depth_or_array_layers: copy_size.depth_or_array_layers,
-            },
-        };
+        let regions = (0..array_layer_count).map(|rel_array_layer| {
+            let mut texture_base = src_base.clone();
+            texture_base.array_layer += rel_array_layer;
+            let mut buffer_layout = destination.layout;
+            buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
+            hal::BufferTextureCopy {
+                buffer_layout,
+                texture_base,
+                size: hal_copy_size,
+            }
+        });
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barriers);
@@ -688,7 +712,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 src_raw,
                 hal::TextureUses::COPY_SRC,
                 dst_raw,
-                iter::once(region),
+                regions,
             );
         }
         Ok(())
@@ -725,11 +749,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let (src_range, src_base, _) =
+        let (src_range, src_tex_base, _) =
             extract_texture_selector(source, copy_size, &*texture_guard)?;
-        let (dst_range, dst_base, _) =
+        let (dst_range, dst_tex_base, _) =
             extract_texture_selector(destination, copy_size, &*texture_guard)?;
-        if src_base.aspect != dst_base.aspect {
+        if src_tex_base.aspect != dst_tex_base.aspect {
             return Err(TransferError::MismatchedAspects.into());
         }
 
@@ -777,32 +801,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
-        let max_src_image_extent =
+        let (src_copy_size, array_layer_count) =
             validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
-        let max_dst_image_extent = validate_texture_copy_range(
+        let (dst_copy_size, _) = validate_texture_copy_range(
             destination,
             &dst_texture.desc,
             CopySide::Destination,
             copy_size,
         )?;
 
-        // WebGPU uses the physical size of the texture for copies whereas vulkan uses
-        // the virtual size. We have passed validation, so it's safe to use the
-        // image extent data directly. We want the provided copy size to be no larger than
-        // the virtual size.
-        let region = hal::TextureCopy {
-            src_base,
-            dst_base,
-            size: Extent3d {
-                width: copy_size
-                    .width
-                    .min(max_src_image_extent.width.min(max_dst_image_extent.width)),
-                height: copy_size
-                    .height
-                    .min(max_src_image_extent.height.min(max_dst_image_extent.height)),
-                depth_or_array_layers: copy_size.depth_or_array_layers,
-            },
+        let hal_copy_size = hal::CopyExtent {
+            width: src_copy_size.width.min(dst_copy_size.width),
+            height: src_copy_size.height.min(dst_copy_size.height),
+            depth: src_copy_size.depth.min(dst_copy_size.depth),
         };
+        let regions = (0..array_layer_count).map(|rel_array_layer| {
+            let mut src_base = src_tex_base.clone();
+            let mut dst_base = dst_tex_base.clone();
+            src_base.array_layer += rel_array_layer;
+            dst_base.array_layer += rel_array_layer;
+            hal::TextureCopy {
+                src_base,
+                dst_base,
+                size: hal_copy_size,
+            }
+        });
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(barriers.into_iter());
@@ -810,7 +833,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 src_raw,
                 hal::TextureUses::COPY_SRC,
                 dst_raw,
-                iter::once(region),
+                regions,
             );
         }
         Ok(())

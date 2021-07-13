@@ -322,7 +322,7 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}
     unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {}
     unsafe fn set_stencil_reference(&mut self, value: u32) {}
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {}
+    unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {}
 
     unsafe fn draw(
         &mut self,

@@ -199,8 +199,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Bc4RSnorm
             | Tf::Bc5RgUnorm
             | Tf::Bc5RgSnorm
-            | Tf::Bc6hRgbSfloat
             | Tf::Bc6hRgbUfloat
+            | Tf::Bc6hRgbSfloat
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb => {
                 if pc.format_bc {
@@ -889,6 +889,7 @@ impl super::PrivateCapabilities {
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
+        let base = wgt::Limits::default();
         crate::Capabilities {
             limits: wgt::Limits {
                 max_texture_dimension_1d: self.max_texture_size as u32,
@@ -896,18 +897,20 @@ impl super::PrivateCapabilities {
                 max_texture_dimension_3d: self.max_texture_3d_size as u32,
                 max_texture_array_layers: self.max_texture_layers as u32,
                 max_bind_groups: 8,
-                max_dynamic_uniform_buffers_per_pipeline_layout: 8,
-                max_dynamic_storage_buffers_per_pipeline_layout: 4,
-                max_sampled_textures_per_shader_stage: 16,
+                max_dynamic_uniform_buffers_per_pipeline_layout: base
+                    .max_dynamic_uniform_buffers_per_pipeline_layout,
+                max_dynamic_storage_buffers_per_pipeline_layout: base
+                    .max_dynamic_storage_buffers_per_pipeline_layout,
+                max_sampled_textures_per_shader_stage: base.max_sampled_textures_per_shader_stage,
                 max_samplers_per_shader_stage: self.max_samplers_per_stage,
-                max_storage_buffers_per_shader_stage: 8,
-                max_storage_textures_per_shader_stage: 8,
+                max_storage_buffers_per_shader_stage: base.max_storage_buffers_per_shader_stage,
+                max_storage_textures_per_shader_stage: base.max_storage_textures_per_shader_stage,
                 max_uniform_buffers_per_shader_stage: 12,
                 max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
                 max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
-                max_vertex_buffers: 8,
-                max_vertex_attributes: 16,
-                max_vertex_buffer_array_stride: 2048,
+                max_vertex_buffers: base.max_vertex_buffers,
+                max_vertex_attributes: base.max_vertex_attributes,
+                max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
                 max_push_constant_size: 0x1000,
             },
             alignments: crate::Alignments {

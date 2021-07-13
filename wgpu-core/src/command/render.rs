@@ -15,6 +15,7 @@ use crate::{
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{Texture, TextureView, TextureViewSource},
+    swap_chain::SwapChain,
     track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -491,11 +492,11 @@ where
 struct RenderAttachment<'a> {
     texture_id: &'a Stored<id::TextureId>,
     selector: &'a TextureSelector,
-    previous_use: Option<hal::TextureUses>,
-    new_use: hal::TextureUses,
+    usage: hal::TextureUses,
 }
 
-type AttachmentDataVec<T> = ArrayVec<T, { hal::MAX_COLOR_TARGETS + hal::MAX_COLOR_TARGETS + 1 }>;
+const MAX_TOTAL_ATTACHMENTS: usize = hal::MAX_COLOR_TARGETS + hal::MAX_COLOR_TARGETS + 1;
+type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 
 struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
@@ -514,6 +515,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
+        swap_chain_guard: &'a Storage<SwapChain<A>, id::SwapChainId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
 
@@ -527,7 +529,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut attachment_type_name = "";
         let mut extent = None;
         let mut sample_count = 0;
-        let mut used_swap_chain = None::<Stored<id::SwapChainId>>;
+        let mut used_swap_chain = None::<(Stored<id::SwapChainId>, hal::TextureUses)>;
 
         let mut add_view = |view: &TextureView<A>, type_name| {
             if let Some(ex) = extent {
@@ -577,12 +579,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }
             };
 
-            // Using render pass for transition.
-            let previous_use = cmd_buf
-                .trackers
-                .textures
-                .query(source_id.value, view.selector.clone());
-            let new_use = if at.is_read_only(ds_aspects)? {
+            let usage = if at.is_read_only(ds_aspects)? {
                 is_ds_read_only = true;
                 hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::SAMPLED
             } else {
@@ -591,16 +588,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             render_attachments.push(RenderAttachment {
                 texture_id: source_id,
                 selector: &view.selector,
-                previous_use,
-                new_use,
+                usage,
             });
 
-            let old_use = previous_use.unwrap_or(new_use);
             depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
                     view: &view.raw,
-                    usage: new_use,
-                    boundary_usage: old_use..new_use,
+                    usage,
                 },
                 depth_ops: at.depth.hal_ops(),
                 stencil_ops: at.stencil.hal_ops(),
@@ -626,33 +620,22 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 ));
             }
 
-            let boundary_usage = match color_view.source {
+            match color_view.source {
                 TextureViewSource::Native(ref source_id) => {
-                    let previous_use = cmd_buf
-                        .trackers
-                        .textures
-                        .query(source_id.value, color_view.selector.clone());
-                    let new_use = hal::TextureUses::COLOR_TARGET;
                     render_attachments.push(RenderAttachment {
                         texture_id: source_id,
                         selector: &color_view.selector,
-                        previous_use,
-                        new_use,
+                        usage: hal::TextureUses::COLOR_TARGET,
                     });
-
-                    let old_use = previous_use.unwrap_or(new_use);
-                    old_use..new_use
                 }
                 TextureViewSource::SwapChain(ref source_id) => {
-                    assert!(used_swap_chain.is_none());
-                    used_swap_chain = Some(source_id.clone());
-
-                    let end = hal::TextureUses::empty();
-                    let start = match at.channel.load_op {
+                    //HACK: guess the start usage based on the load op
+                    let start_usage = match at.channel.load_op {
+                        LoadOp::Load => hal::TextureUses::empty(),
                         LoadOp::Clear => hal::TextureUses::UNINITIALIZED,
-                        LoadOp::Load => end,
                     };
-                    start..end
+                    assert!(used_swap_chain.is_none());
+                    used_swap_chain = Some((source_id.clone(), start_usage));
                 }
             };
 
@@ -676,34 +659,25 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     return Err(RenderPassErrorInner::InvalidResolveTargetSampleCount);
                 }
 
-                let boundary_usage = match resolve_view.source {
+                match resolve_view.source {
                     TextureViewSource::Native(ref source_id) => {
-                        let previous_use = cmd_buf
-                            .trackers
-                            .textures
-                            .query(source_id.value, resolve_view.selector.clone());
-                        let new_use = hal::TextureUses::COLOR_TARGET;
                         render_attachments.push(RenderAttachment {
                             texture_id: source_id,
                             selector: &resolve_view.selector,
-                            previous_use,
-                            new_use,
+                            usage: hal::TextureUses::COLOR_TARGET,
                         });
-
-                        let old_use = previous_use.unwrap_or(new_use);
-                        old_use..new_use
                     }
                     TextureViewSource::SwapChain(ref source_id) => {
+                        //HACK: guess the start usage
+                        let start_usage = hal::TextureUses::UNINITIALIZED;
                         assert!(used_swap_chain.is_none());
-                        used_swap_chain = Some(source_id.clone());
-                        hal::TextureUses::UNINITIALIZED..hal::TextureUses::empty()
+                        used_swap_chain = Some((source_id.clone(), start_usage));
                     }
                 };
 
                 hal_resolve_target = Some(hal::Attachment {
                     view: &resolve_view.raw,
                     usage: hal::TextureUses::COLOR_TARGET,
-                    boundary_usage,
                 });
             }
 
@@ -711,7 +685,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 target: hal::Attachment {
                     view: &color_view.raw,
                     usage: hal::TextureUses::COLOR_TARGET,
-                    boundary_usage,
                 },
                 resolve_target: hal_resolve_target,
                 ops: at.channel.hal_ops(),
@@ -721,6 +694,21 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         if sample_count != 1 && sample_count != 4 {
             return Err(RenderPassErrorInner::InvalidSampleCount(sample_count));
+        }
+
+        if let Some((ref sc_id, start_usage)) = used_swap_chain {
+            let &(_, ref suf_texture) = swap_chain_guard[sc_id.value]
+                .acquired_texture
+                .as_ref()
+                .unwrap();
+            let barrier = hal::TextureBarrier {
+                texture: std::borrow::Borrow::borrow(suf_texture),
+                usage: start_usage..hal::TextureUses::COLOR_TARGET,
+                range: wgt::ImageSubresourceRange::default(),
+            };
+            unsafe {
+                cmd_buf.encoder.raw.transition_textures(iter::once(barrier));
+            }
         }
 
         let view_data = AttachmentData {
@@ -756,7 +744,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             context,
             trackers: StatefulTrackerSubset::new(A::VARIANT),
             render_attachments,
-            used_swap_chain,
+            used_swap_chain: used_swap_chain.map(|(sc_id, _)| sc_id),
             is_ds_read_only,
             extent,
             _phantom: PhantomData,
@@ -767,9 +755,28 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
+        swap_chain_guard: &Storage<SwapChain<A>, id::SwapChainId>,
     ) -> Result<(StatefulTrackerSubset, Option<Stored<id::SwapChainId>>), RenderPassErrorInner>
     {
         profiling::scope!("finish", "RenderPassInfo");
+        unsafe {
+            raw.end_render_pass();
+        }
+
+        if let Some(ref sc_id) = self.used_swap_chain {
+            let &(_, ref suf_texture) = swap_chain_guard[sc_id.value]
+                .acquired_texture
+                .as_ref()
+                .unwrap();
+            let barrier = hal::TextureBarrier {
+                texture: std::borrow::Borrow::borrow(suf_texture),
+                usage: hal::TextureUses::COLOR_TARGET..hal::TextureUses::empty(),
+                range: wgt::ImageSubresourceRange::default(),
+            };
+            unsafe {
+                raw.transition_textures(iter::once(barrier));
+            }
+        }
 
         for ra in self.render_attachments {
             let texture = &texture_guard[ra.texture_id.value];
@@ -782,29 +789,11 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     ra.texture_id.value,
                     &ra.texture_id.ref_count,
                     ra.selector.clone(),
-                    ra.new_use,
+                    ra.usage,
                 )
                 .map_err(UsageConflict::from)?;
-
-            if let Some(usage) = ra.previous_use {
-                // Make the attachment tracks to be aware of the internal
-                // transition done by the render pass, by registering the
-                // previous usage as the initial state.
-                self.trackers
-                    .textures
-                    .prepend(
-                        ra.texture_id.value,
-                        &ra.texture_id.ref_count,
-                        ra.selector.clone(),
-                        usage,
-                    )
-                    .unwrap();
-            }
         }
 
-        unsafe {
-            raw.end_render_pass();
-        }
         Ok((self.trackers, self.used_swap_chain))
     }
 }
@@ -842,7 +831,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (pass_raw, trackers, query_reset_state) = {
-            // read-only lock guard
+            let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
@@ -886,6 +875,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_stencil_attachment,
                 cmd_buf,
                 &*view_guard,
+                &*swap_chain_guard,
             )
             .map_pass_err(scope)?;
 
@@ -1206,8 +1196,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::SetBlendConstant(ref color) => {
                         state.blend_constant = OptionalState::Set;
+                        let array = [
+                            color.r as f32,
+                            color.g as f32,
+                            color.b as f32,
+                            color.a as f32,
+                        ];
                         unsafe {
-                            raw.set_blend_constants(color);
+                            raw.set_blend_constants(&array);
                         }
                     }
                     RenderCommand::SetStencilReference(value) => {
@@ -1738,8 +1734,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             log::trace!("Merging {:?} with the render pass", encoder_id);
-            let (trackers, used_swapchain) =
-                info.finish(raw, &*texture_guard).map_pass_err(scope)?;
+            let (trackers, used_swapchain) = info
+                .finish(raw, &*texture_guard, &*swap_chain_guard)
+                .map_pass_err(scope)?;
+
             let raw_cmd_buf = unsafe {
                 raw.end_encoding()
                     .map_err(|_| RenderPassErrorInner::OutOfMemory)

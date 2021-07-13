@@ -74,7 +74,7 @@ impl super::DeviceShared {
                 for cat in e.key().colors.iter() {
                     color_refs.push(vk::AttachmentReference {
                         attachment: vk_attachments.len() as u32,
-                        layout: cat.base.layout_in,
+                        layout: cat.base.layout,
                     });
                     vk_attachments.push({
                         let (load_op, store_op) = conv::map_attachment_ops(cat.base.ops);
@@ -83,14 +83,14 @@ impl super::DeviceShared {
                             .samples(samples)
                             .load_op(load_op)
                             .store_op(store_op)
-                            .initial_layout(cat.base.layout_pre)
-                            .final_layout(cat.base.layout_post)
+                            .initial_layout(cat.base.layout)
+                            .final_layout(cat.base.layout)
                             .build()
                     });
                     let at_ref = if let Some(ref rat) = cat.resolve {
                         let at_ref = vk::AttachmentReference {
                             attachment: vk_attachments.len() as u32,
-                            layout: rat.layout_in,
+                            layout: rat.layout,
                         };
                         let (load_op, store_op) = conv::map_attachment_ops(rat.ops);
                         let vk_attachment = vk::AttachmentDescription::builder()
@@ -98,8 +98,8 @@ impl super::DeviceShared {
                             .samples(vk::SampleCountFlags::TYPE_1)
                             .load_op(load_op)
                             .store_op(store_op)
-                            .initial_layout(rat.layout_pre)
-                            .final_layout(rat.layout_post)
+                            .initial_layout(rat.layout)
+                            .final_layout(rat.layout)
                             .build();
                         vk_attachments.push(vk_attachment);
                         at_ref
@@ -115,7 +115,7 @@ impl super::DeviceShared {
                 if let Some(ref ds) = e.key().depth_stencil {
                     ds_ref = Some(vk::AttachmentReference {
                         attachment: vk_attachments.len() as u32,
-                        layout: ds.base.layout_in,
+                        layout: ds.base.layout,
                     });
                     let (load_op, store_op) = conv::map_attachment_ops(ds.base.ops);
                     let (stencil_load_op, stencil_store_op) =
@@ -127,8 +127,8 @@ impl super::DeviceShared {
                         .store_op(store_op)
                         .stencil_load_op(stencil_load_op)
                         .stencil_store_op(stencil_store_op)
-                        .initial_layout(ds.base.layout_pre)
-                        .final_layout(ds.base.layout_post)
+                        .initial_layout(ds.base.layout)
+                        .final_layout(ds.base.layout)
                         .build();
                     vk_attachments.push(vk_attachment);
                 }
@@ -654,7 +654,11 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        let (array_layer_count, vk_extent) = conv::map_extent(desc.size, desc.dimension);
+        let (depth, array_layer_count) = match desc.dimension {
+            wgt::TextureDimension::D3 => (desc.size.depth_or_array_layers, 1),
+            _ => (1, desc.size.depth_or_array_layers),
+        };
+
         let mut raw_flags = vk::ImageCreateFlags::empty();
         if desc.dimension == wgt::TextureDimension::D2 && desc.size.depth_or_array_layers % 6 == 0 {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
@@ -664,7 +668,11 @@ impl crate::Device<super::Api> for super::Device {
             .flags(raw_flags)
             .image_type(conv::map_texture_dimension(desc.dimension))
             .format(self.shared.private_caps.map_texture_format(desc.format))
-            .extent(vk_extent)
+            .extent(vk::Extent3D {
+                width: desc.size.width,
+                height: desc.size.height,
+                depth,
+            })
             .mip_levels(desc.mip_level_count)
             .array_layers(array_layer_count)
             .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
@@ -699,7 +707,6 @@ impl crate::Device<super::Api> for super::Device {
             raw,
             block: Some(block),
             usage: desc.usage,
-            dim: desc.dimension,
             aspects: crate::FormatAspects::from(desc.format),
             format_info: desc.format.describe(),
             raw_flags,
@@ -725,7 +732,7 @@ impl crate::Device<super::Api> for super::Device {
             .subresource_range(conv::map_subresource_range(&desc.range, texture.aspects));
 
         let mut image_view_info;
-        if self.shared.private_caps.image_view_usage {
+        if self.shared.private_caps.image_view_usage && !desc.usage.is_empty() {
             image_view_info = vk::ImageViewUsageCreateInfo::builder()
                 .usage(conv::map_texture_usage(desc.usage))
                 .build();

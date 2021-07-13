@@ -42,8 +42,12 @@
 )]
 
 #[cfg(all(feature = "metal", not(any(target_os = "macos", target_os = "ios"))))]
-compile_error!("Metal backend enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
+compile_error!("Metal API enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
+#[cfg(all(feature = "dx12", not(windows)))]
+compile_error!("DX12 API enabled on non-Windows OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 
+#[cfg(all(feature = "dx12", windows))]
+mod dx12;
 mod empty;
 #[cfg(feature = "gles")]
 mod gles;
@@ -54,6 +58,8 @@ mod vulkan;
 
 pub mod util;
 pub mod api {
+    #[cfg(feature = "dx12")]
+    pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
     #[cfg(feature = "gles")]
     pub use super::gles::Api as Gles;
@@ -345,6 +351,8 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     where
         T: Iterator<Item = BufferCopy>;
 
+    /// Copy from one texture to another.
+    /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
@@ -355,11 +363,15 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     ) where
         T: Iterator<Item = TextureCopy>;
 
+    /// Copy from buffer to texture.
+    /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
     unsafe fn copy_buffer_to_texture<T>(&mut self, src: &A::Buffer, dst: &A::Texture, regions: T)
     where
         T: Iterator<Item = BufferTextureCopy>;
 
+    /// Copy from texture to buffer.
+    /// Works with a single array layer.
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &A::Texture,
@@ -425,7 +437,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     unsafe fn set_viewport(&mut self, rect: &Rect<f32>, depth_range: Range<f32>);
     unsafe fn set_scissor_rect(&mut self, rect: &Rect<u32>);
     unsafe fn set_stencil_reference(&mut self, value: u32);
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color);
+    unsafe fn set_blend_constants(&mut self, color: &[f32; 4]);
 
     unsafe fn draw(
         &mut self,
@@ -614,6 +626,7 @@ bitflags::bitflags! {
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
         const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits;
+        //TODO: remove this
         const UNINITIALIZED = 0xFFFF;
     }
 }
@@ -999,35 +1012,41 @@ pub struct BufferCopy {
 
 #[derive(Clone, Debug)]
 pub struct TextureCopyBase {
-    pub origin: wgt::Origin3d,
     pub mip_level: u32,
+    pub array_layer: u32,
+    /// Origin within a texture.
+    /// Note: for 1D and 2D textures, Z must be 0.
+    pub origin: wgt::Origin3d,
     pub aspect: FormatAspects,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CopyExtent {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
 }
 
 #[derive(Clone, Debug)]
 pub struct TextureCopy {
     pub src_base: TextureCopyBase,
     pub dst_base: TextureCopyBase,
-    pub size: wgt::Extent3d,
+    pub size: CopyExtent,
 }
 
 #[derive(Clone, Debug)]
 pub struct BufferTextureCopy {
     pub buffer_layout: wgt::ImageDataLayout,
     pub texture_base: TextureCopyBase,
-    pub size: wgt::Extent3d,
+    pub size: CopyExtent,
 }
 
 #[derive(Debug)]
 pub struct Attachment<'a, A: Api> {
     pub view: &'a A::TextureView,
-    /// Contains either a single mutating usage as a target, or a valid combination
-    /// of read-only usages.
+    /// Contains either a single mutating usage as a target,
+    /// or a valid combination of read-only usages.
     pub usage: TextureUses,
-    /// Defines the boundary usages for the attachment.
-    /// It is expected to begin a render pass with `boundary_usage.start` usage,
-    /// and will end it with `boundary_usage.end` usage.
-    pub boundary_usage: Range<TextureUses>,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1036,7 +1055,6 @@ impl<A: Api> Clone for Attachment<'_, A> {
         Self {
             view: self.view,
             usage: self.usage,
-            boundary_usage: self.boundary_usage.clone(),
         }
     }
 }

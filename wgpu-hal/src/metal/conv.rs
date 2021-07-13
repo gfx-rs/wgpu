@@ -261,34 +261,20 @@ pub fn map_range(range: &crate::MemoryRange) -> mtl::NSRange {
     }
 }
 
-pub fn map_extent(extent: &wgt::Extent3d, raw_type: mtl::MTLTextureType) -> (u64, mtl::MTLSize) {
-    let (depth, array_layers) = match raw_type {
-        mtl::MTLTextureType::D3 => (extent.depth_or_array_layers as u64, 1),
-        _ => (1, extent.depth_or_array_layers as u64),
-    };
-    (
-        array_layers,
-        mtl::MTLSize {
-            width: extent.width as u64,
-            height: extent.height as u64,
-            depth,
-        },
-    )
+pub fn map_copy_extent(extent: &crate::CopyExtent) -> mtl::MTLSize {
+    mtl::MTLSize {
+        width: extent.width as u64,
+        height: extent.height as u64,
+        depth: extent.depth as u64,
+    }
 }
 
-pub fn map_origin(origin: &wgt::Origin3d, raw_type: mtl::MTLTextureType) -> (u64, mtl::MTLOrigin) {
-    let (z, slice) = match raw_type {
-        mtl::MTLTextureType::D3 => (origin.z as u64, 0),
-        _ => (0, origin.z as u64),
-    };
-    (
-        slice,
-        mtl::MTLOrigin {
-            x: origin.x as u64,
-            y: origin.y as u64,
-            z,
-        },
-    )
+pub fn map_origin(origin: &wgt::Origin3d) -> mtl::MTLOrigin {
+    mtl::MTLOrigin {
+        x: origin.x as u64,
+        y: origin.y as u64,
+        z: origin.z as u64,
+    }
 }
 
 pub fn map_store_action(store: bool, resolve: bool) -> mtl::MTLStoreAction {

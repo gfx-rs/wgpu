@@ -201,52 +201,51 @@ impl super::Queue {
                 ref copy,
             } => {
                 //TODO: cubemaps
-                //TODO: how is depth handled?
+                //TODO: handle 3D copies
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
-                for layer in 0..copy.size.depth_or_array_layers as i32 {
-                    if is_3d_target(src_target) {
-                        //TODO: handle GLES without framebuffer_texture_3d
-                        gl.framebuffer_texture_layer(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            Some(src),
-                            copy.src_base.mip_level as i32,
-                            copy.src_base.origin.z as i32 + layer,
-                        );
-                    } else {
-                        gl.framebuffer_texture_2d(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            src_target,
-                            Some(src),
-                            copy.src_base.mip_level as i32,
-                        );
-                    }
-                    gl.bind_texture(dst_target, Some(dst));
-                    if is_3d_target(dst_target) {
-                        gl.copy_tex_sub_image_3d(
-                            dst_target,
-                            copy.dst_base.mip_level as i32,
-                            copy.dst_base.origin.x as i32,
-                            copy.dst_base.origin.y as i32,
-                            copy.dst_base.origin.z as i32 + layer,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
-                        );
-                    } else {
-                        gl.copy_tex_sub_image_2d(
-                            dst_target,
-                            copy.dst_base.mip_level as i32,
-                            copy.dst_base.origin.x as i32,
-                            copy.dst_base.origin.y as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
-                        );
-                    }
+                if is_3d_target(src_target) {
+                    //TODO: handle GLES without framebuffer_texture_3d
+                    gl.framebuffer_texture_layer(
+                        glow::READ_FRAMEBUFFER,
+                        glow::COLOR_ATTACHMENT0,
+                        Some(src),
+                        copy.src_base.mip_level as i32,
+                        copy.src_base.array_layer as i32,
+                    );
+                } else {
+                    gl.framebuffer_texture_2d(
+                        glow::READ_FRAMEBUFFER,
+                        glow::COLOR_ATTACHMENT0,
+                        src_target,
+                        Some(src),
+                        copy.src_base.mip_level as i32,
+                    );
+                }
+
+                gl.bind_texture(dst_target, Some(dst));
+                if is_3d_target(dst_target) {
+                    gl.copy_tex_sub_image_3d(
+                        dst_target,
+                        copy.dst_base.mip_level as i32,
+                        copy.dst_base.origin.x as i32,
+                        copy.dst_base.origin.y as i32,
+                        copy.dst_base.origin.z as i32,
+                        copy.src_base.origin.x as i32,
+                        copy.src_base.origin.y as i32,
+                        copy.size.width as i32,
+                        copy.size.height as i32,
+                    );
+                } else {
+                    gl.copy_tex_sub_image_2d(
+                        dst_target,
+                        copy.dst_base.mip_level as i32,
+                        copy.dst_base.origin.x as i32,
+                        copy.dst_base.origin.y as i32,
+                        copy.src_base.origin.x as i32,
+                        copy.src_base.origin.y as i32,
+                        copy.size.width as i32,
+                        copy.size.height as i32,
+                    );
                 }
             }
             C::CopyBufferToTexture {
@@ -286,7 +285,7 @@ impl super::Queue {
                                 copy.texture_base.origin.z as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
-                                copy.size.depth_or_array_layers as i32,
+                                copy.size.depth as i32,
                                 format_desc.external,
                                 format_desc.data_type,
                                 unpack_data,
@@ -306,26 +305,18 @@ impl super::Queue {
                             );
                         }
                         glow::TEXTURE_CUBE_MAP => {
-                            let mut offset = copy.buffer_layout.offset as u32;
-                            for face_index in 0..copy.size.depth_or_array_layers {
-                                gl.tex_sub_image_2d(
-                                    CUBEMAP_FACES
-                                        [(copy.texture_base.origin.z + face_index) as usize],
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    glow::PixelUnpackData::BufferOffset(offset),
-                                );
-                                offset += copy
-                                    .buffer_layout
-                                    .rows_per_image
-                                    .map_or(0, |rpi| rpi.get())
-                                    * copy.buffer_layout.bytes_per_row.map_or(0, |bpr| bpr.get());
-                            }
+                            let offset = copy.buffer_layout.offset as u32;
+                            gl.tex_sub_image_2d(
+                                CUBEMAP_FACES[copy.texture_base.array_layer as usize],
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                glow::PixelUnpackData::BufferOffset(offset),
+                            );
                         }
                         glow::TEXTURE_CUBE_MAP_ARRAY => {
                             //Note: not sure if this is correct!
@@ -337,7 +328,7 @@ impl super::Queue {
                                 copy.texture_base.origin.z as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
-                                copy.size.depth_or_array_layers as i32,
+                                copy.size.depth as i32,
                                 format_desc.external,
                                 format_desc.data_type,
                                 unpack_data,
@@ -349,10 +340,9 @@ impl super::Queue {
                     let bytes_per_image =
                         copy.buffer_layout.rows_per_image.map_or(1, |rpi| rpi.get())
                             * copy.buffer_layout.bytes_per_row.map_or(1, |bpr| bpr.get());
-                    let offset_end = copy.buffer_layout.offset as u32
-                        + bytes_per_image * copy.size.depth_or_array_layers;
+                    let offset = copy.buffer_layout.offset as u32;
                     let unpack_data = glow::CompressedPixelUnpackData::BufferRange(
-                        copy.buffer_layout.offset as u32..offset_end,
+                        offset..offset + bytes_per_image,
                     );
                     match dst_target {
                         glow::TEXTURE_3D | glow::TEXTURE_2D_ARRAY => {
@@ -364,7 +354,7 @@ impl super::Queue {
                                 copy.texture_base.origin.z as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
-                                copy.size.depth_or_array_layers as i32,
+                                copy.size.depth as i32,
                                 format_desc.internal,
                                 unpack_data,
                             );
@@ -382,23 +372,18 @@ impl super::Queue {
                             );
                         }
                         glow::TEXTURE_CUBE_MAP => {
-                            let mut offset = copy.buffer_layout.offset as u32;
-                            for face_index in 0..copy.size.depth_or_array_layers {
-                                gl.compressed_tex_sub_image_2d(
-                                    CUBEMAP_FACES
-                                        [(copy.texture_base.origin.z + face_index) as usize],
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.internal,
-                                    glow::CompressedPixelUnpackData::BufferRange(
-                                        offset..offset + bytes_per_image,
-                                    ),
-                                );
-                                offset += bytes_per_image;
-                            }
+                            gl.compressed_tex_sub_image_2d(
+                                CUBEMAP_FACES[copy.texture_base.array_layer as usize],
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.internal,
+                                glow::CompressedPixelUnpackData::BufferRange(
+                                    offset..offset + bytes_per_image,
+                                ),
+                            );
                         }
                         glow::TEXTURE_CUBE_MAP_ARRAY => {
                             //Note: not sure if this is correct!
@@ -410,7 +395,7 @@ impl super::Queue {
                                 copy.texture_base.origin.z as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
-                                copy.size.depth_or_array_layers as i32,
+                                copy.size.depth as i32,
                                 format_desc.internal,
                                 unpack_data,
                             );
@@ -445,45 +430,37 @@ impl super::Queue {
                     .map_or(copy.size.width, |bpr| {
                         bpr.get() / format_info.block_size as u32
                     });
-                let column_texels = copy
-                    .buffer_layout
-                    .rows_per_image
-                    .map_or(copy.size.height, |rpi| rpi.get());
                 gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32);
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst));
 
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
-                for layer in 0..copy.size.depth_or_array_layers {
-                    let offset = copy.buffer_layout.offset as u32
-                        + layer * column_texels * row_texels * format_info.block_size as u32;
-                    if is_3d_target(src_target) {
-                        //TODO: handle GLES without framebuffer_texture_3d
-                        gl.framebuffer_texture_layer(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            Some(src),
-                            copy.texture_base.mip_level as i32,
-                            copy.texture_base.origin.z as i32 + layer as i32,
-                        );
-                    } else {
-                        gl.framebuffer_texture_2d(
-                            glow::READ_FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            src_target,
-                            Some(src),
-                            copy.texture_base.mip_level as i32,
-                        );
-                    }
-                    gl.read_pixels(
-                        copy.texture_base.origin.x as i32,
-                        copy.texture_base.origin.y as i32,
-                        copy.size.width as i32,
-                        copy.size.height as i32,
-                        format_desc.external,
-                        format_desc.data_type,
-                        glow::PixelPackData::BufferOffset(offset),
+                if is_3d_target(src_target) {
+                    //TODO: handle GLES without framebuffer_texture_3d
+                    gl.framebuffer_texture_layer(
+                        glow::READ_FRAMEBUFFER,
+                        glow::COLOR_ATTACHMENT0,
+                        Some(src),
+                        copy.texture_base.mip_level as i32,
+                        copy.texture_base.array_layer as i32,
+                    );
+                } else {
+                    gl.framebuffer_texture_2d(
+                        glow::READ_FRAMEBUFFER,
+                        glow::COLOR_ATTACHMENT0,
+                        src_target,
+                        Some(src),
+                        copy.texture_base.mip_level as i32,
                     );
                 }
+                gl.read_pixels(
+                    copy.texture_base.origin.x as i32,
+                    copy.texture_base.origin.y as i32,
+                    copy.size.width as i32,
+                    copy.size.height as i32,
+                    format_desc.external,
+                    format_desc.data_type,
+                    glow::PixelPackData::BufferOffset(copy.buffer_layout.offset as u32),
+                );
             }
             C::SetIndexBuffer(buffer) => {
                 gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer));

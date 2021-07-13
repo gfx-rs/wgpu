@@ -23,7 +23,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
-    let message_severity = match message_severity {
+    let level = match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::Level::Error,
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::Level::Warn,
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Info,
@@ -45,7 +45,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     };
 
     log::log!(
-        message_severity,
+        level,
         "{:?} [{} (0x{:x})]\n\t{}",
         message_type,
         message_id_name,
@@ -64,7 +64,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                     .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
             })
             .collect::<Vec<_>>();
-        log::log!(message_severity, "\tqueues: {}", names.join(", "));
+        log::log!(level, "\tqueues: {}", names.join(", "));
     }
 
     if cd.cmd_buf_label_count != 0 {
@@ -78,7 +78,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                     .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
             })
             .collect::<Vec<_>>();
-        log::log!(message_severity, "\tcommand buffers: {}", names.join(", "));
+        log::log!(level, "\tcommand buffers: {}", names.join(", "));
     }
 
     if cd.object_count != 0 {
@@ -99,7 +99,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                 )
             })
             .collect::<Vec<_>>();
-        log::log!(message_severity, "\tobjects: {}", names.join(", "));
+        log::log!(level, "\tobjects: {}", names.join(", "));
     }
 
     vk::FALSE
@@ -647,7 +647,6 @@ impl crate::Surface<super::Api> for super::Surface {
                 raw: sc.images[index as usize],
                 block: None,
                 usage: sc.config.usage,
-                dim: wgt::TextureDimension::D2,
                 aspects: crate::FormatAspects::COLOR,
                 format_info: sc.config.format.describe(),
                 raw_flags: vk::ImageCreateFlags::empty(),
