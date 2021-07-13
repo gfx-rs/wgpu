@@ -1,5 +1,10 @@
 # Change Log
 
+## wgpu-core-0.9.1 (2021-07-13)
+  - fix buffer inits delayed by a frame
+  - fix query resolves to initialize buffers
+  - fix pipeline statistics stride
+
 ## v0.9 (2021-06-18)
   - Updated:
     - naga to `v0.5`.

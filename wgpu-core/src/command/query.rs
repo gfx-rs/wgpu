@@ -382,7 +382,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        let stride = query_set.elements * wgt::QUERY_SIZE;
+        let elements_per_query = match query_set.desc.ty {
+            wgt::QueryType::PipelineStatistics(ps) => ps.bits().count_ones(),
+            wgt::QueryType::Timestamp => 1,
+        };
+        let stride = elements_per_query * wgt::QUERY_SIZE;
         let bytes_used = (stride * query_count) as BufferAddress;
 
         let buffer_start_offset = destination_offset;
