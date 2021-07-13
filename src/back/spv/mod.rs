@@ -3,6 +3,7 @@
 
 mod block;
 mod helpers;
+mod image;
 mod index;
 mod instructions;
 mod layout;
@@ -369,6 +370,10 @@ struct BlockContext<'w> {
 impl BlockContext<'_> {
     fn gen_id(&mut self) -> Word {
         self.writer.id_gen.next()
+    }
+
+    fn get_type_id(&mut self, lookup_type: LookupType) -> Word {
+        self.writer.get_type_id(lookup_type)
     }
 
     fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Word {
