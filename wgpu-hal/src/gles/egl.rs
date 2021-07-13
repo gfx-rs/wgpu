@@ -396,6 +396,11 @@ impl crate::Instance<super::Api> for Instance {
             None
         };
 
+        // Workaround Mesa driver bug on Intel cards by disabling fastclear:
+        // https://gitlab.freedesktop.org/mesa/mesa/-/issues/2565
+        // https://github.com/gfx-rs/wgpu/issues/1627#issuecomment-877854185
+        std::env::set_var("INTEL_DEBUG", "nofc");
+
         let display = if let (Some(library), Some(egl)) =
             (wayland_library, egl.upcast::<egl::EGL1_5>())
         {
