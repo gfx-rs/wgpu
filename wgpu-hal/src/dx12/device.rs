@@ -1027,7 +1027,7 @@ impl crate::Device<super::Api> for super::Device {
         let mut ranges = Vec::with_capacity(total_non_dynamic_entries);
 
         let mut bind_group_infos =
-            arrayvec::ArrayVec::<[super::BindGroupInfo; crate::MAX_BIND_GROUPS]>::default();
+            arrayvec::ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
         for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
             let space = root_space_offset + index as u32;
             let mut info = super::BindGroupInfo {
@@ -1414,7 +1414,7 @@ impl crate::Device<super::Api> for super::Device {
         let bias = desc
             .depth_stencil
             .as_ref()
-            .map(|ds| ds.bias.clone())
+            .map(|ds| ds.bias)
             .unwrap_or_default();
 
         let raw_rasterizer = d3d12::D3D12_RASTERIZER_DESC {

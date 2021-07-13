@@ -247,7 +247,7 @@ enum PassKind {
 
 struct PassState {
     has_label: bool,
-    resolves: ArrayVec<[PassResolve; crate::MAX_COLOR_TARGETS]>,
+    resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_TARGETS }>,
     vertex_buffers: [d3d12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
     dirty_vertex_buffers: usize,
     kind: PassKind,
@@ -423,7 +423,7 @@ pub struct PipelineLayout {
     raw: native::RootSignature,
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    bind_group_infos: ArrayVec<BindGroupInfo, crate::MAX_BIND_GROUPS>,
+    bind_group_infos: ArrayVec<BindGroupInfo, { crate::MAX_BIND_GROUPS }>,
     naga_options: naga::back::hlsl::Options,
 }
 
