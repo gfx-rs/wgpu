@@ -1,6 +1,6 @@
 use super::{conv, descriptor, HResult as _};
 use parking_lot::Mutex;
-use std::{ffi, mem, ptr, slice, sync::Arc};
+use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, winerror},
     um::{d3d12, d3d12sdklayers, d3dcompiler, synchapi, winbase},
@@ -8,6 +8,8 @@ use winapi::{
 };
 
 const D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING: u32 = 0x1688;
+//TODO: find the exact value
+const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE;
 
 impl super::Device {
     pub(super) fn new(
@@ -48,13 +50,16 @@ impl super::Device {
 
             let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
                 Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-                CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
-                MemoryPoolPreference: d3d12::D3D12_MEMORY_POOL_L0,
+                CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+                MemoryPoolPreference: match private_caps.memory_architecture {
+                    super::MemoryArchitecture::Unified { .. } => d3d12::D3D12_MEMORY_POOL_L0,
+                    super::MemoryArchitecture::NonUnified => d3d12::D3D12_MEMORY_POOL_L1,
+                },
                 CreationNodeMask: 0,
                 VisibleNodeMask: 0,
             };
 
-            let hr = raw.CreateCommittedResource(
+            raw.CreateCommittedResource(
                 &heap_properties,
                 d3d12::D3D12_HEAP_FLAG_NONE,
                 &raw_desc,
@@ -62,17 +67,11 @@ impl super::Device {
                 ptr::null(),
                 &d3d12::ID3D12Resource::uuidof(),
                 zero_buffer.mut_void(),
-            );
+            )
+            .into_device_result("Zero buffer creation")?;
 
-            hr.into_device_result("Zero buffer creation")?;
-
-            let range = d3d12::D3D12_RANGE { Begin: 0, End: 0 };
-            let mut ptr = std::ptr::null_mut();
-            (*zero_buffer)
-                .Map(0, &range, &mut ptr)
-                .into_device_result("Map zero buffer")?;
-            slice::from_raw_parts_mut(ptr as *mut u8, super::ZERO_BUFFER_SIZE as usize).fill(0);
-            (*zero_buffer).Unmap(0, &range);
+            //Note: without `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED`
+            // this resource is zeroed by default.
         };
 
         // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
@@ -129,6 +128,10 @@ impl super::Device {
             },
             private_caps,
             shared: Arc::new(shared),
+            //Note: these names have to match Naga's convention
+            vertex_attribute_names: (0..d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT)
+                .map(|i| ffi::CString::new(format!("LOC{}", i)).unwrap())
+                .collect(),
             rtv_pool: Mutex::new(descriptor::CpuPool::new(
                 raw,
                 native::DescriptorHeapType::Rtv,
@@ -651,7 +654,11 @@ impl crate::Device<super::Api> for super::Device {
 
         let hr = self.raw.CreateCommittedResource(
             &heap_properties,
-            d3d12::D3D12_HEAP_FLAG_NONE,
+            if self.private_caps.heap_create_not_zeroed {
+                D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+            } else {
+                d3d12::D3D12_HEAP_FLAG_NONE
+            },
             &raw_desc,
             d3d12::D3D12_RESOURCE_STATE_COMMON,
             ptr::null(),
@@ -726,7 +733,11 @@ impl crate::Device<super::Api> for super::Device {
 
         let hr = self.raw.CreateCommittedResource(
             &heap_properties,
-            d3d12::D3D12_HEAP_FLAG_NONE,
+            if self.private_caps.heap_create_not_zeroed {
+                D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+            } else {
+                d3d12::D3D12_HEAP_FLAG_NONE
+            },
             &raw_desc,
             d3d12::D3D12_RESOURCE_STATE_COMMON,
             ptr::null(),
@@ -974,6 +985,16 @@ impl crate::Device<super::Api> for super::Device {
         // DescriptorTable1: Space: 2 (SrvCbvUav)
         // Root Descriptors 1
         //     ...
+
+        //TODO: reverse the order, according to this advice in
+        // https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#binding-model
+        //> Furthermore, applications should generally sort the layout
+        //> of the root arguments in decreasing order of change frequency.
+        //> This way if some implementations need to switch to a different
+        //> memory storage scheme to version parts of a heavily populated
+        //> root arguments, the data that is changing at the highest frequency
+        //> (near the start of the root arguments) is most likely to run
+        //> as efficiently as possible.
 
         let mut root_offset = 0u32;
         let root_constants: &[()] = &[];
@@ -1338,7 +1359,181 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
-        unimplemented!()
+        let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
+        let mut shader_stages = wgt::ShaderStages::VERTEX;
+
+        let blob_vs =
+            self.load_shader(&desc.vertex_stage, desc.layout, naga::ShaderStage::Vertex)?;
+        let blob_fs = match desc.fragment_stage {
+            Some(ref stage) => {
+                shader_stages |= wgt::ShaderStages::FRAGMENT;
+                self.load_shader(stage, desc.layout, naga::ShaderStage::Fragment)?
+            }
+            None => native::Blob::null(),
+        };
+
+        let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
+        let mut input_element_descs = Vec::new();
+        for (i, (stride, vbuf)) in vertex_strides
+            .iter_mut()
+            .zip(desc.vertex_buffers)
+            .enumerate()
+        {
+            *stride = NonZeroU32::new(vbuf.array_stride as u32);
+            let (slot_class, step_rate) = match vbuf.step_mode {
+                wgt::InputStepMode::Vertex => {
+                    (d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0)
+                }
+                wgt::InputStepMode::Instance => {
+                    (d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1)
+                }
+            };
+            for attribute in vbuf.attributes {
+                let name = &self.vertex_attribute_names[attribute.shader_location as usize];
+                input_element_descs.push(d3d12::D3D12_INPUT_ELEMENT_DESC {
+                    SemanticName: name.as_ptr(),
+                    SemanticIndex: attribute.shader_location,
+                    Format: conv::map_vertex_format(attribute.format),
+                    InputSlot: i as u32,
+                    AlignedByteOffset: attribute.offset as u32,
+                    InputSlotClass: slot_class,
+                    InstanceDataStepRate: step_rate,
+                });
+            }
+        }
+
+        let mut rtv_formats = [dxgiformat::DXGI_FORMAT_UNKNOWN;
+            d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
+        for (rtv_format, ct) in rtv_formats.iter_mut().zip(desc.color_targets) {
+            *rtv_format = conv::map_texture_format(ct.format);
+        }
+
+        let bias = desc
+            .depth_stencil
+            .as_ref()
+            .map(|ds| ds.bias.clone())
+            .unwrap_or_default();
+
+        let raw_rasterizer = d3d12::D3D12_RASTERIZER_DESC {
+            FillMode: conv::map_polygon_mode(desc.primitive.polygon_mode),
+            CullMode: match desc.primitive.cull_mode {
+                None => d3d12::D3D12_CULL_MODE_NONE,
+                Some(wgt::Face::Front) => d3d12::D3D12_CULL_MODE_FRONT,
+                Some(wgt::Face::Back) => d3d12::D3D12_CULL_MODE_BACK,
+            },
+            FrontCounterClockwise: match desc.primitive.front_face {
+                wgt::FrontFace::Cw => 0,
+                wgt::FrontFace::Ccw => 1,
+            },
+            DepthBias: bias.constant,
+            DepthBiasClamp: bias.clamp,
+            SlopeScaledDepthBias: bias.slope_scale,
+            DepthClipEnable: if desc.primitive.clamp_depth { 0 } else { 1 },
+            MultisampleEnable: if desc.multisample.count > 1 { 1 } else { 0 },
+            ForcedSampleCount: 0,
+            AntialiasedLineEnable: 0,
+            ConservativeRaster: if desc.primitive.conservative {
+                d3d12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
+            } else {
+                d3d12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+            },
+        };
+
+        let raw_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
+            pRootSignature: desc.layout.raw.as_mut_ptr(),
+            VS: *native::Shader::from_blob(blob_vs),
+            PS: if blob_fs.is_null() {
+                *native::Shader::null()
+            } else {
+                *native::Shader::from_blob(blob_fs)
+            },
+            GS: *native::Shader::null(),
+            DS: *native::Shader::null(),
+            HS: *native::Shader::null(),
+            StreamOutput: d3d12::D3D12_STREAM_OUTPUT_DESC {
+                pSODeclaration: ptr::null(),
+                NumEntries: 0,
+                pBufferStrides: ptr::null(),
+                NumStrides: 0,
+                RasterizedStream: 0,
+            },
+            BlendState: d3d12::D3D12_BLEND_DESC {
+                AlphaToCoverageEnable: if desc.multisample.alpha_to_coverage_enabled {
+                    1
+                } else {
+                    0
+                },
+                IndependentBlendEnable: 1,
+                RenderTarget: conv::map_render_targets(desc.color_targets),
+            },
+            SampleMask: desc.multisample.mask as u32,
+            RasterizerState: raw_rasterizer,
+            DepthStencilState: match desc.depth_stencil {
+                Some(ref ds) => conv::map_depth_stencil(ds),
+                None => mem::zeroed(),
+            },
+            InputLayout: d3d12::D3D12_INPUT_LAYOUT_DESC {
+                pInputElementDescs: if input_element_descs.is_empty() {
+                    ptr::null()
+                } else {
+                    input_element_descs.as_ptr()
+                },
+                NumElements: input_element_descs.len() as u32,
+            },
+            IBStripCutValue: match desc.primitive.strip_index_format {
+                Some(wgt::IndexFormat::Uint16) => d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF,
+                Some(wgt::IndexFormat::Uint32) => {
+                    d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF
+                }
+                None => d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+            },
+            PrimitiveTopologyType: topology_class,
+            NumRenderTargets: desc.color_targets.len() as u32,
+            RTVFormats: rtv_formats,
+            DSVFormat: desc
+                .depth_stencil
+                .as_ref()
+                .map_or(dxgiformat::DXGI_FORMAT_UNKNOWN, |ds| {
+                    conv::map_texture_format(ds.format)
+                }),
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: desc.multisample.count,
+                Quality: 0,
+            },
+            NodeMask: 0,
+            CachedPSO: d3d12::D3D12_CACHED_PIPELINE_STATE {
+                pCachedBlob: ptr::null(),
+                CachedBlobSizeInBytes: 0,
+            },
+            Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
+        };
+
+        let mut raw = native::PipelineState::null();
+        let hr = self.raw.CreateGraphicsPipelineState(
+            &raw_desc,
+            &d3d12::ID3D12PipelineState::uuidof(),
+            raw.mut_void(),
+        );
+
+        blob_vs.destroy();
+        if !blob_fs.is_null() {
+            blob_fs.destroy();
+        }
+
+        hr.into_result()
+            .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.into_owned()))?;
+
+        if let Some(name) = desc.label {
+            let cwstr = conv::map_label(name);
+            raw.SetName(cwstr.as_ptr());
+        }
+
+        Ok(super::RenderPipeline {
+            raw,
+            signature: desc.layout.raw,
+            topology,
+            vertex_strides,
+        })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
         pipeline.raw.destroy();
@@ -1348,17 +1543,17 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
-        let cs = self.load_shader(&desc.stage, desc.layout, naga::ShaderStage::Compute)?;
+        let blob_cs = self.load_shader(&desc.stage, desc.layout, naga::ShaderStage::Compute)?;
 
         let pair = self.raw.create_compute_pipeline_state(
             desc.layout.raw,
-            native::Shader::from_blob(cs),
+            native::Shader::from_blob(blob_cs),
             0,
             native::CachedPSO::null(),
             native::PipelineStateFlags::empty(),
         );
 
-        cs.destroy();
+        blob_cs.destroy();
 
         let raw = pair.into_result().map_err(|err| {
             crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.into_owned())
@@ -1369,7 +1564,10 @@ impl crate::Device<super::Api> for super::Device {
             raw.SetName(cwstr.as_ptr());
         }
 
-        Ok(super::ComputePipeline { raw })
+        Ok(super::ComputePipeline {
+            raw,
+            signature: desc.layout.raw,
+        })
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
         pipeline.raw.destroy();

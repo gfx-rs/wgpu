@@ -110,7 +110,7 @@ bitflags::bitflags! {
         /// Vulkan + Metal + DX12 + Browser WebGPU
         const PRIMARY = Self::VULKAN.bits
             | Self::METAL.bits
-            | Self::DX12.bits
+            //| Self::DX12.bits // enable when Naga is polished
             | Self::BROWSER_WEBGPU.bits;
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.

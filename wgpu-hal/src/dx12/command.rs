@@ -637,7 +637,30 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.list.unwrap().EndEvent()
     }
 
-    unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {}
+    unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
+        let list = self.list.unwrap();
+
+        list.set_graphics_root_signature(pipeline.signature);
+        list.set_pipeline_state(pipeline.raw);
+        list.IASetPrimitiveTopology(pipeline.topology);
+
+        //TODO: root signature changes require full layout rebind!
+
+        for (index, (vb, &stride)) in self
+            .pass
+            .vertex_buffers
+            .iter_mut()
+            .zip(pipeline.vertex_strides.iter())
+            .enumerate()
+        {
+            if let Some(stride) = stride {
+                if vb.StrideInBytes != stride.get() {
+                    vb.StrideInBytes = stride.get();
+                    self.pass.dirty_vertex_buffers |= 1 << index;
+                }
+            }
+        }
+    }
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
@@ -795,7 +818,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.end_pass();
     }
 
-    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {}
+    unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
+        let list = self.list.unwrap();
+
+        list.set_compute_root_signature(pipeline.signature);
+        list.set_pipeline_state(pipeline.raw);
+
+        //TODO: root signature changes require full layout rebind!
+    }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
         self.list.unwrap().dispatch(count);

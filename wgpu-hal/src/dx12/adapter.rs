@@ -108,6 +108,7 @@ impl super::Adapter {
                 super::MemoryArchitecture::NonUnified
             },
             shader_debug_info: instance_flags.contains(crate::InstanceFlags::DEBUG),
+            heap_create_not_zeroed: false, //TODO: winapi support for Options7
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit

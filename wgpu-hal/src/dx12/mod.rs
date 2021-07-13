@@ -16,7 +16,7 @@ mod instance;
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{borrow::Cow, mem, num::NonZeroU32, ptr, sync::Arc};
+use std::{borrow::Cow, ffi, mem, num::NonZeroU32, ptr, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
     um::{d3d12, synchapi, winbase, winnt},
@@ -132,6 +132,7 @@ struct PrivateCapabilities {
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
     shader_debug_info: bool,
+    heap_create_not_zeroed: bool,
 }
 
 #[derive(Default)]
@@ -197,6 +198,7 @@ pub struct Device {
     idler: Idler,
     private_caps: PrivateCapabilities,
     shared: Arc<DeviceShared>,
+    vertex_attribute_names: Vec<ffi::CString>,
     // CPU only pools
     rtv_pool: Mutex<descriptor::CpuPool>,
     dsv_pool: Mutex<descriptor::CpuPool>,
@@ -433,6 +435,7 @@ pub struct ShaderModule {
 
 pub struct RenderPipeline {
     raw: native::PipelineState,
+    signature: native::RootSignature,
     topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
 }
@@ -442,6 +445,7 @@ unsafe impl Sync for RenderPipeline {}
 
 pub struct ComputePipeline {
     raw: native::PipelineState,
+    signature: native::RootSignature,
 }
 
 unsafe impl Send for ComputePipeline {}

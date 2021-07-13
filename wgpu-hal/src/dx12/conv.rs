@@ -1,7 +1,7 @@
 use std::iter;
 use winapi::{
     shared::{dxgi1_2, dxgiformat},
-    um::d3d12,
+    um::{d3d12, d3dcommon},
 };
 
 pub(super) fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
@@ -114,6 +114,45 @@ pub fn map_index_format(format: wgt::IndexFormat) -> dxgiformat::DXGI_FORMAT {
     match format {
         wgt::IndexFormat::Uint16 => dxgiformat::DXGI_FORMAT_R16_UINT,
         wgt::IndexFormat::Uint32 => dxgiformat::DXGI_FORMAT_R32_UINT,
+    }
+}
+
+pub fn map_vertex_format(format: wgt::VertexFormat) -> dxgiformat::DXGI_FORMAT {
+    use wgt::VertexFormat as Vf;
+    use winapi::shared::dxgiformat::*;
+
+    match format {
+        Vf::Unorm8x2 => DXGI_FORMAT_R8G8_UNORM,
+        Vf::Snorm8x2 => DXGI_FORMAT_R8G8_SNORM,
+        Vf::Uint8x2 => DXGI_FORMAT_R8G8_UINT,
+        Vf::Sint8x2 => DXGI_FORMAT_R8G8_SINT,
+        Vf::Unorm8x4 => DXGI_FORMAT_R8G8B8A8_UNORM,
+        Vf::Snorm8x4 => DXGI_FORMAT_R8G8B8A8_SNORM,
+        Vf::Uint8x4 => DXGI_FORMAT_R8G8B8A8_UINT,
+        Vf::Sint8x4 => DXGI_FORMAT_R8G8B8A8_SINT,
+        Vf::Unorm16x2 => DXGI_FORMAT_R16G16_UNORM,
+        Vf::Snorm16x2 => DXGI_FORMAT_R16G16_SNORM,
+        Vf::Uint16x2 => DXGI_FORMAT_R16G16_UINT,
+        Vf::Sint16x2 => DXGI_FORMAT_R16G16_SINT,
+        Vf::Float16x2 => DXGI_FORMAT_R16G16_FLOAT,
+        Vf::Unorm16x4 => DXGI_FORMAT_R16G16B16A16_UNORM,
+        Vf::Snorm16x4 => DXGI_FORMAT_R16G16B16A16_SNORM,
+        Vf::Uint16x4 => DXGI_FORMAT_R16G16B16A16_UINT,
+        Vf::Sint16x4 => DXGI_FORMAT_R16G16B16A16_SINT,
+        Vf::Float16x4 => DXGI_FORMAT_R16G16B16A16_FLOAT,
+        Vf::Uint32 => DXGI_FORMAT_R32_UINT,
+        Vf::Sint32 => DXGI_FORMAT_R32_SINT,
+        Vf::Float32 => DXGI_FORMAT_R32_FLOAT,
+        Vf::Uint32x2 => DXGI_FORMAT_R32G32_UINT,
+        Vf::Sint32x2 => DXGI_FORMAT_R32G32_SINT,
+        Vf::Float32x2 => DXGI_FORMAT_R32G32_FLOAT,
+        Vf::Uint32x3 => DXGI_FORMAT_R32G32B32_UINT,
+        Vf::Sint32x3 => DXGI_FORMAT_R32G32B32_SINT,
+        Vf::Float32x3 => DXGI_FORMAT_R32G32B32_FLOAT,
+        Vf::Uint32x4 => DXGI_FORMAT_R32G32B32A32_UINT,
+        Vf::Sint32x4 => DXGI_FORMAT_R32G32B32A32_SINT,
+        Vf::Float32x4 => DXGI_FORMAT_R32G32B32A32_FLOAT,
+        Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }
 }
 
@@ -307,4 +346,170 @@ pub fn map_texture_usage_to_state(usage: crate::TextureUses) -> d3d12::D3D12_RES
         state |= d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
     state
+}
+
+pub fn map_topology(
+    topology: wgt::PrimitiveTopology,
+) -> (
+    d3d12::D3D12_PRIMITIVE_TOPOLOGY_TYPE,
+    d3d12::D3D12_PRIMITIVE_TOPOLOGY,
+) {
+    match topology {
+        wgt::PrimitiveTopology::PointList => (
+            d3d12::D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
+            d3dcommon::D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        ),
+        wgt::PrimitiveTopology::LineList => (
+            d3d12::D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
+            d3dcommon::D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        ),
+        wgt::PrimitiveTopology::LineStrip => (
+            d3d12::D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
+            d3dcommon::D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        ),
+        wgt::PrimitiveTopology::TriangleList => (
+            d3d12::D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        ),
+        wgt::PrimitiveTopology::TriangleStrip => (
+            d3d12::D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        ),
+    }
+}
+
+pub fn map_polygon_mode(mode: wgt::PolygonMode) -> d3d12::D3D12_FILL_MODE {
+    match mode {
+        wgt::PolygonMode::Point => {
+            log::error!("Point rasterization is not supported");
+            d3d12::D3D12_FILL_MODE_WIREFRAME
+        }
+        wgt::PolygonMode::Line => d3d12::D3D12_FILL_MODE_WIREFRAME,
+        wgt::PolygonMode::Fill => d3d12::D3D12_FILL_MODE_SOLID,
+    }
+}
+
+fn map_blend_factor(factor: wgt::BlendFactor, is_alpha: bool) -> d3d12::D3D12_BLEND {
+    use wgt::BlendFactor as Bf;
+    match factor {
+        Bf::Zero => d3d12::D3D12_BLEND_ZERO,
+        Bf::One => d3d12::D3D12_BLEND_ONE,
+        Bf::Src if is_alpha => d3d12::D3D12_BLEND_SRC_ALPHA,
+        Bf::Src => d3d12::D3D12_BLEND_SRC_COLOR,
+        Bf::OneMinusSrc if is_alpha => d3d12::D3D12_BLEND_INV_SRC_ALPHA,
+        Bf::OneMinusSrc => d3d12::D3D12_BLEND_INV_SRC_COLOR,
+        Bf::Dst if is_alpha => d3d12::D3D12_BLEND_DEST_ALPHA,
+        Bf::Dst => d3d12::D3D12_BLEND_DEST_COLOR,
+        Bf::OneMinusDst if is_alpha => d3d12::D3D12_BLEND_INV_DEST_ALPHA,
+        Bf::OneMinusDst => d3d12::D3D12_BLEND_INV_DEST_COLOR,
+        Bf::SrcAlpha => d3d12::D3D12_BLEND_SRC_ALPHA,
+        Bf::OneMinusSrcAlpha => d3d12::D3D12_BLEND_INV_SRC_ALPHA,
+        Bf::DstAlpha => d3d12::D3D12_BLEND_DEST_ALPHA,
+        Bf::OneMinusDstAlpha => d3d12::D3D12_BLEND_INV_DEST_ALPHA,
+        Bf::Constant => d3d12::D3D12_BLEND_BLEND_FACTOR,
+        Bf::OneMinusConstant => d3d12::D3D12_BLEND_INV_BLEND_FACTOR,
+        Bf::SrcAlphaSaturated => d3d12::D3D12_BLEND_SRC_ALPHA_SAT,
+        //Bf::Src1Color if is_alpha => d3d12::D3D12_BLEND_SRC1_ALPHA,
+        //Bf::Src1Color => d3d12::D3D12_BLEND_SRC1_COLOR,
+        //Bf::OneMinusSrc1Color if is_alpha => d3d12::D3D12_BLEND_INV_SRC1_ALPHA,
+        //Bf::OneMinusSrc1Color => d3d12::D3D12_BLEND_INV_SRC1_COLOR,
+        //Bf::Src1Alpha => d3d12::D3D12_BLEND_SRC1_ALPHA,
+        //Bf::OneMinusSrc1Alpha => d3d12::D3D12_BLEND_INV_SRC1_ALPHA,
+    }
+}
+
+fn map_blend_component(
+    component: &wgt::BlendComponent,
+    is_alpha: bool,
+) -> (
+    d3d12::D3D12_BLEND_OP,
+    d3d12::D3D12_BLEND,
+    d3d12::D3D12_BLEND,
+) {
+    let raw_op = match component.operation {
+        wgt::BlendOperation::Add => d3d12::D3D12_BLEND_OP_ADD,
+        wgt::BlendOperation::Subtract => d3d12::D3D12_BLEND_OP_SUBTRACT,
+        wgt::BlendOperation::ReverseSubtract => d3d12::D3D12_BLEND_OP_REV_SUBTRACT,
+        wgt::BlendOperation::Min => d3d12::D3D12_BLEND_OP_MIN,
+        wgt::BlendOperation::Max => d3d12::D3D12_BLEND_OP_MAX,
+    };
+    let raw_src = map_blend_factor(component.src_factor, is_alpha);
+    let raw_dst = map_blend_factor(component.dst_factor, is_alpha);
+    (raw_op, raw_src, raw_dst)
+}
+
+pub fn map_render_targets(
+    color_targets: &[wgt::ColorTargetState],
+) -> [d3d12::D3D12_RENDER_TARGET_BLEND_DESC; d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize]
+{
+    let dummy_target = d3d12::D3D12_RENDER_TARGET_BLEND_DESC {
+        BlendEnable: 0,
+        LogicOpEnable: 0,
+        SrcBlend: d3d12::D3D12_BLEND_ZERO,
+        DestBlend: d3d12::D3D12_BLEND_ZERO,
+        BlendOp: d3d12::D3D12_BLEND_OP_ADD,
+        SrcBlendAlpha: d3d12::D3D12_BLEND_ZERO,
+        DestBlendAlpha: d3d12::D3D12_BLEND_ZERO,
+        BlendOpAlpha: d3d12::D3D12_BLEND_OP_ADD,
+        LogicOp: d3d12::D3D12_LOGIC_OP_CLEAR,
+        RenderTargetWriteMask: 0,
+    };
+    let mut raw_targets = [dummy_target; d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
+
+    for (raw, ct) in raw_targets.iter_mut().zip(color_targets.iter()) {
+        raw.RenderTargetWriteMask = ct.write_mask.bits() as u8;
+        if let Some(ref blend) = ct.blend {
+            let (color_op, color_src, color_dst) = map_blend_component(&blend.color, false);
+            let (alpha_op, alpha_src, alpha_dst) = map_blend_component(&blend.alpha, true);
+            raw.BlendEnable = 1;
+            raw.BlendOp = color_op;
+            raw.SrcBlend = color_src;
+            raw.DestBlend = color_dst;
+            raw.BlendOpAlpha = alpha_op;
+            raw.SrcBlendAlpha = alpha_src;
+            raw.DestBlendAlpha = alpha_dst;
+        }
+    }
+
+    raw_targets
+}
+
+fn map_stencil_op(op: wgt::StencilOperation) -> d3d12::D3D12_STENCIL_OP {
+    use wgt::StencilOperation as So;
+    match op {
+        So::Keep => d3d12::D3D12_STENCIL_OP_KEEP,
+        So::Zero => d3d12::D3D12_STENCIL_OP_ZERO,
+        So::Replace => d3d12::D3D12_STENCIL_OP_REPLACE,
+        So::IncrementClamp => d3d12::D3D12_STENCIL_OP_INCR_SAT,
+        So::IncrementWrap => d3d12::D3D12_STENCIL_OP_INCR,
+        So::DecrementClamp => d3d12::D3D12_STENCIL_OP_DECR_SAT,
+        So::DecrementWrap => d3d12::D3D12_STENCIL_OP_DECR,
+        So::Invert => d3d12::D3D12_STENCIL_OP_INVERT,
+    }
+}
+
+fn map_stencil_face(face: &wgt::StencilFaceState) -> d3d12::D3D12_DEPTH_STENCILOP_DESC {
+    d3d12::D3D12_DEPTH_STENCILOP_DESC {
+        StencilFailOp: map_stencil_op(face.fail_op),
+        StencilDepthFailOp: map_stencil_op(face.depth_fail_op),
+        StencilPassOp: map_stencil_op(face.pass_op),
+        StencilFunc: map_comparison(face.compare),
+    }
+}
+
+pub fn map_depth_stencil(ds: &wgt::DepthStencilState) -> d3d12::D3D12_DEPTH_STENCIL_DESC {
+    d3d12::D3D12_DEPTH_STENCIL_DESC {
+        DepthEnable: if ds.is_depth_enabled() { 1 } else { 0 },
+        DepthWriteMask: if ds.depth_write_enabled {
+            d3d12::D3D12_DEPTH_WRITE_MASK_ALL
+        } else {
+            d3d12::D3D12_DEPTH_WRITE_MASK_ZERO
+        },
+        DepthFunc: map_comparison(ds.depth_compare),
+        StencilEnable: if ds.stencil.is_enabled() { 1 } else { 0 },
+        StencilReadMask: ds.stencil.read_mask as u8,
+        StencilWriteMask: ds.stencil.write_mask as u8,
+        FrontFace: map_stencil_face(&ds.stencil.front),
+        BackFace: map_stencil_face(&ds.stencil.back),
+    }
 }
