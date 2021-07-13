@@ -631,6 +631,19 @@ impl Limits {
             max_push_constant_size: 0,
         }
     }
+
+    /// Modify the current limits to use the 2D resolution limits of the other.
+    ///
+    /// This is useful because the swapchain might need to be larger than any other image in the application.
+    ///
+    /// If your application only needs 512x512, you might be running on a 4k display and need extremely high resolution limits.
+    pub fn using_resolution_2d(self, other: Self) -> Self {
+        Self {
+            max_texture_dimension_1d: other.max_texture_dimension_1d,
+            max_texture_dimension_2d: other.max_texture_dimension_2d,
+            ..self
+        }
+    }
 }
 
 /// Represents the sets of additional limits on an adapter,
