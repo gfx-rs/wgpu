@@ -27,7 +27,7 @@ If you are looking for the native implementation or bindings to the API in other
    API   |    Windows 7/10    |  Linux & Android   |    macOS & iOS     |
   -----  | ------------------ | ------------------ | ------------------ |
   DX11   | :construction:     |                    |                    |
-  DX12   | :construction:     |                    |                    |
+  DX12   | :ok:               |                    |                    |
   Vulkan | :white_check_mark: | :white_check_mark: |                    |
   Metal  |                    |                    | :white_check_mark: |
   GLes3  |                    | :ok:               |                    |

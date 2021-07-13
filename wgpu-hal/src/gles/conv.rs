@@ -70,8 +70,8 @@ impl super::AdapterShared {
             | Tf::Bc4RSnorm
             | Tf::Bc5RgUnorm
             | Tf::Bc5RgSnorm
-            | Tf::Bc6hRgbSfloat
             | Tf::Bc6hRgbUfloat
+            | Tf::Bc6hRgbSfloat
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb => unimplemented!(),
             Tf::Etc2RgbUnorm => (glow::COMPRESSED_RGB8_ETC2, glow::RGB, 0),

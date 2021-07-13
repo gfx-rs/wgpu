@@ -201,8 +201,8 @@ macro_rules! gfx_select {
             wgt::Backend::Vulkan => $global.$method::<$crate::api::Vulkan>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
             wgt::Backend::Metal => $global.$method::<$crate::api::Metal>( $($param),* ),
-            //#[cfg(all(not(target_arch = "wasm32"), windows))]
-            //wgt::Backend::Dx12 => $global.$method::<$crate::api::Dx12>( $($param),* ),
+            #[cfg(all(not(target_arch = "wasm32"), windows))]
+            wgt::Backend::Dx12 => $global.$method::<$crate::api::Dx12>( $($param),* ),
             //#[cfg(all(not(target_arch = "wasm32"), windows))]
             //wgt::Backend::Dx11 => $global.$method::<$crate::api::Dx11>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), unix, not(any(target_os = "ios", target_os = "macos"))))]

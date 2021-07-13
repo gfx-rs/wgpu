@@ -18,13 +18,11 @@ impl super::Texture {
     where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let dim = self.dim;
         let aspects = self.aspects;
         let fi = self.format_info;
         regions.map(move |r| {
-            let (layer_count, image_extent) = conv::map_extent(r.size, dim);
             let (image_subresource, image_offset) =
-                conv::map_subresource_layers(&r.texture_base, dim, aspects, layer_count);
+                conv::map_subresource_layers(&r.texture_base, aspects);
             vk::BufferImageCopy {
                 buffer_offset: r.buffer_layout.offset,
                 buffer_row_length: r.buffer_layout.bytes_per_row.map_or(0, |bpr| {
@@ -36,7 +34,7 @@ impl super::Texture {
                     .map_or(0, |rpi| rpi.get() * fi.block_dimensions.1 as u32),
                 image_subresource,
                 image_offset,
-                image_extent,
+                image_extent: conv::map_copy_extent(&r.size),
             }
         })
     }
@@ -228,17 +226,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let src_layout = conv::derive_image_layout(src_usage, src.aspects);
 
         let vk_regions_iter = regions.map(|r| {
-            let (layer_count, extent) = conv::map_extent(r.size, src.dim);
             let (src_subresource, src_offset) =
-                conv::map_subresource_layers(&r.src_base, src.dim, src.aspects, layer_count);
+                conv::map_subresource_layers(&r.src_base, src.aspects);
             let (dst_subresource, dst_offset) =
-                conv::map_subresource_layers(&r.dst_base, dst.dim, dst.aspects, layer_count);
+                conv::map_subresource_layers(&r.dst_base, dst.aspects);
             vk::ImageCopy {
                 src_subresource,
                 src_offset,
                 dst_subresource,
                 dst_offset,
-                extent,
+                extent: conv::map_copy_extent(&r.size),
             }
         });
 
@@ -571,16 +568,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .raw
             .cmd_set_stencil_reference(self.active, vk::StencilFaceFlags::all(), value);
     }
-    unsafe fn set_blend_constants(&mut self, color: &wgt::Color) {
-        let vk_constants = [
-            color.r as f32,
-            color.g as f32,
-            color.b as f32,
-            color.a as f32,
-        ];
-        self.device
-            .raw
-            .cmd_set_blend_constants(self.active, &vk_constants);
+    unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
+        self.device.raw.cmd_set_blend_constants(self.active, color);
     }
 
     unsafe fn draw(

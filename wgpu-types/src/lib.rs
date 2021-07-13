@@ -110,7 +110,7 @@ bitflags::bitflags! {
         /// Vulkan + Metal + DX12 + Browser WebGPU
         const PRIMARY = Self::VULKAN.bits
             | Self::METAL.bits
-            | Self::DX12.bits
+            //| Self::DX12.bits // enable when Naga is polished
             | Self::BROWSER_WEBGPU.bits;
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.
@@ -204,7 +204,7 @@ bitflags::bitflags! {
         ///
         /// Supported Platforms:
         /// - Vulkan (works)
-        /// - DX12 (future)
+        /// - DX12 (works)
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 0x0000_0000_0000_0004;
@@ -219,7 +219,7 @@ bitflags::bitflags! {
         ///
         /// Supported Platforms:
         /// - Vulkan (works)
-        /// - DX12 (future)
+        /// - DX12 (works)
         ///
         /// This is a web and native feature.
         const PIPELINE_STATISTICS_QUERY = 0x0000_0000_0000_0008;
