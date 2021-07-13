@@ -168,13 +168,13 @@ OpBranch %81
 %93 = OpImageQuerySizeLod  %87  %76 %82
 %94 = OpCompositeExtract  %4  %93 2
 %95 = OpImageQuerySizeLod  %15  %77 %82
-%96 = OpVectorShuffle  %87  %95 %95 0 0 0
-%97 = OpImageQueryLevels  %4  %77
-%98 = OpImageQuerySizeLod  %15  %77 %6
-%99 = OpVectorShuffle  %87  %98 %98 0 0 0
-%100 = OpImageQuerySizeLod  %87  %78 %82
-%101 = OpImageQueryLevels  %4  %78
-%102 = OpImageQuerySizeLod  %87  %78 %6
+%96 = OpImageQueryLevels  %4  %77
+%97 = OpImageQuerySizeLod  %15  %77 %6
+%98 = OpImageQuerySizeLod  %87  %78 %82
+%99 = OpVectorShuffle  %15  %98 %98 0 0
+%100 = OpImageQueryLevels  %4  %78
+%101 = OpImageQuerySizeLod  %87  %78 %6
+%102 = OpVectorShuffle  %15  %101 %101 0 0
 %103 = OpImageQuerySizeLod  %87  %78 %82
 %104 = OpCompositeExtract  %4  %103 2
 %105 = OpImageQuerySizeLod  %87  %79 %82
@@ -190,11 +190,11 @@ OpBranch %81
 %115 = OpCompositeExtract  %4  %92 1
 %116 = OpIAdd  %4  %114 %115
 %117 = OpIAdd  %4  %116 %94
-%118 = OpCompositeExtract  %4  %96 1
+%118 = OpCompositeExtract  %4  %95 1
 %119 = OpIAdd  %4  %117 %118
-%120 = OpCompositeExtract  %4  %99 1
+%120 = OpCompositeExtract  %4  %97 1
 %121 = OpIAdd  %4  %119 %120
-%122 = OpCompositeExtract  %4  %100 1
+%122 = OpCompositeExtract  %4  %99 1
 %123 = OpIAdd  %4  %121 %122
 %124 = OpCompositeExtract  %4  %102 1
 %125 = OpIAdd  %4  %123 %124
@@ -207,8 +207,8 @@ OpBranch %81
 %132 = OpIAdd  %4  %131 %85
 %133 = OpIAdd  %4  %132 %90
 %134 = OpIAdd  %4  %133 %106
-%135 = OpIAdd  %4  %134 %97
-%136 = OpIAdd  %4  %135 %101
+%135 = OpIAdd  %4  %134 %96
+%136 = OpIAdd  %4  %135 %100
 %137 = OpConvertSToF  %8  %136
 %138 = OpCompositeConstruct  %23  %137 %137 %137 %137
 OpStore %71 %138

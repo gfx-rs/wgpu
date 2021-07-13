@@ -42,12 +42,12 @@ fn queries() -> [[builtin(position)]] vec4<f32> {
     let num_levels_2d_array: i32 = textureNumLevels(image_2d_array);
     let dim_2d_array_lod: vec2<i32> = textureDimensions(image_2d_array, 1);
     let num_layers_2d: i32 = textureNumLayers(image_2d_array);
-    let dim_cube: vec3<i32> = textureDimensions(image_cube);
+    let dim_cube: vec2<i32> = textureDimensions(image_cube);
     let num_levels_cube: i32 = textureNumLevels(image_cube);
-    let dim_cube_lod: vec3<i32> = textureDimensions(image_cube, 1);
-    let dim_cube_array: vec3<i32> = textureDimensions(image_cube_array);
+    let dim_cube_lod: vec2<i32> = textureDimensions(image_cube, 1);
+    let dim_cube_array: vec2<i32> = textureDimensions(image_cube_array);
     let num_levels_cube_array: i32 = textureNumLevels(image_cube_array);
-    let dim_cube_array_lod: vec3<i32> = textureDimensions(image_cube_array, 1);
+    let dim_cube_array_lod: vec2<i32> = textureDimensions(image_cube_array, 1);
     let num_layers_cube: i32 = textureNumLayers(image_cube_array);
     let dim_3d: vec3<i32> = textureDimensions(image_3d);
     let num_levels_3d: i32 = textureNumLevels(image_3d);

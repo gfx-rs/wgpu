@@ -1072,7 +1072,7 @@ impl<'w> BlockContext<'w> {
                             let id = self.gen_id();
                             let components = match dim {
                                 // always pick the first component, and duplicate it for all 3 dimensions
-                                Id::Cube => &[0u32, 0, 0][..],
+                                Id::Cube => &[0u32, 0][..],
                                 _ => &[0u32, 1, 2, 3][..dim_coords],
                             };
                             block.body.push(Instruction::vector_shuffle(

@@ -395,12 +395,12 @@ impl<'a> ResolveContext<'a> {
                             kind: crate::ScalarKind::Sint,
                             width: 4,
                         },
-                        crate::ImageDimension::D2 => Ti::Vector {
+                        crate::ImageDimension::D2 | crate::ImageDimension::Cube => Ti::Vector {
                             size: crate::VectorSize::Bi,
                             kind: crate::ScalarKind::Sint,
                             width: 4,
                         },
-                        crate::ImageDimension::D3 | crate::ImageDimension::Cube => Ti::Vector {
+                        crate::ImageDimension::D3 => Ti::Vector {
                             size: crate::VectorSize::Tri,
                             kind: crate::ScalarKind::Sint,
                             width: 4,

@@ -526,7 +526,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::ImageDimension::Cube => {
-                write!(self.out, "int3(")?;
+                write!(self.out, "int2(")?;
                 self.put_image_query(image, "width", level, context)?;
                 write!(self.out, ")")?;
             }
