@@ -460,7 +460,10 @@ pub enum ImageClass {
     Sampled {
         /// Kind of values to sample.
         kind: ScalarKind,
-        // Multi-sampled.
+        /// Multi-sampled image.
+        ///
+        /// A multi-sampled image holds several samples per texel. Multi-sampled
+        /// images cannot have mipmaps.
         multi: bool,
     },
     /// Depth comparison image.
@@ -1008,12 +1011,70 @@ pub enum Expression {
     },
     /// Load a texel from an image.
     ImageLoad {
+        /// The image to load a texel from. This must have type [`Image`]. (This
+        /// will necessarily be a [`GlobalVariable`] or [`FunctionArgument`]
+        /// expression, since no other expressions are allowed to have that
+        /// type.)
+        ///
+        /// [`Image`]: TypeInner::Image
+        /// [`GlobalVariable`]: Expression::GlobalVariable
+        /// [`FunctionArgument`]: Expression::FunctionArgument
         image: Handle<Expression>,
+
+        /// The coordinate of the texel we wish to load. This must be a scalar
+        /// for [`D1`] images, a [`Bi`] vector for [`D2`] images, and a [`Tri`]
+        /// vector for [`D3`] images. (Array indices, sample indices, and
+        /// explicit level-of-detail values are supplied separately.) Its
+        /// component type must be [`Sint`].
+        ///
+        /// [`D1`]: ImageDimension::D1
+        /// [`D2`]: ImageDimension::D2
+        /// [`D3`]: ImageDimension::D3
+        /// [`Bi`]: VectorSize::Bi
+        /// [`Tri`]: VectorSize::Tri
+        /// [`Sint`]: ScalarKind::Sint
         coordinate: Handle<Expression>,
+
+        /// The index into an arrayed image. If the [`arrayed`] flag in
+        /// `image`'s type is `true`, then this must be `Some(expr)`, where
+        /// `expr` is a [`Sint`] scalar. Otherwise, it must be `None`.
+        ///
+        /// [`arrayed`]: TypeInner::Image::arrayed
+        /// [`Sint`]: ScalarKind::Sint
         array_index: Option<Handle<Expression>>,
-        /// For storage images, this is None.
-        /// For sampled images, this is the Some(Level).
-        /// For multisampled images, this is Some(Sample).
+
+        /// The sample within a particular texel.
+        ///
+        /// The meaning of this value depends on the [`class`] of `image`:
+        ///
+        /// -   [`Storage`] images hold exactly one sample per texel, so `index` must
+        ///     be `None`.
+        ///
+        /// -   [`Depth`] images may have mipmaps, so `index` must be `Some(level)`,
+        ///     where `level` identifies the level of detail.
+        ///
+        /// -   [`Sampled`] images may be multisampled or have mipmaps, but not both.
+        ///     Which one is indicated by the `Sampled` variant's [`multi`] field:
+        ///
+        ///     - If `multi` is `true`, then the image has multiple samples per
+        ///       texel, and `index` must be `Some(sample)`, where `sample` is
+        ///       the index of the sample to retrieve.
+        ///
+        ///     - If `multi` is `false`, then the image may have mipmaps. In
+        ///       this case, `index` must be `Some(level)`, where `level`
+        ///       identifies the level of detail. Even if the image has only the
+        ///       full-sized version, `level` must still be present; its only
+        ///       in-range value is zero.
+        ///
+        /// When `index` is `Some` the value must be a `Sint` scalar value. If
+        /// it identifes a level of detail, zero represents the full resolution
+        /// mipmap.
+        ///
+        /// [`class`]: TypeInner::Image::class
+        /// [`Sampled`]: ImageClass::Sampled
+        /// [`Storage`]: ImageClass::Storage
+        /// [`Depth`]: ImageClass::Depth
+        /// [`multi`]: ImageClass::Sampled::multi
         index: Option<Handle<Expression>>,
     },
     /// Query information from an image.
@@ -1198,11 +1259,17 @@ pub enum Statement {
         pointer: Handle<Expression>,
         value: Handle<Expression>,
     },
-    /// Stores a value to an image.
+    /// Stores a texel value to an image.
     ///
-    /// Image has to point into a global variable of type `TypeInner::Image`.
+    /// The `image`, `coordinate`, and `array_index` fields have the same
+    /// meanings as the corresponding operands of an [`ImageLoad`] expression;
+    /// see that documentation for details. Storing into multisampled images or
+    /// images with mipmaps is not supported, so there is no `index`operand.
+    ///
     /// This statement is a barrier for any operations on the corresponding
-    /// `Expression::GlobalVariable` for this image.
+    /// [`Expression::GlobalVariable`] for this image.
+    ///
+    /// [`ImageLoad`]: Expression::ImageLoad
     ImageStore {
         image: Handle<Expression>,
         coordinate: Handle<Expression>,
