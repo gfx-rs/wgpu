@@ -264,10 +264,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
 
-        let info = format.describe();
-        let is_compressed = info.block_dimensions != (1, 1);
         let raw_format = conv::map_texture_format(format);
-
         let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: raw_format,
             Support1: mem::zeroed(),

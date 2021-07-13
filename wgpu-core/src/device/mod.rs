@@ -2418,6 +2418,7 @@ impl<A: hal::Api> Device<A> {
 
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&mut self) {
+        self.pending_writes.deactivate();
         let mut life_tracker = self.life_tracker.lock();
         let current_index = self.active_submission_index;
         if let Err(error) = unsafe { self.raw.wait(&self.fence, current_index, CLEANUP_WAIT_MS) } {

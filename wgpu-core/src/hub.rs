@@ -636,6 +636,14 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             }
         }
 
+        // destroy command buffers first, since otherwise DX12 isn't happy
+        for element in self.command_buffers.data.write().map.drain(..) {
+            if let Element::Occupied(command_buffer, _) = element {
+                let device = &devices[command_buffer.device_id.value];
+                device.destroy_command_buffer(command_buffer);
+            }
+        }
+
         for element in self.samplers.data.write().map.drain(..) {
             if let Element::Occupied(sampler, _) = element {
                 unsafe {
@@ -671,12 +679,6 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             if let Element::Occupied(buffer, _) = element {
                 //TODO: unmap if needed
                 devices[buffer.device_id.value].destroy_buffer(buffer);
-            }
-        }
-        for element in self.command_buffers.data.write().map.drain(..) {
-            if let Element::Occupied(command_buffer, _) = element {
-                let device = &devices[command_buffer.device_id.value];
-                device.destroy_command_buffer(command_buffer);
             }
         }
         for element in self.bind_groups.data.write().map.drain(..) {

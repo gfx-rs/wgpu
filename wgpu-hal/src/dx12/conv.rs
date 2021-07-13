@@ -100,13 +100,31 @@ pub(super) fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI
     }
 }
 
+//Note: DXGI doesn't allow sRGB format on the swapchain,
+// but creating RTV of swapchain buffers with sRGB works.
 pub fn map_texture_format_nosrgb(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
-    // NOTE: DXGI doesn't allow sRGB format on the swapchain, but
-    //       creating RTV of swapchain buffers with sRGB works
     match format {
         wgt::TextureFormat::Bgra8UnormSrgb => dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM,
         wgt::TextureFormat::Rgba8UnormSrgb => dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM,
         _ => map_texture_format(format),
+    }
+}
+
+//Note: SRV and UAV can't use the depth formats directly
+//TODO: stencil views?
+pub fn map_texture_format_nodepth(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
+    match format {
+        wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_FLOAT,
+        wgt::TextureFormat::Depth24Plus | wgt::TextureFormat::Depth24PlusStencil8 => {
+            dxgiformat::DXGI_FORMAT_R24_UNORM_X8_TYPELESS
+        }
+        _ => {
+            assert_eq!(
+                crate::FormatAspects::from(format),
+                crate::FormatAspects::COLOR
+            );
+            map_texture_format(format)
+        }
     }
 }
 
@@ -170,9 +188,6 @@ pub fn map_buffer_usage_to_resource_flags(usage: crate::BufferUses) -> d3d12::D3
     if usage.contains(crate::BufferUses::STORAGE_STORE) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
-    if !usage.intersects(crate::BufferUses::UNIFORM | crate::BufferUses::STORAGE_LOAD) {
-        flags |= d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-    }
     flags
 }
 
@@ -196,12 +211,12 @@ pub fn map_texture_usage_to_resource_flags(
         crate::TextureUses::DEPTH_STENCIL_READ | crate::TextureUses::DEPTH_STENCIL_WRITE,
     ) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        if !usage.intersects(crate::TextureUses::SAMPLED | crate::TextureUses::STORAGE_LOAD) {
+            flags |= d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+        }
     }
     if usage.contains(crate::TextureUses::STORAGE_STORE) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    }
-    if !usage.intersects(crate::TextureUses::SAMPLED | crate::TextureUses::STORAGE_LOAD) {
-        flags |= d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
 
     flags

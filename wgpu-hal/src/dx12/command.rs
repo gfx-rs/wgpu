@@ -36,7 +36,7 @@ impl super::CommandEncoder {
 
     unsafe fn end_pass(&mut self) {
         let list = self.list.unwrap();
-        list.set_descriptor_heaps(&[native::DescriptorHeap::null(); 2]);
+        list.set_descriptor_heaps(&[]);
         if self.pass.has_label {
             list.EndEvent();
         }
@@ -344,7 +344,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &super::Texture,
-        src_usage: crate::TextureUses,
+        _src_usage: crate::TextureUses,
         dst: &super::Buffer,
         regions: T,
     ) where
@@ -364,7 +364,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let raw_format = conv::map_texture_format(src.format);
 
         for r in regions {
-            let dst_box = make_box(&r.texture_base.origin, &r.size);
+            let src_box = make_box(&r.texture_base.origin, &r.size);
             *src_location.u.SubresourceIndex_mut() = src.calc_subresource_for_copy(&r.texture_base);
             *dst_location.u.PlacedFootprint_mut() = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                 Offset: r.buffer_layout.offset,
@@ -380,7 +380,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 },
             };
 
-            list.CopyTextureRegion(&src_location, 0, 0, 0, &dst_location, &dst_box);
+            list.CopyTextureRegion(&dst_location, 0, 0, 0, &src_location, &src_box);
         }
     }
 
@@ -410,7 +410,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         range: Range<u32>,
         buffer: &super::Buffer,
         offset: wgt::BufferAddress,
-        stride: wgt::BufferSize,
+        _stride: wgt::BufferSize,
     ) {
         self.list.unwrap().ResolveQueryData(
             set.raw.as_mut_ptr(),
@@ -508,7 +508,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     pResource: resolve.src.0.as_mut_ptr(),
                     Subresource: resolve.src.1,
                     StateBefore: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
-                    StateAfter: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                    StateAfter: d3d12::D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
                 };
                 self.temp.barriers.push(barrier);
                 *barrier.u.Transition_mut() = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {

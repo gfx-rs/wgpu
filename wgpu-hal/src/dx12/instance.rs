@@ -41,7 +41,7 @@ unsafe extern "system" fn output_debug_string_handler(
         Some(msg) => {
             match MESSAGE_PREFIXES
                 .iter()
-                .find(|&&(prefix, level)| msg.starts_with(prefix))
+                .find(|&&(prefix, _)| msg.starts_with(prefix))
             {
                 Some(&(prefix, level)) => (&msg[prefix.len() + 2..], level),
                 None => (msg, log::Level::Debug),

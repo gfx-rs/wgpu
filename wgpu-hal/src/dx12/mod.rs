@@ -5,8 +5,6 @@
 
 !*/
 
-#![allow(unused_variables)]
-
 mod adapter;
 mod command;
 mod conv;
@@ -16,7 +14,7 @@ mod instance;
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{borrow::Cow, ffi, mem, num::NonZeroU32, ptr, sync::Arc};
+use std::{borrow::Cow, mem, num::NonZeroU32, ptr, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
     um::{d3d12, synchapi, winbase, winnt},
@@ -109,8 +107,10 @@ struct SwapChain {
     // when the swapchain is destroyed
     resources: Vec<native::Resource>,
     waitable: winnt::HANDLE,
-    present_mode: wgt::PresentMode,
     acquired_count: usize,
+    present_mode: wgt::PresentMode,
+    format: wgt::TextureFormat,
+    size: wgt::Extent3d,
 }
 
 pub struct Surface {
@@ -162,6 +162,12 @@ struct Idler {
     event: native::Event,
 }
 
+impl Idler {
+    unsafe fn destroy(self) {
+        self.fence.destroy();
+    }
+}
+
 struct CommandSignatures {
     draw: native::CommandSignature,
     draw_indexed: native::CommandSignature,
@@ -199,7 +205,6 @@ pub struct Device {
     idler: Idler,
     private_caps: PrivateCapabilities,
     shared: Arc<DeviceShared>,
-    vertex_attribute_names: Vec<ffi::CString>,
     // CPU only pools
     rtv_pool: Mutex<descriptor::CpuPool>,
     dsv_pool: Mutex<descriptor::CpuPool>,
@@ -219,6 +224,14 @@ pub struct Queue {
 
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
+
+impl Drop for Queue {
+    fn drop(&mut self) {
+        unsafe {
+            self.raw.destroy();
+        }
+    }
+}
 
 #[derive(Default)]
 struct Temp {
@@ -579,6 +592,8 @@ impl crate::Surface<Api> for Surface {
             waitable,
             acquired_count: 0,
             present_mode: config.present_mode,
+            format: config.format,
+            size: config.extent,
         });
 
         Ok(())
@@ -599,9 +614,31 @@ impl crate::Surface<Api> for Surface {
         &mut self,
         timeout_ms: u32,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
-        Ok(None)
+        let sc = self.swap_chain.as_mut().unwrap();
+
+        sc.wait(timeout_ms)?;
+
+        let base_index = sc.raw.GetCurrentBackBufferIndex() as usize;
+        let index = (base_index + sc.acquired_count) % sc.resources.len();
+        sc.acquired_count += 1;
+
+        let texture = Texture {
+            resource: sc.resources[index],
+            format: sc.format,
+            dimension: wgt::TextureDimension::D2,
+            size: sc.size,
+            mip_level_count: 1,
+            sample_count: 1,
+        };
+        Ok(Some(crate::AcquiredSurfaceTexture {
+            texture,
+            suboptimal: false,
+        }))
     }
-    unsafe fn discard_texture(&mut self, texture: Texture) {}
+    unsafe fn discard_texture(&mut self, _texture: Texture) {
+        let sc = self.swap_chain.as_mut().unwrap();
+        sc.acquired_count -= 1;
+    }
 }
 
 impl crate::Queue<Api> for Queue {
@@ -627,7 +664,7 @@ impl crate::Queue<Api> for Queue {
     unsafe fn present(
         &mut self,
         surface: &mut Surface,
-        texture: Texture,
+        _texture: Texture,
     ) -> Result<(), crate::SurfaceError> {
         let sc = surface.swap_chain.as_mut().unwrap();
         sc.acquired_count -= 1;

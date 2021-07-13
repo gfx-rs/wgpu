@@ -166,6 +166,15 @@ impl<A: hal::Api> PendingWrites<A> {
         }
         &mut self.command_encoder
     }
+
+    pub fn deactivate(&mut self) {
+        if self.is_active {
+            unsafe {
+                self.command_encoder.discard_encoding();
+            }
+            self.is_active = false;
+        }
+    }
 }
 
 #[derive(Default)]

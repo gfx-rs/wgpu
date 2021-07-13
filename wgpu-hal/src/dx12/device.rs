@@ -7,6 +7,8 @@ use winapi::{
     Interface,
 };
 
+// this has to match Naga's HLSL backend, and also needs to be null-terminated
+const NAGA_LOCATION_SEMANTIC: &[u8] = b"LOC\0";
 const D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING: u32 = 0x1688;
 //TODO: find the exact value
 const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12::D3D12_HEAP_FLAG_NONE;
@@ -45,7 +47,7 @@ impl super::Device {
                     Quality: 0,
                 },
                 Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-                Flags: d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE,
+                Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
             };
 
             let heap_properties = d3d12::D3D12_HEAP_PROPERTIES {
@@ -110,7 +112,7 @@ impl super::Device {
             heap_views: descriptor::GeneralHeap::new(
                 raw,
                 native::DescriptorHeapType::CbvSrvUav,
-                capacity_samplers,
+                capacity_views,
             )?,
             heap_samplers: descriptor::GeneralHeap::new(
                 raw,
@@ -128,10 +130,6 @@ impl super::Device {
             },
             private_caps,
             shared: Arc::new(shared),
-            //Note: these names have to match Naga's convention
-            vertex_attribute_names: (0..d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT)
-                .map(|i| ffi::CString::new(format!("LOC{}", i)).unwrap())
-                .collect(),
             rtv_pool: Mutex::new(descriptor::CpuPool::new(
                 raw,
                 native::DescriptorHeapType::Rtv,
@@ -153,7 +151,12 @@ impl super::Device {
     }
 
     pub(super) unsafe fn wait_idle(&self) -> Result<(), crate::DeviceError> {
-        let value = self.idler.fence.get_value() + 1;
+        let cur_value = self.idler.fence.get_value();
+        if cur_value == !0 {
+            return Err(crate::DeviceError::Lost);
+        }
+
+        let value = cur_value + 1;
         log::info!("Waiting for idle with value {}", value);
         self.present_queue.signal(self.idler.fence, value);
         let hr = self
@@ -171,7 +174,7 @@ impl super::Device {
         desc: &crate::TextureViewDescriptor,
     ) -> descriptor::Handle {
         let mut raw_desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
-            Format: conv::map_texture_format(desc.format),
+            Format: conv::map_texture_format_nodepth(desc.format),
             ViewDimension: 0,
             Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             u: mem::zeroed(),
@@ -280,7 +283,7 @@ impl super::Device {
         desc: &crate::TextureViewDescriptor,
     ) -> descriptor::Handle {
         let mut raw_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
-            Format: conv::map_texture_format(desc.format),
+            Format: conv::map_texture_format_nodepth(desc.format),
             ViewDimension: 0,
             u: mem::zeroed(),
         };
@@ -524,7 +527,7 @@ impl super::Device {
         //TODO: reuse the writer
         let mut source = String::new();
         let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
-        let reflection_info = writer
+        let _reflection_info = writer
             .write(module, &stage.module.naga.info)
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {:?}", e)))?;
 
@@ -593,6 +596,7 @@ impl crate::Device<super::Api> for super::Device {
         self.srv_uav_pool.into_inner().destroy();
         self.sampler_pool.into_inner().destroy();
         self.shared.destroy();
+        self.idler.destroy();
 
         // Debug tracking alive objects
         if !thread::panicking() {
@@ -616,11 +620,16 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
         let mut resource = native::Resource::null();
+        let mut size = desc.size;
+        if desc.usage.contains(crate::BufferUses::UNIFORM) {
+            let align_mask = d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64 - 1;
+            size = ((size - 1) | align_mask) + 1;
+        }
 
         let raw_desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
-            Width: desc.size,
+            Width: size,
             Height: 1,
             DepthOrArraySize: 1,
             MipLevels: 1,
@@ -670,10 +679,12 @@ impl crate::Device<super::Api> for super::Device {
         );
 
         hr.into_device_result("Buffer creation")?;
-        Ok(super::Buffer {
-            resource,
-            size: desc.size,
-        })
+        if let Some(label) = desc.label {
+            let cwstr = conv::map_label(label);
+            resource.SetName(cwstr.as_ptr());
+        }
+
+        Ok(super::Buffer { resource, size })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         buffer.resource.destroy();
@@ -697,8 +708,8 @@ impl crate::Device<super::Api> for super::Device {
         (*buffer.resource).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
         Ok(())
     }
-    unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, ranges: I) {}
-    unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, ranges: I) {}
+    unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
+    unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
 
     unsafe fn create_texture(
         &self,
@@ -743,17 +754,17 @@ impl crate::Device<super::Api> for super::Device {
             },
             &raw_desc,
             d3d12::D3D12_RESOURCE_STATE_COMMON,
-            ptr::null(),
+            ptr::null(), // clear value
             &d3d12::ID3D12Resource::uuidof(),
             resource.mut_void(),
         );
 
+        hr.into_device_result("Texture creation")?;
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
             resource.SetName(cwstr.as_ptr());
         }
 
-        hr.into_device_result("Texture creation")?;
         Ok(super::Texture {
             resource,
             format: desc.format,
@@ -886,6 +897,12 @@ impl crate::Device<super::Api> for super::Device {
             .raw
             .create_command_allocator(native::CmdListType::Direct)
             .into_device_result("Command allocator creation")?;
+
+        if let Some(label) = desc.label {
+            let cwstr = conv::map_label(label);
+            allocator.SetName(cwstr.as_ptr());
+        }
+
         Ok(super::CommandEncoder {
             allocator,
             device: self.raw,
@@ -999,7 +1016,6 @@ impl crate::Device<super::Api> for super::Device {
         //> (near the start of the root arguments) is most likely to run
         //> as efficiently as possible.
 
-        let mut root_offset = 0u32;
         let root_constants: &[()] = &[];
 
         // Number of elements in the root signature.
@@ -1077,7 +1093,6 @@ impl crate::Device<super::Api> for super::Device {
                     &ranges[range_base..],
                 ));
                 info.tables |= super::TableTypes::SRV_CBV_UAV;
-                root_offset += 1;
             }
 
             // Sampler descriptor tables
@@ -1103,7 +1118,6 @@ impl crate::Device<super::Api> for super::Device {
                     &ranges[range_base..],
                 ));
                 info.tables |= super::TableTypes::SAMPLERS;
-                root_offset += 1;
             }
 
             // Root (dynamic) descriptor tables
@@ -1137,7 +1151,6 @@ impl crate::Device<super::Api> for super::Device {
                 };
                 info.dynamic_buffers.push(kind);
                 parameters.push(param);
-                root_offset += 2; // root view costs 2 words
             }
 
             bind_group_infos.push(info);
@@ -1217,10 +1230,13 @@ impl crate::Device<super::Api> for super::Device {
         for (layout, entry) in desc.layout.entries.iter().zip(desc.entries.iter()) {
             match layout.ty {
                 wgt::BindingType::Buffer {
-                    has_dynamic_offset,
-                    ty,
+                    has_dynamic_offset: true,
                     ..
                 } => {
+                    let data = &desc.buffers[entry.resource_index as usize];
+                    dynamic_buffers.push(data.resolve_address());
+                }
+                wgt::BindingType::Buffer { ty, .. } => {
                     let data = &desc.buffers[entry.resource_index as usize];
                     let gpu_address = data.resolve_address();
                     let size = data.resolve_size() as u32;
@@ -1228,14 +1244,12 @@ impl crate::Device<super::Api> for super::Device {
                     let cpu_index = inner.stage.len() as u32;
                     let handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
                     match ty {
-                        _ if has_dynamic_offset => {
-                            dynamic_buffers.push(gpu_address);
-                        }
                         wgt::BufferBindingType::Uniform => {
-                            let mask = d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
+                            let size_mask =
+                                d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
                             let raw_desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
                                 BufferLocation: gpu_address,
-                                SizeInBytes: size,
+                                SizeInBytes: ((size - 1) | size_mask) + 1,
                             };
                             self.raw.CreateConstantBufferView(&raw_desc, handle);
                         }
@@ -1344,7 +1358,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_shader_module(
         &self,
-        desc: &crate::ShaderModuleDescriptor,
+        _desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         match shader {
@@ -1392,9 +1406,8 @@ impl crate::Device<super::Api> for super::Device {
                 }
             };
             for attribute in vbuf.attributes {
-                let name = &self.vertex_attribute_names[attribute.shader_location as usize];
                 input_element_descs.push(d3d12::D3D12_INPUT_ELEMENT_DESC {
-                    SemanticName: name.as_ptr(),
+                    SemanticName: NAGA_LOCATION_SEMANTIC.as_ptr() as *const _,
                     SemanticIndex: attribute.shader_location,
                     Format: conv::map_vertex_format(attribute.format),
                     InputSlot: i as u32,
