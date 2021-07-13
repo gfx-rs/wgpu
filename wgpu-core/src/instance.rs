@@ -212,36 +212,34 @@ impl<A: HalApi> Adapter<A> {
         &self,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
+        use hal::TextureFormatCapabilities as Tfc;
 
+        let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
         let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
-        allowed_usages.set(
-            wgt::TextureUsages::SAMPLED,
-            caps.contains(hal::TextureFormatCapabilities::SAMPLED),
-        );
-        allowed_usages.set(
-            wgt::TextureUsages::STORAGE,
-            caps.contains(hal::TextureFormatCapabilities::STORAGE),
-        );
+
+        allowed_usages.set(wgt::TextureUsages::SAMPLED, caps.contains(Tfc::SAMPLED));
+        allowed_usages.set(wgt::TextureUsages::STORAGE, caps.contains(Tfc::STORAGE));
         allowed_usages.set(
             wgt::TextureUsages::RENDER_ATTACHMENT,
-            caps.intersects(
-                hal::TextureFormatCapabilities::COLOR_ATTACHMENT
-                    | hal::TextureFormatCapabilities::DEPTH_STENCIL_ATTACHMENT,
-            ),
+            caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
         );
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
         flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS,
-            caps.contains(hal::TextureFormatCapabilities::STORAGE_ATOMIC),
+            caps.contains(Tfc::STORAGE_ATOMIC),
         );
         flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-            caps.contains(hal::TextureFormatCapabilities::STORAGE_READ_WRITE),
+            caps.contains(Tfc::STORAGE_READ_WRITE),
         );
 
-        let filterable = caps.contains(hal::TextureFormatCapabilities::SAMPLED_LINEAR);
+        // We are currently taking the filtering and blending together,
+        // but we may reconsider this in the future if there are formats
+        // in the wild for which these two capabilities do not match.
+        let filterable = caps.contains(Tfc::SAMPLED_LINEAR)
+            && (!caps.contains(Tfc::COLOR_ATTACHMENT)
+                || caps.contains(Tfc::COLOR_ATTACHMENT_BLEND));
 
         wgt::TextureFormatFeatures {
             allowed_usages,
