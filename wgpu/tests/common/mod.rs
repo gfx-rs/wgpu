@@ -91,7 +91,7 @@ impl Default for TestParameters {
     fn default() -> Self {
         Self {
             required_features: Features::empty(),
-            required_limits: lowest_reasonable_limits(),
+            required_limits: Limits::downlevel_defaults(),
             required_downlevel_properties: lowest_downlevel_properties(),
             failures: Vec::new(),
         }
