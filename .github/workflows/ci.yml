@@ -73,6 +73,7 @@ jobs:
     env:
       PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
       RUSTFLAGS: --cfg=web_sys_unstable_apis
+      RUSTDOCFLAGS: -Dwarnings
 
     steps:
       - name: checkout repo
@@ -118,6 +119,9 @@ jobs:
         run: |
           cargo clippy --target ${{ matrix.target }} -p wgpu -- -D warnings
 
+          # build docs
+          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
+
       - name: check native stable (fatal warnings)
         if: (matrix.kind == 'compile' || matrix.kind == 'test') && matrix.channel == 'stable'
         run: |
@@ -127,6 +131,10 @@ jobs:
           # check with all features
           # explicitly don't mention wgpu-hal so that --all-features don't apply to it
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features -- -D warnings 
+
+          # build docs
+          cargo doc --target ${{ matrix.target }} --no-deps
+          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
 
       - name: check native nightly (non-fatal warnings)
         if: (matrix.kind == 'compile' || matrix.kind == 'test') && matrix.channel != 'stable'
