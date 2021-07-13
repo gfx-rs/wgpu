@@ -137,7 +137,8 @@ async fn setup<E: Example>(title: &str) -> Setup {
         required_features - adapter_features
     );
 
-    let needed_limits = E::required_limits();
+    // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
+    let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
     let trace_dir = std::env::var("WGPU_TRACE");
     let (device, queue) = adapter
@@ -396,10 +397,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
     assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
 
     let features = E::required_features() | params.optional_features;
-    let mut limits = E::required_limits();
-    if limits == wgpu::Limits::default() {
-        limits = test_common::lowest_reasonable_limits();
-    }
+    let limits = E::required_limits();
 
     test_common::initialize_test(
         mem::take(&mut params.base_test_parameters)

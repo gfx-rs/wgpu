@@ -24,7 +24,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             &wgpu::DeviceDescriptor {
                 label: None,
                 features: wgpu::Features::empty(),
-                limits: wgpu::Limits::downlevel_defaults(),
+                // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
+                limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
             },
             None,
         )
