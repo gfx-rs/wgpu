@@ -82,14 +82,10 @@ impl DeviceExt for crate::Device {
         desc: &crate::TextureDescriptor,
         data: &[u8],
     ) -> crate::Texture {
-        let texture = if desc.usage.contains(crate::TextureUsages::COPY_DST) {
-            self.create_texture(desc)
-        } else {
-            // Implicitly add the COPY_DST usage
-            let mut desc = desc.to_owned();
-            desc.usage |= crate::TextureUsages::COPY_DST;
-            self.create_texture(&desc)
-        };
+        // Implicitly add the COPY_DST usage
+        let mut desc = desc.to_owned();
+        desc.usage |= crate::TextureUsages::COPY_DST;
+        let texture = self.create_texture(&desc);
 
         let format_info = desc.format.describe();
         let layer_iterations = desc.array_layer_count();
