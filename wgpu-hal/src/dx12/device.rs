@@ -1,6 +1,6 @@
 use super::{conv, descriptor, HResult as _};
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
+use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc, thread};
 use winapi::{
     shared::{dxgiformat, dxgitype, winerror},
     um::{d3d12, d3d12sdklayers, d3dcompiler, synchapi, winbase},
@@ -568,6 +568,7 @@ impl super::Device {
         match hr.into_result() {
             Ok(()) => Ok(shader_data),
             Err(e) => {
+                log::warn!("Naga generated shader:\n{}", source);
                 let message = unsafe {
                     let slice = slice::from_raw_parts(
                         error.GetBufferPointer() as *const u8,
@@ -593,16 +594,18 @@ impl crate::Device<super::Api> for super::Device {
         self.sampler_pool.into_inner().destroy();
         self.shared.destroy();
 
-        //self.descriptor_updater.lock().destroy();
-
         // Debug tracking alive objects
-        if let Ok(debug_device) = self
-            .raw
-            .cast::<d3d12sdklayers::ID3D12DebugDevice>()
-            .into_result()
-        {
-            debug_device.ReportLiveDeviceObjects(d3d12sdklayers::D3D12_RLDO_DETAIL);
-            debug_device.destroy();
+        if !thread::panicking() {
+            if let Ok(debug_device) = self
+                .raw
+                .cast::<d3d12sdklayers::ID3D12DebugDevice>()
+                .into_result()
+            {
+                debug_device.ReportLiveDeviceObjects(
+                    d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
+                );
+                debug_device.destroy();
+            }
         }
 
         self.raw.destroy();

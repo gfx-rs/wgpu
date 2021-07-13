@@ -96,7 +96,7 @@ const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 pub struct Instance {
     factory: native::Factory4,
     library: Arc<native::D3D12Lib>,
-    lib_dxgi: native::DxgiLib,
+    _lib_dxgi: native::DxgiLib,
     flags: crate::InstanceFlags,
 }
 
@@ -109,6 +109,7 @@ struct SwapChain {
     // when the swapchain is destroyed
     resources: Vec<native::Resource>,
     waitable: winnt::HANDLE,
+    present_mode: wgt::PresentMode,
     acquired_count: usize,
 }
 
@@ -213,6 +214,7 @@ unsafe impl Sync for Device {}
 
 pub struct Queue {
     raw: native::CommandQueue,
+    temp_lists: Vec<native::CommandList>,
 }
 
 unsafe impl Send for Queue {}
@@ -489,6 +491,7 @@ impl crate::Surface<Api> for Surface {
         let non_srgb_format = conv::map_texture_format_nosrgb(config.format);
 
         let swap_chain = match self.swap_chain.take() {
+            //Note: this path doesn't properly re-initialize all of the things
             Some(sc) => {
                 // can't have image resources in flight used by GPU
                 let _ = device.wait_idle();
@@ -575,9 +578,7 @@ impl crate::Surface<Api> for Surface {
             resources,
             waitable,
             acquired_count: 0,
-            //format: config.format,
-            //size: config.extent,
-            //mode: config.present_mode,
+            present_mode: config.present_mode,
         });
 
         Ok(())
@@ -609,6 +610,18 @@ impl crate::Queue<Api> for Queue {
         command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
+        self.temp_lists.clear();
+        for cmd_buf in command_buffers {
+            self.temp_lists.push(cmd_buf.raw.as_list());
+        }
+
+        self.raw.execute_command_lists(&self.temp_lists);
+
+        if let Some((fence, value)) = signal_fence {
+            self.raw
+                .signal(fence.raw, value)
+                .into_device_result("Signal fence")?;
+        }
         Ok(())
     }
     unsafe fn present(
@@ -616,6 +629,16 @@ impl crate::Queue<Api> for Queue {
         surface: &mut Surface,
         texture: Texture,
     ) -> Result<(), crate::SurfaceError> {
+        let sc = surface.swap_chain.as_mut().unwrap();
+        sc.acquired_count -= 1;
+
+        let (interval, flags) = match sc.present_mode {
+            wgt::PresentMode::Immediate => (0, dxgi::DXGI_PRESENT_ALLOW_TEARING),
+            wgt::PresentMode::Fifo => (1, 0),
+            wgt::PresentMode::Mailbox => (1, 0),
+        };
+        sc.raw.Present(interval, flags);
+
         Ok(())
     }
 }

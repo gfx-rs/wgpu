@@ -50,7 +50,7 @@ unsafe extern "system" fn output_debug_string_handler(
         None => return excpt::EXCEPTION_CONTINUE_SEARCH,
     };
 
-    log::log!(level, "{}", message,);
+    log::log!(level, "{}", message.trim_end_matches("\n\0"));
 
     if cfg!(debug_assertions) && level == log::Level::Error {
         std::process::exit(1);
@@ -132,7 +132,7 @@ impl crate::Instance<super::Api> for super::Instance {
         Ok(Self {
             factory,
             library: Arc::new(lib_main),
-            lib_dxgi,
+            _lib_dxgi: lib_dxgi,
             flags: desc.flags,
         })
     }

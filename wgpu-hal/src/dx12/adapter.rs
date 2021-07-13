@@ -250,7 +250,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         )?;
         Ok(crate::OpenDevice {
             device,
-            queue: super::Queue { raw: queue },
+            queue: super::Queue {
+                raw: queue,
+                temp_lists: Vec::new(),
+            },
         })
     }
 
