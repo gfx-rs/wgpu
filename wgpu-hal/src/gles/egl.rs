@@ -1,5 +1,6 @@
 use glow::HasContext;
 use parking_lot::{Mutex, MutexGuard};
+use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 
 use std::{ffi::CStr, os::raw, ptr, sync::Arc, time::Duration};
 
@@ -29,6 +30,7 @@ type WlEglWindowCreateFun = unsafe extern "system" fn(
     height: raw::c_int,
 ) -> *mut raw::c_void;
 
+#[cfg(not(any(target_os = "android", target_os = "macos")))]
 type WlEglWindowResizeFun = unsafe extern "system" fn(
     window: *const raw::c_void,
     width: raw::c_int,
@@ -466,7 +468,7 @@ impl Drop for Inner {
 }
 
 pub struct Instance {
-    wsi_library: Option<libloading::Library>,
+    wsi_library: Option<Arc<libloading::Library>>,
     flags: crate::InstanceFlags,
     inner: Mutex<Inner>,
 }
@@ -514,7 +516,7 @@ impl crate::Instance<super::Api> for Instance {
         {
             log::info!("Using Wayland platform");
             let display_attributes = [egl::ATTRIB_NONE];
-            wsi_library = Some(library);
+            wsi_library = Some(Arc::new(library));
             egl.get_platform_display(
                 EGL_PLATFORM_WAYLAND_KHR,
                 egl::DEFAULT_DISPLAY,
@@ -526,7 +528,7 @@ impl crate::Instance<super::Api> for Instance {
         {
             log::info!("Using X11 platform");
             let display_attributes = [egl::ATTRIB_NONE];
-            wsi_library = Some(library);
+            wsi_library = Some(Arc::new(library));
             egl.get_platform_display(EGL_PLATFORM_X11_KHR, display.as_ptr(), &display_attributes)
                 .unwrap()
         } else {
@@ -566,31 +568,34 @@ impl crate::Instance<super::Api> for Instance {
     #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
     unsafe fn create_surface(
         &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+        has_handle: &impl HasRawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 
+        let raw_window_handle = has_handle.raw_window_handle();
+
         #[cfg_attr(target_os = "android", allow(unused_mut))]
         let mut inner = self.inner.lock();
-        #[cfg_attr(target_os = "android", allow(unused_mut))]
-        let mut wl_window = None;
-        #[cfg(not(any(target_os = "android", target_os = "macos")))]
-        let (mut temp_xlib_handle, mut temp_xcb_handle);
 
-        #[allow(trivial_casts)]
-        let native_window_ptr = match has_handle.raw_window_handle() {
+        match raw_window_handle {
             #[cfg(not(any(target_os = "android", target_os = "macos")))]
-            Rwh::Xlib(handle) => {
-                temp_xlib_handle = handle.window;
-                &mut temp_xlib_handle as *mut _ as *mut std::ffi::c_void
-            }
+            Rwh::Xlib(_) => {}
             #[cfg(not(any(target_os = "android", target_os = "macos")))]
-            Rwh::Xcb(handle) => {
-                temp_xcb_handle = handle.window;
-                &mut temp_xcb_handle as *mut _ as *mut std::ffi::c_void
-            }
+            Rwh::Xcb(_) => {}
             #[cfg(target_os = "android")]
-            Rwh::Android(handle) => handle.a_native_window as *mut _ as *mut std::ffi::c_void,
+            Rwh::Android(handle) => {
+                let format = inner
+                    .egl
+                    .get_config_attrib(inner.display, inner.config, egl::NATIVE_VISUAL_ID)
+                    .unwrap();
+
+                let ret = ANativeWindow_setBuffersGeometry(handle.a_native_window, 0, 0, format);
+
+                if ret != 0 {
+                    log::error!("Error returned from ANativeWindow_setBuffersGeometry");
+                    return Err(crate::InstanceError);
+                }
+            }
             #[cfg(not(any(target_os = "android", target_os = "macos")))]
             Rwh::Wayland(handle) => {
                 /* Wayland displays are not sharable between surfaces so if the
@@ -625,17 +630,6 @@ impl crate::Instance<super::Api> for Instance {
                     inner.wl_display = Some(handle.display);
                     drop(old_inner);
                 }
-
-                let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> = self
-                    .wsi_library
-                    .as_ref()
-                    .expect("unsupported window")
-                    .get(b"wl_egl_window_create")
-                    .unwrap();
-                let result = wl_egl_window_create(handle.surface, 640, 480) as *mut _
-                    as *mut std::ffi::c_void;
-                wl_window = Some(result);
-                result
             }
             other => {
                 log::error!("Unsupported window: {:?}", other);
@@ -643,72 +637,10 @@ impl crate::Instance<super::Api> for Instance {
             }
         };
 
-        let mut attributes = vec![
-            egl::RENDER_BUFFER as usize,
-            if cfg!(target_os = "android") {
-                egl::BACK_BUFFER as usize
-            } else {
-                egl::SINGLE_BUFFER as usize
-            },
-        ];
-
         let enable_srgb = match inner.srgb_kind {
-            SrgbFrameBufferKind::Core => {
-                attributes.push(egl::GL_COLORSPACE as usize);
-                attributes.push(egl::GL_COLORSPACE_SRGB as usize);
-                true
-            }
-            SrgbFrameBufferKind::Khr => {
-                attributes.push(EGL_GL_COLORSPACE_KHR as usize);
-                attributes.push(EGL_GL_COLORSPACE_SRGB_KHR as usize);
-                true
-            }
+            SrgbFrameBufferKind::Core | SrgbFrameBufferKind::Khr => true,
             SrgbFrameBufferKind::None => false,
         };
-
-        attributes.push(egl::ATTRIB_NONE);
-
-        let raw = if let Some(egl) = inner.egl.upcast::<egl::EGL1_5>() {
-            egl.create_platform_window_surface(
-                inner.display,
-                inner.config,
-                native_window_ptr,
-                &attributes,
-            )
-            .map_err(|e| {
-                log::warn!("Error in create_platform_window_surface: {:?}", e);
-                crate::InstanceError
-            })
-        } else {
-            let attributes_i32: Vec<i32> = attributes.iter().map(|a| *a as i32).collect();
-            inner
-                .egl
-                .create_window_surface(
-                    inner.display,
-                    inner.config,
-                    native_window_ptr,
-                    Some(&attributes_i32),
-                )
-                .map_err(|e| {
-                    log::warn!("Error in create_platform_window_surface: {:?}", e);
-                    crate::InstanceError
-                })
-        }?;
-
-        #[cfg(target_os = "android")]
-        {
-            let format = inner
-                .egl
-                .get_config_attrib(inner.display, inner.config, egl::NATIVE_VISUAL_ID)
-                .unwrap();
-
-            let ret = ANativeWindow_setBuffersGeometry(native_window_ptr, 0, 0, format);
-
-            if ret != 0 {
-                log::error!("Error returned from ANativeWindow_setBuffersGeometry");
-                return Err(crate::InstanceError);
-            }
-        }
 
         inner
             .egl
@@ -717,32 +649,18 @@ impl crate::Instance<super::Api> for Instance {
 
         Ok(Surface {
             egl: Arc::clone(&inner.egl),
-            raw,
+            wsi_library: self.wsi_library.clone(),
+            config: inner.config,
             display: inner.display,
             context: inner.context,
             presentable: inner.supports_native_window,
             pbuffer: inner.pbuffer,
-            wl_window,
+            raw_window_handle,
             swapchain: None,
             enable_srgb,
         })
     }
-    unsafe fn destroy_surface(&self, surface: Surface) {
-        let inner = self.inner.lock();
-        inner
-            .egl
-            .destroy_surface(inner.display, surface.raw)
-            .unwrap();
-        if let Some(wl_window) = surface.wl_window {
-            let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> = self
-                .wsi_library
-                .as_ref()
-                .expect("unsupported window")
-                .get(b"wl_egl_window_destroy")
-                .unwrap();
-            wl_egl_window_destroy(wl_window)
-        }
-    }
+    unsafe fn destroy_surface(&self, _surface: Surface) {}
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
         let inner = self.inner.lock();
@@ -795,6 +713,8 @@ impl crate::Instance<super::Api> for Instance {
 
 #[derive(Debug)]
 pub struct Swapchain {
+    surface: egl::Surface,
+    wl_window: Option<*mut raw::c_void>,
     framebuffer: glow::Framebuffer,
     renderbuffer: glow::Renderbuffer,
     /// Extent because the window lies
@@ -807,12 +727,13 @@ pub struct Swapchain {
 #[derive(Debug)]
 pub struct Surface {
     egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
-    raw: egl::Surface,
+    wsi_library: Option<Arc<libloading::Library>>,
+    config: egl::Config,
     display: egl::Display,
     context: egl::Context,
     pbuffer: Option<egl::Surface>,
     pub(super) presentable: bool,
-    wl_window: Option<*mut raw::c_void>,
+    raw_window_handle: RawWindowHandle,
     swapchain: Option<Swapchain>,
     pub(super) enable_srgb: bool,
 }
@@ -831,8 +752,8 @@ impl Surface {
         self.egl
             .make_current(
                 self.display,
-                Some(self.raw),
-                Some(self.raw),
+                Some(sc.surface),
+                Some(sc.surface),
                 Some(self.context),
             )
             .map_err(|e| {
@@ -862,10 +783,12 @@ impl Surface {
         );
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
 
-        self.egl.swap_buffers(self.display, self.raw).map_err(|e| {
-            log::error!("swap_buffers failed: {}", e);
-            crate::SurfaceError::Lost
-        })?;
+        self.egl
+            .swap_buffers(self.display, sc.surface)
+            .map_err(|e| {
+                log::error!("swap_buffers failed: {}", e);
+                crate::SurfaceError::Lost
+            })?;
         self.egl
             .make_current(self.display, None, None, None)
             .map_err(|e| {
@@ -875,6 +798,21 @@ impl Surface {
 
         Ok(())
     }
+
+    unsafe fn unconfigure_impl(
+        &mut self,
+        device: &super::Device,
+    ) -> Option<(egl::Surface, Option<*mut raw::c_void>)> {
+        let gl = &device.shared.context.lock();
+        match self.swapchain.take() {
+            Some(sc) => {
+                gl.delete_renderbuffer(sc.renderbuffer);
+                gl.delete_framebuffer(sc.framebuffer);
+                Some((sc.surface, sc.wl_window))
+            }
+            None => None,
+        }
+    }
 }
 
 impl crate::Surface<super::Api> for Surface {
@@ -883,20 +821,105 @@ impl crate::Surface<super::Api> for Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        self.unconfigure(device);
+        use raw_window_handle::RawWindowHandle as Rwh;
 
-        if let Some(window) = self.wl_window {
-            let library = libloading::Library::new("libwayland-egl.so").unwrap();
-            let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
-                library.get(b"wl_egl_window_resize").unwrap();
-            wl_egl_window_resize(
-                window,
-                config.extent.width as i32,
-                config.extent.height as i32,
-                0,
-                0,
-            );
-        }
+        let (surface, wl_window) = match self.unconfigure_impl(device) {
+            Some(pair) => pair,
+            None => {
+                #[cfg_attr(any(target_os = "android", target_os = "macos"), allow(unused_mut))]
+                let mut wl_window = None;
+                #[cfg(not(any(target_os = "android", target_os = "macos")))]
+                let (mut temp_xlib_handle, mut temp_xcb_handle);
+                #[allow(trivial_casts)]
+                let native_window_ptr = match self.raw_window_handle {
+                    #[cfg(not(any(target_os = "android", target_os = "macos")))]
+                    Rwh::Xlib(handle) => {
+                        temp_xlib_handle = handle.window;
+                        &mut temp_xlib_handle as *mut _ as *mut std::ffi::c_void
+                    }
+                    #[cfg(not(any(target_os = "android", target_os = "macos")))]
+                    Rwh::Xcb(handle) => {
+                        temp_xcb_handle = handle.window;
+                        &mut temp_xcb_handle as *mut _ as *mut std::ffi::c_void
+                    }
+                    #[cfg(target_os = "android")]
+                    Rwh::Android(handle) => handle.a_native_window,
+                    #[cfg(not(any(target_os = "android", target_os = "macos")))]
+                    Rwh::Wayland(handle) => {
+                        let library = self.wsi_library.as_ref().expect("unsupported window");
+                        let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
+                            library.get(b"wl_egl_window_create").unwrap();
+                        let window = wl_egl_window_create(handle.surface, 640, 480) as *mut _
+                            as *mut std::ffi::c_void;
+                        let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
+                            library.get(b"wl_egl_window_resize").unwrap();
+                        wl_egl_window_resize(
+                            window,
+                            config.extent.width as i32,
+                            config.extent.height as i32,
+                            0,
+                            0,
+                        );
+                        wl_window = Some(window);
+                        window
+                    }
+                    _ => unreachable!(),
+                };
+
+                let raw = if let Some(egl) = self.egl.upcast::<egl::EGL1_5>() {
+                    let attributes = [
+                        egl::RENDER_BUFFER as usize,
+                        if cfg!(target_os = "android") {
+                            egl::BACK_BUFFER as usize
+                        } else {
+                            egl::SINGLE_BUFFER as usize
+                        },
+                        // Always enable sRGB in EGL 1.5
+                        egl::GL_COLORSPACE as usize,
+                        egl::GL_COLORSPACE_SRGB as usize,
+                        egl::ATTRIB_NONE,
+                    ];
+
+                    egl.create_platform_window_surface(
+                        self.display,
+                        self.config,
+                        native_window_ptr,
+                        &attributes,
+                    )
+                    .map_err(|e| {
+                        log::warn!("Error in create_platform_window_surface: {:?}", e);
+                        crate::SurfaceError::Lost
+                    })
+                } else {
+                    let mut attributes = vec![
+                        egl::RENDER_BUFFER,
+                        if cfg!(target_os = "android") {
+                            egl::BACK_BUFFER
+                        } else {
+                            egl::SINGLE_BUFFER
+                        },
+                    ];
+                    if self.enable_srgb {
+                        attributes.push(EGL_GL_COLORSPACE_KHR as i32);
+                        attributes.push(EGL_GL_COLORSPACE_SRGB_KHR as i32);
+                    }
+                    attributes.push(egl::ATTRIB_NONE as i32);
+                    self.egl
+                        .create_window_surface(
+                            self.display,
+                            self.config,
+                            native_window_ptr,
+                            Some(&attributes),
+                        )
+                        .map_err(|e| {
+                            log::warn!("Error in create_platform_window_surface: {:?}", e);
+                            crate::SurfaceError::Lost
+                        })
+                }?;
+
+                (raw, wl_window)
+            }
+        };
 
         let format_desc = device.shared.describe_texture_format(config.format);
         let gl = &device.shared.context.lock();
@@ -920,6 +943,8 @@ impl crate::Surface<super::Api> for Surface {
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
 
         self.swapchain = Some(Swapchain {
+            surface,
+            wl_window,
             renderbuffer,
             framebuffer,
             extent: config.extent,
@@ -932,10 +957,17 @@ impl crate::Surface<super::Api> for Surface {
     }
 
     unsafe fn unconfigure(&mut self, device: &super::Device) {
-        let gl = &device.shared.context.lock();
-        if let Some(sc) = self.swapchain.take() {
-            gl.delete_renderbuffer(sc.renderbuffer);
-            gl.delete_framebuffer(sc.framebuffer);
+        if let Some((surface, wl_window)) = self.unconfigure_impl(device) {
+            self.egl.destroy_surface(self.display, surface).unwrap();
+            if let Some(window) = wl_window {
+                let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> = self
+                    .wsi_library
+                    .as_ref()
+                    .expect("unsupported window")
+                    .get(b"wl_egl_window_destroy")
+                    .unwrap();
+                wl_egl_window_destroy(window);
+            }
         }
     }
 
