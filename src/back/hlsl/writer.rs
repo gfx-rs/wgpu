@@ -1,5 +1,3 @@
-//TODO: temp
-#![allow(dead_code)]
 use super::{Error, Options};
 use crate::{
     back,
@@ -11,13 +9,11 @@ use std::fmt::Write;
 const LOCATION_SEMANTIC: &str = "LOC";
 
 /// Shorthand result used internally by the backend
-type BackendResult = Result<(), Error>;
+pub(super) type BackendResult = Result<(), Error>;
 
 /// Structure contains information required for generating
 /// wrapped structure of all entry points arguments
 struct EntryPointBinding {
-    /// Associated shader stage
-    stage: ShaderStage,
     /// Generated structure name
     name: String,
     /// Members of generated structure
@@ -31,7 +27,7 @@ struct EpStructMember {
 }
 
 pub struct Writer<'a, W> {
-    out: W,
+    pub(super) out: W,
     names: crate::FastHashMap<NameKey, String>,
     namer: proc::Namer,
     /// HLSL backend options
@@ -40,6 +36,7 @@ pub struct Writer<'a, W> {
     ep_inputs: Vec<Option<EntryPointBinding>>,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
+    pub(super) wrapped_image_queries: crate::FastHashSet<super::image::WrappedImageQuery>,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -51,6 +48,7 @@ impl<'a, W: Write> Writer<'a, W> {
             options,
             ep_inputs: Vec::new(),
             named_expressions: crate::NamedExpressions::default(),
+            wrapped_image_queries: crate::FastHashSet::default(),
         }
     }
 
@@ -60,6 +58,7 @@ impl<'a, W: Write> Writer<'a, W> {
             .reset(module, super::keywords::RESERVED, &[], &mut self.names);
         self.named_expressions.clear();
         self.ep_inputs.clear();
+        self.wrapped_image_queries.clear();
     }
 
     pub fn write(
@@ -154,6 +153,9 @@ impl<'a, W: Write> Writer<'a, W> {
             };
             let name = self.names[&NameKey::Function(handle)].clone();
 
+            // Write wrapped function for `Expression::ImageQuery` before writing all statements and expressions
+            self.write_wrapped_image_query_functions(module, &ctx)?;
+
             self.write_function(module, name.as_str(), function, &ctx)?;
 
             writeln!(self.out)?;
@@ -169,6 +171,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 expressions: &ep.function.expressions,
                 named_expressions: &ep.function.named_expressions,
             };
+
+            // Write wrapped function for `Expression::ImageQuery` before writing all statements and expressions
+            self.write_wrapped_image_query_functions(module, &ctx)?;
 
             if ep.stage == ShaderStage::Compute {
                 // HLSL is calling workgroup size, num threads
@@ -266,7 +271,6 @@ impl<'a, W: Write> Writer<'a, W> {
             writeln!(self.out)?;
 
             let ep_input = EntryPointBinding {
-                stage,
                 name: struct_name,
                 members,
             };
@@ -290,19 +294,21 @@ impl<'a, W: Write> Writer<'a, W> {
         let global = &module.global_variables[handle];
         let inner = &module.types[global.ty].inner;
 
-        if let Some(storage_access) = storage_access(global.storage_access) {
-            write!(self.out, "{} ", storage_access)?;
-        }
-
-        let (storage_class, register_ty) = match *inner {
-            TypeInner::Image { .. } => ("", "t"),
+        let (storage, register_ty) = match *inner {
+            TypeInner::Image { .. } => {
+                if global.storage_access.contains(crate::StorageAccess::STORE) {
+                    ("RW", "u")
+                } else {
+                    ("", "t")
+                }
+            }
             TypeInner::Sampler { .. } => ("", "s"),
             TypeInner::Struct { .. } | TypeInner::Vector { .. } => ("static ", ""),
             // TODO: other register ty https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
             _ => return Err(Error::Unimplemented(format!("register_ty {:?}", inner))),
         };
 
-        write!(self.out, "{}", storage_class)?;
+        write!(self.out, "{}", storage)?;
         self.write_type(module, global.ty)?;
         if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
             self.write_array_size(module, size)?;
@@ -314,7 +320,11 @@ impl<'a, W: Write> Writer<'a, W> {
         )?;
 
         if let Some(ref binding) = global.binding {
-            writeln!(self.out, " : register({}{});", register_ty, binding.binding)?;
+            write!(self.out, " : register({}{}", register_ty, binding.binding)?;
+            if self.options.shader_model > super::ShaderModel::V5_0 {
+                write!(self.out, ", space{}", binding.group)?;
+            }
+            writeln!(self.out, ");")?;
         } else {
             write!(self.out, " = ")?;
             if let Some(init) = global.init {
@@ -507,7 +517,7 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Adds no trailing or leading whitespace
-    fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
+    pub(super) fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
         match *inner {
             TypeInner::Scalar { kind, width } => {
                 write!(self.out, "{}", scalar_kind_str(kind, width)?)?;
@@ -537,26 +547,34 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             TypeInner::Image {
                 dim,
-                arrayed: _, //TODO:
+                arrayed,
                 class,
             } => {
+                use crate::ImageClass as Ic;
+
                 let dim_str = image_dimension_str(dim);
-                if let crate::ImageClass::Sampled { kind, multi: false } = class {
-                    write!(
-                        self.out,
-                        "Texture{}<{}4>",
-                        dim_str,
-                        scalar_kind_str(kind, 4)?
-                    )?
-                } else {
-                    return Err(Error::Unimplemented(format!(
-                        "write_value_type {:?}",
-                        inner
-                    )));
+                let arrayed_str = if arrayed { "Array" } else { "" };
+                write!(self.out, "Texture{}{}", dim_str, arrayed_str)?;
+                match class {
+                    Ic::Depth => {}
+                    Ic::Sampled { kind, multi } => {
+                        let multi_str = if multi { "MS" } else { "" };
+                        let scalar_kind_str = scalar_kind_str(kind, 4)?;
+                        write!(self.out, "{}<{}4>", multi_str, scalar_kind_str)?
+                    }
+                    Ic::Storage(format) => {
+                        let storage_format_str = storage_format_to_texture_type(format);
+                        write!(self.out, "<{}>", storage_format_str)?
+                    }
                 }
             }
-            TypeInner::Sampler { comparison: false } => {
-                write!(self.out, "SamplerState")?;
+            TypeInner::Sampler { comparison } => {
+                let sampler = if comparison {
+                    "SamplerComparisonState"
+                } else {
+                    "SamplerState"
+                };
+                write!(self.out, "{}", sampler)?;
             }
             // HLSL arrays are written as `type name[size]`
             // Current code is written arrays only as `[size]`
@@ -893,6 +911,32 @@ impl<'a, W: Write> Writer<'a, W> {
                     )?;
                 }
             }
+            Statement::ImageStore {
+                image,
+                coordinate,
+                array_index,
+                value,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                self.write_expr(module, image, func_ctx)?;
+
+                write!(self.out, "[")?;
+                if let Some(index) = array_index {
+                    // Array index accepted only for texture_storage_2d_array, so we can safety use int3(coordinate, array_index) here
+                    write!(self.out, "int3(")?;
+                    self.write_expr(module, coordinate, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, index, func_ctx)?;
+                    write!(self.out, ")")?;
+                } else {
+                    self.write_expr(module, coordinate, func_ctx)?;
+                }
+                write!(self.out, "]")?;
+
+                write!(self.out, " = ")?;
+                self.write_expr(module, value, func_ctx)?;
+                writeln!(self.out, ";")?;
+            }
             _ => return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt))),
         }
 
@@ -903,7 +947,7 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Doesn't add any newlines or leading/trailing spaces
-    fn write_expr(
+    pub(super) fn write_expr(
         &mut self,
         module: &Module,
         expr: Handle<crate::Expression>,
@@ -1023,19 +1067,195 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             Expression::ImageSample {
                 image,
-                sampler,        // TODO:
-                coordinate,     // TODO:
-                array_index: _, // TODO:
-                offset: _,      // TODO:
-                level: _,       // TODO:
-                depth_ref: _,   // TODO:
+                sampler,
+                coordinate,
+                array_index,
+                offset,
+                level,
+                depth_ref,
             } => {
+                use crate::SampleLevel as Sl;
+
+                let texture_func = match level {
+                    Sl::Auto => {
+                        if depth_ref.is_some() {
+                            "SampleCmp"
+                        } else {
+                            "Sample"
+                        }
+                    }
+                    Sl::Zero => "SampleCmpLevelZero",
+                    Sl::Exact(_) => "SampleLevel",
+                    Sl::Bias(_) => "SampleBias",
+                    Sl::Gradient { .. } => "SampleGrad",
+                };
+
                 self.write_expr(module, image, func_ctx)?;
-                write!(self.out, ".Sample(")?;
+                write!(self.out, ".{}(", texture_func)?;
                 self.write_expr(module, sampler, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, coordinate, func_ctx)?;
+
+                if let Some(array_index) = array_index {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, array_index, func_ctx)?;
+                }
+
+                if let Some(depth_ref) = depth_ref {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, depth_ref, func_ctx)?;
+                }
+
+                match level {
+                    Sl::Auto | Sl::Zero => {}
+                    Sl::Exact(expr) => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, expr, func_ctx)?;
+                    }
+                    Sl::Bias(expr) => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, expr, func_ctx)?;
+                    }
+                    Sl::Gradient { x, y } => {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, x, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, y, func_ctx)?;
+                    }
+                }
+
+                if let Some(offset) = offset {
+                    write!(self.out, ", ")?;
+                    self.write_constant(module, offset)?;
+                }
+
                 write!(self.out, ")")?;
+            }
+            Expression::ImageQuery { image, query } => {
+                // use wrapped image query function
+                if let TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                } = *func_ctx.info[image].ty.inner_with(&module.types)
+                {
+                    let wrapped_image_query = super::image::WrappedImageQuery {
+                        dim,
+                        arrayed,
+                        class,
+                        query: query.into(),
+                    };
+
+                    self.write_wrapped_image_query_function_name(wrapped_image_query)?;
+                    write!(self.out, "(")?;
+                    // Image always first param
+                    self.write_expr(module, image, func_ctx)?;
+                    if let crate::ImageQuery::Size { level: Some(level) } = query {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, level, func_ctx)?;
+                    }
+                    write!(self.out, ")")?;
+                }
+            }
+            Expression::ImageLoad {
+                image,
+                coordinate,
+                array_index,
+                index,
+            } => {
+                // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
+                let image_ty = func_ctx.info[image].ty.inner_with(&module.types);
+                if let crate::TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                } = *image_ty
+                {
+                    use crate::ImageDimension as IDim;
+
+                    self.write_expr(module, image, func_ctx)?;
+                    write!(self.out, ".Load(")?;
+
+                    let ms = if let crate::ImageClass::Sampled { multi: true, .. } = class {
+                        true
+                    } else {
+                        false
+                    };
+
+                    // Input location type based on texture type
+                    let (load_param_ty, load_components_count) = match dim {
+                        IDim::D1 => {
+                            if arrayed {
+                                ("int3", 3)
+                            } else {
+                                ("int2", 2)
+                            }
+                        }
+                        IDim::D2 => match (ms, arrayed) {
+                            (true, true) => ("int3", 3),
+                            (true, false) => ("int2", 2),
+                            (false, true) => ("int4", 4),
+                            (false, false) => ("int3", 3),
+                        },
+                        IDim::D3 => ("int4", 4),
+                        _ => unreachable!(),
+                    };
+
+                    let coordinate_expr_components_count =
+                        match *func_ctx.info[coordinate].ty.inner_with(&module.types) {
+                            TypeInner::Vector { size, .. } => size as i32,
+                            TypeInner::Scalar { .. } => 1,
+                            // coordinates can be only vector or scalar
+                            _ => unreachable!(),
+                        };
+
+                    let components_count = {
+                        let array_coords = if arrayed { 1 } else { 0 };
+                        let array_index_param = if array_index.is_some() { 1 } else { 0 };
+                        let sampler_index_param = if index.is_some() { 1 } else { 0 };
+
+                        coordinate_expr_components_count
+                            + array_coords
+                            + array_index_param
+                            + sampler_index_param
+                    };
+
+                    let is_ty_cast_required =
+                        load_components_count > coordinate_expr_components_count;
+
+                    // cast to another type, if required
+                    if is_ty_cast_required {
+                        write!(self.out, "{}(", load_param_ty)?;
+                    }
+                    self.write_expr(module, coordinate, func_ctx)?;
+                    if let Some(array_index) = array_index {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, array_index, func_ctx)?;
+                    }
+                    if let Some(index) = index {
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, index, func_ctx)?;
+                    }
+                    if index.is_none() && components_count < load_components_count {
+                        // write zero mipmap level if it's not provided but required
+                        write!(self.out, ", 0")?;
+                    };
+
+                    if is_ty_cast_required {
+                        // close bracket for type
+                        write!(self.out, ")")?;
+                    }
+
+                    // close bracket for Load function
+                    write!(self.out, ")")?;
+
+                    // return x component if return type is scalar
+                    if let TypeInner::Scalar { .. } =
+                        *func_ctx.info[expr].ty.inner_with(&module.types)
+                    {
+                        write!(self.out, ".x")?;
+                    }
+                }
             }
             // TODO: copy-paste from wgsl-out
             Expression::GlobalVariable(handle) => {
@@ -1378,7 +1598,7 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 }
 
-fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
+pub(super) fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
     use crate::ImageDimension as IDim;
 
     match dim {
@@ -1434,24 +1654,6 @@ fn scalar_kind_str(kind: crate::ScalarKind, width: crate::Bytes) -> Result<&'sta
     }
 }
 
-fn storage_access(storage_access: crate::StorageAccess) -> Option<&'static str> {
-    if storage_access == crate::StorageAccess::LOAD {
-        Some("ByteAddressBuffer")
-    } else if storage_access.is_all() {
-        Some("RWByteAddressBuffer")
-    } else {
-        None
-    }
-}
-
-fn number_of_components(vector_size: crate::VectorSize) -> usize {
-    match vector_size {
-        crate::VectorSize::Bi => 2,
-        crate::VectorSize::Tri => 3,
-        crate::VectorSize::Quad => 4,
-    }
-}
-
 /// Helper function that returns the string corresponding to the HLSL interpolation qualifier
 fn interpolation_str(interpolation: crate::Interpolation) -> &'static str {
     use crate::Interpolation as I;
@@ -1471,5 +1673,33 @@ fn sampling_str(sampling: crate::Sampling) -> Option<&'static str> {
         S::Center => None,
         S::Centroid => Some("centroid"),
         S::Sample => Some("sample"),
+    }
+}
+
+fn storage_format_to_texture_type(format: crate::StorageFormat) -> &'static str {
+    use crate::StorageFormat as Sf;
+
+    match format {
+        Sf::R16Float => "float",
+        Sf::R8Unorm => "unorm float",
+        Sf::R8Snorm => "snorm float",
+        Sf::R8Uint | Sf::R16Uint => "uint",
+        Sf::R8Sint | Sf::R16Sint => "int",
+
+        Sf::Rg16Float => "float2",
+        Sf::Rg8Unorm => "unorm float2",
+        Sf::Rg8Snorm => "snorm float2",
+
+        Sf::Rg8Sint | Sf::Rg16Sint => "int2",
+        Sf::Rg8Uint | Sf::Rg16Uint => "uint2",
+
+        Sf::Rg11b10Float => "float3",
+
+        Sf::Rgba16Float | Sf::R32Float | Sf::Rg32Float | Sf::Rgba32Float => "float4",
+        Sf::Rgba8Unorm | Sf::Rgb10a2Unorm => "unorm float4",
+        Sf::Rgba8Snorm => "snorm float4",
+
+        Sf::Rgba8Uint | Sf::Rgba16Uint | Sf::R32Uint | Sf::Rg32Uint | Sf::Rgba32Uint => "uint4",
+        Sf::Rgba8Sint | Sf::Rgba16Sint | Sf::R32Sint | Sf::Rg32Sint | Sf::Rgba32Sint => "int4",
     }
 }

@@ -6,6 +6,7 @@
 //! - 6.0
 //!
 
+mod image;
 mod keywords;
 mod writer;
 
@@ -16,7 +17,7 @@ pub use writer::Writer;
 
 /// A HLSL shader model version.
 #[allow(non_snake_case, non_camel_case_types)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd)]
 pub enum ShaderModel {
     V5_0,
     V5_1,
