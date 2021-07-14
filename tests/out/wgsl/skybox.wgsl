@@ -1,6 +1,6 @@
 struct VertexOutput {
     [[builtin(position)]] position: vec4<f32>;
-    [[location(0), interpolate(perspective)]] uv: vec3<f32>;
+    [[location(0)]] uv: vec3<f32>;
 };
 
 [[block]]

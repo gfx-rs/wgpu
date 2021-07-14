@@ -4,7 +4,7 @@ struct ColorMaterial_color {
 };
 
 struct FragmentOutput {
-    [[location(0), interpolate(perspective)]] o_Target: vec4<f32>;
+    [[location(0)]] o_Target: vec4<f32>;
 };
 
 var<private> v_Uv: vec2<f32>;

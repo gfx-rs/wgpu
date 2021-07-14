@@ -37,7 +37,7 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
 }
 
 [[stage(fragment)]]
-fn fs_main([[location(0), interpolate(perspective)]] raw_normal: vec3<f32>, [[location(1), interpolate(perspective)]] position: vec4<f32>) -> [[location(0)]] vec4<f32> {
+fn fs_main([[location(0)]] raw_normal: vec3<f32>, [[location(1)]] position: vec4<f32>) -> [[location(0)]] vec4<f32> {
     var color: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
     var i: u32 = 0u;
 

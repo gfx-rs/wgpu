@@ -1,5 +1,5 @@
 struct VertexOutput {
-    [[location(0), interpolate(perspective)]] v_uv: vec2<f32>;
+    [[location(0)]] v_uv: vec2<f32>;
     [[builtin(position)]] member: vec4<f32>;
 };
 
@@ -17,7 +17,7 @@ fn main1() {
 }
 
 [[stage(vertex)]]
-fn main([[location(0), interpolate(perspective)]] a_pos: vec2<f32>, [[location(1), interpolate(perspective)]] a_uv: vec2<f32>) -> VertexOutput {
+fn main([[location(0)]] a_pos: vec2<f32>, [[location(1)]] a_uv: vec2<f32>) -> VertexOutput {
     a_pos1 = a_pos;
     a_uv1 = a_uv;
     main1();

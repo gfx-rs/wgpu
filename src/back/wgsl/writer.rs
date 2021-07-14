@@ -324,23 +324,23 @@ impl<W: Write> Writer<W> {
                 Attribute::Binding(id) => format!("binding({})", id),
                 Attribute::Group(id) => format!("group({})", id),
                 Attribute::Interpolate(interpolation, sampling) => {
-                    if interpolation.is_some() || sampling.is_some() {
-                        let interpolation_str = if let Some(interpolation) = interpolation {
-                            interpolation_str(interpolation)
-                        } else {
-                            ""
-                        };
-                        let sampling_str = if let Some(sampling) = sampling {
-                            // Center sampling is the default
-                            if sampling == crate::Sampling::Center {
-                                String::from("")
-                            } else {
-                                format!(",{}", sampling_str(sampling))
-                            }
-                        } else {
-                            String::from("")
-                        };
-                        format!("interpolate({}{})", interpolation_str, sampling_str)
+                    if sampling.is_some() && sampling != Some(crate::Sampling::Center) {
+                        format!(
+                            "interpolate({}, {})",
+                            interpolation_str(
+                                interpolation.unwrap_or(crate::Interpolation::Perspective)
+                            ),
+                            sampling_str(sampling.unwrap_or(crate::Sampling::Center))
+                        )
+                    } else if interpolation.is_some()
+                        && interpolation != Some(crate::Interpolation::Perspective)
+                    {
+                        format!(
+                            "interpolate({})",
+                            interpolation_str(
+                                interpolation.unwrap_or(crate::Interpolation::Perspective)
+                            )
+                        )
                     } else {
                         String::from("")
                     }

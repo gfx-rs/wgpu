@@ -9,7 +9,7 @@ struct VertexPushConstants {
 };
 
 struct VertexOutput {
-    [[location(0), interpolate(perspective)]] frag_color: vec4<f32>;
+    [[location(0)]] frag_color: vec4<f32>;
     [[builtin(position)]] member: vec4<f32>;
 };
 
@@ -32,7 +32,7 @@ fn main1() {
 }
 
 [[stage(vertex)]]
-fn main([[location(0), interpolate(perspective)]] position: vec2<f32>, [[location(1), interpolate(perspective)]] color: vec4<f32>) -> VertexOutput {
+fn main([[location(0)]] position: vec2<f32>, [[location(1)]] color: vec4<f32>) -> VertexOutput {
     position1 = position;
     color1 = color;
     main1();

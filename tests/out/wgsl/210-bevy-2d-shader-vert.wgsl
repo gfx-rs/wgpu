@@ -14,7 +14,7 @@ struct Sprite_size {
 };
 
 struct VertexOutput {
-    [[location(0), interpolate(perspective)]] v_Uv: vec2<f32>;
+    [[location(0)]] v_Uv: vec2<f32>;
     [[builtin(position)]] member: vec4<f32>;
 };
 
@@ -46,7 +46,7 @@ fn main1() {
 }
 
 [[stage(vertex)]]
-fn main([[location(0), interpolate(perspective)]] Vertex_Position: vec3<f32>, [[location(2), interpolate(perspective)]] Vertex_Uv: vec2<f32>) -> VertexOutput {
+fn main([[location(0)]] Vertex_Position: vec3<f32>, [[location(2)]] Vertex_Uv: vec2<f32>) -> VertexOutput {
     Vertex_Position1 = Vertex_Position;
     Vertex_Uv1 = Vertex_Uv;
     main1();

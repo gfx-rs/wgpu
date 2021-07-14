@@ -4,7 +4,7 @@ struct gl_PerVertex {
 };
 
 struct VertexOutput {
-    [[location(0), interpolate(perspective)]] member: vec2<f32>;
+    [[location(0)]] member: vec2<f32>;
     [[builtin(position)]] gl_Position: vec4<f32>;
 };
 

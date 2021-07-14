@@ -52,6 +52,7 @@ pub fn map_interpolation(word: &str, span: Span) -> Result<crate::Interpolation,
 
 pub fn map_sampling(word: &str, span: Span) -> Result<crate::Sampling, Error<'_>> {
     match word {
+        "center" => Ok(crate::Sampling::Center),
         "centroid" => Ok(crate::Sampling::Centroid),
         "sample" => Ok(crate::Sampling::Sample),
         _ => Err(Error::UnknownAttribute(span)),

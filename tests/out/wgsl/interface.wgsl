@@ -1,6 +1,6 @@
 struct VertexOutput {
     [[builtin(position)]] position: vec4<f32>;
-    [[location(1), interpolate(perspective)]] varying: f32;
+    [[location(1)]] varying: f32;
 };
 
 struct FragmentOutput {

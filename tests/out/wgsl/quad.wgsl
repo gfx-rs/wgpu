@@ -1,5 +1,5 @@
 struct VertexOutput {
-    [[location(0), interpolate(perspective)]] uv: vec2<f32>;
+    [[location(0)]] uv: vec2<f32>;
     [[builtin(position)]] position: vec4<f32>;
 };
 
@@ -16,7 +16,7 @@ fn main([[location(0)]] pos: vec2<f32>, [[location(1)]] uv: vec2<f32>) -> Vertex
 }
 
 [[stage(fragment)]]
-fn main1([[location(0), interpolate(perspective)]] uv1: vec2<f32>) -> [[location(0)]] vec4<f32> {
+fn main1([[location(0)]] uv1: vec2<f32>) -> [[location(0)]] vec4<f32> {
     let color: vec4<f32> = textureSample(u_texture, u_sampler, uv1);
     if ((color.w == 0.0)) {
         discard;

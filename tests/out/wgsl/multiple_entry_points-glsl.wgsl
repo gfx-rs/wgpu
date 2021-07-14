@@ -3,7 +3,7 @@ struct VertexOutput {
 };
 
 struct FragmentOutput {
-    [[location(0), interpolate(perspective)]] o_color: vec4<f32>;
+    [[location(0)]] o_color: vec4<f32>;
 };
 
 var<private> gl_Position: vec4<f32>;

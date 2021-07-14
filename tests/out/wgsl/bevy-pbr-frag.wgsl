@@ -53,7 +53,7 @@ struct StandardMaterial_emissive {
 };
 
 struct FragmentOutput {
-    [[location(0), interpolate(perspective)]] o_Target: vec4<f32>;
+    [[location(0)]] o_Target: vec4<f32>;
 };
 
 var<private> v_WorldPosition1: vec3<f32>;
@@ -842,7 +842,7 @@ fn main1() {
 }
 
 [[stage(fragment)]]
-fn main([[location(0), interpolate(perspective)]] v_WorldPosition: vec3<f32>, [[location(1), interpolate(perspective)]] v_WorldNormal: vec3<f32>, [[location(2), interpolate(perspective)]] v_Uv: vec2<f32>, [[location(3), interpolate(perspective)]] v_WorldTangent: vec4<f32>, [[builtin(front_facing)]] param: bool) -> FragmentOutput {
+fn main([[location(0)]] v_WorldPosition: vec3<f32>, [[location(1)]] v_WorldNormal: vec3<f32>, [[location(2)]] v_Uv: vec2<f32>, [[location(3)]] v_WorldTangent: vec4<f32>, [[builtin(front_facing)]] param: bool) -> FragmentOutput {
     v_WorldPosition1 = v_WorldPosition;
     v_WorldNormal1 = v_WorldNormal;
     v_Uv1 = v_Uv;
