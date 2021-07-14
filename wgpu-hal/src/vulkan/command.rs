@@ -94,7 +94,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.temp.clear();
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
-        self.free.extend(self.discarded.drain(..));
+        self.free.append(&mut self.discarded);
         let _ = self
             .device
             .raw
@@ -483,7 +483,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn insert_debug_marker(&mut self, label: &str) {
         if let Some(ext) = self.device.debug_messenger() {
             let cstr = self.temp.make_c_str(label);
-            let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(&cstr).build();
+            let vk_label = vk::DebugUtilsLabelEXT::builder().label_name(cstr).build();
             ext.cmd_insert_debug_utils_label(self.active, &vk_label);
         }
     }
