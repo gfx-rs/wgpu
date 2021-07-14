@@ -396,11 +396,6 @@ impl crate::Instance<super::Api> for Instance {
             None
         };
 
-        // Workaround Mesa driver bug on Intel cards by disabling fastclear:
-        // https://gitlab.freedesktop.org/mesa/mesa/-/issues/2565
-        // https://github.com/gfx-rs/wgpu/issues/1627#issuecomment-877854185
-        std::env::set_var("INTEL_DEBUG", "nofc");
-
         let display = if let (Some(library), Some(egl)) =
             (wayland_library, egl.upcast::<egl::EGL1_5>())
         {
@@ -601,6 +596,7 @@ impl crate::Instance<super::Api> for Instance {
             pbuffer: inner.pbuffer,
             wl_window,
             swapchain: None,
+            enable_intel_mesa_fastclear_workaround: None,
         })
     }
     unsafe fn destroy_surface(&self, surface: Surface) {
@@ -677,6 +673,9 @@ pub struct Surface {
     pub(super) presentable: bool,
     wl_window: Option<*mut raw::c_void>,
     swapchain: Option<Swapchain>,
+    // If None, the check has not yet been done, if Some(bool) indicates whether or not we
+    // workaround this bug: https://gitlab.freedesktop.org/mesa/mesa/-/issues/2565
+    enable_intel_mesa_fastclear_workaround: Option<bool>,
 }
 
 unsafe impl Send for Surface {}
@@ -757,13 +756,30 @@ impl crate::Surface<super::Api> for Surface {
             );
         }
 
-        let format_desc = device.shared.describe_texture_format(config.format);
         let gl = &device.shared.context;
+
+        // Check renderer version to see if we need to workaround intel mesa bug
+        if self.enable_intel_mesa_fastclear_workaround.is_none() {
+            let renderer = gl.get_parameter_string(glow::RENDERER);
+
+            // Check renderer string for buggy cards
+            self.enable_intel_mesa_fastclear_workaround = Some(
+                renderer.contains("Mesa")
+                    && renderer.contains("Intel")
+                    && renderer.contains("CML GT2"),
+            );
+        }
+
+        let format_desc = device.shared.describe_texture_format(config.format);
         let renderbuffer = gl.create_renderbuffer().unwrap();
         gl.bind_renderbuffer(glow::RENDERBUFFER, Some(renderbuffer));
         gl.renderbuffer_storage(
             glow::RENDERBUFFER,
-            format_desc.internal,
+            if self.enable_intel_mesa_fastclear_workaround.unwrap() {
+                glow::RGBA8
+            } else {
+                format_desc.internal
+            },
             config.extent.width as _,
             config.extent.height as _,
         );
