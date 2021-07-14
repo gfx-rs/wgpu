@@ -320,7 +320,7 @@ pub(crate) fn validate_texture_copy_range(
     // the virtual size.
     let copy_extent = hal::CopyExtent {
         width: copy_size.width.min(extent_virtual.width),
-        height: copy_size.width.min(extent_virtual.height),
+        height: copy_size.height.min(extent_virtual.height),
         depth,
     };
     Ok((copy_extent, array_layer_count))
