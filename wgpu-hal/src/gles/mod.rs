@@ -158,6 +158,8 @@ pub struct Adapter {
 pub struct Device {
     shared: Arc<AdapterShared>,
     main_vao: glow::VertexArray,
+    #[cfg(feature = "renderdoc")]
+    render_doc: crate::auxil::renderdoc::RenderDoc,
 }
 
 pub struct Queue {

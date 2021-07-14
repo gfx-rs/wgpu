@@ -5,7 +5,7 @@ use std::{
 };
 
 use super::conv;
-use crate::util::map_naga_stage;
+use crate::auxil::map_naga_stage;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 

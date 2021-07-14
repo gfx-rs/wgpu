@@ -54,10 +54,10 @@ hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["metal"] }
 #Note: could also enable "vulkan" for Vulkan Portability
 
 [target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan", "gles"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan", "gles", "renderdoc"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan", "dx12"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["vulkan", "dx12", "renderdoc"] }
 
 [build-dependencies]
 cfg_aliases = "0.1"

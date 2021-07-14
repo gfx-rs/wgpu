@@ -147,6 +147,8 @@ impl super::Device {
                 native::DescriptorHeapType::Sampler,
             )),
             library: Arc::clone(library),
+            #[cfg(feature = "renderdoc")]
+            render_doc: Default::default(),
         })
     }
 
@@ -522,7 +524,7 @@ impl super::Device {
     ) -> Result<native::Blob, crate::PipelineError> {
         use naga::back::hlsl;
 
-        let stage_bit = crate::util::map_naga_stage(naga_stage);
+        let stage_bit = crate::auxil::map_naga_stage(naga_stage);
         let module = &stage.module.naga.module;
         //TODO: reuse the writer
         let mut source = String::new();
@@ -1664,7 +1666,18 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn start_capture(&self) -> bool {
+        #[cfg(feature = "renderdoc")]
+        {
+            self.render_doc
+                .start_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+        }
+        #[cfg(not(feature = "renderdoc"))]
         false
     }
-    unsafe fn stop_capture(&self) {}
+
+    unsafe fn stop_capture(&self) {
+        #[cfg(feature = "renderdoc")]
+        self.render_doc
+            .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+    }
 }

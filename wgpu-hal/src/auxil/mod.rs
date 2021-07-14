@@ -1,3 +1,6 @@
+#[cfg(feature = "renderdoc")]
+pub(super) mod renderdoc;
+
 pub mod db {
     pub mod intel {
         pub const VENDOR: u32 = 0x8086;

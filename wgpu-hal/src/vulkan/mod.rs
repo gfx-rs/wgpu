@@ -231,6 +231,8 @@ pub struct Device {
         Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options,
+    #[cfg(feature = "renderdoc")]
+    render_doc: crate::auxil::renderdoc::RenderDoc,
 }
 
 pub struct Queue {
