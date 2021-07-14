@@ -185,7 +185,7 @@ pub fn map_acomposite_alpha_mode(mode: crate::CompositeAlphaMode) -> dxgi1_2::DX
 
 pub fn map_buffer_usage_to_resource_flags(usage: crate::BufferUses) -> d3d12::D3D12_RESOURCE_FLAGS {
     let mut flags = 0;
-    if usage.contains(crate::BufferUses::STORAGE_STORE) {
+    if usage.contains(crate::BufferUses::STORAGE_WRITE) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
     flags
@@ -211,11 +211,11 @@ pub fn map_texture_usage_to_resource_flags(
         crate::TextureUses::DEPTH_STENCIL_READ | crate::TextureUses::DEPTH_STENCIL_WRITE,
     ) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-        if !usage.intersects(crate::TextureUses::SAMPLED | crate::TextureUses::STORAGE_LOAD) {
+        if !usage.contains(crate::TextureUses::SAMPLED) {
             flags |= d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
         }
     }
-    if usage.contains(crate::TextureUses::STORAGE_STORE) {
+    if usage.contains(crate::TextureUses::STORAGE_WRITE) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
@@ -283,11 +283,7 @@ pub fn map_binding_type(ty: &wgt::BindingType) -> native::DescriptorRangeType {
             ty: wgt::BufferBindingType::Storage { read_only: true },
             ..
         }
-        | Bt::Texture { .. }
-        | Bt::StorageTexture {
-            access: wgt::StorageTextureAccess::ReadOnly,
-            ..
-        } => native::DescriptorRangeType::SRV,
+        | Bt::Texture { .. } => native::DescriptorRangeType::SRV,
         Bt::Buffer {
             ty: wgt::BufferBindingType::Storage { read_only: false },
             ..
@@ -316,11 +312,11 @@ pub fn map_buffer_usage_to_state(usage: crate::BufferUses) -> d3d12::D3D12_RESOU
     if usage.intersects(Bu::VERTEX | Bu::UNIFORM) {
         state |= d3d12::D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
-    if usage.intersects(Bu::STORAGE_LOAD) {
+    if usage.intersects(Bu::STORAGE_READ) {
         state |= d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
             | d3d12::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
-    if usage.intersects(Bu::STORAGE_STORE) {
+    if usage.intersects(Bu::STORAGE_WRITE) {
         state |= d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
     if usage.intersects(Bu::INDIRECT) {
@@ -344,7 +340,7 @@ pub fn map_texture_usage_to_state(usage: crate::TextureUses) -> d3d12::D3D12_RES
     if usage.intersects(Tu::COPY_DST) {
         state |= d3d12::D3D12_RESOURCE_STATE_COPY_DEST;
     }
-    if usage.intersects(Tu::SAMPLED | Tu::STORAGE_LOAD) {
+    if usage.intersects(Tu::SAMPLED) {
         state |= d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
             | d3d12::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
@@ -357,7 +353,7 @@ pub fn map_texture_usage_to_state(usage: crate::TextureUses) -> d3d12::D3D12_RES
     if usage.intersects(Tu::DEPTH_STENCIL_WRITE) {
         state |= d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
-    if usage.intersects(Tu::STORAGE_STORE) {
+    if usage.intersects(Tu::STORAGE_READ | Tu::STORAGE_WRITE) {
         state |= d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
     state

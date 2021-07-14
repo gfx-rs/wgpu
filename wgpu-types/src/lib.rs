@@ -1213,9 +1213,11 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct TextureFormatFeatureFlags: u32 {
-        /// When used as a STORAGE texture, then a texture with this format can be bound with `StorageTextureAccess::ReadWrite`.
+        /// When used as a STORAGE texture, then a texture with this format can be bound with
+        /// [`StorageTextureAccess::ReadOnly`] or [`StorageTextureAccess::ReadWrite`].
         const STORAGE_READ_WRITE = 1;
-        /// When used as a STORAGE texture, then a texture with this format can be written to with atomics. TODO: No access flag exposed as of writing
+        /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
+        // TODO: No access flag exposed as of writing
         const STORAGE_ATOMICS = 2;
     }
 }
@@ -2899,13 +2901,6 @@ impl Default for TextureSampleType {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum StorageTextureAccess {
-    /// The texture can only be read in the shader and it must be annotated with `readonly`.
-    ///
-    /// Example GLSL syntax:
-    /// ```cpp,ignore
-    /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
-    /// ```
-    ReadOnly,
     /// The texture can only be written in the shader and it must be annotated with `writeonly`.
     ///
     /// Example GLSL syntax:
@@ -2913,6 +2908,14 @@ pub enum StorageTextureAccess {
     /// layout(set=0, binding=0, r32f) writeonly uniform image2D myStorageImage;
     /// ```
     WriteOnly,
+    /// The texture can only be read in the shader and it must be annotated with `readonly`.
+    /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access mode,
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
+    /// ```
+    ReadOnly,
     /// The texture can be both read and written in the shader.
     /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] must be enabled to use this access mode.
     ///

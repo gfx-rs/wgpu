@@ -737,8 +737,8 @@ impl<A: HalApi> Device<A> {
                 }
                 wgt::TextureViewDimension::D3 => {
                     hal::TextureUses::SAMPLED
-                        | hal::TextureUses::STORAGE_LOAD
-                        | hal::TextureUses::STORAGE_STORE
+                        | hal::TextureUses::STORAGE_READ
+                        | hal::TextureUses::STORAGE_WRITE
                 }
                 _ => hal::TextureUses::all(),
             };
@@ -785,7 +785,7 @@ impl<A: HalApi> Device<A> {
             samples: texture.desc.sample_count,
             // once a storage - forever a storage
             sampled_internal_use: if texture.desc.usage.contains(wgt::TextureUsages::STORAGE) {
-                hal::TextureUses::SAMPLED | hal::TextureUses::STORAGE_LOAD
+                hal::TextureUses::SAMPLED | hal::TextureUses::STORAGE_READ
             } else {
                 hal::TextureUses::SAMPLED
             },
@@ -900,7 +900,7 @@ impl<A: HalApi> Device<A> {
         );
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)?;
-        let interface = validation::Interface::new(&module, &info);
+        let interface = validation::Interface::new(&module, &info, self.features);
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
 
         let hal_desc = hal::ShaderModuleDescriptor {
@@ -1054,8 +1054,12 @@ impl<A: HalApi> Device<A> {
                             | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
                     ),
                     match access {
-                        wgt::StorageTextureAccess::ReadOnly => WritableStorage::No,
                         wgt::StorageTextureAccess::WriteOnly => WritableStorage::Yes,
+                        wgt::StorageTextureAccess::ReadOnly => {
+                            required_features |=
+                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+                            WritableStorage::No
+                        }
                         wgt::StorageTextureAccess::ReadWrite => {
                             required_features |=
                                 wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
@@ -1174,9 +1178,9 @@ impl<A: HalApi> Device<A> {
             wgt::BufferBindingType::Storage { read_only } => (
                 wgt::BufferUsages::STORAGE,
                 if read_only {
-                    hal::BufferUses::STORAGE_LOAD
+                    hal::BufferUses::STORAGE_READ
                 } else {
-                    hal::BufferUses::STORAGE_STORE
+                    hal::BufferUses::STORAGE_WRITE
                 },
                 limits.max_storage_buffer_binding_size,
             ),
@@ -1594,18 +1598,27 @@ impl<A: HalApi> Device<A> {
                     });
                 }
                 let internal_use = match access {
-                    wgt::StorageTextureAccess::ReadOnly => hal::TextureUses::STORAGE_LOAD,
-                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUses::STORAGE_STORE,
+                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUses::STORAGE_WRITE,
+                    wgt::StorageTextureAccess::ReadOnly => {
+                        if !view
+                            .format_features
+                            .flags
+                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE)
+                        {
+                            return Err(Error::StorageReadNotSupported(view.desc.format));
+                        }
+                        hal::TextureUses::STORAGE_READ
+                    }
                     wgt::StorageTextureAccess::ReadWrite => {
                         if !view
                             .format_features
                             .flags
                             .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE)
                         {
-                            return Err(Error::StorageReadWriteNotSupported(view.desc.format));
+                            return Err(Error::StorageReadNotSupported(view.desc.format));
                         }
 
-                        hal::TextureUses::STORAGE_STORE | hal::TextureUses::STORAGE_LOAD
+                        hal::TextureUses::STORAGE_WRITE | hal::TextureUses::STORAGE_READ
                     }
                 };
                 Ok((wgt::TextureUsages::STORAGE, internal_use))

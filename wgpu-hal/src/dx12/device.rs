@@ -792,13 +792,13 @@ impl crate::Device<super::Api> for super::Device {
             ),
             handle_srv: if desc
                 .usage
-                .intersects(crate::TextureUses::SAMPLED | crate::TextureUses::STORAGE_LOAD)
+                .intersects(crate::TextureUses::SAMPLED | crate::TextureUses::STORAGE_READ)
             {
                 Some(self.view_texture_as_shader_resource(texture, desc))
             } else {
                 None
             },
-            handle_uav: if desc.usage.intersects(crate::TextureUses::STORAGE_STORE) {
+            handle_uav: if desc.usage.intersects(crate::TextureUses::STORAGE_WRITE) {
                 Some(self.view_texture_as_unoredered_access(texture, desc))
             } else {
                 None
@@ -1295,11 +1295,7 @@ impl crate::Device<super::Api> for super::Device {
                     }
                     inner.stage.push(handle);
                 }
-                wgt::BindingType::Texture { .. }
-                | wgt::BindingType::StorageTexture {
-                    access: wgt::StorageTextureAccess::ReadOnly,
-                    ..
-                } => {
+                wgt::BindingType::Texture { .. } => {
                     let data = &desc.textures[entry.resource_index as usize];
                     let handle = data.view.handle_srv.unwrap();
                     cpu_views.as_mut().unwrap().stage.push(handle.raw);

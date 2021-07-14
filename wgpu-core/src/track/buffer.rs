@@ -8,7 +8,7 @@ impl PendingTransition<BufferState> {
     fn collapse(self) -> Result<BufferUses, Self> {
         if self.usage.start.is_empty()
             || self.usage.start == self.usage.end
-            || !BufferUses::WRITE_ALL.intersects(self.usage.start | self.usage.end)
+            || !BufferUses::EXCLUSIVE.intersects(self.usage.start | self.usage.end)
         {
             Ok(self.usage.start | self.usage.end)
         } else {
@@ -129,11 +129,11 @@ mod test {
         };
         let id = Id::dummy();
         assert_eq!(
-            bs.change(id, (), BufferUses::STORAGE_STORE, None),
+            bs.change(id, (), BufferUses::STORAGE_WRITE, None),
             Err(PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUses::INDEX..BufferUses::STORAGE_STORE,
+                usage: BufferUses::INDEX..BufferUses::STORAGE_WRITE,
             }),
         );
         bs.change(id, (), BufferUses::VERTEX, None).unwrap();
@@ -145,7 +145,7 @@ mod test {
     fn change_replace() {
         let mut bs = Unit {
             first: None,
-            last: BufferUses::STORAGE_STORE,
+            last: BufferUses::STORAGE_WRITE,
         };
         let id = Id::dummy();
         let mut list = Vec::new();
@@ -156,33 +156,33 @@ mod test {
             &[PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUses::STORAGE_STORE..BufferUses::VERTEX,
+                usage: BufferUses::STORAGE_WRITE..BufferUses::VERTEX,
             }],
         );
         assert_eq!(
             bs,
             Unit {
-                first: Some(BufferUses::STORAGE_STORE),
+                first: Some(BufferUses::STORAGE_WRITE),
                 last: BufferUses::VERTEX,
             }
         );
 
         list.clear();
-        bs.change(id, (), BufferUses::STORAGE_STORE, Some(&mut list))
+        bs.change(id, (), BufferUses::STORAGE_WRITE, Some(&mut list))
             .unwrap();
         assert_eq!(
             &list,
             &[PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUses::VERTEX..BufferUses::STORAGE_STORE,
+                usage: BufferUses::VERTEX..BufferUses::STORAGE_WRITE,
             }],
         );
         assert_eq!(
             bs,
             Unit {
-                first: Some(BufferUses::STORAGE_STORE),
-                last: BufferUses::STORAGE_STORE,
+                first: Some(BufferUses::STORAGE_WRITE),
+                last: BufferUses::STORAGE_WRITE,
             }
         );
     }
