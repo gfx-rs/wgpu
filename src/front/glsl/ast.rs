@@ -69,6 +69,7 @@ pub struct EntryArg {
     pub binding: Binding,
     pub handle: Handle<GlobalVariable>,
     pub prologue: PrologueStage,
+    pub storage: StorageQualifier,
 }
 
 #[derive(Debug)]
@@ -76,6 +77,7 @@ pub struct Program<'a> {
     pub version: u16,
     pub profile: Profile,
     pub entry_points: &'a FastHashMap<String, ShaderStage>,
+    pub strip_unused_linkages: bool,
 
     pub workgroup_size: [u32; 3],
     pub early_fragment_tests: bool,
@@ -94,11 +96,12 @@ pub struct Program<'a> {
 }
 
 impl<'a> Program<'a> {
-    pub fn new(entry_points: &'a FastHashMap<String, ShaderStage>) -> Program<'a> {
+    pub fn new(entry_points: &'a FastHashMap<String, ShaderStage>, strip_unused_linkages: bool) -> Program<'a> {
         Program {
             version: 0,
             profile: Profile::Core,
             entry_points,
+            strip_unused_linkages,
 
             workgroup_size: [1; 3],
             early_fragment_tests: false,

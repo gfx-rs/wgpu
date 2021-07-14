@@ -45,7 +45,7 @@ impl Program<'_> {
             return Ok(Some(global_var));
         }
 
-        let mut add_builtin = |inner, builtin, mutable, prologue| {
+        let mut add_builtin = |inner, builtin, mutable, prologue, storage| {
             let ty = self
                 .module
                 .types
@@ -66,6 +66,7 @@ impl Program<'_> {
                 binding: Binding::BuiltIn(builtin),
                 handle,
                 prologue,
+                storage,
             });
 
             self.global_variables.push((
@@ -101,6 +102,7 @@ impl Program<'_> {
                 BuiltIn::Position,
                 true,
                 PrologueStage::empty(),
+                StorageQualifier::Output,
             ),
             "gl_FragCoord" => add_builtin(
                 TypeInner::Vector {
@@ -111,6 +113,7 @@ impl Program<'_> {
                 BuiltIn::Position,
                 false,
                 PrologueStage::FRAGMENT,
+                StorageQualifier::Input,
             ),
             "gl_FragDepth" => add_builtin(
                 TypeInner::Scalar {
@@ -120,6 +123,7 @@ impl Program<'_> {
                 BuiltIn::FragDepth,
                 true,
                 PrologueStage::empty(),
+                StorageQualifier::Output,
             ),
             "gl_VertexIndex" => add_builtin(
                 TypeInner::Scalar {
@@ -129,6 +133,7 @@ impl Program<'_> {
                 BuiltIn::VertexIndex,
                 false,
                 PrologueStage::VERTEX,
+                StorageQualifier::Input,
             ),
             "gl_InstanceIndex" => add_builtin(
                 TypeInner::Scalar {
@@ -138,6 +143,7 @@ impl Program<'_> {
                 BuiltIn::InstanceIndex,
                 false,
                 PrologueStage::VERTEX,
+                StorageQualifier::Input,
             ),
             "gl_GlobalInvocationID" => add_builtin(
                 TypeInner::Vector {
@@ -148,6 +154,7 @@ impl Program<'_> {
                 BuiltIn::GlobalInvocationId,
                 false,
                 PrologueStage::COMPUTE,
+                StorageQualifier::Input,
             ),
             "gl_FrontFacing" => add_builtin(
                 TypeInner::Scalar {
@@ -157,6 +164,7 @@ impl Program<'_> {
                 BuiltIn::FrontFacing,
                 false,
                 PrologueStage::FRAGMENT,
+                StorageQualifier::Input,
             ),
             _ => Ok(None),
         }
@@ -440,6 +448,7 @@ impl Program<'_> {
                 },
                 handle,
                 prologue,
+                storage,
             });
 
             if let Some(name) = name {

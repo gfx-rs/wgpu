@@ -166,6 +166,7 @@ fn main() {
                 &naga::front::glsl::Options {
                     entry_points,
                     defines: Default::default(),
+                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {
@@ -183,6 +184,7 @@ fn main() {
                 &naga::front::glsl::Options {
                     entry_points,
                     defines: Default::default(),
+                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {
@@ -200,6 +202,7 @@ fn main() {
                 &naga::front::glsl::Options {
                     entry_points,
                     defines: Default::default(),
+                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {

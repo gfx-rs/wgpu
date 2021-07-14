@@ -7,7 +7,7 @@ struct FragmentOutput {
     [[location(0)]] o_Target: vec4<f32>;
 };
 
-var<private> v_Uv: vec2<f32>;
+var<private> v_Uv1: vec2<f32>;
 var<private> o_Target: vec4<f32>;
 [[group(1), binding(0)]]
 var<uniform> global: ColorMaterial_color;
@@ -23,8 +23,9 @@ fn main1() {
 }
 
 [[stage(fragment)]]
-fn main() -> FragmentOutput {
+fn main([[location(0)]] v_Uv: vec2<f32>) -> FragmentOutput {
+    v_Uv1 = v_Uv;
     main1();
-    let _e1: vec4<f32> = o_Target;
-    return FragmentOutput(_e1);
+    let _e3: vec4<f32> = o_Target;
+    return FragmentOutput(_e3);
 }

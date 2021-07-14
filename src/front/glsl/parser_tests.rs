@@ -14,7 +14,7 @@ fn parse_program<'a>(
     source: &str,
     entry_points: &'a crate::FastHashMap<String, ShaderStage>,
 ) -> Result<Program<'a>, ErrorKind> {
-    let mut program = Program::new(entry_points);
+    let mut program = Program::new(entry_points, true);
     let defines = crate::FastHashMap::default();
     let lex = Lexer::new(source, &defines);
     let mut parser = parser::Parser::new(&mut program, lex);

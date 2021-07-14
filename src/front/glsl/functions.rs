@@ -1,7 +1,7 @@
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, ImageQuery, LocalVariable,
-    MathFunction, RelationalFunction, SampleLevel, ScalarKind, ScalarValue, Statement,
+    MathFunction, RelationalFunction, SampleLevel, ScalarKind, ScalarValue, ShaderStage, Statement,
     StructMember, SwizzleComponent, Type, TypeInner, VectorSize,
 };
 
@@ -1159,12 +1159,23 @@ impl Program<'_> {
             let mut expressions = Arena::new();
             let mut body = Vec::new();
 
+            let can_strip_stage_inputs = self.strip_unused_linkages || stage != ShaderStage::Fragment;
+            let can_strip_stage_outputs = self.strip_unused_linkages || stage != ShaderStage::Vertex;
+
             for (i, arg) in self.entry_args.iter().enumerate() {
-                if function_arg_use[function.index()]
+                if arg.storage != StorageQualifier::Input {
+                    continue;
+                }
+
+                if !arg.prologue.contains(stage.into()) {
+                    continue;
+                }
+
+                let is_used = function_arg_use[function.index()]
                     .get(i)
-                    .map_or(true, |u| !u.contains(EntryArgUse::READ))
-                    || !arg.prologue.contains(stage.into())
-                {
+                    .map_or(false, |u| u.contains(EntryArgUse::READ));
+
+                if can_strip_stage_inputs && !is_used {
                     continue;
                 }
 
@@ -1194,10 +1205,15 @@ impl Program<'_> {
             let mut components = Vec::new();
 
             for (i, arg) in self.entry_args.iter().enumerate() {
-                if function_arg_use[function.index()]
+                if arg.storage != StorageQualifier::Output {
+                    continue;
+                }
+
+                let is_used = function_arg_use[function.index()]
                     .get(i)
-                    .map_or(true, |u| !u.contains(EntryArgUse::WRITE))
-                {
+                    .map_or(false, |u| u.contains(EntryArgUse::WRITE));
+
+                if can_strip_stage_outputs && !is_used {
                     continue;
                 }
 

@@ -457,6 +457,7 @@ fn convert_glsl_folder() {
     for entry in std::fs::read_dir(format!("{}/{}/glsl", root, BASE_DIR_IN)).unwrap() {
         let entry = entry.unwrap();
         let file_name = entry.file_name().into_string().unwrap();
+
         if file_name.ends_with(".ron") {
             // No needed to validate ron files
             continue;
@@ -498,11 +499,13 @@ fn convert_glsl_folder() {
             entry_points.insert("main".to_string(), stage);
         }
 
+        let strip_unused_linkages = entry_points.len() > 1;
         let module = naga::front::glsl::parse_str(
             &fs::read_to_string(entry.path()).expect("Couldn't find glsl file"),
             &naga::front::glsl::Options {
                 entry_points,
                 defines: Default::default(),
+                strip_unused_linkages: strip_unused_linkages,
             },
         )
         .unwrap();
