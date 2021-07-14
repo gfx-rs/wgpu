@@ -1,3 +1,11 @@
+//! HLSL shading language backend
+//!
+//! # Supported shader model versions:
+//! - 5.0
+//! - 5.1
+//! - 6.0
+//!
+
 mod keywords;
 mod writer;
 
