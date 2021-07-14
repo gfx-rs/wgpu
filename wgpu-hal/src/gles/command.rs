@@ -196,7 +196,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
-            if !bar.usage.start.contains(crate::BufferUses::STORAGE_STORE) {
+            if !bar.usage.start.contains(crate::BufferUses::STORAGE_WRITE) {
                 continue;
             }
             self.cmd_buffer
@@ -219,7 +219,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let mut combined_usage = crate::TextureUses::empty();
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
-            if !bar.usage.start.contains(crate::TextureUses::STORAGE_STORE) {
+            if !bar.usage.start.contains(crate::TextureUses::STORAGE_WRITE) {
                 continue;
             }
             // unlike buffers, there is no need for a concrete texture

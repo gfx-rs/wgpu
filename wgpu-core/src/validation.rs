@@ -107,6 +107,7 @@ struct EntryPoint {
 
 #[derive(Debug)]
 pub struct Interface {
+    features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -188,6 +189,10 @@ pub enum BindingError {
     InconsistentlyDerivedType,
     #[error("texture format {0:?} is not supported for storage use")]
     BadStorageFormat(wgt::TextureFormat),
+    #[error(
+        "storage texture usage {0:?} doesn't have a matching supported `StorageTextureAccess`"
+    )]
+    UnsupportedTextureStorageAccess(GlobalUse),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -460,7 +465,11 @@ impl Resource {
         }
     }
 
-    fn derive_binding_type(&self, shader_usage: GlobalUse) -> Result<BindingType, BindingError> {
+    fn derive_binding_type(
+        &self,
+        shader_usage: GlobalUse,
+        features: wgt::Features,
+    ) -> Result<BindingType, BindingError> {
         Ok(match self.ty {
             ResourceType::Buffer { size } => BindingType::Buffer {
                 ty: match self.class {
@@ -509,10 +518,18 @@ impl Resource {
                         multisampled: false,
                     },
                     naga::ImageClass::Storage(format) => BindingType::StorageTexture {
-                        access: if shader_usage.contains(GlobalUse::WRITE) {
+                        access: if shader_usage == GlobalUse::WRITE || shader_usage.is_empty() {
                             wgt::StorageTextureAccess::WriteOnly
-                        } else {
+                        } else if !features
+                            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+                        {
+                            return Err(BindingError::UnsupportedTextureStorageAccess(
+                                shader_usage,
+                            ));
+                        } else if shader_usage == GlobalUse::READ {
                             wgt::StorageTextureAccess::ReadOnly
+                        } else {
+                            wgt::StorageTextureAccess::ReadWrite
                         },
                         view_dimension,
                         format: {
@@ -783,7 +800,11 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo) -> Self {
+    pub fn new(
+        module: &naga::Module,
+        info: &naga::valid::ModuleInfo,
+        features: wgt::Features,
+    ) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -854,6 +875,7 @@ impl Interface {
         }
 
         Interface {
+            features,
             resources,
             entry_points,
         }
@@ -901,7 +923,7 @@ impl Interface {
                     .get_mut(res.bind.group as usize)
                     .ok_or(BindingError::Missing)
                     .and_then(|set| {
-                        let ty = res.derive_binding_type(usage)?;
+                        let ty = res.derive_binding_type(usage, self.features)?;
                         match set.entry(res.bind.binding) {
                             Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)

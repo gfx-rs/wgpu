@@ -51,7 +51,7 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
         usage.contains(wgt::BufferUsages::UNIFORM),
     );
     u.set(
-        hal::BufferUses::STORAGE_LOAD | hal::BufferUses::STORAGE_STORE,
+        hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_WRITE,
         usage.contains(wgt::BufferUsages::STORAGE),
     );
     u.set(
@@ -79,7 +79,7 @@ pub fn map_texture_usage(
         usage.contains(wgt::TextureUsages::SAMPLED),
     );
     u.set(
-        hal::TextureUses::STORAGE_LOAD | hal::TextureUses::STORAGE_STORE,
+        hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_WRITE,
         usage.contains(wgt::TextureUsages::STORAGE),
     );
     let is_color = aspect.contains(hal::FormatAspects::COLOR);

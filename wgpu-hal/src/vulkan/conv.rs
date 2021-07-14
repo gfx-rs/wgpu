@@ -197,7 +197,7 @@ pub fn map_texture_usage(usage: crate::TextureUses) -> vk::ImageUsageFlags {
     ) {
         flags |= vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
     }
-    if usage.intersects(crate::TextureUses::STORAGE_LOAD | crate::TextureUses::STORAGE_STORE) {
+    if usage.intersects(crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_WRITE) {
         flags |= vk::ImageUsageFlags::STORAGE;
     }
     flags
@@ -239,11 +239,11 @@ pub fn map_texture_usage_to_barrier(
         access |= vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
             | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE;
     }
-    if usage.contains(crate::TextureUses::STORAGE_LOAD) {
+    if usage.contains(crate::TextureUses::STORAGE_READ) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_READ;
     }
-    if usage.contains(crate::TextureUses::STORAGE_STORE) {
+    if usage.contains(crate::TextureUses::STORAGE_WRITE) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_WRITE;
     }
@@ -276,7 +276,7 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUses {
         bits |= crate::TextureUses::DEPTH_STENCIL_READ | crate::TextureUses::DEPTH_STENCIL_WRITE;
     }
     if usage.contains(vk::ImageUsageFlags::STORAGE) {
-        bits |= crate::TextureUses::STORAGE_LOAD | crate::TextureUses::STORAGE_STORE;
+        bits |= crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_WRITE;
     }
     bits
 }
@@ -424,7 +424,7 @@ pub fn map_buffer_usage(usage: crate::BufferUses) -> vk::BufferUsageFlags {
     if usage.contains(crate::BufferUses::UNIFORM) {
         flags |= vk::BufferUsageFlags::UNIFORM_BUFFER;
     }
-    if usage.intersects(crate::BufferUses::STORAGE_LOAD | crate::BufferUses::STORAGE_STORE) {
+    if usage.intersects(crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_WRITE) {
         flags |= vk::BufferUsageFlags::STORAGE_BUFFER;
     }
     if usage.contains(crate::BufferUses::INDEX) {
@@ -468,11 +468,11 @@ pub fn map_buffer_usage_to_barrier(
         stages |= shader_stages;
         access |= vk::AccessFlags::UNIFORM_READ;
     }
-    if usage.intersects(crate::BufferUses::STORAGE_LOAD) {
+    if usage.intersects(crate::BufferUses::STORAGE_READ) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_READ;
     }
-    if usage.intersects(crate::BufferUses::STORAGE_STORE) {
+    if usage.intersects(crate::BufferUses::STORAGE_WRITE) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_WRITE;
     }

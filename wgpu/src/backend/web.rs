@@ -1232,11 +1232,11 @@ impl crate::Context for Context {
                         view_dimension,
                     } => {
                         let mapped_access = match access {
-                            wgt::StorageTextureAccess::ReadOnly => {
-                                web_sys::GpuStorageTextureAccess::ReadOnly
-                            }
                             wgt::StorageTextureAccess::WriteOnly => {
                                 web_sys::GpuStorageTextureAccess::WriteOnly
+                            }
+                            wgt::StorageTextureAccess::ReadOnly => {
+                                panic!("ReadOnly is not available")
                             }
                             wgt::StorageTextureAccess::ReadWrite => {
                                 panic!("ReadWrite is not available")

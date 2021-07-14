@@ -27,7 +27,7 @@ impl PendingTransition<TextureState> {
     fn collapse(self) -> Result<TextureUses, Self> {
         if self.usage.start.is_empty()
             || self.usage.start == self.usage.end
-            || !TextureUses::WRITE_ALL.intersects(self.usage.start | self.usage.end)
+            || !TextureUses::EXCLUSIVE.intersects(self.usage.start | self.usage.end)
         {
             Ok(self.usage.start | self.usage.end)
         } else {
@@ -243,7 +243,7 @@ mod test {
         ts.mips.push(PlaneStates::from_slice(&[
             (1..3, Unit::new(TextureUses::SAMPLED)),
             (3..5, Unit::new(TextureUses::SAMPLED)),
-            (5..6, Unit::new(TextureUses::STORAGE_LOAD)),
+            (5..6, Unit::new(TextureUses::STORAGE_READ)),
         ]));
 
         assert_eq!(

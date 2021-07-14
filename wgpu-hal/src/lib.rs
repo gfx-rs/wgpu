@@ -515,9 +515,9 @@ bitflags!(
         /// Format can be sampled with a min/max reduction sampler.
         const SAMPLED_MINMAX = 0x4;
 
-        /// Format can be used as storage with exclusive read & write access.
+        /// Format can be used as storage with write-only access.
         const STORAGE = 0x10;
-        /// Format can be used as storage with simultaneous read/write access.
+        /// Format can be used as storage with read and read/write access.
         const STORAGE_READ_WRITE = 0x20;
         /// Format can be used as storage with atomics.
         const STORAGE_ATOMIC = 0x40;
@@ -591,19 +591,19 @@ bitflags::bitflags! {
         const INDEX = 16;
         const VERTEX = 32;
         const UNIFORM = 64;
-        const STORAGE_LOAD = 128;
-        const STORAGE_STORE = 256;
+        const STORAGE_READ = 128;
+        const STORAGE_WRITE = 256;
         const INDIRECT = 512;
-        /// The combination of all read-only usages.
-        const READ_ALL = Self::MAP_READ.bits | Self::COPY_SRC.bits |
+        /// The combination of usages that can be used together (read-only).
+        const INCLUSIVE = Self::MAP_READ.bits | Self::COPY_SRC.bits |
             Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
-            Self::STORAGE_LOAD.bits | Self::INDIRECT.bits;
-        /// The combination of all write-only and read-write usages.
-        const WRITE_ALL = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_STORE.bits;
+            Self::STORAGE_READ.bits | Self::INDIRECT.bits;
+        /// The combination of exclusive usages (write-only and read-write).
+        const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_WRITE.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
-        const ORDERED = Self::READ_ALL.bits | Self::MAP_WRITE.bits | Self::COPY_DST.bits;
+        const ORDERED = Self::INCLUSIVE.bits | Self::MAP_WRITE.bits | Self::COPY_DST.bits;
     }
 }
 
@@ -616,16 +616,16 @@ bitflags::bitflags! {
         const COLOR_TARGET = 8;
         const DEPTH_STENCIL_READ = 16;
         const DEPTH_STENCIL_WRITE = 32;
-        const STORAGE_LOAD = 64;
-        const STORAGE_STORE = 128;
-        /// The combination of all read-only usages.
-        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits | Self::DEPTH_STENCIL_READ.bits | Self::STORAGE_LOAD.bits;
-        /// The combination of all write-only and read-write usages.
-        const WRITE_ALL = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_STORE.bits;
+        const STORAGE_READ = 64;
+        const STORAGE_WRITE = 128;
+        /// The combination of usages that can be used together (read-only).
+        const INCLUSIVE = Self::COPY_SRC.bits | Self::SAMPLED.bits | Self::DEPTH_STENCIL_READ.bits;
+        /// The combination of exclusive usages (write-only and read-write).
+        const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_WRITE.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
-        const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits;
+        const ORDERED = Self::INCLUSIVE.bits | Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits;
         //TODO: remove this
         const UNINITIALIZED = 0xFFFF;
     }
