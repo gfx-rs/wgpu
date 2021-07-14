@@ -3,7 +3,6 @@ status = [
   "MacOS x86_64",
   "IOS aarch64",
   "Linux x86_64",
-  "Linux Nightly x86_64",
   "Android aarch64",
   "WebAssembly",
   "Format",
