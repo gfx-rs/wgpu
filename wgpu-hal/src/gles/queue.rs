@@ -891,8 +891,18 @@ impl crate::Queue<super::Api> for super::Queue {
     ) -> Result<(), crate::DeviceError> {
         self.reset_state();
         for cmd_buf in command_buffers.iter() {
+            if let Some(ref label) = cmd_buf.label {
+                self.shared.context.push_debug_group(
+                    glow::DEBUG_SOURCE_APPLICATION,
+                    DEBUG_ID,
+                    label,
+                );
+            }
             for command in cmd_buf.commands.iter() {
                 self.process(command, &cmd_buf.data_bytes, &cmd_buf.data_words);
+            }
+            if cmd_buf.label.is_some() {
+                self.shared.context.pop_debug_group();
             }
         }
 
