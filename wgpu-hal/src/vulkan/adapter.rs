@@ -1063,7 +1063,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         Some(crate::SurfaceCapabilities {
             formats,
-            swap_chain_sizes: 1..=max_image_count,
+            swap_chain_sizes: caps.min_image_count..=max_image_count,
             current_extent,
             extents: min_extent..=max_extent,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
