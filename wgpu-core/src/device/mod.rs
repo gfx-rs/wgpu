@@ -2268,7 +2268,7 @@ impl<A: HalApi> Device<A> {
                     }
                     hal::PipelineError::EntryPoint(stage) => {
                         pipeline::CreateRenderPipelineError::Internal {
-                            stage: hal::util::map_naga_stage(stage),
+                            stage: hal::auxil::map_naga_stage(stage),
                             error: EP_FAILURE.to_string(),
                         }
                     }

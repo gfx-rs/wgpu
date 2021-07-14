@@ -618,7 +618,7 @@ impl super::Instance {
 
         let (available_features, downlevel_flags) = phd_features.to_wgpu(&phd_capabilities);
         {
-            use crate::util::db;
+            use crate::auxil::db;
             // see https://github.com/gfx-rs/gfx/issues/1930
             let _is_windows_intel_dual_src_bug = cfg!(windows)
                 && phd_capabilities.properties.vendor_id == db::intel::VENDOR
@@ -897,6 +897,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             desc_allocator: Mutex::new(desc_allocator),
             valid_ash_memory_types,
             naga_options,
+            #[cfg(feature = "renderdoc")]
+            render_doc: Default::default(),
         };
 
         Ok(crate::OpenDevice { device, queue })

@@ -212,6 +212,8 @@ pub struct Device {
     sampler_pool: Mutex<descriptor::CpuPool>,
     // library
     library: Arc<native::D3D12Lib>,
+    #[cfg(feature = "renderdoc")]
+    render_doc: crate::auxil::renderdoc::RenderDoc,
 }
 
 unsafe impl Send for Device {}

@@ -353,6 +353,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 main_vao,
+                #[cfg(feature = "renderdoc")]
+                render_doc: Default::default(),
             },
             queue: super::Queue {
                 shared: Arc::clone(&self.shared),

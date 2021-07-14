@@ -1501,9 +1501,23 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn start_capture(&self) -> bool {
+        #[cfg(feature = "renderdoc")]
+        {
+            self.render_doc.start_frame_capture(
+                ash::vk::Handle::as_raw(self.shared.raw.handle()) as *mut _,
+                ptr::null_mut(),
+            )
+        }
+        #[cfg(not(feature = "renderdoc"))]
         false
     }
-    unsafe fn stop_capture(&self) {}
+    unsafe fn stop_capture(&self) {
+        #[cfg(feature = "renderdoc")]
+        self.render_doc.end_frame_capture(
+            ash::vk::Handle::as_raw(self.shared.raw.handle()) as *mut _,
+            ptr::null_mut(),
+        )
+    }
 }
 
 impl From<gpu_alloc::AllocationError> for crate::DeviceError {

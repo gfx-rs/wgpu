@@ -56,7 +56,7 @@ mod metal;
 #[cfg(feature = "vulkan")]
 mod vulkan;
 
-pub mod util;
+pub mod auxil;
 pub mod api {
     #[cfg(feature = "dx12")]
     pub use super::dx12::Api as Dx12;

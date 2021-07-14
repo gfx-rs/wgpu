@@ -626,7 +626,7 @@ impl crate::Surface<super::Api> for super::Surface {
             };
 
         // special case for Intel Vulkan returning bizzare values (ugh)
-        if sc.device.vendor_id == crate::util::db::intel::VENDOR && index > 0x100 {
+        if sc.device.vendor_id == crate::auxil::db::intel::VENDOR && index > 0x100 {
             return Err(crate::SurfaceError::Outdated);
         }
 
