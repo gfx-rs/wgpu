@@ -450,6 +450,8 @@ fn convert_spv_pointer_access() {
 #[allow(unused_variables)]
 #[test]
 fn convert_glsl_folder() {
+    env_logger::init();
+
     let root = env!("CARGO_MANIFEST_DIR");
 
     for entry in std::fs::read_dir(format!("{}/{}/glsl", root, BASE_DIR_IN)).unwrap() {
