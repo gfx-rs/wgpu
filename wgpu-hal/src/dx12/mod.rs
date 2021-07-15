@@ -1,7 +1,35 @@
 /*!
 # DirectX12 API internals.
 
-## Pipeline Layout
+Generally the mapping is straightforwad.
+
+## Resource transitions
+
+D3D12 API matches WebGPU internal states very well. The only
+caveat here is issuing a special UAV barrier whenever both source
+and destination states match, and they are for storage sync.
+
+## Memory
+
+For now, all resources are created with "committed" memory.
+
+## Resource binding
+
+See ['Device::create_pipeline_layout`] documentation for the structure
+of the root signature corresponding to WebGPU pipeline layout.
+
+Binding groups is mostly straightforward, with one big caveat:
+all bindings have to be reset whenever the pipeline layout changes.
+This is the rule of D3D12, and we can do nothing to help it.
+
+We detect this change at both [`crate::CommandEncoder::set_bind_group`]
+and [`crate::CommandEncoder::set_render_pipeline`] with
+[`crate::CommandEncoder::set_compute_pipeline`].
+
+For this reason, in order avoid repeating the binding code,
+we are binding everything in [`CommandEncoder::update_root_elements`].
+When the pipeline layout is changed, we reset all bindings.
+Otherwise, we pass a range corresponding only to the current bind group.
 
 !*/
 

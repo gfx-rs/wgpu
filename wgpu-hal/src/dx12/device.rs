@@ -994,29 +994,22 @@ impl crate::Device<super::Api> for super::Device {
         // SRV/CBV/UAV tables are added to the signature first, then Sampler tables,
         // and finally dynamic uniform descriptors.
         //
-        // Dynamic uniform buffers are implemented as root descriptors.
-        // This allows to handle the dynamic offsets properly, which would not be feasible
-        // with a combination of root constant and descriptor table.
+        // Buffers with dynamic offsets are implemented as root descriptors.
+        // This is easier than trying to patch up the offset on the shader side.
         //
         // Root signature layout:
-        //     Root Constants: Register: Offest/4, Space: 0
+        // Root Constants: Register: Offset/4, Space: 0
         //     ...
-        // DescriptorTable0: Space: 1 (SrvCbvUav)
-        // DescriptorTable0: Space: 1 (Sampler)
-        // Root Descriptors 0
-        // DescriptorTable1: Space: 2 (SrvCbvUav)
-        // Root Descriptors 1
-        //     ...
+        // (bind group [3]) - Space: 1
+        //   View descriptor table, if any
+        //   Sampler descriptor table, if any
+        //   Root descriptors (for dynamic offset buffers)
+        // (bind group [2]) - Space: 2
+        // ...
+        // (bind group [0]) - Space: 4
 
-        //TODO: reverse the order, according to this advice in
+        //Note: lower bind group indices are put futher down the root signature. See:
         // https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#binding-model
-        //> Furthermore, applications should generally sort the layout
-        //> of the root arguments in decreasing order of change frequency.
-        //> This way if some implementations need to switch to a different
-        //> memory storage scheme to version parts of a heavily populated
-        //> root arguments, the data that is changing at the highest frequency
-        //> (near the start of the root arguments) is most likely to run
-        //> as efficiently as possible.
 
         let root_constants: &[()] = &[];
 
@@ -1046,7 +1039,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut bind_group_infos =
             arrayvec::ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
-        for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
+        for (index, bgl) in desc.bind_group_layouts.iter().rev().enumerate() {
             let space = root_space_offset + index as u32;
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
@@ -1160,6 +1153,8 @@ impl crate::Device<super::Api> for super::Device {
 
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
+        // remember that we pushed them in reverse
+        bind_group_infos.reverse();
 
         let (blob, error) = self
             .library
