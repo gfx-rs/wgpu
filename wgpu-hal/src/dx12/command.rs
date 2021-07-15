@@ -55,6 +55,45 @@ impl super::CommandEncoder {
             );
         }
     }
+
+    fn update_root_elements(&self, range: Range<super::RootIndex>) {
+        use super::{BufferViewKind as Bvk, PassKind as Pk};
+
+        let list = self.list.unwrap();
+        for index in range {
+            match self.pass.root_elements[index as usize] {
+                super::RootElement::Empty => {}
+                super::RootElement::Table(descriptor) => match self.pass.kind {
+                    Pk::Render => list.set_graphics_root_descriptor_table(index, descriptor),
+                    Pk::Compute => list.set_compute_root_descriptor_table(index, descriptor),
+                    Pk::Transfer => (),
+                },
+                super::RootElement::DynamicOffsetBuffer { kind, address } => {
+                    match (self.pass.kind, kind) {
+                        (Pk::Render, Bvk::Constant) => {
+                            list.set_graphics_root_constant_buffer_view(index, address)
+                        }
+                        (Pk::Compute, Bvk::Constant) => {
+                            list.set_compute_root_constant_buffer_view(index, address)
+                        }
+                        (Pk::Render, Bvk::ShaderResource) => {
+                            list.set_graphics_root_shader_resource_view(index, address)
+                        }
+                        (Pk::Compute, Bvk::ShaderResource) => {
+                            list.set_compute_root_shader_resource_view(index, address)
+                        }
+                        (Pk::Render, Bvk::UnorderedAccess) => {
+                            list.set_graphics_root_unordered_access_view(index, address)
+                        }
+                        (Pk::Compute, Bvk::UnorderedAccess) => {
+                            list.set_compute_root_unordered_access_view(index, address)
+                        }
+                        (Pk::Transfer, _) => (),
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
@@ -549,68 +588,45 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
-        use super::PassKind as Pk;
-
-        let list = self.list.unwrap();
         let info = &layout.bind_group_infos[index as usize];
-        let mut root_index = info.base_root_index;
+        let mut root_index = info.base_root_index as usize;
 
         // Bind CBV/SRC/UAV descriptor tables
         if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
-            let descriptor = group.handle_views.unwrap().gpu;
-            match self.pass.kind {
-                Pk::Render => list.set_graphics_root_descriptor_table(root_index, descriptor),
-                Pk::Compute => list.set_compute_root_descriptor_table(root_index, descriptor),
-                Pk::Transfer => (),
-            }
+            self.pass.root_elements[root_index] =
+                super::RootElement::Table(group.handle_views.unwrap().gpu);
             root_index += 1;
         }
 
         // Bind Sampler descriptor tables.
         if info.tables.contains(super::TableTypes::SAMPLERS) {
-            let descriptor = group.handle_samplers.unwrap().gpu;
-            match self.pass.kind {
-                Pk::Render => list.set_graphics_root_descriptor_table(root_index, descriptor),
-                Pk::Compute => list.set_compute_root_descriptor_table(root_index, descriptor),
-                Pk::Transfer => (),
-            }
+            self.pass.root_elements[root_index] =
+                super::RootElement::Table(group.handle_samplers.unwrap().gpu);
             root_index += 1;
         }
 
         // Bind root descriptors
-        for ((kind, &gpu_base), &offset) in info
+        for ((&kind, &gpu_base), &offset) in info
             .dynamic_buffers
             .iter()
             .zip(group.dynamic_buffers.iter())
             .zip(dynamic_offsets)
         {
-            let gpu_address = gpu_base + offset as wgt::BufferAddress;
-            match self.pass.kind {
-                Pk::Render => match *kind {
-                    super::BufferViewKind::Constant => {
-                        list.set_graphics_root_constant_buffer_view(root_index, gpu_address)
-                    }
-                    super::BufferViewKind::ShaderResource => {
-                        list.set_graphics_root_shader_resource_view(root_index, gpu_address)
-                    }
-                    super::BufferViewKind::UnorderedAccess => {
-                        list.set_graphics_root_unordered_access_view(root_index, gpu_address)
-                    }
-                },
-                Pk::Compute => match *kind {
-                    super::BufferViewKind::Constant => {
-                        list.set_compute_root_constant_buffer_view(root_index, gpu_address)
-                    }
-                    super::BufferViewKind::ShaderResource => {
-                        list.set_compute_root_shader_resource_view(root_index, gpu_address)
-                    }
-                    super::BufferViewKind::UnorderedAccess => {
-                        list.set_compute_root_unordered_access_view(root_index, gpu_address)
-                    }
-                },
-                Pk::Transfer => (),
-            }
+            self.pass.root_elements[root_index] = super::RootElement::DynamicOffsetBuffer {
+                kind,
+                address: gpu_base + offset as native::GpuAddress,
+            };
+            root_index += 1;
         }
+
+        let update_range = if self.pass.signature == layout.raw {
+            info.base_root_index..root_index as super::RootIndex
+        } else {
+            // D3D12 requires full reset on signature change
+            self.pass.signature = layout.raw;
+            0..layout.total_root_elements
+        };
+        self.update_root_elements(update_range);
     }
     unsafe fn set_push_constants(
         &mut self,
@@ -640,11 +656,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         let list = self.list.unwrap();
 
-        list.set_graphics_root_signature(pipeline.signature);
+        if self.pass.signature != pipeline.signature {
+            // D3D12 requires full reset on signature change
+            list.set_graphics_root_signature(pipeline.signature);
+            self.pass.signature = pipeline.signature;
+            self.update_root_elements(0..pipeline.total_root_elements);
+        };
+
         list.set_pipeline_state(pipeline.raw);
         list.IASetPrimitiveTopology(pipeline.topology);
-
-        //TODO: root signature changes require full layout rebind!
 
         for (index, (vb, &stride)) in self
             .pass
@@ -821,10 +841,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
         let list = self.list.unwrap();
 
-        list.set_compute_root_signature(pipeline.signature);
-        list.set_pipeline_state(pipeline.raw);
+        if self.pass.signature != pipeline.signature {
+            // D3D12 requires full reset on signature change
+            list.set_compute_root_signature(pipeline.signature);
+            self.pass.signature = pipeline.signature;
+            self.update_root_elements(0..pipeline.total_root_elements);
+        };
 
-        //TODO: root signature changes require full layout rebind!
+        list.set_pipeline_state(pipeline.raw);
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {

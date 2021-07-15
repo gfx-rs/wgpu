@@ -1198,6 +1198,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::PipelineLayout {
             raw,
             bind_group_infos,
+            total_root_elements: total_parameters as super::RootIndex,
             naga_options: naga::back::hlsl::Options {
                 shader_model: naga::back::hlsl::ShaderModel::V5_1,
             },
@@ -1545,6 +1546,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::RenderPipeline {
             raw,
             signature: desc.layout.raw,
+            total_root_elements: desc.layout.total_root_elements,
             topology,
             vertex_strides,
         })
@@ -1581,6 +1583,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::ComputePipeline {
             raw,
             signature: desc.layout.raw,
+            total_root_elements: desc.layout.total_root_elements,
         })
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
