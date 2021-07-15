@@ -16,7 +16,7 @@ use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use std::{borrow::Cow, mem, num::NonZeroU32, ptr, sync::Arc};
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
+    shared::{dxgi, dxgi1_2, dxgi1_4, dxgitype, windef, winerror},
     um::{d3d12, synchapi, winbase, winnt},
     Interface as _,
 };
@@ -89,6 +89,8 @@ impl<T> HResult<T> for (T, i32) {
     }
 }
 
+// Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
+const MAX_ROOT_ELEMENTS: usize = 64;
 const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
@@ -251,9 +253,23 @@ impl Temp {
 struct PassResolve {
     src: (native::Resource, u32),
     dst: (native::Resource, u32),
-    format: dxgiformat::DXGI_FORMAT,
+    format: native::Format,
 }
 
+#[derive(Clone, Copy)]
+enum RootElement {
+    Empty,
+    //Constant(u32),
+    /// Descriptor table.
+    Table(native::GpuDescriptor),
+    /// Descriptor for a buffer that has dynamic offset.
+    DynamicOffsetBuffer {
+        kind: BufferViewKind,
+        address: native::GpuAddress,
+    },
+}
+
+#[derive(Clone, Copy)]
 enum PassKind {
     Render,
     Compute,
@@ -263,6 +279,8 @@ enum PassKind {
 struct PassState {
     has_label: bool,
     resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_TARGETS }>,
+    signature: native::RootSignature,
+    root_elements: [RootElement; MAX_ROOT_ELEMENTS],
     vertex_buffers: [d3d12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
     dirty_vertex_buffers: usize,
     kind: PassKind,
@@ -273,6 +291,8 @@ impl PassState {
         PassState {
             has_label: false,
             resolves: ArrayVec::new(),
+            signature: native::RootSignature::null(),
+            root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
             vertex_buffers: [unsafe { mem::zeroed() }; crate::MAX_VERTEX_BUFFERS],
             dirty_vertex_buffers: 0,
             kind: PassKind::Transfer,
@@ -280,10 +300,8 @@ impl PassState {
     }
 
     fn clear(&mut self) {
-        self.has_label = false;
-        self.resolves.clear();
-        self.dirty_vertex_buffers = 0;
-        self.kind = PassKind::Transfer;
+        // careful about heap allocations!
+        *self = Self::new();
     }
 }
 
@@ -363,7 +381,7 @@ impl Texture {
 
 #[derive(Debug)]
 pub struct TextureView {
-    raw_format: dxgiformat::DXGI_FORMAT,
+    raw_format: native::Format,
     target_base: (native::Resource, u32),
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
@@ -408,6 +426,7 @@ pub struct BindGroupLayout {
     copy_counts: Vec<u32>, // all 1's
 }
 
+#[derive(Clone, Copy)]
 enum BufferViewKind {
     Constant,
     ShaderResource,
@@ -428,8 +447,11 @@ bitflags::bitflags! {
     }
 }
 
+// Index into the root signature.
+type RootIndex = u32;
+
 struct BindGroupInfo {
-    base_root_index: u32,
+    base_root_index: RootIndex,
     tables: TableTypes,
     dynamic_buffers: Vec<BufferViewKind>,
 }
@@ -439,6 +461,7 @@ pub struct PipelineLayout {
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
     bind_group_infos: ArrayVec<BindGroupInfo, { crate::MAX_BIND_GROUPS }>,
+    total_root_elements: RootIndex,
     naga_options: naga::back::hlsl::Options,
 }
 
@@ -453,6 +476,7 @@ pub struct ShaderModule {
 pub struct RenderPipeline {
     raw: native::PipelineState,
     signature: native::RootSignature,
+    total_root_elements: RootIndex,
     topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
 }
@@ -463,6 +487,7 @@ unsafe impl Sync for RenderPipeline {}
 pub struct ComputePipeline {
     raw: native::PipelineState,
     signature: native::RootSignature,
+    total_root_elements: RootIndex,
 }
 
 unsafe impl Send for ComputePipeline {}
