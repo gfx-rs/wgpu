@@ -573,7 +573,17 @@ impl super::PrivateCapabilities {
                 MTLLanguageVersion::V1_0
             },
             exposed_queues: 1,
-            read_write_texture_tier: device.read_write_texture_support(),
+            read_write_texture_tier: if os_is_mac {
+                if Self::version_at_least(major, minor, 10, 13) {
+                    device.read_write_texture_support()
+                } else {
+                    mtl::MTLReadWriteTextureTier::TierNone
+                }
+            } else if Self::version_at_least(major, minor, 11, 0) {
+                device.read_write_texture_support()
+            } else {
+                mtl::MTLReadWriteTextureTier::TierNone
+            },
             resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
             argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
             shared_textures: !os_is_mac,
