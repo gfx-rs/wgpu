@@ -604,6 +604,7 @@ impl RenderBundle {
                         index as u32,
                         &bind_group.raw,
                         &offsets[num_dynamic_offsets as usize..],
+                        hal::BindingInvalidation::All,
                     );
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }

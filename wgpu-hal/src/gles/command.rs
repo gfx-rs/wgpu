@@ -504,6 +504,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         index: u32,
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
+        invalidation: crate::BindingInvalidation,
     ) {
         let mut do_index = 0;
         let mut dirty_textures = 0u32;
@@ -528,6 +529,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             if has_dynamic_offset {
                                 offset += dynamic_offsets[do_index] as i32;
                                 do_index += 1;
+                            } else if invalidation == crate::BindingInvalidation::DynamicOffsetsOnly
+                            {
+                                continue;
                             }
                             match ty {
                                 wgt::BufferBindingType::Uniform => glow::UNIFORM_BUFFER,
@@ -546,6 +550,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         size,
                     });
                 }
+                _ if invalidation == crate::BindingInvalidation::DynamicOffsetsOnly => continue,
                 super::RawBinding::Sampler(sampler) => {
                     dirty_samplers |= 1 << slot;
                     self.state.samplers[slot as usize] = Some(sampler);

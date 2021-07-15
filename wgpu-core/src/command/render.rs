@@ -931,13 +931,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .validate_dynamic_bindings(&temp_offsets)
                             .map_pass_err(scope)?;
 
-                        // merge the resource tracker in
-                        info.trackers
-                            .merge_extend(&bind_group.used)
-                            .map_pass_err(scope)?;
-                        //Note: stateless trackers are not merged: the lifetime reference
-                        // is held to the bind group itself.
-
                         cmd_buf.buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {
                                 match buffer_guard.get(action.id) {
@@ -955,26 +948,54 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
 
                         let pipeline_layout_id = state.binder.pipeline_layout_id;
-                        let entries = state.binder.assign_group(
-                            index as usize,
-                            id::Valid(bind_group_id),
-                            bind_group,
-                            &temp_offsets,
-                        );
-                        if !entries.is_empty() {
-                            let pipeline_layout =
-                                &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
-                            for (i, e) in entries.iter().enumerate() {
-                                let raw_bg =
-                                    &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
 
+                        let valid_bg_id = id::Valid(bind_group_id);
+                        // first check if the group is already active
+                        if state.binder.is_group_assigned(index as usize, valid_bg_id) {
+                            if !temp_offsets.is_empty() {
+                                let pipeline_layout =
+                                    &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                                let raw_bg = &bind_group_guard[valid_bg_id].raw;
                                 unsafe {
                                     raw.set_bind_group(
                                         pipeline_layout,
-                                        index as u32 + i as u32,
+                                        index as u32,
                                         raw_bg,
-                                        &e.dynamic_offsets,
+                                        &temp_offsets,
+                                        hal::BindingInvalidation::DynamicOffsetsOnly,
                                     );
+                                }
+                            }
+                        } else {
+                            // merge the resource tracker in
+                            info.trackers
+                                .merge_extend(&bind_group.used)
+                                .map_pass_err(scope)?;
+                            //Note: stateless trackers are not merged: the lifetime reference
+                            // is held to the bind group itself.
+
+                            let entries = state.binder.assign_group(
+                                index as usize,
+                                valid_bg_id,
+                                bind_group,
+                                &temp_offsets,
+                            );
+                            if !entries.is_empty() {
+                                let pipeline_layout =
+                                    &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                                for (i, e) in entries.iter().enumerate() {
+                                    let raw_bg =
+                                        &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+
+                                    unsafe {
+                                        raw.set_bind_group(
+                                            pipeline_layout,
+                                            index as u32 + i as u32,
+                                            raw_bg,
+                                            &e.dynamic_offsets,
+                                            hal::BindingInvalidation::All,
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -1039,6 +1060,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             start_index as u32 + i as u32,
                                             raw_bg,
                                             &e.dynamic_offsets,
+                                            hal::BindingInvalidation::All,
                                         );
                                     }
                                 }

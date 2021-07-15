@@ -587,23 +587,34 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         index: u32,
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
+        invalidation: crate::BindingInvalidation,
     ) {
         let info = &layout.bind_group_infos[index as usize];
         let mut root_index = info.base_root_index as usize;
 
-        // Bind CBV/SRC/UAV descriptor tables
-        if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
-            self.pass.root_elements[root_index] =
-                super::RootElement::Table(group.handle_views.unwrap().gpu);
-            root_index += 1;
-        }
+        let base_update_index = match invalidation {
+            crate::BindingInvalidation::All => {
+                // Bind CBV/SRC/UAV descriptor tables
+                if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
+                    self.pass.root_elements[root_index] =
+                        super::RootElement::Table(group.handle_views.unwrap().gpu);
+                    root_index += 1;
+                }
 
-        // Bind Sampler descriptor tables.
-        if info.tables.contains(super::TableTypes::SAMPLERS) {
-            self.pass.root_elements[root_index] =
-                super::RootElement::Table(group.handle_samplers.unwrap().gpu);
-            root_index += 1;
-        }
+                // Bind Sampler descriptor tables.
+                if info.tables.contains(super::TableTypes::SAMPLERS) {
+                    self.pass.root_elements[root_index] =
+                        super::RootElement::Table(group.handle_samplers.unwrap().gpu);
+                    root_index += 1;
+                }
+                info.base_root_index
+            }
+            crate::BindingInvalidation::DynamicOffsetsOnly => {
+                // skip the tables
+                root_index += info.tables.bits().count_ones() as usize;
+                root_index as super::RootIndex
+            }
+        };
 
         // Bind root descriptors
         for ((&kind, &gpu_base), &offset) in info
@@ -619,12 +630,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             root_index += 1;
         }
 
-        let update_range = if self.pass.signature == layout.raw {
-            info.base_root_index..root_index as super::RootIndex
-        } else {
+        let update_range = if self.pass.signature != layout.raw {
             // D3D12 requires full reset on signature change
             self.pass.signature = layout.raw;
             0..layout.total_root_elements
+        } else {
+            base_update_index..root_index as super::RootIndex
         };
         self.update_root_elements(update_range);
     }

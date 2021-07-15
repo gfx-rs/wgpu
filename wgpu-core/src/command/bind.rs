@@ -183,6 +183,17 @@ impl Binder {
         (bind_range.start, &self.payloads[bind_range])
     }
 
+    pub(super) fn is_group_assigned(
+        &self,
+        index: usize,
+        bind_group_id: Valid<BindGroupId>,
+    ) -> bool {
+        match self.payloads[index].group_id {
+            Some(ref stored) => stored.value == bind_group_id,
+            None => false,
+        }
+    }
+
     pub(super) fn assign_group<'a, A: HalApi>(
         &'a mut self,
         index: usize,

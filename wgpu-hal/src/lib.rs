@@ -391,6 +391,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
         index: u32,
         group: &A::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
+        invalidation: BindingInvalidation,
     );
 
     unsafe fn set_push_constants(
@@ -1099,6 +1100,18 @@ pub struct RenderPassDescriptor<'a, A: Api> {
 #[derive(Clone, Debug)]
 pub struct ComputePassDescriptor<'a> {
     pub label: Label<'a>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BindingInvalidation {
+    All,
+    DynamicOffsetsOnly,
+}
+
+impl Default for BindingInvalidation {
+    fn default() -> Self {
+        Self::All
+    }
 }
 
 #[test]

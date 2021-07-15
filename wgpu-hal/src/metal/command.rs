@@ -391,6 +391,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         group_index: u32,
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
+        invalidation: crate::BindingInvalidation,
     ) {
         let bg_info = &layout.bind_group_infos[group_index as usize];
 
@@ -401,6 +402,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 let mut offset = buf.offset;
                 if let Some(dyn_index) = buf.dynamic_index {
                     offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+                } else if invalidation == crate::BindingInvalidation::DynamicOffsetsOnly {
+                    continue;
                 }
                 encoder.set_vertex_buffer(
                     (bg_info.base_resource_indices.vs.buffers + index) as u64,
@@ -435,6 +438,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 let mut offset = buf.offset;
                 if let Some(dyn_index) = buf.dynamic_index {
                     offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+                } else if invalidation == crate::BindingInvalidation::DynamicOffsetsOnly {
+                    continue;
                 }
                 encoder.set_fragment_buffer(
                     (bg_info.base_resource_indices.fs.buffers + index) as u64,
@@ -463,34 +468,36 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 }
             }
 
-            for index in 0..group.counters.vs.samplers {
-                let res = group.samplers[index as usize];
-                encoder.set_vertex_sampler_state(
-                    (bg_info.base_resource_indices.vs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.fs.samplers {
-                let res = group.samplers[(group.counters.vs.samplers + index) as usize];
-                encoder.set_fragment_sampler_state(
-                    (bg_info.base_resource_indices.fs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
+            if invalidation == crate::BindingInvalidation::All {
+                for index in 0..group.counters.vs.samplers {
+                    let res = group.samplers[index as usize];
+                    encoder.set_vertex_sampler_state(
+                        (bg_info.base_resource_indices.vs.samplers + index) as u64,
+                        Some(res.as_native()),
+                    );
+                }
+                for index in 0..group.counters.fs.samplers {
+                    let res = group.samplers[(group.counters.vs.samplers + index) as usize];
+                    encoder.set_fragment_sampler_state(
+                        (bg_info.base_resource_indices.fs.samplers + index) as u64,
+                        Some(res.as_native()),
+                    );
+                }
 
-            for index in 0..group.counters.vs.textures {
-                let res = group.textures[index as usize];
-                encoder.set_vertex_texture(
-                    (bg_info.base_resource_indices.vs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.fs.textures {
-                let res = group.textures[(group.counters.vs.textures + index) as usize];
-                encoder.set_fragment_texture(
-                    (bg_info.base_resource_indices.fs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
+                for index in 0..group.counters.vs.textures {
+                    let res = group.textures[index as usize];
+                    encoder.set_vertex_texture(
+                        (bg_info.base_resource_indices.vs.textures + index) as u64,
+                        Some(res.as_native()),
+                    );
+                }
+                for index in 0..group.counters.fs.textures {
+                    let res = group.textures[(group.counters.vs.textures + index) as usize];
+                    encoder.set_fragment_texture(
+                        (bg_info.base_resource_indices.fs.textures + index) as u64,
+                        Some(res.as_native()),
+                    );
+                }
             }
         }
 
@@ -507,6 +514,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 let mut offset = buf.offset;
                 if let Some(dyn_index) = buf.dynamic_index {
                     offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+                } else if invalidation == crate::BindingInvalidation::DynamicOffsetsOnly {
+                    continue;
                 }
                 encoder.set_buffer(
                     (bg_info.base_resource_indices.cs.buffers + index) as u64,
@@ -535,19 +544,21 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 }
             }
 
-            for index in 0..group.counters.cs.samplers {
-                let res = group.samplers[(index_base.samplers + index) as usize];
-                encoder.set_sampler_state(
-                    (bg_info.base_resource_indices.cs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.cs.textures {
-                let res = group.textures[(index_base.textures + index) as usize];
-                encoder.set_texture(
-                    (bg_info.base_resource_indices.cs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
+            if invalidation == crate::BindingInvalidation::All {
+                for index in 0..group.counters.cs.samplers {
+                    let res = group.samplers[(index_base.samplers + index) as usize];
+                    encoder.set_sampler_state(
+                        (bg_info.base_resource_indices.cs.samplers + index) as u64,
+                        Some(res.as_native()),
+                    );
+                }
+                for index in 0..group.counters.cs.textures {
+                    let res = group.textures[(index_base.textures + index) as usize];
+                    encoder.set_texture(
+                        (bg_info.base_resource_indices.cs.textures + index) as u64,
+                        Some(res.as_native()),
+                    );
+                }
             }
         }
     }

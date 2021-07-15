@@ -294,6 +294,7 @@ impl crate::CommandEncoder<Api> for Encoder {
         index: u32,
         group: &Resource,
         dynamic_offsets: &[wgt::DynamicOffset],
+        invalidation: crate::BindingInvalidation,
     ) {
     }
     unsafe fn set_push_constants(

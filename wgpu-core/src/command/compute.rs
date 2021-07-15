@@ -370,6 +370,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     index as u32 + i as u32,
                                     raw_bg,
                                     &e.dynamic_offsets,
+                                    hal::BindingInvalidation::All,
                                 );
                             }
                         }
@@ -411,6 +412,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         start_index as u32 + i as u32,
                                         raw_bg,
                                         &e.dynamic_offsets,
+                                        hal::BindingInvalidation::All,
                                     );
                                 }
                             }

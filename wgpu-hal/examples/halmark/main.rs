@@ -644,16 +644,33 @@ impl<A: hal::Api> Example<A> {
         unsafe {
             ctx.encoder.begin_render_pass(&pass_desc);
             ctx.encoder.set_render_pipeline(&self.pipeline);
-            ctx.encoder
-                .set_bind_group(&self.pipeline_layout, 0, &self.global_group, &[]);
+            ctx.encoder.set_bind_group(
+                &self.pipeline_layout,
+                0,
+                &self.global_group,
+                &[],
+                hal::BindingInvalidation::All,
+            );
+            ctx.encoder.set_bind_group(
+                &self.pipeline_layout,
+                1,
+                &self.local_group,
+                &[0],
+                hal::BindingInvalidation::All,
+            );
         }
 
         for i in 0..self.bunnies.len() {
             let offset =
                 (i as wgt::DynamicOffset) * (wgt::BIND_BUFFER_ALIGNMENT as wgt::DynamicOffset);
             unsafe {
-                ctx.encoder
-                    .set_bind_group(&self.pipeline_layout, 1, &self.local_group, &[offset]);
+                ctx.encoder.set_bind_group(
+                    &self.pipeline_layout,
+                    1,
+                    &self.local_group,
+                    &[offset],
+                    hal::BindingInvalidation::DynamicOffsetsOnly,
+                );
                 ctx.encoder.draw(0, 4, 0, 1);
             }
         }
