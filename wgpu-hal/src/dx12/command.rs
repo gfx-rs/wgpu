@@ -527,7 +527,25 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 );
             }
         }
+
+        let raw_vp = d3d12::D3D12_VIEWPORT {
+            TopLeftX: 0.0,
+            TopLeftY: 0.0,
+            Width: desc.extent.width as f32,
+            Height: desc.extent.height as f32,
+            MinDepth: 0.0,
+            MaxDepth: 1.0,
+        };
+        let raw_rect = d3d12::D3D12_RECT {
+            left: 0,
+            top: 0,
+            right: desc.extent.width as i32,
+            bottom: desc.extent.height as i32,
+        };
+        list.RSSetViewports(1, &raw_vp);
+        list.RSSetScissorRects(1, &raw_rect);
     }
+
     unsafe fn end_render_pass(&mut self) {
         if !self.pass.resolves.is_empty() {
             let list = self.list.unwrap();
