@@ -542,6 +542,8 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const CLEAR_COMMANDS = 0x0000_0001_0000_0000;
+        ///
+        const PRIMITIVE_ID = 0x0000_0040_0000_0000;
 
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;

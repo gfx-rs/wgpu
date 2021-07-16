@@ -195,6 +195,7 @@ const FEATURE_MAP: &[(wgt::Features, hal::Features)] = &[
         wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
         hal::Features::SAMPLER_BORDER_COLOR,
     ),
+    (wgt::Features::PRIMITIVE_ID, hal::Features::GEOMETRY_SHADER)
 ];
 
 #[derive(Debug)]

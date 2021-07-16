@@ -30,3 +30,4 @@ default-members = ["wgpu"]
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
+naga = { path = "../naga" }
