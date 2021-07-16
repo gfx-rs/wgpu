@@ -125,6 +125,9 @@ impl PhysicalDeviceFeatures {
                 //.shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
                 //.shader_int16(requested_features.contains(wgt::Features::SHADER_INT16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
+                .geometry_shader(
+                    requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX)
+                )
                 .build(),
             vulkan_1_2: if api_version >= vk::API_VERSION_1_2 {
                 Some(
@@ -245,7 +248,8 @@ impl PhysicalDeviceFeatures {
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::TIMESTAMP_QUERY
             | F::PIPELINE_STATISTICS_QUERY
-            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::SHADER_PRIMITIVE_INDEX;
         let mut dl_flags = Df::all();
 
         dl_flags.set(Df::CUBE_ARRAY_TEXTURES, self.core.image_cube_array != 0);

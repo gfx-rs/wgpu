@@ -12,7 +12,7 @@ members = [
 default-members = ["wgpu", "player", "wgpu-hal", "wgpu-info"]
 
 [patch."https://github.com/gfx-rs/naga"]
-#naga = { path = "../naga" }
+naga = { git = "https://github.com/initial-algebra/naga", rev = "b1a08acec2c1d5cbfd0743bc6b22b7f2841f1ad3" }
 
 [patch."https://github.com/zakarumych/gpu-descriptor"]
 #gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }

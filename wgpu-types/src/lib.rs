@@ -479,6 +479,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SPIRV_SHADER_PASSTHROUGH = 0x0000_0800_0000_0000;
+        const SHADER_PRIMITIVE_INDEX = 0x0000_1000_0000_0000;
     }
 }
 

@@ -1051,7 +1051,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.5.0"
-source = "git+https://github.com/gfx-rs/naga?rev=458db0b#458db0b5228854dc417283f4b9742e03f25bc492"
+source = "git+https://github.com/initial-algebra/naga?rev=b1a08acec2c1d5cbfd0743bc6b22b7f2841f1ad3#b1a08acec2c1d5cbfd0743bc6b22b7f2841f1ad3"
 dependencies = [
  "bit-set",
  "bitflags",
