@@ -462,10 +462,17 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         if surface.presentable {
             Some(crate::SurfaceCapabilities {
-                formats: vec![
-                    wgt::TextureFormat::Rgba8UnormSrgb,
-                    wgt::TextureFormat::Bgra8UnormSrgb,
-                ],
+                formats: if surface.enable_srgb {
+                    vec![
+                        wgt::TextureFormat::Rgba8UnormSrgb,
+                        wgt::TextureFormat::Bgra8UnormSrgb,
+                    ]
+                } else {
+                    vec![
+                        wgt::TextureFormat::Rgba8Unorm,
+                        wgt::TextureFormat::Bgra8Unorm,
+                    ]
+                },
                 present_modes: vec![wgt::PresentMode::Fifo], //TODO
                 composite_alpha_modes: vec![crate::CompositeAlphaMode::Opaque], //TODO
                 swap_chain_sizes: 2..=2,

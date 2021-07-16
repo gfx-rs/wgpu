@@ -8,6 +8,8 @@ const EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR: i32 = 0x0001;
 const EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT: i32 = 0x30BF;
 const EGL_PLATFORM_WAYLAND_KHR: u32 = 0x31D8;
 const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
+const EGL_GL_COLORSPACE_KHR: u32 = 0x309D;
+const EGL_GL_COLORSPACE_SRGB_KHR: u32 = 0x3089;
 
 type XOpenDisplayFun =
     unsafe extern "system" fn(display_name: *const raw::c_char) -> *mut raw::c_void;
@@ -214,6 +216,16 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
 }
 
 #[derive(Debug)]
+enum SrgbFrameBufferKind {
+    /// No support for SRGB surface
+    None,
+    /// Using EGL 1.5's support for colorspaces
+    Core,
+    /// Using EGL_KHR_gl_colorspace
+    Khr,
+}
+
+#[derive(Debug)]
 struct Inner {
     egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
     version: (i32, i32),
@@ -225,6 +237,8 @@ struct Inner {
     /// Required for `eglMakeCurrent` on platforms that doesn't supports `EGL_KHR_surfaceless_context`.
     pbuffer: Option<egl::Surface>,
     wl_display: Option<*mut raw::c_void>,
+    /// Method by which the framebuffer should support srgb
+    srgb_kind: SrgbFrameBufferKind,
 }
 
 impl Inner {
@@ -294,7 +308,7 @@ impl Inner {
                 context_attributes.push(EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT);
                 context_attributes.push(egl::TRUE as _);
             } else {
-                log::info!("\tEGL context: -robust access");
+                log::warn!("\tEGL context: -robust access");
             }
 
             //TODO do we need `egl::CONTEXT_OPENGL_NOTIFICATION_STRATEGY_EXT`?
@@ -328,6 +342,17 @@ impl Inner {
                 None
             };
 
+        let srgb_kind = if version >= (1, 5) {
+            log::info!("\tEGL surface: +srgb");
+            SrgbFrameBufferKind::Core
+        } else if display_extensions.contains("EGL_KHR_gl_colorspace") {
+            log::info!("\tEGL surface: +srgb khr");
+            SrgbFrameBufferKind::Khr
+        } else {
+            log::warn!("\tEGL surface: -srgb");
+            SrgbFrameBufferKind::None
+        };
+
         Ok(Self {
             egl,
             display,
@@ -337,6 +362,7 @@ impl Inner {
             context,
             pbuffer,
             wl_display: None,
+            srgb_kind,
         })
     }
 }
@@ -543,11 +569,21 @@ impl crate::Instance<super::Api> for Instance {
                 egl::SINGLE_BUFFER as usize
             },
         ];
-        if inner.version >= (1, 5) {
-            // Always enable sRGB in EGL 1.5
-            attributes.push(egl::GL_COLORSPACE as usize);
-            attributes.push(egl::GL_COLORSPACE_SRGB as usize);
-        }
+
+        let enable_srgb = match inner.srgb_kind {
+            SrgbFrameBufferKind::Core => {
+                attributes.push(egl::GL_COLORSPACE as usize);
+                attributes.push(egl::GL_COLORSPACE_SRGB as usize);
+                true
+            }
+            SrgbFrameBufferKind::Khr => {
+                attributes.push(EGL_GL_COLORSPACE_KHR as usize);
+                attributes.push(EGL_GL_COLORSPACE_SRGB_KHR as usize);
+                true
+            }
+            SrgbFrameBufferKind::None => false,
+        };
+
         attributes.push(egl::ATTRIB_NONE);
 
         let raw = if let Some(egl) = inner.egl.upcast::<egl::EGL1_5>() {
@@ -601,6 +637,7 @@ impl crate::Instance<super::Api> for Instance {
             pbuffer: inner.pbuffer,
             wl_window,
             swapchain: None,
+            enable_srgb,
         })
     }
     unsafe fn destroy_surface(&self, surface: Surface) {
@@ -677,6 +714,7 @@ pub struct Surface {
     pub(super) presentable: bool,
     wl_window: Option<*mut raw::c_void>,
     swapchain: Option<Swapchain>,
+    pub(super) enable_srgb: bool,
 }
 
 unsafe impl Send for Surface {}
