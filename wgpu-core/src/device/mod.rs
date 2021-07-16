@@ -2446,7 +2446,7 @@ impl<A: hal::Api> Device<A> {
         self.command_allocator.into_inner().dispose(&self.raw);
         unsafe {
             self.raw.destroy_fence(self.fence);
-            self.raw.exit();
+            self.raw.exit(self.queue);
         }
     }
 }

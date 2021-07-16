@@ -592,13 +592,14 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(self) {
+    unsafe fn exit(self, queue: super::Queue) {
         self.rtv_pool.into_inner().destroy();
         self.dsv_pool.into_inner().destroy();
         self.srv_uav_pool.into_inner().destroy();
         self.sampler_pool.into_inner().destroy();
         self.shared.destroy();
         self.idler.destroy();
+        queue.raw.destroy();
 
         // Debug tracking alive objects
         if !thread::panicking() {

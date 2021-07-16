@@ -860,6 +860,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
             swapchain_fn,
             device: Arc::clone(&shared),
             family_index,
+            relay_semaphore: shared
+                .raw
+                .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?,
+            relay_active: false,
         };
 
         let mem_allocator = {

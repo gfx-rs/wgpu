@@ -106,7 +106,7 @@ impl crate::Queue<Api> for Context {
 }
 
 impl crate::Device<Api> for Context {
-    unsafe fn exit(self) {}
+    unsafe fn exit(self, queue: Context) {}
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }

@@ -518,10 +518,9 @@ impl<A: hal::Api> Example<A> {
             self.device.destroy_pipeline_layout(self.pipeline_layout);
 
             self.surface.unconfigure(&self.device);
-            self.device.exit();
+            self.device.exit(self.queue);
             self.instance.destroy_surface(self.surface);
             drop(self.adapter);
-            drop(self.queue);
         }
     }
 
