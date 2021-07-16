@@ -30,4 +30,4 @@ default-members = ["wgpu"]
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
-naga = { path = "../naga" }
+naga = { git = "https://github.com/initial-algebra/naga" , rev = "8a4c8c67d2a96ac17dcc243e8937ea533a40527f" }
