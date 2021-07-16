@@ -22,8 +22,8 @@ int unary() {
 vec4 selection() {
     vec4 vector1_ = vec4(1.0);
     vec4 vector2_ = vec4(1.0);
-    int a = (true ? 0 : 1);
-    return (true ? vector1_ : vector2_);
+    int a = (true ? 1 : 0);
+    return (true ? vector2_ : vector1_);
 }
 
 void main() {

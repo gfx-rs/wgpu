@@ -96,7 +96,10 @@ pub struct Program<'a> {
 }
 
 impl<'a> Program<'a> {
-    pub fn new(entry_points: &'a FastHashMap<String, ShaderStage>, strip_unused_linkages: bool) -> Program<'a> {
+    pub fn new(
+        entry_points: &'a FastHashMap<String, ShaderStage>,
+        strip_unused_linkages: bool,
+    ) -> Program<'a> {
         Program {
             version: 0,
             profile: Profile::Core,

@@ -47,7 +47,7 @@ fragment fragment1Output fragment1(
 ) {
     const VertexOutput in = { position, varyings1.varying };
     metal::uint mask = sample_mask & (1u << sample_index);
-    float color1 = front_facing ? 0.0 : 1.0;
+    float color1 = front_facing ? 1.0 : 0.0;
     const auto _tmp = FragmentOutput {in.varying, mask, color1};
     return fragment1Output { _tmp.depth, _tmp.sample_mask, _tmp.color };
 }

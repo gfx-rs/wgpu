@@ -1159,8 +1159,10 @@ impl Program<'_> {
             let mut expressions = Arena::new();
             let mut body = Vec::new();
 
-            let can_strip_stage_inputs = self.strip_unused_linkages || stage != ShaderStage::Fragment;
-            let can_strip_stage_outputs = self.strip_unused_linkages || stage != ShaderStage::Vertex;
+            let can_strip_stage_inputs =
+                self.strip_unused_linkages || stage != ShaderStage::Fragment;
+            let can_strip_stage_outputs =
+                self.strip_unused_linkages || stage != ShaderStage::Vertex;
 
             for (i, arg) in self.entry_args.iter().enumerate() {
                 if arg.storage != StorageQualifier::Input {

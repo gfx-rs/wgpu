@@ -101,7 +101,7 @@ OpBranch %55
 %55 = OpLabel
 %56 = OpShiftLeftLogical  %6  %5 %47
 %57 = OpBitwiseAnd  %6  %49 %56
-%58 = OpSelect  %4  %45 %7 %3
+%58 = OpSelect  %4  %45 %3 %7
 %59 = OpCompositeExtract  %4  %36 1
 %60 = OpCompositeConstruct  %10  %59 %57 %58
 %61 = OpCompositeExtract  %4  %60 0

@@ -39,7 +39,7 @@ VertexOutput vertex(VertexInput_vertex vertexinput_vertex)
 FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
 {
     uint mask = (fragmentinput_fragment.sample_mask1 & (1u << fragmentinput_fragment.sample_index1));
-    float color2 = (fragmentinput_fragment.front_facing1 ? 0.0 : 1.0);
+    float color2 = (fragmentinput_fragment.front_facing1 ? 1.0 : 0.0);
     const FragmentOutput fragmentoutput1 = { fragmentinput_fragment.in2.varying, mask, color2 };
     return fragmentoutput1;
 }

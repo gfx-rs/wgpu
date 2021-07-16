@@ -1112,9 +1112,9 @@ impl Parser {
             }
         } else if name == "select" {
             lexer.open_arguments()?;
-            let accept = self.parse_general_expression(lexer, ctx.reborrow())?;
-            lexer.expect(Token::Separator(','))?;
             let reject = self.parse_general_expression(lexer, ctx.reborrow())?;
+            lexer.expect(Token::Separator(','))?;
+            let accept = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.expect(Token::Separator(','))?;
             let condition = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.close_arguments()?;

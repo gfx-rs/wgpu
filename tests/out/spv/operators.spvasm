@@ -68,9 +68,9 @@ OpBranch %47
 %47 = OpLabel
 %48 = OpCompositeConstruct  %15  %3 %3 %3 %3
 %49 = OpCompositeConstruct  %15  %3 %3 %3 %3
-%50 = OpSelect  %9  %12 %14 %11
+%50 = OpSelect  %9  %12 %11 %14
 %53 = OpCompositeConstruct  %52  %12 %12 %12 %12
-%51 = OpSelect  %15  %53 %48 %49
+%51 = OpSelect  %15  %53 %49 %48
 OpReturnValue %51
 OpFunctionEnd
 %55 = OpFunction  %2  None %56

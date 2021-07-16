@@ -18,8 +18,8 @@ float4 selection()
 {
     float4 vector1_ = float4(1.0.xxxx);
     float4 vector2_ = float4(1.0.xxxx);
-    int a = (true ? 0 : 1);
-    return (true ? vector1_ : vector2_);
+    int a = (true ? 1 : 0);
+    return (true ? vector2_ : vector1_);
 }
 
 [numthreads(1, 1, 1)]

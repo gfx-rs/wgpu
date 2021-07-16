@@ -22,8 +22,8 @@ metal::float4 selection(
 ) {
     metal::float4 vector1_ = metal::float4(1.0);
     metal::float4 vector2_ = metal::float4(1.0);
-    int a = true ? 0 : 1;
-    return true ? vector1_ : vector2_;
+    int a = true ? 1 : 0;
+    return true ? vector2_ : vector1_;
 }
 
 kernel void main1(

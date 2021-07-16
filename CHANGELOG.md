@@ -1,5 +1,9 @@
 # Change Log
 
+## TBD
+  - API:
+    - WGSL `select()` order of true/false is swapped
+
 ## v0.5 (2021-06-18)
   - development release for wgpu-0.9
   - API:

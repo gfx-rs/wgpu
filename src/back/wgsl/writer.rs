@@ -1245,9 +1245,9 @@ impl<W: Write> Writer<W> {
                 reject,
             } => {
                 write!(self.out, "select(")?;
-                self.write_expr(module, accept, func_ctx)?;
-                write!(self.out, ", ")?;
                 self.write_expr(module, reject, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, accept, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, condition, func_ctx)?;
                 write!(self.out, ")")?
