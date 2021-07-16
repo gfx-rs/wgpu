@@ -240,6 +240,12 @@ pub struct Queue {
     swapchain_fn: khr::Swapchain,
     device: Arc<DeviceShared>,
     family_index: u32,
+    /// This special semaphore is used to synchronize GPU work of
+    /// everything on a queue with... itself. Yikes!
+    /// It's required by the confusing portion of the spec to be signalled
+    /// by last submission and waited by the present.
+    relay_semaphore: vk::Semaphore,
+    relay_active: bool,
 }
 
 #[derive(Debug)]
@@ -444,19 +450,18 @@ impl crate::Queue<Api> for Queue {
 
         let mut fence_raw = vk::Fence::null();
         let mut vk_timeline_info;
+        let mut semaphores = [self.relay_semaphore, vk::Semaphore::null()];
         let signal_values;
-        let signal_semaphores;
+
         if let Some((fence, value)) = signal_fence {
             fence.maintain(&self.device.raw)?;
             match *fence {
                 Fence::TimelineSemaphore(raw) => {
-                    signal_values = [value];
-                    signal_semaphores = [raw];
+                    signal_values = [!0, value];
+                    semaphores[1] = raw;
                     vk_timeline_info = vk::TimelineSemaphoreSubmitInfo::builder()
                         .signal_semaphore_values(&signal_values);
-                    vk_info = vk_info
-                        .signal_semaphores(&signal_semaphores)
-                        .push_next(&mut vk_timeline_info);
+                    vk_info = vk_info.push_next(&mut vk_timeline_info);
                 }
                 Fence::FencePool {
                     ref mut active,
@@ -465,15 +470,29 @@ impl crate::Queue<Api> for Queue {
                 } => {
                     fence_raw = match free.pop() {
                         Some(raw) => raw,
-                        None => {
-                            let vk_info = vk::FenceCreateInfo::builder().build();
-                            self.device.raw.create_fence(&vk_info, None)?
-                        }
+                        None => self
+                            .device
+                            .raw
+                            .create_fence(&vk::FenceCreateInfo::builder(), None)?,
                     };
                     active.push((value, fence_raw));
                 }
             }
         }
+
+        let wait_stage_mask = [vk::PipelineStageFlags::TOP_OF_PIPE];
+        if self.relay_active {
+            vk_info = vk_info
+                .wait_semaphores(&semaphores[..1])
+                .wait_dst_stage_mask(&wait_stage_mask);
+        }
+        self.relay_active = true;
+        let signal_count = if semaphores[1] == vk::Semaphore::null() {
+            1
+        } else {
+            2
+        };
+        vk_info = vk_info.signal_semaphores(&semaphores[..signal_count]);
 
         self.device
             .raw
@@ -490,9 +509,15 @@ impl crate::Queue<Api> for Queue {
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];
-        let vk_info = vk::PresentInfoKHR::builder()
+        let semaphores = [self.relay_semaphore];
+        let mut vk_info = vk::PresentInfoKHR::builder()
             .swapchains(&swapchains)
             .image_indices(&image_indices);
+
+        if self.relay_active {
+            vk_info = vk_info.wait_semaphores(&semaphores);
+            self.relay_active = false;
+        }
 
         let suboptimal = self
             .swapchain_fn

@@ -289,9 +289,12 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(self) {
+    unsafe fn exit(self, queue: super::Queue) {
         let gl = &self.shared.context;
         gl.delete_vertex_array(self.main_vao);
+        gl.delete_framebuffer(queue.draw_fbo);
+        gl.delete_framebuffer(queue.copy_fbo);
+        gl.delete_buffer(queue.zero_buffer);
     }
 
     unsafe fn create_buffer(

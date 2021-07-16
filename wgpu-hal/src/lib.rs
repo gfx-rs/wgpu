@@ -204,7 +204,7 @@ pub trait Adapter<A: Api>: Send + Sync {
 
 pub trait Device<A: Api>: Send + Sync {
     /// Exit connection to this logical device.
-    unsafe fn exit(self);
+    unsafe fn exit(self, queue: A::Queue);
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUses::empty()`.

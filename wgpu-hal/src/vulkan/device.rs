@@ -538,9 +538,12 @@ impl super::Device {
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(self) {
+    unsafe fn exit(self, queue: super::Queue) {
         self.mem_allocator.into_inner().cleanup(&*self.shared);
         self.desc_allocator.into_inner().cleanup(&*self.shared);
+        self.shared
+            .raw
+            .destroy_semaphore(queue.relay_semaphore, None);
         self.shared.free_resources();
     }
 
