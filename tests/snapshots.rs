@@ -355,7 +355,10 @@ fn convert_wgsl() {
             "shadow",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
-        ("image", Targets::SPIRV | Targets::METAL | Targets::WGSL),
+        (
+            "image",
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+        ),
         ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         (
             "operators",
