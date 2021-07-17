@@ -82,12 +82,6 @@ git = "https://github.com/gfx-rs/naga"
 rev = "458db0b"
 features = ["wgsl-in"]
 
-# used to generate SPIR-V for the Web target
-[target.'cfg(target_arch = "wasm32")'.dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "458db0b"
-features = ["wgsl-in", "spv-out"]
-
 [[example]]
 name="boids"
 test = true
