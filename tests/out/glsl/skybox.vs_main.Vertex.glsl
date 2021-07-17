@@ -12,7 +12,7 @@ layout(binding = 0) uniform Data_block_0 {
     mat4x4 view;
 } _group_0_binding_0;
 
-smooth out vec3 _vs2fs_location0;
+layout(location = 0) smooth out vec3 _vs2fs_location0;
 
 void main() {
     uint vertex_index = uint(gl_VertexID);

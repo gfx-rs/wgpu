@@ -101,9 +101,14 @@ impl Version {
         }
     }
 
-    /// Checks if the version supports explicit `layout(location=)` qualifiers.
+    /// Checks if the version supports all of the explicit layouts:
+    /// - `location=` qualifiers for bindings
+    /// - `binding=` qualifiers for resources
+    ///
+    /// Note: `location=` for vertex inputs and fragment outputs is supported
+    /// unconditionally for GLES 300.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Embedded(300) || *self >= Version::Desktop(410)
+        *self >= Version::Embedded(310) || *self >= Version::Desktop(410)
     }
 }
 
@@ -865,17 +870,19 @@ impl<'a, W: Write> Writer<'a, W> {
                     ShaderStage::Fragment => !output,
                     _ => false,
                 };
+
+                // Write the I/O locations, if allowed
+                if self.options.version.supports_explicit_locations()
+                    || !emit_interpolation_and_auxiliary
+                {
+                    write!(self.out, "layout(location = {}) ", location)?;
+                }
+
+                // Write the interpolation qualifier.
                 if let Some(interp) = interpolation {
                     if emit_interpolation_and_auxiliary {
                         write!(self.out, "{} ", glsl_interpolation(interp))?;
                     }
-                }
-
-                // Write the storage class
-                if !emit_interpolation_and_auxiliary
-                    && self.options.version.supports_explicit_locations()
-                {
-                    write!(self.out, "layout(location = {}) ", location)?;
                 }
 
                 // Write the sampling auxiliary qualifier.

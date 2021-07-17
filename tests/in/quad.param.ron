@@ -2,4 +2,9 @@
 	spv_version: (1, 0),
 	spv_debug: true,
 	spv_adjust_coordinate_space: true,
+	glsl: (
+		version: Embedded(300),
+		writer_flags: (bits: 0),
+		binding_map: {},
+	),
 )

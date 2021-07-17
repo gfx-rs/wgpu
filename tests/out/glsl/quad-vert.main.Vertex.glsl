@@ -25,7 +25,7 @@ vec2 a_pos1 = vec2(0, 0);
 
 layout(location = 1) in vec2 _p2vs_location1;
 layout(location = 0) in vec2 _p2vs_location0;
-smooth out vec2 _vs2fs_location0;
+layout(location = 0) smooth out vec2 _vs2fs_location0;
 
 void main2() {
     vec2 _expr12 = a_uv1;
