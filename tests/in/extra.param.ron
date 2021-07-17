@@ -1,4 +1,12 @@
 (
 	god_mode: true,
 	spv_version: (1, 0),
+	msl_custom: true,
+	msl: (
+		lang_version: (2, 2),
+		per_stage_map: (),
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: false,
+	),
 )

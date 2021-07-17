@@ -1573,6 +1573,11 @@ impl<W: Write> Writer<W> {
             .reset(module, super::keywords::RESERVED, &[], &mut self.names);
         self.runtime_sized_buffers.clear();
 
+        writeln!(
+            self.out,
+            "// language: metal{}.{}",
+            options.lang_version.0, options.lang_version.1
+        )?;
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
