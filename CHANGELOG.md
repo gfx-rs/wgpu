@@ -1,4 +1,6 @@
 # Change Log
+## wgpu-core-0.9.2
+  - fix `Features::TEXTURE_SPECIFIC_FORMAT_FEATURES` not being supported for rendertargets
 
 ## wgpu-core-0.9.1 (2021-07-13)
   - fix buffer inits delayed by a frame
