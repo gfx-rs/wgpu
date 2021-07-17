@@ -898,6 +898,11 @@ impl<A: HalApi> Device<A> {
             Caps::FLOAT64,
             self.features.contains(wgt::Features::SHADER_FLOAT64),
         );
+        caps.set(
+            Caps::PRIMITIVE_INDEX,
+            self.features
+                .contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
+        );
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)?;
         let interface = validation::Interface::new(&module, &info, self.features);

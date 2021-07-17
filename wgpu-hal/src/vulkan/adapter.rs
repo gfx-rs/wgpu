@@ -125,6 +125,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
                 //.shader_int16(requested_features.contains(wgt::Features::SHADER_INT16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
+                .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
             vulkan_1_2: if api_version >= vk::API_VERSION_1_2 {
                 Some(
@@ -290,6 +291,7 @@ impl PhysicalDeviceFeatures {
             F::TEXTURE_BINDING_ARRAY,
             self.core.shader_sampled_image_array_dynamic_indexing != 0,
         );
+        features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
         if Self::all_features_supported(
             &features,
             &[
