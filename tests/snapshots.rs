@@ -324,6 +324,8 @@ fn write_output_wgsl(
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn convert_wgsl() {
+    let _ = env_logger::try_init();
+
     let root = env!("CARGO_MANIFEST_DIR");
     let inputs = [
         (
@@ -407,6 +409,8 @@ fn convert_wgsl() {
 
 #[cfg(feature = "spv-in")]
 fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
+    let _ = env_logger::try_init();
+
     let root = env!("CARGO_MANIFEST_DIR");
     let module = naga::front::spv::parse_u8_slice(
         &fs::read(format!("{}/{}/spv/{}.spv", root, BASE_DIR_IN, name))
@@ -453,7 +457,7 @@ fn convert_spv_pointer_access() {
 #[allow(unused_variables)]
 #[test]
 fn convert_glsl_folder() {
-    env_logger::init();
+    let _ = env_logger::try_init();
 
     let root = env!("CARGO_MANIFEST_DIR");
 
