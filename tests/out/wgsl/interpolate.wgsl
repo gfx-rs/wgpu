@@ -1,6 +1,6 @@
 struct FragmentInput {
     [[builtin(position)]] position: vec4<f32>;
-    [[location(0), interpolate(flat)]] flat: u32;
+    [[location(0)]] flat: u32;
     [[location(1), interpolate(linear)]] linear: f32;
     [[location(2), interpolate(linear, centroid)]] linear_centroid: vec2<f32>;
     [[location(3), interpolate(linear, sample)]] linear_sample: vec3<f32>;
