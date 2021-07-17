@@ -2447,6 +2447,7 @@ fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
         // fragment
         Bi::FragDepth => "gl_FragDepth",
         Bi::FrontFacing => "gl_FrontFacing",
+        Bi::PrimitiveIndex => "uint(gl_PrimitiveID)",
         Bi::SampleIndex => "gl_SampleID",
         Bi::SampleMask => {
             if output {

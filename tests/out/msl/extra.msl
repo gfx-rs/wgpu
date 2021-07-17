@@ -6,6 +6,10 @@ struct PushConstants {
     char _pad1[12];
     metal::float2 double1;
 };
+struct FragmentIn {
+    metal::float4 color;
+    metal::uint primitive_index;
+};
 
 struct main1Input {
     metal::float4 color [[user(loc0), center_perspective]];
@@ -15,7 +19,12 @@ struct main1Output {
 };
 fragment main1Output main1(
   main1Input varyings [[stage_in]]
+, metal::uint primitive_index [[primitive_id]]
 ) {
-    const auto color = varyings.color;
-    return main1Output { color };
+    const FragmentIn in = { varyings.color, primitive_index };
+    if ((in.primitive_index % 2u) == 0u) {
+        return main1Output { in.color };
+    } else {
+        return main1Output { metal::float4(metal::float3(1.0) - in.color.xyz, in.color.w) };
+    }
 }

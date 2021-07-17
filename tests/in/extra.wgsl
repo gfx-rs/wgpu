@@ -5,7 +5,16 @@ struct PushConstants {
 };
 var<push_constant> pc: PushConstants;
 
+struct FragmentIn {
+    [[location(0)]] color: vec4<f32>;
+    [[builtin(primitive_index)]] primitive_index: u32;
+};
+
 [[stage(fragment)]]
-fn main([[location(0)]] color: vec4<f32>) -> [[location(0)]] vec4<f32> {
-    return color;
+fn main(in: FragmentIn) -> [[location(0)]] vec4<f32> {
+    if (in.primitive_index % 2u == 0u) {
+        return in.color;
+    } else {
+        return vec4<f32>(vec3<f32>(1.0) - in.color.rgb, in.color.a);
+    }
 }

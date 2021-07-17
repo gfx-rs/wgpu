@@ -348,6 +348,7 @@ impl ResolvedBinding {
                     // fragment
                     Bi::FragDepth => "depth(any)",
                     Bi::FrontFacing => "front_facing",
+                    Bi::PrimitiveIndex => "primitive_id",
                     Bi::SampleIndex => "sample_id",
                     Bi::SampleMask => "sample_mask",
                     // compute

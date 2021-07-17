@@ -166,6 +166,16 @@ impl Program<'_> {
                 PrologueStage::FRAGMENT,
                 StorageQualifier::Input,
             ),
+            "gl_PrimitiveID" => add_builtin(
+                TypeInner::Scalar {
+                    kind: ScalarKind::Uint,
+                    width: 4,
+                },
+                BuiltIn::PrimitiveIndex,
+                false,
+                PrologueStage::FRAGMENT,
+                StorageQualifier::Input,
+            ),
             _ => Ok(None),
         }
     }

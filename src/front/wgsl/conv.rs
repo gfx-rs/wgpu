@@ -20,6 +20,7 @@ pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>>
         // fragment
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,
+        "primitive_index" => crate::BuiltIn::PrimitiveIndex,
         "sample_index" => crate::BuiltIn::SampleIndex,
         "sample_mask" => crate::BuiltIn::SampleMask,
         // compute

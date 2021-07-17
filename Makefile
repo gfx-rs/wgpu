@@ -35,7 +35,7 @@ validate-spv: $(SNAPSHOTS_BASE_OUT)/spv/*.spvasm
 validate-msl: $(SNAPSHOTS_BASE_OUT)/msl/*.msl
 	@set -e && for file in $^ ; do \
 		echo "Validating" $${file#"$(SNAPSHOTS_BASE_OUT)/"};	\
-		cat $${file} | xcrun -sdk macosx metal -mmacosx-version-min=10.11 -x metal - -o /dev/null; \
+		cat $${file} | xcrun -sdk macosx metal -mmacosx-version-min=10.15 -x metal - -o /dev/null; \
 	done
 
 validate-glsl: $(SNAPSHOTS_BASE_OUT)/glsl/*.glsl

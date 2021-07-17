@@ -132,6 +132,7 @@ pub(super) fn map_builtin(word: spirv::Word) -> Result<crate::BuiltIn, Error> {
         // fragment
         Some(Bi::FragDepth) => crate::BuiltIn::FragDepth,
         Some(Bi::FrontFacing) => crate::BuiltIn::FrontFacing,
+        Some(Bi::PrimitiveId) => crate::BuiltIn::PrimitiveIndex,
         Some(Bi::SampleId) => crate::BuiltIn::SampleIndex,
         Some(Bi::SampleMask) => crate::BuiltIn::SampleMask,
         // compute

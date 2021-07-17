@@ -53,6 +53,8 @@ pub enum VaryingError {
     BindingCollision { location: u32 },
     #[error("Built-in {0:?} is present more than once")]
     DuplicateBuiltIn(crate::BuiltIn),
+    #[error("Capability {0:?} is not supported")]
+    UnsupportedCapability(Capabilities),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -99,6 +101,7 @@ struct VaryingContext<'a> {
     types: &'a Arena<crate::Type>,
     location_mask: &'a mut BitSet,
     built_in_mask: u32,
+    capabilities: Capabilities,
 }
 
 impl VaryingContext<'_> {
@@ -176,6 +179,21 @@ impl VaryingContext<'_> {
                                 width: crate::BOOL_WIDTH,
                             },
                     ),
+                    Bi::PrimitiveIndex => {
+                        if !self.capabilities.contains(Capabilities::PRIMITIVE_INDEX) {
+                            return Err(VaryingError::UnsupportedCapability(
+                                Capabilities::PRIMITIVE_INDEX,
+                            ));
+                        }
+                        (
+                            self.stage == St::Fragment && !self.output,
+                            *ty_inner
+                                == Ti::Scalar {
+                                    kind: Sk::Uint,
+                                    width,
+                                },
+                        )
+                    }
                     Bi::SampleIndex => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner
@@ -429,6 +447,7 @@ impl super::Validator {
                 types: &module.types,
                 location_mask: &mut self.location_mask,
                 built_in_mask: argument_built_ins,
+                capabilities: self.capabilities,
             };
             ctx.validate(fa.binding.as_ref())
                 .map_err(|e| EntryPointError::Argument(index as u32, e))?;
@@ -444,6 +463,7 @@ impl super::Validator {
                 types: &module.types,
                 location_mask: &mut self.location_mask,
                 built_in_mask: 0,
+                capabilities: self.capabilities,
             };
             ctx.validate(fr.binding.as_ref())
                 .map_err(EntryPointError::Result)?;

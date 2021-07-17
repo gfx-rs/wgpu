@@ -69,6 +69,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Int8,
     spirv::Capability::Int16,
     spirv::Capability::Int64,
+    spirv::Capability::Geometry,
     // tricky ones
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
@@ -3482,6 +3483,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         | crate::BuiltIn::InstanceIndex
                         | crate::BuiltIn::SampleIndex
                         | crate::BuiltIn::VertexIndex
+                        | crate::BuiltIn::PrimitiveIndex
                         | crate::BuiltIn::LocalInvocationIndex => Some(crate::TypeInner::Scalar {
                             kind: crate::ScalarKind::Uint,
                             width: 4,
