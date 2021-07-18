@@ -304,27 +304,55 @@ fn write_output_hlsl(
     // This file contains an info about profiles (shader stages) contains inside generated shader
     // This info will be passed to dxc
     let mut config_str = String::new();
+    let mut vertex_str = String::from("vertex=(");
+    let mut fragment_str = String::from("fragment=(");
+    let mut compute_str = String::from("compute=(");
     for (index, ep) in module.entry_points.iter().enumerate() {
         let name = match reflection_info.entry_point_names[index] {
             Ok(ref name) => name,
             Err(_) => continue,
         };
-        let stage_str = match ep.stage {
-            naga::ShaderStage::Vertex => "vertex",
-            naga::ShaderStage::Fragment => "fragment",
-            naga::ShaderStage::Compute => "compute",
-        };
-        writeln!(
-            config_str,
-            "{}={}_{}\n{}_name={}",
-            stage_str,
-            ep.stage.to_hlsl_str(),
-            options.shader_model.to_str(),
-            stage_str,
-            name,
-        )
-        .unwrap();
+        match ep.stage {
+            naga::ShaderStage::Vertex => {
+                write!(
+                    vertex_str,
+                    "{}:{}_{} ",
+                    name,
+                    ep.stage.to_hlsl_str(),
+                    options.shader_model.to_str(),
+                )
+                .unwrap();
+            }
+            naga::ShaderStage::Fragment => {
+                write!(
+                    fragment_str,
+                    "{}:{}_{} ",
+                    name,
+                    ep.stage.to_hlsl_str(),
+                    options.shader_model.to_str(),
+                )
+                .unwrap();
+            }
+            naga::ShaderStage::Compute => {
+                write!(
+                    compute_str,
+                    "{}:{}_{} ",
+                    name,
+                    ep.stage.to_hlsl_str(),
+                    options.shader_model.to_str(),
+                )
+                .unwrap();
+            }
+        }
     }
+
+    writeln!(
+        config_str,
+        "{})\n{})\n{})",
+        vertex_str, fragment_str, compute_str
+    )
+    .unwrap();
+
     fs::write(
         destination.join(format!("hlsl/{}.hlsl.config", file_name)),
         config_str,

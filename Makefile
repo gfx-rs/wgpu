@@ -65,17 +65,27 @@ validate-wgsl: $(SNAPSHOTS_BASE_OUT)/wgsl/*.wgsl
 		cargo run $${file}; \
 	done
 
+validate-hlsl: SHELL:=/bin/bash # required because config files uses arrays
 validate-hlsl: $(SNAPSHOTS_BASE_OUT)/hlsl/*.hlsl
 	@set -e && for file in $^ ; do \
+		DXC_PARAMS="-Wno-parentheses-equality -Zi -Qembed_debug"; \
 		echo "Validating" $${file#"$(SNAPSHOTS_BASE_OUT)/"}; \
 		config="$$(dirname $${file})/$$(basename $${file}).config"; \
-		vertex=""\
-		fragment="" \
-		compute="" \
 		. $${config}; \
-		DXC_PARAMS="-Wno-parentheses-equality -Zi -Qembed_debug"; \
-		[ ! -z "$${vertex}" ] && echo "Vertex Stage:" && dxc $${file} -T $${vertex} -E $${vertex_name} $${DXC_PARAMS} > /dev/null; \
-		[ ! -z "$${fragment}" ] && echo "Fragment Stage:" && dxc $${file} -T $${fragment} -E $${fragment_name} $${DXC_PARAMS} > /dev/null; \
-		[ ! -z "$${compute}" ] && echo "Compute Stage:" && dxc $${file} -T $${compute} -E $${compute_name} $${DXC_PARAMS} > /dev/null; \
+		for (( i=0; i<$${#vertex[@]}; i++ )); do \
+			name=`echo $${vertex[i]} | cut -d \: -f 1`; \
+			profile=`echo $${vertex[i]} | cut -d \: -f 2`; \
+			(set -x; dxc $${file} -T $${profile} -E $${name} $${DXC_PARAMS} > /dev/null); \
+		done; \
+		for (( i=0; i<$${#fragment[@]}; i++ )); do \
+			name=`echo $${fragment[i]} | cut -d \: -f 1`; \
+			profile=`echo $${fragment[i]} | cut -d \: -f 2`; \
+			(set -x; dxc $${file} -T $${profile} -E $${name} $${DXC_PARAMS} > /dev/null); \
+		done; \
+		for (( i=0; i<$${#compute[@]}; i++ )); do \
+			name=`echo $${compute[i]} | cut -d \: -f 1`; \
+			profile=`echo $${compute[i]} | cut -d \: -f 2`; \
+			(set -x; dxc $${file} -T $${profile} -E $${name} $${DXC_PARAMS} > /dev/null); \
+		done; \
 		echo "======================"; \
 	done
