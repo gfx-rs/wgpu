@@ -21,6 +21,8 @@
 // int dim_1d = NagaDimensions1D(image_1d);
 // ```
 
+use super::{super::FunctionCtx, writer::BackendResult};
+use crate::arena::Handle;
 use std::fmt::Write;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -84,11 +86,18 @@ impl From<crate::ImageQuery> for ImageQuery {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum MipLevelCoordinate {
+    NotApplicable,
+    Zero,
+    Expression(Handle<crate::Expression>),
+}
+
 impl<'a, W: Write> super::Writer<'a, W> {
     pub(super) fn write_wrapped_image_query_function_name(
         &mut self,
         query: WrappedImageQuery,
-    ) -> super::writer::BackendResult {
+    ) -> BackendResult {
         let dim_str = super::writer::image_dimension_str(query.dim);
         let class_str = match query.class {
             crate::ImageClass::Sampled { multi: true, .. } => "MS",
@@ -118,8 +127,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
     pub(super) fn write_wrapped_image_query_functions(
         &mut self,
         module: &crate::Module,
-        func_ctx: &crate::back::FunctionCtx<'_>,
-    ) -> super::writer::BackendResult {
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
         for (handle, _) in func_ctx.expressions.iter() {
             if let crate::Expression::ImageQuery { image, query } = func_ctx.expressions[handle] {
                 let image_ty = func_ctx.info[image].ty.inner_with(&module.types);
@@ -243,6 +252,47 @@ impl<'a, W: Write> super::Writer<'a, W> {
             }
         }
 
+        Ok(())
+    }
+
+    pub(super) fn write_texture_coordinates(
+        &mut self,
+        kind: &str,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        mip_level: MipLevelCoordinate,
+        module: &crate::Module,
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
+        // HLSL expects the array index to be merged with the coordinate
+        let extra = array_index.is_some() as usize
+            + (mip_level != MipLevelCoordinate::NotApplicable) as usize;
+        if extra == 0 {
+            self.write_expr(module, coordinate, func_ctx)?;
+        } else {
+            let num_coords = match *func_ctx.info[coordinate].ty.inner_with(&module.types) {
+                crate::TypeInner::Scalar { .. } => 1,
+                crate::TypeInner::Vector { size, .. } => size as usize,
+                _ => unreachable!(),
+            };
+            write!(self.out, "{}{}(", kind, num_coords + extra)?;
+            self.write_expr(module, coordinate, func_ctx)?;
+            if let Some(expr) = array_index {
+                write!(self.out, ", ")?;
+                self.write_expr(module, expr, func_ctx)?;
+            }
+            match mip_level {
+                MipLevelCoordinate::NotApplicable => {}
+                MipLevelCoordinate::Zero => {
+                    write!(self.out, ", 0")?;
+                }
+                MipLevelCoordinate::Expression(expr) => {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, expr, func_ctx)?;
+                }
+            }
+            write!(self.out, ")")?;
+        }
         Ok(())
     }
 }

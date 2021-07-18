@@ -1,4 +1,7 @@
-use super::{Error, Options};
+use super::{
+    image::{MipLevelCoordinate, WrappedImageQuery},
+    Error, Options,
+};
 use crate::{
     back,
     proc::{self, NameKey},
@@ -36,7 +39,7 @@ pub struct Writer<'a, W> {
     ep_inputs: Vec<Option<EntryPointBinding>>,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
-    pub(super) wrapped_image_queries: crate::FastHashSet<super::image::WrappedImageQuery>,
+    pub(super) wrapped_image_queries: crate::FastHashSet<WrappedImageQuery>,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -397,21 +400,20 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::Constant>,
     ) -> BackendResult {
         write!(self.out, "static const ")?;
-
         match *inner {
             crate::ConstantInner::Scalar {
                 width: _,
                 ref value,
             } => {
                 // Write type
-                match *value {
-                    crate::ScalarValue::Sint(_) => write!(self.out, "int")?,
-                    crate::ScalarValue::Uint(_) => write!(self.out, "uint")?,
-                    crate::ScalarValue::Float(_) => write!(self.out, "float")?,
-                    crate::ScalarValue::Bool(_) => write!(self.out, "bool")?,
+                let ty_str = match *value {
+                    crate::ScalarValue::Sint(_) => "int",
+                    crate::ScalarValue::Uint(_) => "uint",
+                    crate::ScalarValue::Float(_) => "float",
+                    crate::ScalarValue::Bool(_) => "bool",
                 };
                 let name = &self.names[&NameKey::Constant(handle)];
-                write!(self.out, " {} = ", name)?;
+                write!(self.out, "{} {} = ", ty_str, name)?;
 
                 // Second match required to avoid heap allocation by `format!()`
                 match *value {
@@ -427,6 +429,8 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             crate::ConstantInner::Composite { ty, ref components } => {
                 self.write_type(module, ty)?;
+                let name = &self.names[&NameKey::Constant(handle)];
+                write!(self.out, " {} = ", name)?;
                 self.write_composite_constant(module, ty, components)?;
             }
         }
@@ -1142,12 +1146,14 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ".{}(", texture_func)?;
                 self.write_expr(module, sampler, func_ctx)?;
                 write!(self.out, ", ")?;
-                self.write_expr(module, coordinate, func_ctx)?;
-
-                if let Some(array_index) = array_index {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, array_index, func_ctx)?;
-                }
+                self.write_texture_coordinates(
+                    "float",
+                    coordinate,
+                    array_index,
+                    MipLevelCoordinate::NotApplicable,
+                    module,
+                    func_ctx,
+                )?;
 
                 if let Some(depth_ref) = depth_ref {
                     write!(self.out, ", ")?;
@@ -1187,7 +1193,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     class,
                 } = *func_ctx.info[image].ty.inner_with(&module.types)
                 {
-                    let wrapped_image_query = super::image::WrappedImageQuery {
+                    let wrapped_image_query = WrappedImageQuery {
                         dim,
                         arrayed,
                         class,
@@ -1212,97 +1218,47 @@ impl<'a, W: Write> Writer<'a, W> {
                 index,
             } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                let image_ty = func_ctx.info[image].ty.inner_with(&module.types);
-                if let crate::TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class,
-                } = *image_ty
+                let ms = match *func_ctx.info[image].ty.inner_with(&module.types) {
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::Sampled { multi, .. },
+                        ..
+                    } => multi,
+                    _ => false,
+                };
+
+                self.write_expr(module, image, func_ctx)?;
+                write!(self.out, ".Load(")?;
+
+                let mip_level = if ms {
+                    MipLevelCoordinate::NotApplicable
+                } else {
+                    match index {
+                        Some(expr) => MipLevelCoordinate::Expression(expr),
+                        None => MipLevelCoordinate::Zero,
+                    }
+                };
+
+                self.write_texture_coordinates(
+                    "int",
+                    coordinate,
+                    array_index,
+                    mip_level,
+                    module,
+                    func_ctx,
+                )?;
+
+                if ms {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, index.unwrap(), func_ctx)?;
+                }
+
+                // close bracket for Load function
+                write!(self.out, ")")?;
+
+                // return x component if return type is scalar
+                if let TypeInner::Scalar { .. } = *func_ctx.info[expr].ty.inner_with(&module.types)
                 {
-                    use crate::ImageDimension as IDim;
-
-                    self.write_expr(module, image, func_ctx)?;
-                    write!(self.out, ".Load(")?;
-
-                    let ms = if let crate::ImageClass::Sampled { multi: true, .. } = class {
-                        true
-                    } else {
-                        false
-                    };
-
-                    // Input location type based on texture type
-                    let (load_param_ty, load_components_count) = match dim {
-                        IDim::D1 => {
-                            if arrayed {
-                                ("int3", 3)
-                            } else {
-                                ("int2", 2)
-                            }
-                        }
-                        IDim::D2 => match (ms, arrayed) {
-                            (true, true) => ("int3", 3),
-                            (true, false) => ("int2", 2),
-                            (false, true) => ("int4", 4),
-                            (false, false) => ("int3", 3),
-                        },
-                        IDim::D3 => ("int4", 4),
-                        _ => unreachable!(),
-                    };
-
-                    let coordinate_expr_components_count =
-                        match *func_ctx.info[coordinate].ty.inner_with(&module.types) {
-                            TypeInner::Vector { size, .. } => size as i32,
-                            TypeInner::Scalar { .. } => 1,
-                            // coordinates can be only vector or scalar
-                            _ => unreachable!(),
-                        };
-
-                    let components_count = {
-                        let array_coords = if arrayed { 1 } else { 0 };
-                        let array_index_param = if array_index.is_some() { 1 } else { 0 };
-                        let sampler_index_param = if index.is_some() { 1 } else { 0 };
-
-                        coordinate_expr_components_count
-                            + array_coords
-                            + array_index_param
-                            + sampler_index_param
-                    };
-
-                    let is_ty_cast_required =
-                        load_components_count > coordinate_expr_components_count;
-
-                    // cast to another type, if required
-                    if is_ty_cast_required {
-                        write!(self.out, "{}(", load_param_ty)?;
-                    }
-                    self.write_expr(module, coordinate, func_ctx)?;
-                    if let Some(array_index) = array_index {
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, array_index, func_ctx)?;
-                    }
-                    if let Some(index) = index {
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, index, func_ctx)?;
-                    }
-                    if index.is_none() && components_count < load_components_count {
-                        // write zero mipmap level if it's not provided but required
-                        write!(self.out, ", 0")?;
-                    };
-
-                    if is_ty_cast_required {
-                        // close bracket for type
-                        write!(self.out, ")")?;
-                    }
-
-                    // close bracket for Load function
-                    write!(self.out, ")")?;
-
-                    // return x component if return type is scalar
-                    if let TypeInner::Scalar { .. } =
-                        *func_ctx.info[expr].ty.inner_with(&module.types)
-                    {
-                        write!(self.out, ".x")?;
-                    }
+                    write!(self.out, ".x")?;
                 }
             }
             // TODO: copy-paste from wgsl-out
