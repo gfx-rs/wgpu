@@ -8,7 +8,7 @@ struct Data {
     float4x4 view;
 };
 
-Data r_data : register(b0, space0);
+cbuffer r_data : register(b0, space0) { Data r_data; }
 TextureCube<float4> r_texture : register(t0, space0);
 SamplerState r_sampler : register(s0, space1);
 

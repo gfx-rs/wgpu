@@ -16,7 +16,7 @@ struct Lights {
     Light data[1];
 };
 
-Globals u_globals : register(b0);
+cbuffer u_globals : register(b0) { Globals u_globals; }
 Lights s_lights : register(t1);
 Texture2DArray t_shadow : register(t2);
 SamplerComparisonState sampler_shadow : register(s3);

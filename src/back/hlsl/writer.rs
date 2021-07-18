@@ -344,7 +344,7 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::StorageClass::Function => unreachable!("Function storage class"),
             crate::StorageClass::Private => ("static ", ""),
             crate::StorageClass::WorkGroup => ("groupshared ", ""),
-            crate::StorageClass::Uniform => ("", "b"),
+            crate::StorageClass::Uniform => ("cbuffer", "b"),
             crate::StorageClass::Storage | crate::StorageClass::Handle => {
                 if let TypeInner::Sampler { .. } = *inner {
                     ("", "s")
@@ -358,12 +358,13 @@ impl<'a, W: Write> Writer<'a, W> {
         };
 
         write!(self.out, "{}", storage)?;
-        self.write_type(module, global.ty)?;
-        write!(
-            self.out,
-            " {}",
-            &self.names[&NameKey::GlobalVariable(handle)]
-        )?;
+        // constant buffer declarations are expected to be inlined, e.g.
+        // cbuffer foo: register(b0) { field1: type1; };
+        if global.class != crate::StorageClass::Uniform {
+            self.write_type(module, global.ty)?;
+        }
+        let name = &self.names[&NameKey::GlobalVariable(handle)];
+        write!(self.out, " {}", name)?;
         if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
             self.write_array_size(module, size)?;
         }
@@ -375,14 +376,22 @@ impl<'a, W: Write> Writer<'a, W> {
             if self.options.shader_model > super::ShaderModel::V5_0 {
                 write!(self.out, ", space{}", bt.space)?;
             }
-            writeln!(self.out, ");")?;
-        } else {
+            write!(self.out, ")")?;
+        } else if global.class == crate::StorageClass::Private {
             write!(self.out, " = ")?;
             if let Some(init) = global.init {
                 self.write_constant(module, init)?;
             } else {
                 self.write_default_init(module, global.ty)?;
             }
+        }
+
+        if global.class == crate::StorageClass::Uniform {
+            write!(self.out, " {{ ")?;
+            self.write_type(module, global.ty)?;
+            let name = &self.names[&NameKey::GlobalVariable(handle)];
+            writeln!(self.out, " {}; }}", name)?;
+        } else {
             writeln!(self.out, ";")?;
         }
 
