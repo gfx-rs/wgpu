@@ -20,7 +20,7 @@ pub use writer::Writer;
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindTarget {
     pub space: u8,
-    pub register: u8,
+    pub register: u32,
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
@@ -108,7 +108,7 @@ impl Options {
             Some(target) => Ok(target.clone()),
             None if self.fake_missing_bindings => Ok(BindTarget {
                 space: res_binding.group as u8,
-                register: res_binding.binding as u8,
+                register: res_binding.binding,
             }),
             None => Err(EntryPointError::MissingBinding(res_binding.clone())),
         }
@@ -116,6 +116,7 @@ impl Options {
 }
 
 /// Structure that contains a reflection info
+#[derive(Default)]
 pub struct ReflectionInfo {
     /// Mapping of the entry point names. Each item in the array
     /// corresponds to an entry point index. The real entry point name may be different if one of the
