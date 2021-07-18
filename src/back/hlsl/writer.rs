@@ -64,7 +64,7 @@ impl<'a, W: Write> Writer<'a, W> {
     pub fn write(
         &mut self,
         module: &Module,
-        info: &valid::ModuleInfo,
+        module_info: &valid::ModuleInfo,
     ) -> Result<super::ReflectionInfo, Error> {
         self.reset(module);
 
@@ -144,7 +144,31 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write all regular functions
         for (handle, function) in module.functions.iter() {
-            let info = &info[handle];
+            let info = &module_info[handle];
+
+            // Check if all of the globals are accessible
+            if !self.options.fake_missing_bindings {
+                if let Some((var_handle, _)) =
+                    module
+                        .global_variables
+                        .iter()
+                        .find(|&(var_handle, var)| match var.binding {
+                            Some(ref binding) if !info[var_handle].is_empty() => {
+                                self.options.resolve_resource_binding(binding).is_err()
+                            }
+                            _ => false,
+                        })
+                {
+                    log::info!(
+                        "Skipping function {:?} (name {:?}) because global {:?} is inaccessible",
+                        handle,
+                        function.name,
+                        var_handle
+                    );
+                    continue;
+                }
+            }
+
             let ctx = back::FunctionCtx {
                 ty: back::FunctionType::Function(handle),
                 info,
@@ -161,13 +185,34 @@ impl<'a, W: Write> Writer<'a, W> {
             writeln!(self.out)?;
         }
 
-        let mut entry_points_info = Vec::with_capacity(module.entry_points.len());
+        let mut entry_point_names = Vec::with_capacity(module.entry_points.len());
 
         // Write all entry points
         for (index, ep) in module.entry_points.iter().enumerate() {
+            let info = module_info.get_entry_point(index);
+
+            if !self.options.fake_missing_bindings {
+                let mut ep_error = None;
+                for (var_handle, var) in module.global_variables.iter() {
+                    match var.binding {
+                        Some(ref binding) if !info[var_handle].is_empty() => {
+                            if let Err(err) = self.options.resolve_resource_binding(binding) {
+                                ep_error = Some(err);
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if let Some(err) = ep_error {
+                    entry_point_names.push(Err(err));
+                    continue;
+                }
+            }
+
             let ctx = back::FunctionCtx {
                 ty: back::FunctionType::EntryPoint(index as u16),
-                info: info.get_entry_point(index),
+                info,
                 expressions: &ep.function.expressions,
                 named_expressions: &ep.function.named_expressions,
             };
@@ -176,7 +221,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_wrapped_image_query_functions(module, &ctx)?;
 
             if ep.stage == ShaderStage::Compute {
-                // HLSL is calling workgroup size, num threads
+                // HLSL is calling workgroup size "num threads"
                 let num_threads = ep.workgroup_size;
                 writeln!(
                     self.out,
@@ -186,19 +231,16 @@ impl<'a, W: Write> Writer<'a, W> {
             }
 
             let name = self.names[&NameKey::EntryPoint(index as u16)].clone();
-
             self.write_function(module, &name, &ep.function, &ctx)?;
 
             if index < module.entry_points.len() - 1 {
                 writeln!(self.out)?;
             }
 
-            entry_points_info.push(name);
+            entry_point_names.push(Ok(name));
         }
 
-        Ok(super::ReflectionInfo {
-            entry_points: entry_points_info,
-        })
+        Ok(super::ReflectionInfo { entry_point_names })
     }
 
     fn write_semantic(
@@ -324,9 +366,11 @@ impl<'a, W: Write> Writer<'a, W> {
         )?;
 
         if let Some(ref binding) = global.binding {
-            write!(self.out, " : register({}{}", register_ty, binding.binding)?;
+            // this was already resolved earlier when we started evaluating an entry point.
+            let bt = self.options.resolve_resource_binding(binding).unwrap();
+            write!(self.out, " : register({}{}", register_ty, bt.register)?;
             if self.options.shader_model > super::ShaderModel::V5_0 {
-                write!(self.out, ", space{}", binding.group)?;
+                write!(self.out, ", space{}", bt.space)?;
             }
             writeln!(self.out, ");")?;
         } else {

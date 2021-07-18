@@ -64,6 +64,12 @@ struct Parameters {
     #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
     #[serde(default)]
     glsl_comp_ep_name: Option<String>,
+    #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
+    #[serde(default)]
+    hlsl: naga::back::hlsl::Options,
+    #[cfg(all(not(feature = "deserialize"), feature = "hlsl-out"))]
+    #[serde(default)]
+    hlsl_custom: bool,
 }
 
 #[allow(dead_code, unused_variables)]
@@ -131,7 +137,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "hlsl-out")]
     {
         if targets.contains(Targets::HLSL) {
-            write_output_hlsl(module, &info, &dest, name);
+            write_output_hlsl(module, &info, &dest, name, &params);
         }
     }
     #[cfg(feature = "wgsl-out")]
@@ -271,11 +277,25 @@ fn write_output_hlsl(
     info: &naga::valid::ModuleInfo,
     destination: &PathBuf,
     file_name: &str,
+    params: &Parameters,
 ) {
     use naga::back::hlsl;
+    use std::fmt::Write;
+
+    #[cfg_attr(feature = "deserialize", allow(unused_variables))]
+    let default_options = hlsl::Options::default();
+    #[cfg(feature = "deserialize")]
+    let options = &params.hlsl;
+    #[cfg(not(feature = "deserialize"))]
+    let options = if params.hlsl_custom {
+        println!("Skipping {}", destination.display());
+        return;
+    } else {
+        &default_options
+    };
+
     let mut buffer = String::new();
-    let options = hlsl::Options::default();
-    let mut writer = hlsl::Writer::new(&mut buffer, &options);
+    let mut writer = hlsl::Writer::new(&mut buffer, options);
     let reflection_info = writer.write(module, info).unwrap();
 
     fs::write(destination.join(format!("hlsl/{}.hlsl", file_name)), buffer).unwrap();
@@ -283,22 +303,27 @@ fn write_output_hlsl(
     // We need a config file for validation script
     // This file contains an info about profiles (shader stages) contains inside generated shader
     // This info will be passed to dxc
-    let mut config_str = String::from("");
+    let mut config_str = String::new();
     for (index, ep) in module.entry_points.iter().enumerate() {
+        let name = match reflection_info.entry_point_names[index] {
+            Ok(ref name) => name,
+            Err(_) => continue,
+        };
         let stage_str = match ep.stage {
             naga::ShaderStage::Vertex => "vertex",
             naga::ShaderStage::Fragment => "fragment",
             naga::ShaderStage::Compute => "compute",
         };
-        config_str = format!(
-            "{}{}={}_{}\n{}_name={}\n",
+        writeln!(
             config_str,
+            "{}={}_{}\n{}_name={}",
             stage_str,
             ep.stage.to_hlsl_str(),
             options.shader_model.to_str(),
             stage_str,
-            &reflection_info.entry_points[index]
-        );
+            name,
+        )
+        .unwrap();
     }
     fs::write(
         destination.join(format!("hlsl/{}.hlsl.config", file_name)),
