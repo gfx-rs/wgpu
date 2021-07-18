@@ -13,9 +13,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    init_tracker::{
-        MemoryInitKind, TextureInitRange, TextureInitTrackerAction,
-    },
+    init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{Texture, TextureView},
     track::{StatefulTrackerSubset, TextureSelector, UsageConflict},

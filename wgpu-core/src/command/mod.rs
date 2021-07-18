@@ -11,15 +11,20 @@ use std::collections::hash_map::Entry;
 use std::ops::Range;
 
 pub use self::bundle::*;
+pub(crate) use self::clear::collect_zero_buffer_copies_for_clear_texture;
 pub use self::compute::*;
 pub use self::draw::*;
 pub use self::query::*;
 pub use self::render::*;
 pub use self::transfer::*;
 
+use crate::device::Device;
 use crate::error::{ErrorFormatter, PrettyError};
+use crate::init_tracker::{
+    BufferInitTrackerAction, MemoryInitKind, TextureInitRange, TextureInitTrackerAction,
+};
+use crate::track::TextureSelector;
 use crate::FastHashMap;
-use crate::init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction};
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
@@ -72,9 +77,11 @@ pub struct BakedCommands<A: hal::Api> {
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    texture_memory_init_actions: Vec<TextureInitTrackerAction>,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
+pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
 impl<A: hal::Api> BakedCommands<A> {
     pub(crate) fn initialize_buffer_memory(
@@ -158,7 +165,104 @@ impl<A: hal::Api> BakedCommands<A> {
                 }
             }
         }
+        Ok(())
+    }
 
+    pub(crate) fn initialize_texture_memory(
+        &mut self,
+        device_tracker: &mut TrackerSet,
+        texture_guard: &mut Storage<Texture<A>, id::TextureId>,
+        device: &Device<A>,
+    ) -> Result<(), DestroyedTextureError> {
+        let mut ranges: Vec<TextureInitRange> = Vec::new();
+        for texture_use in self.texture_memory_init_actions.drain(..) {
+            let texture = texture_guard
+                .get_mut(texture_use.id)
+                .map_err(|_| DestroyedTextureError(texture_use.id))?;
+
+            let use_range = texture_use.range;
+            let affected_mip_trackers = texture
+                .initialization_status
+                .mips
+                .iter_mut()
+                .enumerate()
+                .skip(use_range.mip_range.start as usize)
+                .take((use_range.mip_range.end - use_range.mip_range.start) as usize);
+
+            match texture_use.kind {
+                MemoryInitKind::ImplicitlyInitialized => {
+                    for (_, mip_tracker) in affected_mip_trackers {
+                        mip_tracker
+                            .drain(use_range.layer_range.clone())
+                            .for_each(drop);
+                    }
+                }
+                MemoryInitKind::NeedsInitializedMemory => {
+                    ranges.clear();
+                    for (mip_level, mip_tracker) in affected_mip_trackers {
+                        for layer_range in mip_tracker.drain(use_range.layer_range.clone()) {
+                            // TODO: Don't treat every mip_level separately and collapse equal layer ranges!
+                            ranges.push(TextureInitRange {
+                                mip_range: mip_level as u32..(mip_level as u32 + 1),
+                                layer_range,
+                            })
+                        }
+                    }
+
+                    let raw_texture = texture
+                        .inner
+                        .as_raw()
+                        .ok_or(DestroyedTextureError(texture_use.id))?;
+
+                    if texture.hal_usage.contains(hal::TextureUses::COLOR_TARGET)
+                        || texture
+                            .hal_usage
+                            .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
+                    {
+                        // TODO: Clear with render target
+                    } else {
+                        debug_assert!(texture.hal_usage.contains(hal::TextureUses::COPY_DST), "Every texture needs to be either a color/depth/stencil render target or has the COPY_DST flag. Otherwise we can't ensure initialized memory!");
+
+                        let mut zero_buffer_copy_regions = Vec::new();
+                        for range in &ranges {
+                            // Don't do use_replace since the texture may already no longer have a ref_count.
+                            // However, we *know* that it is currently in use, so the tracker must already know about it.
+                            let transition = device_tracker.textures.change_replace_tracked(
+                                id::Valid(texture_use.id),
+                                TextureSelector {
+                                    levels: range.mip_range.clone(),
+                                    layers: range.layer_range.clone(),
+                                },
+                                hal::TextureUses::COPY_DST,
+                            );
+
+                            collect_zero_buffer_copies_for_clear_texture(
+                                &texture.desc,
+                                device.alignments.buffer_copy_pitch.get() as u32,
+                                range.mip_range.clone(),
+                                range.layer_range.clone(),
+                                &mut zero_buffer_copy_regions,
+                            );
+                            unsafe {
+                                self.encoder.transition_textures(
+                                    transition.map(|pending| pending.into_hal(texture)),
+                                );
+                            }
+                        }
+
+                        if zero_buffer_copy_regions.len() > 0 {
+                            unsafe {
+                                self.encoder.copy_buffer_to_texture(
+                                    &device.zero_buffer,
+                                    raw_texture,
+                                    zero_buffer_copy_regions.into_iter(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -264,6 +368,7 @@ impl<A: hal::Api> CommandBuffer<A> {
             list: self.encoder.list,
             trackers: self.trackers,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
+            texture_memory_init_actions: self.texture_memory_init_actions,
         }
     }
 }

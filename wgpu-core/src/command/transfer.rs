@@ -6,9 +6,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    init_tracker::{
-        MemoryInitKind, TextureInitRange, TextureInitTrackerAction,
-    },
+    init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     resource::{Texture, TextureErrorDimension},
     track::TextureSelector,
 };
@@ -352,13 +350,11 @@ pub(crate) fn validate_texture_copy_range(
     Ok((copy_extent, array_layer_count))
 }
 
-fn record_dst_texture_init_requirement<A: HalApi>(
-    texture_memory_init_actions: &mut Vec<TextureInitTrackerAction>,
+fn get_copy_dst_texture_init_requirement<A: HalApi>(
     texture: &Texture<A>,
-    id: TextureId,
+    copy_texture: &wgt::ImageCopyTexture<TextureId>,
     copy_size: &Extent3d,
-    base: &hal::TextureCopyBase,
-) {
+) -> Option<TextureInitTrackerAction> {
     // Attention: If we don't write full texture subresources, we need to a full clear first since we don't track subrects.
     let dst_init_kind = if copy_size.width == texture.desc.size.width
         && copy_size.height == texture.desc.size.height
@@ -367,22 +363,20 @@ fn record_dst_texture_init_requirement<A: HalApi>(
     } else {
         MemoryInitKind::NeedsInitializedMemory
     };
-    texture_memory_init_actions.extend(
-        texture
-            .initialization_status
-            .check_layer_range(
-                base.mip_level,
-                base.origin.z..(base.origin.z + copy_size.depth_or_array_layers),
-            )
-            .map(|layer_range| TextureInitTrackerAction {
-                id,
-                range: TextureInitRange {
-                    mip_range: base.mip_level..base.mip_level + 1,
-                    layer_range
-                },
-                kind: dst_init_kind,
-            }),
-    );
+    texture
+        .initialization_status
+        .check_layer_range(
+            copy_texture.mip_level,
+            copy_texture.origin.z..(copy_texture.origin.z + copy_size.depth_or_array_layers),
+        )
+        .map(|layer_range| TextureInitTrackerAction {
+            id: copy_texture.texture,
+            range: TextureInitRange {
+                mip_range: copy_texture.mip_level..copy_texture.mip_level + 1,
+                layer_range,
+            },
+            kind: dst_init_kind,
+        })
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -602,6 +596,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             true,
         )?;
 
+        if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format) {
+            return Err(
+                TransferError::CopyToForbiddenTextureFormat(dst_texture.desc.format).into(),
+            );
+        }
+
         cmd_buf
             .buffer_memory_init_actions
             .extend(src_buffer.initialization_status.create_action(
@@ -609,19 +609,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
                 MemoryInitKind::NeedsInitializedMemory,
             ));
-
-        if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format) {
-            return Err(
-                TransferError::CopyToForbiddenTextureFormat(dst_texture.desc.format).into(),
-            );
-        }
-    	record_dst_texture_init_requirement(
-            &mut cmd_buf.texture_memory_init_actions,
-            dst_texture,
-            destination.texture,
-            copy_size,
-            &dst_base,
-        );
+        cmd_buf
+            .texture_memory_init_actions
+            .extend(get_copy_dst_texture_init_requirement(
+                dst_texture,
+                destination,
+                copy_size,
+            ));
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
@@ -895,13 +889,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     kind: MemoryInitKind::NeedsInitializedMemory,
                 }),
         );
-        record_dst_texture_init_requirement(
-            &mut cmd_buf.texture_memory_init_actions,
-            dst_texture,
-            destination.texture,
-            copy_size,
-            &dst_tex_base,
-        );
+        cmd_buf
+            .texture_memory_init_actions
+            .extend(get_copy_dst_texture_init_requirement(
+                dst_texture,
+                destination,
+                copy_size,
+            ));
 
         let hal_copy_size = hal::CopyExtent {
             width: src_copy_size.width.min(dst_copy_size.width),

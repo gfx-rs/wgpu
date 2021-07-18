@@ -29,7 +29,7 @@ pub(crate) type TextureLayerInitTracker = InitTracker<u32>;
 
 #[derive(Debug)]
 pub(crate) struct TextureInitTracker {
-    mips: ArrayVec<TextureLayerInitTracker, { hal::MAX_MIP_LEVELS as usize }>,
+    pub mips: ArrayVec<TextureLayerInitTracker, { hal::MAX_MIP_LEVELS as usize }>,
 }
 
 impl TextureInitTracker {
