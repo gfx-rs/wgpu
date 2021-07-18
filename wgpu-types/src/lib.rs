@@ -479,6 +479,17 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SPIRV_SHADER_PASSTHROUGH = 0x0000_0800_0000_0000;
+        /// Enables `builtin(primitive_index)` in fragment shaders.
+        ///
+        /// Note: enables geometry processing for pipelines using the builtin.
+        /// This may come with a significant performance impact on some hardware.
+        /// Other pipelines are not affected.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const SHADER_PRIMITIVE_INDEX = 0x0000_1000_0000_0000;
     }
 }
 

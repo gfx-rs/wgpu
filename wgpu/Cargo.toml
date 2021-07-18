@@ -73,13 +73,13 @@ env_logger = "0.8"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "458db0b"
+rev = "8f71a36"
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "458db0b"
+rev = "8f71a36"
 features = ["wgsl-in"]
 
 [[example]]
