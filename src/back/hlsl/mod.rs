@@ -57,6 +57,17 @@ impl crate::ShaderStage {
     }
 }
 
+impl crate::ImageDimension {
+    fn to_hlsl_str(self) -> &'static str {
+        match self {
+            Self::D1 => "1D",
+            Self::D2 => "2D",
+            Self::D3 => "3D",
+            Self::Cube => "Cube",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]

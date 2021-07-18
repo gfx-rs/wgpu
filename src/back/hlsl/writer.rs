@@ -343,7 +343,7 @@ impl<'a, W: Write> Writer<'a, W> {
         let (storage, register_ty) = match global.class {
             crate::StorageClass::Function => unreachable!("Function storage class"),
             crate::StorageClass::Private => ("static ", ""),
-            crate::StorageClass::WorkGroup => ("shared ", ""),
+            crate::StorageClass::WorkGroup => ("groupshared ", ""),
             crate::StorageClass::Uniform => ("", "b"),
             crate::StorageClass::Storage | crate::StorageClass::Handle => {
                 if let TypeInner::Sampler { .. } = *inner {
@@ -359,14 +359,14 @@ impl<'a, W: Write> Writer<'a, W> {
 
         write!(self.out, "{}", storage)?;
         self.write_type(module, global.ty)?;
-        if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
-            self.write_array_size(module, size)?;
-        }
         write!(
             self.out,
             " {}",
             &self.names[&NameKey::GlobalVariable(handle)]
         )?;
+        if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
+            self.write_array_size(module, size)?;
+        }
 
         if let Some(ref binding) = global.binding {
             // this was already resolved earlier when we started evaluating an entry point.
@@ -604,7 +604,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 use crate::ImageClass as Ic;
 
-                let dim_str = image_dimension_str(dim);
+                let dim_str = dim.to_hlsl_str();
                 let arrayed_str = if arrayed { "Array" } else { "" };
                 write!(self.out, "Texture{}{}", dim_str, arrayed_str)?;
                 match class {
@@ -1596,20 +1596,12 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_default_init(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
         write!(self.out, "(")?;
         self.write_type(module, ty)?;
+        if let TypeInner::Array { size, .. } = module.types[ty].inner {
+            self.write_array_size(module, size)?;
+        }
         write!(self.out, ")0")?;
 
         Ok(())
-    }
-}
-
-pub(super) fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
-    use crate::ImageDimension as IDim;
-
-    match dim {
-        IDim::D1 => "1D",
-        IDim::D2 => "2D",
-        IDim::D3 => "3D",
-        IDim::Cube => "Cube",
     }
 }
 

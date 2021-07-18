@@ -411,7 +411,7 @@ fn convert_wgsl() {
         ),
         (
             "globals",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("bounds-check-zero", Targets::SPIRV),
         (

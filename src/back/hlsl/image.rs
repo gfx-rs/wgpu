@@ -98,7 +98,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         &mut self,
         query: WrappedImageQuery,
     ) -> BackendResult {
-        let dim_str = super::writer::image_dimension_str(query.dim);
+        let dim_str = query.dim.to_hlsl_str();
         let class_str = match query.class {
             crate::ImageClass::Sampled { multi: true, .. } => "MS",
             crate::ImageClass::Depth => "Depth",

@@ -8,9 +8,9 @@ struct Data {
     float4x4 view;
 };
 
-Data r_data : register(b0);
-TextureCube<float4> r_texture : register(t1);
-SamplerState r_sampler : register(s2);
+Data r_data : register(b0, space0);
+TextureCube<float4> r_texture : register(t0, space0);
+SamplerState r_sampler : register(s0, space1);
 
 struct VertexInput_vs_main {
     uint vertex_index1 : SV_VertexID;
