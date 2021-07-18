@@ -1,0 +1,47 @@
+struct VertexOutput {
+    float4 position : SV_Position;
+    linear float3 uv : LOC0;
+};
+
+struct Data {
+    float4x4 proj_inv;
+    float4x4 view;
+};
+
+Data r_data : register(b0);
+TextureCube<float4> r_texture : register(t1);
+SamplerState r_sampler : register(s2);
+
+struct VertexInput_vs_main {
+    uint vertex_index1 : SV_VertexID;
+};
+
+struct FragmentInput_fs_main {
+    VertexOutput in2;
+};
+
+VertexOutput vs_main(VertexInput_vs_main vertexinput_vs_main)
+{
+    int tmp1_ = (int)0;
+    int tmp2_ = (int)0;
+
+    tmp1_ = (int(vertexinput_vs_main.vertex_index1) / 2);
+    tmp2_ = (int(vertexinput_vs_main.vertex_index1) & 1);
+    int _expr10 = tmp1_;
+    int _expr16 = tmp2_;
+    float4 pos = float4((mul(float(_expr10), 4.0) - 1.0), (mul(float(_expr16), 4.0) - 1.0), 0.0, 1.0);
+    float4 _expr27 = r_data.view[0];
+    float4 _expr31 = r_data.view[1];
+    float4 _expr35 = r_data.view[2];
+    float3x3 inv_model_view = transpose(float3x3(_expr27.xyz, _expr31.xyz, _expr35.xyz));
+    float4x4 _expr40 = r_data.proj_inv;
+    float4 unprojected = mul(_expr40, pos);
+    const VertexOutput vertexoutput1 = { pos, mul(inv_model_view, unprojected.xyz) };
+    return vertexoutput1;
+}
+
+float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
+{
+    float4 _expr5 = r_texture.Sample(r_sampler, fragmentinput_fs_main.in2.uv);
+    return _expr5;
+}

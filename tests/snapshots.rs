@@ -347,7 +347,7 @@ fn convert_wgsl() {
         ),
         (
             "skybox",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
             "collatz",

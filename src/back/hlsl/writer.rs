@@ -294,18 +294,22 @@ impl<'a, W: Write> Writer<'a, W> {
         let global = &module.global_variables[handle];
         let inner = &module.types[global.ty].inner;
 
-        let (storage, register_ty) = match *inner {
-            TypeInner::Image { .. } => {
-                if global.storage_access.contains(crate::StorageAccess::STORE) {
+        // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
+        let (storage, register_ty) = match global.class {
+            crate::StorageClass::Function => unreachable!("Function storage class"),
+            crate::StorageClass::Private => ("static ", ""),
+            crate::StorageClass::WorkGroup => ("shared ", ""),
+            crate::StorageClass::Uniform => ("", "b"),
+            crate::StorageClass::Storage | crate::StorageClass::Handle => {
+                if let TypeInner::Sampler { .. } = *inner {
+                    ("", "s")
+                } else if global.storage_access.contains(crate::StorageAccess::STORE) {
                     ("RW", "u")
                 } else {
                     ("", "t")
                 }
             }
-            TypeInner::Sampler { .. } => ("", "s"),
-            TypeInner::Struct { .. } | TypeInner::Vector { .. } => ("static ", ""),
-            // TODO: other register ty https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
-            _ => return Err(Error::Unimplemented(format!("register_ty {:?}", inner))),
+            crate::StorageClass::PushConstant => unimplemented!("Push constants"),
         };
 
         write!(self.out, "{}", storage)?;
@@ -405,7 +409,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => unreachable!(),
                 }
             }
-            crate::ArraySize::Dynamic => (),
+            crate::ArraySize::Dynamic => write!(self.out, "1")?,
         }
 
         write!(self.out, "]")?;
