@@ -529,7 +529,7 @@ impl super::Device {
         //TODO: reuse the writer
         let mut source = String::new();
         let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
-        let _reflection_info = writer
+        let reflection_info = writer
             .write(module, &stage.module.naga.info)
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {:?}", e)))?;
 
@@ -538,7 +538,15 @@ impl super::Device {
             naga_stage.to_hlsl_str(),
             layout.naga_options.shader_model.to_str()
         );
-        let raw_ep = ffi::CString::new(stage.entry_point).unwrap();
+        let ep_index = module
+            .entry_points
+            .iter()
+            .position(|ep| ep.name == stage.entry_point)
+            .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
+        let raw_ep = reflection_info.entry_point_names[ep_index]
+            .as_ref()
+            .map(|name| ffi::CString::new(name.as_str()).unwrap())
+            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
 
         let mut shader_data = native::Blob::null();
         let mut error = native::Blob::null();
@@ -985,6 +993,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::PipelineLayoutDescriptor<super::Api>,
     ) -> Result<super::PipelineLayout, crate::DeviceError> {
+        use naga::back::hlsl;
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
         // Push Constants are implemented as root constants.
@@ -1012,6 +1021,7 @@ impl crate::Device<super::Api> for super::Device {
         //Note: lower bind group indices are put futher down the root signature. See:
         // https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#binding-model
 
+        let mut binding_map = hlsl::BindingMap::default();
         let root_constants: &[()] = &[];
 
         // Number of elements in the root signature.
@@ -1073,16 +1083,25 @@ impl crate::Device<super::Api> for super::Device {
                     | wgt::BindingType::Sampler { .. } => continue,
                     ref other => conv::map_binding_type(other),
                 };
+                let register = (ranges.len() - range_base) as u32;
+                binding_map.insert(
+                    naga::ResourceBinding {
+                        group: index as u32,
+                        binding: entry.binding,
+                    },
+                    hlsl::BindTarget {
+                        space: space as u8,
+                        register,
+                    },
+                );
                 ranges.push(native::DescriptorRange::new(
                     range_ty,
                     entry.count.map_or(1, |count| count.get()),
-                    native::Binding {
-                        register: entry.binding,
-                        space,
-                    },
+                    native::Binding { register, space },
                     d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
                 ));
             }
+            let base_view_register = ranges.len() - range_base;
             if ranges.len() > range_base {
                 parameters.push(native::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_view_static),
@@ -1098,13 +1117,21 @@ impl crate::Device<super::Api> for super::Device {
                     wgt::BindingType::Sampler { .. } => native::DescriptorRangeType::Sampler,
                     _ => continue,
                 };
+                let register = (ranges.len() - range_base) as u32;
+                binding_map.insert(
+                    naga::ResourceBinding {
+                        group: index as u32,
+                        binding: entry.binding,
+                    },
+                    hlsl::BindTarget {
+                        space: space as u8,
+                        register,
+                    },
+                );
                 ranges.push(native::DescriptorRange::new(
                     range_ty,
                     entry.count.map_or(1, |count| count.get()),
-                    native::Binding {
-                        register: entry.binding,
-                        space,
-                    },
+                    native::Binding { register, space },
                     d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
                 ));
             }
@@ -1117,6 +1144,7 @@ impl crate::Device<super::Api> for super::Device {
             }
 
             // Root (dynamic) descriptor tables
+            let parameter_base = parameters.len();
             let dynamic_buffers_visibility = conv::map_visibility(visibility_view_dynamic);
             for entry in bgl.entries.iter() {
                 let buffer_ty = match entry.ty {
@@ -1127,6 +1155,16 @@ impl crate::Device<super::Api> for super::Device {
                     } => ty,
                     _ => continue,
                 };
+                binding_map.insert(
+                    naga::ResourceBinding {
+                        group: index as u32,
+                        binding: entry.binding,
+                    },
+                    hlsl::BindTarget {
+                        space: space as u8,
+                        register: (base_view_register + parameters.len() - parameter_base) as u32,
+                    },
+                );
                 let binding = native::Binding {
                     register: entry.binding,
                     space,
@@ -1195,8 +1233,10 @@ impl crate::Device<super::Api> for super::Device {
             raw,
             bind_group_infos,
             total_root_elements: total_parameters as super::RootIndex,
-            naga_options: naga::back::hlsl::Options {
-                shader_model: naga::back::hlsl::ShaderModel::V5_1,
+            naga_options: hlsl::Options {
+                shader_model: hlsl::ShaderModel::V5_1,
+                binding_map,
+                fake_missing_bindings: false,
             },
         })
     }
