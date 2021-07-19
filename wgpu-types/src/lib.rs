@@ -3,7 +3,7 @@
  */
 
 #![allow(
-    // The intra doc links to the wgpu crate in this crate actually succesfully link to the types in the wgpu crate, when built from the wgpu crate.
+    // The intra doc links to the wgpu crate in this crate actually successfully link to the types in the wgpu crate, when built from the wgpu crate.
     // However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
     // despite the fact that it works fine when it needs to.
     // So we just disable those warnings.
@@ -508,14 +508,14 @@ impl Features {
 /// Represents the sets of limits an adapter/device supports.
 ///
 /// We provide two different defaults.
-/// - [`Limits::downlevel_defaults()]. This is a set of limits that is guarenteed to
+/// - [`Limits::downlevel_defaults()]. This is a set of limits that is guaranteed to
 ///   work on all backends, including "downlevel" backends such
 ///   as OpenGL and D3D11. For most applications we recommend using these
 ///   limits, assuming they are high enough for your application.
-/// - [`Limits::default()`]. This is the set of limits that is guarenteed to
-///   work on all modern backends and is guarenteed to be supported by WebGPU.
+/// - [`Limits::default()`]. This is the set of limits that is guaranteed to
+///   work on all modern backends and is guaranteed to be supported by WebGPU.
 ///   Applications needing more modern features can use this as a reasonable set of
-///   limits if they are targetting only desktop and modern mobile devices.
+///   limits if they are targeting only desktop and modern mobile devices.
 ///
 /// We recommend starting with the most restrictive limits you can and manually
 /// increasing the limits you need boosted. This will let you stay running on
@@ -618,7 +618,7 @@ impl Default for Limits {
 }
 
 impl Limits {
-    /// These default limits are guarenteed to be compatible with GLES3, WebGL, and D3D11
+    /// These default limits are guaranteed to be compatible with GLES3, WebGL, and D3D11
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2096,
