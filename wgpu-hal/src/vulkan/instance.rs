@@ -114,6 +114,131 @@ impl super::Swapchain {
 }
 
 impl super::Instance {
+    pub fn required_extensions(
+        entry: &ash::Entry,
+        driver_api_version: u32,
+        flags: crate::InstanceFlags,
+    ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
+        let instance_extensions = entry
+            .enumerate_instance_extension_properties()
+            .map_err(|e| {
+                log::info!("enumerate_instance_extension_properties: {:?}", e);
+                crate::InstanceError
+            })?;
+
+        // Check our extensions against the available extensions
+        let mut extensions: Vec<&'static CStr> = Vec::new();
+        extensions.push(khr::Surface::name());
+
+        // Platform-specific WSI extensions
+        if cfg!(all(
+            unix,
+            not(target_os = "android"),
+            not(target_os = "macos")
+        )) {
+            extensions.push(khr::XlibSurface::name());
+            extensions.push(khr::XcbSurface::name());
+            extensions.push(khr::WaylandSurface::name());
+        }
+        if cfg!(target_os = "android") {
+            extensions.push(khr::AndroidSurface::name());
+        }
+        if cfg!(target_os = "windows") {
+            extensions.push(khr::Win32Surface::name());
+        }
+        if cfg!(target_os = "macos") {
+            extensions.push(ext::MetalSurface::name());
+        }
+
+        if flags.contains(crate::InstanceFlags::DEBUG) {
+            extensions.push(ext::DebugUtils::name());
+        }
+
+        extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+
+        // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
+        if driver_api_version == vk::API_VERSION_1_0 {
+            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+        }
+
+        // Only keep available extensions.
+        extensions.retain(|&ext| {
+            if instance_extensions
+                .iter()
+                .any(|inst_ext| unsafe { CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext })
+            {
+                true
+            } else {
+                log::info!("Unable to find extension: {}", ext.to_string_lossy());
+                false
+            }
+        });
+        Ok(extensions)
+    }
+
+    /// # Safety
+    ///
+    /// - `raw_instance` must be created from `entry`
+    /// - `raw_instance` must be created respecting `driver_api_version`, `extensions` and `flags`
+    /// - `extensions` must be a superset of `required_extensions()` and must be created from the
+    ///   same entry, driver_api_version and flags.
+    pub unsafe fn from_raw(
+        entry: ash::Entry,
+        raw_instance: ash::Instance,
+        driver_api_version: u32,
+        extensions: Vec<&'static CStr>,
+        flags: crate::InstanceFlags,
+        drop_guard: super::DropGuard,
+    ) -> Result<Self, crate::InstanceError> {
+        if driver_api_version == vk::API_VERSION_1_0
+            && !extensions.contains(&vk::KhrStorageBufferStorageClassFn::name())
+        {
+            log::warn!("Required VK_KHR_storage_buffer_storage_class extension is not supported");
+            return Err(crate::InstanceError);
+        }
+
+        let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
+            let extension = ext::DebugUtils::new(&entry, &raw_instance);
+            let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+                .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
+                .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
+                .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+                .pfn_user_callback(Some(debug_utils_messenger_callback));
+            let messenger = extension
+                .create_debug_utils_messenger(&vk_info, None)
+                .unwrap();
+            Some(super::DebugUtils {
+                extension,
+                messenger,
+            })
+        } else {
+            None
+        };
+
+        let get_physical_device_properties = extensions
+            .iter()
+            .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
+            .map(|_| {
+                vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| {
+                    mem::transmute(
+                        entry.get_instance_proc_addr(raw_instance.handle(), name.as_ptr()),
+                    )
+                })
+            });
+
+        Ok(Self {
+            shared: Arc::new(super::InstanceShared {
+                raw: raw_instance,
+                _drop_guard: drop_guard,
+                flags,
+                debug_utils,
+                get_physical_device_properties,
+                entry,
+            }),
+            extensions,
+        })
+    }
+
     #[allow(dead_code)]
     fn create_surface_from_xlib(
         &self,
@@ -339,75 +464,12 @@ impl crate::Instance<super::Api> for super::Instance {
                 })
             });
 
-        let instance_extensions = entry
-            .enumerate_instance_extension_properties()
-            .map_err(|e| {
-                log::info!("enumerate_instance_extension_properties: {:?}", e);
-                crate::InstanceError
-            })?;
+        let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
             crate::InstanceError
         })?;
-
-        // Check our extensions against the available extensions
-        let extensions = {
-            let mut extensions: Vec<&'static CStr> = Vec::new();
-            extensions.push(khr::Surface::name());
-
-            // Platform-specific WSI extensions
-            if cfg!(all(
-                unix,
-                not(target_os = "android"),
-                not(target_os = "macos")
-            )) {
-                extensions.push(khr::XlibSurface::name());
-                extensions.push(khr::XcbSurface::name());
-                extensions.push(khr::WaylandSurface::name());
-            }
-            if cfg!(target_os = "android") {
-                extensions.push(khr::AndroidSurface::name());
-            }
-            if cfg!(target_os = "windows") {
-                extensions.push(khr::Win32Surface::name());
-            }
-            if cfg!(target_os = "macos") {
-                extensions.push(ext::MetalSurface::name());
-            }
-
-            if desc.flags.contains(crate::InstanceFlags::DEBUG) {
-                extensions.push(ext::DebugUtils::name());
-            }
-
-            extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
-
-            // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
-            if driver_api_version == vk::API_VERSION_1_0 {
-                extensions.push(vk::KhrStorageBufferStorageClassFn::name());
-            }
-
-            // Only keep available extensions.
-            extensions.retain(|&ext| {
-                if instance_extensions
-                    .iter()
-                    .any(|inst_ext| CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext)
-                {
-                    true
-                } else {
-                    log::info!("Unable to find extension: {}", ext.to_string_lossy());
-                    false
-                }
-            });
-            extensions
-        };
-
-        if driver_api_version == vk::API_VERSION_1_0
-            && !extensions.contains(&vk::KhrStorageBufferStorageClassFn::name())
-        {
-            log::warn!("Required VK_KHR_storage_buffer_storage_class extension is not supported");
-            return Err(crate::InstanceError);
-        }
 
         // Check requested layers against the available layers
         let layers = {
@@ -453,45 +515,14 @@ impl crate::Instance<super::Api> for super::Instance {
             })?
         };
 
-        let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
-            let extension = ext::DebugUtils::new(&entry, &vk_instance);
-            let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
-                .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
-                .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
-                .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
-                .pfn_user_callback(Some(debug_utils_messenger_callback));
-            let messenger = extension
-                .create_debug_utils_messenger(&vk_info, None)
-                .unwrap();
-            Some(super::DebugUtils {
-                extension,
-                messenger,
-            })
-        } else {
-            None
-        };
-
-        let get_physical_device_properties = extensions
-            .iter()
-            .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
-            .map(|_| {
-                vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| {
-                    mem::transmute(
-                        entry.get_instance_proc_addr(vk_instance.handle(), name.as_ptr()),
-                    )
-                })
-            });
-
-        Ok(Self {
-            shared: Arc::new(super::InstanceShared {
-                raw: vk_instance,
-                flags: desc.flags,
-                debug_utils,
-                get_physical_device_properties,
-                entry,
-            }),
+        Self::from_raw(
+            entry,
+            vk_instance,
+            driver_api_version,
             extensions,
-        })
+            desc.flags,
+            Box::new(()),
+        )
     }
 
     unsafe fn create_surface(
@@ -645,6 +676,7 @@ impl crate::Surface<super::Api> for super::Surface {
             index,
             texture: super::Texture {
                 raw: sc.images[index as usize],
+                drop_guard: None,
                 block: None,
                 usage: sc.config.usage,
                 aspects: crate::FormatAspects::COLOR,

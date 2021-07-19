@@ -517,13 +517,16 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    fn create_texture(
+    fn create_texture_from_hal(
         &self,
+        hal_texture: A::Texture,
         self_id: id::DeviceId,
         adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
+
+        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
 
         let format_features = self
             .describe_format_features(adapter, desc.format)
@@ -566,6 +569,29 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateTextureError::InvalidMipLevelCount(mips));
         }
 
+        Ok(resource::Texture {
+            raw: Some(hal_texture),
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            desc: desc.map_label(|_| ()),
+            hal_usage,
+            format_features,
+            full_range: TextureSelector {
+                levels: 0..desc.mip_level_count,
+                layers: 0..desc.array_layer_count(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        })
+    }
+
+    fn create_texture(
+        &self,
+        self_id: id::DeviceId,
+        adapter: &crate::instance::Adapter<A>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.borrow_option(),
@@ -583,21 +609,7 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
-        Ok(resource::Texture {
-            raw: Some(raw),
-            device_id: Stored {
-                value: id::Valid(self_id),
-                ref_count: self.life_guard.add_ref(),
-            },
-            desc: desc.map_label(|_| ()),
-            hal_usage,
-            format_features,
-            full_range: TextureSelector {
-                levels: 0..desc.mip_level_count,
-                layers: 0..desc.array_layer_count(),
-            },
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-        })
+        self.create_texture_from_hal(raw, self_id, adapter, desc)
     }
 
     fn create_texture_view(
@@ -2956,6 +2968,65 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };
+            let num_levels = texture.full_range.levels.end;
+            let num_layers = texture.full_range.layers.end;
+            let ref_count = texture.life_guard.add_ref();
+
+            let id = fid.assign(texture, &mut token);
+            log::info!("Created texture {:?} with {:?}", id, desc);
+
+            device
+                .trackers
+                .lock()
+                .textures
+                .init(id, ref_count, TextureState::new(num_levels, num_layers))
+                .unwrap();
+            return (id.0, None);
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
+    }
+
+    /// # Safety
+    ///
+    /// - `hal_texture` must be created from `device_id` corresponding raw handle.
+    /// - `hal_texture` must be created respecting `desc`
+    pub unsafe fn create_texture_from_hal<A: HalApi>(
+        &self,
+        hal_texture: A::Texture,
+        device_id: id::DeviceId,
+        desc: &resource::TextureDescriptor,
+        id_in: Input<G, id::TextureId>,
+    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
+        profiling::scope!("create_texture", "Device");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.textures.prepare(id_in);
+
+        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+
+            // NB: Any change done through the raw texture handle will not be recorded in the replay
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateTexture(fid.id(), desc.clone()));
+            }
+
+            let adapter = &adapter_guard[device.adapter_id.value];
+            let texture =
+                match device.create_texture_from_hal(hal_texture, device_id, adapter, desc) {
+                    Ok(texture) => texture,
+                    Err(error) => break error,
+                };
             let num_levels = texture.full_range.levels.end;
             let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();
