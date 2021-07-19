@@ -1,4 +1,6 @@
-Texture2D<uint4> image_src : register(t1);
+Texture2D<uint4> image_mipmapped_src : register(t0);
+Texture2DMS<uint4> image_multisampled_src : register(t3);
+Texture2D<uint4> image_storage_src : register(t1);
 RWTexture1D<uint4> image_dst : register(u2);
 Texture1D<float4> image_1d : register(t0);
 Texture2D<float4> image_2d : register(t1);
@@ -18,17 +20,19 @@ struct ComputeInput_main {
 int2 NagaDimensions2D(Texture2D<uint4>)
 {
     uint4 ret;
-    image_src.GetDimensions(0, ret.x, ret.y, ret.z);
+    image_storage_src.GetDimensions(0, ret.x, ret.y, ret.z);
     return ret.xy;
 }
 
 [numthreads(16, 1, 1)]
 void main(ComputeInput_main computeinput_main)
 {
-    int2 dim = NagaDimensions2D(image_src);
+    int2 dim = NagaDimensions2D(image_storage_src);
     int2 itc = (mul(dim, int2(computeinput_main.local_id1.xy)) % int2(10, 20));
-    uint4 value = image_src.Load(int3(itc, 0));
-    image_dst[itc.x] = value;
+    uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(computeinput_main.local_id1.z)));
+    uint4 value2_ = image_multisampled_src.Load(itc, int(computeinput_main.local_id1.z));
+    uint4 value3_ = image_storage_src.Load(int3(itc, 0));
+    image_dst[itc.x] = ((value1_ + value2_) + value3_);
     return;
 }
 

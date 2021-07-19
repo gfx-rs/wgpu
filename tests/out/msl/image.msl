@@ -2,19 +2,23 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constant metal::int2 const_type3_ = {3, 1};
+constant metal::int2 const_type5_ = {3, 1};
 
 struct main1Input {
 };
 kernel void main1(
   metal::uint3 local_id [[thread_position_in_threadgroup]]
-, metal::texture2d<uint, metal::access::read> image_src [[user(fake0)]]
+, metal::texture2d<uint, metal::access::sample> image_mipmapped_src [[user(fake0)]]
+, metal::texture2d_ms<uint, metal::access::read> image_multisampled_src [[user(fake0)]]
+, metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
-    metal::int2 dim = int2(image_src.get_width(), image_src.get_height());
+    metal::int2 dim = int2(image_storage_src.get_width(), image_storage_src.get_height());
     metal::int2 itc = (dim * static_cast<int2>(local_id.xy)) % metal::int2(10, 20);
-    metal::uint4 value = image_src.read(metal::uint2(itc));
-    image_dst.write(value, metal::uint(itc.x));
+    metal::uint4 value1_ = image_mipmapped_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
+    metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
+    metal::uint4 value3_ = image_storage_src.read(metal::uint2(itc));
+    image_dst.write((value1_ + value2_) + value3_, metal::uint(itc.x));
     return;
 }
 
@@ -64,9 +68,9 @@ fragment sampleOutput sample(
 ) {
     metal::float2 tc = metal::float2(0.5);
     metal::float4 s2d = image_2d.sample(sampler_reg, tc);
-    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type3_);
+    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type5_);
     metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.3));
-    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_type3_);
+    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_type5_);
     return sampleOutput { ((s2d + s2d_offset) + s2d_level) + s2d_level_offset };
 }
 
