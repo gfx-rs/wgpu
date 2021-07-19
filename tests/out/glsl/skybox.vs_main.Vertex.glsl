@@ -1,6 +1,7 @@
 #version 320 es
 
 precision highp float;
+precision highp int;
 
 struct VertexOutput {
     vec4 position;

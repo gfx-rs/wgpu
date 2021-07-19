@@ -1,6 +1,7 @@
 #version 310 es
 
 precision highp float;
+precision highp int;
 
 struct Light {
     mat4x4 proj;

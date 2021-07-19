@@ -1,6 +1,7 @@
 #version 310 es
 
 precision highp float;
+precision highp int;
 
 uniform highp sampler2D _group_0_binding_0;
 

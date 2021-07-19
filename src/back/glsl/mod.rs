@@ -409,11 +409,12 @@ impl<'a, W: Write> Writer<'a, W> {
             writeln!(self.out, "#extension GL_EXT_texture_shadow_lod : require")?;
         }
 
-        // glsl es requires a precision to be specified for floats
+        // glsl es requires a precision to be specified for floats and ints
         // TODO: Should this be user configurable?
         if es {
             writeln!(self.out)?;
             writeln!(self.out, "precision highp float;")?;
+            writeln!(self.out, "precision highp int;")?;
             writeln!(self.out)?;
         }
 
