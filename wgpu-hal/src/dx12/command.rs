@@ -139,6 +139,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for cmd_buf in command_buffers {
             self.free_lists.push(cmd_buf.raw);
         }
+        self.allocator.reset();
     }
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
