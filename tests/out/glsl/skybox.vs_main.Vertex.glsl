@@ -8,7 +8,7 @@ struct VertexOutput {
     vec3 uv;
 };
 
-layout(binding = 0) uniform Data_block_0 {
+layout(binding = 0) uniform Data_block_0Vs {
     mat4x4 proj_inv;
     mat4x4 view;
 } _group_0_binding_0;

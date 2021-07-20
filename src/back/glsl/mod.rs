@@ -1200,7 +1200,12 @@ impl<'a, W: Write> Writer<'a, W> {
         // generated number so it's unique and `members` are the same as in a struct
         if block {
             // Write the block name, it's just the struct name appended with `_block_ID`
-            let block_name = format!("{}_block_{}", name, self.block_id.generate());
+            let stage_postfix = match self.entry_point.stage {
+                ShaderStage::Vertex => "Vs",
+                ShaderStage::Fragment => "Fs",
+                ShaderStage::Compute => "Cs",
+            };
+            let block_name = format!("{}_block_{}{}", name, self.block_id.generate(), stage_postfix);
             writeln!(self.out, "{} {{", block_name)?;
 
             self.reflection_names.insert(handle, block_name);

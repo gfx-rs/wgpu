@@ -9,11 +9,11 @@ struct Light {
     vec4 color;
 };
 
-uniform Globals_block_0 {
+uniform Globals_block_0Fs {
     uvec4 num_lights;
 } _group_0_binding_0;
 
-readonly buffer Lights_block_1 {
+readonly buffer Lights_block_1Fs {
     Light data[];
 } _group_0_binding_1;
 
