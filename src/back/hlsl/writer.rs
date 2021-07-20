@@ -339,6 +339,18 @@ impl<'a, W: Write> Writer<'a, W> {
         let global = &module.global_variables[handle];
         let inner = &module.types[global.ty].inner;
 
+        if let Some(ref binding) = global.binding {
+            if let Err(err) = self.options.resolve_resource_binding(binding) {
+                log::info!(
+                    "Skipping global {:?} (name {:?}) for being inaccessible: {}",
+                    handle,
+                    global.name,
+                    err,
+                );
+                return Ok(());
+            }
+        }
+
         // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
         let (storage, register_ty) = match global.class {
             crate::StorageClass::Function => unreachable!("Function storage class"),
