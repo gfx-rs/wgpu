@@ -28,7 +28,7 @@ int2 NagaDimensions2D(Texture2D<uint4>)
 void main(ComputeInput_main computeinput_main)
 {
     int2 dim = NagaDimensions2D(image_storage_src);
-    int2 itc = (mul(dim, int2(computeinput_main.local_id1.xy)) % int2(10, 20));
+    int2 itc = ((dim * int2(computeinput_main.local_id1.xy)) % int2(10, 20));
     uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(computeinput_main.local_id1.z)));
     uint4 value2_ = image_multisampled_src.Load(itc, int(computeinput_main.local_id1.z));
     uint4 value3_ = image_storage_src.Load(int3(itc, 0));

@@ -29,7 +29,7 @@ VertexOutput vs_main(VertexInput_vs_main vertexinput_vs_main)
     tmp2_ = (int(vertexinput_vs_main.vertex_index1) & 1);
     int _expr10 = tmp1_;
     int _expr16 = tmp2_;
-    float4 pos = float4((mul(float(_expr10), 4.0) - 1.0), (mul(float(_expr16), 4.0) - 1.0), 0.0, 1.0);
+    float4 pos = float4(((float(_expr10) * 4.0) - 1.0), ((float(_expr16) * 4.0) - 1.0), 0.0, 1.0);
     float4 _expr27 = r_data.view[0];
     float4 _expr31 = r_data.view[1];
     float4 _expr35 = r_data.view[2];

@@ -1063,18 +1063,20 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, ")")?
                 }
             }
+            // Matrix * Vector has to be written as `mul(Matrix, Vector)`
             Expression::Binary {
                 op: crate::BinaryOperator::Multiply,
                 left,
                 right,
-            } => {
+            } if func_ctx.info[left].ty.inner_with(&module.types)
+                != func_ctx.info[right].ty.inner_with(&module.types) =>
+            {
                 write!(self.out, "mul(")?;
                 self.write_expr(module, left, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, right, func_ctx)?;
                 write!(self.out, ")")?;
             }
-            // TODO: copy-paste from wgsl-out
             Expression::Binary { op, left, right } => {
                 write!(self.out, "(")?;
                 self.write_expr(module, left, func_ctx)?;

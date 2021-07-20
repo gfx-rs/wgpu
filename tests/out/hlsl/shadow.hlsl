@@ -32,7 +32,7 @@ float fetch_shadow(uint light_id, float4 homogeneous_coords)
         return 1.0;
     }
     float2 flip_correction = float2(0.5, -0.5);
-    float2 light_local = ((mul(homogeneous_coords.xy, flip_correction) / float2(homogeneous_coords.w.xx)) + float2(0.5, 0.5));
+    float2 light_local = (((homogeneous_coords.xy * flip_correction) / float2(homogeneous_coords.w.xx)) + float2(0.5, 0.5));
     float _expr26 = t_shadow.SampleCmpLevelZero(sampler_shadow, float3(light_local, int(light_id)), (homogeneous_coords.z / homogeneous_coords.w));
     return _expr26;
 }
@@ -56,7 +56,7 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
         float3 light_dir = normalize((light.pos.xyz - fragmentinput_fs_main.position1.xyz));
         float diffuse = max(0.0, dot(normal, light_dir));
         float3 _expr34 = color;
-        color = (_expr34 + mul(mul(_e25, diffuse), light.color.xyz));
+        color = (_expr34 + mul((_e25 * diffuse), light.color.xyz));
         uint _expr40 = i;
         i = (_expr40 + 1u);
     }

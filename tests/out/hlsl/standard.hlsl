@@ -7,5 +7,5 @@ float4 derivatives(FragmentInput_derivatives fragmentinput_derivatives) : SV_Tar
     float4 x = ddx(fragmentinput_derivatives.foo1);
     float4 y = ddy(fragmentinput_derivatives.foo1);
     float4 z = fwidth(fragmentinput_derivatives.foo1);
-    return mul((x + y), z);
+    return ((x + y) * z);
 }
