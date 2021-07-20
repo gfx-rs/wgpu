@@ -29,7 +29,7 @@ A Naga backend can generate code to evaluate an `Expression` however and
 whenever it pleases, as long as it is certain to observe the side effects of all
 previously executed `Statement`s.
 
-Many `Statement` variants use the [`Block`] type, which is simply `Vec<Block>`,
+Many `Statement` variants use the [`Block`] type, which is simply `Vec<Statement>`,
 representing a series of statements executed in order. The body of an
 `EntryPoint`s or `Function` is a `Block`, and `Statement` has a
 [`Block`][Statement::Block] variant.
