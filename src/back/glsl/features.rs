@@ -32,6 +32,8 @@ bitflags::bitflags! {
         const CULL_DISTANCE = 1 << 14;
         // Sample ID
         const SAMPLE_VARIABLES = 1 << 15;
+        /// Arrays with a dynamic length
+        const DYNAMIC_ARRAY_SIZE = 1 << 16;
     }
 }
 
@@ -98,6 +100,7 @@ impl FeaturesManager {
         check_feature!(CLIP_DISTANCE, 130, 300);
         check_feature!(CULL_DISTANCE, 450, 300);
         check_feature!(SAMPLE_VARIABLES, 400, 300);
+        check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -228,9 +231,13 @@ impl<'a, W> Writer<'a, W> {
                 TypeInner::Matrix { width, .. } => {
                     self.scalar_required_features(ScalarKind::Float, width)
                 }
-                TypeInner::Array { base, .. } => {
+                TypeInner::Array { base, size, .. } => {
                     if let TypeInner::Array { .. } = self.module.types[base].inner {
                         self.features.request(Features::ARRAY_OF_ARRAYS)
+                    }
+
+                    if size == crate::ArraySize::Dynamic {
+                        self.features.request(Features::DYNAMIC_ARRAY_SIZE);
                     }
                 }
                 TypeInner::Image {
