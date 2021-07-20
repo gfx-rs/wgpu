@@ -38,13 +38,9 @@ struct Args {
     #[argh(positional)]
     input: String,
 
-    /// the output file
+    /// the output file. If not specified, only validation will be performed
     #[argh(positional)]
-    output: String,
-
-    /// other output files if there are multiples
-    #[argh(positional)]
-    extra_outputs: Vec<String>,
+    output: Vec<String>,
 }
 
 /// Newtype so we can implement [`FromStr`] for `IndexBoundsCheckPolicy`.
@@ -181,8 +177,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Parse commandline arguments
     let args: Args = argh::from_env();
     let input_path = Path::new(&args.input);
-    let mut output_paths = vec![args.output];
-    output_paths.extend(args.extra_outputs);
+    let output_paths = args.output;
 
     // Update parameters from commandline arguments
     if args.validate {
