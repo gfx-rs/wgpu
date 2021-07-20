@@ -812,9 +812,18 @@ impl<'a, W: Write> Writer<'a, W> {
         if let TypeInner::Array { size, .. } = self.module.types[global.ty].inner {
             self.write_array_size(size)?;
         }
-        if let Some(default_value) = zero_init_value_str(&self.module.types[global.ty].inner) {
-            write!(self.out, " = {}", default_value)?;
-        };
+
+        match self.module.types[global.ty].inner {
+            TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => {
+                write!(self.out, " = ")?;
+                if let Some(init) = global.init {
+                    self.write_constant(&self.module.constants[init])?;
+                } else {
+                    self.write_zero_init_value(&self.module.types[global.ty].inner)?;
+                }
+            }
+            _ => {}
+        }
         writeln!(self.out, ";")?;
 
         Ok(())
@@ -1205,7 +1214,12 @@ impl<'a, W: Write> Writer<'a, W> {
                 ShaderStage::Fragment => "Fs",
                 ShaderStage::Compute => "Cs",
             };
-            let block_name = format!("{}_block_{}{}", name, self.block_id.generate(), stage_postfix);
+            let block_name = format!(
+                "{}_block_{}{}",
+                name,
+                self.block_id.generate(),
+                stage_postfix
+            );
             writeln!(self.out, "{} {{", block_name)?;
 
             self.reflection_names.insert(handle, block_name);
@@ -2334,6 +2348,54 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper function that write string with default zero initialization for supported types
+    fn write_zero_init_value(&mut self, inner: &TypeInner) -> BackendResult {
+        match *inner {
+            TypeInner::Scalar { kind, .. } => {
+                self.write_zero_init_scalar(kind)?;
+            }
+            TypeInner::Vector { size, kind, .. } => {
+                self.write_value_type(inner)?;
+                write!(self.out, "(")?;
+                for _ in 1..(size as usize) {
+                    self.write_zero_init_scalar(kind)?;
+                    write!(self.out, ", ")?;
+                }
+                // write last parameter without comma and space
+                self.write_zero_init_scalar(kind)?;
+                write!(self.out, ")")?;
+            }
+            TypeInner::Matrix { columns, rows, .. } => {
+                let number_of_components = (columns as usize) * (rows as usize);
+                self.write_value_type(inner)?;
+                write!(self.out, "(")?;
+                for _ in 1..number_of_components {
+                    // IR supports only float matrix
+                    self.write_zero_init_scalar(crate::ScalarKind::Float)?;
+                    write!(self.out, ", ")?;
+                }
+                // write last parameter without comma and space
+                self.write_zero_init_scalar(crate::ScalarKind::Float)?;
+                write!(self.out, ")")?;
+            }
+            _ => {} // TODO:
+        }
+
+        Ok(())
+    }
+
+    /// Helper function that write string with zero initialization for scalar
+    fn write_zero_init_scalar(&mut self, kind: crate::ScalarKind) -> BackendResult {
+        match kind {
+            crate::ScalarKind::Bool => write!(self.out, "false")?,
+            crate::ScalarKind::Uint => write!(self.out, "0u")?,
+            crate::ScalarKind::Float => write!(self.out, "0.0")?,
+            crate::ScalarKind::Sint => write!(self.out, "0")?,
+        }
+
+        Ok(())
+    }
+
     /// Helper method used to produce the reflection info that's returned to the user
     ///
     /// It takes an iterator of [`Function`](crate::Function) references instead of
@@ -2579,28 +2641,5 @@ fn glsl_storage_access(storage_access: crate::StorageAccess) -> Option<&'static 
         Some("writeonly")
     } else {
         None
-    }
-}
-
-/// Helper function that return string with default zero initialization for supported types
-fn zero_init_value_str(inner: &TypeInner) -> Option<String> {
-    match *inner {
-        TypeInner::Scalar { kind, .. } => match kind {
-            crate::ScalarKind::Bool => Some(String::from("false")),
-            _ => Some(String::from("0")),
-        },
-        TypeInner::Vector { size, kind, width } => {
-            if let Ok(scalar_string) = glsl_scalar(kind, width) {
-                let vec_type = format!("{}vec{}", scalar_string.prefix, size as u8);
-                match size {
-                    crate::VectorSize::Bi => Some(format!("{}(0, 0)", vec_type)),
-                    crate::VectorSize::Tri => Some(format!("{}(0, 0, 0)", vec_type)),
-                    crate::VectorSize::Quad => Some(format!("{}(0, 0, 0, 0)", vec_type)),
-                }
-            } else {
-                None
-            }
-        }
-        _ => None,
     }
 }
