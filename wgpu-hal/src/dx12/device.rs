@@ -1050,8 +1050,8 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut bind_group_infos =
             arrayvec::ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
-        for (index, bgl) in desc.bind_group_layouts.iter().rev().enumerate() {
-            let space = root_space_offset + index as u32;
+        for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
+            let space = root_space_offset + (desc.bind_group_layouts.len() - 1 - index) as u32;
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
                 base_root_index: parameters.len() as u32,
@@ -1192,8 +1192,6 @@ impl crate::Device<super::Api> for super::Device {
 
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
-        // remember that we pushed them in reverse
-        bind_group_infos.reverse();
 
         let (blob, error) = self
             .library

@@ -257,14 +257,6 @@ pub struct Queue {
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
-impl Drop for Queue {
-    fn drop(&mut self) {
-        unsafe {
-            self.raw.destroy();
-        }
-    }
-}
-
 #[derive(Default)]
 struct Temp {
     marker: Vec<u16>,
