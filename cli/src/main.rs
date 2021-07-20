@@ -1,7 +1,111 @@
 #![allow(clippy::manual_strip)]
 #[allow(unused_imports)]
 use std::fs;
-use std::{env, error::Error, path::Path};
+use std::{error::Error, fmt, path::Path, str::FromStr};
+
+/// Translate shaders to different formats
+#[derive(argh::FromArgs, Debug, Clone)]
+struct Args {
+    /// validate the shader during translation
+    #[argh(switch)]
+    validate: bool,
+
+    /// what policy to use for index bounds checking.
+    ///
+    /// May be `Restrict`, `ReadZeroSkipWrite`, or `UndefinedBehavior`
+    #[argh(option)]
+    index_bounds_check_policy: Option<IndexBoundsCheckPolicyArg>,
+
+    /// directory to dump the SPIR-V flow dump to
+    #[argh(option)]
+    flow_dir: Option<String>,
+
+    /// the shader entrypoint to use when compiling to GLSL
+    #[argh(option)]
+    entry_point: Option<String>,
+
+    /// the shader profile to use, for example `es`, `core`, `es330`, if translating to GLSL
+    #[argh(option)]
+    profile: Option<GlslProfileArg>,
+
+    /// the shader model to use if targeting HSLS
+    ///
+    /// May be `50`, 51`, or `60`
+    #[argh(option)]
+    shader_model: Option<ShaderModelArg>,
+
+    /// the input file
+    #[argh(positional)]
+    input: String,
+
+    /// the output file
+    #[argh(positional)]
+    output: String,
+
+    /// other output files if there are multiples
+    #[argh(positional)]
+    extra_outputs: Vec<String>,
+}
+
+/// Newtype so we can implement [`FromStr`] for `IndexBoundsCheckPolicy`.
+#[derive(Debug, Clone)]
+struct IndexBoundsCheckPolicyArg(naga::back::IndexBoundsCheckPolicy);
+
+impl FromStr for IndexBoundsCheckPolicyArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use naga::back::IndexBoundsCheckPolicy;
+        Ok(Self(match s.to_lowercase().as_str() {
+            "restrict" => IndexBoundsCheckPolicy::Restrict,
+            "readzeroskipwrite" => IndexBoundsCheckPolicy::ReadZeroSkipWrite,
+            "undefinedbehavior" => IndexBoundsCheckPolicy::UndefinedBehavior,
+            _ => {
+                return Err(format!(
+                    "Invalid value for --index-bounds-check-policy: {}",
+                    s
+                ))
+            }
+        }))
+    }
+}
+
+/// Newtype so we can implement [`FromStr`] for `ShaderModel`.
+#[derive(Debug, Clone)]
+struct ShaderModelArg(naga::back::hlsl::ShaderModel);
+
+impl FromStr for ShaderModelArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use naga::back::hlsl::ShaderModel;
+        Ok(Self(match s.to_lowercase().as_str() {
+            "50" => ShaderModel::V5_0,
+            "51" => ShaderModel::V5_1,
+            "60" => ShaderModel::V6_0,
+            _ => return Err(format!("Invalid value for --shader-model: {}", s)),
+        }))
+    }
+}
+
+/// Newtype so we can implement [`FromStr`] for [`naga::back::glsl::Version`].
+#[derive(Clone, Debug)]
+struct GlslProfileArg(naga::back::glsl::Version);
+
+impl FromStr for GlslProfileArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use naga::back::glsl::Version;
+        Ok(Self(if s.starts_with("core") {
+            Version::Desktop(s[4..].parse().unwrap_or(330))
+        } else if s.starts_with("es") {
+            Version::Embedded(s[2..].parse().unwrap_or(310))
+        } else {
+            return Err(format!("Unknown profile: {}", s));
+        }))
+    }
+}
 
 #[derive(Default)]
 struct Parameters {
@@ -21,7 +125,7 @@ trait PrettyResult {
     fn unwrap_pretty(self) -> Self::Target;
 }
 
-fn print_err(error: impl Error) {
+fn print_err(error: &dyn Error) {
     eprint!("{}", error);
 
     let mut e = error.source();
@@ -43,7 +147,7 @@ impl<T, E: Error> PrettyResult for Result<T, E> {
         match self {
             Result::Ok(value) => value,
             Result::Err(error) => {
-                print_err(error);
+                print_err(&error);
                 std::process::exit(1);
             }
         }
@@ -51,91 +155,56 @@ impl<T, E: Error> PrettyResult for Result<T, E> {
 }
 
 fn main() {
+    if let Err(e) = run() {
+        print_err(e.as_ref());
+        std::process::exit(1);
+    }
+}
+
+/// Error type for the CLI
+#[derive(Debug, Clone)]
+struct CliError(&'static str);
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+impl std::error::Error for CliError {}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let mut input_path = None;
-    let mut output_paths = Vec::new();
+    // Initialize default parameters
     //TODO: read the parameters from RON?
-    #[allow(unused_mut)]
     let mut params = Parameters::default();
 
-    let mut args = env::args();
-    let _ = args.next().unwrap();
-    #[allow(clippy::while_let_on_iterator)]
-    while let Some(arg) = args.next() {
-        //TODO: use `strip_prefix` when MSRV reaches 1.45.0
-        if arg.starts_with("--") {
-            match &arg[2..] {
-                "validate" => {
-                    let value = args.next().unwrap().parse().unwrap();
-                    params.validation_flags =
-                        naga::valid::ValidationFlags::from_bits(value).unwrap();
-                }
-                "index-bounds-check-policy" => {
-                    let value = args.next().unwrap();
-                    params.index_bounds_check_policy = match value.as_str() {
-                        "Restrict" => naga::back::IndexBoundsCheckPolicy::Restrict,
-                        "ReadZeroSkipWrite" => {
-                            naga::back::IndexBoundsCheckPolicy::ReadZeroSkipWrite
-                        }
-                        "UndefinedBehavior" => {
-                            naga::back::IndexBoundsCheckPolicy::UndefinedBehavior
-                        }
-                        other => {
-                            panic!(
-                                "Unrecognized '--index-bounds-check-policy' value: {:?}",
-                                other
-                            );
-                        }
-                    };
-                }
-                "flow-dir" => params.spv_flow_dump_prefix = args.next(),
-                "entry-point" => params.entry_point = Some(args.next().unwrap()),
-                "profile" => {
-                    use naga::back::glsl::Version;
-                    let string = args.next().unwrap();
-                    //TODO: use `strip_prefix` in 1.45.0
-                    params.glsl.version = if string.starts_with("core") {
-                        Version::Desktop(string[4..].parse().unwrap_or(330))
-                    } else if string.starts_with("es") {
-                        Version::Embedded(string[2..].parse().unwrap_or(310))
-                    } else {
-                        panic!("Unknown profile: {}", string)
-                    };
-                }
-                "shader-model" => {
-                    use naga::back::hlsl::ShaderModel;
-                    let string = args.next().unwrap();
-                    let sm_numb = string.parse::<u16>().unwrap();
-                    let sm = match string.parse().unwrap() {
-                        50 => ShaderModel::V5_0,
-                        51 => ShaderModel::V5_1,
-                        60 => ShaderModel::V6_0,
-                        _ => panic!("Unsupported shader model: {}", sm_numb),
-                    };
-                    params.hlsl.shader_model = sm;
-                }
-                other => log::warn!("Unknown parameter: {}", other),
-            }
-        } else if input_path.is_none() {
-            input_path = Some(arg);
-        } else {
-            output_paths.push(arg);
-        }
+    // Parse commandline arguments
+    let args: Args = argh::from_env();
+    let input_path = Path::new(&args.input);
+    let mut output_paths = vec![args.output];
+    output_paths.extend(args.extra_outputs);
+
+    // Update parameters from commandline arguments
+    if args.validate {
+        params.validation_flags = naga::valid::ValidationFlags::all();
+    }
+    if let Some(policy) = args.index_bounds_check_policy {
+        params.index_bounds_check_policy = policy.0;
+    }
+    params.spv_flow_dump_prefix = args.flow_dir;
+    params.entry_point = args.entry_point;
+    if let Some(version) = args.profile {
+        params.glsl.version = version.0;
+    }
+    if let Some(model) = args.shader_model {
+        params.hlsl.shader_model = model.0;
     }
 
-    let input_path = match input_path {
-        Some(ref string) => Path::new(string),
-        None => {
-            println!("Call with <input> <output> [<options>]");
-            return;
-        }
-    };
-    let module = match Path::new(input_path)
+    let module = match Path::new(&input_path)
         .extension()
-        .expect("Input has no extension?")
+        .ok_or(CliError("Input filename has no extension"))?
         .to_str()
-        .unwrap()
+        .ok_or(CliError("Input filename not valid unicode"))?
     {
         "spv" => {
             let options = naga::front::spv::Options {
@@ -143,22 +212,22 @@ fn main() {
                 strict_capabilities: false,
                 flow_graph_dump_prefix: params.spv_flow_dump_prefix.map(std::path::PathBuf::from),
             };
-            let input = fs::read(input_path).unwrap();
-            naga::front::spv::parse_u8_slice(&input, &options).unwrap()
+            let input = fs::read(input_path)?;
+            naga::front::spv::parse_u8_slice(&input, &options)?
         }
         "wgsl" => {
-            let input = fs::read_to_string(input_path).unwrap();
+            let input = fs::read_to_string(input_path)?;
             let result = naga::front::wgsl::parse_str(&input);
             match result {
                 Ok(v) => v,
                 Err(ref e) => {
                     e.emit_to_stderr(&input);
-                    panic!("unable to parse WGSL");
+                    return Err(CliError("Could not parse WGSL").into());
                 }
             }
         }
         "vert" => {
-            let input = fs::read_to_string(input_path).unwrap();
+            let input = fs::read_to_string(input_path)?;
             let mut entry_points = naga::FastHashMap::default();
             entry_points.insert("main".to_string(), naga::ShaderStage::Vertex);
             naga::front::glsl::parse_str(
@@ -176,7 +245,7 @@ fn main() {
             })
         }
         "frag" => {
-            let input = fs::read_to_string(input_path).unwrap();
+            let input = fs::read_to_string(input_path)?;
             let mut entry_points = naga::FastHashMap::default();
             entry_points.insert("main".to_string(), naga::ShaderStage::Fragment);
             naga::front::glsl::parse_str(
@@ -194,7 +263,7 @@ fn main() {
             })
         }
         "comp" => {
-            let input = fs::read_to_string(input_path).unwrap();
+            let input = fs::read_to_string(input_path)?;
             let mut entry_points = naga::FastHashMap::default();
             entry_points.insert("main".to_string(), naga::ShaderStage::Compute);
             naga::front::glsl::parse_str(
@@ -211,7 +280,7 @@ fn main() {
                 std::process::exit(1);
             })
         }
-        other => panic!("Unknown input extension: {}", other),
+        _ => return Err(CliError("Unknown input file extension").into()),
     };
 
     // validate the IR
@@ -223,7 +292,7 @@ fn main() {
     {
         Ok(info) => Some(info),
         Err(error) => {
-            print_err(error);
+            print_err(&error);
             None
         }
     };
@@ -231,7 +300,7 @@ fn main() {
     if output_paths.is_empty() {
         if info.is_some() {
             println!("Validation successful");
-            return;
+            return Ok(());
         } else {
             std::process::exit(!0);
         }
@@ -240,18 +309,18 @@ fn main() {
     for output_path in output_paths {
         match Path::new(&output_path)
             .extension()
-            .expect("Output has no extension?")
+            .ok_or(CliError("Output filename has no extension"))?
             .to_str()
-            .unwrap()
+            .ok_or(CliError("Output filename not valid unicode"))?
         {
             "txt" => {
                 use std::io::Write;
 
-                let mut file = fs::File::create(output_path).unwrap();
-                writeln!(file, "{:#?}", module).unwrap();
+                let mut file = fs::File::create(output_path)?;
+                writeln!(file, "{:#?}", module)?;
                 if let Some(ref info) = info {
-                    writeln!(file).unwrap();
-                    writeln!(file, "{:#?}", info).unwrap();
+                    writeln!(file)?;
+                    writeln!(file, "{:#?}", info)?;
                 }
             }
             "metal" => {
@@ -260,20 +329,30 @@ fn main() {
                 let pipeline_options = msl::PipelineOptions::default();
                 let (msl, _) = msl::write_string(
                     &module,
-                    info.as_ref().unwrap(),
+                    info.as_ref().ok_or(CliError(
+                        "Generating metal output requires validation to \
+                        succeed, and it failed in a previous step",
+                    ))?,
                     &params.msl,
                     &pipeline_options,
                 )
                 .unwrap_pretty();
-                fs::write(output_path, msl).unwrap();
+                fs::write(output_path, msl)?;
             }
             "spv" => {
                 use naga::back::spv;
 
                 params.spv.index_bounds_check_policy = params.index_bounds_check_policy;
 
-                let spv =
-                    spv::write_vec(&module, info.as_ref().unwrap(), &params.spv).unwrap_pretty();
+                let spv = spv::write_vec(
+                    &module,
+                    info.as_ref().ok_or(CliError(
+                        "Generating SPIR-V output requires validation to \
+                        succeed, and it failed in a previous step",
+                    ))?,
+                    &params.spv,
+                )
+                .unwrap_pretty();
                 let bytes = spv
                     .iter()
                     .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
@@ -281,7 +360,7 @@ fn main() {
                         v
                     });
 
-                fs::write(output_path, bytes.as_slice()).unwrap();
+                fs::write(output_path, bytes.as_slice())?;
             }
             stage @ "vert" | stage @ "frag" | stage @ "comp" => {
                 use naga::back::glsl;
@@ -303,40 +382,58 @@ fn main() {
                 let mut writer = glsl::Writer::new(
                     &mut buffer,
                     &module,
-                    info.as_ref().unwrap(),
+                    info.as_ref().ok_or(CliError(
+                        "Generating glsl output requires validation to \
+                        succeed, and it failed in a previous step",
+                    ))?,
                     &params.glsl,
                     &pipeline_options,
                 )
                 .unwrap_pretty();
-                writer.write().unwrap();
-                fs::write(output_path, buffer).unwrap();
+                writer.write()?;
+                fs::write(output_path, buffer)?;
             }
             "dot" => {
                 use naga::back::dot;
 
-                let output = dot::write(&module, info.as_ref()).unwrap();
-                fs::write(output_path, output).unwrap();
+                let output = dot::write(&module, info.as_ref())?;
+                fs::write(output_path, output)?;
             }
             "hlsl" => {
                 use naga::back::hlsl;
                 let mut buffer = String::new();
                 let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
                 writer
-                    .write(&module, info.as_ref().unwrap())
+                    .write(
+                        &module,
+                        info.as_ref().ok_or(CliError(
+                            "Generating hsls output requires validation to \
+                            succeed, and it failed in a previous step",
+                        ))?,
+                    )
                     .unwrap_pretty();
-                fs::write(output_path, buffer).unwrap();
+                fs::write(output_path, buffer)?;
             }
             "wgsl" => {
                 use naga::back::wgsl;
 
-                let wgsl = wgsl::write_string(&module, info.as_ref().unwrap()).unwrap_pretty();
-                fs::write(output_path, wgsl).unwrap();
+                let wgsl = wgsl::write_string(
+                    &module,
+                    info.as_ref().ok_or(CliError(
+                        "Generating wgsl output requires validation to \
+                        succeed, and it failed in a previous step",
+                    ))?,
+                )
+                .unwrap_pretty();
+                fs::write(output_path, wgsl)?;
             }
             other => {
                 println!("Unknown output extension: {}", other);
             }
         }
     }
+
+    Ok(())
 }
 
 use codespan_reporting::{
