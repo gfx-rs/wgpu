@@ -45,6 +45,7 @@ fn test_vertex_attr_array() {
 ///
 /// It ensures the word alignment as well as the magic number.
 #[macro_export]
+#[cfg(feature = "spirv")]
 macro_rules! include_spirv {
     ($($token:tt)*) => {
         {
