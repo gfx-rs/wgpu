@@ -513,7 +513,7 @@ impl framework::Example for Example {
                 // one item, which is itself `repr(C)`.
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: water_vertex_size as wgpu::BufferAddress,
-                    step_mode: wgpu::InputStepMode::Vertex,
+                    step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Sint16x2, 1 => Sint8x4],
                 }],
             },
@@ -576,7 +576,7 @@ impl framework::Example for Example {
                 entry_point: "vs_main",
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: terrain_vertex_size as wgpu::BufferAddress,
-                    step_mode: wgpu::InputStepMode::Vertex,
+                    step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Unorm8x4],
                 }],
             },

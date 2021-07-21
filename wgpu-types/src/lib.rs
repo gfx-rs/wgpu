@@ -2045,16 +2045,16 @@ impl CompareFunction {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub enum InputStepMode {
-    /// Input data is advanced every vertex. This is the standard value for vertex data.
+pub enum VertexStepMode {
+    /// Vertex data is advanced every vertex.
     Vertex = 0,
-    /// Input data is advanced every instance.
+    /// Vertex data is advanced every instance.
     Instance = 1,
 }
 
-impl Default for InputStepMode {
+impl Default for VertexStepMode {
     fn default() -> Self {
-        InputStepMode::Vertex
+        VertexStepMode::Vertex
     }
 }
 

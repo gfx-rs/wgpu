@@ -27,7 +27,7 @@ use arrayvec::ArrayVec;
 use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, BufferUsages, Color, IndexFormat, InputStepMode, TextureUsages,
+    BufferAddress, BufferSize, BufferUsages, Color, IndexFormat, TextureUsages, VertexStepMode,
 };
 
 #[cfg(any(feature = "serial-pass", feature = "replay"))]
@@ -263,7 +263,7 @@ impl IndexState {
 struct VertexBufferState {
     total_size: BufferAddress,
     stride: BufferAddress,
-    rate: InputStepMode,
+    rate: VertexStepMode,
     bound: bool,
 }
 
@@ -271,7 +271,7 @@ impl VertexBufferState {
     const EMPTY: Self = VertexBufferState {
         total_size: 0,
         stride: 0,
-        rate: InputStepMode::Vertex,
+        rate: VertexStepMode::Vertex,
         bound: false,
     };
 }
@@ -301,13 +301,13 @@ impl VertexState {
             }
             let limit = (vbs.total_size / vbs.stride) as u32;
             match vbs.rate {
-                InputStepMode::Vertex => {
+                VertexStepMode::Vertex => {
                     if limit < self.vertex_limit {
                         self.vertex_limit = limit;
                         self.vertex_limit_slot = idx as _;
                     }
                 }
-                InputStepMode::Instance => {
+                VertexStepMode::Instance => {
                     if limit < self.instance_limit {
                         self.instance_limit = limit;
                         self.instance_limit_slot = idx as _;
@@ -1084,7 +1084,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         for vbs in state.vertex.inputs.iter_mut().skip(vertex_strides_len) {
                             vbs.stride = 0;
-                            vbs.rate = InputStepMode::Vertex;
+                            vbs.rate = VertexStepMode::Vertex;
                         }
                         state.vertex.update_limits();
                     }

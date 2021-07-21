@@ -79,8 +79,8 @@ impl super::CommandEncoder {
                     continue;
                 }
                 let instance_offset = match vb_desc.step {
-                    wgt::InputStepMode::Vertex => 0,
-                    wgt::InputStepMode::Instance => first_instance * vb_desc.stride,
+                    wgt::VertexStepMode::Vertex => 0,
+                    wgt::VertexStepMode::Instance => first_instance * vb_desc.stride,
                 };
                 self.cmd_buffer.commands.push(C::SetVertexBuffer {
                     index: index as u32,
@@ -101,7 +101,7 @@ impl super::CommandEncoder {
 
                 let mut attribute_desc = attribute.clone();
                 attribute_desc.offset += buffer.offset as u32;
-                if buffer_desc.step == wgt::InputStepMode::Instance {
+                if buffer_desc.step == wgt::VertexStepMode::Instance {
                     attribute_desc.offset += buffer_desc.stride * first_instance;
                 }
 
@@ -634,7 +634,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .zip(pipeline.vertex_buffers.iter())
             .enumerate()
         {
-            if pipe_desc.step == wgt::InputStepMode::Instance {
+            if pipe_desc.step == wgt::VertexStepMode::Instance {
                 self.state.instance_vbuf_mask |= 1 << index;
             }
             if state_desc != pipe_desc {

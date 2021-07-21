@@ -1431,10 +1431,10 @@ impl crate::Device<super::Api> for super::Device {
         {
             *stride = NonZeroU32::new(vbuf.array_stride as u32);
             let (slot_class, step_rate) = match vbuf.step_mode {
-                wgt::InputStepMode::Vertex => {
+                wgt::VertexStepMode::Vertex => {
                     (d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0)
                 }
-                wgt::InputStepMode::Instance => {
+                wgt::VertexStepMode::Instance => {
                     (d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1)
                 }
             };

@@ -833,7 +833,7 @@ struct VertexState {
     buffer: Option<id::BufferId>,
     range: Range<wgt::BufferAddress>,
     stride: wgt::BufferAddress,
-    rate: wgt::InputStepMode,
+    rate: wgt::VertexStepMode,
     is_dirty: bool,
 }
 
@@ -843,7 +843,7 @@ impl VertexState {
             buffer: None,
             range: 0..0,
             stride: 0,
-            rate: wgt::InputStepMode::Vertex,
+            rate: wgt::VertexStepMode::Vertex,
             is_dirty: false,
         }
     }
@@ -967,13 +967,13 @@ impl State {
             }
             let limit = ((vbs.range.end - vbs.range.start) / vbs.stride) as u32;
             match vbs.rate {
-                wgt::InputStepMode::Vertex => {
+                wgt::VertexStepMode::Vertex => {
                     if limit < vert_state.vertex_limit {
                         vert_state.vertex_limit = limit;
                         vert_state.vertex_limit_slot = idx as _;
                     }
                 }
-                wgt::InputStepMode::Instance => {
+                wgt::VertexStepMode::Instance => {
                     if limit < vert_state.instance_limit {
                         vert_state.instance_limit = limit;
                         vert_state.instance_limit_slot = idx as _;
@@ -1013,7 +1013,7 @@ impl State {
     fn set_pipeline(
         &mut self,
         index_format: Option<wgt::IndexFormat>,
-        vertex_strides: &[(wgt::BufferAddress, wgt::InputStepMode)],
+        vertex_strides: &[(wgt::BufferAddress, wgt::VertexStepMode)],
         layout_ids: &[id::Valid<id::BindGroupLayoutId>],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {

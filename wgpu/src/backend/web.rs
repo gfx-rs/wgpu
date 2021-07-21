@@ -754,12 +754,12 @@ fn map_vertex_format(format: wgt::VertexFormat) -> web_sys::GpuVertexFormat {
     }
 }
 
-fn map_input_step_mode(mode: wgt::InputStepMode) -> web_sys::GpuInputStepMode {
+fn map_input_step_mode(mode: wgt::VertexStepMode) -> web_sys::GpuInputStepMode {
     use web_sys::GpuInputStepMode as sm;
-    use wgt::InputStepMode;
+    use wgt::VertexStepMode;
     match mode {
-        InputStepMode::Vertex => sm::Vertex,
-        InputStepMode::Instance => sm::Instance,
+        VertexStepMode::Vertex => sm::Vertex,
+        VertexStepMode::Instance => sm::Instance,
     }
 }
 
