@@ -200,8 +200,8 @@ struct RenderPassKey {
 struct FramebufferAttachment {
     /// Can be NULL if the framebuffer is image-less
     raw: vk::ImageView,
-    texture_usage: crate::TextureUses,
     raw_image_flags: vk::ImageCreateFlags,
+    view_usage: crate::TextureUses,
     view_format: wgt::TextureFormat,
 }
 

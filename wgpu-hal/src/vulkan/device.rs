@@ -183,7 +183,7 @@ impl super::DeviceShared {
                     .enumerate()
                     .map(|(i, at)| {
                         vk::FramebufferAttachmentImageInfo::builder()
-                            .usage(conv::map_texture_usage(at.texture_usage))
+                            .usage(conv::map_texture_usage(at.view_usage))
                             .flags(at.raw_image_flags)
                             .width(e.key().extent.width)
                             .height(e.key().extent.height)
@@ -735,12 +735,15 @@ impl crate::Device<super::Api> for super::Device {
             .subresource_range(conv::map_subresource_range(&desc.range, texture.aspects));
 
         let mut image_view_info;
-        if self.shared.private_caps.image_view_usage && !desc.usage.is_empty() {
+        let view_usage = if self.shared.private_caps.image_view_usage && !desc.usage.is_empty() {
             image_view_info = vk::ImageViewUsageCreateInfo::builder()
                 .usage(conv::map_texture_usage(desc.usage))
                 .build();
             vk_info = vk_info.push_next(&mut image_view_info);
-        }
+            desc.usage
+        } else {
+            texture.usage
+        };
 
         let raw = self.shared.raw.create_image_view(&vk_info, None)?;
 
@@ -755,8 +758,8 @@ impl crate::Device<super::Api> for super::Device {
             } else {
                 raw
             },
-            texture_usage: texture.usage,
             raw_image_flags: texture.raw_flags,
+            view_usage,
             view_format: desc.format,
         };
 
