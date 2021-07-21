@@ -1143,8 +1143,8 @@ impl crate::Device<super::Api> for super::Device {
                 binding: i as u32,
                 stride: vb.array_stride as u32,
                 input_rate: match vb.step_mode {
-                    wgt::InputStepMode::Vertex => vk::VertexInputRate::VERTEX,
-                    wgt::InputStepMode::Instance => vk::VertexInputRate::INSTANCE,
+                    wgt::VertexStepMode::Vertex => vk::VertexInputRate::VERTEX,
+                    wgt::VertexStepMode::Instance => vk::VertexInputRate::INSTANCE,
                 },
             });
             for at in vb.attributes {

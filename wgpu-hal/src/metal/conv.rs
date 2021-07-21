@@ -216,10 +216,10 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> mtl::MTLVertexFormat {
     }
 }
 
-pub fn map_step_mode(mode: wgt::InputStepMode) -> mtl::MTLVertexStepFunction {
+pub fn map_step_mode(mode: wgt::VertexStepMode) -> mtl::MTLVertexStepFunction {
     match mode {
-        wgt::InputStepMode::Vertex => mtl::MTLVertexStepFunction::PerVertex,
-        wgt::InputStepMode::Instance => mtl::MTLVertexStepFunction::PerInstance,
+        wgt::VertexStepMode::Vertex => mtl::MTLVertexStepFunction::PerVertex,
+        wgt::VertexStepMode::Instance => mtl::MTLVertexStepFunction::PerInstance,
     }
 }
 

@@ -30,15 +30,15 @@ pub use wgt::{
     BufferUsages, Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
     DepthBiasState, DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags,
     DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout, IndexFormat,
-    InputStepMode, Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode,
-    PowerPreference, PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
+    Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
     SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages, StencilFaceState,
     StencilOperation, StencilState, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
     TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
     TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
-    VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    VertexFormat, VertexStepMode, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES,
+    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -1229,7 +1229,7 @@ pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
     pub array_stride: BufferAddress,
     /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: InputStepMode,
+    pub step_mode: VertexStepMode,
     /// The list of attributes which comprise a single vertex.
     pub attributes: &'a [VertexAttribute],
 }

@@ -137,7 +137,7 @@ pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
     pub array_stride: wgt::BufferAddress,
     /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: wgt::InputStepMode,
+    pub step_mode: wgt::VertexStepMode,
     /// The list of attributes which comprise a single vertex.
     pub attributes: Cow<'a, [wgt::VertexAttribute]>,
 }
@@ -287,7 +287,7 @@ pub struct RenderPipeline<A: hal::Api> {
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
-    pub(crate) vertex_strides: Vec<(wgt::BufferAddress, wgt::InputStepMode)>,
+    pub(crate) vertex_strides: Vec<(wgt::BufferAddress, wgt::VertexStepMode)>,
     pub(crate) life_guard: LifeGuard,
 }
 

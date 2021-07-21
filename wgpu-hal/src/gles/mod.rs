@@ -318,7 +318,7 @@ struct ImageBinding {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 struct VertexBufferDesc {
-    step: wgt::InputStepMode,
+    step: wgt::VertexStepMode,
     stride: u32,
 }
 

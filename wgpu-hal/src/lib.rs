@@ -916,7 +916,7 @@ pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
     pub array_stride: wgt::BufferAddress,
     /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: wgt::InputStepMode,
+    pub step_mode: wgt::VertexStepMode,
     /// The list of attributes which comprise a single vertex.
     pub attributes: &'a [wgt::VertexAttribute],
 }
