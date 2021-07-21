@@ -697,7 +697,8 @@ impl crate::Context for Context {
             PhantomData
         ));
         if let Some(err) = error {
-            self.handle_error_fatal(err, "Adapter::request_device");
+            log::error!("Error in Adapter::request_device: {}", err);
+            return ready(Err(crate::RequestDeviceError));
         }
         let device = Device {
             id: device_id,
