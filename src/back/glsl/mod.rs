@@ -554,9 +554,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 TypeInner::Sampler { .. } => continue,
                 // All other globals are written by `write_global`
                 _ => {
-                    self.write_global(handle, global)?;
-                    // Add a newline (only for readability)
-                    writeln!(self.out)?;
+                    if !ep_info[handle].is_empty() {
+                        self.write_global(handle, global)?;
+                        // Add a newline (only for readability)
+                        writeln!(self.out)?;
+                    }
                 }
             }
         }

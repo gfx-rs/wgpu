@@ -205,6 +205,8 @@ impl<'a, W> Writer<'a, W> {
     /// If the version doesn't support any of the needed [`Features`](Features) a
     /// [`Error::MissingFeatures`](super::Error::MissingFeatures) will be returned
     pub(super) fn collect_required_features(&mut self) -> BackendResult {
+        let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
+
         if let Some(depth_test) = self.entry_point.early_depth_test {
             // If IMAGE_LOAD_STORE is supported for this version of GLSL
             if self.options.version.supports_early_depth_test() {
@@ -227,7 +229,7 @@ impl<'a, W> Writer<'a, W> {
             self.features.request(Features::COMPUTE_SHADER)
         }
 
-        for (_, ty) in self.module.types.iter() {
+        for (ty_handle, ty) in self.module.types.iter() {
             match ty.inner {
                 TypeInner::Scalar { kind, width } => self.scalar_required_features(kind, width),
                 TypeInner::Vector { kind, width, .. } => self.scalar_required_features(kind, width),
@@ -239,8 +241,42 @@ impl<'a, W> Writer<'a, W> {
                         self.features.request(Features::ARRAY_OF_ARRAYS)
                     }
 
+                    // If the array is dynamically sized
                     if size == crate::ArraySize::Dynamic {
-                        self.features.request(Features::DYNAMIC_ARRAY_SIZE);
+                        let mut is_used = false;
+
+                        // Check if this type is used in a global that is needed by the current entrypoint
+                        for (global_handle, global) in self.module.global_variables.iter() {
+                            // Skip unused globals
+                            if ep_info[global_handle].is_empty() {
+                                continue;
+                            }
+
+                            // If this array is the type of a global, then this array is used
+                            if global.ty == ty_handle {
+                                is_used = true;
+                                break;
+                            }
+
+                            // If the type of this global is a struct
+                            if let crate::TypeInner::Struct { ref members, .. } =
+                                self.module.types[global.ty].inner
+                            {
+                                // Check the last element of the struct to see if it's type uses
+                                // this array
+                                if let Some(last) = members.last() {
+                                    if last.ty == ty_handle {
+                                        is_used = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        // If this dynamically size array is used, we need dynamic array size support
+                        if is_used {
+                            self.features.request(Features::DYNAMIC_ARRAY_SIZE);
+                        }
                     }
                 }
                 TypeInner::Image {
@@ -292,7 +328,10 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
-        for (_, global) in self.module.global_variables.iter() {
+        for (handle, global) in self.module.global_variables.iter() {
+            if ep_info[handle].is_empty() {
+                continue;
+            }
             match global.class {
                 StorageClass::WorkGroup => self.features.request(Features::COMPUTE_SHADER),
                 StorageClass::Storage => self.features.request(Features::BUFFER_STORAGE),
