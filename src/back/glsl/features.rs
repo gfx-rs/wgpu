@@ -206,7 +206,10 @@ impl<'a, W> Writer<'a, W> {
     /// [`Error::MissingFeatures`](super::Error::MissingFeatures) will be returned
     pub(super) fn collect_required_features(&mut self) -> BackendResult {
         if let Some(depth_test) = self.entry_point.early_depth_test {
-            self.features.request(Features::IMAGE_LOAD_STORE);
+            // If IMAGE_LOAD_STORE is supported for this version of GLSL
+            if self.options.version.supports_early_depth_test() {
+                self.features.request(Features::IMAGE_LOAD_STORE);
+            }
 
             if depth_test.conservative.is_some() {
                 self.features.request(Features::CONSERVATIVE_DEPTH);

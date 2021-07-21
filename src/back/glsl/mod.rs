@@ -110,6 +110,10 @@ impl Version {
     fn supports_explicit_locations(&self) -> bool {
         *self >= Version::Embedded(310) || *self >= Version::Desktop(410)
     }
+
+    fn supports_early_depth_test(&self) -> bool {
+        *self >= Version::Desktop(130) || *self >= Version::Embedded(310)
+    }
 }
 
 impl PartialOrd for Version {
@@ -430,22 +434,27 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Enable early depth tests if needed
         if let Some(depth_test) = self.entry_point.early_depth_test {
-            writeln!(self.out, "layout(early_fragment_tests) in;")?;
+            // If early depth test is supported for this version of GLSL
+            if self.options.version.supports_early_depth_test() {
+                writeln!(self.out, "layout(early_fragment_tests) in;")?;
 
-            if let Some(conservative) = depth_test.conservative {
-                use crate::ConservativeDepth as Cd;
+                if let Some(conservative) = depth_test.conservative {
+                    use crate::ConservativeDepth as Cd;
 
-                writeln!(
-                    self.out,
-                    "layout (depth_{}) out float gl_FragDepth;",
-                    match conservative {
+                    let depth = match conservative {
                         Cd::GreaterEqual => "greater",
                         Cd::LessEqual => "less",
                         Cd::Unchanged => "unchanged",
-                    }
-                )?;
+                    };
+                    writeln!(self.out, "layout (depth_{}) out float gl_FragDepth;", depth)?;
+                }
+                writeln!(self.out)?;
+            } else {
+                log::warn!(
+                    "Early depth testing is not supported for this version of GLSL: {}",
+                    self.options.version
+                );
             }
-            writeln!(self.out)?;
         }
 
         // Write all structs
