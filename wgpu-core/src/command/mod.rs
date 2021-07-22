@@ -17,7 +17,7 @@ pub use self::transfer::*;
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    memory_init_tracker::MemoryInitTrackerAction,
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, Texture},
     track::{BufferState, ResourceTracker, TextureState, TrackerSet},
     Label, Stored,
@@ -63,10 +63,76 @@ impl<A: hal::Api> CommandEncoder<A> {
     }
 }
 
-pub struct BackedCommands<A: hal::Api> {
+pub struct BakedCommands<A: hal::Api> {
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: TrackerSet,
+    buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
+}
+
+pub(crate) struct DestroyedBufferError(pub id::BufferId);
+
+impl<A: hal::Api> BakedCommands<A> {
+    pub(crate) fn initialize_buffer_memory(
+        &mut self,
+        device_tracker: &mut TrackerSet,
+        buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
+    ) -> Result<(), DestroyedBufferError> {
+        let mut ranges = Vec::new();
+        for buffer_use in self.buffer_memory_init_actions.drain(..) {
+            let buffer = buffer_guard
+                .get_mut(buffer_use.id)
+                .map_err(|_| DestroyedBufferError(buffer_use.id))?;
+
+            let uninitialized_ranges = buffer.initialization_status.drain(buffer_use.range.clone());
+            match buffer_use.kind {
+                MemoryInitKind::ImplicitlyInitialized => {
+                    uninitialized_ranges.for_each(drop);
+                }
+                MemoryInitKind::NeedsInitializedMemory => {
+                    ranges.clear();
+                    ranges.extend(uninitialized_ranges);
+                    // Collapse touching ranges. We can't do this any earlier since we only now gathered ranges from several different command buffers!
+                    ranges.sort_by(|a, b| a.start.cmp(&b.start));
+                    for i in (1..ranges.len()).rev() {
+                        assert!(ranges[i - 1].end <= ranges[i].start); // The memory init tracker made sure of this!
+                        if ranges[i].start == ranges[i - 1].end {
+                            ranges[i - 1].end = ranges[i].end;
+                            ranges.swap_remove(i); // Ordering not important at this point
+                        }
+                    }
+
+                    // Don't do use_replace since the buffer may already no longer have a ref_count.
+                    // However, we *know* that it is currently in use, so the tracker must already know about it.
+                    let transition = device_tracker.buffers.change_replace_tracked(
+                        id::Valid(buffer_use.id),
+                        (),
+                        hal::BufferUses::COPY_DST,
+                    );
+                    let raw_buf = buffer
+                        .raw
+                        .as_ref()
+                        .ok_or(DestroyedBufferError(buffer_use.id))?;
+
+                    unsafe {
+                        self.encoder
+                            .transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
+                    }
+
+                    for range in ranges.iter() {
+                        assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", raw_buf, range.start);
+                        assert!(range.end % 4 == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
+
+                        unsafe {
+                            self.encoder.fill_buffer(raw_buf, range.clone(), 0);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub struct CommandBuffer<A: hal::Api> {
@@ -75,7 +141,7 @@ pub struct CommandBuffer<A: hal::Api> {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chains: SmallVec<[Stored<id::SwapChainId>; 1]>,
-    pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
+    buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
     support_fill_buffer_texture: bool,
     #[cfg(feature = "trace")]
@@ -164,11 +230,12 @@ impl<A: hal::Api> CommandBuffer<A> {
         }
     }
 
-    pub(crate) fn into_baked(self) -> BackedCommands<A> {
-        BackedCommands {
+    pub(crate) fn into_baked(self) -> BakedCommands<A> {
+        BakedCommands {
             encoder: self.encoder.raw,
             list: self.encoder.list,
             trackers: self.trackers,
+            buffer_memory_init_actions: self.buffer_memory_init_actions,
         }
     }
 }
