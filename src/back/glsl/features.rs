@@ -291,7 +291,8 @@ impl<'a, W> Writer<'a, W> {
                     }
 
                     match class {
-                        ImageClass::Sampled { multi: true, .. } => {
+                        ImageClass::Sampled { multi: true, .. }
+                        | ImageClass::Depth { multi: true } => {
                             self.features.request(Features::MULTISAMPLED_TEXTURES);
                             if arrayed {
                                 self.features.request(Features::MULTISAMPLED_TEXTURE_ARRAYS);
@@ -321,7 +322,8 @@ impl<'a, W> Writer<'a, W> {
                             }
                             _ => {}
                         },
-                        _ => {}
+                        ImageClass::Sampled { multi: false, .. }
+                        | ImageClass::Depth { multi: false } => {}
                     }
                 }
                 _ => {}

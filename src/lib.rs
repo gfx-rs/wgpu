@@ -468,7 +468,10 @@ pub enum ImageClass {
         multi: bool,
     },
     /// Depth comparison image.
-    Depth,
+    Depth {
+        /// Multi-sampled depth image.
+        multi: bool,
+    },
     /// Storage image.
     Storage(StorageFormat),
 }
@@ -595,6 +598,7 @@ pub enum TypeInner {
     Image {
         dim: ImageDimension,
         arrayed: bool,
+        //TODO: consider moving `multisampled: bool` out
         class: ImageClass,
     },
     /// Can be used to sample values from images.

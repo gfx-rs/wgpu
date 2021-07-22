@@ -178,11 +178,11 @@ pub(super) fn patch_comparison_type(
     let original_ty = &arena[var.ty];
     let ty_inner = match original_ty.inner {
         crate::TypeInner::Image {
-            class: _,
+            class: crate::ImageClass::Sampled { multi, .. },
             dim,
             arrayed,
         } => crate::TypeInner::Image {
-            class: crate::ImageClass::Depth,
+            class: crate::ImageClass::Depth { multi },
             dim,
             arrayed,
         },

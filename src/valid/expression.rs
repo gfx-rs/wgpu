@@ -93,8 +93,6 @@ pub enum ExpressionError {
     InvalidSampleOffset(crate::ImageDimension, Handle<crate::Constant>),
     #[error("Depth reference {0:?} is not a scalar float")]
     InvalidDepthReference(Handle<crate::Expression>),
-    #[error("Sample level is not compatible with the image dimension {0:?}")]
-    InvalidSampleLevel(crate::ImageDimension),
     #[error("Sample level (exact) type {0:?} is not a scalar float")]
     InvalidSampleLevelExactType(Handle<crate::Expression>),
     #[error("Sample level (bias) type {0:?} is not a scalar float")]
@@ -390,7 +388,7 @@ impl super::Validator {
                         kind: crate::ScalarKind::Float,
                         multi: false,
                     } => false,
-                    crate::ImageClass::Depth => true,
+                    crate::ImageClass::Depth { multi: false } => true,
                     _ => return Err(ExpressionError::InvalidImageClass(class)),
                 };
                 if comparison != depth_ref.is_some() || (comparison && !image_depth) {
@@ -454,16 +452,10 @@ impl super::Validator {
                 }
 
                 // check level properties
-                let can_level = match class {
-                    crate::ImageClass::Sampled { multi, .. } => !multi,
-                    crate::ImageClass::Storage { .. } => unreachable!(),
-                    crate::ImageClass::Depth { .. } => true,
-                };
                 match level {
-                    // require `can_level` here?
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
                     crate::SampleLevel::Zero => ShaderStages::all(),
-                    crate::SampleLevel::Exact(expr) if can_level => {
+                    crate::SampleLevel::Exact(expr) => {
                         match *resolver.resolve(expr)? {
                             Ti::Scalar {
                                 kind: Sk::Float, ..
@@ -510,7 +502,6 @@ impl super::Validator {
                         }
                         ShaderStages::all()
                     }
-                    _ => return Err(ExpressionError::InvalidSampleLevel(dim)),
                 }
             }
             E::ImageLoad {
@@ -585,14 +576,15 @@ impl super::Validator {
                     Ti::Image { class, arrayed, .. } => {
                         let can_level = match class {
                             crate::ImageClass::Sampled { multi, .. } => !multi,
+                            crate::ImageClass::Depth { multi } => !multi,
                             crate::ImageClass::Storage { .. } => false,
-                            crate::ImageClass::Depth { .. } => true,
                         };
                         let good = match query {
                             crate::ImageQuery::NumLayers => arrayed,
                             crate::ImageQuery::Size { level: None } => true,
                             crate::ImageQuery::Size { level: Some(_) }
                             | crate::ImageQuery::NumLevels => can_level,
+                            //TODO: forbid on storage images
                             crate::ImageQuery::NumSamples => !can_level,
                         };
                         if !good {

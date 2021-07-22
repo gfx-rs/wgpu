@@ -486,7 +486,11 @@ impl<W: Write> Writer<W> {
                         if multi { "multisampled_" } else { "" },
                         format!("<{}>", scalar_kind_str(kind)),
                     ),
-                    Ic::Depth => ("depth_", "", String::from("")),
+                    Ic::Depth { multi } => (
+                        "depth_",
+                        if multi { "multisampled_" } else { "" },
+                        String::from(""),
+                    ),
                     Ic::Storage(storage_format) => (
                         "storage_",
                         "",

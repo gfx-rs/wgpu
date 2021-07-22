@@ -629,7 +629,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 let arrayed_str = if arrayed { "Array" } else { "" };
                 write!(self.out, "Texture{}{}", dim_str, arrayed_str)?;
                 match class {
-                    Ic::Depth => {}
+                    Ic::Depth { multi } => {
+                        let multi_str = if multi { "MS" } else { "" };
+                        write!(self.out, "{}<float>", multi_str)?
+                    }
                     Ic::Sampled { kind, multi } => {
                         let multi_str = if multi { "MS" } else { "" };
                         let scalar_kind_str = scalar_kind_str(kind, 4)?;
@@ -1244,6 +1247,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 let ms = match *func_ctx.info[image].ty.inner_with(&module.types) {
                     crate::TypeInner::Image {
                         class: crate::ImageClass::Sampled { multi, .. },
+                        ..
+                    }
+                    | crate::TypeInner::Image {
+                        class: crate::ImageClass::Depth { multi },
                         ..
                     } => multi,
                     _ => false,

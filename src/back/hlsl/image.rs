@@ -101,8 +101,11 @@ impl<'a, W: Write> super::Writer<'a, W> {
         let dim_str = query.dim.to_hlsl_str();
         let class_str = match query.class {
             crate::ImageClass::Sampled { multi: true, .. } => "MS",
-            crate::ImageClass::Depth => "Depth",
-            _ => "",
+            crate::ImageClass::Depth { multi: true } => "DepthMS",
+            crate::ImageClass::Depth { multi: false } => "Depth",
+            crate::ImageClass::Sampled { multi: false, .. } | crate::ImageClass::Storage { .. } => {
+                ""
+            }
         };
         let arrayed_str = if query.arrayed { "Array" } else { "" };
         let query_str = match query.query {
@@ -129,127 +132,125 @@ impl<'a, W: Write> super::Writer<'a, W> {
         module: &crate::Module,
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
+        use crate::{back::INDENT, ImageDimension as IDim, ImageQuery as Iq};
+
+        const RETURN_VARIABLE_NAME: &str = "ret";
+        const MIP_LEVEL_PARAM: &str = "MipLevel";
+
         for (handle, _) in func_ctx.expressions.iter() {
-            if let crate::Expression::ImageQuery { image, query } = func_ctx.expressions[handle] {
-                let image_ty = func_ctx.info[image].ty.inner_with(&module.types);
-                match *image_ty {
-                    crate::TypeInner::Image {
-                        dim,
-                        arrayed,
-                        class,
-                    } => {
-                        use crate::back::INDENT;
+            let (image, query) = match func_ctx.expressions[handle] {
+                crate::Expression::ImageQuery { image, query } => (image, query),
+                _ => continue,
+            };
+            let image_ty = func_ctx.info[image].ty.inner_with(&module.types);
+            let ret_ty = func_ctx.info[handle].ty.inner_with(&module.types);
 
-                        let ret_ty = func_ctx.info[handle].ty.inner_with(&module.types);
+            let (dim, arrayed, class) = match *image_ty {
+                crate::TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                } => (dim, arrayed, class),
+                _ => unreachable!("we only query images"),
+            };
 
-                        let wrapped_image_query = WrappedImageQuery {
-                            dim,
-                            arrayed,
-                            class,
-                            query: query.into(),
-                        };
+            let wrapped_image_query = WrappedImageQuery {
+                dim,
+                arrayed,
+                class,
+                query: query.into(),
+            };
 
-                        if !self.wrapped_image_queries.contains(&wrapped_image_query) {
-                            // Write function return type and name
-                            self.write_value_type(module, ret_ty)?;
-                            write!(self.out, " ")?;
-                            self.write_wrapped_image_query_function_name(wrapped_image_query)?;
-
-                            // Write function parameters
-                            write!(self.out, "(")?;
-                            // Texture always first parameter
-                            self.write_value_type(module, image_ty)?;
-                            // Mipmap is a second parameter if exists
-                            const MIP_LEVEL_PARAM: &str = "MipLevel";
-                            if let crate::ImageQuery::Size { level: Some(_) } = query {
-                                write!(self.out, ", uint {}", MIP_LEVEL_PARAM)?;
-                            }
-                            writeln!(self.out, ")")?;
-
-                            // Write function body
-                            writeln!(self.out, "{{")?;
-                            const RETURN_VARIABLE_NAME: &str = "ret";
-
-                            use crate::ImageDimension as IDim;
-                            use crate::ImageQuery as Iq;
-
-                            let array_coords = if arrayed { 1 } else { 0 };
-                            // GetDimensions Overloaded Methods
-                            // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions#overloaded-methods
-                            let (ret_swizzle, number_of_params) = match query {
-                                Iq::Size { .. } => match dim {
-                                    IDim::D1 => ("x", 1 + array_coords),
-                                    IDim::D2 => ("xy", 3 + array_coords),
-                                    IDim::D3 => ("xyz", 4),
-                                    IDim::Cube => ("xy", 3 + array_coords),
-                                },
-                                Iq::NumLevels | Iq::NumSamples | Iq::NumLayers => {
-                                    if arrayed || dim == IDim::D3 {
-                                        ("w", 4)
-                                    } else {
-                                        ("z", 3)
-                                    }
-                                }
-                            };
-
-                            // Write `GetDimensions` function.
-                            writeln!(self.out, "{}uint4 {};", INDENT, RETURN_VARIABLE_NAME)?;
-                            write!(self.out, "{}", INDENT)?;
-                            self.write_expr(module, image, func_ctx)?;
-                            write!(self.out, ".GetDimensions(")?;
-                            match query {
-                                Iq::Size { level: Some(_) } => {
-                                    write!(self.out, "{}, ", MIP_LEVEL_PARAM)?;
-                                }
-                                _ =>
-                                // Write zero mipmap level for supported types
-                                {
-                                    if let crate::ImageClass::Sampled { multi: true, .. } = class {
-                                    } else {
-                                        match dim {
-                                            IDim::D2 | IDim::D3 | IDim::Cube => {
-                                                write!(self.out, "0, ")?;
-                                            }
-                                            IDim::D1 => {}
-                                        }
-                                    }
-                                }
-                            }
-
-                            for component in crate::back::COMPONENTS[..number_of_params - 1].iter()
-                            {
-                                write!(self.out, "{}.{}, ", RETURN_VARIABLE_NAME, component)?;
-                            }
-
-                            // write last parameter without comma and space for last parameter
-                            write!(
-                                self.out,
-                                "{}.{}",
-                                RETURN_VARIABLE_NAME,
-                                crate::back::COMPONENTS[number_of_params - 1]
-                            )?;
-
-                            writeln!(self.out, ");")?;
-
-                            // Write return value
-                            writeln!(
-                                self.out,
-                                "{}return {}.{};",
-                                INDENT, RETURN_VARIABLE_NAME, ret_swizzle
-                            )?;
-
-                            // End of function body
-                            writeln!(self.out, "}}")?;
-                            // Write extra new line
-                            writeln!(self.out)?;
-
-                            self.wrapped_image_queries.insert(wrapped_image_query);
-                        }
-                    }
-                    // Here we work only with image types
-                    _ => unreachable!(),
-                }
+            if self.wrapped_image_queries.contains(&wrapped_image_query) {
+                continue;
             }
+
+            // Write function return type and name
+            self.write_value_type(module, ret_ty)?;
+            write!(self.out, " ")?;
+            self.write_wrapped_image_query_function_name(wrapped_image_query)?;
+
+            // Write function parameters
+            write!(self.out, "(")?;
+            // Texture always first parameter
+            self.write_value_type(module, image_ty)?;
+            // Mipmap is a second parameter if exists
+            if let crate::ImageQuery::Size { level: Some(_) } = query {
+                write!(self.out, ", uint {}", MIP_LEVEL_PARAM)?;
+            }
+            writeln!(self.out, ")")?;
+
+            // Write function body
+            writeln!(self.out, "{{")?;
+
+            let array_coords = if arrayed { 1 } else { 0 };
+            // GetDimensions Overloaded Methods
+            // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions#overloaded-methods
+            let (ret_swizzle, number_of_params) = match query {
+                Iq::Size { .. } => match dim {
+                    IDim::D1 => ("x", 1 + array_coords),
+                    IDim::D2 => ("xy", 3 + array_coords),
+                    IDim::D3 => ("xyz", 4),
+                    IDim::Cube => ("xy", 3 + array_coords),
+                },
+                Iq::NumLevels | Iq::NumSamples | Iq::NumLayers => {
+                    if arrayed || dim == IDim::D3 {
+                        ("w", 4)
+                    } else {
+                        ("z", 3)
+                    }
+                }
+            };
+
+            // Write `GetDimensions` function.
+            writeln!(self.out, "{}uint4 {};", INDENT, RETURN_VARIABLE_NAME)?;
+            write!(self.out, "{}", INDENT)?;
+            self.write_expr(module, image, func_ctx)?;
+            write!(self.out, ".GetDimensions(")?;
+            match query {
+                Iq::Size { level: Some(_) } => {
+                    write!(self.out, "{}, ", MIP_LEVEL_PARAM)?;
+                }
+                _ => match class {
+                    crate::ImageClass::Sampled { multi: true, .. }
+                    | crate::ImageClass::Depth { multi: true } => {}
+                    _ => match dim {
+                        // Write zero mipmap level for supported types
+                        IDim::D2 | IDim::D3 | IDim::Cube => {
+                            write!(self.out, "0, ")?;
+                        }
+                        IDim::D1 => {}
+                    },
+                },
+            }
+
+            for component in crate::back::COMPONENTS[..number_of_params - 1].iter() {
+                write!(self.out, "{}.{}, ", RETURN_VARIABLE_NAME, component)?;
+            }
+
+            // write last parameter without comma and space for last parameter
+            write!(
+                self.out,
+                "{}.{}",
+                RETURN_VARIABLE_NAME,
+                crate::back::COMPONENTS[number_of_params - 1]
+            )?;
+
+            writeln!(self.out, ");")?;
+
+            // Write return value
+            writeln!(
+                self.out,
+                "{}return {}.{};",
+                INDENT, RETURN_VARIABLE_NAME, ret_swizzle
+            )?;
+
+            // End of function body
+            writeln!(self.out, "}}")?;
+            // Write extra new line
+            writeln!(self.out)?;
+
+            self.wrapped_image_queries.insert(wrapped_image_query);
         }
 
         Ok(())

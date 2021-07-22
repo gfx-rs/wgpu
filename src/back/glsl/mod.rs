@@ -758,7 +758,8 @@ impl<'a, W: Write> Writer<'a, W> {
         let (base, kind, ms, comparison) = match class {
             Ic::Sampled { kind, multi: true } => ("sampler", kind, "MS", ""),
             Ic::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
-            Ic::Depth => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
+            Ic::Depth { multi: true } => ("sampler", crate::ScalarKind::Float, "MS", ""),
+            Ic::Depth { multi: false } => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
             Ic::Storage(format) => ("image", format.into(), "", ""),
         };
 
@@ -1945,7 +1946,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::ImageClass::Sampled { .. } => "texelFetch",
                     crate::ImageClass::Storage(_) => "imageLoad",
                     // TODO: Is there even a function for this?
-                    crate::ImageClass::Depth => todo!(),
+                    crate::ImageClass::Depth { multi: _ } => {
+                        return Err(Error::Custom("TODO: depth sample loads".to_string()))
+                    }
                 };
 
                 write!(self.out, "{}(", fun_name)?;
@@ -1984,7 +1987,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 match query {
                     crate::ImageQuery::Size { level } => {
                         match class {
-                            ImageClass::Sampled { .. } | ImageClass::Depth => {
+                            ImageClass::Sampled { .. } | ImageClass::Depth { .. } => {
                                 write!(self.out, "textureSize(")?;
                                 self.write_expr(image, ctx)?;
                                 write!(self.out, ",")?;
@@ -2008,7 +2011,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     crate::ImageQuery::NumLayers => {
                         let fun_name = match class {
-                            ImageClass::Sampled { .. } | ImageClass::Depth => "textureSize",
+                            ImageClass::Sampled { .. } | ImageClass::Depth { .. } => "textureSize",
                             ImageClass::Storage(_) => "imageSize",
                         };
                         write!(self.out, "{}(", fun_name)?;
@@ -2018,7 +2021,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::ImageQuery::NumSamples => {
                         // assumes ARB_shader_texture_image_samples
                         let fun_name = match class {
-                            ImageClass::Sampled { .. } | ImageClass::Depth => "textureSamples",
+                            ImageClass::Sampled { .. } | ImageClass::Depth { .. } => {
+                                "textureSamples"
+                            }
                             ImageClass::Storage(_) => "imageSamples",
                         };
                         write!(self.out, "{}(", fun_name)?;

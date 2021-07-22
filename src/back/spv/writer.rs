@@ -701,7 +701,7 @@ impl Writer {
             } => {
                 let kind = match class {
                     crate::ImageClass::Sampled { kind, multi: _ } => kind,
-                    crate::ImageClass::Depth => crate::ScalarKind::Float,
+                    crate::ImageClass::Depth { multi: _ } => crate::ScalarKind::Float,
                     crate::ImageClass::Storage(format) => {
                         let required_caps: &[_] = match dim {
                             crate::ImageDimension::D1 => &[spirv::Capability::Image1D],

@@ -368,7 +368,7 @@ impl<'a> ResolveContext<'a> {
             crate::Expression::ImageSample { image, .. }
             | crate::Expression::ImageLoad { image, .. } => match *past(image).inner_with(types) {
                 Ti::Image { class, .. } => TypeResolution::Value(match class {
-                    crate::ImageClass::Depth => Ti::Scalar {
+                    crate::ImageClass::Depth { multi: _ } => Ti::Scalar {
                         kind: crate::ScalarKind::Float,
                         width: 4,
                     },

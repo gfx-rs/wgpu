@@ -2,6 +2,8 @@
 var image_mipmapped_src: texture_2d<u32>;
 [[group(0), binding(3)]]
 var image_multisampled_src: texture_multisampled_2d<u32>;
+[[group(0), binding(4)]]
+var image_depth_multisampled_src: texture_depth_multisampled_2d;
 [[group(0), binding(1)]]
 var image_storage_src: [[access(read)]] texture_storage_2d<rgba8uint>;
 [[group(0), binding(2)]]
@@ -17,8 +19,9 @@ fn main(
     let itc = dim * vec2<i32>(local_id.xy) % vec2<i32>(10, 20);
     let value1 = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
     let value2 = textureLoad(image_multisampled_src, itc, i32(local_id.z));
-    let value3 = textureLoad(image_storage_src, itc);
-    textureStore(image_dst, itc.x, value1 + value2 + value3);
+    let value3 = textureLoad(image_depth_multisampled_src, itc, i32(local_id.z));
+    let value4 = textureLoad(image_storage_src, itc);
+    textureStore(image_dst, itc.x, value1 + value2 + u32(value3) + value4);
 }
 
 [[group(0), binding(0)]]

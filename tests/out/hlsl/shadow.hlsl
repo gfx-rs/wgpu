@@ -18,7 +18,7 @@ struct Lights {
 
 cbuffer u_globals : register(b0) { Globals u_globals; }
 Lights s_lights : register(t1);
-Texture2DArray t_shadow : register(t2);
+Texture2DArray<float> t_shadow : register(t2);
 SamplerComparisonState sampler_shadow : register(s3);
 
 struct FragmentInput_fs_main {

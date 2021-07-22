@@ -452,8 +452,10 @@ impl crate::TypeInner {
 
                 let class_suffix = match class {
                     crate::ImageClass::Sampled { multi: true, .. } => "_multisampled",
-                    crate::ImageClass::Depth => "_depth",
-                    _ => "",
+                    crate::ImageClass::Depth { multi: false } => "_depth",
+                    crate::ImageClass::Depth { multi: true } => "_depth_multisampled",
+                    crate::ImageClass::Sampled { multi: false, .. }
+                    | crate::ImageClass::Storage { .. } => "",
                 };
 
                 let type_in_brackets = match class {
@@ -464,7 +466,7 @@ impl crate::TypeInner {
                         let element_type = kind.to_wgsl(4);
                         format!("<{}>", element_type)
                     }
-                    crate::ImageClass::Depth => String::new(),
+                    crate::ImageClass::Depth { multi: _ } => String::new(),
                     crate::ImageClass::Storage(format) => {
                         format!("<{}>", format.to_wgsl())
                     }
@@ -547,9 +549,19 @@ mod type_inner_tests {
         let img2 = crate::TypeInner::Image {
             dim: crate::ImageDimension::Cube,
             arrayed: true,
-            class: crate::ImageClass::Depth,
+            class: crate::ImageClass::Depth { multi: false },
         };
         assert_eq!(img2.to_wgsl(&types, &constants), "texture_depth_cube_array");
+
+        let img3 = crate::TypeInner::Image {
+            dim: crate::ImageDimension::D2,
+            arrayed: false,
+            class: crate::ImageClass::Depth { multi: true },
+        };
+        assert_eq!(
+            img3.to_wgsl(&types, &constants),
+            "texture_depth_multisampled_2d"
+        );
     }
 }
 
@@ -1342,7 +1354,7 @@ impl Parser {
                     let index = match class {
                         crate::ImageClass::Storage(_) => None,
                         // it's the MSAA index for multi-sampled, and LOD for the others
-                        crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth => {
+                        crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => {
                             lexer.expect(Token::Separator(','))?;
                             Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                         }
@@ -2328,22 +2340,27 @@ impl Parser {
             "texture_depth_2d" => crate::TypeInner::Image {
                 dim: crate::ImageDimension::D2,
                 arrayed: false,
-                class: crate::ImageClass::Depth,
+                class: crate::ImageClass::Depth { multi: false },
             },
             "texture_depth_2d_array" => crate::TypeInner::Image {
                 dim: crate::ImageDimension::D2,
                 arrayed: true,
-                class: crate::ImageClass::Depth,
+                class: crate::ImageClass::Depth { multi: false },
             },
             "texture_depth_cube" => crate::TypeInner::Image {
                 dim: crate::ImageDimension::Cube,
                 arrayed: false,
-                class: crate::ImageClass::Depth,
+                class: crate::ImageClass::Depth { multi: false },
             },
             "texture_depth_cube_array" => crate::TypeInner::Image {
                 dim: crate::ImageDimension::Cube,
                 arrayed: true,
-                class: crate::ImageClass::Depth,
+                class: crate::ImageClass::Depth { multi: false },
+            },
+            "texture_depth_multisampled_2d" => crate::TypeInner::Image {
+                dim: crate::ImageDimension::D2,
+                arrayed: false,
+                class: crate::ImageClass::Depth { multi: true },
             },
             "texture_storage_1d" => {
                 let format = lexer.next_format_generic()?;

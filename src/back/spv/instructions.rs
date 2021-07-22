@@ -233,7 +233,7 @@ impl super::Instruction {
 
         let (depth, multi, sampled) = match image_class {
             crate::ImageClass::Sampled { kind: _, multi } => (false, multi, true),
-            crate::ImageClass::Depth => (true, false, true),
+            crate::ImageClass::Depth { multi } => (true, multi, true),
             crate::ImageClass::Storage(_) => (false, false, false),
         };
         instruction.add_operand(depth as u32);

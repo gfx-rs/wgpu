@@ -1,5 +1,6 @@
 Texture2D<uint4> image_mipmapped_src : register(t0);
 Texture2DMS<uint4> image_multisampled_src : register(t3);
+Texture2DMS<float> image_depth_multisampled_src : register(t4);
 Texture2D<uint4> image_storage_src : register(t1);
 RWTexture1D<uint4> image_dst : register(u2);
 Texture1D<float4> image_1d : register(t0);
@@ -11,7 +12,7 @@ Texture3D<float4> image_3d : register(t5);
 Texture2DMS<float4> image_aa : register(t6);
 SamplerState sampler_reg : register(s0);
 SamplerComparisonState sampler_cmp : register(s1);
-Texture2D image_2d_depth : register(t2);
+Texture2D<float> image_2d_depth : register(t2);
 
 struct ComputeInput_main {
     uint3 local_id1 : SV_GroupThreadID;
@@ -31,8 +32,9 @@ void main(ComputeInput_main computeinput_main)
     int2 itc = ((dim * int2(computeinput_main.local_id1.xy)) % int2(10, 20));
     uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(computeinput_main.local_id1.z)));
     uint4 value2_ = image_multisampled_src.Load(itc, int(computeinput_main.local_id1.z));
-    uint4 value3_ = image_storage_src.Load(int3(itc, 0));
-    image_dst[itc.x] = ((value1_ + value2_) + value3_);
+    float value3_ = image_depth_multisampled_src.Load(itc, int(computeinput_main.local_id1.z)).x;
+    uint4 value4_ = image_storage_src.Load(int3(itc, 0));
+    image_dst[itc.x] = (((value1_ + value2_) + uint4(uint(value3_).xxxx)) + value4_);
     return;
 }
 

@@ -149,7 +149,14 @@ impl<'a> Display for TypeContext<'a> {
                         };
                         ("texture", msaa_str, kind, access)
                     }
-                    crate::ImageClass::Depth => ("depth", "", crate::ScalarKind::Float, "sample"),
+                    crate::ImageClass::Depth { multi } => {
+                        let (msaa_str, access) = if multi {
+                            ("_ms", "read")
+                        } else {
+                            ("", "sample")
+                        };
+                        ("depth", msaa_str, crate::ScalarKind::Float, access)
+                    }
                     crate::ImageClass::Storage(format) => {
                         let access = if self
                             .access

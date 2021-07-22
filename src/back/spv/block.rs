@@ -728,7 +728,7 @@ impl<'w> BlockContext<'w> {
                         ..
                     } => Instruction::image_read(result_type_id, id, image_id, coordinate_id),
                     crate::TypeInner::Image {
-                        class: crate::ImageClass::Depth,
+                        class: crate::ImageClass::Depth { multi: _ },
                         ..
                     } => {
                         // Vulkan doesn't know about our `Depth` class, and it returns `vec4<f32>`,
@@ -751,6 +751,10 @@ impl<'w> BlockContext<'w> {
                     {
                         crate::TypeInner::Image {
                             class: crate::ImageClass::Sampled { multi: true, .. },
+                            ..
+                        }
+                        | crate::TypeInner::Image {
+                            class: crate::ImageClass::Depth { multi: true },
                             ..
                         } => spirv::ImageOperands::SAMPLE,
                         _ => spirv::ImageOperands::LOD,
@@ -791,7 +795,7 @@ impl<'w> BlockContext<'w> {
                 // so we need to grab the first component out of it.
                 let needs_sub_access = match self.ir_module.types[image_type].inner {
                     crate::TypeInner::Image {
-                        class: crate::ImageClass::Depth,
+                        class: crate::ImageClass::Depth { .. },
                         ..
                     } => depth_ref.is_none(),
                     _ => false,
