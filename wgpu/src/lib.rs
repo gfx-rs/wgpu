@@ -1324,9 +1324,9 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
     /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
     pub color_formats: &'a [TextureFormat],
-    /// The formats of the depth attachment that this render bundle is capable to rendering to. This
-    /// must match the formats of the depth attachments in the renderpass this render bundle is executed in.
-    pub depth_stencil_format: Option<TextureFormat>,
+    /// Information about the depth attachment that this render bundle is capable to rendering to. This
+    /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
+    pub depth_stencil: Option<wgt::RenderBundleDepthStencil>,
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the renderpasses it is used in.
     pub sample_count: u32,

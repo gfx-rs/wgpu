@@ -77,7 +77,7 @@ impl Example {
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,
                 color_formats: &[sc_desc.format],
-                depth_stencil_format: None,
+                depth_stencil: None,
                 sample_count,
             });
         encoder.set_pipeline(&pipeline);

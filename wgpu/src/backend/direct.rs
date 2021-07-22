@@ -1291,7 +1291,7 @@ impl crate::Context for Context {
         let descriptor = wgc::command::RenderBundleEncoderDescriptor {
             label: desc.label.map(Borrowed),
             color_formats: Borrowed(desc.color_formats),
-            depth_stencil_format: desc.depth_stencil_format,
+            depth_stencil: desc.depth_stencil,
             sample_count: desc.sample_count,
         };
         match wgc::command::RenderBundleEncoder::new(&descriptor, device.id, None) {

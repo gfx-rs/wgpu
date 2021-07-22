@@ -2746,6 +2746,20 @@ impl<L> CommandBufferDescriptor<L> {
     }
 }
 
+/// Describes the depth/stencil attachment for render bundles.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct RenderBundleDepthStencil {
+    /// Format of the attachment.
+    pub format: TextureFormat,
+    /// True if the depth aspect is used but not modified.
+    pub depth_read_only: bool,
+    /// True if the stencil aspect is used but not modified.
+    pub stencil_read_only: bool,
+}
+
 /// Describes a [`RenderBundle`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
