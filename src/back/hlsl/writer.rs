@@ -352,29 +352,51 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
-        let (storage, register_ty) = match global.class {
+        let register_ty = match global.class {
             crate::StorageClass::Function => unreachable!("Function storage class"),
-            crate::StorageClass::Private => ("static ", ""),
-            crate::StorageClass::WorkGroup => ("groupshared ", ""),
-            crate::StorageClass::Uniform => ("cbuffer", "b"),
-            crate::StorageClass::Storage | crate::StorageClass::Handle => {
-                if let TypeInner::Sampler { .. } = *inner {
-                    ("", "s")
+            crate::StorageClass::Private => {
+                write!(self.out, "static ")?;
+                self.write_type(module, global.ty)?;
+                ""
+            }
+            crate::StorageClass::WorkGroup => {
+                write!(self.out, "groupshared ")?;
+                self.write_type(module, global.ty)?;
+                ""
+            }
+            crate::StorageClass::Uniform => {
+                // constant buffer declarations are expected to be inlined, e.g.
+                // `cbuffer foo: register(b0) { field1: type1; }`
+                write!(self.out, "cbuffer")?;
+                "b"
+            }
+            crate::StorageClass::Storage => {
+                let (prefix, register) =
+                    if global.storage_access.contains(crate::StorageAccess::STORE) {
+                        ("RW", "u")
+                    } else {
+                        ("", "t")
+                    };
+                write!(self.out, "{}StructuredBuffer<", prefix)?;
+                self.write_type(module, global.ty)?;
+                write!(self.out, ">")?;
+                register
+            }
+            crate::StorageClass::Handle => {
+                let register = if let TypeInner::Sampler { .. } = *inner {
+                    "s"
                 } else if global.storage_access.contains(crate::StorageAccess::STORE) {
-                    ("RW", "u")
+                    write!(self.out, "RW")?;
+                    "u"
                 } else {
-                    ("", "t")
-                }
+                    "t"
+                };
+                self.write_type(module, global.ty)?;
+                register
             }
             crate::StorageClass::PushConstant => unimplemented!("Push constants"),
         };
 
-        write!(self.out, "{}", storage)?;
-        // constant buffer declarations are expected to be inlined, e.g.
-        // cbuffer foo: register(b0) { field1: type1; };
-        if global.class != crate::StorageClass::Uniform {
-            self.write_type(module, global.ty)?;
-        }
         let name = &self.names[&NameKey::GlobalVariable(handle)];
         write!(self.out, " {}", name)?;
         if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
@@ -1291,10 +1313,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, ".x")?;
                 }
             }
-            // TODO: copy-paste from wgsl-out
             Expression::GlobalVariable(handle) => {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
-                write!(self.out, "{}", name)?;
+                let postfix = match module.global_variables[handle].class {
+                    crate::StorageClass::Storage => "[0]",
+                    _ => "",
+                };
+                write!(self.out, "{}{}", name, postfix)?;
             }
             Expression::LocalVariable(handle) => {
                 write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
