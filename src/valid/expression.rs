@@ -1077,7 +1077,7 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
-                    Mf::FaceForward | Mf::Fma | Mf::Mix | Mf::SmoothStep => {
+                    Mf::FaceForward | Mf::Fma | Mf::SmoothStep => {
                         let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty) {
                             (Some(ty1), Some(ty2)) => (ty1, ty2),
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
@@ -1104,6 +1104,46 @@ impl super::Validator {
                                 2,
                                 arg2.unwrap(),
                             ));
+                        }
+                    }
+                    Mf::Mix => {
+                        let (arg1_ty, arg2_ty) = match (arg1_ty, arg2_ty) {
+                            (Some(ty1), Some(ty2)) => (ty1, ty2),
+                            _ => return Err(ExpressionError::WrongArgumentCount(fun)),
+                        };
+                        let arg_width = match *arg_ty {
+                            Ti::Scalar {
+                                kind: Sk::Float,
+                                width,
+                            }
+                            | Ti::Vector {
+                                kind: Sk::Float,
+                                width,
+                                ..
+                            } => width,
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        };
+                        if arg1_ty != arg_ty {
+                            return Err(ExpressionError::InvalidArgumentType(
+                                fun,
+                                1,
+                                arg1.unwrap(),
+                            ));
+                        }
+                        // the last argument can always be a scalar
+                        match *arg2_ty {
+                            Ti::Scalar {
+                                kind: Sk::Float,
+                                width,
+                            } if width == arg_width => {}
+                            _ if arg2_ty == arg_ty => {}
+                            _ => {
+                                return Err(ExpressionError::InvalidArgumentType(
+                                    fun,
+                                    2,
+                                    arg2.unwrap(),
+                                ));
+                            }
                         }
                     }
                     Mf::Inverse | Mf::Determinant => {

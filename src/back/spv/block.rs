@@ -488,10 +488,8 @@ impl<'w> BlockContext<'w> {
                 }
 
                 let arg0_id = self.cached[arg];
-                let arg_scalar_kind = self.fun_info[arg]
-                    .ty
-                    .inner_with(&self.ir_module.types)
-                    .scalar_kind();
+                let arg_ty = self.fun_info[arg].ty.inner_with(&self.ir_module.types);
+                let arg_scalar_kind = arg_ty.scalar_kind();
                 let arg1_id = match arg1 {
                     Some(handle) => self.cached[handle],
                     None => 0,
@@ -592,7 +590,44 @@ impl<'w> BlockContext<'w> {
                         other => unimplemented!("Unexpected sign({:?})", other),
                     }),
                     Mf::Fma => MathOp::Ext(spirv::GLOp::Fma),
-                    Mf::Mix => MathOp::Ext(spirv::GLOp::FMix),
+                    Mf::Mix => {
+                        let selector = arg2.unwrap();
+                        let selector_ty =
+                            self.fun_info[selector].ty.inner_with(&self.ir_module.types);
+                        match (arg_ty, selector_ty) {
+                            // if the selector is a scalar, we need to splat it
+                            (
+                                &crate::TypeInner::Vector { size, .. },
+                                &crate::TypeInner::Scalar { kind, width },
+                            ) => {
+                                let selector_type_id =
+                                    self.get_type_id(LookupType::Local(LocalType::Value {
+                                        vector_size: Some(size),
+                                        kind,
+                                        width,
+                                        pointer_class: None,
+                                    }))?;
+                                self.temp_list.clear();
+                                self.temp_list.resize(size as usize, arg2_id);
+
+                                let selector_id = self.gen_id();
+                                block.body.push(Instruction::composite_construct(
+                                    selector_type_id,
+                                    selector_id,
+                                    &self.temp_list,
+                                ));
+
+                                MathOp::Custom(Instruction::ext_inst(
+                                    self.writer.gl450_ext_inst_id,
+                                    spirv::GLOp::FMix,
+                                    result_type_id,
+                                    id,
+                                    &[arg0_id, arg1_id, selector_id],
+                                ))
+                            }
+                            _ => MathOp::Ext(spirv::GLOp::FMix),
+                        }
+                    }
                     Mf::Step => MathOp::Ext(spirv::GLOp::Step),
                     Mf::SmoothStep => MathOp::Ext(spirv::GLOp::SmoothStep),
                     Mf::Sqrt => MathOp::Ext(spirv::GLOp::Sqrt),

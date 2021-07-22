@@ -6,6 +6,14 @@ precision highp int;
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 
+vec4 builtins() {
+    int s1_ = (true ? 1 : 0);
+    vec4 s2_ = (true ? vec4(1.0, 1.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.0, 0.0));
+    vec4 m1_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), vec4(0.5, 0.5, 0.5, 0.5));
+    vec4 m2_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), 0.1);
+    return (((vec4(ivec4(s1_)) + s2_) + m1_) + m2_);
+}
+
 vec4 splat() {
     vec2 a = (((vec2(1.0) + vec2(2.0)) - vec2(3.0)) / vec2(4.0));
     ivec4 b = (ivec4(5) % ivec4(2));
@@ -20,17 +28,10 @@ int unary() {
     }
 }
 
-vec4 selection() {
-    vec4 vector1_ = vec4(1.0);
-    vec4 vector2_ = vec4(1.0);
-    int a = (true ? 1 : 0);
-    return (true ? vector2_ : vector1_);
-}
-
 void main() {
-    vec4 _expr0 = splat();
-    int _expr1 = unary();
-    vec4 _expr2 = selection();
+    vec4 _expr3 = builtins();
+    vec4 _expr4 = splat();
+    int _expr5 = unary();
     return;
 }
 

@@ -1,3 +1,14 @@
+let v_f32_one: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+let v_f32_zero: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+let v_f32_half: vec4<f32> = vec4<f32>(0.5, 0.5, 0.5, 0.5);
+fn builtins() -> vec4<f32> {
+    let s1_: i32 = select(0, 1, true);
+    let s2_: vec4<f32> = select(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), true);
+    let m1_: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), vec4<f32>(0.5, 0.5, 0.5, 0.5));
+    let m2_: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), 0.1);
+    return (((vec4<f32>(vec4<i32>(s1_)) + s2_) + m1_) + m2_);
+}
+
 fn splat() -> vec4<f32> {
     let a: vec2<f32> = (((vec2<f32>(1.0) + vec2<f32>(2.0)) - vec2<f32>(3.0)) / vec2<f32>(4.0));
     let b: vec4<i32> = (vec4<i32>(5) % vec4<i32>(2));
@@ -12,17 +23,10 @@ fn unary() -> i32 {
     }
 }
 
-fn selection() -> vec4<f32> {
-    let vector1_: vec4<f32> = vec4<f32>(1.0);
-    let vector2_: vec4<f32> = vec4<f32>(1.0);
-    let a: i32 = select(0, 1, true);
-    return select(vector1_, vector2_, true);
-}
-
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn main() {
-    let _e0: vec4<f32> = splat();
-    let _e1: i32 = unary();
-    let _e2: vec4<f32> = selection();
+    let _e3: vec4<f32> = builtins();
+    let _e4: vec4<f32> = splat();
+    let _e5: i32 = unary();
     return;
 }

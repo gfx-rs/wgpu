@@ -2,6 +2,18 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+constant metal::float4 v_f32_one = {1.0, 1.0, 1.0, 1.0};
+constant metal::float4 v_f32_zero = {0.0, 0.0, 0.0, 0.0};
+constant metal::float4 v_f32_half = {0.5, 0.5, 0.5, 0.5};
+
+metal::float4 builtins(
+) {
+    int s1_ = true ? 1 : 0;
+    metal::float4 s2_ = true ? v_f32_one : v_f32_zero;
+    metal::float4 m1_ = metal::mix(v_f32_zero, v_f32_one, v_f32_half);
+    metal::float4 m2_ = metal::mix(v_f32_zero, v_f32_one, 0.1);
+    return ((static_cast<float4>(metal::int4(s1_)) + s2_) + m1_) + m2_;
+}
 
 metal::float4 splat(
 ) {
@@ -19,18 +31,10 @@ int unary(
     }
 }
 
-metal::float4 selection(
-) {
-    metal::float4 vector1_ = metal::float4(1.0);
-    metal::float4 vector2_ = metal::float4(1.0);
-    int a = true ? 1 : 0;
-    return true ? vector2_ : vector1_;
-}
-
 kernel void main1(
 ) {
-    metal::float4 _e0 = splat();
-    int _e1 = unary();
-    metal::float4 _e2 = selection();
+    metal::float4 _e3 = builtins();
+    metal::float4 _e4 = splat();
+    int _e5 = unary();
     return;
 }
