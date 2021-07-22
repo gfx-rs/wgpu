@@ -47,6 +47,7 @@ pub(super) fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI
         Tf::Depth32Float => DXGI_FORMAT_D32_FLOAT,
         Tf::Depth24Plus => DXGI_FORMAT_D24_UNORM_S8_UINT,
         Tf::Depth24PlusStencil8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        Tf::Rgb9e5Ufloat => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         Tf::Bc1RgbaUnorm => DXGI_FORMAT_BC1_UNORM,
         Tf::Bc1RgbaUnormSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
         Tf::Bc2RgbaUnorm => DXGI_FORMAT_BC2_UNORM,
