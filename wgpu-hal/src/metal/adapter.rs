@@ -189,6 +189,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
                 Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::SAMPLED_LINEAR
             }
+            Tf::Rgb9e5Ufloat => Tfc::SAMPLED_LINEAR,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
             | Tf::Bc2RgbaUnorm
@@ -988,6 +989,7 @@ impl super::PrivateCapabilities {
                     Depth32Float_Stencil8
                 }
             }
+            Tf::Rgb9e5Ufloat => RGB9E5Float,
             Tf::Bc1RgbaUnorm => BC1_RGBA,
             Tf::Bc1RgbaUnormSrgb => BC1_RGBA_sRGB,
             Tf::Bc2RgbaUnorm => BC2_RGBA,

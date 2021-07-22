@@ -60,6 +60,7 @@ impl super::AdapterShared {
                 glow::DEPTH_COMPONENT,
                 glow::UNSIGNED_INT,
             ),
+            Tf::Rgb9e5Ufloat => (glow::RGB9_E5, glow::RGB, glow::UNSIGNED_INT_5_9_9_9_REV),
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
             | Tf::Bc2RgbaUnorm

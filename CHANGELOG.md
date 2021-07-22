@@ -9,6 +9,7 @@
     - new `Features::SPIRV_SHADER_PASSTHROUGH` run-time feature allows providing pass-through SPIR-V (orthogonal to the compile feature)
     - several bitflag names are renamed to plural: `TextureUsage`, `BufferUsage`, `ColorWrite`.
     - renamed `InputStepMode` to `VertexStepMode`
+    - Implemented `Rgb9e5Ufloat` format.
   - Fixed:
     - `Device::create_query_set` would return an error when creating exactly `QUERY_SET_MAX_QUERIES` (8192) queries. Now it only returns an error when trying to create *more* than `QUERY_SET_MAX_QUERIES` queries.
 

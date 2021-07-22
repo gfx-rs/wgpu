@@ -403,7 +403,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Depth32Float => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
             Tf::Depth24Plus => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
             Tf::Depth24PlusStencil8 => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
-            Tf::Bc1RgbaUnorm
+            Tf::Rgb9e5Ufloat
+            | Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
             | Tf::Bc2RgbaUnorm
             | Tf::Bc2RgbaUnormSrgb
