@@ -243,13 +243,13 @@ impl RenderBundleEncoder {
 
                     self.context
                         .check_compatible(&pipeline.pass_context)
-                        .map_err(RenderCommandError::IncompatiblePipeline)
+                        .map_err(RenderCommandError::IncompatiblePipelineTargets)
                         .map_pass_err(scope)?;
 
                     if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
                         && self.is_ds_read_only
                     {
-                        return Err(RenderCommandError::IncompatibleReadOnlyDepthStencil)
+                        return Err(RenderCommandError::IncompatiblePipelineRods)
                             .map_pass_err(scope);
                     }
 
@@ -517,6 +517,7 @@ impl RenderBundleEncoder {
                 string_data: Vec::new(),
                 push_constant_data: Vec::new(),
             },
+            is_ds_read_only: self.is_ds_read_only,
             device_id: Stored {
                 value: id::Valid(self.parent_id),
                 ref_count: device.life_guard.add_ref(),
@@ -570,10 +571,11 @@ pub struct RenderBundle {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<RenderCommand>,
+    pub(super) is_ds_read_only: bool,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
-    pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
-    pub(crate) context: RenderPassContext,
+    pub(super) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
+    pub(super) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }
 
@@ -590,7 +592,7 @@ impl RenderBundle {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(crate) unsafe fn execute<A: HalApi>(
+    pub(super) unsafe fn execute<A: HalApi>(
         &self,
         raw: &mut A::CommandEncoder,
         pipeline_layout_guard: &Storage<
