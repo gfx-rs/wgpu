@@ -68,6 +68,8 @@ mod queue;
 #[cfg(not(target_arch = "wasm32"))]
 use self::egl::{Instance, Surface};
 
+use arrayvec::ArrayVec;
+
 use glow::HasContext;
 
 use std::{ops::Range, sync::Arc};
@@ -113,13 +115,26 @@ bitflags::bitflags! {
     /// change the exposed feature set.
     struct PrivateCapabilities: u32 {
         /// Support explicit layouts in shader.
-        const SHADER_BINDING_LAYOUT = 0x0001;
+        const SHADER_BINDING_LAYOUT = 1 << 0;
         /// Support extended shadow sampling instructions.
-        const SHADER_TEXTURE_SHADOW_LOD = 0x0002;
+        const SHADER_TEXTURE_SHADOW_LOD = 1 << 1;
         /// Support memory barriers.
-        const MEMORY_BARRIERS = 0x0004;
+        const MEMORY_BARRIERS = 1 << 2;
         /// Vertex buffer layouts separate from the data.
-        const VERTEX_BUFFER_LAYOUT = 0x0008;
+        const VERTEX_BUFFER_LAYOUT = 1 << 3;
+    }
+}
+
+bitflags::bitflags! {
+    /// Flags that indicate necessary workarounds for specific devices or driver bugs
+    struct Workarounds: u32 {
+        // Needs workaround for Intel Mesa bug:
+        // https://gitlab.freedesktop.org/mesa/mesa/-/issues/2565.
+        //
+        // This comment
+        // (https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/4972/diffs?diff_id=75888#22f5d1004713c9bbf857988c7efb81631ab88f99_323_327)
+        // seems to indicate all skylake models are effected.
+        const MESA_I915_SRGB_SHADER_CLEAR = 1 << 0;
     }
 }
 
@@ -148,6 +163,7 @@ struct TextureFormatDesc {
 struct AdapterShared {
     context: glow::Context,
     private_caps: PrivateCapabilities,
+    workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
 }
 
@@ -167,11 +183,16 @@ pub struct Queue {
     features: wgt::Features,
     draw_fbo: glow::Framebuffer,
     copy_fbo: glow::Framebuffer,
-    /// Keep a reasonably large buffer filled with zeroes,
-    /// so that we can implement `FillBuffer` of zeroes
-    /// by copying from it.
+    /// Shader program used to clear the screen for [`PrivateCapabilities::REQUIRES_SHADER_CLEAR`]
+    /// devices.
+    shader_clear_program: glow::Program,
+    /// The uniform location of the color uniform in the shader clear program
+    shader_clear_program_color_uniform_location: glow::UniformLocation,
+    /// Keep a reasonably large buffer filled with zeroes, so that we can implement `FillBuffer` of
+    /// zeroes by copying from it.
     zero_buffer: glow::Buffer,
     temp_query_results: Vec<u64>,
+    draw_buffer_count: u8,
 }
 
 #[derive(Debug)]
@@ -218,6 +239,7 @@ pub struct TextureView {
     aspects: crate::FormatAspects,
     mip_levels: Range<u32>,
     array_layers: Range<u32>,
+    format: wgt::TextureFormat,
 }
 
 #[derive(Debug)]
@@ -471,7 +493,7 @@ struct PrimitiveState {
     clamp_depth: bool,
 }
 
-type InvalidatedAttachments = arrayvec::ArrayVec<u32, { crate::MAX_COLOR_TARGETS + 2 }>;
+type InvalidatedAttachments = ArrayVec<u32, { crate::MAX_COLOR_TARGETS + 2 }>;
 
 #[derive(Debug)]
 enum Command {
@@ -562,7 +584,11 @@ enum Command {
     },
     InvalidateAttachments(InvalidatedAttachments),
     SetDrawColorBuffers(u8),
-    ClearColorF(u32, [f32; 4]),
+    ClearColorF {
+        draw_buffer: u32,
+        color: [f32; 4],
+        is_srgb: bool,
+    },
     ClearColorU(u32, [u32; 4]),
     ClearColorI(u32, [i32; 4]),
     ClearDepth(f32),

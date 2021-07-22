@@ -248,8 +248,10 @@ impl super::Device {
                         return Err(crate::DeviceError::Lost.into());
                     }
                     super::BindingRegister::Textures | super::BindingRegister::Images => {
-                        let loc = gl.get_uniform_location(program, name).unwrap();
-                        gl.uniform_1_i32(Some(&loc), slot as _);
+                        gl.uniform_1_i32(
+                            gl.get_uniform_location(program, name).as_ref(),
+                            slot as _,
+                        );
                     }
                 }
             }
@@ -589,6 +591,7 @@ impl crate::Device<super::Api> for super::Device {
                 & crate::FormatAspects::from(desc.range.aspect),
             mip_levels: desc.range.base_mip_level..end_mip_level,
             array_layers: desc.range.base_array_layer..end_array_layer,
+            format: texture.format,
         })
     }
     unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
