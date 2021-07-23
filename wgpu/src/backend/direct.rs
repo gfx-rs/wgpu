@@ -1085,7 +1085,6 @@ impl crate::Context for Context {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
                 log::warn!("Shader translation error for stage {:?}: {}", stage, error);
                 log::warn!("Please report it to https://github.com/gfx-rs/naga");
-                log::warn!("Try enabling `wgpu/cross` feature as a workaround.");
             }
             self.handle_error(
                 &device.error_sink,
@@ -1136,7 +1135,6 @@ impl crate::Context for Context {
                     error
                 );
                 log::warn!("Please report it to https://github.com/gfx-rs/naga");
-                log::warn!("Try enabling `wgpu/cross` feature as a workaround.");
             }
             self.handle_error(
                 &device.error_sink,
