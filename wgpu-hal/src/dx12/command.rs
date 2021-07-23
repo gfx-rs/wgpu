@@ -148,7 +148,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         self.temp.barriers.clear();
 
+        log::trace!("List {:p} buffer transitions", self.list.unwrap().as_ptr());
         for barrier in barriers {
+            log::trace!(
+                "\t{:p}: usage {:?}..{:?}",
+                barrier.buffer.resource.as_ptr(),
+                barrier.usage.start,
+                barrier.usage.end
+            );
             let s0 = conv::map_buffer_usage_to_state(barrier.usage.start);
             let s1 = conv::map_buffer_usage_to_state(barrier.usage.end);
             if s0 != s1 {
@@ -190,7 +197,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         self.temp.barriers.clear();
 
+        log::trace!("List {:p} texture transitions", self.list.unwrap().as_ptr());
         for barrier in barriers {
+            log::trace!(
+                "\t{:p}: usage {:?}..{:?}, range {:?}",
+                barrier.texture.resource.as_ptr(),
+                barrier.usage.start,
+                barrier.usage.end,
+                barrier.range
+            );
             let s0 = conv::map_texture_usage_to_state(barrier.usage.start);
             let s1 = conv::map_texture_usage_to_state(barrier.usage.end);
             if s0 != s1 {
@@ -216,10 +231,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 };
 
                 if barrier.range.aspect == wgt::TextureAspect::All
-                    && barrier.range.base_mip_level + mip_level_count
-                        == barrier.texture.mip_level_count
-                    && barrier.range.base_array_layer + array_layer_count
-                        == barrier.texture.array_layer_count()
+                    && barrier.range.base_mip_level == 0
+                    && mip_level_count == barrier.texture.mip_level_count
+                    && barrier.range.base_array_layer == 0
+                    && array_layer_count == barrier.texture.array_layer_count()
                 {
                     // Only one barrier if it affects the whole image.
                     self.temp.barriers.push(raw);

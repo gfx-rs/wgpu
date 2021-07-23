@@ -149,8 +149,12 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::NON_FILL_POLYGON_MODE
             | wgt::Features::VERTEX_WRITABLE_STORAGE
-            | wgt::Features::TIMESTAMP_QUERY
-            | wgt::Features::PIPELINE_STATISTICS_QUERY;
+            | wgt::Features::TIMESTAMP_QUERY;
+        //TODO: in order to expose this, we need to run a compute shader
+        // that extract the necessary statistics out of the D3D12 result.
+        // Alternatively, we could allocate a buffer for the query set,
+        // write the results there, and issue a bunch of copy commands.
+        //| wgt::Features::PIPELINE_STATISTICS_QUERY
 
         features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,
