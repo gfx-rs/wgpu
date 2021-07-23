@@ -1514,8 +1514,8 @@ impl crate::Context for Context {
         if let Some(ref label) = desc.label {
             mapped_desc.label(label);
         }
-        if let Some(dsf) = desc.depth_stencil_format {
-            mapped_desc.depth_stencil_format(map_texture_format(dsf));
+        if let Some(ds) = desc.depth_stencil {
+            mapped_desc.depth_stencil_format(map_texture_format(ds.format));
         }
         mapped_desc.sample_count(desc.sample_count);
         RenderBundleEncoder(device.0.create_render_bundle_encoder(&mapped_desc))

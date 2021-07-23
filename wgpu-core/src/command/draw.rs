@@ -72,10 +72,10 @@ pub enum RenderCommandError {
     InvalidPipeline(id::RenderPipelineId),
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
-    #[error("Render pipeline is incompatible with render pass")]
-    IncompatiblePipeline(#[from] crate::device::RenderPassCompatibilityError),
-    #[error("pipeline is not compatible with the depth-stencil read-only render pass")]
-    IncompatibleReadOnlyDepthStencil,
+    #[error("Render pipeline targets are incompatible with render pass")]
+    IncompatiblePipelineTargets(#[from] crate::device::RenderPassCompatibilityError),
+    #[error("pipeline writes to depth/stencil, while the pass has read-only depth/stencil")]
+    IncompatiblePipelineRods,
     #[error("buffer {0:?} is in error {1:?}")]
     Buffer(id::BufferId, BufferError),
     #[error("buffer {0:?} is destroyed")]

@@ -46,6 +46,7 @@ use crate::{
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    pipeline::PipelineFlags,
     track::{TrackerSet, UsageConflict},
     validation::check_buffer_usage,
     Label, LabelHelpers, LifeGuard, Stored,
@@ -66,9 +67,9 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
     /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
     pub color_formats: Cow<'a, [wgt::TextureFormat]>,
-    /// The formats of the depth attachment that this render bundle is capable to rendering to. This
-    /// must match the formats of the depth attachments in the renderpass this render bundle is executed in.
-    pub depth_stencil_format: Option<wgt::TextureFormat>,
+    /// Information about the depth attachment that this render bundle is capable to rendering to. The format
+    /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
+    pub depth_stencil: Option<wgt::RenderBundleDepthStencil>,
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the renderpasses it is used in.
     pub sample_count: u32,
@@ -80,6 +81,7 @@ pub struct RenderBundleEncoder {
     base: BasePass<RenderCommand>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
+    pub(crate) is_ds_read_only: bool,
 }
 
 impl RenderBundleEncoder {
@@ -95,7 +97,7 @@ impl RenderBundleEncoder {
                 attachments: AttachmentData {
                     colors: desc.color_formats.iter().cloned().collect(),
                     resolves: ArrayVec::new(),
-                    depth_stencil: desc.depth_stencil_format,
+                    depth_stencil: desc.depth_stencil.map(|ds| ds.format),
                 },
                 sample_count: {
                     let sc = desc.sample_count;
@@ -104,6 +106,14 @@ impl RenderBundleEncoder {
                     }
                     sc
                 },
+            },
+            is_ds_read_only: match desc.depth_stencil {
+                Some(ds) => {
+                    let aspects = hal::FormatAspects::from(ds.format);
+                    (!aspects.contains(hal::FormatAspects::DEPTH) || ds.depth_read_only)
+                        && (!aspects.contains(hal::FormatAspects::STENCIL) || ds.stencil_read_only)
+                }
+                None => false,
             },
         })
     }
@@ -120,6 +130,7 @@ impl RenderBundleEncoder {
                 },
                 sample_count: 0,
             },
+            is_ds_read_only: false,
         }
     }
 
@@ -232,10 +243,15 @@ impl RenderBundleEncoder {
 
                     self.context
                         .check_compatible(&pipeline.pass_context)
-                        .map_err(RenderCommandError::IncompatiblePipeline)
+                        .map_err(RenderCommandError::IncompatiblePipelineTargets)
                         .map_pass_err(scope)?;
 
-                    //TODO: check read-only depth
+                    if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
+                        && self.is_ds_read_only
+                    {
+                        return Err(RenderCommandError::IncompatiblePipelineRods)
+                            .map_pass_err(scope);
+                    }
 
                     let layout = &pipeline_layout_guard[pipeline.layout_id.value];
                     pipeline_layout_id = Some(pipeline.layout_id.value);
@@ -501,6 +517,7 @@ impl RenderBundleEncoder {
                 string_data: Vec::new(),
                 push_constant_data: Vec::new(),
             },
+            is_ds_read_only: self.is_ds_read_only,
             device_id: Stored {
                 value: id::Valid(self.parent_id),
                 ref_count: device.life_guard.add_ref(),
@@ -554,10 +571,11 @@ pub struct RenderBundle {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
     base: BasePass<RenderCommand>,
+    pub(super) is_ds_read_only: bool,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
-    pub(crate) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
-    pub(crate) context: RenderPassContext,
+    pub(super) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
+    pub(super) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }
 
@@ -574,7 +592,7 @@ impl RenderBundle {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(crate) unsafe fn execute<A: HalApi>(
+    pub(super) unsafe fn execute<A: HalApi>(
         &self,
         raw: &mut A::CommandEncoder,
         pipeline_layout_guard: &Storage<

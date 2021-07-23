@@ -444,8 +444,10 @@ pub enum RenderPassErrorInner {
     InvalidPopDebugGroup,
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
-    #[error("render bundle is incompatible, {0}")]
-    IncompatibleRenderBundle(#[from] RenderPassCompatibilityError),
+    #[error("render bundle has incompatible targets, {0}")]
+    IncompatibleBundleTargets(#[from] RenderPassCompatibilityError),
+    #[error("render bundle has an incompatible read-only depth/stencil flag: bundle is {bundle}, while the pass is {pass}")]
+    IncompatibleBundleRods { pass: bool, bundle: bool },
     #[error(transparent)]
     RenderCommand(#[from] RenderCommandError),
     #[error(transparent)]
@@ -994,7 +996,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         info.context
                             .check_compatible(&pipeline.pass_context)
-                            .map_err(RenderCommandError::IncompatiblePipeline)
+                            .map_err(RenderCommandError::IncompatiblePipelineTargets)
                             .map_pass_err(scope)?;
 
                         state.pipeline_flags = pipeline.flags;
@@ -1002,7 +1004,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
                             && info.is_ds_read_only
                         {
-                            return Err(RenderCommandError::IncompatibleReadOnlyDepthStencil)
+                            return Err(RenderCommandError::IncompatiblePipelineRods)
                                 .map_pass_err(scope);
                         }
 
@@ -1678,8 +1680,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         info.context
                             .check_compatible(&bundle.context)
-                            .map_err(RenderPassErrorInner::IncompatibleRenderBundle)
+                            .map_err(RenderPassErrorInner::IncompatibleBundleTargets)
                             .map_pass_err(scope)?;
+
+                        if info.is_ds_read_only != bundle.is_ds_read_only {
+                            return Err(RenderPassErrorInner::IncompatibleBundleRods {
+                                pass: info.is_ds_read_only,
+                                bundle: bundle.is_ds_read_only,
+                            })
+                            .map_pass_err(scope);
+                        }
 
                         cmd_buf.buffer_memory_init_actions.extend(
                             bundle

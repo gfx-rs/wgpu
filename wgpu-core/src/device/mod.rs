@@ -1939,7 +1939,7 @@ impl<A: HalApi> Device<A> {
                 .iter()
                 .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
         } {
-            log::error!("Color targets: {:?}", color_targets);
+            log::info!("Color targets: {:?}", color_targets);
             self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLENDING)?;
         }
 
@@ -3779,6 +3779,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     desc: trace::new_render_bundle_encoder_descriptor(
                         desc.label.clone(),
                         &bundle_encoder.context,
+                        bundle_encoder.is_ds_read_only,
                     ),
                     base: bundle_encoder.to_base_pass(),
                 });
