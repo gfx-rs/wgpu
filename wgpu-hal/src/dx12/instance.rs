@@ -37,22 +37,31 @@ unsafe extern "system" fn output_debug_string_handler(
         _ => return excpt::EXCEPTION_CONTINUE_SEARCH,
     };
 
-    let (message, level) = match message.strip_prefix("D3D12 ") {
-        Some(msg) => {
-            match MESSAGE_PREFIXES
-                .iter()
-                .find(|&&(prefix, _)| msg.starts_with(prefix))
-            {
-                Some(&(prefix, level)) => (&msg[prefix.len() + 2..], level),
-                None => (msg, log::Level::Debug),
-            }
-        }
+    let message = match message.strip_prefix("D3D12 ") {
+        Some(msg) => msg
+            .trim_end_matches("\n\0")
+            .trim_end_matches("[ STATE_CREATION WARNING #0: UNKNOWN]"),
         None => return excpt::EXCEPTION_CONTINUE_SEARCH,
     };
 
-    log::log!(level, "{}", message.trim_end_matches("\n\0"));
+    let (message, level) = match MESSAGE_PREFIXES
+        .iter()
+        .find(|&&(prefix, _)| message.starts_with(prefix))
+    {
+        Some(&(prefix, level)) => (&message[prefix.len() + 2..], level),
+        None => (message, log::Level::Debug),
+    };
+
+    if level == log::Level::Warn && message.contains("#82") {
+        // This is are useless spammy warnings (#820, #821):
+        // "The application did not pass any clear value to resource creation"
+        return excpt::EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    log::log!(level, "{}", message);
 
     if cfg!(debug_assertions) && level == log::Level::Error {
+        // Panicking behind FFI is UB, so we just exit.
         std::process::exit(1);
     }
 
