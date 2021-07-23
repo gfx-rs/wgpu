@@ -507,6 +507,10 @@ impl<'a, W: Write> Writer<'a, W> {
                         width: _,
                         value: crate::ScalarValue::Uint(size),
                     } => write!(self.out, "{}", size)?,
+                    crate::ConstantInner::Scalar {
+                        width: _,
+                        value: crate::ScalarValue::Sint(size),
+                    } => write!(self.out, "{}", size)?,
                     _ => unreachable!(),
                 }
             }
