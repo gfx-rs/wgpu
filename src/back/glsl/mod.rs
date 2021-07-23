@@ -2252,36 +2252,48 @@ impl<'a, W: Write> Writer<'a, W> {
                             }
                             _ => write!(self.out, "{}", scalar.full)?,
                         }
+
+                        write!(self.out, "(")?;
+                        self.write_expr(expr, ctx)?;
+                        write!(self.out, ")")?
                     }
                     None => {
                         use crate::ScalarKind as Sk;
 
                         let source_kind = inner.scalar_kind().unwrap();
-                        write!(
-                            self.out,
-                            "{}",
-                            match (source_kind, target_kind) {
-                                (Sk::Float, Sk::Sint) => "floatBitsToInt",
-                                (Sk::Float, Sk::Uint) => "floatBitsToUInt",
-                                (Sk::Sint, Sk::Float) => "intBitsToFloat",
-                                (Sk::Uint, Sk::Float) => "uintBitsToFloat",
-                                // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
-                                (Sk::Uint, Sk::Sint) => "int",
-                                (Sk::Sint, Sk::Uint) => "uint",
-                                _ => {
-                                    return Err(Error::Custom(format!(
-                                        "Cannot bitcast {:?} to {:?}",
-                                        source_kind, target_kind
-                                    )));
-                                }
-                            }
-                        )?;
+                        let conv_op = match (source_kind, target_kind) {
+                            (Sk::Float, Sk::Sint) => "floatBitsToInt",
+                            (Sk::Float, Sk::Uint) => "floatBitsToUInt",
+                            (Sk::Sint, Sk::Float) => "intBitsToFloat",
+                            (Sk::Uint, Sk::Float) => "uintBitsToFloat",
+                            // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
+                            (Sk::Uint, Sk::Sint) => "int",
+                            (Sk::Sint, Sk::Uint) => "uint",
+
+                            (Sk::Bool, Sk::Sint) => "int",
+                            (Sk::Bool, Sk::Uint) => "uint",
+                            (Sk::Bool, Sk::Float) => "float",
+
+                            (Sk::Sint, Sk::Bool) => "bool",
+                            (Sk::Uint, Sk::Bool) => "bool",
+                            (Sk::Float, Sk::Bool) => "bool",
+
+                            // No conversion needed
+                            (Sk::Sint, Sk::Sint) => "",
+                            (Sk::Uint, Sk::Uint) => "",
+                            (Sk::Float, Sk::Float) => "",
+                            (Sk::Bool, Sk::Bool) => "",
+                        };
+                        write!(self.out, "{}", conv_op)?;
+                        if !conv_op.is_empty() {
+                            write!(self.out, "(")?;
+                        }
+                        self.write_expr(expr, ctx)?;
+                        if !conv_op.is_empty() {
+                            write!(self.out, ")")?
+                        }
                     }
                 }
-
-                write!(self.out, "(")?;
-                self.write_expr(expr, ctx)?;
-                write!(self.out, ")")?
             }
             Expression::Call(_function) => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
