@@ -421,7 +421,7 @@ impl Resource {
                                 kind: naga::ScalarKind::Uint,
                                 multi,
                             },
-                            wgt::TextureSampleType::Depth => naga::ImageClass::Depth,
+                            wgt::TextureSampleType::Depth => naga::ImageClass::Depth { multi },
                         };
                         (class, GlobalUse::READ | GlobalUse::QUERY)
                     }
@@ -512,10 +512,10 @@ impl Resource {
                         view_dimension,
                         multisampled: multi,
                     },
-                    naga::ImageClass::Depth => BindingType::Texture {
+                    naga::ImageClass::Depth { multi } => BindingType::Texture {
                         sample_type: wgt::TextureSampleType::Depth,
                         view_dimension,
-                        multisampled: false,
+                        multisampled: multi,
                     },
                     naga::ImageClass::Storage(format) => BindingType::StorageTexture {
                         access: if shader_usage == GlobalUse::WRITE || shader_usage.is_empty() {
