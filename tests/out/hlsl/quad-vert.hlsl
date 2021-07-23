@@ -1,3 +1,4 @@
+
 struct gl_PerVertex {
     float4 gl_Position : SV_Position;
     float gl_PointSize : PSIZE;

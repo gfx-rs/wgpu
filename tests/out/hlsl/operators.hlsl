@@ -1,3 +1,4 @@
+
 float4 splat()
 {
     float2 a = (((float2(1.0.xx) + float2(2.0.xx)) - float2(3.0.xx)) / float2(4.0.xx));
@@ -7,10 +8,10 @@ float4 splat()
 
 int unary()
 {
-    if ((!true)) {
+    if (!true) {
         return 1;
     } else {
-        return (!bool(1));
+        return !1;
     }
 }
 

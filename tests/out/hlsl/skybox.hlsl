@@ -1,3 +1,4 @@
+
 struct VertexOutput {
     float4 position : SV_Position;
     linear float3 uv : LOC0;

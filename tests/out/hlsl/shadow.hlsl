@@ -1,5 +1,4 @@
 static const float3 c_ambient = float3(0.05, 0.05, 0.05);
-
 static const uint c_max_lights = 10;
 
 struct Globals {

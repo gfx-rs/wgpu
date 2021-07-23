@@ -100,6 +100,9 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        // Extra newline for readability
+        writeln!(self.out)?;
+
         // Save all entry point output types
         let ep_results = module
             .entry_points
@@ -487,8 +490,6 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
         writeln!(self.out, ";")?;
-        // End with extra newline for readability
-        writeln!(self.out)?;
         Ok(())
     }
 
@@ -1352,32 +1353,12 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             Expression::Unary { op, expr } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
-                let convert_to_bool = if let TypeInner::Scalar {
-                    kind: crate::ScalarKind::Bool,
-                    ..
-                } = *func_ctx.info[expr].ty.inner_with(&module.types)
-                {
-                    false
-                } else {
-                    true
-                };
                 let op_str = match op {
                     crate::UnaryOperator::Negate => "-",
                     crate::UnaryOperator::Not => "!",
                 };
-                write!(self.out, "({}", op_str)?;
-
-                if convert_to_bool {
-                    write!(self.out, "bool(")?;
-                }
-
+                write!(self.out, "{}", op_str)?;
                 self.write_expr(module, expr, func_ctx)?;
-
-                if convert_to_bool {
-                    write!(self.out, ")")?;
-                }
-
-                write!(self.out, ")")?
             }
             Expression::As { expr, kind, .. } => {
                 let inner = func_ctx.info[expr].ty.inner_with(&module.types);

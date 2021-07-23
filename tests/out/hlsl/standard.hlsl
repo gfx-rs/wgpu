@@ -1,3 +1,4 @@
+
 struct FragmentInput_derivatives {
     float4 foo1 : SV_Position;
 };

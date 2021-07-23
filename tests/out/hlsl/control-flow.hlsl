@@ -1,3 +1,4 @@
+
 struct ComputeInput_main {
     uint3 global_id1 : SV_DispatchThreadID;
 };

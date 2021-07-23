@@ -1,3 +1,4 @@
+
 struct VertexOutput {
     float4 position : SV_Position;
     linear float varying : LOC1;
