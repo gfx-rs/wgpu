@@ -1142,20 +1142,7 @@ impl super::Validator {
                 }
                 ShaderStages::all()
             }
-            E::As {
-                expr,
-                kind,
-                convert,
-            } => {
-                let prev_kind = resolver
-                    .resolve(expr)?
-                    .scalar_kind()
-                    .ok_or(ExpressionError::InvalidCastArgument)?;
-
-                if prev_kind == Sk::Bool || kind == Sk::Bool {
-                    return Err(ExpressionError::InvalidCastArgument);
-                }
-
+            E::As { kind, convert, .. } => {
                 match convert {
                     Some(width) if !self.check_width(kind, width) => {
                         return Err(ExpressionError::InvalidCastArgument)
