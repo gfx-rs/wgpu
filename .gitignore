@@ -19,3 +19,8 @@ wgpu/red.png
 # Output from invalid comparison tests
 **/*-actual.png
 **/*-difference.png
+
+# Ignore everything with `gitignore` in the name, except for
+# the .gitignore file
+*gitignore*
+!.gitignore
