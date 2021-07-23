@@ -370,7 +370,7 @@ impl crate::Device<super::Api> for super::Device {
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let mut ptr = ptr::null_mut();
-        let hr = (*buffer.resource).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr);
+        let hr = (*buffer.resource).Map(0, ptr::null(), &mut ptr);
         hr.into_device_result("Map buffer")?;
         Ok(crate::BufferMapping {
             ptr: ptr::NonNull::new(ptr.offset(range.start as isize) as *mut _).unwrap(),
@@ -380,7 +380,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
-        (*buffer.resource).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
+        (*buffer.resource).Unmap(0, ptr::null());
         Ok(())
     }
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
