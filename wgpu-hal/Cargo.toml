@@ -74,4 +74,4 @@ features = ["wgsl-in"]
 
 [dev-dependencies]
 env_logger = "0.8"
-winit = "0.24"
+winit = "0.25"
