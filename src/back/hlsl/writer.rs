@@ -14,6 +14,15 @@ const LOCATION_SEMANTIC: &str = "LOC";
 /// Shorthand result used internally by the backend
 pub(super) type BackendResult = Result<(), Error>;
 
+impl TypeInner {
+    fn is_matrix(&self) -> bool {
+        match *self {
+            Self::Matrix { .. } => true,
+            _ => false,
+        }
+    }
+}
+
 /// Structure contains information required for generating
 /// wrapped structure of all entry points arguments
 struct EntryPointBinding {
@@ -100,7 +109,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
-            if let crate::TypeInner::Struct {
+            if let TypeInner::Struct {
                 top_level,
                 ref members,
                 ..
@@ -500,7 +509,11 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => unreachable!(),
                 }
             }
-            crate::ArraySize::Dynamic => write!(self.out, "1")?,
+            crate::ArraySize::Dynamic => {
+                //TODO: https://github.com/gfx-rs/naga/issues/1127
+                log::warn!("Dynamically sized arrays are not properly supported yet");
+                write!(self.out, "1")?
+            }
         }
 
         write!(self.out, "]")?;
@@ -1088,13 +1101,17 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, ")")?
                 }
             }
-            // Matrix * Vector has to be written as `mul(Matrix, Vector)`
+            // All of the multiplication can be expressed as `mul`,
+            // except vector * vector, which needs to use the "*" operator.
             Expression::Binary {
                 op: crate::BinaryOperator::Multiply,
                 left,
                 right,
-            } if func_ctx.info[left].ty.inner_with(&module.types)
-                != func_ctx.info[right].ty.inner_with(&module.types) =>
+            } if func_ctx.info[left].ty.inner_with(&module.types).is_matrix()
+                || func_ctx.info[right]
+                    .ty
+                    .inner_with(&module.types)
+                    .is_matrix() =>
             {
                 write!(self.out, "mul(")?;
                 self.write_expr(module, left, func_ctx)?;
@@ -1267,11 +1284,11 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
                 let ms = match *func_ctx.info[image].ty.inner_with(&module.types) {
-                    crate::TypeInner::Image {
+                    TypeInner::Image {
                         class: crate::ImageClass::Sampled { multi, .. },
                         ..
                     }
-                    | crate::TypeInner::Image {
+                    | TypeInner::Image {
                         class: crate::ImageClass::Depth { multi },
                         ..
                     } => multi,

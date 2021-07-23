@@ -19,7 +19,7 @@ struct FragmentInput_main {
 
 VertexOutput main(VertexInput_main vertexinput_main)
 {
-    const VertexOutput vertexoutput1 = { vertexinput_main.uv2, float4(mul(c_scale, vertexinput_main.pos1), 0.0, 1.0) };
+    const VertexOutput vertexoutput1 = { vertexinput_main.uv2, float4((c_scale * vertexinput_main.pos1), 0.0, 1.0) };
     return vertexoutput1;
 }
 
@@ -29,7 +29,7 @@ float4 main1(FragmentInput_main fragmentinput_main) : SV_Target0
     if ((color.w == 0.0)) {
         discard;
     }
-    float4 premultiplied = mul(color.w, color);
+    float4 premultiplied = (color.w * color);
     return premultiplied;
 }
 

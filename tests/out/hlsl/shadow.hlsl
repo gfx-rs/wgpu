@@ -56,7 +56,7 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
         float3 light_dir = normalize((light.pos.xyz - fragmentinput_fs_main.position1.xyz));
         float diffuse = max(0.0, dot(normal, light_dir));
         float3 _expr34 = color;
-        color = (_expr34 + mul((_e25 * diffuse), light.color.xyz));
+        color = (_expr34 + ((_e25 * diffuse) * light.color.xyz));
         uint _expr40 = i;
         i = (_expr40 + 1u);
     }
