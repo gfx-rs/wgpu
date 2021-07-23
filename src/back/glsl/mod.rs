@@ -613,7 +613,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write the array size
         // Writes nothing if `ArraySize::Dynamic`
-        // Panics if `ArraySize::Constant` has a constant that isn't an uint
+        // Panics if `ArraySize::Constant` has a constant that isn't an sint or uint
         match size {
             crate::ArraySize::Constant(const_handle) => {
                 match self.module.constants[const_handle].inner {
