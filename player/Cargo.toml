@@ -19,7 +19,7 @@ env_logger = "0.8"
 log = "0.4"
 raw-window-handle = "0.3"
 ron = "0.6"
-winit = { version = "0.24", optional = true }
+winit = { version = "0.25", optional = true }
 
 [dependencies.wgt]
 path = "../wgpu-types"
