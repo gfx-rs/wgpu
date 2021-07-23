@@ -31,15 +31,15 @@ buffer Particles_block_2Cs {
 
 void main() {
     uvec3 global_invocation_id = gl_GlobalInvocationID;
-    vec2 vPos;
-    vec2 vVel;
-    vec2 cMass;
-    vec2 cVel;
-    vec2 colVel;
+    vec2 vPos = vec2(0.0, 0.0);
+    vec2 vVel = vec2(0.0, 0.0);
+    vec2 cMass = vec2(0.0, 0.0);
+    vec2 cVel = vec2(0.0, 0.0);
+    vec2 colVel = vec2(0.0, 0.0);
     int cMassCount = 0;
     int cVelCount = 0;
-    vec2 pos;
-    vec2 vel;
+    vec2 pos = vec2(0.0, 0.0);
+    vec2 vel = vec2(0.0, 0.0);
     uint i = 0u;
     uint index = global_invocation_id.x;
     if ((index >= 1500u)) {

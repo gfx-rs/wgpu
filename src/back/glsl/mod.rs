@@ -825,16 +825,13 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_array_size(size)?;
         }
 
-        match self.module.types[global.ty].inner {
-            TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => {
-                write!(self.out, " = ")?;
-                if let Some(init) = global.init {
-                    self.write_constant(&self.module.constants[init])?;
-                } else {
-                    self.write_zero_init_value(&self.module.types[global.ty].inner)?;
-                }
+        if is_value_init_supported(&self.module, global.ty) {
+            write!(self.out, " = ")?;
+            if let Some(init) = global.init {
+                self.write_constant(init)?;
+            } else {
+                self.write_zero_init_value(global.ty)?;
             }
-            _ => {}
         }
         writeln!(self.out, ";")?;
 
@@ -1096,7 +1093,10 @@ impl<'a, W: Write> Writer<'a, W> {
             // Write the local name
             // The leading space is important
             write!(self.out, " {}", self.names[&ctx.name_key(handle)])?;
-
+            // Write size for array type
+            if let TypeInner::Array { size, .. } = self.module.types[local.ty].inner {
+                self.write_array_size(size)?;
+            }
             // Write the local initializer if needed
             if let Some(init) = local.init {
                 // Put the equal signal only if there's a initializer
@@ -1105,7 +1105,10 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Write the constant
                 // `write_constant` adds no trailing or leading space/newline
-                self.write_constant(&self.module.constants[init])?;
+                self.write_constant(init)?;
+            } else if is_value_init_supported(&self.module, local.ty) {
+                write!(self.out, " = ")?;
+                self.write_zero_init_value(local.ty)?;
             }
 
             // Finish the local with `;` and add a newline (only for readability)
@@ -1158,10 +1161,10 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// # Notes
     /// Adds no newlines or leading/trailing whitespace
-    fn write_constant(&mut self, constant: &crate::Constant) -> BackendResult {
+    fn write_constant(&mut self, handle: Handle<crate::Constant>) -> BackendResult {
         use crate::ScalarValue as Sv;
 
-        match constant.inner {
+        match self.module.constants[handle].inner {
             crate::ConstantInner::Scalar {
                 width: _,
                 ref value,
@@ -1186,9 +1189,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "(")?;
 
                 // Write the comma separated constants
-                self.write_slice(components, |this, _, arg| {
-                    this.write_constant(&this.module.constants[*arg])
-                })?;
+                self.write_slice(components, |this, _, arg| this.write_constant(*arg))?;
 
                 write!(self.out, ")")?
             }
@@ -1744,9 +1745,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
             // Constants are delegated to `write_constant`
-            Expression::Constant(constant) => {
-                self.write_constant(&self.module.constants[constant])?
-            }
+            Expression::Constant(constant) => self.write_constant(constant)?,
             // `Splat` needs to actually write down a vector, it's not always inferred in GLSL.
             Expression::Splat { size: _, value } => {
                 let resolved = ctx.info[expr].ty.inner_with(&self.module.types);
@@ -1771,6 +1770,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // comma separated list of expressions
             Expression::Compose { ty, ref components } => {
                 self.write_type(ty)?;
+
+                let resolved = ctx.info[expr].ty.inner_with(&self.module.types);
+                if let TypeInner::Array { size, .. } = *resolved {
+                    self.write_array_size(size)?;
+                }
 
                 write!(self.out, "(")?;
                 self.write_slice(components, |this, _, arg| this.write_expr(*arg, ctx))?;
@@ -1912,7 +1916,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 if let Some(constant) = offset {
                     write!(self.out, ", ")?;
-                    self.write_constant(&self.module.constants[constant])?;
+                    self.write_constant(constant)?;
                 }
 
                 // End the function
@@ -2361,14 +2365,11 @@ impl<'a, W: Write> Writer<'a, W> {
         let base_ty_res = &ctx.info[handle].ty;
         let resolved = base_ty_res.inner_with(&self.module.types);
 
-        // If rhs is a array type, we should write temp variable as a dynamic array
-        let array_str = if let TypeInner::Array { .. } = *resolved {
-            "[]"
-        } else {
-            ""
-        };
-
-        write!(self.out, " {}{} = ", name, array_str)?;
+        write!(self.out, " {}", name)?;
+        if let TypeInner::Array { size, .. } = *resolved {
+            self.write_array_size(size)?;
+        }
+        write!(self.out, " = ")?;
         self.write_expr(handle, ctx)?;
         writeln!(self.out, ";")?;
         self.named_expressions.insert(handle, name);
@@ -2377,7 +2378,8 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 
     /// Helper function that write string with default zero initialization for supported types
-    fn write_zero_init_value(&mut self, inner: &TypeInner) -> BackendResult {
+    fn write_zero_init_value(&mut self, ty: Handle<crate::Type>) -> BackendResult {
+        let inner = &self.module.types[ty].inner;
         match *inner {
             TypeInner::Scalar { kind, .. } => {
                 self.write_zero_init_scalar(kind)?;
@@ -2669,5 +2671,12 @@ fn glsl_storage_access(storage_access: crate::StorageAccess) -> Option<&'static 
         Some("writeonly")
     } else {
         None
+    }
+}
+
+fn is_value_init_supported(module: &crate::Module, ty: Handle<crate::Type>) -> bool {
+    match module.types[ty].inner {
+        TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => true,
+        _ => false,
     }
 }

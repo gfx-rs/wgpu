@@ -45,8 +45,8 @@ void main() {
     vec2 _expr10 = v_uv;
     vec4 _expr11 = perVertexStruct.gen_gl_Position;
     float _expr12 = perVertexStruct.gen_gl_PointSize;
-    float _expr13[] = perVertexStruct.gen_gl_ClipDistance;
-    float _expr14[] = perVertexStruct.gen_gl_CullDistance;
+    float _expr13[1] = perVertexStruct.gen_gl_ClipDistance;
+    float _expr14[1] = perVertexStruct.gen_gl_CullDistance;
     type10 _tmp_return = type10(_expr10, _expr11, _expr12, _expr13, _expr14);
     _vs2fs_location0 = _tmp_return.member;
     gl_Position = _tmp_return.gen_gl_Position;

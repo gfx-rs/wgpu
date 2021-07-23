@@ -17,8 +17,8 @@ layout(location = 0) smooth out vec3 _vs2fs_location0;
 
 void main() {
     uint vertex_index = uint(gl_VertexID);
-    int tmp1_;
-    int tmp2_;
+    int tmp1_ = 0;
+    int tmp2_ = 0;
     tmp1_ = (int(vertex_index) / 2);
     tmp2_ = (int(vertex_index) & 1);
     int _expr10 = tmp1_;
