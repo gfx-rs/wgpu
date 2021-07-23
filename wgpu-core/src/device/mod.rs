@@ -3779,6 +3779,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     desc: trace::new_render_bundle_encoder_descriptor(
                         desc.label.clone(),
                         &bundle_encoder.context,
+                        bundle_encoder.is_ds_read_only,
                     ),
                     base: bundle_encoder.to_base_pass(),
                 });

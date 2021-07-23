@@ -81,7 +81,7 @@ pub struct RenderBundleEncoder {
     base: BasePass<RenderCommand>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
-    is_ds_read_only: bool,
+    pub(crate) is_ds_read_only: bool,
 }
 
 impl RenderBundleEncoder {

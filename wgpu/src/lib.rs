@@ -29,16 +29,16 @@ pub use wgt::{
     BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType, BufferSize,
     BufferUsages, Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
     DepthBiasState, DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags,
-    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout, IndexFormat,
-    Limits, MultisampleState, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PresentMode, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
-    SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages, StencilFaceState,
-    StencilOperation, StencilState, StorageTextureAccess, SwapChainDescriptor, SwapChainStatus,
-    TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
-    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
-    VertexFormat, VertexStepMode, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES,
-    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
+    ImageSubresourceRange, IndexFormat, Limits, MultisampleState, Origin3d,
+    PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
+    PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBorderColor,
+    ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
+    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -88,7 +88,7 @@ trait RenderInner<Ctx: Context> {
         offset: BufferAddress,
         size: Option<BufferSize>,
     );
-    fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]);
+    fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]);
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
     fn draw_indirect(&mut self, indirect_buffer: &Ctx::BufferId, indirect_offset: BufferAddress);
@@ -211,8 +211,8 @@ trait Context: Debug + Send + Sized + Sync {
     fn adapter_get_texture_format_features(
         &self,
         adapter: &Self::AdapterId,
-        format: wgt::TextureFormat,
-    ) -> wgt::TextureFormatFeatures;
+        format: TextureFormat,
+    ) -> TextureFormatFeatures;
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
@@ -410,7 +410,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         encoder: &Self::CommandEncoderId,
         texture: &Texture,
-        subresource_range: &wgt::ImageSubresourceRange,
+        subresource_range: &ImageSubresourceRange,
     );
     fn command_encoder_clear_buffer(
         &self,
@@ -1326,7 +1326,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     pub color_formats: &'a [TextureFormat],
     /// Information about the depth attachment that this render bundle is capable to rendering to. This
     /// must match the format of the depth attachments in the renderpass this render bundle is executed in.
-    pub depth_stencil: Option<wgt::RenderBundleDepthStencil>,
+    pub depth_stencil: Option<RenderBundleDepthStencil>,
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the renderpasses it is used in.
     pub sample_count: u32,
@@ -1540,10 +1540,7 @@ impl Adapter {
     ///
     /// Note that the WebGPU spec further restricts the available usages/features.
     /// To disable these restrictions on a device, request the [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] feature.
-    pub fn get_texture_format_features(
-        &self,
-        format: wgt::TextureFormat,
-    ) -> wgt::TextureFormatFeatures {
+    pub fn get_texture_format_features(&self, format: TextureFormat) -> TextureFormatFeatures {
         Context::adapter_get_texture_format_features(&*self.context, &self.id, format)
     }
 }
@@ -2187,11 +2184,7 @@ impl CommandEncoder {
     /// - `CLEAR_COMMANDS` extension not enabled
     /// - Texture does not have `COPY_DST` usage.
     /// - Range it out of bounds
-    pub fn clear_texture(
-        &mut self,
-        texture: &Texture,
-        subresource_range: &wgt::ImageSubresourceRange,
-    ) {
+    pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
         Context::command_encoder_clear_image(
             &*self.context,
             self.id.as_ref().unwrap(),
@@ -2642,7 +2635,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
+    pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
         self.id.set_push_constants(stages, offset, data);
     }
 }
@@ -2949,7 +2942,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]) {
+    pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
         self.id.set_push_constants(stages, offset, data);
     }
 }

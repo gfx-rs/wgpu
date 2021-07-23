@@ -13,11 +13,19 @@ pub const FILE_NAME: &str = "trace.ron";
 pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
     label: crate::Label<'a>,
     context: &'a super::RenderPassContext,
+    is_ds_read_only: bool,
 ) -> crate::command::RenderBundleEncoderDescriptor<'a> {
     crate::command::RenderBundleEncoderDescriptor {
         label,
         color_formats: Cow::Borrowed(&context.attachments.colors),
-        depth_stencil_format: context.attachments.depth_stencil,
+        depth_stencil: context.attachments.depth_stencil.map(|format| {
+            let aspects = hal::FormatAspects::from(format);
+            wgt::RenderBundleDepthStencil {
+                format,
+                depth_read_only: is_ds_read_only && aspects.contains(hal::FormatAspects::DEPTH),
+                stencil_read_only: is_ds_read_only && aspects.contains(hal::FormatAspects::STENCIL),
+            }
+        }),
         sample_count: context.sample_count,
     }
 }
