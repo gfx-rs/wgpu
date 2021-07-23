@@ -65,11 +65,11 @@ core-graphics-types = "0.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e017cb4"
+rev = "cc91c77"
 
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e017cb4"
+rev = "cc91c77"
 features = ["wgsl-in"]
 
 [dev-dependencies]

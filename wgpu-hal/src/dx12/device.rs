@@ -205,7 +205,8 @@ impl super::Device {
         let mut error = native::Blob::null();
         let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
         if self.private_caps.shader_debug_info {
-            compile_flags |= d3dcompiler::D3DCOMPILE_DEBUG;
+            compile_flags |=
+                d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
         }
         if self
             .shared
