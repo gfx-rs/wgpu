@@ -17,16 +17,16 @@ use wgpu::util::DeviceExt;
 /// this value will require modification of the time
 /// scale in the `render` method below.
 ///
-const SIZE: f32 = 10.0;
+const SIZE: f32 = 29.0;
 
 ///
 /// Location of the camera.
 /// Location of light is in terrain/water shaders.
 ///
 const CAMERA: Point3<f32> = Point3 {
-    x: -100.0,
-    y: 50.0,
-    z: 100.0,
+    x: -200.0,
+    y: 70.0,
+    z: 200.0,
 };
 
 struct Matrices {
@@ -289,7 +289,7 @@ impl framework::Example for Example {
                 use rand::Rng;
                 let noise = terrain_noise.get([point[0] as f64 / 5.0, point[1] as f64 / 5.0]) + 0.1;
 
-                let y = noise as f32 * 8.0;
+                let y = noise as f32 * 22.0;
 
                 // Multiplies a colour by some random amount.
                 fn mul_arr(mut arr: [u8; 4], by: f32) -> [u8; 4] {
@@ -316,7 +316,7 @@ impl framework::Example for Example {
                     DARK_SAND
                 } else if y <= 0.8 {
                     SAND
-                } else if y <= 3.0 {
+                } else if y <= 10.0 {
                     GRASS
                 } else {
                     SNOW
