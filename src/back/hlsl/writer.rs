@@ -799,6 +799,10 @@ impl<'a, W: Write> Writer<'a, W> {
             // The leading space is important
             self.write_type(module, local.ty)?;
             write!(self.out, " {}", self.names[&func_ctx.name_key(handle)])?;
+            // Write size for array type
+            if let TypeInner::Array { size, .. } = module.types[local.ty].inner {
+                self.write_array_size(module, size)?;
+            }
 
             write!(self.out, " = ")?;
             // Write the local initializer if needed
@@ -1081,12 +1085,11 @@ impl<'a, W: Write> Writer<'a, W> {
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::Compose { ty, ref components } => {
-                let is_struct = if let TypeInner::Struct { .. } = module.types[ty].inner {
-                    true
-                } else {
-                    false
+                let braces_init = match module.types[ty].inner {
+                    TypeInner::Struct { .. } | TypeInner::Array { .. } => true,
+                    _ => false,
                 };
-                if is_struct {
+                if braces_init {
                     write!(self.out, "{{ ")?;
                 } else {
                     self.write_type(module, ty)?;
@@ -1100,7 +1103,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ", ")?;
                     }
                 }
-                if is_struct {
+                if braces_init {
                     write!(self.out, " }}")?
                 } else {
                     write!(self.out, ")")?
