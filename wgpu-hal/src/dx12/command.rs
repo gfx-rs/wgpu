@@ -533,7 +533,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 flags |= native::ClearFlags::STENCIL;
             }
 
-            if !ds_view.is_null() {
+            if !ds_view.is_null() && !flags.is_empty() {
                 list.clear_depth_stencil_view(
                     *ds_view,
                     flags,
