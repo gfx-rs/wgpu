@@ -61,3 +61,11 @@ cargo test -p wgpu -- <name-of-test>
 ```
 
 If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases. 
+
+## Coordinate Systems
+
+wgpu uses the coordinate systems of DX and Metal:
+
+Render | Depth | Texture
+-------|-------|--------
+![render_coordinates](./etc/render_coordinates.png) | ![depth_coordinates](./etc/depth_coordinates.png) | ![texture_coordinates](./etc/texture_coordinates.png)
