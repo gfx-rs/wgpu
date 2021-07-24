@@ -85,6 +85,14 @@ impl super::TypeInner {
         }
     }
 
+    pub fn pointer_class(&self) -> Option<crate::StorageClass> {
+        match *self {
+            Self::Pointer { class, .. } => Some(class),
+            Self::ValuePointer { class, .. } => Some(class),
+            _ => None,
+        }
+    }
+
     pub fn span(&self, constants: &super::Arena<super::Constant>) -> u32 {
         match *self {
             Self::Scalar { kind: _, width } => width as u32,

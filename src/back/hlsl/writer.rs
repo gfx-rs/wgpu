@@ -1,5 +1,5 @@
 use super::{
-    image::{MipLevelCoordinate, WrappedImageQuery},
+    help::{MipLevelCoordinate, WrappedArrayLength, WrappedImageQuery},
     Error, Options,
 };
 use crate::{
@@ -7,20 +7,25 @@ use crate::{
     proc::{self, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
 };
-use std::fmt::Write;
+use std::{fmt, mem};
 
 const LOCATION_SEMANTIC: &str = "LOC";
 
 /// Shorthand result used internally by the backend
 pub(super) type BackendResult = Result<(), Error>;
 
-impl TypeInner {
-    fn is_matrix(&self) -> bool {
-        match *self {
-            Self::Matrix { .. } => true,
-            _ => false,
-        }
-    }
+#[derive(Copy, Clone, PartialEq)]
+enum Io {
+    Input,
+    Output,
+}
+
+enum SubAccess {
+    Offset(u32),
+    Index {
+        value: Handle<crate::Expression>,
+        stride: u32,
+    },
 }
 
 /// Structure contains information required for generating
@@ -48,10 +53,12 @@ pub struct Writer<'a, W> {
     ep_inputs: Vec<Option<EntryPointBinding>>,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
+    pub(super) wrapped_array_lengths: crate::FastHashSet<WrappedArrayLength>,
     pub(super) wrapped_image_queries: crate::FastHashSet<WrappedImageQuery>,
+    temp_access_chain: Vec<SubAccess>,
 }
 
-impl<'a, W: Write> Writer<'a, W> {
+impl<'a, W: fmt::Write> Writer<'a, W> {
     pub fn new(out: W, options: &'a Options) -> Self {
         Self {
             out,
@@ -60,7 +67,9 @@ impl<'a, W: Write> Writer<'a, W> {
             options,
             ep_inputs: Vec::new(),
             named_expressions: crate::NamedExpressions::default(),
+            wrapped_array_lengths: crate::FastHashSet::default(),
             wrapped_image_queries: crate::FastHashSet::default(),
+            temp_access_chain: Vec::new(),
         }
     }
 
@@ -68,8 +77,9 @@ impl<'a, W: Write> Writer<'a, W> {
         self.names.clear();
         self.namer
             .reset(module, super::keywords::RESERVED, &[], &mut self.names);
-        self.named_expressions.clear();
         self.ep_inputs.clear();
+        self.named_expressions.clear();
+        self.wrapped_array_lengths.clear();
         self.wrapped_image_queries.clear();
     }
 
@@ -118,6 +128,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 ..
             } = ty.inner
             {
+                if let Some(member) = members.last() {
+                    if let TypeInner::Array {
+                        size: crate::ArraySize::Dynamic,
+                        ..
+                    } = module.types[member.ty].inner
+                    {
+                        // unsized arrays can only be in storage buffers, for which we use `ByteAddressBuffer` anyway.
+                        continue;
+                    }
+                }
+
                 let ep_result = ep_results.iter().find(|e| {
                     if let Some(ref result) = e.1 {
                         result.ty == handle
@@ -126,18 +147,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                 });
 
-                if let Some(result) = ep_result {
-                    self.write_struct(
-                        module,
-                        handle,
-                        top_level,
-                        members,
-                        Some(result.0),
-                        Some(true),
-                    )?;
-                } else {
-                    self.write_struct(module, handle, top_level, members, None, None)?;
-                }
+                self.write_struct(
+                    module,
+                    handle,
+                    top_level,
+                    members,
+                    ep_result.map(|r| (r.0, Io::Output)),
+                )?;
                 writeln!(self.out)?;
             }
         }
@@ -192,8 +208,9 @@ impl<'a, W: Write> Writer<'a, W> {
             };
             let name = self.names[&NameKey::Function(handle)].clone();
 
-            // Write wrapped function for `Expression::ImageQuery` before writing all statements and expressions
-            self.write_wrapped_image_query_functions(module, &ctx)?;
+            // Write wrapped function for `Expression::ImageQuery` and `Expressions::ArrayLength`
+            // before writing all statements and expressions.
+            self.write_wrapped_functions(module, &ctx)?;
 
             self.write_function(module, name.as_str(), function, &ctx)?;
 
@@ -232,8 +249,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 named_expressions: &ep.function.named_expressions,
             };
 
-            // Write wrapped function for `Expression::ImageQuery` before writing all statements and expressions
-            self.write_wrapped_image_query_functions(module, &ctx)?;
+            // Write wrapped function for `Expression::ImageQuery` and `Expressions::ArrayLength`
+            // before writing all statements and expressions.
+            self.write_wrapped_functions(module, &ctx)?;
 
             if ep.stage == ShaderStage::Compute {
                 // HLSL is calling workgroup size "num threads"
@@ -261,15 +279,15 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_semantic(
         &mut self,
         binding: &crate::Binding,
-        stage: Option<ShaderStage>,
-        output: Option<bool>,
+        stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         match *binding {
             crate::Binding::BuiltIn(builtin) => {
-                write!(self.out, " : {}", builtin_str(builtin))?;
+                let builtin_str = builtin.to_hlsl_str()?;
+                write!(self.out, " : {}", builtin_str)?;
             }
             crate::Binding::Location { location, .. } => {
-                if stage == Some(crate::ShaderStage::Fragment) && output == Some(true) {
+                if stage == Some((crate::ShaderStage::Fragment, Io::Output)) {
                     write!(self.out, " : SV_Target{}", location)?;
                 } else {
                     write!(self.out, " : {}{}", LOCATION_SEMANTIC, location)?;
@@ -316,7 +334,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_type(module, member.ty)?;
                 write!(self.out, " {}", &member.name)?;
                 if let Some(ref binding) = member.binding {
-                    self.write_semantic(binding, Some(stage), Some(false))?;
+                    self.write_semantic(binding, Some((stage, Io::Input)))?;
                 }
                 write!(self.out, ";")?;
                 writeln!(self.out)?;
@@ -389,9 +407,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     } else {
                         ("", "t")
                     };
-                write!(self.out, "{}StructuredBuffer<", prefix)?;
-                self.write_type(module, global.ty)?;
-                write!(self.out, ">")?;
+                write!(self.out, "{}ByteAddressBuffer", prefix)?;
                 register
             }
             crate::StorageClass::Handle => {
@@ -502,22 +518,13 @@ impl<'a, W: Write> Writer<'a, W> {
         // Panics if `ArraySize::Constant` has a constant that isn't an sint or uint
         match size {
             crate::ArraySize::Constant(const_handle) => {
-                match module.constants[const_handle].inner {
-                    crate::ConstantInner::Scalar {
-                        width: _,
-                        value: crate::ScalarValue::Uint(size),
-                    } => write!(self.out, "{}", size)?,
-                    crate::ConstantInner::Scalar {
-                        width: _,
-                        value: crate::ScalarValue::Sint(size),
-                    } => write!(self.out, "{}", size)?,
-                    _ => unreachable!(),
-                }
+                let size = module.constants[const_handle].to_array_length().unwrap();
+                write!(self.out, "{}", size)?;
             }
             crate::ArraySize::Dynamic => {
                 //TODO: https://github.com/gfx-rs/naga/issues/1127
                 log::warn!("Dynamically sized arrays are not properly supported yet");
-                write!(self.out, "1")?
+                write!(self.out, "1")?;
             }
         }
 
@@ -535,8 +542,7 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::Type>,
         _block: bool,
         members: &[crate::StructMember],
-        shader_stage: Option<ShaderStage>,
-        out: Option<bool>,
+        shader_stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         // Write struct name
         write!(self.out, "struct {}", self.names[&NameKey::Type(handle)])?;
@@ -553,15 +559,22 @@ impl<'a, W: Write> Writer<'a, W> {
                     stride: _,
                 } => {
                     // HLSL arrays are written as `type name[size]`
-                    let ty_name = match module.types[base].inner {
+                    let (ty_name, vec_size) = match module.types[base].inner {
                         // Write scalar type by backend so as not to depend on the front-end implementation
                         // Name returned from frontend can be generated (type1, float1, etc.)
-                        TypeInner::Scalar { kind, width } => scalar_kind_str(kind, width)?,
-                        _ => &self.names[&NameKey::Type(base)],
+                        TypeInner::Scalar { kind, width } => (kind.to_hlsl_str(width)?, None),
+                        // Similarly, write vector types directly.
+                        TypeInner::Vector { size, kind, width } => {
+                            (kind.to_hlsl_str(width)?, Some(size))
+                        }
+                        _ => (self.names[&NameKey::Type(base)].as_str(), None),
                     };
 
                     // Write `type` and `name`
                     write!(self.out, "{}", ty_name)?;
+                    if let Some(s) = vec_size {
+                        write!(self.out, "{}", s as usize)?;
+                    }
                     write!(
                         self.out,
                         " {}",
@@ -579,12 +592,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     }) = member.binding
                     {
                         if let Some(interpolation) = interpolation {
-                            write!(self.out, "{} ", interpolation_str(interpolation))?
+                            write!(self.out, "{} ", interpolation.to_hlsl_str())?
                         }
 
                         if let Some(sampling) = sampling {
-                            if let Some(str) = sampling_str(sampling) {
-                                write!(self.out, "{} ", str)?
+                            if let Some(string) = sampling.to_hlsl_str() {
+                                write!(self.out, "{} ", string)?
                             }
                         }
                     }
@@ -600,7 +613,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
 
             if let Some(ref binding) = member.binding {
-                self.write_semantic(binding, shader_stage, out)?;
+                self.write_semantic(binding, shader_stage)?;
             };
             write!(self.out, ";")?;
             writeln!(self.out)?;
@@ -633,13 +646,13 @@ impl<'a, W: Write> Writer<'a, W> {
     pub(super) fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
         match *inner {
             TypeInner::Scalar { kind, width } => {
-                write!(self.out, "{}", scalar_kind_str(kind, width)?)?;
+                write!(self.out, "{}", kind.to_hlsl_str(width)?)?;
             }
             TypeInner::Vector { size, kind, width } => {
                 write!(
                     self.out,
                     "{}{}",
-                    scalar_kind_str(kind, width)?,
+                    kind.to_hlsl_str(width)?,
                     back::vector_size_str(size)
                 )?;
             }
@@ -653,7 +666,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(
                     self.out,
                     "{}{}x{}",
-                    scalar_kind_str(crate::ScalarKind::Float, width)?,
+                    crate::ScalarKind::Float.to_hlsl_str(width)?,
                     back::vector_size_str(columns),
                     back::vector_size_str(rows),
                 )?;
@@ -663,26 +676,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 arrayed,
                 class,
             } => {
-                use crate::ImageClass as Ic;
-
-                let dim_str = dim.to_hlsl_str();
-                let arrayed_str = if arrayed { "Array" } else { "" };
-                write!(self.out, "Texture{}{}", dim_str, arrayed_str)?;
-                match class {
-                    Ic::Depth { multi } => {
-                        let multi_str = if multi { "MS" } else { "" };
-                        write!(self.out, "{}<float>", multi_str)?
-                    }
-                    Ic::Sampled { kind, multi } => {
-                        let multi_str = if multi { "MS" } else { "" };
-                        let scalar_kind_str = scalar_kind_str(kind, 4)?;
-                        write!(self.out, "{}<{}4>", multi_str, scalar_kind_str)?
-                    }
-                    Ic::Storage(format) => {
-                        let storage_format_str = storage_format_to_texture_type(format);
-                        write!(self.out, "<{}>", storage_format_str)?
-                    }
-                }
+                self.write_image_type(dim, arrayed, class)?;
             }
             TypeInner::Sampler { comparison } => {
                 let sampler = if comparison {
@@ -782,8 +776,7 @@ impl<'a, W: Write> Writer<'a, W> {
         };
         if let Some(ref result) = func.result {
             if let Some(ref binding) = result.binding {
-                let output = stage.is_some();
-                self.write_semantic(binding, stage, Some(output))?;
+                self.write_semantic(binding, stage.map(|s| (s, Io::Output)))?;
             }
         }
 
@@ -955,11 +948,48 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
             Statement::Store { pointer, value } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
-                self.write_expr(module, pointer, func_ctx)?;
-                write!(self.out, " = ")?;
-                self.write_expr(module, value, func_ctx)?;
-                writeln!(self.out, ";")?
+                let array_info = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
+                    TypeInner::Pointer { base, .. } => match module.types[base].inner {
+                        crate::TypeInner::Array {
+                            size: crate::ArraySize::Constant(ch),
+                            ..
+                        } => Some((ch, base)),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+
+                if func_ctx.info[pointer]
+                    .ty
+                    .inner_with(&module.types)
+                    .pointer_class()
+                    == Some(crate::StorageClass::Storage)
+                {
+                    return Err(Error::Unimplemented("Storage stores".to_string()));
+                } else if let Some((const_handle, base_ty)) = array_info {
+                    let size = module.constants[const_handle].to_array_length().unwrap();
+                    writeln!(self.out, "{}{{", INDENT.repeat(indent))?;
+                    write!(self.out, "{}", INDENT.repeat(indent + 1))?;
+                    self.write_type(module, base_ty)?;
+                    write!(self.out, " _result[{}]=", size)?;
+                    self.write_expr(module, value, func_ctx)?;
+                    writeln!(self.out, ";")?;
+                    write!(
+                        self.out,
+                        "{}for(int _i=0; _i<{}; ++_i) ",
+                        INDENT.repeat(indent + 1),
+                        size
+                    )?;
+                    self.write_expr(module, pointer, func_ctx)?;
+                    writeln!(self.out, "[_i] = _result[_i];")?;
+                    writeln!(self.out, "{}}}", INDENT.repeat(indent))?;
+                } else {
+                    write!(self.out, "{}", INDENT.repeat(indent))?;
+                    self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, " = ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    writeln!(self.out, ";")?
+                }
             }
             Statement::Call {
                 function,
@@ -1134,40 +1164,65 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(module, right, func_ctx)?;
                 write!(self.out, ")")?;
             }
-            // TODO: copy-paste from glsl-out
+            Expression::Access { base, index } => {
+                if func_ctx.info[expr]
+                    .ty
+                    .inner_with(&module.types)
+                    .pointer_class()
+                    == Some(crate::StorageClass::Storage)
+                {
+                    // do nothing, the chain is written on `Load`/`Store`
+                } else {
+                    self.write_expr(module, base, func_ctx)?;
+                    write!(self.out, "[")?;
+                    self.write_expr(module, index, func_ctx)?;
+                    write!(self.out, "]")?;
+                }
+            }
             Expression::AccessIndex { base, index } => {
-                self.write_expr(module, base, func_ctx)?;
+                if func_ctx.info[expr]
+                    .ty
+                    .inner_with(&module.types)
+                    .pointer_class()
+                    == Some(crate::StorageClass::Storage)
+                {
+                    // do nothing, the chain is written on `Load`/`Store`
+                } else {
+                    self.write_expr(module, base, func_ctx)?;
 
-                let base_ty_res = &func_ctx.info[base].ty;
-                let mut resolved = base_ty_res.inner_with(&module.types);
-                let base_ty_handle = match *resolved {
-                    TypeInner::Pointer { base, class: _ } => {
-                        resolved = &module.types[base].inner;
-                        Some(base)
-                    }
-                    _ => base_ty_res.handle(),
-                };
+                    let base_ty_res = &func_ctx.info[base].ty;
+                    let mut resolved = base_ty_res.inner_with(&module.types);
+                    let base_ty_handle = match *resolved {
+                        TypeInner::Pointer { base, class: _ } => {
+                            resolved = &module.types[base].inner;
+                            Some(base)
+                        }
+                        _ => base_ty_res.handle(),
+                    };
 
-                match *resolved {
-                    TypeInner::Vector { .. } => {
-                        // Write vector access as a swizzle
-                        write!(self.out, ".{}", back::COMPONENTS[index as usize])?
-                    }
-                    TypeInner::Matrix { .. }
-                    | TypeInner::Array { .. }
-                    | TypeInner::ValuePointer { .. } => write!(self.out, "[{}]", index)?,
-                    TypeInner::Struct { .. } => {
-                        // This will never panic in case the type is a `Struct`, this is not true
-                        // for other types so we can only check while inside this match arm
-                        let ty = base_ty_handle.unwrap();
+                    match *resolved {
+                        TypeInner::Vector { .. } => {
+                            // Write vector access as a swizzle
+                            write!(self.out, ".{}", back::COMPONENTS[index as usize])?
+                        }
+                        TypeInner::Matrix { .. }
+                        | TypeInner::Array { .. }
+                        | TypeInner::ValuePointer { .. } => write!(self.out, "[{}]", index)?,
+                        TypeInner::Struct { .. } => {
+                            // This will never panic in case the type is a `Struct`, this is not true
+                            // for other types so we can only check while inside this match arm
+                            let ty = base_ty_handle.unwrap();
 
-                        write!(
-                            self.out,
-                            ".{}",
-                            &self.names[&NameKey::StructMember(ty, index)]
-                        )?
+                            write!(
+                                self.out,
+                                ".{}",
+                                &self.names[&NameKey::StructMember(ty, index)]
+                            )?
+                        }
+                        ref other => {
+                            return Err(Error::Custom(format!("Cannot index {:?}", other)))
+                        }
                     }
-                    ref other => return Err(Error::Custom(format!("Cannot index {:?}", other))),
                 }
             }
             Expression::FunctionArgument(pos) => {
@@ -1339,24 +1394,27 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
             Expression::GlobalVariable(handle) => {
-                let name = &self.names[&NameKey::GlobalVariable(handle)];
-                let postfix = match module.global_variables[handle].class {
-                    crate::StorageClass::Storage => "[0]",
-                    _ => "",
-                };
-                write!(self.out, "{}{}", name, postfix)?;
+                if module.global_variables[handle].class != crate::StorageClass::Storage {
+                    let name = &self.names[&NameKey::GlobalVariable(handle)];
+                    write!(self.out, "{}", name)?;
+                }
             }
             Expression::LocalVariable(handle) => {
                 write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
             }
             Expression::Load { pointer } => {
-                self.write_expr(module, pointer, func_ctx)?;
-            }
-            Expression::Access { base, index } => {
-                self.write_expr(module, base, func_ctx)?;
-                write!(self.out, "[")?;
-                self.write_expr(module, index, func_ctx)?;
-                write!(self.out, "]")?;
+                if func_ctx.info[pointer]
+                    .ty
+                    .inner_with(&module.types)
+                    .pointer_class()
+                    == Some(crate::StorageClass::Storage)
+                {
+                    let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
+                    let result_ty = func_ctx.info[expr].ty.clone();
+                    self.write_storage_load(module, var_handle, result_ty, func_ctx)?;
+                } else {
+                    self.write_expr(module, pointer, func_ctx)?;
+                }
             }
             Expression::Unary { op, expr } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
@@ -1374,12 +1432,12 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(
                             self.out,
                             "{}{}",
-                            scalar_kind_str(kind, width)?,
+                            kind.to_hlsl_str(width)?,
                             back::vector_size_str(size),
                         )?;
                     }
                     TypeInner::Scalar { width, .. } => {
-                        write!(self.out, "{}", scalar_kind_str(kind, width)?)?
+                        write!(self.out, "{}", kind.to_hlsl_str(width)?)?
                     }
                     _ => {
                         return Err(Error::Unimplemented(format!(
@@ -1482,10 +1540,44 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.out.write_char(back::COMPONENTS[sc as usize])?;
                 }
             }
-            // `ArrayLength` is written as `expr.length()`
             Expression::ArrayLength(expr) => {
-                self.write_expr(module, expr, func_ctx)?;
-                write!(self.out, ".length()")?
+                let var_handle = match func_ctx.expressions[expr] {
+                    Expression::AccessIndex { base, index: _ } => {
+                        match func_ctx.expressions[base] {
+                            Expression::GlobalVariable(handle) => handle,
+                            _ => unreachable!(),
+                        }
+                    }
+                    Expression::GlobalVariable(handle) => handle,
+                    _ => unreachable!(),
+                };
+
+                let var = &module.global_variables[var_handle];
+                let (offset, stride) = match module.types[var.ty].inner {
+                    TypeInner::Array { stride, .. } => (0, stride),
+                    TypeInner::Struct {
+                        top_level: true,
+                        ref members,
+                        ..
+                    } => {
+                        let last = members.last().unwrap();
+                        let stride = match module.types[last.ty].inner {
+                            TypeInner::Array { stride, .. } => stride,
+                            _ => unreachable!(),
+                        };
+                        (last.offset, stride)
+                    }
+                    _ => unreachable!(),
+                };
+
+                let wrapped_array_length = WrappedArrayLength {
+                    writable: var.storage_access.contains(crate::StorageAccess::STORE),
+                };
+
+                write!(self.out, "((")?;
+                self.write_wrapped_array_length_function_name(wrapped_array_length)?;
+                let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                write!(self.out, "({}) - {}) / {})", var_name, offset, stride)?
             }
             Expression::Derivative { axis, expr } => {
                 use crate::DerivativeAxis as Da;
@@ -1654,109 +1746,193 @@ impl<'a, W: Write> Writer<'a, W> {
 
     /// Helper function that write default zero initialization
     fn write_default_init(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
-        write!(self.out, "(")?;
-        self.write_type(module, ty)?;
-        if let TypeInner::Array { size, .. } = module.types[ty].inner {
-            self.write_array_size(module, size)?;
+        match module.types[ty].inner {
+            TypeInner::Array {
+                size: crate::ArraySize::Constant(const_handle),
+                base,
+                ..
+            } => {
+                write!(self.out, "{{")?;
+                let count = module.constants[const_handle].to_array_length().unwrap();
+                for i in 0..count {
+                    if i != 0 {
+                        write!(self.out, ",")?;
+                    }
+                    self.write_default_init(module, base)?;
+                }
+                write!(self.out, "}}")?;
+            }
+            _ => {
+                write!(self.out, "(")?;
+                self.write_type(module, ty)?;
+                write!(self.out, ")0")?;
+            }
         }
-        write!(self.out, ")0")?;
-
         Ok(())
     }
-}
 
-fn builtin_str(built_in: crate::BuiltIn) -> &'static str {
-    use crate::BuiltIn as Bi;
-
-    match built_in {
-        Bi::Position => "SV_Position",
-        // vertex
-        Bi::ClipDistance => "SV_ClipDistance",
-        Bi::CullDistance => "SV_CullDistance",
-        Bi::InstanceIndex => "SV_InstanceID",
-        // based on this page https://docs.microsoft.com/en-us/windows/uwp/gaming/glsl-to-hlsl-reference#comparing-opengl-es-20-with-direct3d-11
-        // No meaning unless you target Direct3D 9
-        Bi::PointSize => "PSIZE",
-        Bi::VertexIndex => "SV_VertexID",
-        // fragment
-        Bi::FragDepth => "SV_Depth",
-        Bi::FrontFacing => "SV_IsFrontFace",
-        Bi::PrimitiveIndex => "SV_PrimitiveID",
-        Bi::SampleIndex => "SV_SampleIndex",
-        Bi::SampleMask => "SV_Coverage",
-        // compute
-        Bi::GlobalInvocationId => "SV_DispatchThreadID",
-        Bi::LocalInvocationId => "SV_GroupThreadID",
-        Bi::LocalInvocationIndex => "SV_GroupIndex",
-        Bi::WorkGroupId => "SV_GroupID",
-        _ => todo!("builtin_str {:?}", built_in),
+    fn write_storage_address(
+        &mut self,
+        module: &Module,
+        chain: &[SubAccess],
+        func_ctx: &back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        for (i, access) in chain.iter().enumerate() {
+            if i != 0 {
+                write!(self.out, "+")?;
+            }
+            match *access {
+                SubAccess::Offset(offset) => {
+                    write!(self.out, "{}", offset)?;
+                }
+                SubAccess::Index { value, stride } => {
+                    self.write_expr(module, value, func_ctx)?;
+                    write!(self.out, "*{}", stride)?;
+                }
+            }
+        }
+        Ok(())
     }
-}
 
-/// Helper function that returns scalar related strings
-/// https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-scalar
-fn scalar_kind_str(kind: crate::ScalarKind, width: crate::Bytes) -> Result<&'static str, Error> {
-    use crate::ScalarKind as Sk;
-
-    match kind {
-        Sk::Sint => Ok("int"),
-        Sk::Uint => Ok("uint"),
-        Sk::Float => match width {
-            2 => Ok("half"),
-            4 => Ok("float"),
-            8 => Ok("double"),
-            _ => Err(Error::UnsupportedScalar(kind, width)),
-        },
-        Sk::Bool => Ok("bool"),
+    fn write_storage_load_sequence<I: Iterator<Item = (proc::TypeResolution, u32)>>(
+        &mut self,
+        module: &Module,
+        var_handle: Handle<crate::GlobalVariable>,
+        sequence: I,
+        func_ctx: &back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        for (i, (ty_resolution, offset)) in sequence.enumerate() {
+            // add the index temporarily
+            self.temp_access_chain.push(SubAccess::Offset(offset));
+            if i != 0 {
+                write!(self.out, ", ")?;
+            };
+            self.write_storage_load(module, var_handle, ty_resolution, func_ctx)?;
+            self.temp_access_chain.pop();
+        }
+        Ok(())
     }
-}
 
-/// Helper function that returns the string corresponding to the HLSL interpolation qualifier
-fn interpolation_str(interpolation: crate::Interpolation) -> &'static str {
-    use crate::Interpolation as I;
-
-    match interpolation {
-        I::Perspective => "linear",
-        I::Linear => "noperspective",
-        I::Flat => "nointerpolation",
+    /// Helper function to write down the load operation on a `ByteAddressBuffer`.
+    fn write_storage_load(
+        &mut self,
+        module: &Module,
+        var_handle: Handle<crate::GlobalVariable>,
+        result_ty: proc::TypeResolution,
+        func_ctx: &back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        match *result_ty.inner_with(&module.types) {
+            TypeInner::Scalar { kind, width: _ } => {
+                // working around the borrow checker in `self.write_expr`
+                let chain = mem::take(&mut self.temp_access_chain);
+                let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                let cast = kind.to_hlsl_cast();
+                write!(self.out, "{}({}.Load(", cast, var_name)?;
+                self.write_storage_address(module, &chain, func_ctx)?;
+                write!(self.out, "))")?;
+                self.temp_access_chain = chain;
+            }
+            TypeInner::Vector {
+                size,
+                kind,
+                width: _,
+            } => {
+                // working around the borrow checker in `self.write_expr`
+                let chain = mem::take(&mut self.temp_access_chain);
+                let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                let cast = kind.to_hlsl_cast();
+                write!(self.out, "{}({}.Load{}(", cast, var_name, size as u8)?;
+                self.write_storage_address(module, &chain, func_ctx)?;
+                write!(self.out, "))")?;
+                self.temp_access_chain = chain;
+            }
+            TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => {
+                write!(
+                    self.out,
+                    "{}{}x{}(",
+                    crate::ScalarKind::Float.to_hlsl_str(width)?,
+                    columns as u8,
+                    rows as u8,
+                )?;
+                let row_stride = width as u32 * rows as u32;
+                let iter = (0..columns as u32).map(|i| {
+                    let ty_inner = TypeInner::Vector {
+                        size: rows,
+                        kind: crate::ScalarKind::Float,
+                        width,
+                    };
+                    (proc::TypeResolution::Value(ty_inner), i * row_stride)
+                });
+                self.write_storage_load_sequence(module, var_handle, iter, func_ctx)?;
+                write!(self.out, ")")?;
+            }
+            TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(const_handle),
+                ..
+            } => {
+                write!(self.out, "{{")?;
+                let count = module.constants[const_handle].to_array_length().unwrap();
+                let stride = module.types[base].inner.span(&module.constants);
+                let iter = (0..count).map(|i| (proc::TypeResolution::Handle(base), stride * i));
+                self.write_storage_load_sequence(module, var_handle, iter, func_ctx)?;
+                write!(self.out, "}}")?;
+            }
+            TypeInner::Struct { ref members, .. } => {
+                write!(self.out, "{{")?;
+                let iter = members
+                    .iter()
+                    .map(|m| (proc::TypeResolution::Handle(m.ty), m.offset));
+                self.write_storage_load_sequence(module, var_handle, iter, func_ctx)?;
+                write!(self.out, "}}")?;
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
     }
-}
 
-/// Return the HLSL auxiliary qualifier for the given sampling value.
-fn sampling_str(sampling: crate::Sampling) -> Option<&'static str> {
-    use crate::Sampling as S;
-
-    match sampling {
-        S::Center => None,
-        S::Centroid => Some("centroid"),
-        S::Sample => Some("sample"),
-    }
-}
-
-fn storage_format_to_texture_type(format: crate::StorageFormat) -> &'static str {
-    use crate::StorageFormat as Sf;
-
-    match format {
-        Sf::R16Float => "float",
-        Sf::R8Unorm => "unorm float",
-        Sf::R8Snorm => "snorm float",
-        Sf::R8Uint | Sf::R16Uint => "uint",
-        Sf::R8Sint | Sf::R16Sint => "int",
-
-        Sf::Rg16Float => "float2",
-        Sf::Rg8Unorm => "unorm float2",
-        Sf::Rg8Snorm => "snorm float2",
-
-        Sf::Rg8Sint | Sf::Rg16Sint => "int2",
-        Sf::Rg8Uint | Sf::Rg16Uint => "uint2",
-
-        Sf::Rg11b10Float => "float3",
-
-        Sf::Rgba16Float | Sf::R32Float | Sf::Rg32Float | Sf::Rgba32Float => "float4",
-        Sf::Rgba8Unorm | Sf::Rgb10a2Unorm => "unorm float4",
-        Sf::Rgba8Snorm => "snorm float4",
-
-        Sf::Rgba8Uint | Sf::Rgba16Uint | Sf::R32Uint | Sf::Rg32Uint | Sf::Rgba32Uint => "uint4",
-        Sf::Rgba8Sint | Sf::Rgba16Sint | Sf::R32Sint | Sf::Rg32Sint | Sf::Rgba32Sint => "int4",
+    fn fill_access_chain(
+        &mut self,
+        module: &Module,
+        mut cur_expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx<'_>,
+    ) -> Result<Handle<crate::GlobalVariable>, Error> {
+        self.temp_access_chain.clear();
+        loop {
+            let stride = func_ctx.info[cur_expr]
+                .ty
+                .inner_with(&module.types)
+                .span(&module.constants);
+            let (next_expr, sub) = match func_ctx.expressions[cur_expr] {
+                crate::Expression::GlobalVariable(handle) => return Ok(handle),
+                crate::Expression::Access { base, index } => (
+                    base,
+                    SubAccess::Index {
+                        value: index,
+                        stride,
+                    },
+                ),
+                crate::Expression::AccessIndex { base, index } => {
+                    match *func_ctx.info[base].ty.inner_with(&module.types) {
+                        TypeInner::Struct { ref members, .. } => {
+                            (base, SubAccess::Offset(members[index as usize].offset))
+                        }
+                        _ => (base, SubAccess::Offset(index * stride)),
+                    }
+                }
+                ref other => {
+                    return Err(Error::Unimplemented(format!(
+                        "Pointer access of {:?}",
+                        other
+                    )))
+                }
+            };
+            self.temp_access_chain.push(sub);
+            cur_expr = next_expr;
+        }
     }
 }

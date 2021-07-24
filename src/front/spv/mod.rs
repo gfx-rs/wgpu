@@ -2906,19 +2906,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let decor = self.future_decor.remove(&id);
         let base_lookup_ty = self.lookup_type.lookup(type_id)?;
-        let class = match module.types[base_lookup_ty.handle].inner {
-            crate::TypeInner::Pointer { class, .. }
-            | crate::TypeInner::ValuePointer { class, .. } => class,
-            _ if self
-                .lookup_storage_buffer_types
-                .contains_key(&base_lookup_ty.handle) =>
-            {
-                crate::StorageClass::Storage
-            }
-            _ => match map_storage_class(storage_class)? {
+        let class = if let Some(class) = module.types[base_lookup_ty.handle].inner.pointer_class() {
+            class
+        } else if self
+            .lookup_storage_buffer_types
+            .contains_key(&base_lookup_ty.handle)
+        {
+            crate::StorageClass::Storage
+        } else {
+            match map_storage_class(storage_class)? {
                 ExtendedClass::Global(class) => class,
                 ExtendedClass::Input | ExtendedClass::Output => crate::StorageClass::Private,
-            },
+            }
         };
 
         // Don't bother with pointer stuff for `Handle` types.

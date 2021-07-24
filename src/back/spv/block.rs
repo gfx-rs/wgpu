@@ -199,12 +199,7 @@ impl<'w> BlockContext<'w> {
             crate::Expression::GlobalVariable(_) | crate::Expression::LocalVariable(_) => true,
             crate::Expression::FunctionArgument(index) => {
                 let arg = &self.ir_function.arguments[index as usize];
-                match self.ir_module.types[arg.ty].inner {
-                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
-                        true
-                    }
-                    _ => false,
-                }
+                self.ir_module.types[arg.ty].inner.pointer_class().is_some()
             }
 
             // The chain rule: if this `Access...`'s `base` operand was

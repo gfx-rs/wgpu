@@ -492,14 +492,12 @@ impl<'function> Context<'function> {
                     });
 
                 if !lhs {
-                    match *program.resolve_type(self, pointer, meta)? {
-                        TypeInner::Pointer { .. } | TypeInner::ValuePointer { .. } => {
-                            return Ok((
-                                Some(self.add_expression(Expression::Load { pointer }, body)),
-                                meta,
-                            ));
-                        }
-                        _ => {}
+                    let resolved = program.resolve_type(self, pointer, meta)?;
+                    if resolved.pointer_class().is_some() {
+                        return Ok((
+                            Some(self.add_expression(Expression::Load { pointer }, body)),
+                            meta,
+                        ));
                     }
                 }
 

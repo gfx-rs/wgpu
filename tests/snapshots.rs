@@ -423,7 +423,10 @@ fn convert_wgsl() {
             "interpolate",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("access", Targets::SPIRV | Targets::METAL | Targets::WGSL),
+        (
+            "access",
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+        ),
         (
             "control-flow",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -444,7 +447,7 @@ fn convert_wgsl() {
         ("bounds-check-zero", Targets::SPIRV),
         (
             "texture-arg",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
     ];
 

@@ -6,12 +6,16 @@ struct _mslBufferSizes {
     metal::uint size0;
 };
 
-typedef int type2[1];
+struct type2 {
+    metal::uint2 inner[2];
+};
+typedef int type4[1];
 struct Bar {
     metal::float4x4 matrix;
-    type2 data;
+    type2 arr;
+    type4 data;
 };
-struct type6 {
+struct type8 {
     int inner[5];
 };
 
@@ -26,14 +30,16 @@ vertex fooOutput foo(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo1 = 0.0;
-    type6 c;
+    type8 c;
     float baz = foo1;
     foo1 = 1.0;
-    metal::float4 _e9 = bar.matrix[3];
-    float b = _e9.x;
-    int a = bar.data[(1 + (_buffer_sizes.size0 - 64 - 4) / 4) - 2u];
-    for(int _i=0; _i<5; ++_i) c.inner[_i] = type6 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
+    metal::float4x4 matrix = bar.matrix;
+    type2 arr = bar.arr;
+    metal::float4 _e13 = bar.matrix[3];
+    float b = _e13.x;
+    int a = bar.data[(1 + (_buffer_sizes.size0 - 80 - 4) / 4) - 2u];
+    for(int _i=0; _i<5; ++_i) c.inner[_i] = type8 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
     c.inner[vi + 1u] = 42;
     int value = c.inner[vi];
-    return fooOutput { static_cast<float4>(metal::int4(value)) };
+    return fooOutput { matrix * static_cast<float4>(metal::int4(value)) };
 }

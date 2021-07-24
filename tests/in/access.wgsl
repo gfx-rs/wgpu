@@ -3,6 +3,7 @@
 [[block]]
 struct Bar {
 	matrix: mat4x4<f32>;
+	arr: [[stride(8)]] array<vec2<u32>, 2>;
 	data: [[stride(4)]] array<i32>;
 };
 
@@ -16,6 +17,9 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
     let baz: f32 = foo;
     foo = 1.0;
 
+	let matrix = bar.matrix;
+	let arr = bar.arr;
+
 	let index = 3u;
 	let b = bar.matrix[index].x;
 
@@ -25,5 +29,5 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 	c[vi + 1u] = 42;
 	let value = c[vi];
 
-	return vec4<f32>(vec4<i32>(value));
+	return matrix * vec4<f32>(vec4<i32>(value));
 }

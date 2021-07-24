@@ -6,7 +6,8 @@
 //! - 6.0
 //!
 
-mod image;
+mod conv;
+mod help;
 mod keywords;
 mod writer;
 
