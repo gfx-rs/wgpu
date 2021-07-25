@@ -24,6 +24,19 @@ float4 foo(VertexInput_foo vertexinput_foo) : SV_Position
     float4 _expr13 = asfloat(bar.Load4(12+0));
     float b = _expr13.x;
     int a = asint(bar.Load((((NagaBufferLengthRW(bar) - 80) / 4) - 2u)*4+8));
+    bar.Store(8+4+0, asuint(1.0));
+    {
+        float4x4 _value2 = float4x4(float4(0.0.xxxx), float4(1.0.xxxx), float4(2.0.xxxx), float4(3.0.xxxx));
+        bar.Store4(0+0, asuint(_value2[0]));
+        bar.Store4(0+16, asuint(_value2[1]));
+        bar.Store4(0+32, asuint(_value2[2]));
+        bar.Store4(0+48, asuint(_value2[3]));
+    }
+    {
+        uint2 _value2[2] = { uint2(0u.xx), uint2(1u.xx) };
+        bar.Store2(4+0, asuint(_value2[0]));
+        bar.Store2(4+8, asuint(_value2[1]));
+    }
     {
         int _result[5]={ a, int(b), 3, 4, 5 };
         for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];

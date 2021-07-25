@@ -396,7 +396,7 @@ fn convert_wgsl() {
         ),
         (
             "boids",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
             "skybox",
@@ -404,7 +404,12 @@ fn convert_wgsl() {
         ),
         (
             "collatz",
-            Targets::SPIRV | Targets::METAL | Targets::IR | Targets::ANALYSIS | Targets::WGSL,
+            Targets::SPIRV
+                | Targets::METAL
+                | Targets::IR
+                | Targets::ANALYSIS
+                | Targets::HLSL
+                | Targets::WGSL,
         ),
         (
             "shadow",
