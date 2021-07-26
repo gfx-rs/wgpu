@@ -1,5 +1,8 @@
 # Change Log
 
+## Unreleased
+  - expose all indirect argument types
+
 ## v0.4.0 (2021-04-29)
   - update `libloading` to 0.7
 

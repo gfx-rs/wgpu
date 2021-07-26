@@ -51,7 +51,64 @@ impl IndirectArgument {
         })
     }
 
-    // TODO: missing variants
+    pub fn vertex_buffer(slot: u32) -> Self {
+        let mut desc = d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW,
+            ..unsafe { mem::zeroed() }
+        };
+        *unsafe { desc.u.VertexBuffer_mut() } =
+            d3d12::D3D12_INDIRECT_ARGUMENT_DESC_VertexBuffer { Slot: slot };
+        IndirectArgument(desc)
+    }
+
+    pub fn constant(root_index: RootIndex, dest_offset_words: u32, count: u32) -> Self {
+        let mut desc = d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
+            ..unsafe { mem::zeroed() }
+        };
+        *unsafe { desc.u.Constant_mut() } = d3d12::D3D12_INDIRECT_ARGUMENT_DESC_Constant {
+            RootParameterIndex: root_index,
+            DestOffsetIn32BitValues: dest_offset_words,
+            Num32BitValuesToSet: count,
+        };
+        IndirectArgument(desc)
+    }
+
+    pub fn constant_buffer_view(root_index: RootIndex) -> Self {
+        let mut desc = d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW,
+            ..unsafe { mem::zeroed() }
+        };
+        *unsafe { desc.u.ConstantBufferView_mut() } =
+            d3d12::D3D12_INDIRECT_ARGUMENT_DESC_ConstantBufferView {
+                RootParameterIndex: root_index,
+            };
+        IndirectArgument(desc)
+    }
+
+    pub fn shader_resource_view(root_index: RootIndex) -> Self {
+        let mut desc = d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW,
+            ..unsafe { mem::zeroed() }
+        };
+        *unsafe { desc.u.ShaderResourceView_mut() } =
+            d3d12::D3D12_INDIRECT_ARGUMENT_DESC_ShaderResourceView {
+                RootParameterIndex: root_index,
+            };
+        IndirectArgument(desc)
+    }
+
+    pub fn unordered_access_view(root_index: RootIndex) -> Self {
+        let mut desc = d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW,
+            ..unsafe { mem::zeroed() }
+        };
+        *unsafe { desc.u.UnorderedAccessView_mut() } =
+            d3d12::D3D12_INDIRECT_ARGUMENT_DESC_UnorderedAccessView {
+                RootParameterIndex: root_index,
+            };
+        IndirectArgument(desc)
+    }
 }
 
 #[repr(transparent)]
