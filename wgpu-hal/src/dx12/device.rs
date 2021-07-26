@@ -1,9 +1,9 @@
 use super::{conv, descriptor, view, HResult as _};
 use parking_lot::Mutex;
-use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc, thread};
+use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
 use winapi::{
     shared::{dxgiformat, dxgitype, winerror},
-    um::{d3d12, d3d12sdklayers, d3dcompiler, synchapi, winbase},
+    um::{d3d12, d3dcompiler, synchapi, winbase},
     Interface,
 };
 
@@ -204,7 +204,11 @@ impl super::Device {
         let mut shader_data = native::Blob::null();
         let mut error = native::Blob::null();
         let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
-        if self.private_caps.shader_debug_info {
+        if self
+            .private_caps
+            .instance_flags
+            .contains(crate::InstanceFlags::DEBUG)
+        {
             compile_flags |=
                 d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
         }
@@ -237,15 +241,9 @@ impl super::Device {
             )
         };
 
-        match hr.into_result() {
-            Ok(()) => Ok(shader_data),
+        let (result, log_level) = match hr.into_result() {
+            Ok(()) => (Ok(shader_data), log::Level::Info),
             Err(e) => {
-                log::warn!(
-                    "Naga generated shader for {:?} at {:?}:\n{}",
-                    raw_ep,
-                    naga_stage,
-                    source
-                );
                 let message = unsafe {
                     let slice = slice::from_raw_parts(
                         error.GetBufferPointer() as *const u8,
@@ -257,9 +255,21 @@ impl super::Device {
                 unsafe {
                     error.destroy();
                 }
-                Err(crate::PipelineError::Linkage(stage_bit, full_msg))
+                (
+                    Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
+                    log::Level::Warn,
+                )
             }
-        }
+        };
+
+        log::log!(
+            log_level,
+            "Naga generated shader for {:?} at {:?}:\n{}",
+            raw_ep,
+            naga_stage,
+            source
+        );
+        result
     }
 }
 
@@ -272,22 +282,6 @@ impl crate::Device<super::Api> for super::Device {
         self.shared.destroy();
         self.idler.destroy();
         queue.raw.destroy();
-
-        // Debug tracking alive objects
-        if !thread::panicking() {
-            if let Ok(debug_device) = self
-                .raw
-                .cast::<d3d12sdklayers::ID3D12DebugDevice>()
-                .into_result()
-            {
-                debug_device.ReportLiveDeviceObjects(
-                    d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
-                );
-                debug_device.destroy();
-            }
-        }
-
-        self.raw.destroy();
     }
 
     unsafe fn create_buffer(
@@ -773,6 +767,8 @@ impl crate::Device<super::Api> for super::Device {
                 }
             }
 
+            let (mut num_cbv, mut num_srv, mut num_uav) = (0, 0, 0);
+
             // SRV/CBV/UAV descriptor tables
             let mut range_base = ranges.len();
             for entry in bgl.entries.iter() {
@@ -784,7 +780,15 @@ impl crate::Device<super::Api> for super::Device {
                     | wgt::BindingType::Sampler { .. } => continue,
                     ref other => conv::map_binding_type(other),
                 };
-                let register = (ranges.len() - range_base) as u32;
+                let reg_ref = match range_ty {
+                    native::DescriptorRangeType::CBV => &mut num_cbv,
+                    native::DescriptorRangeType::SRV => &mut num_srv,
+                    native::DescriptorRangeType::UAV => &mut num_uav,
+                    native::DescriptorRangeType::Sampler => unreachable!(),
+                };
+                let register = *reg_ref;
+                *reg_ref += 1;
+
                 binding_map.insert(
                     naga::ResourceBinding {
                         group: index as u32,
@@ -802,7 +806,6 @@ impl crate::Device<super::Api> for super::Device {
                     d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
                 ));
             }
-            let base_view_register = ranges.len() - range_base;
             if ranges.len() > range_base {
                 parameters.push(native::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_view_static),
@@ -845,7 +848,6 @@ impl crate::Device<super::Api> for super::Device {
             }
 
             // Root (dynamic) descriptor tables
-            let parameter_base = parameters.len();
             let dynamic_buffers_visibility = conv::map_visibility(visibility_view_dynamic);
             for entry in bgl.entries.iter() {
                 let buffer_ty = match entry.ty {
@@ -856,7 +858,52 @@ impl crate::Device<super::Api> for super::Device {
                     } => ty,
                     _ => continue,
                 };
-                let register = (base_view_register + parameters.len() - parameter_base) as u32;
+
+                let (kind, param, register) = match buffer_ty {
+                    wgt::BufferBindingType::Uniform => {
+                        let binding = native::Binding {
+                            space,
+                            register: num_cbv,
+                        };
+                        (
+                            super::BufferViewKind::Constant,
+                            native::RootParameter::cbv_descriptor(
+                                dynamic_buffers_visibility,
+                                binding,
+                            ),
+                            &mut num_cbv,
+                        )
+                    }
+                    wgt::BufferBindingType::Storage { read_only: true } => {
+                        let binding = native::Binding {
+                            space,
+                            register: num_srv,
+                        };
+                        (
+                            super::BufferViewKind::ShaderResource,
+                            native::RootParameter::srv_descriptor(
+                                dynamic_buffers_visibility,
+                                binding,
+                            ),
+                            &mut num_srv,
+                        )
+                    }
+                    wgt::BufferBindingType::Storage { read_only: false } => {
+                        let binding = native::Binding {
+                            space,
+                            register: num_uav,
+                        };
+                        (
+                            super::BufferViewKind::UnorderedAccess,
+                            native::RootParameter::uav_descriptor(
+                                dynamic_buffers_visibility,
+                                binding,
+                            ),
+                            &mut num_uav,
+                        )
+                    }
+                };
+
                 binding_map.insert(
                     naga::ResourceBinding {
                         group: index as u32,
@@ -864,24 +911,11 @@ impl crate::Device<super::Api> for super::Device {
                     },
                     hlsl::BindTarget {
                         space: space as u8,
-                        register,
+                        register: *register,
                     },
                 );
-                let binding = native::Binding { space, register };
-                let (kind, param) = match buffer_ty {
-                    wgt::BufferBindingType::Uniform => (
-                        super::BufferViewKind::Constant,
-                        native::RootParameter::cbv_descriptor(dynamic_buffers_visibility, binding),
-                    ),
-                    wgt::BufferBindingType::Storage { read_only: true } => (
-                        super::BufferViewKind::ShaderResource,
-                        native::RootParameter::srv_descriptor(dynamic_buffers_visibility, binding),
-                    ),
-                    wgt::BufferBindingType::Storage { read_only: false } => (
-                        super::BufferViewKind::UnorderedAccess,
-                        native::RootParameter::uav_descriptor(dynamic_buffers_visibility, binding),
-                    ),
-                };
+                *register += 1;
+
                 info.dynamic_buffers.push(kind);
                 parameters.push(param);
             }
