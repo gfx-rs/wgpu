@@ -41,14 +41,20 @@ void main(ComputeInput_main computeinput_main)
     if ((index >= NUM_PARTICLES)) {
         return;
     }
-    float2 _expr10 = asfloat(particlesSrc.Load2(0+index*4+0));
+    float2 _expr10 = asfloat(particlesSrc.Load2(0+index*16+0));
     vPos = _expr10;
-    float2 _expr15 = asfloat(particlesSrc.Load2(4+index*4+0));
+    float2 _expr15 = asfloat(particlesSrc.Load2(8+index*16+0));
     vVel = _expr15;
     cMass = float2(0.0, 0.0);
     cVel = float2(0.0, 0.0);
     colVel = float2(0.0, 0.0);
+    bool loop_init = true;
     while(true) {
+        if (!loop_init) {
+        uint _expr86 = i;
+        i = (_expr86 + 1u);
+        }
+        loop_init = false;
         uint _expr37 = i;
         if ((_expr37 >= NUM_PARTICLES)) {
             break;
@@ -58,10 +64,10 @@ void main(ComputeInput_main computeinput_main)
             continue;
         }
         uint _expr42 = i;
-        float2 _expr45 = asfloat(particlesSrc.Load2(0+_expr42*4+0));
+        float2 _expr45 = asfloat(particlesSrc.Load2(0+_expr42*16+0));
         pos = _expr45;
         uint _expr47 = i;
-        float2 _expr50 = asfloat(particlesSrc.Load2(4+_expr47*4+0));
+        float2 _expr50 = asfloat(particlesSrc.Load2(8+_expr47*16+0));
         vel = _expr50;
         float2 _expr51 = pos;
         float2 _expr52 = vPos;
@@ -92,8 +98,6 @@ void main(ComputeInput_main computeinput_main)
             int _expr83 = cVelCount;
             cVelCount = (_expr83 + 1);
         }
-        uint _expr86 = i;
-        i = (_expr86 + 1u);
     }
     int _expr89 = cMassCount;
     if ((_expr89 > 0)) {
@@ -140,8 +144,8 @@ void main(ComputeInput_main computeinput_main)
         vPos.y = -1.0;
     }
     float2 _expr164 = vPos;
-    particlesDst.Store2(0+index*4+0, asuint(_expr164));
+    particlesDst.Store2(0+index*16+0, asuint(_expr164));
     float2 _expr168 = vVel;
-    particlesDst.Store2(4+index*4+0, asuint(_expr168));
+    particlesDst.Store2(8+index*16+0, asuint(_expr168));
     return;
 }

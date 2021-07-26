@@ -365,10 +365,17 @@ impl<W: fmt::Write> super::Writer<'_, W> {
     ) -> Result<Handle<crate::GlobalVariable>, Error> {
         self.temp_access_chain.clear();
         loop {
-            let stride = func_ctx.info[cur_expr]
-                .ty
-                .inner_with(&module.types)
-                .span(&module.constants);
+            // determine the size of the pontee
+            let stride = match *func_ctx.info[cur_expr].ty.inner_with(&module.types) {
+                crate::TypeInner::Pointer { base, class: _ } => {
+                    module.types[base].inner.span(&module.constants)
+                }
+                crate::TypeInner::ValuePointer { size, width, .. } => {
+                    size.map_or(1, |s| s as u32) * width as u32
+                }
+                _ => 0,
+            };
+
             let (next_expr, sub) = match func_ctx.expressions[cur_expr] {
                 crate::Expression::GlobalVariable(handle) => return Ok(handle),
                 crate::Expression::Access { base, index } => (

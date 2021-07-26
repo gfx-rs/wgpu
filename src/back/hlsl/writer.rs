@@ -1008,23 +1008,42 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ref body,
                 ref continuing,
             } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
-                writeln!(self.out, "while(true) {{")?;
-
-                for sta in body.iter().chain(continuing.iter()) {
-                    self.write_stmt(module, sta, func_ctx, indent + 1)?;
+                if !continuing.is_empty() {
+                    let gate_name = self.namer.call("loop_init");
+                    writeln!(
+                        self.out,
+                        "{}bool {} = true;",
+                        INDENT.repeat(indent),
+                        gate_name
+                    )?;
+                    writeln!(self.out, "{}while(true) {{", INDENT.repeat(indent))?;
+                    writeln!(
+                        self.out,
+                        "{}if (!{}) {{",
+                        INDENT.repeat(indent + 1),
+                        gate_name
+                    )?;
+                    for sta in continuing.iter() {
+                        self.write_stmt(module, sta, func_ctx, indent + 1)?;
+                    }
+                    writeln!(self.out, "{}}}", INDENT.repeat(indent + 1))?;
+                    writeln!(
+                        self.out,
+                        "{}{} = false;",
+                        INDENT.repeat(indent + 1),
+                        gate_name
+                    )?;
+                } else {
+                    writeln!(self.out, "{}while(true) {{", INDENT.repeat(indent))?;
                 }
 
+                for sta in body.iter() {
+                    self.write_stmt(module, sta, func_ctx, indent + 1)?;
+                }
                 writeln!(self.out, "{}}}", INDENT.repeat(indent))?
             }
-            Statement::Break => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
-                writeln!(self.out, "break;")?
-            }
-            Statement::Continue => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
-                writeln!(self.out, "continue;")?
-            }
+            Statement::Break => writeln!(self.out, "{}break;", INDENT.repeat(indent))?,
+            Statement::Continue => writeln!(self.out, "{}continue;", INDENT.repeat(indent))?,
             Statement::Barrier(barrier) => {
                 if barrier.contains(crate::Barrier::STORAGE) {
                     writeln!(

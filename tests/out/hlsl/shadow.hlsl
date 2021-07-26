@@ -38,22 +38,26 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
     uint i = 0u;
 
     float3 normal = normalize(fragmentinput_fs_main.raw_normal1);
+    bool loop_init = true;
     while(true) {
+        if (!loop_init) {
+        uint _expr40 = i;
+        i = (_expr40 + 1u);
+        }
+        loop_init = false;
         uint _expr12 = i;
         uint4 _expr14 = u_globals.num_lights;
         if ((_expr12 >= min(_expr14.x, c_max_lights))) {
             break;
         }
         uint _expr19 = i;
-        Light light = {transpose(float4x4(asfloat(s_lights.Load4(_expr19*4+0+0+0)), asfloat(s_lights.Load4(_expr19*4+0+0+16)), asfloat(s_lights.Load4(_expr19*4+0+0+32)), asfloat(s_lights.Load4(_expr19*4+0+0+48)))), asfloat(s_lights.Load4(_expr19*4+0+64)), asfloat(s_lights.Load4(_expr19*4+0+80))};
+        Light light = {transpose(float4x4(asfloat(s_lights.Load4(_expr19*96+0+0+0)), asfloat(s_lights.Load4(_expr19*96+0+0+16)), asfloat(s_lights.Load4(_expr19*96+0+0+32)), asfloat(s_lights.Load4(_expr19*96+0+0+48)))), asfloat(s_lights.Load4(_expr19*96+0+64)), asfloat(s_lights.Load4(_expr19*96+0+80))};
         uint _expr22 = i;
         const float _e25 = fetch_shadow(_expr22, mul(light.proj, fragmentinput_fs_main.position1));
         float3 light_dir = normalize((light.pos.xyz - fragmentinput_fs_main.position1.xyz));
         float diffuse = max(0.0, dot(normal, light_dir));
         float3 _expr34 = color;
         color = (_expr34 + ((_e25 * diffuse) * light.color.xyz));
-        uint _expr40 = i;
-        i = (_expr40 + 1u);
     }
     float3 _expr43 = color;
     return float4(_expr43, 1.0);
