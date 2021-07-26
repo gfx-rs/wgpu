@@ -161,9 +161,9 @@ enum MemoryArchitecture {
 
 #[derive(Debug, Clone, Copy)]
 struct PrivateCapabilities {
+    instance_flags: crate::InstanceFlags,
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
-    shader_debug_info: bool,
     heap_create_not_zeroed: bool,
 }
 

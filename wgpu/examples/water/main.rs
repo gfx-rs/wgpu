@@ -800,6 +800,6 @@ fn water() {
         base_test_parameters: framework::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
         tolerance: 5,
-        max_outliers: 300, // bounded by rpi4 on vk
+        max_outliers: 460, // bounded by DX12, then rpi4 on vk
     });
 }

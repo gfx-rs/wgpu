@@ -1,12 +1,23 @@
 use super::{conv, HResult as _};
-use std::{mem, sync::Arc};
+use std::{mem, sync::Arc, thread};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
-    um::{d3d12, winuser},
+    um::{d3d12, d3d12sdklayers, winuser},
 };
 
 impl Drop for super::Adapter {
     fn drop(&mut self) {
+        // Debug tracking alive objects
+        if !thread::panicking()
+            && self
+                .private_caps
+                .instance_flags
+                .contains(crate::InstanceFlags::VALIDATION)
+        {
+            unsafe {
+                self.report_live_objects();
+            }
+        }
         unsafe {
             self.raw.destroy();
         }
@@ -14,6 +25,19 @@ impl Drop for super::Adapter {
 }
 
 impl super::Adapter {
+    pub unsafe fn report_live_objects(&self) {
+        if let Ok(debug_device) = self
+            .raw
+            .cast::<d3d12sdklayers::ID3D12DebugDevice>()
+            .into_result()
+        {
+            debug_device.ReportLiveDeviceObjects(
+                d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
+            );
+            debug_device.destroy();
+        }
+    }
+
     #[allow(trivial_casts)]
     pub(super) fn expose(
         adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
@@ -98,6 +122,7 @@ impl super::Adapter {
         };
 
         let private_caps = super::PrivateCapabilities {
+            instance_flags,
             heterogeneous_resource_heaps: options.ResourceHeapTier
                 != d3d12::D3D12_RESOURCE_HEAP_TIER_1,
             memory_architecture: if features_architecture.UMA != 0 {
@@ -107,7 +132,6 @@ impl super::Adapter {
             } else {
                 super::MemoryArchitecture::NonUnified
             },
-            shader_debug_info: instance_flags.contains(crate::InstanceFlags::DEBUG),
             heap_create_not_zeroed: false, //TODO: winapi support for Options7
         };
 
