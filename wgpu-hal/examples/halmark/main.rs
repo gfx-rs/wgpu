@@ -232,7 +232,7 @@ impl<A: hal::Api> Example<A> {
                 write_mask: wgt::ColorWrites::default(),
             }],
         };
-        let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
+        let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc, None).unwrap() };
 
         let texture_data = vec![0xFFu8; 4];
 

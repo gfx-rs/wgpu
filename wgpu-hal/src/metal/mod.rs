@@ -57,6 +57,7 @@ impl crate::Api for Api {
     type BindGroup = BindGroup;
     type PipelineLayout = PipelineLayout;
     type ShaderModule = ShaderModule;
+    type PipelineCache = PipelineCache;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
 }
@@ -601,6 +602,8 @@ impl PipelineStageInfo {
         self.sized_bindings.extend_from_slice(&other.sized_bindings);
     }
 }
+
+pub struct PipelineCache;
 
 pub struct RenderPipeline {
     raw: mtl::RenderPipelineState,

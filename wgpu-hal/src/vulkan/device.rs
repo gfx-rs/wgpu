@@ -1120,9 +1120,35 @@ impl crate::Device<super::Api> for super::Device {
         let _ = self.shared.raw.destroy_shader_module(module.raw, None);
     }
 
+    unsafe fn create_empty_pipeline_cache(&self) -> super::PipelineCache {
+        super::PipelineCache {
+            raw: vk::PipelineCache::null(),
+        }
+    }
+
+    unsafe fn create_pipeline_cache(
+        &self,
+        data: &[u8],
+    ) -> Result<super::PipelineCache, crate::DeviceError> {
+        let raw = self
+            .shared
+            .raw
+            .create_pipeline_cache(
+                &vk::PipelineCacheCreateInfo::builder().initial_data(data),
+                None,
+            )
+            .map_err(crate::DeviceError::from)?;
+        Ok(super::PipelineCache { raw })
+    }
+
+    unsafe fn destroy_pipeline_cache(&self, cache: super::PipelineCache) {
+        self.shared.raw.destroy_pipeline_cache(cache.raw, None)
+    }
+
     unsafe fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
+        cache: Option<&super::PipelineCache>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let dynamic_states = [
             vk::DynamicState::VIEWPORT,
@@ -1320,7 +1346,11 @@ impl crate::Device<super::Api> for super::Device {
         let mut raw_vec = self
             .shared
             .raw
-            .create_graphics_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+            .create_graphics_pipelines(
+                cache.map(|c| c.raw).unwrap_or(vk::PipelineCache::null()),
+                &vk_infos,
+                None,
+            )
             .map_err(|(_, e)| crate::DeviceError::from(e))?;
 
         let raw = raw_vec.pop().unwrap();

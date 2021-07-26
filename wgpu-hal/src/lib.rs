@@ -156,6 +156,7 @@ pub trait Api: Clone + Sized {
     type BindGroup: fmt::Debug + Send + Sync;
     type PipelineLayout: Send + Sync;
     type ShaderModule: fmt::Debug + Send + Sync;
+    type PipelineCache: Send + Sync;
     type RenderPipeline: Send + Sync;
     type ComputePipeline: Send + Sync;
 }
@@ -267,9 +268,13 @@ pub trait Device<A: Api>: Send + Sync {
         shader: ShaderInput,
     ) -> Result<A::ShaderModule, ShaderError>;
     unsafe fn destroy_shader_module(&self, module: A::ShaderModule);
+    unsafe fn create_empty_pipeline_cache(&self) -> A::PipelineCache;
+    unsafe fn create_pipeline_cache(&self, data: &[u8]) -> Result<A::PipelineCache, DeviceError>;
+    unsafe fn destroy_pipeline_cache(&self, cache: A::PipelineCache);
     unsafe fn create_render_pipeline(
         &self,
         desc: &RenderPipelineDescriptor<A>,
+        cache: Option<&A::PipelineCache>,
     ) -> Result<A::RenderPipeline, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: A::RenderPipeline);
     unsafe fn create_compute_pipeline(

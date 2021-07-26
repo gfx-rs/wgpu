@@ -1106,6 +1106,23 @@ impl crate::Device<super::Api> for super::Device {
         // just drop
     }
 
+    unsafe fn create_empty_pipeline_cache(&self) -> super::PipelineCache {
+        log::warn!("Pipeline caches are not supported on Dx12.");
+        super::PipelineCache
+    }
+
+    unsafe fn create_pipeline_cache(
+        &self,
+        _: &[u8],
+    ) -> Result<super::PipelineCache, crate::DeviceError> {
+        log::warn!("Pipeline caches are not supported on Dx12.");
+        Ok(super::PipelineCache)
+    }
+
+    unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {
+        log::warn!("Pipeline caches are not supported on Dx12.");
+    }
+
     unsafe fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,

@@ -1,5 +1,6 @@
 use super::conv;
 use crate::auxil::map_naga_stage;
+use crate::DeviceError;
 use glow::HasContext;
 use std::{convert::TryInto, iter, ptr, sync::Arc};
 
@@ -855,10 +856,29 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
 
+    unsafe fn create_empty_pipeline_cache(&self) -> super::PipelineCache {
+        log::warn!("Pipeline caches are not supported on GLes.");
+        super::PipelineCache
+    }
+
+    unsafe fn create_pipeline_cache(&self, _: &[u8]) -> Result<super::PipelineCache, DeviceError> {
+        log::warn!("Pipeline caches are not supported on GLes.");
+        Ok(super::PipelineCache)
+    }
+
+    unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {
+        log::warn!("Pipeline caches are not supported on GLes.");
+    }
+
     unsafe fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
+        cache: Option<&super::PipelineCache>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        if cache.is_some() {
+            log::warn!("Pipeline caches are not supported on GLes.")
+        }
+
         let shaders = iter::once((naga::ShaderStage::Vertex, &desc.vertex_stage)).chain(
             desc.fragment_stage
                 .as_ref()

@@ -33,6 +33,7 @@ impl crate::Api for Api {
     type BindGroup = Resource;
     type PipelineLayout = Resource;
     type ShaderModule = Resource;
+    type PipelineCache = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
 }
@@ -179,9 +180,18 @@ impl crate::Device<Api> for Context {
         Ok(Resource)
     }
     unsafe fn destroy_shader_module(&self, module: Resource) {}
+    unsafe fn create_empty_pipeline_cache(&self) -> Resource {
+        Resource
+    }
+    unsafe fn create_pipeline_cache(&self, data: &[u8]) -> Result<Resource, crate::DeviceError> {
+        Ok(Resource)
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: Resource) {}
+
     unsafe fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<Api>,
+        cache: Option<&Resource>,
     ) -> Result<Resource, crate::PipelineError> {
         Ok(Resource)
     }

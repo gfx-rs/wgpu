@@ -104,6 +104,7 @@ impl crate::Api for Api {
     type BindGroup = BindGroup;
     type PipelineLayout = PipelineLayout;
     type ShaderModule = ShaderModule;
+    type PipelineCache = PipelineCache;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
 }
@@ -173,6 +174,8 @@ pub struct Queue {
     zero_buffer: glow::Buffer,
     temp_query_results: Vec<u64>,
 }
+
+pub struct PipelineCache;
 
 #[derive(Debug)]
 pub struct Buffer {

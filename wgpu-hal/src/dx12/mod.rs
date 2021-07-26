@@ -75,6 +75,7 @@ impl crate::Api for Api {
     type BindGroup = BindGroup;
     type PipelineLayout = PipelineLayout;
     type ShaderModule = ShaderModule;
+    type PipelineCache = PipelineCache;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
 }
@@ -494,6 +495,8 @@ pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
 }
+
+pub struct PipelineCache;
 
 pub struct RenderPipeline {
     raw: native::PipelineState,

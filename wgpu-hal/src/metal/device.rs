@@ -682,10 +682,31 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
 
+    unsafe fn create_empty_pipeline_cache(&self) -> super::PipelineCache {
+        log::warn!("Pipeline caches are not supported on Metal.");
+        super::PipelineCache
+    }
+
+    unsafe fn create_pipeline_cache(
+        &self,
+        data: &[u8],
+    ) -> Result<super::PipelineCache, crate::DeviceError> {
+        log::warn!("Pipeline caches are not supported on Metal.");
+        Ok(super::PipelineCache)
+    }
+
+    unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {
+        log::warn!("Pipeline caches are not supported on Metal.");
+    }
+
     unsafe fn create_render_pipeline(
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
+        cache: Option<&super::PipelineCache>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        if cache.is_some() {
+            log::warn!("Pipeline caches are not supported on Metal.")
+        }
         let descriptor = mtl::RenderPipelineDescriptor::new();
         let (primitive_class, raw_primitive_type) =
             conv::map_primitive_topology(desc.primitive.topology);
