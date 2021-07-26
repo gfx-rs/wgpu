@@ -535,6 +535,29 @@ impl super::Device {
             config: config.clone(),
         })
     }
+
+    /// The image handle and its memory are not handled by wgpu-hal
+    ///
+    /// # Safety
+    ///
+    /// - `vk_image` must be created respecting `desc` and `raw_flags`
+    /// - The application must manually destroy the texture handle. This can be done inside the
+    ///   `Drop` impl of `drop_guard`.
+    pub unsafe fn texture_from_raw(
+        vk_image: vk::Image,
+        desc: &crate::TextureDescriptor,
+        drop_guard: super::DropGuard,
+    ) -> super::Texture {
+        super::Texture {
+            raw: vk_image,
+            drop_guard: Some(drop_guard),
+            block: None,
+            usage: desc.usage,
+            aspects: crate::FormatAspects::from(desc.format),
+            format_info: desc.format.describe(),
+            raw_flags: vk::ImageCreateFlags::empty(),
+        }
+    }
 }
 
 impl crate::Device<super::Api> for super::Device {
@@ -708,6 +731,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Texture {
             raw,
+            drop_guard: None,
             block: Some(block),
             usage: desc.usage,
             aspects: crate::FormatAspects::from(desc.format),
@@ -716,10 +740,12 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        self.shared.raw.destroy_image(texture.raw, None);
-        self.mem_allocator
-            .lock()
-            .dealloc(&*self.shared, texture.block.unwrap());
+        if texture.drop_guard.is_none() {
+            self.shared.raw.destroy_image(texture.raw, None);
+        }
+        if let Some(block) = texture.block {
+            self.mem_allocator.lock().dealloc(&*self.shared, block);
+        }
     }
 
     unsafe fn create_texture_view(

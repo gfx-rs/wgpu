@@ -30,7 +30,7 @@ unsafe impl Sync for PhysicalDeviceFeatures {}
 
 impl PhysicalDeviceFeatures {
     /// Add the members of `self` into `info.enabled_features` and its `p_next` chain.
-    fn add_to_device_create_builder<'a>(
+    pub fn add_to_device_create_builder<'a>(
         &'a mut self,
         mut info: vk::DeviceCreateInfoBuilder<'a>,
     ) -> vk::DeviceCreateInfoBuilder<'a> {
@@ -592,7 +592,7 @@ impl super::InstanceShared {
 }
 
 impl super::Instance {
-    pub(super) fn expose_adapter(
+    pub fn expose_adapter(
         &self,
         phd: vk::PhysicalDevice,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
@@ -723,28 +723,51 @@ impl super::Instance {
     }
 }
 
-impl crate::Adapter<super::Api> for super::Adapter {
-    unsafe fn open(
+impl super::Adapter {
+    pub fn required_device_extensions(&self, features: wgt::Features) -> Vec<&'static CStr> {
+        let (supported_extensions, unsupported_extensions) = self
+            .phd_capabilities
+            .get_required_extensions(features)
+            .iter()
+            .partition::<Vec<&CStr>, _>(|&&extension| {
+                self.phd_capabilities.supports_extension(extension)
+            });
+
+        if !unsupported_extensions.is_empty() {
+            log::warn!("Missing extensions: {:?}", unsupported_extensions);
+        }
+
+        log::debug!("Supported extensions: {:?}", supported_extensions);
+        supported_extensions
+    }
+
+    /// `features` must be the same features used to create `enabled_extensions`.
+    pub fn physical_device_features(
         &self,
+        enabled_extensions: &[&'static CStr],
         features: wgt::Features,
+    ) -> PhysicalDeviceFeatures {
+        PhysicalDeviceFeatures::from_extensions_and_requested_features(
+            self.phd_capabilities.properties.api_version,
+            enabled_extensions,
+            features,
+            self.downlevel_flags,
+            &self.private_caps,
+        )
+    }
+
+    /// # Safety
+    ///
+    /// - `raw_device` must be created from this adapter.
+    /// - `raw_device` must be created using `family_index`, `enabled_extensions` and `physical_device_features()`
+    /// - `enabled_extensions` must be a superset of `required_device_extensions()`.
+    pub unsafe fn device_from_raw(
+        &self,
+        raw_device: ash::Device,
+        enabled_extensions: &[&'static CStr],
+        family_index: u32,
+        queue_index: u32,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let enabled_extensions = {
-            let (supported_extensions, unsupported_extensions) = self
-                .phd_capabilities
-                .get_required_extensions(features)
-                .iter()
-                .partition::<Vec<&CStr>, _>(|&&extension| {
-                    self.phd_capabilities.supports_extension(extension)
-                });
-
-            if !unsupported_extensions.is_empty() {
-                log::warn!("Missing extensions: {:?}", unsupported_extensions);
-            }
-
-            log::debug!("Supported extensions: {:?}", supported_extensions);
-            supported_extensions
-        };
-
         let mem_properties = self
             .instance
             .raw
@@ -758,39 +781,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 u
             }
         });
-
-        // Create device
-        let family_index = 0; //TODO
-        let raw_device = {
-            let family_info = vk::DeviceQueueCreateInfo::builder()
-                .queue_family_index(family_index)
-                .queue_priorities(&[1.0])
-                .build();
-            let family_infos = [family_info];
-
-            let str_pointers = enabled_extensions
-                .iter()
-                .map(|&s| {
-                    // Safe because `enabled_extensions` entries have static lifetime.
-                    s.as_ptr()
-                })
-                .collect::<Vec<_>>();
-
-            let mut enabled_phd_features =
-                PhysicalDeviceFeatures::from_extensions_and_requested_features(
-                    self.phd_capabilities.properties.api_version,
-                    &enabled_extensions,
-                    features,
-                    self.downlevel_flags,
-                    &self.private_caps,
-                );
-            let pre_info = vk::DeviceCreateInfo::builder()
-                .queue_create_infos(&family_infos)
-                .enabled_extension_names(&str_pointers);
-            let info = enabled_phd_features.add_to_device_create_builder(pre_info);
-
-            self.instance.raw.create_device(self.raw, &info, None)?
-        };
 
         let swapchain_fn = khr::Swapchain::new(&self.instance.raw, &raw_device);
 
@@ -841,7 +831,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         };
 
         log::info!("Private capabilities: {:?}", self.private_caps);
-        let raw_queue = raw_device.get_device_queue(family_index, 0);
+        let raw_queue = raw_device.get_device_queue(family_index, queue_index);
 
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
@@ -908,6 +898,46 @@ impl crate::Adapter<super::Api> for super::Adapter {
         };
 
         Ok(crate::OpenDevice { device, queue })
+    }
+}
+
+impl crate::Adapter<super::Api> for super::Adapter {
+    unsafe fn open(
+        &self,
+        features: wgt::Features,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        let enabled_extensions = self.required_device_extensions(features);
+        let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
+
+        let family_index = 0; //TODO
+        let family_info = vk::DeviceQueueCreateInfo::builder()
+            .queue_family_index(family_index)
+            .queue_priorities(&[1.0])
+            .build();
+        let family_infos = [family_info];
+
+        let str_pointers = enabled_extensions
+            .iter()
+            .map(|&s| {
+                // Safe because `enabled_extensions` entries have static lifetime.
+                s.as_ptr()
+            })
+            .collect::<Vec<_>>();
+
+        let pre_info = vk::DeviceCreateInfo::builder()
+            .queue_create_infos(&family_infos)
+            .enabled_extension_names(&str_pointers);
+        let info = enabled_phd_features
+            .add_to_device_create_builder(pre_info)
+            .build();
+        let raw_device = self.instance.raw.create_device(self.raw, &info, None)?;
+
+        self.device_from_raw(
+            raw_device,
+            &enabled_extensions,
+            family_info.queue_family_index,
+            0,
+        )
     }
 
     unsafe fn texture_format_capabilities(
