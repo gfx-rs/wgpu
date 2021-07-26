@@ -6,8 +6,6 @@ pub(crate) use web::{BufferMappedRange, Context};
 #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
 mod direct;
 #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
-mod error;
-
 #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
 pub(crate) use direct::{BufferMappedRange, Context};
 

@@ -1,9 +1,8 @@
 use crate::{
-    backend::{error::ContextError, native_gpu_future},
-    AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    backend::native_gpu_future, AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor,
+    BindingResource, BufferBinding, CommandEncoderDescriptor, ComputePassDescriptor,
+    ComputePipelineDescriptor, DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode,
+    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
     SwapChainStatus, TextureDescriptor, TextureFormat, TextureViewDescriptor,
 };
@@ -144,7 +143,7 @@ impl Context {
         label: Label,
         string: &'static str,
     ) {
-        let error = ContextError {
+        let error = wgc::error::ContextError {
             string,
             cause: Box::new(cause),
             label: label.unwrap_or_default().to_string(),
@@ -185,6 +184,19 @@ impl Context {
         string: &'static str,
     ) -> ! {
         panic!("Error in {}: {}", string, cause);
+    }
+
+    fn format_error(&self, err: &(impl Error + 'static)) -> String {
+        let global = self.global();
+        let mut err_descs = vec![wgc::error::format_pretty_any(global, err)];
+
+        let mut source_opt = err.source();
+        while let Some(source) = source_opt {
+            err_descs.push(wgc::error::format_pretty_any(global, source));
+            source_opt = source.source();
+        }
+
+        format!("Validation Error\n\nCaused by:\n{}", err_descs.join(""))
     }
 }
 
