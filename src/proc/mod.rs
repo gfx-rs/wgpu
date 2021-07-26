@@ -101,11 +101,15 @@ impl super::TypeInner {
                 kind: _,
                 width,
             } => (size as u8 * width) as u32,
+            // matrices are treated as arrays of aligned columns
             Self::Matrix {
                 columns,
                 rows,
                 width,
-            } => (columns as u8 * rows as u8 * width) as u32,
+            } => {
+                let aligned_rows = if rows > crate::VectorSize::Bi { 4 } else { 2 };
+                columns as u32 * aligned_rows * width as u32
+            }
             Self::Pointer { .. } | Self::ValuePointer { .. } => POINTER_SPAN,
             Self::Array {
                 base: _,
@@ -317,4 +321,18 @@ impl super::SwizzleComponent {
             _ => Self::W,
         }
     }
+}
+
+#[test]
+fn test_matrix_size() {
+    let constants = crate::Arena::new();
+    assert_eq!(
+        crate::TypeInner::Matrix {
+            columns: crate::VectorSize::Tri,
+            rows: crate::VectorSize::Tri,
+            width: 4
+        }
+        .span(&constants),
+        48
+    );
 }
