@@ -9,12 +9,13 @@
 mod conv;
 mod help;
 mod keywords;
+mod storage;
 mod writer;
 
 use std::fmt::Error as FmtError;
 use thiserror::Error;
 
-pub use writer::Writer;
+use crate::proc;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -68,6 +69,9 @@ impl crate::ImageDimension {
         }
     }
 }
+
+/// Shorthand result used internally by the backend
+type BackendResult = Result<(), Error>;
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -137,4 +141,19 @@ pub enum Error {
     Unimplemented(String), // TODO: Error used only during development
     #[error("{0}")]
     Custom(String),
+}
+
+pub struct Writer<'a, W> {
+    out: W,
+    names: crate::FastHashMap<proc::NameKey, String>,
+    namer: proc::Namer,
+    /// HLSL backend options
+    options: &'a Options,
+    /// Information about entry point arguments wrapped into structure
+    ep_inputs: Vec<Option<writer::EntryPointBinding>>,
+    /// Set of expressions that have associated temporary variables
+    named_expressions: crate::NamedExpressions,
+    wrapped_array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
+    wrapped_image_queries: crate::FastHashSet<help::WrappedImageQuery>,
+    temp_access_chain: Vec<storage::SubAccess>,
 }
