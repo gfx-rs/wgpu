@@ -45,7 +45,7 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
             break;
         }
         uint _expr19 = i;
-        Light light = {float4x4(asfloat(s_lights.Load4(_expr19*4+0+0+0)), asfloat(s_lights.Load4(_expr19*4+0+0+16)), asfloat(s_lights.Load4(_expr19*4+0+0+32)), asfloat(s_lights.Load4(_expr19*4+0+0+48))), asfloat(s_lights.Load4(_expr19*4+0+64)), asfloat(s_lights.Load4(_expr19*4+0+80))};
+        Light light = {transpose(float4x4(asfloat(s_lights.Load4(_expr19*4+0+0+0)), asfloat(s_lights.Load4(_expr19*4+0+0+16)), asfloat(s_lights.Load4(_expr19*4+0+0+32)), asfloat(s_lights.Load4(_expr19*4+0+0+48)))), asfloat(s_lights.Load4(_expr19*4+0+64)), asfloat(s_lights.Load4(_expr19*4+0+80))};
         uint _expr22 = i;
         const float _e25 = fetch_shadow(_expr22, mul(light.proj, fragmentinput_fs_main.position1));
         float3 light_dir = normalize((light.pos.xyz - fragmentinput_fs_main.position1.xyz));

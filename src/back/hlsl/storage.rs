@@ -1,3 +1,8 @@
+//! Logic related to `ByteAddressBuffer` operations.
+//!
+//! HLSL backend uses byte address buffers for all storage buffers in IR.
+//! Matrices have to be transposed, because HLSL syntax implies row majority.
+
 use super::{
     super::{FunctionCtx, INDENT},
     BackendResult, Error,
@@ -116,22 +121,22 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             } => {
                 write!(
                     self.out,
-                    "{}{}x{}(",
+                    "transpose({}{}x{}(",
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    columns as u8,
                     rows as u8,
+                    columns as u8,
                 )?;
-                let row_stride = width as u32 * rows as u32;
-                let iter = (0..columns as u32).map(|i| {
+                let row_stride = width as u32 * columns as u32;
+                let iter = (0..rows as u32).map(|i| {
                     let ty_inner = crate::TypeInner::Vector {
-                        size: rows,
+                        size: columns,
                         kind: crate::ScalarKind::Float,
                         width,
                     };
                     (TypeResolution::Value(ty_inner), i * row_stride)
                 });
                 self.write_storage_load_sequence(module, var_handle, iter, func_ctx)?;
-                write!(self.out, ")")?;
+                write!(self.out, "))")?;
             }
             crate::TypeInner::Array {
                 base,
@@ -254,23 +259,23 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 let depth = indent + 1;
                 write!(
                     self.out,
-                    "{}{}{}x{} {}{} = ",
+                    "{}{}{}x{} {}{} = transpose(",
                     INDENT.repeat(indent + 1),
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    columns as u8,
                     rows as u8,
+                    columns as u8,
                     STORE_TEMP_NAME,
                     depth,
                 )?;
                 self.write_store_value(module, &value, func_ctx)?;
-                writeln!(self.out, ";")?;
+                writeln!(self.out, ");")?;
                 // then iterate the stores
-                let row_stride = width as u32 * rows as u32;
-                for i in 0..columns as u32 {
+                let row_stride = width as u32 * columns as u32;
+                for i in 0..rows as u32 {
                     self.temp_access_chain
                         .push(SubAccess::Offset(i * row_stride));
                     let ty_inner = crate::TypeInner::Vector {
-                        size: rows,
+                        size: columns,
                         kind: crate::ScalarKind::Float,
                         width,
                     };
