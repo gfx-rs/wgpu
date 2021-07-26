@@ -3,6 +3,9 @@ use std::sync::Arc;
 
 // https://webgl2fundamentals.org/webgl/lessons/webgl-data-textures.html
 
+const GL_UNMASKED_VENDOR_WEBGL: u32 = 0x9245;
+const GL_UNMASKED_RENDERER_WEBGL: u32 = 0x9246;
+
 impl super::Adapter {
     /// According to the OpenGL specification, the version information is
     /// expected to follow the following syntax:
@@ -161,16 +164,28 @@ impl super::Adapter {
     }
 
     pub(super) unsafe fn expose(gl: glow::Context) -> Option<crate::ExposedAdapter<super::Api>> {
-        let vendor = gl.get_parameter_string(glow::VENDOR);
-        let renderer = gl.get_parameter_string(glow::RENDERER);
+        let extensions = gl.supported_extensions();
+
+        let (vendor_const, renderer_const) = if extensions.contains("WEBGL_debug_renderer_info") {
+            (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
+        } else {
+            (glow::VENDOR, glow::RENDERER)
+        };
+        let (vendor, renderer) = {
+            let vendor = gl.get_parameter_string(vendor_const);
+            let renderer = gl.get_parameter_string(renderer_const);
+
+            (vendor, renderer)
+        };
         let version = gl.get_parameter_string(glow::VERSION);
+
         log::info!("Vendor: {}", vendor);
         log::info!("Renderer: {}", renderer);
         log::info!("Version: {}", version);
 
-        let ver = Self::parse_version(&version).ok()?;
-        let extensions = gl.supported_extensions();
         log::debug!("Extensions: {:#?}", extensions);
+
+        let ver = Self::parse_version(&version).ok()?;
 
         let shading_language_version = {
             let sl_version = gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION);
@@ -293,6 +308,22 @@ impl super::Adapter {
             ver >= (3, 1),
         );
 
+        let mut workarounds = super::Workarounds::empty();
+        let r = renderer.to_lowercase();
+        // Check for Mesa sRGB clear bug. See
+        // [`super::PrivateCapabilities::MESA_I915_SRGB_SHADER_CLEAR`].
+        if r.contains("mesa")
+            && r.contains("intel")
+            && r.split(&[' ', '(', ')'][..])
+                .any(|substr| substr.len() == 3 && substr.chars().nth(2) == Some('l'))
+        {
+            log::warn!(
+                "Detected skylake derivative running on mesa i915. Clears to srgb textures will \
+                use manual shader clears."
+            );
+            workarounds.set(super::Workarounds::MESA_I915_SRGB_SHADER_CLEAR, true);
+        }
+
         let downlevel_defaults = wgt::DownlevelLimits {};
 
         Some(crate::ExposedAdapter {
@@ -300,6 +331,7 @@ impl super::Adapter {
                 shared: Arc::new(super::AdapterShared {
                     context: gl,
                     private_caps,
+                    workarounds,
                     shading_language_version,
                 }),
             },
@@ -327,6 +359,34 @@ impl super::Adapter {
             },
         })
     }
+
+    unsafe fn create_shader_clear_program(
+        gl: &glow::Context,
+    ) -> (glow::Program, glow::UniformLocation) {
+        let program = gl
+            .create_program()
+            .expect("Could not create shader program");
+        let vertex = gl
+            .create_shader(glow::VERTEX_SHADER)
+            .expect("Could not create shader");
+        gl.shader_source(vertex, include_str!("./shader_clear.vert"));
+        gl.compile_shader(vertex);
+        let fragment = gl
+            .create_shader(glow::FRAGMENT_SHADER)
+            .expect("Could not create shader");
+        gl.shader_source(fragment, include_str!("./shader_clear.frag"));
+        gl.compile_shader(fragment);
+        gl.attach_shader(program, vertex);
+        gl.attach_shader(program, fragment);
+        gl.link_program(program);
+        let color_uniform_location = gl
+            .get_uniform_location(program, "color")
+            .expect("Could not find color uniform in shader clear shader");
+        gl.delete_shader(vertex);
+        gl.delete_shader(fragment);
+
+        (program, color_uniform_location)
+    }
 }
 
 impl crate::Adapter<super::Api> for super::Adapter {
@@ -349,6 +409,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let zeroes = vec![0u8; super::ZERO_BUFFER_SIZE];
         gl.buffer_data_u8_slice(glow::COPY_READ_BUFFER, &zeroes, glow::STATIC_DRAW);
 
+        // Compile the shader program we use for doing manual clears to work around Mesa fastclear
+        // bug.
+        let (shader_clear_program, shader_clear_program_color_uniform_location) =
+            Self::create_shader_clear_program(gl);
+
         Ok(crate::OpenDevice {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
@@ -365,8 +430,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 copy_fbo: gl
                     .create_framebuffer()
                     .map_err(|_| crate::DeviceError::OutOfMemory)?,
+                shader_clear_program,
+                shader_clear_program_color_uniform_location,
                 zero_buffer,
                 temp_query_results: Vec::new(),
+                draw_buffer_count: 1,
             },
         })
     }

@@ -444,10 +444,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 self.cmd_buffer
                     .commands
                     .push(match cat.target.view.sample_type {
-                        wgt::TextureSampleType::Float { .. } => C::ClearColorF(
-                            i as u32,
-                            [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
-                        ),
+                        wgt::TextureSampleType::Float { .. } => C::ClearColorF {
+                            draw_buffer: i as u32,
+                            color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
+                            is_srgb: cat.target.view.format.describe().srgb,
+                        },
                         wgt::TextureSampleType::Depth => unimplemented!(),
                         wgt::TextureSampleType::Uint => C::ClearColorU(
                             i as u32,

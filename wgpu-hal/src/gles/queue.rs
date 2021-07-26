@@ -26,6 +26,36 @@ fn is_3d_target(target: super::BindTarget) -> bool {
 }
 
 impl super::Queue {
+    /// Performs a manual shader clear, used as a workaround for a clearing bug on mesa
+    unsafe fn perform_shader_clear(&self, draw_buffer: u32, color: [f32; 4]) {
+        let gl = &self.shared.context;
+
+        gl.use_program(Some(self.shader_clear_program));
+        gl.uniform_4_f32(
+            Some(&self.shader_clear_program_color_uniform_location),
+            color[0],
+            color[1],
+            color[2],
+            color[3],
+        );
+        gl.disable(glow::DEPTH_TEST);
+        gl.disable(glow::STENCIL_TEST);
+        gl.disable(glow::SCISSOR_TEST);
+        gl.disable(glow::BLEND);
+        gl.disable(glow::CULL_FACE);
+        gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
+        gl.draw_arrays(glow::TRIANGLES, 0, 3);
+
+        // Reset the draw buffers to what they were before the clear
+        let indices = (0..self.draw_buffer_count as u32)
+            .map(|i| glow::COLOR_ATTACHMENT0 + i)
+            .collect::<ArrayVec<_, { crate::MAX_COLOR_TARGETS }>>();
+        gl.draw_buffers(&indices);
+        for draw_buffer in 0..self.draw_buffer_count as u32 {
+            gl.disable_draw_buffer(glow::BLEND, draw_buffer);
+        }
+    }
+
     unsafe fn reset_state(&self) {
         let gl = &self.shared.context;
         gl.use_program(None);
@@ -551,6 +581,7 @@ impl super::Queue {
                 gl.invalidate_framebuffer(glow::DRAW_FRAMEBUFFER, list);
             }
             C::SetDrawColorBuffers(count) => {
+                self.draw_buffer_count = count;
                 let indices = (0..count as u32)
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
                     .collect::<ArrayVec<_, { crate::MAX_COLOR_TARGETS }>>();
@@ -559,8 +590,21 @@ impl super::Queue {
                     gl.disable_draw_buffer(glow::BLEND, draw_buffer);
                 }
             }
-            C::ClearColorF(draw_buffer, ref color) => {
-                gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color);
+            C::ClearColorF {
+                draw_buffer,
+                ref color,
+                is_srgb,
+            } => {
+                if self
+                    .shared
+                    .workarounds
+                    .contains(super::Workarounds::MESA_I915_SRGB_SHADER_CLEAR)
+                    && is_srgb
+                {
+                    self.perform_shader_clear(draw_buffer, *color);
+                } else {
+                    gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color);
+                }
             }
             C::ClearColorU(draw_buffer, ref color) => {
                 gl.clear_buffer_u32_slice(glow::COLOR, draw_buffer, color);
