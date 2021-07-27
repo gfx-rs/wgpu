@@ -506,6 +506,14 @@ bitflags!(
 );
 
 bitflags!(
+    /// Pipeline layout creation flags.
+    pub struct PipelineLayoutFlags: u32 {
+        /// Include support for base vertex/instance drawing.
+        const BASE_VERTEX_INSTANCE = 0x1;
+    }
+);
+
+bitflags!(
     /// Texture format capability flags.
     pub struct TextureFormatCapabilities: u32 {
         /// Format can be sampled.
@@ -785,6 +793,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
 #[derive(Clone, Debug)]
 pub struct PipelineLayoutDescriptor<'a, A: Api> {
     pub label: Label<'a>,
+    pub flags: PipelineLayoutFlags,
     pub bind_group_layouts: &'a [&'a A::BindGroupLayout],
     pub push_constant_ranges: &'a [wgt::PushConstantRange],
 }

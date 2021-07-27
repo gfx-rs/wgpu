@@ -1723,6 +1723,7 @@ impl<A: HalApi> Device<A> {
             .collect::<Vec<_>>();
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.borrow_option(),
+            flags: hal::PipelineLayoutFlags::BASE_VERTEX_INSTANCE,
             bind_group_layouts: &bgl_vec,
             push_constant_ranges: desc.push_constant_ranges.as_ref(),
         };

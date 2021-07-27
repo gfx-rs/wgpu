@@ -459,8 +459,7 @@ dependencies = [
 [[package]]
 name = "d3d12"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "091ed1b25fe47c7ff129fc440c23650b6114f36aa00bc7212cc8041879294428"
+source = "git+https://github.com/gfx-rs/d3d12-rs?rev=79f29c8#79f29c8809d3dc4f97785815567e5efda20e639a"
 dependencies = [
  "bitflags",
  "libloading 0.7.0",
@@ -965,7 +964,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.5.0"
-source = "git+https://github.com/gfx-rs/naga?rev=e97c8f9#e97c8f944121a58bbc908ecb64bdf97d4ada039d"
+source = "git+https://github.com/gfx-rs/naga?rev=a7ac13a#a7ac13a61d63620b8a0821db9176ed467fc282f7"
 dependencies = [
  "bit-set",
  "bitflags",

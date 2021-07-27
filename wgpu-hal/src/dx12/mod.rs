@@ -280,7 +280,10 @@ struct PassResolve {
 #[derive(Clone, Copy)]
 enum RootElement {
     Empty,
-    //Constant(u32),
+    SpecialConstantBuffer {
+        base_vertex: i32,
+        base_instance: u32,
+    },
     /// Descriptor table.
     Table(native::GpuDescriptor),
     /// Descriptor for a buffer that has dynamic offset.
@@ -300,7 +303,7 @@ enum PassKind {
 struct PassState {
     has_label: bool,
     resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_TARGETS }>,
-    signature: native::RootSignature,
+    layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
     vertex_buffers: [d3d12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
     dirty_vertex_buffers: usize,
@@ -312,7 +315,11 @@ impl PassState {
         PassState {
             has_label: false,
             resolves: ArrayVec::new(),
-            signature: native::RootSignature::null(),
+            layout: PipelineLayoutShared {
+                signature: native::RootSignature::null(),
+                total_root_elements: 0,
+                special_constants_root_index: None,
+            },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
             vertex_buffers: [unsafe { mem::zeroed() }; crate::MAX_VERTEX_BUFFERS],
             dirty_vertex_buffers: 0,
@@ -468,7 +475,7 @@ bitflags::bitflags! {
     }
 }
 
-// Index into the root signature.
+// Element (also known as parameter) index into the root signature.
 type RootIndex = u32;
 
 struct BindGroupInfo {
@@ -477,17 +484,23 @@ struct BindGroupInfo {
     dynamic_buffers: Vec<BufferViewKind>,
 }
 
+#[derive(Clone)]
+struct PipelineLayoutShared {
+    signature: native::RootSignature,
+    total_root_elements: RootIndex,
+    special_constants_root_index: Option<RootIndex>,
+}
+
+unsafe impl Send for PipelineLayoutShared {}
+unsafe impl Sync for PipelineLayoutShared {}
+
 pub struct PipelineLayout {
-    raw: native::RootSignature,
+    shared: PipelineLayoutShared,
     // Storing for each associated bind group, which tables we created
     // in the root signature. This is required for binding descriptor sets.
     bind_group_infos: ArrayVec<BindGroupInfo, { crate::MAX_BIND_GROUPS }>,
-    total_root_elements: RootIndex,
     naga_options: naga::back::hlsl::Options,
 }
-
-unsafe impl Send for PipelineLayout {}
-unsafe impl Sync for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct ShaderModule {
@@ -497,8 +510,7 @@ pub struct ShaderModule {
 
 pub struct RenderPipeline {
     raw: native::PipelineState,
-    signature: native::RootSignature,
-    total_root_elements: RootIndex,
+    layout: PipelineLayoutShared,
     topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
 }
@@ -508,8 +520,7 @@ unsafe impl Sync for RenderPipeline {}
 
 pub struct ComputePipeline {
     raw: native::PipelineState,
-    signature: native::RootSignature,
-    total_root_elements: RootIndex,
+    layout: PipelineLayoutShared,
 }
 
 unsafe impl Send for ComputePipeline {}

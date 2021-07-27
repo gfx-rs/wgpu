@@ -143,7 +143,7 @@ fn draw_vertex_offset() {
     initialize_test(
         TestParameters::default()
             .test_features()
-            .backend_failure(wgpu::Backends::DX12 | wgpu::Backends::DX11),
+            .backend_failure(wgpu::Backends::DX11),
         |ctx| {
             pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
                 cmb.draw(0..3, 0..1);
@@ -167,7 +167,7 @@ fn draw_instanced_offset() {
     initialize_test(
         TestParameters::default()
             .test_features()
-            .backend_failure(wgpu::Backends::DX12 | wgpu::Backends::DX11),
+            .backend_failure(wgpu::Backends::DX11),
         |ctx| {
             pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
                 cmb.draw(0..3, 0..1);
