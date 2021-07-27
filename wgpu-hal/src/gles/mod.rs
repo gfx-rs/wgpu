@@ -66,7 +66,7 @@ mod device;
 mod queue;
 
 #[cfg(not(target_arch = "wasm32"))]
-use self::egl::{Instance, Surface};
+use self::egl::{AdapterContext, Instance, Surface};
 
 use arrayvec::ArrayVec;
 
@@ -161,7 +161,7 @@ struct TextureFormatDesc {
 }
 
 struct AdapterShared {
-    context: glow::Context,
+    context: AdapterContext,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,

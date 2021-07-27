@@ -1,7 +1,7 @@
 use super::Command as C;
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use std::{mem, ops::Range, slice};
+use std::{mem, ops::Range, slice, sync::Arc};
 
 const DEBUG_ID: u32 = 0;
 
@@ -27,9 +27,7 @@ fn is_3d_target(target: super::BindTarget) -> bool {
 
 impl super::Queue {
     /// Performs a manual shader clear, used as a workaround for a clearing bug on mesa
-    unsafe fn perform_shader_clear(&self, draw_buffer: u32, color: [f32; 4]) {
-        let gl = &self.shared.context;
-
+    unsafe fn perform_shader_clear(&self, gl: &glow::Context, draw_buffer: u32, color: [f32; 4]) {
         gl.use_program(Some(self.shader_clear_program));
         gl.uniform_4_f32(
             Some(&self.shader_clear_program_color_uniform_location),
@@ -56,8 +54,7 @@ impl super::Queue {
         }
     }
 
-    unsafe fn reset_state(&self) {
-        let gl = &self.shared.context;
+    unsafe fn reset_state(&self, gl: &glow::Context) {
         gl.use_program(None);
         gl.bind_framebuffer(glow::FRAMEBUFFER, None);
         gl.disable(glow::DEPTH_TEST);
@@ -71,8 +68,13 @@ impl super::Queue {
         }
     }
 
-    unsafe fn set_attachment(&self, fbo_target: u32, attachment: u32, view: &super::TextureView) {
-        let gl = &self.shared.context;
+    unsafe fn set_attachment(
+        &self,
+        gl: &glow::Context,
+        fbo_target: u32,
+        attachment: u32,
+        view: &super::TextureView,
+    ) {
         match view.inner {
             super::TextureInner::Renderbuffer { raw } => {
                 gl.framebuffer_renderbuffer(fbo_target, attachment, glow::RENDERBUFFER, Some(raw));
@@ -99,8 +101,13 @@ impl super::Queue {
         }
     }
 
-    unsafe fn process(&mut self, command: &C, data_bytes: &[u8], data_words: &[u32]) {
-        let gl = &self.shared.context;
+    unsafe fn process(
+        &mut self,
+        gl: &glow::Context,
+        command: &C,
+        data_bytes: &[u8],
+        data_words: &[u32],
+    ) {
         match *command {
             C::Draw {
                 topology,
@@ -551,7 +558,7 @@ impl super::Queue {
                 attachment,
                 ref view,
             } => {
-                self.set_attachment(glow::DRAW_FRAMEBUFFER, attachment, view);
+                self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view);
             }
             C::ResolveAttachment {
                 attachment,
@@ -561,7 +568,7 @@ impl super::Queue {
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.draw_fbo));
                 gl.read_buffer(attachment);
                 gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.copy_fbo));
-                self.set_attachment(glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, dst);
+                self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, dst);
                 gl.blit_framebuffer(
                     0,
                     0,
@@ -601,7 +608,7 @@ impl super::Queue {
                     .contains(super::Workarounds::MESA_I915_SRGB_SHADER_CLEAR)
                     && is_srgb
                 {
-                    self.perform_shader_clear(draw_buffer, *color);
+                    self.perform_shader_clear(gl, draw_buffer, *color);
                 } else {
                     gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color);
                 }
@@ -933,25 +940,22 @@ impl crate::Queue<super::Api> for super::Queue {
         command_buffers: &[&super::CommandBuffer],
         signal_fence: Option<(&mut super::Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
-        self.reset_state();
+        let shared = Arc::clone(&self.shared);
+        let gl = &shared.context.lock();
+        self.reset_state(gl);
         for cmd_buf in command_buffers.iter() {
             if let Some(ref label) = cmd_buf.label {
-                self.shared.context.push_debug_group(
-                    glow::DEBUG_SOURCE_APPLICATION,
-                    DEBUG_ID,
-                    label,
-                );
+                gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label);
             }
             for command in cmd_buf.commands.iter() {
-                self.process(command, &cmd_buf.data_bytes, &cmd_buf.data_words);
+                self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.data_words);
             }
             if cmd_buf.label.is_some() {
-                self.shared.context.pop_debug_group();
+                gl.pop_debug_group();
             }
         }
 
         if let Some((fence, value)) = signal_fence {
-            let gl = &self.shared.context;
             fence.maintain(gl);
             let sync = gl
                 .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
@@ -967,7 +971,7 @@ impl crate::Queue<super::Api> for super::Queue {
         surface: &mut super::Surface,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.get_without_egl_lock();
         surface.present(texture, gl)
     }
 }
