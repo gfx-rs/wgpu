@@ -185,12 +185,68 @@ impl Program<'_> {
                 } else {
                     let mut components = Vec::with_capacity(args.len());
 
-                    for (mut arg, meta) in args.iter().copied() {
-                        let scalar_components = scalar_components(&self.module.types[ty].inner);
-                        if let Some((kind, width)) = scalar_components {
-                            ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
+                    match self.module.types[ty].inner {
+                        TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        } => {
+                            let mut flattened =
+                                Vec::with_capacity(columns as usize * rows as usize);
+
+                            for (mut arg, meta) in args.iter().copied() {
+                                let scalar_components =
+                                    scalar_components(&self.module.types[ty].inner);
+                                if let Some((kind, width)) = scalar_components {
+                                    ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
+                                }
+
+                                match *self.resolve_type(ctx, arg, meta)? {
+                                    TypeInner::Vector { size, .. } => {
+                                        for i in 0..(size as u32) {
+                                            flattened.push(ctx.add_expression(
+                                                Expression::AccessIndex {
+                                                    base: arg,
+                                                    index: i,
+                                                },
+                                                body,
+                                            ))
+                                        }
+                                    }
+                                    _ => flattened.push(arg),
+                                }
+                            }
+
+                            let ty = self.module.types.fetch_or_append(Type {
+                                name: None,
+                                inner: TypeInner::Vector {
+                                    size: rows,
+                                    kind: ScalarKind::Float,
+                                    width,
+                                },
+                            });
+
+                            for chunk in flattened.chunks(rows as usize) {
+                                components.push(ctx.add_expression(
+                                    Expression::Compose {
+                                        ty,
+                                        components: Vec::from(chunk),
+                                    },
+                                    body,
+                                ))
+                            }
                         }
-                        components.push(arg)
+                        _ => {
+                            for (mut arg, meta) in args.iter().copied() {
+                                let scalar_components =
+                                    scalar_components(&self.module.types[ty].inner);
+                                if let Some((kind, width)) = scalar_components {
+                                    ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
+                                }
+
+                                components.push(arg)
+                            }
+                        }
                     }
 
                     ctx.add_expression(Expression::Compose { ty, components }, body)
