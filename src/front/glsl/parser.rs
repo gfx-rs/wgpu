@@ -522,7 +522,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             ))
         } else {
             let expr = self.parse_assignment(ctx, body)?;
-            Ok(ctx.lower_expect(self.program, expr, false, body)?)
+            let (mut init, init_meta) = ctx.lower_expect(self.program, expr, false, body)?;
+
+            let scalar_components = ast::scalar_components(&self.program.module.types[ty].inner);
+            if let Some((kind, width)) = scalar_components {
+                ctx.implicit_conversion(self.program, &mut init, init_meta, kind, width)?;
+            }
+
+            Ok((init, init_meta))
         }
     }
 
