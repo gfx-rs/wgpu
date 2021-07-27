@@ -120,7 +120,8 @@ impl RootParameter {
         RootParameter(param)
     }
 
-    fn descriptor(
+    //TODO: should this be unsafe?
+    pub fn descriptor(
         ty: d3d12::D3D12_ROOT_PARAMETER_TYPE,
         visibility: ShaderVisibility,
         binding: Binding,

@@ -335,6 +335,17 @@ impl GraphicsCommandList {
         }
     }
 
+    pub fn set_compute_root_constant(
+        &self,
+        root_index: RootIndex,
+        value: u32,
+        dest_offset_words: u32,
+    ) {
+        unsafe {
+            self.SetComputeRoot32BitConstant(root_index, value, dest_offset_words);
+        }
+    }
+
     pub fn set_graphics_root_descriptor_table(
         &self,
         root_index: RootIndex,
@@ -372,6 +383,17 @@ impl GraphicsCommandList {
     ) {
         unsafe {
             self.SetGraphicsRootUnorderedAccessView(root_index, buffer_location);
+        }
+    }
+
+    pub fn set_graphics_root_constant(
+        &self,
+        root_index: RootIndex,
+        value: u32,
+        dest_offset_words: u32,
+    ) {
+        unsafe {
+            self.SetGraphicsRoot32BitConstant(root_index, value, dest_offset_words);
         }
     }
 
