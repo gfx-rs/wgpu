@@ -219,6 +219,12 @@ impl super::Adapter {
             vertex_shader_storage_blocks.min(fragment_shader_storage_blocks)
         };
 
+        let max_storage_textures_per_shader_stage = if vertex_shader_storage_textures == 0 {
+            fragment_shader_storage_textures
+        } else {
+            vertex_shader_storage_textures.min(fragment_shader_storage_textures)
+        };
+
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_COMPRESSION_ETC2
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
@@ -228,7 +234,9 @@ impl super::Adapter {
         );
         features.set(
             wgt::Features::VERTEX_WRITABLE_STORAGE,
-            ver >= (3, 1) && !vertex_ssbo_false_zero,
+            ver >= (3, 1)
+                && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero)
+                && vertex_shader_storage_textures != 0,
         );
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
@@ -275,8 +283,7 @@ impl super::Adapter {
             max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
             max_samplers_per_shader_stage: super::MAX_SAMPLERS as u32,
             max_storage_buffers_per_shader_stage,
-            max_storage_textures_per_shader_stage: vertex_shader_storage_textures
-                .min(fragment_shader_storage_textures),
+            max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,
             max_uniform_buffer_binding_size: gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
                 as u32,
