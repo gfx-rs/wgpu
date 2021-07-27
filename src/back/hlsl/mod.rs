@@ -92,14 +92,18 @@ pub struct Options {
     pub binding_map: BindingMap,
     /// Don't panic on missing bindings, instead generate any HLSL.
     pub fake_missing_bindings: bool,
+    /// Add special constants to `SV_VertexIndex` and `SV_InstanceIndex`,
+    /// to make them work like in Vulkan/Metal, with help of the host.
+    pub special_constants_binding: Option<BindTarget>,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Options {
-            shader_model: ShaderModel::V5_0,
+            shader_model: ShaderModel::V5_1,
             binding_map: BindingMap::default(),
             fake_missing_bindings: true,
+            special_constants_binding: None,
         }
     }
 }

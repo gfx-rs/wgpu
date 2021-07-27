@@ -11,6 +11,10 @@ use crate::{
 use std::fmt;
 
 const LOCATION_SEMANTIC: &str = "LOC";
+const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
+const SPECIAL_CBUF_VAR: &str = "_NagaConstants";
+const SPECIAL_BASE_VERTEX: &str = "base_vertex";
+const SPECIAL_BASE_INSTANCE: &str = "base_instance";
 
 /// Structure contains information required for generating
 /// wrapped structure of all entry points arguments
@@ -64,6 +68,23 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module_info: &valid::ModuleInfo,
     ) -> Result<super::ReflectionInfo, Error> {
         self.reset(module);
+
+        // Write special constants, if needed
+        if let Some(ref bt) = self.options.special_constants_binding {
+            writeln!(self.out, "struct {} {{", SPECIAL_CBUF_TYPE)?;
+            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_BASE_VERTEX)?;
+            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_BASE_INSTANCE)?;
+            writeln!(self.out, "}};")?;
+            write!(
+                self.out,
+                "ConstantBuffer<{}> {}: register(b{}",
+                SPECIAL_CBUF_TYPE, SPECIAL_CBUF_VAR, bt.register
+            )?;
+            if bt.space != 0 {
+                write!(self.out, ", space{}", bt.space)?;
+            }
+            writeln!(self.out, ");")?;
+        }
 
         // Write all constants
         // For example, input wgsl shader:
@@ -410,7 +431,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // this was already resolved earlier when we started evaluating an entry point.
             let bt = self.options.resolve_resource_binding(binding).unwrap();
             write!(self.out, " : register({}{}", register_ty, bt.register)?;
-            if self.options.shader_model > super::ShaderModel::V5_0 {
+            if bt.space != 0 {
                 write!(self.out, ", space{}", bt.space)?;
             }
             write!(self.out, ")")?;
@@ -1105,8 +1126,30 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         use crate::Expression;
 
+        // Handle the special semantics for base vertex/instance
+        let ff_input = if self.options.special_constants_binding.is_some() {
+            func_ctx.is_fixed_function_input(expr, module)
+        } else {
+            None
+        };
+        let closing_bracket = match ff_input {
+            Some(crate::BuiltIn::VertexIndex) => {
+                write!(self.out, "({}.{} + ", SPECIAL_CBUF_VAR, SPECIAL_BASE_VERTEX)?;
+                ")"
+            }
+            Some(crate::BuiltIn::InstanceIndex) => {
+                write!(
+                    self.out,
+                    "({}.{} + ",
+                    SPECIAL_CBUF_VAR, SPECIAL_BASE_INSTANCE
+                )?;
+                ")"
+            }
+            _ => "",
+        };
+
         if let Some(name) = self.named_expressions.get(&expr) {
-            write!(self.out, "{}", name)?;
+            write!(self.out, "{}{}", name, closing_bracket)?;
             return Ok(());
         }
 
@@ -1627,6 +1670,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 
+        if !closing_bracket.is_empty() {
+            write!(self.out, "{}", closing_bracket)?;
+        }
         Ok(())
     }
 

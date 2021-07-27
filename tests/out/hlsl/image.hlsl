@@ -11,9 +11,9 @@ TextureCube<float4> image_cube : register(t3);
 TextureCubeArray<float4> image_cube_array : register(t4);
 Texture3D<float4> image_3d : register(t5);
 Texture2DMS<float4> image_aa : register(t6);
-SamplerState sampler_reg : register(s0);
-SamplerComparisonState sampler_cmp : register(s1);
-Texture2D<float> image_2d_depth : register(t2);
+SamplerState sampler_reg : register(s0, space1);
+SamplerComparisonState sampler_cmp : register(s1, space1);
+Texture2D<float> image_2d_depth : register(t2, space1);
 
 struct ComputeInput_main {
     uint3 local_id1 : SV_GroupThreadID;

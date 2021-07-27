@@ -1,3 +1,8 @@
+struct NagaConstants {
+    int base_vertex;
+    int base_instance;
+};
+ConstantBuffer<NagaConstants> _NagaConstants: register(b1);
 
 struct VertexOutput {
     float4 position : SV_Position;
@@ -9,8 +14,8 @@ struct Data {
     float4x4 view;
 };
 
-cbuffer r_data : register(b0, space0) { Data r_data; }
-TextureCube<float4> r_texture : register(t0, space0);
+cbuffer r_data : register(b0) { Data r_data; }
+TextureCube<float4> r_texture : register(t0);
 SamplerState r_sampler : register(s0, space1);
 
 struct VertexInput_vs_main {
@@ -26,8 +31,8 @@ VertexOutput vs_main(VertexInput_vs_main vertexinput_vs_main)
     int tmp1_ = (int)0;
     int tmp2_ = (int)0;
 
-    tmp1_ = (int(vertexinput_vs_main.vertex_index1) / 2);
-    tmp2_ = (int(vertexinput_vs_main.vertex_index1) & 1);
+    tmp1_ = (int((_NagaConstants.base_vertex + vertexinput_vs_main.vertex_index1)) / 2);
+    tmp2_ = (int((_NagaConstants.base_vertex + vertexinput_vs_main.vertex_index1)) & 1);
     int _expr10 = tmp1_;
     int _expr16 = tmp2_;
     float4 pos = float4(((float(_expr10) * 4.0) - 1.0), ((float(_expr16) * 4.0) - 1.0), 0.0, 1.0);
