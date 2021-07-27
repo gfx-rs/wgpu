@@ -472,8 +472,8 @@ fn skybox() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
-            .backend_failure(wgpu::Backends::VULKAN | wgpu::Backends::GL),
-        tolerance: 2,
+            .backend_failure(wgpu::Backends::GL),
+        tolerance: 3,
         max_outliers: 3,
     });
 }

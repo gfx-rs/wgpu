@@ -36,7 +36,7 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e97c8f9"
+rev = "a7ac13a"
 features = ["wgsl-in"]
 
 [dependencies.wgt]

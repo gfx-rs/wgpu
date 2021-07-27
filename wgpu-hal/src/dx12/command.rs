@@ -43,7 +43,7 @@ impl super::CommandEncoder {
         self.pass.clear();
     }
 
-    unsafe fn prepare_draw(&mut self) {
+    unsafe fn prepare_draw(&mut self, base_vertex: i32, base_instance: u32) {
         let list = self.list.unwrap();
         while self.pass.dirty_vertex_buffers != 0 {
             let index = self.pass.dirty_vertex_buffers.trailing_zeros();
@@ -54,6 +54,24 @@ impl super::CommandEncoder {
                 self.pass.vertex_buffers.as_ptr().offset(index as isize),
             );
         }
+        if let Some(root_index) = self.pass.layout.special_constants_root_index {
+            let needs_update = match self.pass.root_elements[root_index as usize] {
+                super::RootElement::SpecialConstantBuffer {
+                    base_vertex: other_vertex,
+                    base_instance: other_instance,
+                } => base_vertex != other_vertex || base_instance != other_instance,
+                _ => true,
+            };
+            if needs_update {
+                self.pass.root_elements[root_index as usize] =
+                    super::RootElement::SpecialConstantBuffer {
+                        base_vertex,
+                        base_instance,
+                    };
+                list.set_graphics_root_constant(root_index, base_vertex as u32, 0);
+                list.set_graphics_root_constant(root_index, base_instance, 1);
+            }
+        }
     }
 
     fn update_root_elements(&self, range: Range<super::RootIndex>) {
@@ -63,6 +81,17 @@ impl super::CommandEncoder {
         for index in range {
             match self.pass.root_elements[index as usize] {
                 super::RootElement::Empty => {}
+                super::RootElement::SpecialConstantBuffer {
+                    base_vertex,
+                    base_instance,
+                } => match self.pass.kind {
+                    Pk::Render => {
+                        list.set_graphics_root_constant(index, base_vertex as u32, 0);
+                        list.set_graphics_root_constant(index, base_instance, 1);
+                    }
+                    Pk::Compute => (),
+                    Pk::Transfer => (),
+                },
                 super::RootElement::Table(descriptor) => match self.pass.kind {
                     Pk::Render => list.set_graphics_root_descriptor_table(index, descriptor),
                     Pk::Compute => list.set_compute_root_descriptor_table(index, descriptor),
@@ -93,6 +122,18 @@ impl super::CommandEncoder {
                 }
             }
         }
+    }
+
+    fn reset_signature(&mut self, layout: &super::PipelineLayoutShared) {
+        if let Some(root_index) = layout.special_constants_root_index {
+            self.pass.root_elements[root_index as usize] =
+                super::RootElement::SpecialConstantBuffer {
+                    base_vertex: 0,
+                    base_instance: 0,
+                };
+        }
+        self.pass.layout = layout.clone();
+        self.update_root_elements(0..layout.total_root_elements);
     }
 }
 
@@ -653,14 +694,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             root_index += 1;
         }
 
-        let update_range = if self.pass.signature == layout.raw {
-            info.base_root_index..root_index as super::RootIndex
+        if self.pass.layout.signature == layout.shared.signature {
+            let update_range = info.base_root_index..root_index as super::RootIndex;
+            self.update_root_elements(update_range);
         } else {
             // D3D12 requires full reset on signature change
-            self.pass.signature = layout.raw;
-            0..layout.total_root_elements
+            self.reset_signature(&layout.shared);
         };
-        self.update_root_elements(update_range);
     }
     unsafe fn set_push_constants(
         &mut self,
@@ -690,11 +730,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         let list = self.list.unwrap();
 
-        if self.pass.signature != pipeline.signature {
+        if self.pass.layout.signature != pipeline.layout.signature {
             // D3D12 requires full reset on signature change
-            list.set_graphics_root_signature(pipeline.signature);
-            self.pass.signature = pipeline.signature;
-            self.update_root_elements(0..pipeline.total_root_elements);
+            list.set_graphics_root_signature(pipeline.layout.signature);
+            self.reset_signature(&pipeline.layout);
         };
 
         list.set_pipeline_state(pipeline.raw);
@@ -772,7 +811,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_instance: u32,
         instance_count: u32,
     ) {
-        self.prepare_draw();
+        self.prepare_draw(start_vertex as i32, start_instance);
         self.list
             .unwrap()
             .draw(vertex_count, instance_count, start_vertex, start_instance);
@@ -785,7 +824,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_instance: u32,
         instance_count: u32,
     ) {
-        self.prepare_draw();
+        self.prepare_draw(base_vertex, start_instance);
         self.list.unwrap().draw_indexed(
             index_count,
             instance_count,
@@ -800,7 +839,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        self.prepare_draw();
+        self.prepare_draw(0, 0);
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.draw.as_mut_ptr(),
             draw_count,
@@ -816,7 +855,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        self.prepare_draw();
+        self.prepare_draw(0, 0);
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.draw_indexed.as_mut_ptr(),
             draw_count,
@@ -834,7 +873,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        self.prepare_draw();
+        self.prepare_draw(0, 0);
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.draw.as_mut_ptr(),
             max_count,
@@ -852,7 +891,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        self.prepare_draw();
+        self.prepare_draw(0, 0);
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.draw_indexed.as_mut_ptr(),
             max_count,
@@ -875,11 +914,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
         let list = self.list.unwrap();
 
-        if self.pass.signature != pipeline.signature {
+        if self.pass.layout.signature != pipeline.layout.signature {
             // D3D12 requires full reset on signature change
-            list.set_compute_root_signature(pipeline.signature);
-            self.pass.signature = pipeline.signature;
-            self.update_root_elements(0..pipeline.total_root_elements);
+            list.set_compute_root_signature(pipeline.layout.signature);
+            self.reset_signature(&pipeline.layout);
         };
 
         list.set_pipeline_state(pipeline.raw);

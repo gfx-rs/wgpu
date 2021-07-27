@@ -703,28 +703,53 @@ impl crate::Device<super::Api> for super::Device {
         // This is easier than trying to patch up the offset on the shader side.
         //
         // Root signature layout:
-        // Root Constants: Register: Offset/4, Space: 0
+        // Root Constants: Parameter=0, Space=0
+        // Special constant buffer: Space=0
         //     ...
-        // (bind group [3]) - Space: 1
+        // (bind group [3]) - Space=0
         //   View descriptor table, if any
         //   Sampler descriptor table, if any
         //   Root descriptors (for dynamic offset buffers)
-        // (bind group [2]) - Space: 2
+        // (bind group [2]) - Space=0
         // ...
-        // (bind group [0]) - Space: 4
+        // (bind group [0]) - Space=0
 
         //Note: lower bind group indices are put futher down the root signature. See:
         // https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#binding-model
 
+        fn native_binding(bt: &hlsl::BindTarget) -> native::Binding {
+            native::Binding {
+                space: bt.space as u32,
+                register: bt.register,
+            }
+        }
+
         let mut binding_map = hlsl::BindingMap::default();
-        let root_constants: &[()] = &[];
+        let (mut bind_cbv, mut bind_srv, mut bind_uav, mut bind_sampler) = (
+            hlsl::BindTarget::default(),
+            hlsl::BindTarget::default(),
+            hlsl::BindTarget::default(),
+            hlsl::BindTarget::default(),
+        );
+        let mut parameters = Vec::new();
 
-        // Number of elements in the root signature.
-        let total_parameters = root_constants.len() + desc.bind_group_layouts.len() * 2;
-        // Guarantees that no re-allocation is done, and our pointers are valid
-        let mut parameters = Vec::with_capacity(total_parameters);
+        let (special_constants_root_index, special_constants_binding) = if desc
+            .flags
+            .contains(crate::PipelineLayoutFlags::BASE_VERTEX_INSTANCE)
+        {
+            let parameter_index = parameters.len();
+            parameters.push(native::RootParameter::constants(
+                native::ShaderVisibility::VS,
+                native_binding(&bind_cbv),
+                2, // 0 = base vertex, 1 = base instance
+            ));
+            let binding = bind_cbv.clone();
+            bind_cbv.register += 1;
+            (Some(parameter_index as u32), Some(binding))
+        } else {
+            (None, None)
+        };
 
-        let root_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
         // which could cause invalid pointers.
@@ -745,8 +770,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut bind_group_infos =
             arrayvec::ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
-        for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
-            let space = root_space_offset + (desc.bind_group_layouts.len() - 1 - index) as u32;
+        for (index, bgl) in desc.bind_group_layouts.iter().enumerate().rev() {
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
                 base_root_index: parameters.len() as u32,
@@ -767,8 +791,6 @@ impl crate::Device<super::Api> for super::Device {
                 }
             }
 
-            let (mut num_cbv, mut num_srv, mut num_uav) = (0, 0, 0);
-
             // SRV/CBV/UAV descriptor tables
             let mut range_base = ranges.len();
             for entry in bgl.entries.iter() {
@@ -780,31 +802,27 @@ impl crate::Device<super::Api> for super::Device {
                     | wgt::BindingType::Sampler { .. } => continue,
                     ref other => conv::map_binding_type(other),
                 };
-                let reg_ref = match range_ty {
-                    native::DescriptorRangeType::CBV => &mut num_cbv,
-                    native::DescriptorRangeType::SRV => &mut num_srv,
-                    native::DescriptorRangeType::UAV => &mut num_uav,
+                let bt = match range_ty {
+                    native::DescriptorRangeType::CBV => &mut bind_cbv,
+                    native::DescriptorRangeType::SRV => &mut bind_srv,
+                    native::DescriptorRangeType::UAV => &mut bind_uav,
                     native::DescriptorRangeType::Sampler => unreachable!(),
                 };
-                let register = *reg_ref;
-                *reg_ref += 1;
 
                 binding_map.insert(
                     naga::ResourceBinding {
                         group: index as u32,
                         binding: entry.binding,
                     },
-                    hlsl::BindTarget {
-                        space: space as u8,
-                        register,
-                    },
+                    bt.clone(),
                 );
                 ranges.push(native::DescriptorRange::new(
                     range_ty,
                     entry.count.map_or(1, |count| count.get()),
-                    native::Binding { space, register },
+                    native_binding(bt),
                     d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
                 ));
+                bt.register += 1;
             }
             if ranges.len() > range_base {
                 parameters.push(native::RootParameter::descriptor_table(
@@ -821,23 +839,20 @@ impl crate::Device<super::Api> for super::Device {
                     wgt::BindingType::Sampler { .. } => native::DescriptorRangeType::Sampler,
                     _ => continue,
                 };
-                let register = (ranges.len() - range_base) as u32;
                 binding_map.insert(
                     naga::ResourceBinding {
                         group: index as u32,
                         binding: entry.binding,
                     },
-                    hlsl::BindTarget {
-                        space: space as u8,
-                        register,
-                    },
+                    bind_sampler.clone(),
                 );
                 ranges.push(native::DescriptorRange::new(
                     range_ty,
                     entry.count.map_or(1, |count| count.get()),
-                    native::Binding { space, register },
+                    native_binding(&bind_sampler),
                     d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
                 ));
+                bind_sampler.register += 1;
             }
             if ranges.len() > range_base {
                 parameters.push(native::RootParameter::descriptor_table(
@@ -859,49 +874,22 @@ impl crate::Device<super::Api> for super::Device {
                     _ => continue,
                 };
 
-                let (kind, param, register) = match buffer_ty {
-                    wgt::BufferBindingType::Uniform => {
-                        let binding = native::Binding {
-                            space,
-                            register: num_cbv,
-                        };
-                        (
-                            super::BufferViewKind::Constant,
-                            native::RootParameter::cbv_descriptor(
-                                dynamic_buffers_visibility,
-                                binding,
-                            ),
-                            &mut num_cbv,
-                        )
-                    }
-                    wgt::BufferBindingType::Storage { read_only: true } => {
-                        let binding = native::Binding {
-                            space,
-                            register: num_srv,
-                        };
-                        (
-                            super::BufferViewKind::ShaderResource,
-                            native::RootParameter::srv_descriptor(
-                                dynamic_buffers_visibility,
-                                binding,
-                            ),
-                            &mut num_srv,
-                        )
-                    }
-                    wgt::BufferBindingType::Storage { read_only: false } => {
-                        let binding = native::Binding {
-                            space,
-                            register: num_uav,
-                        };
-                        (
-                            super::BufferViewKind::UnorderedAccess,
-                            native::RootParameter::uav_descriptor(
-                                dynamic_buffers_visibility,
-                                binding,
-                            ),
-                            &mut num_uav,
-                        )
-                    }
+                let (kind, parameter_ty, bt) = match buffer_ty {
+                    wgt::BufferBindingType::Uniform => (
+                        super::BufferViewKind::Constant,
+                        d3d12::D3D12_ROOT_PARAMETER_TYPE_CBV,
+                        &mut bind_cbv,
+                    ),
+                    wgt::BufferBindingType::Storage { read_only: true } => (
+                        super::BufferViewKind::ShaderResource,
+                        d3d12::D3D12_ROOT_PARAMETER_TYPE_SRV,
+                        &mut bind_srv,
+                    ),
+                    wgt::BufferBindingType::Storage { read_only: false } => (
+                        super::BufferViewKind::UnorderedAccess,
+                        d3d12::D3D12_ROOT_PARAMETER_TYPE_UAV,
+                        &mut bind_uav,
+                    ),
                 };
 
                 binding_map.insert(
@@ -909,15 +897,16 @@ impl crate::Device<super::Api> for super::Device {
                         group: index as u32,
                         binding: entry.binding,
                     },
-                    hlsl::BindTarget {
-                        space: space as u8,
-                        register: *register,
-                    },
+                    bt.clone(),
                 );
-                *register += 1;
-
                 info.dynamic_buffers.push(kind);
-                parameters.push(param);
+                parameters.push(native::RootParameter::descriptor(
+                    parameter_ty,
+                    dynamic_buffers_visibility,
+                    native_binding(bt),
+                ));
+
+                bt.register += 1;
             }
 
             bind_group_infos.push(info);
@@ -961,18 +950,22 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         Ok(super::PipelineLayout {
-            raw,
+            shared: super::PipelineLayoutShared {
+                signature: raw,
+                total_root_elements: parameters.len() as super::RootIndex,
+                special_constants_root_index,
+            },
             bind_group_infos,
-            total_root_elements: total_parameters as super::RootIndex,
             naga_options: hlsl::Options {
                 shader_model: hlsl::ShaderModel::V5_1,
                 binding_map,
                 fake_missing_bindings: false,
+                special_constants_binding,
             },
         })
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
-        pipeline_layout.raw.destroy();
+        pipeline_layout.shared.signature.destroy();
     }
 
     unsafe fn create_bind_group(
@@ -1224,7 +1217,7 @@ impl crate::Device<super::Api> for super::Device {
         };
 
         let raw_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-            pRootSignature: desc.layout.raw.as_mut_ptr(),
+            pRootSignature: desc.layout.shared.signature.as_mut_ptr(),
             VS: *native::Shader::from_blob(blob_vs),
             PS: if blob_fs.is_null() {
                 *native::Shader::null()
@@ -1314,8 +1307,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::RenderPipeline {
             raw,
-            signature: desc.layout.raw,
-            total_root_elements: desc.layout.total_root_elements,
+            layout: desc.layout.shared.clone(),
             topology,
             vertex_strides,
         })
@@ -1331,7 +1323,7 @@ impl crate::Device<super::Api> for super::Device {
         let blob_cs = self.load_shader(&desc.stage, desc.layout, naga::ShaderStage::Compute)?;
 
         let pair = self.raw.create_compute_pipeline_state(
-            desc.layout.raw,
+            desc.layout.shared.signature,
             native::Shader::from_blob(blob_cs),
             0,
             native::CachedPSO::null(),
@@ -1351,8 +1343,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::ComputePipeline {
             raw,
-            signature: desc.layout.raw,
-            total_root_elements: desc.layout.total_root_elements,
+            layout: desc.layout.shared.clone(),
         })
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {

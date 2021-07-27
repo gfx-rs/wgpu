@@ -47,7 +47,7 @@ glow = { git = "https://github.com/grovesNL/glow", rev = "0864897a28bbdd43f89f4f
 
 # backend: Dx12
 bit-set = { version = "0.5", optional = true }
-native = { package = "d3d12", version = "0.4", features = ["libloading"], optional = true }
+native = { package = "d3d12", git = "https://github.com/gfx-rs/d3d12-rs", rev = "79f29c8", features = ["libloading"], optional = true }
 range-alloc = { version = "0.1", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -65,11 +65,11 @@ core-graphics-types = "0.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e97c8f9"
+rev = "a7ac13a"
 
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "e97c8f9"
+rev = "a7ac13a"
 features = ["wgsl-in"]
 
 [dev-dependencies]
