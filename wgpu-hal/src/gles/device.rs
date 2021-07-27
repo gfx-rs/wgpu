@@ -73,12 +73,11 @@ impl CompilationContext<'_> {
 
 impl super::Device {
     unsafe fn compile_shader(
-        &self,
+        gl: &glow::Context,
         shader: &str,
         naga_stage: naga::ShaderStage,
         label: Option<&str>,
     ) -> Result<glow::Shader, crate::PipelineError> {
-        let gl = &self.shared.context;
         let target = match naga_stage {
             naga::ShaderStage::Vertex => glow::VERTEX_SHADER,
             naga::ShaderStage::Fragment => glow::FRAGMENT_SHADER,
@@ -111,7 +110,7 @@ impl super::Device {
     }
 
     fn create_shader(
-        &self,
+        gl: &glow::Context,
         naga_stage: naga::ShaderStage,
         stage: &crate::ProgrammableStage<super::Api>,
         context: CompilationContext,
@@ -156,16 +155,16 @@ impl super::Device {
             reflection_info,
         );
 
-        unsafe { self.compile_shader(&output, naga_stage, stage.module.label.as_deref()) }
+        unsafe { Self::compile_shader(gl, &output, naga_stage, stage.module.label.as_deref()) }
     }
 
     unsafe fn create_pipeline<'a, I: Iterator<Item = ShaderStage<'a>>>(
         &self,
+        gl: &glow::Context,
         shaders: I,
         layout: &super::PipelineLayout,
         label: crate::Label,
     ) -> Result<super::PipelineInner, crate::PipelineError> {
-        let gl = &self.shared.context;
         let program = gl.create_program().unwrap();
         if let Some(label) = label {
             if gl.supports_debug() {
@@ -186,7 +185,7 @@ impl super::Device {
                 name_binding_map: &mut name_binding_map,
             };
 
-            let shader = self.create_shader(naga_stage, stage, context)?;
+            let shader = Self::create_shader(gl, naga_stage, stage, context)?;
             shaders_to_delete.push(shader);
         }
 
@@ -199,7 +198,7 @@ impl super::Device {
             let shader_src = format!("#version {} es \n void main(void) {{}}", version,);
             log::info!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader =
-                self.compile_shader(&shader_src, naga::ShaderStage::Fragment, Some("_dummy"))?;
+                Self::compile_shader(gl, &shader_src, naga::ShaderStage::Fragment, Some("_dummy"))?;
             shaders_to_delete.push(shader);
         }
 
@@ -292,7 +291,7 @@ impl super::Device {
 
 impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         gl.delete_vertex_array(self.main_vao);
         gl.delete_framebuffer(queue.draw_fbo);
         gl.delete_framebuffer(queue.copy_fbo);
@@ -303,7 +302,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
 
         let target = if desc.usage.contains(crate::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
@@ -360,7 +359,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         gl.delete_buffer(buffer.raw);
     }
 
@@ -369,7 +368,7 @@ impl crate::Device<super::Api> for super::Device {
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
 
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
 
@@ -388,7 +387,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         gl.bind_buffer(buffer.target, Some(buffer.raw));
         gl.unmap_buffer(buffer.target);
         gl.bind_buffer(buffer.target, None);
@@ -398,7 +397,7 @@ impl crate::Device<super::Api> for super::Device {
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         gl.bind_buffer(buffer.target, Some(buffer.raw));
         for range in ranges {
             gl.flush_mapped_buffer_range(
@@ -416,7 +415,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
 
         let render_usage = crate::TextureUses::COLOR_TARGET
             | crate::TextureUses::DEPTH_STENCIL_WRITE
@@ -559,7 +558,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         match texture.inner {
             super::TextureInner::Renderbuffer { raw, .. } => {
                 gl.delete_renderbuffer(raw);
@@ -600,7 +599,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> Result<super::Sampler, crate::DeviceError> {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
 
         let raw = gl.create_sampler().unwrap();
 
@@ -667,7 +666,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Sampler { raw })
     }
     unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         gl.delete_sampler(sampler.raw);
     }
 
@@ -862,12 +861,13 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::RenderPipelineDescriptor<super::Api>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        let gl = &self.shared.context.lock();
         let shaders = iter::once((naga::ShaderStage::Vertex, &desc.vertex_stage)).chain(
             desc.fragment_stage
                 .as_ref()
                 .map(|fs| (naga::ShaderStage::Fragment, fs)),
         );
-        let inner = self.create_pipeline(shaders, desc.layout, desc.label)?;
+        let inner = self.create_pipeline(gl, shaders, desc.layout, desc.label)?;
 
         let (vertex_buffers, vertex_attributes) = {
             let mut buffers = Vec::new();
@@ -925,7 +925,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         gl.delete_program(pipeline.inner.program);
     }
 
@@ -933,13 +933,14 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
+        let gl = &self.shared.context.lock();
         let shaders = iter::once((naga::ShaderStage::Compute, &desc.stage));
-        let inner = self.create_pipeline(shaders, desc.layout, desc.label)?;
+        let inner = self.create_pipeline(gl, shaders, desc.layout, desc.label)?;
 
         Ok(super::ComputePipeline { inner })
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         gl.delete_program(pipeline.inner.program);
     }
 
@@ -948,7 +949,7 @@ impl crate::Device<super::Api> for super::Device {
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Result<super::QuerySet, crate::DeviceError> {
         use std::fmt::Write;
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         let mut temp_string = String::new();
 
         let mut queries = Vec::with_capacity(desc.count as usize);
@@ -975,7 +976,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_query_set(&self, set: super::QuerySet) {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         for &query in set.queries.iter() {
             gl.delete_query(query);
         }
@@ -987,7 +988,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_fence(&self, fence: super::Fence) {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         for (_, sync) in fence.pending {
             gl.delete_sync(sync);
         }
@@ -996,7 +997,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         fence: &super::Fence,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
-        Ok(fence.get_latest(&self.shared.context))
+        Ok(fence.get_latest(&self.shared.context.lock()))
     }
     unsafe fn wait(
         &self,
@@ -1005,7 +1006,7 @@ impl crate::Device<super::Api> for super::Device {
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
         if fence.last_completed < wait_value {
-            let gl = &self.shared.context;
+            let gl = &self.shared.context.lock();
             let timeout_ns = (timeout_ms as u64 * 1_000_000).min(!0u32 as u64);
             let &(_, sync) = fence
                 .pending

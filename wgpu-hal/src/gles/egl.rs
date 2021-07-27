@@ -1,7 +1,10 @@
 use glow::HasContext;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 
-use std::{ffi::CStr, os::raw, ptr, sync::Arc};
+use std::{ffi::CStr, os::raw, ptr, sync::Arc, time::Duration};
+
+/// The amount of time to wait while trying to obtain a lock to the adapter context
+const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
 
 const EGL_CONTEXT_FLAGS_KHR: i32 = 0x30FC;
 const EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR: i32 = 0x0001;
@@ -225,6 +228,90 @@ enum SrgbFrameBufferKind {
     Khr,
 }
 
+/// A wrapper around a [`glow::Context`] and the required EGL context that uses locking to guarantee
+/// exclusive access when shared with multiple threads.
+pub struct AdapterContext {
+    glow_context: Mutex<glow::Context>,
+    egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
+    egl_display: egl::Display,
+    egl_context: egl::Context,
+    egl_pbuffer: Option<egl::Surface>,
+}
+
+unsafe impl Sync for AdapterContext {}
+unsafe impl Send for AdapterContext {}
+
+/// A guard containing a lock to an [`AdapterContext`]
+pub struct AdapterContextLock<'a> {
+    glow_context: MutexGuard<'a, glow::Context>,
+    egl: &'a Arc<egl::DynamicInstance<egl::EGL1_4>>,
+    egl_display: egl::Display,
+}
+
+impl<'a> std::ops::Deref for AdapterContextLock<'a> {
+    type Target = glow::Context;
+
+    fn deref(&self) -> &Self::Target {
+        &self.glow_context
+    }
+}
+
+impl<'a> Drop for AdapterContextLock<'a> {
+    fn drop(&mut self) {
+        // Make the EGL context *not* current on this thread
+        self.egl
+            .make_current(self.egl_display, None, None, None)
+            .expect("Cannot make EGL context not current");
+    }
+}
+
+impl AdapterContext {
+    /// Get's the [`glow::Context`] without waiting for a lock
+    ///
+    /// # Safety
+    ///
+    /// This should only be called when you have manually made sure that the current thread has made
+    /// the EGL context current and that no other thread also has the EGL context current.
+    /// Additionally, you must manually make the EGL context **not** current after you are done with
+    /// it, so that future calls to `lock()` will not fail.
+    ///
+    /// > **Note:** Calling this function **will** still lock the [`glow::Context`] which adds an
+    /// > extra safe-guard against accidental concurrent access to the context.
+    pub unsafe fn get_without_egl_lock(&self) -> MutexGuard<glow::Context> {
+        self.glow_context
+            .try_lock_for(Duration::from_secs(CONTEXT_LOCK_TIMEOUT_SECS))
+            .expect("Could not lock adapter context. This is most-likely a deadlcok.")
+    }
+
+    /// Obtain a lock to the EGL context and get handle to the [`glow::Context`] that can be used to
+    /// do rendering.
+    #[track_caller]
+    pub fn lock<'a>(&'a self) -> AdapterContextLock<'a> {
+        let glow_context = self
+            .glow_context
+            // Don't lock forever. If it takes longer than 1 second to get the lock we've got a
+            // deadlock and should panic to show where we got stuck
+            .try_lock_for(Duration::from_secs(CONTEXT_LOCK_TIMEOUT_SECS))
+            .expect("Could not lock adapter context. This is most-likely a deadlcok.");
+
+        // Make the EGL context current on this thread
+        self.egl
+            .make_current(
+                self.egl_display,
+                self.egl_pbuffer,
+                self.egl_pbuffer,
+                Some(self.egl_context),
+            )
+            .expect("Cannot make EGL context current");
+
+        AdapterContextLock {
+            glow_context,
+            egl: &self.egl,
+            egl_display: self.egl_display,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Inner {
     egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
@@ -329,7 +416,10 @@ impl Inner {
         // Testing if context can be binded without surface
         // and creating dummy pbuffer surface if not.
         let pbuffer =
-            if version < (1, 5) || !display_extensions.contains("EGL_KHR_surfaceless_context") {
+            if version >= (1, 5) || display_extensions.contains("EGL_KHR_surfaceless_context") {
+                log::info!("\tEGL context: +surfaceless");
+                None
+            } else {
                 let attributes = [egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE];
                 egl.create_pbuffer_surface(display, config, &attributes)
                     .map(Some)
@@ -337,9 +427,6 @@ impl Inner {
                         log::warn!("Error in create_pbuffer_surface: {:?}", e);
                         crate::InstanceError
                     })?
-            } else {
-                log::info!("\tEGL context: +surfaceless");
-                None
             };
 
         let srgb_kind = if version >= (1, 5) {
@@ -623,6 +710,11 @@ impl crate::Instance<super::Api> for Instance {
             }
         }
 
+        inner
+            .egl
+            .make_current(inner.display, None, None, None)
+            .unwrap();
+
         Ok(Surface {
             egl: Arc::clone(&inner.egl),
             raw,
@@ -684,7 +776,20 @@ impl crate::Instance<super::Api> for Instance {
             gl.debug_message_callback(gl_debug_message_callback);
         }
 
-        super::Adapter::expose(gl).into_iter().collect()
+        inner
+            .egl
+            .make_current(inner.display, None, None, None)
+            .unwrap();
+
+        super::Adapter::expose(AdapterContext {
+            glow_context: Mutex::new(gl),
+            egl: inner.egl.clone(),
+            egl_display: inner.display,
+            egl_context: inner.context,
+            egl_pbuffer: inner.pbuffer,
+        })
+        .into_iter()
+        .collect()
     }
 }
 
@@ -759,7 +864,7 @@ impl Surface {
             crate::SurfaceError::Lost
         })?;
         self.egl
-            .make_current(self.display, self.pbuffer, self.pbuffer, Some(self.context))
+            .make_current(self.display, None, None, None)
             .map_err(|e| {
                 log::error!("make_current(null) failed: {}", e);
                 crate::SurfaceError::Lost
@@ -791,7 +896,7 @@ impl crate::Surface<super::Api> for Surface {
         }
 
         let format_desc = device.shared.describe_texture_format(config.format);
-        let gl = &device.shared.context;
+        let gl = &device.shared.context.lock();
         let renderbuffer = gl.create_renderbuffer().unwrap();
         gl.bind_renderbuffer(glow::RENDERBUFFER, Some(renderbuffer));
         gl.renderbuffer_storage(
@@ -824,7 +929,7 @@ impl crate::Surface<super::Api> for Surface {
     }
 
     unsafe fn unconfigure(&mut self, device: &super::Device) {
-        let gl = &device.shared.context;
+        let gl = &device.shared.context.lock();
         if let Some(sc) = self.swapchain.take() {
             gl.delete_renderbuffer(sc.renderbuffer);
             gl.delete_framebuffer(sc.framebuffer);

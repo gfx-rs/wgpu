@@ -163,7 +163,10 @@ impl super::Adapter {
         }
     }
 
-    pub(super) unsafe fn expose(gl: glow::Context) -> Option<crate::ExposedAdapter<super::Api>> {
+    pub(super) unsafe fn expose(
+        context: super::AdapterContext,
+    ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let gl = context.lock();
         let extensions = gl.supported_extensions();
 
         let (vendor_const, renderer_const) = if extensions.contains("WEBGL_debug_renderer_info") {
@@ -333,10 +336,13 @@ impl super::Adapter {
 
         let downlevel_defaults = wgt::DownlevelLimits {};
 
+        // Drop the GL guard so we can move the context into AdapterShared
+        drop(gl);
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 shared: Arc::new(super::AdapterShared {
-                    context: gl,
+                    context,
                     private_caps,
                     workarounds,
                     shading_language_version,
@@ -401,7 +407,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         features: wgt::Features,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let gl = &self.shared.context;
+        let gl = &self.shared.context.lock();
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
         gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
         let main_vao = gl
