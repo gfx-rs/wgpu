@@ -100,10 +100,10 @@ impl Default for TestParameters {
 
 bitflags::bitflags! {
     pub struct FailureReasons: u8 {
-        const BACKEND = 0x1;
-        const VENDOR = 0x2;
-        const ADAPTER = 0x4;
-        const ALWAYS = 0x8;
+        const BACKEND = 1 << 0;
+        const VENDOR = 1 << 1;
+        const ADAPTER = 1 << 2;
+        const ALWAYS = 1 << 3;
     }
 }
 

@@ -175,7 +175,7 @@ bitflags::bitflags! {
         /// - some mobile chips
         ///
         /// This is a web and native feature.
-        const DEPTH_CLAMPING = 0x0000_0000_0000_0001;
+        const DEPTH_CLAMPING = 1 << 0;
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
         /// with 8 or 16 bytes per block.
         ///
@@ -189,7 +189,7 @@ bitflags::bitflags! {
         /// - desktops
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_BC = 0x0000_0000_0000_0002;
+        const TEXTURE_COMPRESSION_BC = 1 << 1;
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
         /// all work before the query is finished. Call [`CommandEncoder::write_timestamp`],
         /// [`RenderPassEncoder::write_timestamp`], or [`ComputePassEncoder::write_timestamp`] to
@@ -207,7 +207,7 @@ bitflags::bitflags! {
         /// - DX12 (works)
         ///
         /// This is a web and native feature.
-        const TIMESTAMP_QUERY = 0x0000_0000_0000_0004;
+        const TIMESTAMP_QUERY = 1 << 2;
         /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
         /// performed between the start and stop call. Call [`RenderPassEncoder::begin_pipeline_statistics_query`] to start
         /// a query, then call [`RenderPassEncoder::end_pipeline_statistics_query`] to stop one.
@@ -222,7 +222,7 @@ bitflags::bitflags! {
         /// - DX12 (works)
         ///
         /// This is a web and native feature.
-        const PIPELINE_STATISTICS_QUERY = 0x0000_0000_0000_0008;
+        const PIPELINE_STATISTICS_QUERY = 1 << 3;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///
@@ -234,7 +234,7 @@ bitflags::bitflags! {
         /// - All
         ///
         /// This is a native only feature.
-        const MAPPABLE_PRIMARY_BUFFERS = 0x0000_0000_0001_0000;
+        const MAPPABLE_PRIMARY_BUFFERS = 1 << 16;
         /// Allows the user to create uniform arrays of textures in shaders:
         ///
         /// eg. `uniform texture2D textures[10]`.
@@ -253,7 +253,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const TEXTURE_BINDING_ARRAY = 0x0000_0000_0002_0000;
+        const TEXTURE_BINDING_ARRAY = 1 << 17;
         /// Allows the user to create arrays of buffers in shaders:
         ///
         /// eg. `uniform myBuffer { .... } buffer_array[10]`.
@@ -271,7 +271,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const BUFFER_BINDING_ARRAY = 0x0000_0000_0004_0000;
+        const BUFFER_BINDING_ARRAY = 1 << 18;
         /// Allows the user to create uniform arrays of storage buffers or textures in shaders,
         /// if resp. [`Features::BUFFER_BINDING_ARRAY`] or [`Features::TEXTURE_BINDING_ARRAY`]
         /// is supported.
@@ -284,7 +284,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const STORAGE_RESOURCE_BINDING_ARRAY = 0x0000_0000_0008_0000;
+        const STORAGE_RESOURCE_BINDING_ARRAY = 1 << 19;
         /// Allows shaders to index resource arrays with dynamically non-uniform values:
         ///
         /// eg. `texture_array[vertex_data]`
@@ -309,7 +309,7 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
-        const RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0010_0000;
+        const RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 20;
         /// Allows the user to create unsized uniform arrays of bindings:
         ///
         /// eg. `uniform texture2D textures[]`.
@@ -322,7 +322,7 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s runtimeDescriptorArray feature
         ///
         /// This is a native only feature.
-        const UNSIZED_BINDING_ARRAY = 0x0000_0000_0020_0000;
+        const UNSIZED_BINDING_ARRAY = 1 << 21;
         /// Allows the user to call [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`].
         ///
         /// Allows multiple indirect calls to be dispatched from a single buffer.
@@ -332,7 +332,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const MULTI_DRAW_INDIRECT = 0x0000_0000_0040_0000;
+        const MULTI_DRAW_INDIRECT = 1 << 22;
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
         /// This allows the use of a buffer containing the actual number of draw calls.
@@ -342,7 +342,7 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
         ///
         /// This is a native only feature.
-        const MULTI_DRAW_INDIRECT_COUNT = 0x0000_0000_0080_0000;
+        const MULTI_DRAW_INDIRECT_COUNT = 1 << 23;
         /// Allows the use of push constants: small, fast bits of memory that can be updated
         /// inside a [`RenderPass`].
         ///
@@ -359,7 +359,7 @@ bitflags::bitflags! {
         /// - OpenGL (emulated with uniforms)
         ///
         /// This is a native only feature.
-        const PUSH_CONSTANTS = 0x0000_0000_0100_0000;
+        const PUSH_CONSTANTS = 1 << 24;
         /// Allows the use of [`AddressMode::ClampToBorder`].
         ///
         /// Supported platforms:
@@ -370,7 +370,7 @@ bitflags::bitflags! {
         /// - OpenGL
         ///
         /// This is a web and native feature.
-        const ADDRESS_MODE_CLAMP_TO_BORDER = 0x0000_0000_0200_0000;
+        const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 25;
         /// Allows the user to set a non-fill polygon mode in [`PrimitiveState::polygon_mode`]
         ///
         /// This allows drawing polygons/triangles as lines (wireframe) or points instead of filled
@@ -380,7 +380,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const NON_FILL_POLYGON_MODE = 0x0000_0000_0400_0000;
+        const NON_FILL_POLYGON_MODE = 1 << 26;
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
         ///
@@ -395,7 +395,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ETC2 = 0x0000_0000_0800_0000;
+        const TEXTURE_COMPRESSION_ETC2 = 1 << 27;
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
         /// Blocks are always 16 bytes.
         ///
@@ -410,7 +410,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ASTC_LDR = 0x0000_0000_1000_0000;
+        const TEXTURE_COMPRESSION_ASTC_LDR = 1 << 28;
         /// Enables device specific texture format features.
         ///
         /// See `TextureFormatFeatures` for a listing of the features in question.
@@ -422,7 +422,7 @@ bitflags::bitflags! {
         /// This extension does not enable additional formats.
         ///
         /// This is a native-only feature.
-        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 0x0000_0000_2000_0000;
+        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 29;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -432,7 +432,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const SHADER_FLOAT64 = 0x0000_0000_4000_0000;
+        const SHADER_FLOAT64 = 1 << 30;
         /// Enables using 64-bit types for vertex attributes.
         ///
         /// Requires SHADER_FLOAT64.
@@ -440,7 +440,7 @@ bitflags::bitflags! {
         /// Supported Platforms: N/A
         ///
         /// This is a native-only feature.
-        const VERTEX_ATTRIBUTE_64BIT = 0x0000_0000_8000_0000;
+        const VERTEX_ATTRIBUTE_64BIT = 1 << 31;
         /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
         ///
         /// Processing of degenerate triangles/lines is hardware specific.
@@ -450,7 +450,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const CONSERVATIVE_RASTERIZATION = 0x0000_0001_0000_0000;
+        const CONSERVATIVE_RASTERIZATION = 1 << 32;
         /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
         ///
         /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
@@ -459,14 +459,14 @@ bitflags::bitflags! {
         /// - All
         ///
         /// This is a native-only feature.
-        const VERTEX_WRITABLE_STORAGE = 0x0000_0002_0000_0000;
+        const VERTEX_WRITABLE_STORAGE = 1 << 33;
         /// Enables clear to zero for buffers & images.
         ///
         /// Supported platforms:
         /// - All
         ///
         /// This is a native only feature.
-        const CLEAR_COMMANDS = 0x0000_0400_0000_0000;
+        const CLEAR_COMMANDS = 1 << 34;
         /// Enables creating shader modules from SPIR-V binary data (unsafe).
         ///
         /// SPIR-V data is not parsed or interpreted in any way; you can use
@@ -478,7 +478,7 @@ bitflags::bitflags! {
         /// Vulkan implementation.
         ///
         /// This is a native only feature.
-        const SPIRV_SHADER_PASSTHROUGH = 0x0000_0800_0000_0000;
+        const SPIRV_SHADER_PASSTHROUGH = 1 << 35;
         /// Enables `builtin(primitive_index)` in fragment shaders.
         ///
         /// Note: enables geometry processing for pipelines using the builtin.
@@ -489,7 +489,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SHADER_PRIMITIVE_INDEX = 0x0000_1000_0000_0000;
+        const SHADER_PRIMITIVE_INDEX = 1 << 36;
     }
 }
 
@@ -705,33 +705,33 @@ bitflags::bitflags! {
     /// Binary flags listing various ways the underlying platform does not conform to the WebGPU standard.
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
-        const COMPUTE_SHADERS = 0x0000_0001;
+        const COMPUTE_SHADERS = 1 << 0;
         /// Supports binding storage buffers and textures to fragment shaders.
-        const FRAGMENT_WRITABLE_STORAGE = 0x0000_0002;
+        const FRAGMENT_WRITABLE_STORAGE = 1 << 1;
         /// Supports indirect drawing and dispatching.
-        const INDIRECT_EXECUTION = 0x0000_0004;
+        const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to indexed draw calls.
-        const BASE_VERTEX = 0x0000_0008;
+        const BASE_VERTEX = 1 << 3;
         /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
-        const READ_ONLY_DEPTH_STENCIL = 0x0000_0010;
+        const READ_ONLY_DEPTH_STENCIL = 1 << 4;
         /// Supports:
         /// - copy_image_to_image
         /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
-        const DEVICE_LOCAL_IMAGE_COPIES = 0x0000_0020;
+        const DEVICE_LOCAL_IMAGE_COPIES = 1 << 5;
         /// Supports textures with mipmaps which have a non power of two size.
-        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 0x0000_0040;
+        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 1 << 6;
         /// Supports textures that are cube arrays.
-        const CUBE_ARRAY_TEXTURES = 0x0000_0080;
+        const CUBE_ARRAY_TEXTURES = 1 << 7;
         /// Supports comparison samplers.
-        const COMPARISON_SAMPLERS = 0x0000_0100;
+        const COMPARISON_SAMPLERS = 1 << 8;
         /// Supports different blending modes per color target.
-        const INDEPENDENT_BLENDING = 0x0000_0200;
+        const INDEPENDENT_BLENDING = 1 << 9;
 
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by WebGPU,
         /// the implementation is allowed to completely ignore aniso clamp. This flag is here for native backends
         /// so they can comunicate to the user of aniso is enabled.
-        const ANISOTROPIC_FILTERING = 0x8000_0000;
+        const ANISOTROPIC_FILTERING = 1 << 10;
 
     }
 }
@@ -832,13 +832,13 @@ bitflags::bitflags! {
         /// Binding is not visible from any shader stage.
         const NONE = 0;
         /// Binding is visible from the vertex shader of a render pipeline.
-        const VERTEX = 1;
+        const VERTEX = 1 << 0;
         /// Binding is visible from the fragment shader of a render pipeline.
-        const FRAGMENT = 2;
+        const FRAGMENT = 1 << 1;
+        /// Binding is visible from the compute shader of a compute pipeline.
+        const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
         const VERTEX_FRAGMENT = Self::VERTEX.bits | Self::FRAGMENT.bits;
-        /// Binding is visible from the compute shader of a compute pipeline.
-        const COMPUTE = 4;
     }
 }
 
@@ -1225,10 +1225,10 @@ bitflags::bitflags! {
     pub struct TextureFormatFeatureFlags: u32 {
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::ReadOnly`] or [`StorageTextureAccess::ReadWrite`].
-        const STORAGE_READ_WRITE = 1;
+        const STORAGE_READ_WRITE = 1 << 0;
         /// When used as a STORAGE texture, then a texture with this format can be written to with atomics.
         // TODO: No access flag exposed as of writing
-        const STORAGE_ATOMICS = 2;
+        const STORAGE_ATOMICS = 1 << 1;
     }
 }
 
@@ -1820,17 +1820,17 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct ColorWrites: u32 {
         /// Enable red channel writes
-        const RED = 1;
+        const RED = 1 << 0;
         /// Enable green channel writes
-        const GREEN = 2;
+        const GREEN = 1 << 1;
         /// Enable blue channel writes
-        const BLUE = 4;
+        const BLUE = 1 << 2;
         /// Enable alpha channel writes
-        const ALPHA = 8;
+        const ALPHA = 1 << 3;
         /// Enable red, green, and blue channel writes
-        const COLOR = 7;
+        const COLOR = Self::RED.bits | Self::GREEN.bits | Self::BLUE.bits;
         /// Enable writes to all channels.
-        const ALL = 15;
+        const ALL = Self::RED.bits | Self::GREEN.bits | Self::BLUE.bits | Self::ALPHA.bits;
     }
 }
 
@@ -2206,29 +2206,29 @@ bitflags::bitflags! {
         ///
         /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] isn't enabled, the only other usage a buffer
         /// may have is COPY_DST.
-        const MAP_READ = 1;
+        const MAP_READ = 1 << 0;
         /// Allow a buffer to be mapped for writing using [`Buffer::map_async`] + [`Buffer::get_mapped_range_mut`].
         /// This does not include creating a buffer with `mapped_at_creation` set.
         ///
         /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] feature isn't enabled, the only other usage a buffer
         /// may have is COPY_SRC.
-        const MAP_WRITE = 2;
+        const MAP_WRITE = 1 << 1;
         /// Allow a buffer to be the source buffer for a [`CommandEncoder::copy_buffer_to_buffer`] or [`CommandEncoder::copy_buffer_to_texture`]
         /// operation.
-        const COPY_SRC = 4;
+        const COPY_SRC = 1 << 2;
         /// Allow a buffer to be the destination buffer for a [`CommandEncoder::copy_buffer_to_buffer`], [`CommandEncoder::copy_texture_to_buffer`],
         /// [`CommandEncoder::fill_buffer`] or [`Queue::write_buffer`] operation.
-        const COPY_DST = 8;
+        const COPY_DST = 1 << 3;
         /// Allow a buffer to be the index buffer in a draw operation.
-        const INDEX = 16;
+        const INDEX = 1 << 4;
         /// Allow a buffer to be the vertex buffer in a draw operation.
-        const VERTEX = 32;
+        const VERTEX = 1 << 5;
         /// Allow a buffer to be a [`BufferBindingType::Uniform`] inside a bind group.
-        const UNIFORM = 64;
+        const UNIFORM = 1 << 6;
         /// Allow a buffer to be a [`BufferBindingType::Storage`] inside a bind group.
-        const STORAGE = 128;
+        const STORAGE = 1 << 7;
         /// Allow a buffer to be the indirect buffer in an indirect draw call.
-        const INDIRECT = 256;
+        const INDIRECT = 1 << 8;
     }
 }
 
@@ -2320,16 +2320,16 @@ bitflags::bitflags! {
     pub struct TextureUsages: u32 {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
-        const COPY_SRC = 1;
+        const COPY_SRC = 1 << 0;
         /// Allows a texture to be the destination in a  [`CommandEncoder::copy_texture_to_buffer`],
         /// [`CommandEncoder::copy_texture_to_texture`], or [`Queue::write_texture`] operation.
-        const COPY_DST = 2;
+        const COPY_DST = 1 << 1;
         /// Allows a texture to be a [`BindingType::Texture`] in a bind group.
-        const TEXTURE_BINDING = 4;
+        const TEXTURE_BINDING = 1 << 2;
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
-        const STORAGE_BINDING = 8;
+        const STORAGE_BINDING = 1 << 3;
         /// Allows a texture to be an output attachment of a renderpass.
-        const RENDER_ATTACHMENT = 16;
+        const RENDER_ATTACHMENT = 1 << 4;
     }
 }
 
@@ -3204,21 +3204,21 @@ bitflags::bitflags! {
     pub struct PipelineStatisticsTypes : u8 {
         /// Amount of times the vertex shader is ran. Accounts for
         /// the vertex cache when doing indexed rendering.
-        const VERTEX_SHADER_INVOCATIONS = 0x01;
+        const VERTEX_SHADER_INVOCATIONS = 1 << 0;
         /// Amount of times the clipper is invoked. This
         /// is also the amount of triangles output by the vertex shader.
-        const CLIPPER_INVOCATIONS = 0x02;
+        const CLIPPER_INVOCATIONS = 1 << 1;
         /// Amount of primitives that are not culled by the clipper.
         /// This is the amount of triangles that are actually on screen
         /// and will be rasterized and rendered.
-        const CLIPPER_PRIMITIVES_OUT = 0x04;
+        const CLIPPER_PRIMITIVES_OUT = 1 << 2;
         /// Amount of times the fragment shader is ran. Accounts for
         /// fragment shaders running in 2x2 blocks in order to get
         /// derivatives.
-        const FRAGMENT_SHADER_INVOCATIONS = 0x08;
+        const FRAGMENT_SHADER_INVOCATIONS = 1 << 3;
         /// Amount of times a compute shader is invoked. This will
         /// be equivalent to the dispatch count times the workgroup size.
-        const COMPUTE_SHADER_INVOCATIONS = 0x10;
+        const COMPUTE_SHADER_INVOCATIONS = 1 << 4;
     }
 }
 

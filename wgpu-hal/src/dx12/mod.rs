@@ -470,8 +470,8 @@ pub struct BindGroup {
 
 bitflags::bitflags! {
     struct TableTypes: u8 {
-        const SRV_CBV_UAV = 0x1;
-        const SAMPLERS = 0x2;
+        const SRV_CBV_UAV = 1 << 0;
+        const SAMPLERS = 1 << 1;
     }
 }
 

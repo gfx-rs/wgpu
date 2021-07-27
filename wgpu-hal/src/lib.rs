@@ -499,9 +499,9 @@ bitflags!(
     /// Instance initialization flags.
     pub struct InstanceFlags: u32 {
         /// Generate debug information in shaders and objects.
-        const DEBUG = 0x1;
+        const DEBUG = 1 << 0;
         /// Enable validation, if possible.
-        const VALIDATION = 0x2;
+        const VALIDATION = 1 << 1;
     }
 );
 
@@ -509,7 +509,7 @@ bitflags!(
     /// Pipeline layout creation flags.
     pub struct PipelineLayoutFlags: u32 {
         /// Include support for base vertex/instance drawing.
-        const BASE_VERTEX_INSTANCE = 0x1;
+        const BASE_VERTEX_INSTANCE = 1 << 0;
     }
 );
 
@@ -517,39 +517,39 @@ bitflags!(
     /// Texture format capability flags.
     pub struct TextureFormatCapabilities: u32 {
         /// Format can be sampled.
-        const SAMPLED = 0x1;
+        const SAMPLED = 1 << 0;
         /// Format can be sampled with a linear sampler.
-        const SAMPLED_LINEAR = 0x2;
+        const SAMPLED_LINEAR = 1 << 1;
         /// Format can be sampled with a min/max reduction sampler.
-        const SAMPLED_MINMAX = 0x4;
+        const SAMPLED_MINMAX = 1 << 2;
 
         /// Format can be used as storage with write-only access.
-        const STORAGE = 0x10;
+        const STORAGE = 1 << 3;
         /// Format can be used as storage with read and read/write access.
-        const STORAGE_READ_WRITE = 0x20;
+        const STORAGE_READ_WRITE = 1 << 4;
         /// Format can be used as storage with atomics.
-        const STORAGE_ATOMIC = 0x40;
+        const STORAGE_ATOMIC = 1 << 5;
 
         /// Format can be used as color and input attachment.
-        const COLOR_ATTACHMENT = 0x100;
+        const COLOR_ATTACHMENT = 1 << 6;
         /// Format can be used as color (with blending) and input attachment.
-        const COLOR_ATTACHMENT_BLEND = 0x200;
+        const COLOR_ATTACHMENT_BLEND = 1 << 7;
         /// Format can be used as depth-stencil and input attachment.
-        const DEPTH_STENCIL_ATTACHMENT = 0x400;
+        const DEPTH_STENCIL_ATTACHMENT = 1 << 8;
 
         /// Format can be copied from.
-        const COPY_SRC = 0x1000;
+        const COPY_SRC = 1 << 9;
         /// Format can be copied to.
-        const COPY_DST = 0x2000;
+        const COPY_DST = 1 << 10;
     }
 );
 
 bitflags!(
     /// Texture format capability flags.
     pub struct FormatAspects: u8 {
-        const COLOR = 1;
-        const DEPTH = 2;
-        const STENCIL = 4;
+        const COLOR = 1 << 0;
+        const DEPTH = 1 << 1;
+        const STENCIL = 1 << 2;
     }
 );
 
@@ -575,8 +575,8 @@ impl From<wgt::TextureFormat> for FormatAspects {
 
 bitflags!(
     pub struct MemoryFlags: u32 {
-        const TRANSIENT = 1;
-        const PREFER_COHERENT = 2;
+        const TRANSIENT = 1 << 0;
+        const PREFER_COHERENT = 1 << 1;
     }
 );
 
@@ -584,24 +584,24 @@ bitflags!(
 
 bitflags!(
     pub struct AttachmentOps: u8 {
-        const LOAD = 1;
-        const STORE = 2;
+        const LOAD = 1 << 0;
+        const STORE = 1 << 1;
     }
 );
 
 bitflags::bitflags! {
     /// Similar to `wgt::BufferUsages` but for internal use.
     pub struct BufferUses: u32 {
-        const MAP_READ = 1;
-        const MAP_WRITE = 2;
-        const COPY_SRC = 4;
-        const COPY_DST = 8;
-        const INDEX = 16;
-        const VERTEX = 32;
-        const UNIFORM = 64;
-        const STORAGE_READ = 128;
-        const STORAGE_WRITE = 256;
-        const INDIRECT = 512;
+        const MAP_READ = 1 << 0;
+        const MAP_WRITE = 1 << 1;
+        const COPY_SRC = 1 << 2;
+        const COPY_DST = 1 << 3;
+        const INDEX = 1 << 4;
+        const VERTEX = 1 << 5;
+        const UNIFORM = 1 << 6;
+        const STORAGE_READ = 1 << 7;
+        const STORAGE_WRITE = 1 << 8;
+        const INDIRECT = 1 << 9;
         /// The combination of usages that can be used together (read-only).
         const INCLUSIVE = Self::MAP_READ.bits | Self::COPY_SRC.bits |
             Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
@@ -618,14 +618,14 @@ bitflags::bitflags! {
 bitflags::bitflags! {
     /// Similar to `wgt::TextureUsages` but for internal use.
     pub struct TextureUses: u32 {
-        const COPY_SRC = 1;
-        const COPY_DST = 2;
-        const RESOURCE = 4;
-        const COLOR_TARGET = 8;
-        const DEPTH_STENCIL_READ = 16;
-        const DEPTH_STENCIL_WRITE = 32;
-        const STORAGE_READ = 64;
-        const STORAGE_WRITE = 128;
+        const COPY_SRC = 1 << 0;
+        const COPY_DST = 1 << 1;
+        const RESOURCE = 1 << 2;
+        const COLOR_TARGET = 1 << 3;
+        const DEPTH_STENCIL_READ = 1 << 4;
+        const DEPTH_STENCIL_WRITE = 1 << 5;
+        const STORAGE_READ = 1 << 6;
+        const STORAGE_WRITE = 1 << 7;
         /// The combination of usages that can be used together (read-only).
         const INCLUSIVE = Self::COPY_SRC.bits | Self::RESOURCE.bits | Self::DEPTH_STENCIL_READ.bits;
         /// The combination of exclusive usages (write-only and read-write).
