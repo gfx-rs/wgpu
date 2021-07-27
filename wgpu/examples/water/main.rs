@@ -798,7 +798,8 @@ fn water() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
-            .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
+            .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
+            .specific_failure(Some(wgpu::Backends::DX12), None, Some("Basic"), false), // WARP has a bug https://github.com/gfx-rs/wgpu/issues/1730
         tolerance: 5,
         max_outliers: 460, // bounded by DX12, then rpi4 on vk
     });
