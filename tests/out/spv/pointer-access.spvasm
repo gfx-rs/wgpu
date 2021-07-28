@@ -12,6 +12,8 @@ OpDecorate %12 ArrayStride 4
 OpDecorate %14 ArrayStride 4
 OpDecorate %15 Block
 OpMemberDecorate %15 0 Offset 0
+OpDecorate %17 NonReadable
+OpDecorate %17 NonWritable
 OpDecorate %17 DescriptorSet 0
 OpDecorate %17 Binding 0
 %2 = OpTypeVoid

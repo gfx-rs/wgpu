@@ -14,6 +14,7 @@ OpMemberDecorate %9 1 Offset 48
 OpMemberDecorate %9 2 Offset 64
 OpMemberDecorate %9 2 ColMajor
 OpMemberDecorate %9 2 MatrixStride 16
+OpDecorate %10 NonWritable
 OpDecorate %10 DescriptorSet 0
 OpDecorate %10 Binding 0
 %2 = OpTypeVoid

@@ -25,7 +25,7 @@ pub(super) fn map_storage_class(class: crate::StorageClass) -> spirv::StorageCla
         crate::StorageClass::Handle => spirv::StorageClass::UniformConstant,
         crate::StorageClass::Function => spirv::StorageClass::Function,
         crate::StorageClass::Private => spirv::StorageClass::Private,
-        crate::StorageClass::Storage => spirv::StorageClass::StorageBuffer,
+        crate::StorageClass::Storage { .. } => spirv::StorageClass::StorageBuffer,
         crate::StorageClass::Uniform => spirv::StorageClass::Uniform,
         crate::StorageClass::WorkGroup => spirv::StorageClass::Workgroup,
         crate::StorageClass::PushConstant => spirv::StorageClass::PushConstant,

@@ -154,7 +154,9 @@ pub(super) fn map_storage_class(word: spirv::Word) -> Result<super::ExtendedClas
         Some(Sc::Output) => Ec::Output,
         Some(Sc::Private) => Ec::Global(crate::StorageClass::Private),
         Some(Sc::UniformConstant) => Ec::Global(crate::StorageClass::Handle),
-        Some(Sc::StorageBuffer) => Ec::Global(crate::StorageClass::Storage),
+        Some(Sc::StorageBuffer) => Ec::Global(crate::StorageClass::Storage {
+            access: crate::StorageAccess::default(),
+        }),
         // we expect the `Storage` case to be filtered out before calling this function.
         Some(Sc::Uniform) => Ec::Global(crate::StorageClass::Uniform),
         Some(Sc::Workgroup) => Ec::Global(crate::StorageClass::WorkGroup),

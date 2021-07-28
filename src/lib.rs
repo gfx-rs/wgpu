@@ -245,7 +245,7 @@ pub enum StorageClass {
     /// Uniform buffer data.
     Uniform,
     /// Storage buffer data, potentially mutable.
-    Storage,
+    Storage { access: StorageAccess },
     /// Opaque handles, such as samplers and images.
     Handle,
     /// Push constants.
@@ -473,7 +473,10 @@ pub enum ImageClass {
         multi: bool,
     },
     /// Storage image.
-    Storage(StorageFormat),
+    Storage {
+        format: StorageFormat,
+        access: StorageAccess,
+    },
 }
 
 /// A data type declared in the module.
@@ -682,8 +685,6 @@ pub struct GlobalVariable {
     pub ty: Handle<Type>,
     /// Initial value for this variable.
     pub init: Option<Handle<Constant>>,
-    /// Access bit for storage types of images and buffers.
-    pub storage_access: StorageAccess,
 }
 
 /// Variable defined at function level.

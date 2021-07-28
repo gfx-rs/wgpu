@@ -497,11 +497,11 @@ impl<'a, W: Write> Writer<'a, W> {
                     class,
                 } => {
                     // Gather the storage format if needed
-                    let layout_storage_format = match self.module.types[global.ty].inner {
+                    let storage_format_access = match self.module.types[global.ty].inner {
                         TypeInner::Image {
-                            class: crate::ImageClass::Storage(format),
+                            class: crate::ImageClass::Storage { format, access },
                             ..
-                        } => Some(glsl_storage_format(format)),
+                        } => Some((format, access)),
                         _ => None,
                     };
                     // Gether the location if needed
@@ -513,23 +513,24 @@ impl<'a, W: Write> Writer<'a, W> {
                     };
 
                     // Write all the layout qualifiers
-                    if layout_binding.is_some() || layout_storage_format.is_some() {
+                    if layout_binding.is_some() || storage_format_access.is_some() {
                         write!(self.out, "layout(")?;
                         if let Some(binding) = layout_binding {
                             write!(self.out, "binding = {}", binding)?;
                         }
-                        if let Some(format) = layout_storage_format {
+                        if let Some((format, _)) = storage_format_access {
+                            let format_str = glsl_storage_format(format);
                             let separator = match layout_binding {
                                 Some(_) => ",",
                                 None => "",
                             };
-                            write!(self.out, "{}{}", separator, format)?;
+                            write!(self.out, "{}{}", separator, format_str)?;
                         }
                         write!(self.out, ") ")?;
                     }
 
-                    if let Some(storage_access) = glsl_storage_access(global.storage_access) {
-                        write!(self.out, "{} ", storage_access)?;
+                    if let Some((_, access)) = storage_format_access {
+                        self.write_storage_access(access)?;
                     }
 
                     // All images in glsl are `uniform`
@@ -760,7 +761,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Ic::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
             Ic::Depth { multi: true } => ("sampler", crate::ScalarKind::Float, "MS", ""),
             Ic::Depth { multi: false } => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
-            Ic::Storage(format) => ("image", format.into(), "", ""),
+            Ic::Storage { format, .. } => ("image", format.into(), "", ""),
         };
 
         write!(
@@ -798,8 +799,8 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        if let Some(storage_access) = glsl_storage_access(global.storage_access) {
-            write!(self.out, "{} ", storage_access)?;
+        if let crate::StorageClass::Storage { access } = global.class {
+            self.write_storage_access(access)?;
         }
 
         // Write the storage class
@@ -1013,7 +1014,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 } => {
                     // Write the storage format if needed
                     if let TypeInner::Image {
-                        class: crate::ImageClass::Storage(format),
+                        class: crate::ImageClass::Storage { format, .. },
                         ..
                     } = this.module.types[arg.ty].inner
                     {
@@ -1939,7 +1940,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 let fun_name = match class {
                     crate::ImageClass::Sampled { .. } => "texelFetch",
-                    crate::ImageClass::Storage(_) => "imageLoad",
+                    crate::ImageClass::Storage { .. } => "imageLoad",
                     // TODO: Is there even a function for this?
                     crate::ImageClass::Depth { multi: _ } => {
                         return Err(Error::Custom("TODO: depth sample loads".to_string()))
@@ -1992,7 +1993,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                     write!(self.out, "0",)?;
                                 }
                             }
-                            ImageClass::Storage(_) => {
+                            ImageClass::Storage { .. } => {
                                 write!(self.out, "imageSize(")?;
                                 self.write_expr(image, ctx)?;
                             }
@@ -2007,7 +2008,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::ImageQuery::NumLayers => {
                         let fun_name = match class {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => "textureSize",
-                            ImageClass::Storage(_) => "imageSize",
+                            ImageClass::Storage { .. } => "imageSize",
                         };
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(image, ctx)?;
@@ -2019,7 +2020,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => {
                                 "textureSamples"
                             }
-                            ImageClass::Storage(_) => "imageSamples",
+                            ImageClass::Storage { .. } => "imageSamples",
                         };
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(image, ctx)?;
@@ -2417,6 +2418,21 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper function that return the glsl storage access string of [`StorageAccess`](crate::StorageAccess)
+    ///
+    /// glsl allows adding both `readonly` and `writeonly` but this means that
+    /// they can only be used to query information about the resource which isn't what
+    /// we want here so when storage access is both `LOAD` and `STORE` add no modifiers
+    fn write_storage_access(&mut self, storage_access: crate::StorageAccess) -> BackendResult {
+        if !storage_access.contains(crate::StorageAccess::STORE) {
+            write!(self.out, "readonly ")?;
+        }
+        if !storage_access.contains(crate::StorageAccess::LOAD) {
+            write!(self.out, "writeonly ")?;
+        }
+        Ok(())
+    }
+
     /// Helper method used to produce the reflection info that's returned to the user
     ///
     /// It takes an iterator of [`Function`](crate::Function) references instead of
@@ -2454,7 +2470,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             match self.module.types[var.ty].inner {
                 crate::TypeInner::Struct { .. } => match var.class {
-                    crate::StorageClass::Uniform | crate::StorageClass::Storage => {
+                    crate::StorageClass::Uniform | crate::StorageClass::Storage { .. } => {
                         let name = self.reflection_names[&var.ty].clone();
                         uniforms.insert(handle, name);
                     }
@@ -2568,7 +2584,7 @@ fn glsl_storage_class(class: crate::StorageClass) -> Option<&'static str> {
     match class {
         Sc::Function => None,
         Sc::Private => None,
-        Sc::Storage => Some("buffer"),
+        Sc::Storage { .. } => Some("buffer"),
         Sc::Uniform => Some("uniform"),
         Sc::Handle => Some("uniform"),
         Sc::WorkGroup => Some("shared"),
@@ -2647,21 +2663,6 @@ fn glsl_storage_format(format: crate::StorageFormat) -> &'static str {
         Sf::Rgba32Uint => "rgba32ui",
         Sf::Rgba32Sint => "rgba32i",
         Sf::Rgba32Float => "rgba32f",
-    }
-}
-
-/// Helper function that return the glsl storage access string of [`StorageAccess`](crate::StorageAccess)
-///
-/// glsl allows adding both `readonly` and `writeonly` but this means that
-/// they can only be used to query information about the resource which isn't what
-/// we want here so when storage access is both `LOAD` and `STORE` add no modifiers
-fn glsl_storage_access(storage_access: crate::StorageAccess) -> Option<&'static str> {
-    if storage_access == crate::StorageAccess::LOAD {
-        Some("readonly")
-    } else if storage_access == crate::StorageAccess::STORE {
-        Some("writeonly")
-    } else {
-        None
     }
 }
 

@@ -261,13 +261,13 @@ fn unknown_built_in() {
 fn unknown_access() {
     check(
         r#"
-            var<storage> x: [[access(unknown_access)]] array<u32>;
+            var<storage,unknown_access> x: array<u32>;
         "#,
         r#"error: unknown access: 'unknown_access'
-  ┌─ wgsl:2:38
+  ┌─ wgsl:2:25
   │
-2 │             var<storage> x: [[access(unknown_access)]] array<u32>;
-  │                                      ^^^^^^^^^^^^^^ unknown access
+2 │             var<storage,unknown_access> x: array<u32>;
+  │                         ^^^^^^^^^^^^^^ unknown access
 
 "#,
     );
@@ -345,13 +345,13 @@ fn unknown_type() {
 fn unknown_storage_format() {
     check(
         r#"
-            let storage: [[access(read)]] texture_storage_1d<rgba>;
+            let storage: texture_storage_1d<rgba>;
         "#,
         r#"error: unknown storage format: 'rgba'
-  ┌─ wgsl:2:62
+  ┌─ wgsl:2:45
   │
-2 │             let storage: [[access(read)]] texture_storage_1d<rgba>;
-  │                                                              ^^^^ unknown storage format
+2 │             let storage: texture_storage_1d<rgba>;
+  │                                             ^^^^ unknown storage format
 
 "#,
     );

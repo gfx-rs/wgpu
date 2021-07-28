@@ -241,7 +241,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                         StorageQualifier::StorageClass(StorageClass::Uniform),
                     ),
                     TokenValue::Buffer => TypeQualifier::StorageQualifier(
-                        StorageQualifier::StorageClass(StorageClass::Storage),
+                        StorageQualifier::StorageClass(StorageClass::Storage {
+                            access: crate::StorageAccess::default(),
+                        }),
                     ),
                     TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
                     TokenValue::PrecisionQualifier(p) => TypeQualifier::Precision(p),

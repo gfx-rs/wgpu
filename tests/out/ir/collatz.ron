@@ -76,16 +76,17 @@
     global_variables: [
         (
             name: Some("v_indices"),
-            class: Storage,
+            class: Storage(
+                access: (
+                    bits: 3,
+                ),
+            ),
             binding: Some((
                 group: 0,
                 binding: 0,
             )),
             ty: 3,
             init: None,
-            storage_access: (
-                bits: 3,
-            ),
         ),
     ],
     functions: [

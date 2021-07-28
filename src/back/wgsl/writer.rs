@@ -12,7 +12,6 @@ type BackendResult = Result<(), Error>;
 /// WGSL attribute
 /// https://gpuweb.github.io/gpuweb/wgsl/#attributes
 enum Attribute {
-    Access(crate::StorageAccess),
     Binding(u32),
     Block,
     BuiltIn(crate::BuiltIn),
@@ -297,16 +296,6 @@ impl<W: Write> Writer<W> {
         let mut attributes_str = String::new();
         for (index, attribute) in attributes.iter().enumerate() {
             let attribute_str = match *attribute {
-                Attribute::Access(access) => {
-                    let access_str = if access.is_all() {
-                        "read_write"
-                    } else if access.contains(crate::StorageAccess::LOAD) {
-                        "read"
-                    } else {
-                        "write"
-                    };
-                    format!("access({})", access_str)
-                }
                 Attribute::Block => String::from("block"),
                 Attribute::Location(id) => format!("location({})", id),
                 Attribute::BuiltIn(builtin_attrib) => {
@@ -491,10 +480,14 @@ impl<W: Write> Writer<W> {
                         if multi { "multisampled_" } else { "" },
                         String::from(""),
                     ),
-                    Ic::Storage(storage_format) => (
+                    Ic::Storage { format, access } => (
                         "storage_",
                         "",
-                        format!("<{}>", storage_format_str(storage_format)),
+                        if access.contains(crate::StorageAccess::STORE) {
+                            format!("<{},write>", storage_format_str(format))
+                        } else {
+                            format!("<{}>", storage_format_str(format))
+                        },
                     ),
                 };
                 let ty_str = format!(
@@ -1329,10 +1322,7 @@ impl<W: Write> Writer<W> {
             write!(self.out, "<{}>", storage_class)?;
         }
         write!(self.out, " {}: ", name)?;
-        // Write access attribute if present
-        if !global.storage_access.is_empty() {
-            self.write_attributes(&[Attribute::Access(global.storage_access)], true)?;
-        }
+
         // Write global type
         self.write_type(module, global.ty)?;
 
@@ -1586,7 +1576,11 @@ fn storage_class_str(storage_class: crate::StorageClass) -> Option<&'static str>
     match storage_class {
         Sc::Private => Some("private"),
         Sc::Uniform => Some("uniform"),
-        Sc::Storage => Some("storage"),
+        Sc::Storage { access } => Some(if access.contains(crate::StorageAccess::STORE) {
+            "storage,read_write"
+        } else {
+            "storage"
+        }),
         Sc::PushConstant => Some("push_constant"),
         Sc::WorkGroup => Some("workgroup"),
         Sc::Function | Sc::Handle => None,

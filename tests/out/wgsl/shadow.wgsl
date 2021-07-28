@@ -20,7 +20,7 @@ let c_max_lights: u32 = 10u;
 [[group(0), binding(0)]]
 var<uniform> u_globals: Globals;
 [[group(0), binding(1)]]
-var<storage> s_lights: [[access(read)]] Lights;
+var<storage> s_lights: Lights;
 [[group(0), binding(2)]]
 var t_shadow: texture_depth_2d_array;
 [[group(0), binding(3)]]

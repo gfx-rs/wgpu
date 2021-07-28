@@ -2912,7 +2912,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             .lookup_storage_buffer_types
             .contains_key(&base_lookup_ty.handle)
         {
-            crate::StorageClass::Storage
+            crate::StorageClass::Storage {
+                access: crate::StorageAccess::default(),
+            }
         } else {
             match map_storage_class(storage_class)? {
                 ExtendedClass::Global(class) => class,
@@ -3161,7 +3163,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let inner = crate::TypeInner::Image {
             class: if format != 0 {
-                crate::ImageClass::Storage(map_image_format(format)?)
+                crate::ImageClass::Storage {
+                    format: map_image_format(format)?,
+                    access: crate::StorageAccess::default(),
+                }
             } else {
                 crate::ImageClass::Sampled {
                     kind,
@@ -3418,18 +3423,25 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let original_ty = self.lookup_type.lookup(type_id)?.handle;
         let (effective_ty, is_storage) = match module.types[original_ty].inner {
-            crate::TypeInner::Pointer { base, class } => {
-                (base, class == crate::StorageClass::Storage)
-            }
+            crate::TypeInner::Pointer { base, class } => (
+                base,
+                match class {
+                    crate::StorageClass::Storage { .. } => true,
+                    _ => false,
+                },
+            ),
             crate::TypeInner::Image {
-                class: crate::ImageClass::Storage(_),
+                class: crate::ImageClass::Storage { .. },
                 ..
             } => (original_ty, true),
             _ => (original_ty, false),
         };
         let (ext_class, type_storage_access) =
             match self.lookup_storage_buffer_types.get(&effective_ty) {
-                Some(&access) => (ExtendedClass::Global(crate::StorageClass::Storage), access),
+                Some(&access) => (
+                    ExtendedClass::Global(crate::StorageClass::Storage { access }),
+                    access,
+                ),
                 None => (
                     map_storage_class(storage_class)?,
                     crate::StorageAccess::all(),
@@ -3449,7 +3461,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let (inner, var) = match ext_class {
             ExtendedClass::Global(class) => {
-                let storage_access = if is_storage {
+                // TODO actually apply decorators
+                let _storage_access = if is_storage {
                     let mut access = type_storage_access;
                     if dec.flags.contains(DecorationFlags::NON_READABLE) {
                         access &= !crate::StorageAccess::LOAD;
@@ -3468,7 +3481,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     class,
                     ty: effective_ty,
                     init,
-                    storage_access,
                 };
                 (Variable::Global, var)
             }
@@ -3513,7 +3525,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     binding: None,
                     ty: effective_ty,
                     init: None,
-                    storage_access: crate::StorageAccess::empty(),
                 };
                 let inner = Variable::Input(crate::FunctionArgument {
                     name: dec.name,
@@ -3584,7 +3595,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     binding: None,
                     ty: effective_ty,
                     init,
-                    storage_access: crate::StorageAccess::empty(),
                 };
                 let inner = Variable::Output(crate::FunctionResult {
                     ty: effective_ty,

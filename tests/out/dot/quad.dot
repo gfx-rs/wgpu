@@ -35,9 +35,9 @@ digraph Module {
 		label="Fragment/'main'"
 		node [ style=filled ]
 		ep1_e0 [ fillcolor="#ffffb3" label="[1] Constant" ]
-		ep1_e1 [ fillcolor="#ffffb3" label="[2] Global" ]
+		ep1_e1 [ color="#ffffb3" label="[2] Global" ]
 		g1 -> ep1_e1 [fillcolor=gray]
-		ep1_e2 [ fillcolor="#ffffb3" label="[3] Global" ]
+		ep1_e2 [ color="#ffffb3" label="[3] Global" ]
 		g0 -> ep1_e2 [fillcolor=gray]
 		ep1_e3 [ color="#8dd3c7" label="[4] Argument[0]" ]
 		ep1_e4 [ color="#80b1d3" label="[5] ImageSample" ]
@@ -86,9 +86,9 @@ digraph Module {
 		label="Fragment/'fs_extra'"
 		node [ style=filled ]
 		ep2_e0 [ fillcolor="#ffffb3" label="[1] Constant" ]
-		ep2_e1 [ fillcolor="#ffffb3" label="[2] Global" ]
+		ep2_e1 [ color="#ffffb3" label="[2] Global" ]
 		g1 -> ep2_e1 [fillcolor=gray]
-		ep2_e2 [ fillcolor="#ffffb3" label="[3] Global" ]
+		ep2_e2 [ color="#ffffb3" label="[3] Global" ]
 		g0 -> ep2_e2 [fillcolor=gray]
 		ep2_e3 [ fillcolor="#ffffb3" label="[4] Constant" ]
 		ep2_e4 [ fillcolor="#ffffb3" label="[5] Constant" ]

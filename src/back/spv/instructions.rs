@@ -234,7 +234,7 @@ impl super::Instruction {
         let (depth, multi, sampled) = match image_class {
             crate::ImageClass::Sampled { kind: _, multi } => (false, multi, true),
             crate::ImageClass::Depth { multi } => (true, multi, true),
-            crate::ImageClass::Storage(_) => (false, false, false),
+            crate::ImageClass::Storage { .. } => (false, false, false),
         };
         instruction.add_operand(depth as u32);
         instruction.add_operand(arrayed as u32);
@@ -242,7 +242,7 @@ impl super::Instruction {
         instruction.add_operand(if sampled { 1 } else { 2 });
 
         let format = match image_class {
-            crate::ImageClass::Storage(format) => match format {
+            crate::ImageClass::Storage { format, .. } => match format {
                 crate::StorageFormat::R8Unorm => spirv::ImageFormat::R8,
                 crate::StorageFormat::R8Snorm => spirv::ImageFormat::R8Snorm,
                 crate::StorageFormat::R8Uint => spirv::ImageFormat::R8ui,

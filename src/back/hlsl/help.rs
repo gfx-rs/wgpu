@@ -105,9 +105,13 @@ impl<'a, W: Write> super::Writer<'a, W> {
         arrayed: bool,
         class: crate::ImageClass,
     ) -> BackendResult {
+        let access_str = match class {
+            crate::ImageClass::Storage { .. } => "RW",
+            _ => "",
+        };
         let dim_str = dim.to_hlsl_str();
         let arrayed_str = if arrayed { "Array" } else { "" };
-        write!(self.out, "Texture{}{}", dim_str, arrayed_str)?;
+        write!(self.out, "{}Texture{}{}", access_str, dim_str, arrayed_str)?;
         match class {
             crate::ImageClass::Depth { multi } => {
                 let multi_str = if multi { "MS" } else { "" };
@@ -118,7 +122,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 let scalar_kind_str = kind.to_hlsl_str(4)?;
                 write!(self.out, "{}<{}4>", multi_str, scalar_kind_str)?
             }
-            crate::ImageClass::Storage(format) => {
+            crate::ImageClass::Storage { format, .. } => {
                 let storage_format_str = format.to_hlsl_str();
                 write!(self.out, "<{}>", storage_format_str)?
             }
@@ -195,9 +199,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
             crate::ImageClass::Sampled { multi: true, .. } => "MS",
             crate::ImageClass::Depth { multi: true } => "DepthMS",
             crate::ImageClass::Depth { multi: false } => "Depth",
-            crate::ImageClass::Sampled { multi: false, .. } | crate::ImageClass::Storage { .. } => {
-                ""
-            }
+            crate::ImageClass::Sampled { multi: false, .. } => "",
+            crate::ImageClass::Storage { .. } => "RW",
         };
         let arrayed_str = if query.arrayed { "Array" } else { "" };
         let query_str = match query.query {
@@ -226,7 +229,10 @@ impl<'a, W: Write> super::Writer<'a, W> {
         expr_handle: Handle<crate::Expression>,
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
-        use crate::{back::INDENT, ImageDimension as IDim};
+        use crate::{
+            back::{COMPONENTS, INDENT},
+            ImageDimension as IDim,
+        };
 
         const ARGUMENT_VARIABLE_NAME: &str = "texture";
         const RETURN_VARIABLE_NAME: &str = "ret";
@@ -253,15 +259,24 @@ impl<'a, W: Write> super::Writer<'a, W> {
         writeln!(self.out, "{{")?;
 
         let array_coords = if wiq.arrayed { 1 } else { 0 };
+        // extra parameter is the mip level count or the sample count
+        let extra_coords = match wiq.class {
+            crate::ImageClass::Storage { .. } => 0,
+            crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => 1,
+        };
+
         // GetDimensions Overloaded Methods
         // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions#overloaded-methods
         let (ret_swizzle, number_of_params) = match wiq.query {
-            ImageQuery::Size | ImageQuery::SizeLevel => match wiq.dim {
-                IDim::D1 => ("x", 1 + array_coords),
-                IDim::D2 => ("xy", 3 + array_coords),
-                IDim::D3 => ("xyz", 4),
-                IDim::Cube => ("xy", 3 + array_coords),
-            },
+            ImageQuery::Size | ImageQuery::SizeLevel => {
+                let ret = match wiq.dim {
+                    IDim::D1 => "x",
+                    IDim::D2 => "xy",
+                    IDim::D3 => "xyz",
+                    IDim::Cube => "xy",
+                };
+                (ret, ret.len() + array_coords + extra_coords)
+            }
             ImageQuery::NumLevels | ImageQuery::NumSamples | ImageQuery::NumLayers => {
                 if wiq.arrayed || wiq.dim == IDim::D3 {
                     ("w", 4)
@@ -284,18 +299,16 @@ impl<'a, W: Write> super::Writer<'a, W> {
             }
             _ => match wiq.class {
                 crate::ImageClass::Sampled { multi: true, .. }
-                | crate::ImageClass::Depth { multi: true } => {}
-                _ => match wiq.dim {
+                | crate::ImageClass::Depth { multi: true }
+                | crate::ImageClass::Storage { .. } => {}
+                _ => {
                     // Write zero mipmap level for supported types
-                    IDim::D2 | IDim::D3 | IDim::Cube => {
-                        write!(self.out, "0, ")?;
-                    }
-                    IDim::D1 => {}
-                },
+                    write!(self.out, "0, ")?;
+                }
             },
         }
 
-        for component in crate::back::COMPONENTS[..number_of_params - 1].iter() {
+        for component in COMPONENTS[..number_of_params - 1].iter() {
             write!(self.out, "{}.{}, ", RETURN_VARIABLE_NAME, component)?;
         }
 
@@ -304,7 +317,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
             self.out,
             "{}.{}",
             RETURN_VARIABLE_NAME,
-            crate::back::COMPONENTS[number_of_params - 1]
+            COMPONENTS[number_of_params - 1]
         )?;
 
         writeln!(self.out, ");")?;
@@ -344,10 +357,12 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         }
                         ref other => unreachable!("Array length of base {:?}", other),
                     };
+                    let storage_access = match global_var.class {
+                        crate::StorageClass::Storage { access } => access,
+                        _ => crate::StorageAccess::default(),
+                    };
                     let wal = WrappedArrayLength {
-                        writable: global_var
-                            .storage_access
-                            .contains(crate::StorageAccess::STORE),
+                        writable: storage_access.contains(crate::StorageAccess::STORE),
                     };
 
                     if !self.wrapped_array_lengths.contains(&wal) {

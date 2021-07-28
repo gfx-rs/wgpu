@@ -396,24 +396,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "cbuffer")?;
                 "b"
             }
-            crate::StorageClass::Storage => {
-                let (prefix, register) =
-                    if global.storage_access.contains(crate::StorageAccess::STORE) {
-                        ("RW", "u")
-                    } else {
-                        ("", "t")
-                    };
+            crate::StorageClass::Storage { access } => {
+                let (prefix, register) = if access.contains(crate::StorageAccess::STORE) {
+                    ("RW", "u")
+                } else {
+                    ("", "t")
+                };
                 write!(self.out, "{}ByteAddressBuffer", prefix)?;
                 register
             }
             crate::StorageClass::Handle => {
-                let register = if let TypeInner::Sampler { .. } = *inner {
-                    "s"
-                } else if global.storage_access.contains(crate::StorageAccess::STORE) {
-                    write!(self.out, "RW")?;
-                    "u"
-                } else {
-                    "t"
+                let register = match *inner {
+                    TypeInner::Sampler { .. } => "s",
+                    // all storage textures are UAV, unconditionally
+                    TypeInner::Image {
+                        class: crate::ImageClass::Storage { .. },
+                        ..
+                    } => "u",
+                    _ => "t",
                 };
                 self.write_type(module, global.ty)?;
                 register
@@ -954,11 +954,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     _ => None,
                 };
 
-                if func_ctx.info[pointer]
+                if let Some(crate::StorageClass::Storage { .. }) = func_ctx.info[pointer]
                     .ty
                     .inner_with(&module.types)
                     .pointer_class()
-                    == Some(crate::StorageClass::Storage)
                 {
                     let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
                     self.write_storage_store(
@@ -1208,11 +1207,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
             }
             Expression::Access { base, index } => {
-                if func_ctx.info[expr]
+                if let Some(crate::StorageClass::Storage { .. }) = func_ctx.info[expr]
                     .ty
                     .inner_with(&module.types)
                     .pointer_class()
-                    == Some(crate::StorageClass::Storage)
                 {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
@@ -1223,11 +1221,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             Expression::AccessIndex { base, index } => {
-                if func_ctx.info[expr]
+                if let Some(crate::StorageClass::Storage { .. }) = func_ctx.info[expr]
                     .ty
                     .inner_with(&module.types)
                     .pointer_class()
-                    == Some(crate::StorageClass::Storage)
                 {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
@@ -1389,22 +1386,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 index,
             } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                let ms = match *func_ctx.info[image].ty.inner_with(&module.types) {
-                    TypeInner::Image {
-                        class: crate::ImageClass::Sampled { multi, .. },
-                        ..
-                    }
-                    | TypeInner::Image {
-                        class: crate::ImageClass::Depth { multi },
-                        ..
-                    } => multi,
-                    _ => false,
+                let (ms, storage) = match *func_ctx.info[image].ty.inner_with(&module.types) {
+                    TypeInner::Image { class, .. } => match class {
+                        crate::ImageClass::Sampled { multi, .. }
+                        | crate::ImageClass::Depth { multi } => (multi, false),
+                        crate::ImageClass::Storage { .. } => (false, true),
+                    },
+                    _ => (false, false),
                 };
 
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ".Load(")?;
 
-                let mip_level = if ms {
+                let mip_level = if ms || storage {
                     MipLevelCoordinate::NotApplicable
                 } else {
                     match index {
@@ -1436,27 +1430,30 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, ".x")?;
                 }
             }
-            Expression::GlobalVariable(handle) => {
-                if module.global_variables[handle].class != crate::StorageClass::Storage {
+            Expression::GlobalVariable(handle) => match module.global_variables[handle].class {
+                crate::StorageClass::Storage { .. } => {}
+                _ => {
                     let name = &self.names[&NameKey::GlobalVariable(handle)];
                     write!(self.out, "{}", name)?;
                 }
-            }
+            },
             Expression::LocalVariable(handle) => {
                 write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
             }
             Expression::Load { pointer } => {
-                if func_ctx.info[pointer]
+                match func_ctx.info[pointer]
                     .ty
                     .inner_with(&module.types)
                     .pointer_class()
-                    == Some(crate::StorageClass::Storage)
                 {
-                    let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
-                    let result_ty = func_ctx.info[expr].ty.clone();
-                    self.write_storage_load(module, var_handle, result_ty, func_ctx)?;
-                } else {
-                    self.write_expr(module, pointer, func_ctx)?;
+                    Some(crate::StorageClass::Storage { .. }) => {
+                        let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
+                        let result_ty = func_ctx.info[expr].ty.clone();
+                        self.write_storage_load(module, var_handle, result_ty, func_ctx)?;
+                    }
+                    _ => {
+                        self.write_expr(module, pointer, func_ctx)?;
+                    }
                 }
             }
             Expression::Unary { op, expr } => {
@@ -1613,8 +1610,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     _ => unreachable!(),
                 };
 
+                let storage_access = match var.class {
+                    crate::StorageClass::Storage { access } => access,
+                    _ => crate::StorageAccess::default(),
+                };
                 let wrapped_array_length = WrappedArrayLength {
-                    writable: var.storage_access.contains(crate::StorageAccess::STORE),
+                    writable: storage_access.contains(crate::StorageAccess::STORE),
                 };
 
                 write!(self.out, "((")?;

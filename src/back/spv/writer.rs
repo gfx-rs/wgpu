@@ -702,7 +702,7 @@ impl Writer {
                 let kind = match class {
                     crate::ImageClass::Sampled { kind, multi: _ } => kind,
                     crate::ImageClass::Depth { multi: _ } => crate::ScalarKind::Float,
-                    crate::ImageClass::Storage(format) => {
+                    crate::ImageClass::Storage { format, .. } => {
                         let required_caps: &[_] = match dim {
                             crate::ImageDimension::D1 => &[spirv::Capability::Image1D],
                             crate::ImageDimension::Cube => &[spirv::Capability::ImageCubeArray],
@@ -1057,13 +1057,23 @@ impl Writer {
 
         use spirv::Decoration;
 
-        let access_decoration = match global_variable.storage_access {
-            crate::StorageAccess::LOAD => Some(Decoration::NonWritable),
-            crate::StorageAccess::STORE => Some(Decoration::NonReadable),
-            _ => None,
+        let storage_access = match global_variable.class {
+            crate::StorageClass::Storage { access } => Some(access),
+            _ => match ir_module.types[global_variable.ty].inner {
+                crate::TypeInner::Image {
+                    class: crate::ImageClass::Storage { access, .. },
+                    ..
+                } => Some(access),
+                _ => None,
+            },
         };
-        if let Some(decoration) = access_decoration {
-            self.decorate(id, decoration, &[]);
+        if let Some(storage_access) = storage_access {
+            if !storage_access.contains(crate::StorageAccess::LOAD) {
+                self.decorate(id, Decoration::NonReadable, &[]);
+            }
+            if !storage_access.contains(crate::StorageAccess::STORE) {
+                self.decorate(id, Decoration::NonWritable, &[]);
+            }
         }
 
         if let Some(ref res_binding) = global_variable.binding {
@@ -1104,10 +1114,14 @@ impl Writer {
         ir_module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<(), Error> {
-        let has_storage_buffers = ir_module
-            .global_variables
-            .iter()
-            .any(|(_, var)| var.class == crate::StorageClass::Storage);
+        let has_storage_buffers =
+            ir_module
+                .global_variables
+                .iter()
+                .any(|(_, var)| match var.class {
+                    crate::StorageClass::Storage { .. } => true,
+                    _ => false,
+                });
         if self.physical_layout.version < 0x10300 && has_storage_buffers {
             // enable the storage buffer class on < SPV-1.3
             Instruction::extension("SPV_KHR_storage_buffer_storage_class")

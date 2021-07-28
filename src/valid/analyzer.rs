@@ -434,9 +434,8 @@ impl FunctionInfo {
                     // uniform data
                     Sc::Uniform | Sc::PushConstant => true,
                     // storage data is only uniform when read-only
-                    Sc::Handle | Sc::Storage => {
-                        !var.storage_access.contains(crate::StorageAccess::STORE)
-                    }
+                    Sc::Storage { access } => !access.contains(crate::StorageAccess::STORE),
+                    Sc::Handle => false,
                 };
                 Uniformity {
                     non_uniform_result: if uniform { None } else { Some(handle) },
@@ -865,7 +864,6 @@ fn uniform_control_flow() {
         ty,
         class: crate::StorageClass::Handle,
         binding: None,
-        storage_access: crate::StorageAccess::STORE,
     });
     let uniform_global = global_var_arena.append(crate::GlobalVariable {
         name: None,
@@ -873,7 +871,6 @@ fn uniform_control_flow() {
         ty,
         binding: None,
         class: crate::StorageClass::Uniform,
-        storage_access: crate::StorageAccess::empty(),
     });
 
     let mut expressions = Arena::new();

@@ -8,7 +8,7 @@
                 bits: 7,
             ),
             uniformity: (
-                non_uniform_result: Some(48),
+                non_uniform_result: Some(4),
                 requirements: (
                     bits: 0,
                 ),
@@ -88,7 +88,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(4),
                         requirements: (
                             bits: 0,
                         ),
@@ -99,7 +99,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(5),
                         requirements: (
                             bits: 0,
                         ),
@@ -110,7 +110,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -119,7 +119,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 21,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -1047,7 +1051,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(4),
                         requirements: (
                             bits: 0,
                         ),
@@ -1070,7 +1074,7 @@
                 bits: 7,
             ),
             uniformity: (
-                non_uniform_result: Some(48),
+                non_uniform_result: Some(4),
                 requirements: (
                     bits: 0,
                 ),
@@ -1150,7 +1154,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(4),
                         requirements: (
                             bits: 0,
                         ),
@@ -1161,7 +1165,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(5),
                         requirements: (
                             bits: 0,
                         ),
@@ -1172,7 +1176,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -1181,7 +1185,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 21,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -1876,7 +1884,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -1885,7 +1893,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 20,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -1901,7 +1913,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -1910,12 +1922,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 19,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -1924,12 +1940,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 18,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -1951,7 +1971,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -1966,7 +1986,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(4),
                         requirements: (
                             bits: 0,
                         ),
@@ -1999,7 +2019,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2008,7 +2028,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 20,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -2024,7 +2048,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2033,12 +2057,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 19,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2047,12 +2075,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2063,12 +2095,16 @@
                         size: None,
                         kind: Float,
                         width: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2082,7 +2118,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2091,7 +2127,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 20,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -2107,7 +2147,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2116,12 +2156,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 19,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2130,12 +2174,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2146,12 +2194,16 @@
                         size: None,
                         kind: Float,
                         width: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2165,7 +2217,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2174,7 +2226,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 20,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -2190,7 +2246,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2199,12 +2255,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 19,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2213,12 +2273,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2229,12 +2293,16 @@
                         size: None,
                         kind: Float,
                         width: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2248,7 +2316,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2360,7 +2428,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2371,7 +2439,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2410,7 +2478,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(4),
                         requirements: (
                             bits: 0,
                         ),
@@ -2424,7 +2492,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2433,7 +2501,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 20,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -2449,7 +2521,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2458,12 +2530,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 19,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2472,12 +2548,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2488,12 +2568,16 @@
                         size: None,
                         kind: Float,
                         width: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2507,7 +2591,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2516,7 +2600,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 20,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -2532,7 +2620,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2541,12 +2629,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 19,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2555,12 +2647,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2571,12 +2667,16 @@
                         size: None,
                         kind: Float,
                         width: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2590,7 +2690,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: None,
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2599,7 +2699,11 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 20,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
@@ -2615,7 +2719,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2624,12 +2728,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 19,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2638,12 +2746,16 @@
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2654,12 +2766,16 @@
                         size: None,
                         kind: Float,
                         width: 4,
-                        class: Storage,
+                        class: Storage(
+                            access: (
+                                bits: 3,
+                            ),
+                        ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2673,7 +2789,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2684,7 +2800,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(48),
+                        non_uniform_result: Some(6),
                         requirements: (
                             bits: 0,
                         ),
@@ -2761,7 +2877,7 @@
                 bits: 7,
             ),
             uniformity: (
-                non_uniform_result: Some(48),
+                non_uniform_result: Some(4),
                 requirements: (
                     bits: 0,
                 ),

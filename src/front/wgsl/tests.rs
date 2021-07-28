@@ -21,8 +21,8 @@ fn parse_types() {
     parse_str("var t: texture_2d<f32>;").unwrap();
     parse_str("var t: texture_cube_array<i32>;").unwrap();
     parse_str("var t: texture_multisampled_2d<u32>;").unwrap();
-    parse_str("var t: [[access(write)]] texture_storage_1d<rgba8uint>;").unwrap();
-    parse_str("var t: [[access(read)]] texture_storage_3d<r32float>;").unwrap();
+    parse_str("var t: texture_storage_1d<rgba8uint,write>;").unwrap();
+    parse_str("var t: texture_storage_3d<r32float>;").unwrap();
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn parse_struct() {
             [[size(32), align(8)]] z: vec3<f32>;
         };
         struct Empty {};
-        var s: [[access(read_write)]] Foo;
+        var<storage,read_write> s: Foo;
     ",
     )
     .unwrap();
@@ -219,7 +219,7 @@ fn parse_texture_load() {
     .unwrap();
     parse_str(
         "
-        var t: [[access(read)]] texture_storage_1d_array<r32float>;
+        var t: texture_storage_1d_array<r32float>;
         fn foo() {
             let r: vec4<f32> = textureLoad(t, 10, 2);
         }
@@ -232,7 +232,7 @@ fn parse_texture_load() {
 fn parse_texture_store() {
     parse_str(
         "
-        var t: [[access(write)]] texture_storage_2d<rgba8unorm>;
+        var t: texture_storage_2d<rgba8unorm,write>;
         fn foo() {
             textureStore(t, vec2<i32>(10, 20), vec4<f32>(0.0, 1.0, 2.0, 3.0));
         }
@@ -317,15 +317,47 @@ fn parse_array_length() {
         }; // this is used as both input and output for convenience
 
         [[group(0), binding(0)]]
-        var<storage> foo: [[access(read_write)]] Foo;
+        var<storage> foo: Foo;
 
         [[group(0), binding(1)]]
-        var<storage> bar: [[access(read)]] array<u32>;
+        var<storage> bar: array<u32>;
 
         fn foo() {
             var x: u32 = arrayLength(foo.data);
             var y: u32 = arrayLength(bar);
         }
+        ",
+    )
+    .unwrap();
+}
+
+#[test]
+fn parse_storage_buffers() {
+    parse_str(
+        "
+        [[group(0), binding(0)]]
+        var<storage> foo: array<u32>;
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        [[group(0), binding(0)]]
+        var<storage,read> foo: array<u32>;
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        [[group(0), binding(0)]]
+        var<storage,write> foo: array<u32>;
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        [[group(0), binding(0)]]
+        var<storage,read_write> foo: array<u32>;
         ",
     )
     .unwrap();

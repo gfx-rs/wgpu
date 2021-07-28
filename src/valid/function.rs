@@ -475,11 +475,13 @@ impl super::Validator {
                                 }
                             }
                             match class {
-                                crate::ImageClass::Storage(format) => crate::TypeInner::Vector {
-                                    kind: format.into(),
-                                    size: crate::VectorSize::Quad,
-                                    width: 4,
-                                },
+                                crate::ImageClass::Storage { format, .. } => {
+                                    crate::TypeInner::Vector {
+                                        kind: format.into(),
+                                        size: crate::VectorSize::Quad,
+                                        width: 4,
+                                    }
+                                }
                                 _ => {
                                     return Err(FunctionError::InvalidImageStore(
                                         ExpressionError::InvalidImageClass(class),

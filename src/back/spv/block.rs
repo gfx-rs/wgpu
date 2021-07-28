@@ -1043,7 +1043,7 @@ impl<'w> BlockContext<'w> {
                         };
 
                         let (query_op, level_id) = match class {
-                            Ic::Storage(_) => (spirv::Op::ImageQuerySize, None),
+                            Ic::Storage { .. } => (spirv::Op::ImageQuerySize, None),
                             _ => {
                                 let level_id = match level {
                                     Some(expr) => self.cached[expr],

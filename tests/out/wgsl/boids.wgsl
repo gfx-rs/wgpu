@@ -24,9 +24,9 @@ let NUM_PARTICLES: u32 = 1500u;
 [[group(0), binding(0)]]
 var<uniform> params: SimParams;
 [[group(0), binding(1)]]
-var<storage> particlesSrc: [[access(read)]] Particles;
+var<storage> particlesSrc: Particles;
 [[group(0), binding(2)]]
-var<storage> particlesDst: [[access(read_write)]] Particles;
+var<storage,read_write> particlesDst: Particles;
 
 [[stage(compute), workgroup_size(64, 1, 1)]]
 fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {

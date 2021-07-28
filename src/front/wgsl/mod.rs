@@ -467,8 +467,12 @@ impl crate::TypeInner {
                         format!("<{}>", element_type)
                     }
                     crate::ImageClass::Depth { multi: _ } => String::new(),
-                    crate::ImageClass::Storage(format) => {
-                        format!("<{}>", format.to_wgsl())
+                    crate::ImageClass::Storage { format, access } => {
+                        if access.contains(crate::StorageAccess::STORE) {
+                            format!("<{},write>", format.to_wgsl())
+                        } else {
+                            format!("<{}>", format.to_wgsl())
+                        }
                     }
                 };
 
@@ -529,7 +533,9 @@ mod type_inner_tests {
 
         let ptr = crate::TypeInner::Pointer {
             base: mytype2,
-            class: crate::StorageClass::Storage,
+            class: crate::StorageClass::Storage {
+                access: crate::StorageAccess::default(),
+            },
         };
         assert_eq!(ptr.to_wgsl(&types, &constants), "*MyType2");
 
@@ -836,7 +842,6 @@ impl Composition {
 #[derive(Default)]
 struct TypeAttributes {
     stride: Option<NonZeroU32>,
-    access: crate::StorageAccess,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -927,7 +932,6 @@ struct ParsedVariable<'a> {
     name: &'a str,
     class: Option<crate::StorageClass>,
     ty: Handle<crate::Type>,
-    access: crate::StorageAccess,
     init: Option<Handle<crate::Constant>>,
 }
 
@@ -1352,7 +1356,7 @@ impl Parser {
                         None
                     };
                     let index = match class {
-                        crate::ImageClass::Storage(_) => None,
+                        crate::ImageClass::Storage { .. } => None,
                         // it's the MSAA index for multi-sampled, and LOD for the others
                         crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => {
                             lexer.expect(Token::Separator(','))?;
@@ -1997,14 +2001,32 @@ impl Parser {
     ) -> Result<ParsedVariable<'a>, Error<'a>> {
         self.scopes.push(Scope::VariableDecl);
         let mut class = None;
+
         if lexer.skip(Token::Paren('<')) {
             let (class_str, span) = lexer.next_ident_with_span()?;
-            class = Some(conv::map_storage_class(class_str, span)?);
+            class = Some(match class_str {
+                "storage" => {
+                    let access = if lexer.skip(Token::Separator(',')) {
+                        let (ident, span) = lexer.next_ident_with_span()?;
+                        match ident {
+                            "read" => crate::StorageAccess::LOAD,
+                            "write" => crate::StorageAccess::STORE,
+                            "read_write" => crate::StorageAccess::all(),
+                            _ => return Err(Error::UnknownAccess(span)),
+                        }
+                    } else {
+                        // defaulting to `read`
+                        crate::StorageAccess::LOAD
+                    };
+                    crate::StorageClass::Storage { access }
+                }
+                _ => conv::map_storage_class(class_str, span)?,
+            });
             lexer.expect(Token::Paren('>'))?;
         }
         let name = lexer.next_ident()?;
         lexer.expect(Token::Separator(':'))?;
-        let (ty, access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+        let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
 
         let init = if lexer.skip(Token::Operation('=')) {
             let handle = self.parse_const_expression(lexer, type_arena, const_arena)?;
@@ -2018,7 +2040,6 @@ impl Parser {
             name,
             class,
             ty,
-            access,
             init,
         })
     }
@@ -2363,43 +2384,43 @@ impl Parser {
                 class: crate::ImageClass::Depth { multi: true },
             },
             "texture_storage_1d" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D1,
                     arrayed: false,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             "texture_storage_1d_array" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D1,
                     arrayed: true,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             "texture_storage_2d" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D2,
                     arrayed: false,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             "texture_storage_2d_array" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D2,
                     arrayed: true,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             "texture_storage_3d" => {
-                let format = lexer.next_format_generic()?;
+                let (format, access) = lexer.next_format_generic()?;
                 crate::TypeInner::Image {
                     dim: crate::ImageDimension::D3,
                     arrayed: false,
-                    class: crate::ImageClass::Storage(format),
+                    class: crate::ImageClass::Storage { format, access },
                 }
             }
             _ => return Ok(None),
@@ -2459,17 +2480,6 @@ impl Parser {
             self.scopes.push(Scope::Attribute);
             loop {
                 match lexer.next() {
-                    (Token::Word("access"), _) => {
-                        lexer.expect(Token::Paren('('))?;
-                        let (ident, span) = lexer.next_ident_with_span()?;
-                        attribute.access = match ident {
-                            "read" => crate::StorageAccess::LOAD,
-                            "write" => crate::StorageAccess::STORE,
-                            "read_write" => crate::StorageAccess::all(),
-                            _ => return Err(Error::UnknownAccess(span)),
-                        };
-                        lexer.expect(Token::Paren(')'))?;
-                    }
                     (Token::Word("stride"), _) => {
                         lexer.expect(Token::Paren('('))?;
                         let (stride, span) = lexer.capture_span(Lexer::next_uint_literal)?;
@@ -2484,7 +2494,7 @@ impl Parser {
             self.scopes.pop();
         }
 
-        let storage_access = attribute.access;
+        let storage_access = crate::StorageAccess::default();
         let (name, name_span) = lexer.next_ident_with_span()?;
         let handle = self.parse_type_decl_name(
             lexer,
@@ -3271,14 +3281,12 @@ impl Parser {
                     Some(c) => c,
                     None => match module.types[pvar.ty].inner {
                         crate::TypeInner::Struct { .. } if binding.is_some() => {
-                            if pvar.access.is_empty() {
-                                crate::StorageClass::Uniform
-                            } else {
-                                crate::StorageClass::Storage
-                            }
+                            crate::StorageClass::Uniform
                         }
                         crate::TypeInner::Array { .. } if binding.is_some() => {
-                            crate::StorageClass::Storage
+                            crate::StorageClass::Storage {
+                                access: crate::StorageAccess::LOAD,
+                            }
                         }
                         crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
                             crate::StorageClass::Handle
@@ -3292,7 +3300,6 @@ impl Parser {
                     binding: binding.take(),
                     ty: pvar.ty,
                     init: pvar.init,
-                    storage_access: pvar.access,
                 });
                 lookup_global_expression
                     .insert(pvar.name, crate::Expression::GlobalVariable(var_handle));

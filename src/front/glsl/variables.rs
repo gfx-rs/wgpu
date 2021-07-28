@@ -1,7 +1,7 @@
 use crate::{
-    Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, ImageClass,
-    Interpolation, LocalVariable, ScalarKind, StorageAccess, StorageClass, SwizzleComponent, Type,
-    TypeInner, VectorSize,
+    Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
+    LocalVariable, ScalarKind, StorageAccess, StorageClass, SwizzleComponent, Type, TypeInner,
+    VectorSize,
 };
 
 use super::ast::*;
@@ -57,7 +57,6 @@ impl Program<'_> {
                 binding: None,
                 ty,
                 init: None,
-                storage_access: StorageAccess::empty(),
             });
 
             let idx = self.entry_args.len();
@@ -407,7 +406,7 @@ impl Program<'_> {
             match storage {
                 StorageQualifier::StorageClass(StorageClass::PushConstant)
                 | StorageQualifier::StorageClass(StorageClass::Uniform)
-                | StorageQualifier::StorageClass(StorageClass::Storage) => {}
+                | StorageQualifier::StorageClass(StorageClass::Storage { .. }) => {}
                 _ => {
                     return Err(ErrorKind::SemanticError(
                         meta,
@@ -445,7 +444,6 @@ impl Program<'_> {
                 binding: None,
                 ty,
                 init,
-                storage_access: StorageAccess::empty(),
             });
 
             let idx = self.entry_args.len();
@@ -490,29 +488,20 @@ impl Program<'_> {
             return Ok(GlobalOrConstant::Constant(init));
         }
 
-        let (class, storage_access) = match self.module.types[ty].inner {
-            TypeInner::Image { class, .. } => (
-                StorageClass::Handle,
-                if let ImageClass::Storage(_) = class {
-                    // TODO: Add support for qualifiers such as readonly,
-                    // writeonly and readwrite
-                    StorageAccess::all()
-                } else {
-                    StorageAccess::empty()
-                },
-            ),
-            TypeInner::Sampler { .. } => (StorageClass::Handle, StorageAccess::empty()),
+        // TODO: Add support for qualifiers such as readonly, writeonly and readwrite
+        let class = match self.module.types[ty].inner {
+            TypeInner::Image { .. } => StorageClass::Handle,
+            TypeInner::Sampler { .. } => StorageClass::Handle,
             _ => {
-                if let StorageQualifier::StorageClass(StorageClass::Storage) = storage {
-                    (StorageClass::Storage, StorageAccess::all())
+                if let StorageQualifier::StorageClass(StorageClass::Storage { .. }) = storage {
+                    StorageClass::Storage {
+                        access: StorageAccess::all(),
+                    }
                 } else {
-                    (
-                        match storage {
-                            StorageQualifier::StorageClass(class) => class,
-                            _ => StorageClass::Private,
-                        },
-                        StorageAccess::empty(),
-                    )
+                    match storage {
+                        StorageQualifier::StorageClass(class) => class,
+                        _ => StorageClass::Private,
+                    }
                 }
             }
         };
@@ -523,7 +512,6 @@ impl Program<'_> {
             binding,
             ty,
             init,
-            storage_access,
         });
 
         if let Some(name) = name {

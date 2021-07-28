@@ -5,7 +5,9 @@ pub fn map_storage_class(word: &str, span: Span) -> Result<crate::StorageClass, 
         "private" => Ok(crate::StorageClass::Private),
         "workgroup" => Ok(crate::StorageClass::WorkGroup),
         "uniform" => Ok(crate::StorageClass::Uniform),
-        "storage" => Ok(crate::StorageClass::Storage),
+        "storage" => Ok(crate::StorageClass::Storage {
+            access: crate::StorageAccess::default(),
+        }),
         "push_constant" => Ok(crate::StorageClass::PushConstant),
         _ => Err(Error::UnknownStorageClass(span)),
     }

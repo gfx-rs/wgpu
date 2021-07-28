@@ -298,7 +298,7 @@ impl<'a, W> Writer<'a, W> {
                                 self.features.request(Features::MULTISAMPLED_TEXTURE_ARRAYS);
                             }
                         }
-                        ImageClass::Storage(format) => match format {
+                        ImageClass::Storage { format, .. } => match format {
                             StorageFormat::R8Unorm
                             | StorageFormat::R8Snorm
                             | StorageFormat::R8Uint
@@ -336,7 +336,7 @@ impl<'a, W> Writer<'a, W> {
             }
             match global.class {
                 StorageClass::WorkGroup => self.features.request(Features::COMPUTE_SHADER),
-                StorageClass::Storage => self.features.request(Features::BUFFER_STORAGE),
+                StorageClass::Storage { .. } => self.features.request(Features::BUFFER_STORAGE),
                 StorageClass::PushConstant => return Err(Error::PushConstantNotSupported),
                 _ => {}
             }

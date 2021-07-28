@@ -197,7 +197,11 @@
             name: None,
             inner: Pointer(
                 base: 21,
-                class: Storage,
+                class: Storage(
+                    access: (
+                        bits: 0,
+                    ),
+                ),
             ),
         ),
         (
@@ -776,9 +780,6 @@
             )),
             ty: 56,
             init: None,
-            storage_access: (
-                bits: 0,
-            ),
         ),
         (
             name: Some("sampler_shadow"),
@@ -789,9 +790,6 @@
             )),
             ty: 57,
             init: None,
-            storage_access: (
-                bits: 0,
-            ),
         ),
         (
             name: Some("u_globals"),
@@ -802,22 +800,20 @@
             )),
             ty: 14,
             init: None,
-            storage_access: (
-                bits: 0,
-            ),
         ),
         (
             name: Some("s_lights"),
-            class: Storage,
+            class: Storage(
+                access: (
+                    bits: 3,
+                ),
+            ),
             binding: Some((
                 group: 0,
                 binding: 1,
             )),
             ty: 21,
             init: None,
-            storage_access: (
-                bits: 1,
-            ),
         ),
         (
             name: Some("in_position_fs"),
@@ -825,9 +821,6 @@
             binding: None,
             ty: 4,
             init: None,
-            storage_access: (
-                bits: 0,
-            ),
         ),
         (
             name: Some("in_normal_fs"),
@@ -835,9 +828,6 @@
             binding: None,
             ty: 2,
             init: None,
-            storage_access: (
-                bits: 0,
-            ),
         ),
         (
             name: Some("out_color_fs"),
@@ -845,9 +835,6 @@
             binding: None,
             ty: 4,
             init: None,
-            storage_access: (
-                bits: 0,
-            ),
         ),
     ],
     functions: [
