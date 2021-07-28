@@ -799,7 +799,7 @@ impl Interface {
             };
             let ty = match module.types[var.ty].inner {
                 naga::TypeInner::Struct {
-                    level: naga::StructLevel::Root,
+                    top_level: true,
                     members: _,
                     span,
                 } => ResourceType::Buffer {
