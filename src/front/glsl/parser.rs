@@ -5,6 +5,7 @@ use super::{
     },
     error::ErrorKind,
     lex::Lexer,
+    offset,
     token::{SourceMetadata, Token, TokenValue},
     variables::{GlobalOrConstant, VarDeclaration},
     Program,
@@ -146,7 +147,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                 let ty_name = self.expect_ident()?.0;
                 self.expect(TokenValue::LeftBrace)?;
                 let mut members = Vec::new();
-                let span = self.parse_struct_declaration_list(&mut members)?;
+                let span =
+                    self.parse_struct_declaration_list(&mut members, StructLayout::Std140)?;
                 self.expect(TokenValue::RightBrace)?;
 
                 let ty = self.program.module.types.append(Type {
@@ -902,8 +904,16 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         ty_name: String,
         mut meta: SourceMetadata,
     ) -> Result<bool> {
+        let layout = qualifiers
+            .iter()
+            .find_map(|&(ref qualifier, _)| match *qualifier {
+                TypeQualifier::Layout(layout) => Some(layout),
+                _ => None,
+            })
+            .unwrap_or(StructLayout::Std140);
+
         let mut members = Vec::new();
-        let span = self.parse_struct_declaration_list(&mut members)?;
+        let span = self.parse_struct_declaration_list(&mut members, layout)?;
         self.expect(TokenValue::RightBrace)?;
 
         let mut ty = self.program.module.types.append(Type {
@@ -977,30 +987,44 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
     }
 
     // TODO: Accept layout arguments
-    fn parse_struct_declaration_list(&mut self, members: &mut Vec<StructMember>) -> Result<u32> {
+    fn parse_struct_declaration_list(
+        &mut self,
+        members: &mut Vec<StructMember>,
+        layout: StructLayout,
+    ) -> Result<u32> {
         let mut span = 0;
 
         loop {
             // TODO: type_qualifier
 
-            let ty = self.parse_type_non_void()?.0;
-            let name = self.expect_ident()?.0;
+            let (ty, mut meta) = self.parse_type_non_void()?;
+            let (name, end_meta) = self.expect_ident()?;
+
+            meta = meta.union(&end_meta);
 
             let array_specifier = self.parse_array_specifier()?;
             let ty = self.maybe_array(ty, array_specifier);
 
             self.expect(TokenValue::Semicolon)?;
 
+            let info = offset::calculate_offset(
+                ty,
+                meta,
+                layout,
+                &mut self.program.module.types,
+                &self.program.module.constants,
+            )?;
+
+            span = offset::align_up(span, info.align);
+
             members.push(StructMember {
                 name: Some(name),
-                ty,
+                ty: info.ty,
                 binding: None,
                 offset: span,
             });
 
-            span += self.program.module.types[ty]
-                .inner
-                .span(&self.program.module.constants);
+            span += info.span;
 
             if let TokenValue::RightBrace = self.expect_peek()?.value {
                 break;

@@ -12,6 +12,7 @@ mod error;
 pub use error::ParseError;
 mod constants;
 mod functions;
+mod offset;
 mod parser;
 #[cfg(test)]
 mod parser_tests;
