@@ -39,6 +39,10 @@ The following environment variables can be used to configure how the framework e
 
   If unset a low power adapter is preferred.
 
+- `WGPU_ADAPTER_NAME`
+
+  Select a specific adapter by specifying a substring of the adapter name.
+
 #### Run Examples on the Web (`wasm32-unknown-unknown`)
 
 See [wiki article](https://github.com/gfx-rs/wgpu-rs/wiki/Running-on-the-Web-with-WebGPU-and-WebGL).
