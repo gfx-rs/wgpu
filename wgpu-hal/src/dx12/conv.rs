@@ -212,7 +212,7 @@ pub fn map_texture_usage_to_resource_flags(
         crate::TextureUses::DEPTH_STENCIL_READ | crate::TextureUses::DEPTH_STENCIL_WRITE,
     ) {
         flags |= d3d12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-        if !usage.contains(crate::TextureUses::SAMPLED) {
+        if !usage.contains(crate::TextureUses::RESOURCE) {
             flags |= d3d12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
         }
     }
@@ -341,7 +341,7 @@ pub fn map_texture_usage_to_state(usage: crate::TextureUses) -> d3d12::D3D12_RES
     if usage.intersects(Tu::COPY_DST) {
         state |= d3d12::D3D12_RESOURCE_STATE_COPY_DEST;
     }
-    if usage.intersects(Tu::SAMPLED) {
+    if usage.intersects(Tu::RESOURCE) {
         state |= d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
             | d3d12::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }

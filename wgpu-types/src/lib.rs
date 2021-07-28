@@ -182,7 +182,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::SAMPLED`] for BCn formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for BCn formats.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -387,7 +387,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::SAMPLED`] for ETC2 formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ETC2 formats.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -402,7 +402,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::SAMPLED`] for ASTC formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -1675,9 +1675,10 @@ impl TextureFormat {
         let srgb = true;
 
         // Flags
-        let basic = TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::SAMPLED;
+        let basic =
+            TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
         let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
-        let storage = basic | TextureUsages::STORAGE;
+        let storage = basic | TextureUsages::STORAGE_BINDING;
         let all_flags = TextureUsages::all();
 
         // See <https://gpuweb.github.io/gpuweb/#texture-format-caps> for reference
@@ -2324,9 +2325,9 @@ bitflags::bitflags! {
         /// [`CommandEncoder::copy_texture_to_texture`], or [`Queue::write_texture`] operation.
         const COPY_DST = 2;
         /// Allows a texture to be a [`BindingType::Texture`] in a bind group.
-        const SAMPLED = 4;
+        const TEXTURE_BINDING = 4;
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
-        const STORAGE = 8;
+        const STORAGE_BINDING = 8;
         /// Allows a texture to be an output attachment of a renderpass.
         const RENDER_ATTACHMENT = 16;
     }

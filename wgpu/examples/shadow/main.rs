@@ -377,7 +377,7 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::SHADOW_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::SAMPLED,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: None,
         });
         let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());

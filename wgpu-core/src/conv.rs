@@ -75,12 +75,12 @@ pub fn map_texture_usage(
         usage.contains(wgt::TextureUsages::COPY_DST),
     );
     u.set(
-        hal::TextureUses::SAMPLED,
-        usage.contains(wgt::TextureUsages::SAMPLED),
+        hal::TextureUses::RESOURCE,
+        usage.contains(wgt::TextureUsages::TEXTURE_BINDING),
     );
     u.set(
         hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_WRITE,
-        usage.contains(wgt::TextureUsages::STORAGE),
+        usage.contains(wgt::TextureUsages::STORAGE_BINDING),
     );
     let is_color = aspect.contains(hal::FormatAspects::COLOR);
     u.set(

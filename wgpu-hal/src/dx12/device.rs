@@ -460,7 +460,7 @@ impl crate::Device<super::Api> for super::Device {
                 texture.resource,
                 texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
             ),
-            handle_srv: if desc.usage.intersects(crate::TextureUses::SAMPLED) {
+            handle_srv: if desc.usage.intersects(crate::TextureUses::RESOURCE) {
                 let raw_desc = view_desc.to_srv();
                 let handle = self.srv_uav_pool.lock().alloc_handle();
                 self.raw.CreateShaderResourceView(

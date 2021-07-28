@@ -268,7 +268,7 @@ impl<A: hal::Api> Example<A> {
             sample_count: 1,
             dimension: wgt::TextureDimension::D2,
             format: wgt::TextureFormat::Rgba8UnormSrgb,
-            usage: hal::TextureUses::COPY_DST | hal::TextureUses::SAMPLED,
+            usage: hal::TextureUses::COPY_DST | hal::TextureUses::RESOURCE,
             memory_flags: hal::MemoryFlags::empty(),
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
@@ -292,7 +292,7 @@ impl<A: hal::Api> Example<A> {
             let texture_barrier2 = hal::TextureBarrier {
                 texture: &texture,
                 range: wgt::ImageSubresourceRange::default(),
-                usage: hal::TextureUses::COPY_DST..hal::TextureUses::SAMPLED,
+                usage: hal::TextureUses::COPY_DST..hal::TextureUses::RESOURCE,
             };
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgt::ImageDataLayout {
@@ -378,7 +378,7 @@ impl<A: hal::Api> Example<A> {
             label: None,
             format: texture_desc.format,
             dimension: wgt::TextureViewDimension::D2,
-            usage: hal::TextureUses::SAMPLED,
+            usage: hal::TextureUses::RESOURCE,
             range: wgt::ImageSubresourceRange::default(),
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
@@ -391,7 +391,7 @@ impl<A: hal::Api> Example<A> {
             };
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
-                usage: hal::TextureUses::SAMPLED,
+                usage: hal::TextureUses::RESOURCE,
             };
             let global_group_desc = hal::BindGroupDescriptor {
                 label: Some("global"),

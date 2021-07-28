@@ -162,7 +162,7 @@ pub fn derive_image_layout(
         crate::TextureUses::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUses::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
         crate::TextureUses::COPY_DST => vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        crate::TextureUses::SAMPLED if is_color => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        crate::TextureUses::RESOURCE if is_color => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
         crate::TextureUses::COLOR_TARGET => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         crate::TextureUses::DEPTH_STENCIL_WRITE => {
             vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
@@ -187,7 +187,7 @@ pub fn map_texture_usage(usage: crate::TextureUses) -> vk::ImageUsageFlags {
     if usage.contains(crate::TextureUses::COPY_DST) {
         flags |= vk::ImageUsageFlags::TRANSFER_DST;
     }
-    if usage.contains(crate::TextureUses::SAMPLED) {
+    if usage.contains(crate::TextureUses::RESOURCE) {
         flags |= vk::ImageUsageFlags::SAMPLED;
     }
     if usage.contains(crate::TextureUses::COLOR_TARGET) {
@@ -221,7 +221,7 @@ pub fn map_texture_usage_to_barrier(
         stages |= vk::PipelineStageFlags::TRANSFER;
         access |= vk::AccessFlags::TRANSFER_WRITE;
     }
-    if usage.contains(crate::TextureUses::SAMPLED) {
+    if usage.contains(crate::TextureUses::RESOURCE) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_READ;
     }
@@ -268,7 +268,7 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUses {
         bits |= crate::TextureUses::COPY_DST;
     }
     if usage.contains(vk::ImageUsageFlags::SAMPLED) {
-        bits |= crate::TextureUses::SAMPLED;
+        bits |= crate::TextureUses::RESOURCE;
     }
     if usage.contains(vk::ImageUsageFlags::COLOR_ATTACHMENT) {
         bits |= crate::TextureUses::COLOR_TARGET;
