@@ -328,6 +328,6 @@ fn boids() {
         base_test_parameters: framework::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS),
         tolerance: 0,
-        max_outliers: 1000, // Currently bounded by rpi4
+        max_outliers: 2500, // Currently bounded by WARP
     });
 }
