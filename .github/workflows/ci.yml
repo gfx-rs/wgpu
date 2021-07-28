@@ -163,7 +163,7 @@ jobs:
           cargo test --target ${{ matrix.target }} -p player -- --nocapture
 
           # run coretests
-          cargo run --target ${{ matrix.target }} --bin wgpu-info -- cargo test --target ${{ matrix.target }} -p wgpu -- --nocapture --test-threads=1 # GLES is currently non-multithreadable
+          cargo run --target ${{ matrix.target }} --bin wgpu-info -- cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture --test-threads=1 # GLES is currently non-multithreadable
 
   fmt:
     name: Format
