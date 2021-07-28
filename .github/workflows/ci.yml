@@ -130,6 +130,9 @@ jobs:
         run: |
           cargo clippy --target ${{ matrix.target }} -p wgpu
 
+          # Build for WebGL
+          cargo clippy --target ${{ matrix.target }} -p wgpu --features webgl -- -D warnings
+
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
 

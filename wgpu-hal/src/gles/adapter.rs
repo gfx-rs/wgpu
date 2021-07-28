@@ -184,7 +184,7 @@ impl super::Adapter {
 
         log::info!("Vendor: {}", vendor);
         log::info!("Renderer: {}", renderer);
-        log::info!("Version: {}", version);
+        log::info!("Version: {}", &version);
 
         log::debug!("Extensions: {:#?}", extensions);
 
@@ -192,7 +192,7 @@ impl super::Adapter {
 
         let shading_language_version = {
             let sl_version = gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION);
-            log::info!("SL version: {}", sl_version);
+            log::info!("SL version: {}", &sl_version);
             let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
             let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
             naga::back::glsl::Version::Embedded(value)
@@ -209,9 +209,11 @@ impl super::Adapter {
         let max_storage_block_size =
             gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) as u32;
 
-        // WORKAROUND:
-        // In order to work around an issue with GL on RPI4 and similar, we ignore a zero vertex ssbo count if there are vertex sstos. (more info: https://github.com/gfx-rs/wgpu/pull/1607#issuecomment-874938961)
-        // The hardware does not want us to write to these SSBOs, but GLES cannot express that. We detect this case and disable writing to SSBOs.
+        // WORKAROUND: In order to work around an issue with GL on RPI4 and similar, we ignore a
+        // zero vertex ssbo count if there are vertex sstos. (more info:
+        // https://github.com/gfx-rs/wgpu/pull/1607#issuecomment-874938961) The hardware does not
+        // want us to write to these SSBOs, but GLES cannot express that. We detect this case and
+        // disable writing to SSBOs.
         let vertex_ssbo_false_zero =
             vertex_shader_storage_blocks == 0 && vertex_shader_storage_textures != 0;
         if vertex_ssbo_false_zero {
@@ -252,7 +254,12 @@ impl super::Adapter {
             wgt::DownlevelFlags::VERTEX_STORAGE,
             ver >= (3, 1)
                 && max_storage_block_size != 0
-                && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
+                && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero)
+                && !cfg!(target_arch = "wasm32"),
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::FRAGMENT_STORAGE,
+            ver >= (3, 1) && !cfg!(target_arch = "wasm32"),
         );
 
         let mut features = wgt::Features::empty()
@@ -282,6 +289,10 @@ impl super::Adapter {
         private_caps.set(
             super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT,
             ver >= (3, 1),
+        );
+        private_caps.set(
+            super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
+            cfg!(not(target_arch = "wasm32")),
         );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
@@ -340,6 +351,10 @@ impl super::Adapter {
         };
 
         let mut workarounds = super::Workarounds::empty();
+
+        #[cfg(target_arch = "wasm32")]
+        workarounds.set(super::Workarounds::EMULATE_BUFFER_MAP, true);
+
         let r = renderer.to_lowercase();
         // Check for Mesa sRGB clear bug. See
         // [`super::PrivateCapabilities::MESA_I915_SRGB_SHADER_CLEAR`].
@@ -358,6 +373,7 @@ impl super::Adapter {
         let downlevel_defaults = wgt::DownlevelLimits {};
 
         // Drop the GL guard so we can move the context into AdapterShared
+        #[cfg(not(target_arch = "wasm32"))]
         drop(gl);
 
         Some(crate::ExposedAdapter {
@@ -365,6 +381,7 @@ impl super::Adapter {
                 shared: Arc::new(super::AdapterShared {
                     context,
                     private_caps,
+                    downlevel_flags,
                     workarounds,
                     shading_language_version,
                 }),
@@ -461,6 +478,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 zero_buffer,
                 temp_query_results: Vec::new(),
                 draw_buffer_count: 1,
+                current_index_buffer: None,
             },
         })
     }
@@ -560,11 +578,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 formats: if surface.enable_srgb {
                     vec![
                         wgt::TextureFormat::Rgba8UnormSrgb,
+                        #[cfg(not(target_arch = "wasm32"))]
                         wgt::TextureFormat::Bgra8UnormSrgb,
                     ]
                 } else {
                     vec![
                         wgt::TextureFormat::Rgba8Unorm,
+                        #[cfg(not(target_arch = "wasm32"))]
                         wgt::TextureFormat::Bgra8Unorm,
                     ]
                 },
@@ -588,6 +608,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
         }
     }
 }
+
+// SAFE: WASM doesn't have threads
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for super::Adapter {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for super::Adapter {}
 
 #[cfg(test)]
 mod tests {

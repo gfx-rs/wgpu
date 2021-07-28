@@ -538,28 +538,31 @@ impl Features {
 
 /// Represents the sets of limits an adapter/device supports.
 ///
-/// We provide two different defaults.
-/// - [`Limits::downlevel_defaults()]. This is a set of limits that is guaranteed to
-///   work on all backends, including "downlevel" backends such
-///   as OpenGL and D3D11. For most applications we recommend using these
-///   limits, assuming they are high enough for your application.
-/// - [`Limits::default()`]. This is the set of limits that is guaranteed to
-///   work on all modern backends and is guaranteed to be supported by WebGPU.
-///   Applications needing more modern features can use this as a reasonable set of
-///   limits if they are targeting only desktop and modern mobile devices.
+/// We provide three different defaults.
+/// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guarenteed to work on almost
+///   all backends, including "downlevel" backends such as OpenGL and D3D11, other than WebGL. For
+///   most applications we recommend using these limits, assuming they are high enough for your
+///   application, and you do not intent to support WebGL.
+/// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
+///   [`downlevel_defaults()`], configured to be low enough to support running in the browser using
+///   WebGL2.
+/// - [`Limits::default()`]. This is the set of limits that is guarenteed to work on all modern
+///   backends and is guarenteed to be supported by WebGPU. Applications needing more modern
+///   features can use this as a reasonable set of limits if they are targetting only desktop and
+///   modern mobile devices.
 ///
-/// We recommend starting with the most restrictive limits you can and manually
-/// increasing the limits you need boosted. This will let you stay running on
-/// all hardware that supports the limits you need.
+/// We recommend starting with the most restrictive limits you can and manually increasing the
+/// limits you need boosted. This will let you stay running on all hardware that supports the limits
+/// you need.
 ///
 /// Limits "better" than the default must be supported by the adapter and requested when requesting
-/// a device. If limits "better" than the adapter supports are requested, requesting a device will panic.
-/// Once a device is requested, you may only use resources up to the limits requested _even_ if the
-/// adapter supports "better" limits.
+/// a device. If limits "better" than the adapter supports are requested, requesting a device will
+/// panic. Once a device is requested, you may only use resources up to the limits requested _even_
+/// if the adapter supports "better" limits.
 ///
 /// Requesting limits that are "better" than you need may cause performance to decrease because the
-/// implementation needs to support more than is needed. You should ideally only request exactly what
-/// you need.
+/// implementation needs to support more than is needed. You should ideally only request exactly
+/// what you need.
 ///
 /// See also: <https://gpuweb.github.io/gpuweb/#dictdef-gpulimits>
 #[repr(C)]
@@ -660,7 +663,7 @@ impl Default for Limits {
 }
 
 impl Limits {
-    /// These default limits are guaranteed to be compatible with GLES3, WebGL, and D3D11
+    /// These default limits are guarenteed to be compatible with GLES3, and D3D11
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2096,
@@ -683,6 +686,20 @@ impl Limits {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
+        }
+    }
+
+    /// These default limits are guarenteed to be compatible with GLES3, and D3D11, and WebGL2
+    pub fn downlevel_webgl2_defaults() -> Self {
+        Self {
+            max_storage_buffers_per_shader_stage: 0,
+            max_storage_textures_per_shader_stage: 0,
+            max_dynamic_storage_buffers_per_pipeline_layout: 0,
+            max_storage_buffer_binding_size: 0,
+            max_vertex_buffer_array_stride: 255,
+
+            // Most of the values should be the same as the downlevel defaults
+            ..Self::downlevel_defaults()
         }
     }
 
@@ -801,6 +818,9 @@ bitflags::bitflags! {
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
         /// here for native backends so they can comunicate to the user of aniso is enabled.
         const ANISOTROPIC_FILTERING = 1 << 11;
+
+        /// Supports storage buffers in fragment shaders.
+        const FRAGMENT_STORAGE = 1 << 12;
     }
 }
 

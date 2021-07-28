@@ -1022,6 +1022,7 @@ impl HalApi for hal::api::Dx11 {
 impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
+        #[allow(clippy::needless_update)]
         Instance {
             name: name.to_owned(),
             gl: Some(hal_instance),

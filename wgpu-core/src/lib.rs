@@ -46,6 +46,9 @@ mod track;
 mod validation;
 
 pub use hal::api;
+pub use hal::MAX_BIND_GROUPS;
+pub use hal::MAX_COLOR_TARGETS;
+pub use hal::MAX_VERTEX_BUFFERS;
 
 use atomic::{AtomicUsize, Ordering};
 
@@ -211,7 +214,10 @@ macro_rules! gfx_select {
             wgt::Backend::Dx12 => $global.$method::<$crate::api::Dx12>( $($param),* ),
             //#[cfg(all(not(target_arch = "wasm32"), windows))]
             //wgt::Backend::Dx11 => $global.$method::<$crate::api::Dx11>( $($param),* ),
-            #[cfg(all(not(target_arch = "wasm32"), unix, not(any(target_os = "ios", target_os = "macos"))))]
+            #[cfg(any(
+                all(unix, not(target_os = "macos"), not(target_os = "ios")),
+                target_arch = "wasm32"
+            ))]
             wgt::Backend::Gl => $global.$method::<$crate::api::Gles>( $($param),+ ),
             other => panic!("Unexpected backend {:?}", other),
 

@@ -49,7 +49,13 @@ compile_error!("DX12 API enabled on non-Windows OS. If your project is not using
 #[cfg(all(feature = "dx12", windows))]
 mod dx12;
 mod empty;
-#[cfg(feature = "gles")]
+#[cfg(all(
+    feature = "gles",
+    any(
+        target_arch = "wasm32",
+        all(unix, not(target_os = "ios"), not(target_os = "macos"))
+    )
+))]
 mod gles;
 #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
 mod metal;
@@ -61,7 +67,13 @@ pub mod api {
     #[cfg(feature = "dx12")]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
-    #[cfg(feature = "gles")]
+    #[cfg(all(
+        feature = "gles",
+        any(
+            target_arch = "wasm32",
+            all(unix, not(target_os = "ios"), not(target_os = "macos"))
+        )
+    ))]
     pub use super::gles::Api as Gles;
     #[cfg(feature = "metal")]
     pub use super::metal::Api as Metal;
