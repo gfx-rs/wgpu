@@ -663,7 +663,7 @@ impl super::Queue {
             }
             C::TextureBarrier(usage) => {
                 let mut flags = 0;
-                if usage.contains(crate::TextureUses::SAMPLED) {
+                if usage.contains(crate::TextureUses::RESOURCE) {
                     flags |= glow::TEXTURE_FETCH_BARRIER_BIT;
                 }
                 if usage.intersects(

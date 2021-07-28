@@ -241,8 +241,8 @@ mod test {
         let mut ts = TextureState::default();
         ts.mips.push(PlaneStates::empty());
         ts.mips.push(PlaneStates::from_slice(&[
-            (1..3, Unit::new(TextureUses::SAMPLED)),
-            (3..5, Unit::new(TextureUses::SAMPLED)),
+            (1..3, Unit::new(TextureUses::RESOURCE)),
+            (3..5, Unit::new(TextureUses::RESOURCE)),
             (5..6, Unit::new(TextureUses::STORAGE_READ)),
         ]));
 
@@ -252,7 +252,7 @@ mod test {
                 layers: 2..5,
             }),
             // level 1 matches
-            Some(TextureUses::SAMPLED),
+            Some(TextureUses::RESOURCE),
         );
         assert_eq!(
             ts.query(TextureSelector {
@@ -260,7 +260,7 @@ mod test {
                 layers: 2..5,
             }),
             // level 0 is empty, level 1 matches
-            Some(TextureUses::SAMPLED),
+            Some(TextureUses::RESOURCE),
         );
         assert_eq!(
             ts.query(TextureSelector {
@@ -268,7 +268,7 @@ mod test {
                 layers: 1..5,
             }),
             // level 1 matches with gaps
-            Some(TextureUses::SAMPLED),
+            Some(TextureUses::RESOURCE),
         );
         assert_eq!(
             ts.query(TextureSelector {
@@ -286,7 +286,7 @@ mod test {
         let mut ts1 = TextureState::default();
         ts1.mips.push(PlaneStates::from_slice(&[(
             1..3,
-            Unit::new(TextureUses::SAMPLED),
+            Unit::new(TextureUses::RESOURCE),
         )]));
         let mut ts2 = TextureState::default();
         assert_eq!(
@@ -308,7 +308,7 @@ mod test {
             ts1.mips[0].query(&(1..2), |&v| v),
             Some(Ok(Unit {
                 first: None,
-                last: TextureUses::SAMPLED | TextureUses::COPY_SRC,
+                last: TextureUses::RESOURCE | TextureUses::COPY_SRC,
             })),
             "wrong extension result"
         );
@@ -322,7 +322,7 @@ mod test {
                     levels: 0..1,
                     layers: 1..2,
                 },
-                usage: TextureUses::SAMPLED | TextureUses::COPY_SRC..TextureUses::COPY_DST,
+                usage: TextureUses::RESOURCE | TextureUses::COPY_SRC..TextureUses::COPY_DST,
             }),
             "wrong error on extending with incompatible state"
         );
@@ -348,7 +348,7 @@ mod test {
                         levels: 0..1,
                         layers: 1..2,
                     },
-                    usage: TextureUses::SAMPLED | TextureUses::COPY_SRC..TextureUses::COPY_DST,
+                    usage: TextureUses::RESOURCE | TextureUses::COPY_SRC..TextureUses::COPY_DST,
                 },
                 PendingTransition {
                     id,
@@ -358,7 +358,7 @@ mod test {
                     },
                     // the transition links the end of the base rage (..SAMPLED)
                     // with the start of the next range (COPY_SRC..)
-                    usage: TextureUses::SAMPLED..TextureUses::COPY_SRC,
+                    usage: TextureUses::RESOURCE..TextureUses::COPY_SRC,
                 },
             ],
             "replacing produced wrong transitions"
@@ -366,7 +366,7 @@ mod test {
         assert_eq!(
             ts1.mips[0].query(&(1..2), |&v| v),
             Some(Ok(Unit {
-                first: Some(TextureUses::SAMPLED | TextureUses::COPY_SRC),
+                first: Some(TextureUses::RESOURCE | TextureUses::COPY_SRC),
                 last: TextureUses::COPY_DST,
             })),
             "wrong final layer 1 state"
@@ -374,7 +374,7 @@ mod test {
         assert_eq!(
             ts1.mips[0].query(&(2..3), |&v| v),
             Some(Ok(Unit {
-                first: Some(TextureUses::SAMPLED),
+                first: Some(TextureUses::RESOURCE),
                 last: TextureUses::COLOR_TARGET,
             })),
             "wrong final layer 2 state"
@@ -416,7 +416,7 @@ mod test {
             ts1.mips[0].query(&(2..3), |&v| v),
             Some(Ok(Unit {
                 // the initial state here is never expected to change
-                first: Some(TextureUses::SAMPLED),
+                first: Some(TextureUses::RESOURCE),
                 last: TextureUses::COPY_DST,
             })),
             "wrong final layer 2 state"

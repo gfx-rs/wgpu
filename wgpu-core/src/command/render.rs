@@ -583,7 +583,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             let usage = if at.is_read_only(ds_aspects)? {
                 is_ds_read_only = true;
-                hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::SAMPLED
+                hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::RESOURCE
             } else {
                 hal::TextureUses::DEPTH_STENCIL_WRITE
             };

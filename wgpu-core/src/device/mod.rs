@@ -745,17 +745,17 @@ impl<A: HalApi> Device<A> {
             let mask_copy = !(hal::TextureUses::COPY_SRC | hal::TextureUses::COPY_DST);
             let mask_dimension = match view_dim {
                 wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
-                    hal::TextureUses::SAMPLED
+                    hal::TextureUses::RESOURCE
                 }
                 wgt::TextureViewDimension::D3 => {
-                    hal::TextureUses::SAMPLED
+                    hal::TextureUses::RESOURCE
                         | hal::TextureUses::STORAGE_READ
                         | hal::TextureUses::STORAGE_WRITE
                 }
                 _ => hal::TextureUses::all(),
             };
             let mask_mip_level = if end_layer != desc.range.base_array_layer + 1 {
-                hal::TextureUses::SAMPLED
+                hal::TextureUses::RESOURCE
             } else {
                 hal::TextureUses::all()
             };
@@ -796,10 +796,14 @@ impl<A: HalApi> Device<A> {
             extent,
             samples: texture.desc.sample_count,
             // once a storage - forever a storage
-            sampled_internal_use: if texture.desc.usage.contains(wgt::TextureUsages::STORAGE) {
-                hal::TextureUses::SAMPLED | hal::TextureUses::STORAGE_READ
+            sampled_internal_use: if texture
+                .desc
+                .usage
+                .contains(wgt::TextureUsages::STORAGE_BINDING)
+            {
+                hal::TextureUses::RESOURCE | hal::TextureUses::STORAGE_READ
             } else {
-                hal::TextureUses::SAMPLED
+                hal::TextureUses::RESOURCE
             },
             selector,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
@@ -1593,7 +1597,10 @@ impl<A: HalApi> Device<A> {
                         view_dimension: view.desc.dimension,
                     });
                 }
-                Ok((wgt::TextureUsages::SAMPLED, view.sampled_internal_use))
+                Ok((
+                    wgt::TextureUsages::TEXTURE_BINDING,
+                    view.sampled_internal_use,
+                ))
             }
             wgt::BindingType::StorageTexture {
                 access,
@@ -1638,7 +1645,7 @@ impl<A: HalApi> Device<A> {
                         hal::TextureUses::STORAGE_WRITE | hal::TextureUses::STORAGE_READ
                     }
                 };
-                Ok((wgt::TextureUsages::STORAGE, internal_use))
+                Ok((wgt::TextureUsages::STORAGE_BINDING, internal_use))
             }
             _ => Err(Error::WrongBindingType {
                 binding,

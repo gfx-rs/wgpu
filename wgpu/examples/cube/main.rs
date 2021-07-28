@@ -180,7 +180,7 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R8Uint,
-            usage: wgpu::TextureUsages::SAMPLED | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         queue.write_texture(

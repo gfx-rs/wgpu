@@ -620,14 +620,14 @@ bitflags::bitflags! {
     pub struct TextureUses: u32 {
         const COPY_SRC = 1;
         const COPY_DST = 2;
-        const SAMPLED = 4;
+        const RESOURCE = 4;
         const COLOR_TARGET = 8;
         const DEPTH_STENCIL_READ = 16;
         const DEPTH_STENCIL_WRITE = 32;
         const STORAGE_READ = 64;
         const STORAGE_WRITE = 128;
         /// The combination of usages that can be used together (read-only).
-        const INCLUSIVE = Self::COPY_SRC.bits | Self::SAMPLED.bits | Self::DEPTH_STENCIL_READ.bits;
+        const INCLUSIVE = Self::COPY_SRC.bits | Self::RESOURCE.bits | Self::DEPTH_STENCIL_READ.bits;
         /// The combination of exclusive usages (write-only and read-write).
         const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_WRITE.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.

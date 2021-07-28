@@ -198,7 +198,7 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: sc_desc.format,
-            usage: wgpu::TextureUsages::SAMPLED
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
         });
@@ -210,7 +210,7 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::SAMPLED
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
         });

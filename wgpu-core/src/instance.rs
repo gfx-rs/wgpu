@@ -218,8 +218,14 @@ impl<A: HalApi> Adapter<A> {
         let caps = unsafe { self.raw.adapter.texture_format_capabilities(format) };
         let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
 
-        allowed_usages.set(wgt::TextureUsages::SAMPLED, caps.contains(Tfc::SAMPLED));
-        allowed_usages.set(wgt::TextureUsages::STORAGE, caps.contains(Tfc::STORAGE));
+        allowed_usages.set(
+            wgt::TextureUsages::TEXTURE_BINDING,
+            caps.contains(Tfc::SAMPLED),
+        );
+        allowed_usages.set(
+            wgt::TextureUsages::STORAGE_BINDING,
+            caps.contains(Tfc::STORAGE),
+        );
         allowed_usages.set(
             wgt::TextureUsages::RENDER_ATTACHMENT,
             caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),

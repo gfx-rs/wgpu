@@ -324,7 +324,7 @@ impl framework::Example for Skybox {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: skybox_format,
-                usage: wgpu::TextureUsages::SAMPLED | wgpu::TextureUsages::COPY_DST,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 label: None,
             },
             &image.data,

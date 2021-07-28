@@ -9,7 +9,7 @@ pub fn map_texture_usage(usage: crate::TextureUses) -> mtl::MTLTextureUsage {
     );
     mtl_usage.set(
         mtl::MTLTextureUsage::ShaderRead,
-        usage.intersects(Tu::SAMPLED | Tu::DEPTH_STENCIL_READ | Tu::STORAGE_READ),
+        usage.intersects(Tu::RESOURCE | Tu::DEPTH_STENCIL_READ | Tu::STORAGE_READ),
     );
     mtl_usage.set(
         mtl::MTLTextureUsage::ShaderWrite,
