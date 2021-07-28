@@ -115,7 +115,39 @@ pub fn calculate_offset(
 
             (align, align * columns as u32)
         }
-        TypeInner::Struct { .. } => todo!(),
+        TypeInner::Struct {
+            ref members,
+            top_level,
+            ..
+        } => {
+            let mut span = 0;
+            let mut align = 0;
+            let mut members = members.clone();
+            let name = types[ty].name.clone();
+
+            for member in members.iter_mut() {
+                let info = calculate_offset(member.ty, meta, layout, types, constants)?;
+
+                span = align_up(span, info.align);
+                align = align.max(info.align);
+
+                member.ty = info.ty;
+                member.offset = span;
+
+                span += info.span;
+            }
+
+            ty = types.fetch_or_append(Type {
+                name,
+                inner: TypeInner::Struct {
+                    top_level,
+                    members,
+                    span,
+                },
+            });
+
+            (align, span)
+        }
         _ => {
             return Err(ErrorKind::SemanticError(
                 meta,
