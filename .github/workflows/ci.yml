@@ -18,7 +18,7 @@ jobs:
             os: windows-2019
             channel: stable
             target: x86_64-pc-windows-msvc
-            kind: compile
+            kind: test
           
           # MacOS
 
@@ -153,17 +153,17 @@ jobs:
           cargo build --target ${{ matrix.target }} --tests -p player
           cargo build --target ${{ matrix.target }} --examples --tests -p wgpu
 
-      # - name: tests
-      #   if: matrix.kind == 'test'
-      #   run: |
-      #     # run wgpu-info
-      #     cargo run --target ${{ matrix.target }} --bin wgpu-info
+      - name: tests
+        if: matrix.kind == 'test' && matrix.os == 'windows-2019'
+        run: |
+          # run wgpu-info
+          cargo run --target ${{ matrix.target }} --bin wgpu-info
         
-      #     # run player tests
-      #     cargo test --target ${{ matrix.target }} -p player -- --nocapture
+          # run player tests
+          cargo test --target ${{ matrix.target }} -p player -- --nocapture
 
-      #     # run coretests
-      #     cargo run --target ${{ matrix.target }} --bin wgpu-info -- cargo test --target ${{ matrix.target }} -p wgpu -- --nocapture --test-threads=1 # GLES is currently non-multithreadable
+          # run coretests
+          cargo run --target ${{ matrix.target }} --bin wgpu-info -- cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture --test-threads=1 # GLES is currently non-multithreadable
 
   fmt:
     name: Format
