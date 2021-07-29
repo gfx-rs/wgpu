@@ -129,6 +129,16 @@ pub fn map_texture_format_nodepth(format: wgt::TextureFormat) -> dxgiformat::DXG
     }
 }
 
+pub fn map_texture_format_depth_typeless(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
+    match format {
+        wgt::TextureFormat::Depth32Float => dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+        wgt::TextureFormat::Depth24Plus | wgt::TextureFormat::Depth24PlusStencil8 => {
+            dxgiformat::DXGI_FORMAT_R24G8_TYPELESS
+        }
+        _ => unreachable!(),
+    }
+}
+
 pub fn map_index_format(format: wgt::IndexFormat) -> dxgiformat::DXGI_FORMAT {
     match format {
         wgt::IndexFormat::Uint16 => dxgiformat::DXGI_FORMAT_R16_UINT,

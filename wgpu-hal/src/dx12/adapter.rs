@@ -121,6 +121,9 @@ impl super::Adapter {
             hr == 0 && features2.DepthBoundsTestSupported != 0
         };
 
+        //Note: `D3D12_FEATURE_D3D12_OPTIONS3::CastingFullyTypedFormatSupported` can be checked
+        // to know if we can skip "typeless" formats entirely.
+
         let private_caps = super::PrivateCapabilities {
             instance_flags,
             heterogeneous_resource_heaps: options.ResourceHeapTier
