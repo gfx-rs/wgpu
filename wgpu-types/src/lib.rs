@@ -702,7 +702,16 @@ impl DownlevelCapabilities {
 }
 
 bitflags::bitflags! {
-    /// Binary flags listing various ways the underlying platform does not conform to the WebGPU standard.
+    /// Binary flags listing features that may or may not be present on downlevel adapters.
+    ///
+    /// A downlevel adapter is a GPU adapter that WGPU supports, but with potentially limited
+    /// features, due to the lack of hardware feature support.
+    ///
+    /// Flags that are **not** present for a downlevel adapter or device usually indicates
+    /// non-compliance with the WebGPU specification, but not always.
+    ///
+    /// You can check whether a set of flags is compliant through the
+    /// [`DownlevelCapabilities::is_webgpu_compliant()`] function.
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
         const COMPUTE_SHADERS = 1 << 0;
@@ -712,7 +721,8 @@ bitflags::bitflags! {
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to indexed draw calls.
         const BASE_VERTEX = 1 << 3;
-        /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil attachment.
+        /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil
+        /// attachment.
         const READ_ONLY_DEPTH_STENCIL = 1 << 4;
         /// Supports:
         /// - copy_image_to_image
@@ -728,11 +738,10 @@ bitflags::bitflags! {
         const INDEPENDENT_BLENDING = 1 << 9;
 
 
-        /// Supports samplers with anisotropic filtering. Note this isn't actually required by WebGPU,
-        /// the implementation is allowed to completely ignore aniso clamp. This flag is here for native backends
-        /// so they can comunicate to the user of aniso is enabled.
+        /// Supports samplers with anisotropic filtering. Note this isn't actually required by
+        /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
+        /// here for native backends so they can comunicate to the user of aniso is enabled.
         const ANISOTROPIC_FILTERING = 1 << 10;
-
     }
 }
 
