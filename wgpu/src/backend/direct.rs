@@ -188,11 +188,17 @@ impl Context {
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
         let global = self.global();
-        let mut err_descs = vec![wgc::error::format_pretty_any(global, err)];
+        let mut err_descs = vec![];
+
+        let mut err_str = String::new();
+        wgc::error::format_pretty_any(&mut err_str, global, err);
+        err_descs.push(err_str);
 
         let mut source_opt = err.source();
         while let Some(source) = source_opt {
-            err_descs.push(wgc::error::format_pretty_any(global, source));
+            let mut source_str = String::new();
+            wgc::error::format_pretty_any(&mut source_str, global, source);
+            err_descs.push(source_str);
             source_opt = source.source();
         }
 

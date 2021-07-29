@@ -10,6 +10,7 @@ use crate::{
         AttachmentData, MissingDownlevelFlags, MissingFeatures, RenderPassCompatibilityError,
         RenderPassContext,
     },
+    error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
@@ -458,6 +459,15 @@ pub enum RenderPassErrorInner {
     QueryUse(#[from] QueryUseError),
 }
 
+impl PrettyError for RenderPassErrorInner {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self);
+        if let Self::InvalidAttachment(id) = *self {
+            fmt.texture_view_label_with_key(&id, "attachment");
+        };
+    }
+}
+
 impl From<MissingBufferUsageError> for RenderPassErrorInner {
     fn from(error: MissingBufferUsageError) -> Self {
         Self::RenderCommand(error.into())
@@ -477,6 +487,14 @@ pub struct RenderPassError {
     pub scope: PassErrorScope,
     #[source]
     inner: RenderPassErrorInner,
+}
+impl PrettyError for RenderPassError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        // This error is wrapper for the inner error,
+        // but the scope has useful labels
+        fmt.error(self);
+        self.scope.fmt_pretty(fmt);
+    }
 }
 
 impl<T, E> MapPassErr<T, RenderPassError> for Result<T, E>

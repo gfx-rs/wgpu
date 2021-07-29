@@ -1,5 +1,6 @@
 use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
+    error::{ErrorFormatter, PrettyError},
     hub::Resource,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     memory_init_tracker::MemoryInitTrackerAction,
@@ -153,6 +154,33 @@ pub enum CreateBindGroupError {
     StorageReadNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
+}
+
+impl PrettyError for CreateBindGroupError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self);
+        match *self {
+            Self::BindingZeroSize(id) => {
+                fmt.buffer_label(&id);
+            }
+            Self::BindingRangeTooLarge { buffer, .. } => {
+                fmt.buffer_label(&buffer);
+            }
+            Self::BindingSizeTooSmall { buffer, .. } => {
+                fmt.buffer_label(&buffer);
+            }
+            Self::InvalidBuffer(id) => {
+                fmt.buffer_label(&id);
+            }
+            Self::InvalidTextureView(id) => {
+                fmt.texture_view_label(&id);
+            }
+            Self::InvalidSampler(id) => {
+                fmt.sampler_label(&id);
+            }
+            _ => {}
+        };
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -439,6 +467,15 @@ pub enum CreatePipelineLayoutError {
     TooManyBindings(BindingTypeMaxCountError),
     #[error("bind group layout count {actual} exceeds device bind group limit {max}")]
     TooManyGroups { actual: usize, max: usize },
+}
+
+impl PrettyError for CreatePipelineLayoutError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self);
+        if let Self::InvalidBindGroupLayout(id) = *self {
+            fmt.bind_group_layout_label(&id);
+        };
+    }
 }
 
 #[derive(Clone, Debug, Error)]
