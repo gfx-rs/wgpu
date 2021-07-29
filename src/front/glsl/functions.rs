@@ -416,6 +416,39 @@ impl Program<'_> {
                     ))
                 }
             }
+            "textureGrad" => {
+                if args.len() != 4 {
+                    return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                }
+                let arg_1 = &mut args[1];
+                ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
+                let arg_2 = &mut args[2];
+                ctx.implicit_conversion(self, &mut arg_2.0, arg_2.1, ScalarKind::Float, 4)?;
+                let arg_3 = &mut args[3];
+                ctx.implicit_conversion(self, &mut arg_3.0, arg_3.1, ScalarKind::Float, 4)?;
+                if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
+                    Ok(Some(ctx.add_expression(
+                        Expression::ImageSample {
+                            image: args[0].0,
+                            sampler,
+                            coordinate: args[1].0,
+                            array_index: None, //TODO
+                            offset: None,
+                            level: SampleLevel::Gradient {
+                                x: args[2].0,
+                                y: args[3].0,
+                            },
+                            depth_ref: None,
+                        },
+                        body,
+                    )))
+                } else {
+                    Err(ErrorKind::SemanticError(
+                        meta,
+                        "Bad call to textureGrad".into(),
+                    ))
+                }
+            }
             "textureSize" => {
                 if !(1..=2).contains(&args.len()) {
                     return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
