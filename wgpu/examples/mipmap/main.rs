@@ -371,7 +371,7 @@ impl framework::Example for Example {
 
         Self::generate_mipmaps(
             &mut init_encoder,
-            &device,
+            device,
             &texture,
             &query_sets,
             MIP_LEVEL_COUNT,

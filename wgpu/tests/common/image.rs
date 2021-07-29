@@ -58,7 +58,7 @@ fn write_png(
     encoder.set_compression(compression);
     let mut writer = encoder.write_header().unwrap();
 
-    writer.write_image_data(&data).unwrap();
+    writer.write_image_data(data).unwrap();
 }
 
 fn calc_difference(lhs: u8, rhs: u8) -> u8 {
@@ -122,7 +122,7 @@ pub fn compare_image_output(
                 .unwrap(),
             );
 
-            write_png(&actual_path, width, height, &data, png::Compression::Fast);
+            write_png(actual_path, width, height, data, png::Compression::Fast);
             write_png(
                 &difference_path,
                 width,

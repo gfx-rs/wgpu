@@ -73,7 +73,7 @@ pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
     backend_bits: wgt::Backends,
 ) -> Option<Adapter> {
-    match initialize_adapter_from_env(&instance, backend_bits) {
+    match initialize_adapter_from_env(instance, backend_bits) {
         Some(a) => Some(a),
         None => {
             instance

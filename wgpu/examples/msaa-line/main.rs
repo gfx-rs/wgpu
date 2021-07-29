@@ -47,7 +47,7 @@ impl Example {
         log::info!("sample_count: {}", sample_count);
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: wgpu::VertexState {
                 module: shader,
                 entry_point: "vs_main",
@@ -163,7 +163,7 @@ impl framework::Example for Example {
 
         let bundle = Example::create_bundle(
             device,
-            &sc_desc,
+            sc_desc,
             &shader,
             &pipeline_layout,
             sample_count,
@@ -261,7 +261,7 @@ impl framework::Example for Example {
             } else {
                 wgpu::RenderPassColorAttachment {
                     view: &self.multisampled_framebuffer,
-                    resolve_target: Some(&view),
+                    resolve_target: Some(view),
                     ops,
                 }
             };

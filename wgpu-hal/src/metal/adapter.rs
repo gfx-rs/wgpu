@@ -585,28 +585,28 @@ impl super::PrivateCapabilities {
             } else {
                 mtl::MTLReadWriteTextureTier::TierNone
             },
-            resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
-            argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
+            resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
+            argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT),
             shared_textures: !os_is_mac,
             mutable_comparison_samplers: Self::supports_any(
-                &device,
+                device,
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
-            sampler_clamp_to_border: Self::supports_any(&device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
+            sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             sampler_lod_average: {
                 // TODO: Clarify minimum macOS version with Apple (43707452)
                 let need_version = if os_is_mac { (10, 13) } else { (9, 0) };
                 Self::version_at_least(major, minor, need_version.0, need_version.1)
             },
-            base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
-            base_vertex_instance_drawing: Self::supports_any(&device, BASE_VERTEX_INSTANCE_SUPPORT),
-            dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
+            base_instance: Self::supports_any(device, BASE_INSTANCE_SUPPORT),
+            base_vertex_instance_drawing: Self::supports_any(device, BASE_VERTEX_INSTANCE_SUPPORT),
+            dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: !os_is_mac || device.is_low_power(),
             headless: os_is_mac && device.is_headless(),
-            layered_rendering: Self::supports_any(&device, LAYERED_RENDERING_SUPPORT),
-            function_specialization: Self::supports_any(&device, FUNCTION_SPECIALIZATION_SUPPORT),
-            depth_clip_mode: Self::supports_any(&device, DEPTH_CLIP_MODE),
-            texture_cube_array: Self::supports_any(&device, TEXTURE_CUBE_ARRAY_SUPPORT),
+            layered_rendering: Self::supports_any(device, LAYERED_RENDERING_SUPPORT),
+            function_specialization: Self::supports_any(device, FUNCTION_SPECIALIZATION_SUPPORT),
+            depth_clip_mode: Self::supports_any(device, DEPTH_CLIP_MODE),
+            texture_cube_array: Self::supports_any(device, TEXTURE_CUBE_ARRAY_SUPPORT),
             format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
             format_depth32_stencil8_filter: os_is_mac,
             format_depth32_stencil8_none: !os_is_mac,
@@ -614,61 +614,61 @@ impl super::PrivateCapabilities {
             format_b5: !os_is_mac,
             format_bc: os_is_mac,
             format_eac_etc: !os_is_mac,
-            format_astc: Self::supports_any(&device, ASTC_PIXEL_FORMAT_FEATURES),
-            format_any8_unorm_srgb_all: Self::supports_any(&device, ANY8_UNORM_SRGB_ALL),
-            format_any8_unorm_srgb_no_write: !Self::supports_any(&device, ANY8_UNORM_SRGB_ALL)
+            format_astc: Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES),
+            format_any8_unorm_srgb_all: Self::supports_any(device, ANY8_UNORM_SRGB_ALL),
+            format_any8_unorm_srgb_no_write: !Self::supports_any(device, ANY8_UNORM_SRGB_ALL)
                 && !os_is_mac,
-            format_any8_snorm_all: Self::supports_any(&device, ANY8_SNORM_RESOLVE),
+            format_any8_snorm_all: Self::supports_any(device, ANY8_SNORM_RESOLVE),
             format_r16_norm_all: os_is_mac,
             format_r32_all: !Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                 ],
             ),
             format_r32_no_write: Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                 ],
             ),
             format_r32float_no_write_no_filter: Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                 ],
             ) && !os_is_mac,
             format_r32float_no_filter: !Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                 ],
             ) && !os_is_mac,
             format_r32float_all: os_is_mac,
-            format_rgba8_srgb_all: Self::supports_any(&device, RGBA8_SRGB),
-            format_rgba8_srgb_no_write: !Self::supports_any(&device, RGBA8_SRGB),
-            format_rgb10a2_unorm_all: Self::supports_any(&device, RGB10A2UNORM_ALL),
-            format_rgb10a2_unorm_no_write: !Self::supports_any(&device, RGB10A2UNORM_ALL),
-            format_rgb10a2_uint_color: !Self::supports_any(&device, RGB10A2UINT_COLOR_WRITE),
-            format_rgb10a2_uint_color_write: Self::supports_any(&device, RGB10A2UINT_COLOR_WRITE),
-            format_rg11b10_all: Self::supports_any(&device, RG11B10FLOAT_ALL),
-            format_rg11b10_no_write: !Self::supports_any(&device, RG11B10FLOAT_ALL),
-            format_rgb9e5_all: Self::supports_any(&device, RGB9E5FLOAT_ALL),
-            format_rgb9e5_no_write: !Self::supports_any(&device, RGB9E5FLOAT_ALL) && !os_is_mac,
+            format_rgba8_srgb_all: Self::supports_any(device, RGBA8_SRGB),
+            format_rgba8_srgb_no_write: !Self::supports_any(device, RGBA8_SRGB),
+            format_rgb10a2_unorm_all: Self::supports_any(device, RGB10A2UNORM_ALL),
+            format_rgb10a2_unorm_no_write: !Self::supports_any(device, RGB10A2UNORM_ALL),
+            format_rgb10a2_uint_color: !Self::supports_any(device, RGB10A2UINT_COLOR_WRITE),
+            format_rgb10a2_uint_color_write: Self::supports_any(device, RGB10A2UINT_COLOR_WRITE),
+            format_rg11b10_all: Self::supports_any(device, RG11B10FLOAT_ALL),
+            format_rg11b10_no_write: !Self::supports_any(device, RG11B10FLOAT_ALL),
+            format_rgb9e5_all: Self::supports_any(device, RGB9E5FLOAT_ALL),
+            format_rgb9e5_no_write: !Self::supports_any(device, RGB9E5FLOAT_ALL) && !os_is_mac,
             format_rgb9e5_filter_only: os_is_mac,
             format_rg32_color: Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                 ],
             ),
             format_rg32_color_write: !Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
@@ -676,7 +676,7 @@ impl super::PrivateCapabilities {
             ),
             format_rg32float_all: os_is_mac,
             format_rg32float_color_blend: Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
@@ -684,35 +684,35 @@ impl super::PrivateCapabilities {
             ),
             format_rg32float_no_filter: !os_is_mac
                 && !Self::supports_any(
-                    &device,
+                    device,
                     &[
                         MTLFeatureSet::iOS_GPUFamily1_v1,
                         MTLFeatureSet::iOS_GPUFamily2_v1,
                     ],
                 ),
             format_rgba32int_color: Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                 ],
             ),
             format_rgba32int_color_write: !Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                 ],
             ),
             format_rgba32float_color: Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                 ],
             ),
             format_rgba32float_color_write: !Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v1,
                     MTLFeatureSet::iOS_GPUFamily2_v1,
@@ -724,7 +724,7 @@ impl super::PrivateCapabilities {
                 .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
             format_depth32float_none: !device
                 .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
-            format_bgr10a2_all: Self::supports_any(&device, BGR10A2_ALL),
+            format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),
             format_bgr10a2_no_write: !device
                 .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3),
             max_buffers_per_stage: 31,
@@ -737,7 +737,7 @@ impl super::PrivateCapabilities {
                 1 << 28 // 256MB otherwise
             },
             max_texture_size: if Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily3_v1,
                     MTLFeatureSet::tvOS_GPUFamily2_v1,
@@ -746,7 +746,7 @@ impl super::PrivateCapabilities {
             ) {
                 16384
             } else if Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily1_v2,
                     MTLFeatureSet::iOS_GPUFamily2_v2,
@@ -761,7 +761,7 @@ impl super::PrivateCapabilities {
             max_texture_layers: 2048,
             max_fragment_input_components: if os_is_mac { 128 } else { 60 },
             max_color_render_targets: if Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily2_v1,
                     MTLFeatureSet::iOS_GPUFamily3_v1,
@@ -778,7 +778,7 @@ impl super::PrivateCapabilities {
                 4
             },
             max_total_threadgroup_memory: if Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily4_v2,
                     MTLFeatureSet::iOS_GPUFamily5_v1,
@@ -786,7 +786,7 @@ impl super::PrivateCapabilities {
             ) {
                 64 << 10
             } else if Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily4_v1,
                     MTLFeatureSet::macOS_GPUFamily1_v2,
@@ -799,7 +799,7 @@ impl super::PrivateCapabilities {
             },
             sample_count_mask,
             supports_debug_markers: Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::macOS_GPUFamily1_v2,
                     MTLFeatureSet::macOS_GPUFamily2_v1,
@@ -829,7 +829,7 @@ impl super::PrivateCapabilities {
                 Self::version_at_least(major, minor, 11, 0)
             },
             supports_arrays_of_textures: Self::supports_any(
-                &device,
+                device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily3_v2,
                     MTLFeatureSet::iOS_GPUFamily4_v1,

@@ -1145,7 +1145,7 @@ impl crate::Context for Context {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::JsString::from(&**code))
             }
         };
-        if let Some(ref label) = desc.label {
+        if let Some(label) = desc.label {
             descriptor.label(label);
         }
         Sendable(device.0.create_shader_module(&descriptor))
@@ -1240,7 +1240,7 @@ impl crate::Context for Context {
             .collect::<js_sys::Array>();
 
         let mut mapped_desc = web_sys::GpuBindGroupLayoutDescriptor::new(&mapped_bindings);
-        if let Some(ref label) = desc.label {
+        if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
         Sendable(device.0.create_bind_group_layout(&mapped_desc))
@@ -1265,7 +1265,7 @@ impl crate::Context for Context {
             .map(|binding| {
                 let mapped_resource = match binding.resource {
                     crate::BindingResource::Buffer(crate::BufferBinding {
-                        ref buffer,
+                        buffer,
                         offset,
                         size,
                     }) => {
@@ -1280,10 +1280,8 @@ impl crate::Context for Context {
                     crate::BindingResource::BufferArray(..) => {
                         panic!("Web backend does not support arrays of buffers")
                     }
-                    crate::BindingResource::Sampler(ref sampler) => {
-                        JsValue::from(sampler.id.0.clone())
-                    }
-                    crate::BindingResource::TextureView(ref texture_view) => {
+                    crate::BindingResource::Sampler(sampler) => JsValue::from(sampler.id.0.clone()),
+                    crate::BindingResource::TextureView(texture_view) => {
                         JsValue::from(texture_view.id.0.clone())
                     }
                     crate::BindingResource::TextureViewArray(..) => {
@@ -1326,7 +1324,7 @@ impl crate::Context for Context {
         desc: &crate::RenderPipelineDescriptor,
     ) -> Self::RenderPipelineId {
         let mut mapped_vertex_state =
-            web_sys::GpuVertexState::new(&desc.vertex.entry_point, &desc.vertex.module.id.0);
+            web_sys::GpuVertexState::new(desc.vertex.entry_point, &desc.vertex.module.id.0);
 
         let buffers = desc
             .vertex
@@ -1388,7 +1386,7 @@ impl crate::Context for Context {
                 })
                 .collect::<js_sys::Array>();
             let mapped_fragment_desc =
-                web_sys::GpuFragmentState::new(&frag.entry_point, &frag.module.id.0, &targets);
+                web_sys::GpuFragmentState::new(frag.entry_point, &frag.module.id.0, &targets);
             mapped_desc.fragment(&mapped_fragment_desc);
         }
 
@@ -1410,7 +1408,7 @@ impl crate::Context for Context {
         desc: &crate::ComputePipelineDescriptor,
     ) -> Self::ComputePipelineId {
         let mapped_compute_stage =
-            web_sys::GpuProgrammableStage::new(&desc.entry_point, &desc.module.id.0);
+            web_sys::GpuProgrammableStage::new(desc.entry_point, &desc.module.id.0);
         let mut mapped_desc = web_sys::GpuComputePipelineDescriptor::new(&mapped_compute_stage);
         if let Some(layout) = desc.layout {
             mapped_desc.layout(&layout.id.0);
@@ -1429,7 +1427,7 @@ impl crate::Context for Context {
         let mut mapped_desc =
             web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
         mapped_desc.mapped_at_creation(desc.mapped_at_creation);
-        if let Some(ref label) = desc.label {
+        if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
         Sendable(device.0.create_buffer(&mapped_desc))
@@ -1445,7 +1443,7 @@ impl crate::Context for Context {
             &map_extent_3d(desc.size),
             desc.usage.bits(),
         );
-        if let Some(ref label) = desc.label {
+        if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
         mapped_desc.dimension(map_texture_dimension(desc.dimension));
@@ -1492,7 +1490,7 @@ impl crate::Context for Context {
         desc: &crate::CommandEncoderDescriptor,
     ) -> Self::CommandEncoderId {
         let mut mapped_desc = web_sys::GpuCommandEncoderDescriptor::new();
-        if let Some(ref label) = desc.label {
+        if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
         device
@@ -1511,7 +1509,7 @@ impl crate::Context for Context {
             .map(|cf| wasm_bindgen::JsValue::from(map_texture_format(*cf)))
             .collect::<js_sys::Array>();
         let mut mapped_desc = web_sys::GpuRenderBundleEncoderDescriptor::new(&mapped_color_formats);
-        if let Some(ref label) = desc.label {
+        if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
         if let Some(ds) = desc.depth_stencil {
@@ -1782,7 +1780,7 @@ impl crate::Context for Context {
         desc: &crate::ComputePassDescriptor,
     ) -> Self::ComputePassId {
         let mut mapped_desc = web_sys::GpuComputePassDescriptor::new();
-        if let Some(ref label) = desc.label {
+        if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
         ComputePass(encoder.begin_compute_pass_with_descriptor(&mapped_desc))
