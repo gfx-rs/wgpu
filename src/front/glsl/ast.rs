@@ -625,7 +625,8 @@ impl<'function> Context<'function> {
                 }
             }
             HirExprKind::Call(call) if !lhs => {
-                let maybe_expr = program.function_call(self, body, call.kind, &call.args, meta)?;
+                let maybe_expr = program
+                    .function_or_constructor_call(self, body, call.kind, &call.args, meta)?;
                 return Ok((maybe_expr, meta));
             }
             HirExprKind::Conditional {
