@@ -202,12 +202,6 @@ pub struct RenderPipelineDescriptor<'a> {
 pub enum ColorStateError {
     #[error("output is missing")]
     Missing,
-    #[error("format {0:?} is not renderable")]
-    FormatNotRenderable(wgt::TextureFormat),
-    #[error("format {0:?} is not blendable")]
-    FormatNotBlendable(wgt::TextureFormat),
-    #[error("format {0:?} does not have a color aspect")]
-    FormatNotColor(wgt::TextureFormat),
     #[error("output format {pipeline} is incompatible with the shader {shader}")]
     IncompatibleFormat {
         pipeline: validation::NumericType,
@@ -215,16 +209,6 @@ pub enum ColorStateError {
     },
     #[error("blend factors for {0:?} must be `One`")]
     InvalidMinMaxBlendFactors(wgt::BlendComponent),
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum DepthStencilStateError {
-    #[error("format {0:?} is not renderable")]
-    FormatNotRenderable(wgt::TextureFormat),
-    #[error("format {0:?} does not have a depth aspect, but depth test/write is enabled")]
-    FormatNotDepth(wgt::TextureFormat),
-    #[error("format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
-    FormatNotStencil(wgt::TextureFormat),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -237,8 +221,6 @@ pub enum CreateRenderPipelineError {
     Implicit(#[from] ImplicitLayoutError),
     #[error("color state [{0}] is invalid")]
     ColorState(u8, #[source] ColorStateError),
-    #[error("depth/stencil state is invalid")]
-    DepthStencilState(#[from] DepthStencilStateError),
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
     #[error("the number of vertex buffers {given} exceeds the limit {limit}")]

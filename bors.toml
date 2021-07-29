@@ -7,6 +7,4 @@ status = [
   "Ubuntu Nightly",
   "Windows Stable",
   "Windows Nightly",
-  "Web Assembly",
-  #"Clippy",
 ]

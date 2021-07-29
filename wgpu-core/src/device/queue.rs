@@ -601,11 +601,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let device = device_guard
                 .get_mut(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
+            let pending_write_command_buffer = device.pending_writes.finish();
             device.temp_suspected.clear();
             device.active_submission_index += 1;
             let submit_index = device.active_submission_index;
 
-            let (fence, pending_write_command_buffer) = {
+            let fence = {
                 let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
                 let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -757,9 +758,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
 
-                // Finish pending writes. Don't do this earlier since buffer init may lead to additional writes (see initialize_buffer_memory).
-                let pending_write_command_buffer = device.pending_writes.finish();
-
                 // now prepare the GPU submission
                 let mut fence = device
                     .raw
@@ -788,7 +786,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         Some(&mut fence),
                     );
                 }
-                (fence, pending_write_command_buffer)
+                fence
             };
 
             if let Some(comb_raw) = pending_write_command_buffer {
@@ -803,12 +801,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
             };
 
-            device.temp_suspected.clear();
-
             profiling::scope!("cleanup");
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,
+                &device.temp_suspected,
                 device.pending_writes.temp_resources.drain(..),
             );
 

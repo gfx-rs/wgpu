@@ -1,56 +1,4 @@
 # Change Log
-## wgpu-core-0.9.2
-  - fix `Features::TEXTURE_SPECIFIC_FORMAT_FEATURES` not being supported for rendertargets
-
-## wgpu-core-0.9.1 (2021-07-13)
-  - fix buffer inits delayed by a frame
-  - fix query resolves to initialize buffers
-  - fix pipeline statistics stride
-  - fix the check for maximum query count
-
-## v0.9 (2021-06-18)
-  - Updated:
-    - naga to `v0.5`.
-  - Added:
-    - `Features::VERTEX_WRITABLE_STORAGE`.
-    - `Features::CLEAR_COMMANDS` which allows you to use `cmd_buf.clear_texture` and `cmd_buf.clear_buffer`.
-  - Changed:
-    - Updated default storage buffer/image limit to `8` from `4`.
-  - Fixed:
-    - `Buffer::get_mapped_range` can now have a range of zero.
-    - Fixed output spirv requiring the "kernal" capability.
-    - Fixed segfault due to improper drop order.
-    - Fixed incorrect dynamic stencil reference for Replace ops.
-    - Fixed tracking of temporary resources.
-    - Stopped unconditionally adding cubemap flags when the backend doesn't support cubemaps.
-  - Validation:
-    - Ensure that if resources are viewed from the vertex stage, they are read only unless `Features::VERTEX_WRITABLE_STORAGE` is true.
-    - Ensure storage class (i.e. storage vs uniform) is consistent between the shader and the pipeline layout.
-    - Error when a color texture is used as a depth/stencil texture.
-    - Check that pipeline output formats are logical
-    - Added shader label to log messages if validation fails.
-  - Tracing:
-    - Make renderpasses show up in the trace before they are run.
-  - Docs: 
-    - Fix typo in `PowerPreference::LowPower` description.
-  - Player:
-    - Automatically start and stop RenderDoc captures.
-  - Examples:
-    - Handle winit's unconditional exception.
-  - Internal: 
-    - Merged wgpu-rs and wgpu back into a single repository.
-    - The tracker was split into two different stateful/stateless trackers to reduce overhead.
-    - Added code coverage testing
-    - CI can now test on lavapipe
-    - Add missing extern "C" in wgpu-core on `wgpu_render_pass_execute_bundles`
-    - Fix incorrect function name `wgpu_render_pass_bundle_indexed_indirect` to `wgpu_render_bundle_draw_indexed_indirect`.
-
-## wgpu-types-0.8.1 (2021-06-08)
-  - fix dynamic stencil reference for Replace ops
-
-## v0.8.1 (2021-05-06)
-  - fix SPIR-V generation from WGSL, which was broken due to "Kernel" capability
-  - validate buffer storage classes
 
 ## v0.8 (2021-04-29)
   - Naga is used by default to translate shaders, SPIRV-Cross is optional behind `cross` feature
@@ -60,7 +8,7 @@
     - conservative rasterization (native-only)
     - buffer resource indexing (native-only)
   - API adjustments to the spec:
-    - Renamed `RenderPassColorAttachmentDescriptor` to `RenderPassColorAttachment`:
+    - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
       - Renamed the `attachment` member to `view`
     - Renamed `RenderPassDepthStencilAttachmentDescriptor` to `RenderPassDepthStencilAttachment`:
       - Renamed the `attachment` member to `view`
@@ -91,7 +39,7 @@
     - interpolation qualifiers
     - allow vertex components to be underspecified
 
-## wgpu-core-0.7.1 (2021-02-25)
+## v0.7.1 (2021-02-25)
   - expose `wgc::device::queue` sub-module in public
   - fix the indexed buffer check
   - fix command allocator race condition
@@ -100,12 +48,9 @@
   - Major API changes:
     - `RenderPipelineDescriptor`
     - `BindingType`
-    - new `ShaderModuleDescriptor`
-    - new `RenderEncoder`
   - Features:
     - (beta) WGSL support, including the ability to bypass SPIR-V entirely
     - (beta) implicit bind group layout support
-    - better error messages
     - timestamp and pipeline statistics queries
     - ETC2 and ASTC compressed textures
     - (beta) targeting WASM with WebGL backend
@@ -119,9 +64,6 @@
     - shader interface
     - render pipeline descriptor
     - vertex buffers
-
-### wgpu-0.6.2 (2020-11-24)
-  - don't panic in the staging belt if the channel is dropped
 
 ## v0.6 (2020-08-17)
   - Crates:
@@ -150,28 +92,28 @@
     - bind group matching to the layout
     - experimental shader interface matching with Naga
 
-## wgpu-core-0.5.6 (2020-07-09)
+## v0.5.6 (2020-07-09)
   - add debug markers support
 
-## wgpu-core-0.5.5 (2020-05-20)
+## v0.5.5 (2020-05-20)
   - fix destruction of adapters, swap chains, and bind group layouts
   - fix command pool leak with temporary threads
   - improve assertion messages
   - implement `From<TextureFormat>` for `TextureComponentType`
 
-## wgpu-core-0.5.4 (2020-04-24)
+## v0.5.4 (2020-04-24)
   - fix memory management of staging buffers
 
-## wgpu-core-0.5.3 (2020-04-18)
+## v0.5.3 (2020-04-18)
   - fix reading access to storage textures
   - another fix to layout transitions for swapchain images
 
-## wgpu-core-0.5.2 (2020-04-15)
+## v0.5.2 (2020-04-15)
   - fix read-only storage flags
   - fix pipeline layout life time
   - improve various assert messages
 
-## wgpu-core-0.5.1 (2020-04-10)
+## v0.5.1 (2020-04-10)
   - fix tracking of swapchain images that are used multiple times in a command buffer
   - fix tracking of initial usage of a resource across a command buffer
 
@@ -196,13 +138,13 @@
     - unmapping dropped buffers
     - better error messages on misused swapchain frames
 
-## wgpu-core-0.4.3 (2020-01-20)
+## v0.4.3 (2020-01-20)
   - improved swap chain error handling
 
-## wgpu-core-0.4.2 (2019-12-15)
+## v0.4.2 (2019-12-15)
   - fixed render pass transitions
 
-## wgpu-core-0.4.1 (2019-11-28)
+## v0.4.1 (2019-11-28)
   - fixed depth/stencil transitions
   - fixed dynamic offset iteration
 
@@ -216,10 +158,10 @@
   - Validation:
     - buffer and texture usage
 
-## wgpu-core-0.3.3 (2019-08-22)
+## v0.3.3 (2019-08-22)
   - fixed instance creation on Windows
 
-## wgpu-core-0.3.1 (2019-08-21)
+## v0.3.1 (2019-08-21)
   - fixed pipeline barriers that aren't transitions
 
 ## v0.3 (2019-08-21)
@@ -242,16 +184,16 @@
     - bind group buffer ranges
     - required stencil reference, blend color
 
-## wgpu-core-0.2.6 (2019-04-04)
+## v0.2.6 (2019-04-04)
   - fixed frame acquisition GPU waits
 
-## wgpu-core-0.2.5 (2019-03-31)
+## v0.2.5 (2019-03-31)
   - fixed submission tracking
   - added support for blend colors
   - fixed bind group compatibility at the gfx-hal level
   - validating the bind groups and blend colors
 
-## wgpu-core-0.2.3 (2019-03-20)
+## v0.2.3 (2019-03-20)
   - fixed vertex format mapping
   - fixed building with "empty" backend on Windows
   - bumped the default descriptor pool size

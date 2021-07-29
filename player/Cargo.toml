@@ -9,7 +9,7 @@ description = "WebGPU trace player"
 homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+license = "MPL-2.0"
 publish = false
 
 [features]

@@ -253,6 +253,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         &mut self,
         index: SubmissionIndex,
         fence: B::Fence,
+        new_suspects: &SuspectedResources,
         temp_resources: impl Iterator<Item = (TempResource<B>, alloc::MemoryBlock<B>)>,
     ) {
         let mut last_resources = NonReferencedResources::new();
@@ -273,6 +274,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
                 .drain(..)
                 .map(|stored| stored.value),
         );
+        self.suspected_resources.extend(new_suspects);
 
         self.active.alloc().init(ActiveSubmission {
             index,

@@ -1,13 +1,13 @@
 [package]
 name = "wgpu-types"
-version = "0.9.0"
+version = "0.8.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU types"
 homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+license = "MPL-2.0"
 
 [lib]
 
