@@ -1030,6 +1030,11 @@ impl<'a, W: Write> Writer<'a, W> {
                     // any spaces at the beginning or end
                     this.write_image_type(dim, arrayed, class)?;
                 }
+                TypeInner::Pointer { base, .. } => {
+                    // write parameter qualifiers
+                    write!(this.out, "inout ")?;
+                    this.write_type(base)?;
+                }
                 // All other types are written by `write_type`
                 _ => {
                     this.write_type(arg.ty)?;
