@@ -317,7 +317,7 @@ impl framework::Example for Skybox {
         let image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
 
         let texture = device.create_texture_with_data(
-            &queue,
+            queue,
             &wgpu::TextureDescriptor {
                 size,
                 mip_level_count: max_mips as u32,

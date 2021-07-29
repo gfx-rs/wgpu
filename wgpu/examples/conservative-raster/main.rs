@@ -48,7 +48,7 @@ impl Example {
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("upscale bind group"),
-            layout: &bind_group_layout_upscale,
+            layout: bind_group_layout_upscale,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,

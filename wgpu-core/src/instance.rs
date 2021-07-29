@@ -677,7 +677,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_adapter_from_hal", "Instance");
 
         let mut token = Token::root();
-        let fid = A::hub(&self).adapters.prepare(input);
+        let fid = A::hub(self).adapters.prepare(input);
 
         match A::VARIANT {
             #[cfg(vulkan)]

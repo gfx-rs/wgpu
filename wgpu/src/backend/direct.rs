@@ -1075,7 +1075,7 @@ impl crate::Context for Context {
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
-            push_constant_ranges: Borrowed(&desc.push_constant_ranges),
+            push_constant_ranges: Borrowed(desc.push_constant_ranges),
         };
 
         let global = &self.0;
@@ -1923,7 +1923,7 @@ impl crate::Context for Context {
 
     fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_insert_debug_marker(encoder.id, &label))
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_insert_debug_marker(encoder.id, label))
         {
             self.handle_error_nolabel(
                 &encoder.error_sink,
@@ -1934,7 +1934,7 @@ impl crate::Context for Context {
     }
     fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_push_debug_group(encoder.id, &label))
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_push_debug_group(encoder.id, label))
         {
             self.handle_error_nolabel(
                 &encoder.error_sink,

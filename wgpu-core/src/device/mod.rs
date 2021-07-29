@@ -1000,7 +1000,7 @@ impl<A: HalApi> Device<A> {
     ) -> Option<id::BindGroupLayoutId> {
         guard
             .iter(self_id.backend())
-            .find(|&(_, ref bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
+            .find(|&(_, bgl)| bgl.device_id.value.0 == self_id && bgl.entries == *entry_map)
             .map(|(id, value)| {
                 value.multi_ref_count.inc();
                 id
@@ -1322,9 +1322,9 @@ impl<A: HalApi> Device<A> {
             let res_index = match entry.resource {
                 Br::Buffer(ref bb) => {
                     let bb = Self::create_buffer_binding(
-                        &bb,
+                        bb,
                         binding,
-                        &decl,
+                        decl,
                         &mut used_buffer_ranges,
                         &mut dynamic_binding_info,
                         &mut used,
@@ -1355,7 +1355,7 @@ impl<A: HalApi> Device<A> {
                         let bb = Self::create_buffer_binding(
                             bb,
                             binding,
-                            &decl,
+                            decl,
                             &mut used_buffer_ranges,
                             &mut dynamic_binding_info,
                             &mut used,
@@ -2225,7 +2225,7 @@ impl<A: HalApi> Device<A> {
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, state) in color_targets.iter().enumerate() {
                 match io.get(&(i as wgt::ShaderLocation)) {
-                    Some(ref output) => {
+                    Some(output) => {
                         validation::check_texture_format(state.format, &output.ty).map_err(
                             |pipeline| {
                                 pipeline::CreateRenderPipelineError::ColorState(
@@ -3546,16 +3546,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(layout) => layout,
                 Err(_) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
-            let bind_group = match device.create_bind_group(
-                device_id,
-                bind_group_layout,
-                desc,
-                &hub,
-                &mut token,
-            ) {
-                Ok(bind_group) => bind_group,
-                Err(e) => break e,
-            };
+            let bind_group =
+                match device.create_bind_group(device_id, bind_group_layout, desc, hub, &mut token)
+                {
+                    Ok(bind_group) => bind_group,
+                    Err(e) => break e,
+                };
             let ref_count = bind_group.life_guard.add_ref();
 
             let id = fid.assign(bind_group, &mut token);
@@ -3808,7 +3804,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .unregister(command_encoder_id, &mut token);
         if let Some(cmdbuf) = cmdbuf {
             let device = &mut device_guard[cmdbuf.device_id.value];
-            device.untrack::<G>(&hub, &cmdbuf.trackers, &mut token);
+            device.untrack::<G>(hub, &cmdbuf.trackers, &mut token);
         }
     }
 
@@ -3864,7 +3860,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let render_bundle = match bundle_encoder.finish(desc, device, &hub, &mut token) {
+            let render_bundle = match bundle_encoder.finish(desc, device, hub, &mut token) {
                 Ok(bundle) => bundle,
                 Err(e) => break e,
             };
@@ -4012,7 +4008,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let fid = hub.render_pipelines.prepare(id_in);
-        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(&hub));
+        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -4036,7 +4032,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 adapter,
                 desc,
                 implicit_context,
-                &hub,
+                hub,
                 &mut token,
             ) {
                 Ok(pair) => pair,
@@ -4146,7 +4142,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let fid = hub.compute_pipelines.prepare(id_in);
-        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(&hub));
+        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
@@ -4167,7 +4163,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device_id,
                 desc,
                 implicit_context,
-                &hub,
+                hub,
                 &mut token,
             ) {
                 Ok(pair) => pair,
@@ -4423,7 +4419,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
         device.lock_life(&mut token).triage_suspected(
-            &hub,
+            hub,
             &device.trackers,
             #[cfg(feature = "trace")]
             None,
@@ -4444,7 +4440,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device_guard
                 .get(device_id)
                 .map_err(|_| DeviceError::Invalid)?
-                .maintain(&hub, force_wait, &mut token)?
+                .maintain(hub, force_wait, &mut token)?
         };
         fire_map_callbacks(callbacks);
         Ok(())
@@ -4461,7 +4457,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         for (_, device) in device_guard.iter(A::VARIANT) {
-            let cbs = device.maintain(&hub, force_wait, &mut token)?;
+            let cbs = device.maintain(hub, force_wait, &mut token)?;
             callbacks.extend(cbs);
         }
         Ok(())

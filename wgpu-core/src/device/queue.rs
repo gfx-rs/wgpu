@@ -741,7 +741,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let callbacks = match device.maintain(&hub, false, &mut token) {
+            let callbacks = match device.maintain(hub, false, &mut token) {
                 Ok(callbacks) => callbacks,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),

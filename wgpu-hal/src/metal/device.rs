@@ -811,7 +811,7 @@ impl crate::Device<super::Api> for super::Device {
                     attribute_desc.set_offset(at.offset);
                 }
             }
-            descriptor.set_vertex_descriptor(Some(&vertex_descriptor));
+            descriptor.set_vertex_descriptor(Some(vertex_descriptor));
         }
 
         if desc.multisample.count != 1 {
