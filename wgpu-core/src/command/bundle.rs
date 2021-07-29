@@ -43,6 +43,7 @@ use crate::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
         SHADER_STAGE_COUNT,
     },
+    error::{ErrorFormatter, PrettyError},
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
@@ -559,6 +560,17 @@ pub enum ExecutionError {
     DestroyedBuffer(id::BufferId),
     #[error("using {0} in a render bundle is not implemented")]
     Unimplemented(&'static str),
+}
+impl PrettyError for ExecutionError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self);
+        match *self {
+            Self::DestroyedBuffer(id) => {
+                fmt.buffer_label(&id);
+            }
+            Self::Unimplemented(_reason) => {}
+        };
+    }
 }
 
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
@@ -1160,6 +1172,14 @@ impl RenderBundleError {
         scope: PassErrorScope::Bundle,
         inner: RenderBundleErrorInner::Device(DeviceError::Invalid),
     };
+}
+impl PrettyError for RenderBundleError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        // This error is wrapper for the inner error,
+        // but the scope has useful labels
+        fmt.error(self);
+        self.scope.fmt_pretty(fmt);
+    }
 }
 
 impl<T, E> MapPassErr<T, RenderBundleError> for Result<T, E>

@@ -3,6 +3,7 @@
 
 use crate::{
     binding_model::PushConstantUploadError,
+    error::ErrorFormatter,
     id,
     track::UseExtendError,
     validation::{MissingBufferUsageError, MissingTextureUsageError},
@@ -92,6 +93,23 @@ pub enum RenderCommandError {
     InvalidScissorRect,
     #[error("Support for {0} is not implemented yet")]
     Unimplemented(&'static str),
+}
+impl crate::error::PrettyError for RenderCommandError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self);
+        match *self {
+            Self::InvalidBindGroup(id) => {
+                fmt.bind_group_label(&id);
+            }
+            Self::InvalidPipeline(id) => {
+                fmt.render_pipeline_label(&id);
+            }
+            Self::Buffer(id, ..) | Self::DestroyedBuffer(id) => {
+                fmt.buffer_label(&id);
+            }
+            _ => {}
+        };
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

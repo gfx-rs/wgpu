@@ -16,288 +16,145 @@ impl<T: fmt::Display> AsDisplay for T {
     }
 }
 
-pub trait PrettyError: Error {
-    fn fmt_pretty(&self, _global: &Global<IdentityManagerFactory>) -> String {
-        format_error_line(self.as_display())
-    }
+pub struct ErrorFormatter<'a> {
+    writer: &'a mut dyn fmt::Write,
+    global: &'a Global<IdentityManagerFactory>,
 }
 
-impl PrettyError for super::command::RenderCommandError {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        let mut ret = format_error_line(self);
-        match *self {
-            Self::InvalidBindGroup(id) => {
-                let name = gfx_select!(id => global.bind_group_label(id));
-                ret.push_str(&format_label_line("bind group", &name));
-            }
-            Self::InvalidPipeline(id) => {
-                let name = gfx_select!(id => global.render_pipeline_label(id));
-                ret.push_str(&format_label_line("render pipeline", &name));
-            }
-            Self::Buffer(id, ..) | Self::DestroyedBuffer(id) => {
-                let name = gfx_select!(id => global.buffer_label(id));
-                ret.push_str(&format_label_line("buffer", &name));
-            }
-            _ => {}
-        };
-        ret
+impl<'a> ErrorFormatter<'a> {
+    pub fn error(&mut self, err: &dyn fmt::Display) {
+        writeln!(self.writer, "    {}", err).expect("Error formatting error");
     }
-}
-impl PrettyError for crate::binding_model::CreateBindGroupError {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        let mut ret = format_error_line(self);
-        match *self {
-            Self::InvalidBuffer(id) => {
-                let name = crate::gfx_select!(id => global.buffer_label(id));
-                ret.push_str(&format_label_line("buffer", &name));
-            }
-            Self::InvalidTextureView(id) => {
-                let name = crate::gfx_select!(id => global.texture_view_label(id));
-                ret.push_str(&format_label_line("texture view", &name));
-            }
-            Self::InvalidSampler(id) => {
-                let name = crate::gfx_select!(id => global.sampler_label(id));
-                ret.push_str(&format_label_line("sampler", &name));
-            }
-            _ => {}
-        };
-        ret
-    }
-}
 
-impl PrettyError for crate::binding_model::CreatePipelineLayoutError {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        let mut ret = format_error_line(self);
-        if let Self::InvalidBindGroupLayout(id) = *self {
-            let name = crate::gfx_select!(id => global.bind_group_layout_label(id));
-            ret.push_str(&format_label_line("bind group layout", &name));
-        };
-        ret
+    pub fn note(&mut self, note: &dyn fmt::Display) {
+        writeln!(self.writer, "      note: {}", note).expect("Error formatting error");
     }
-}
 
-impl PrettyError for crate::command::ExecutionError {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        let mut ret = format_error_line(self);
-        match *self {
-            Self::DestroyedBuffer(id) => {
-                let name = crate::gfx_select!(id => global.buffer_label(id));
-                ret.push_str(&format_label_line("buffer", &name));
-            }
-            Self::Unimplemented(_reason) => {}
-        };
-        ret
-    }
-}
-
-impl PrettyError for crate::command::RenderPassErrorInner {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        let mut ret = format_error_line(self);
-        if let Self::InvalidAttachment(id) = *self {
-            let name = crate::gfx_select!(id => global.texture_view_label(id));
-            ret.push_str(&format_label_line("attachment", &name));
-        };
-        ret
-    }
-}
-
-impl PrettyError for crate::command::RenderPassError {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        // This error is wrapper for the inner error,
-        // but the scope has useful labels
-        format_error_line(self) + &self.scope.fmt_pretty(global)
-    }
-}
-
-impl PrettyError for crate::command::ComputePassError {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        // This error is wrapper for the inner error,
-        // but the scope has useful labels
-        format_error_line(self) + &self.scope.fmt_pretty(global)
-    }
-}
-impl PrettyError for crate::command::RenderBundleError {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        // This error is wrapper for the inner error,
-        // but the scope has useful labels
-        format_error_line(self) + &self.scope.fmt_pretty(global)
-    }
-}
-
-impl PrettyError for crate::command::ComputePassErrorInner {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        let mut ret = format_error_line(self);
-        match *self {
-            Self::InvalidBindGroup(id) => {
-                let name = crate::gfx_select!(id => global.bind_group_label(id));
-                ret.push_str(&format_label_line("bind group", &name));
-            }
-            Self::InvalidPipeline(id) => {
-                let name = crate::gfx_select!(id => global.compute_pipeline_label(id));
-                ret.push_str(&format_label_line("pipeline", &name));
-            }
-            Self::InvalidIndirectBuffer(id) => {
-                let name = crate::gfx_select!(id => global.buffer_label(id));
-                ret.push_str(&format_label_line("indirect buffer", &name));
-            }
-            _ => {}
-        };
-        ret
-    }
-}
-
-impl PrettyError for crate::command::TransferError {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        let mut ret = format_error_line(self);
-        match *self {
-            Self::InvalidBuffer(id) => {
-                let name = crate::gfx_select!(id => global.buffer_label(id));
-                ret.push_str(&format_label_line("label", &name));
-            }
-            Self::InvalidTexture(id) => {
-                let name = crate::gfx_select!(id => global.texture_label(id));
-                ret.push_str(&format_label_line("texture", &name));
-            }
-            // Self::MissingCopySrcUsageFlag(buf_opt, tex_opt) => {
-            //     if let Some(buf) = buf_opt {
-            //         let name = crate::gfx_select!(buf => global.buffer_label(buf));
-            //         ret.push_str(&format_label_line("source", &name));
-            //     }
-            //     if let Some(tex) = tex_opt {
-            //         let name = crate::gfx_select!(tex => global.texture_label(tex));
-            //         ret.push_str(&format_label_line("source", &name));
-            //     }
-            // }
-            Self::MissingCopyDstUsageFlag(buf_opt, tex_opt) => {
-                if let Some(buf) = buf_opt {
-                    let name = crate::gfx_select!(buf => global.buffer_label(buf));
-                    ret.push_str(&format_label_line("destination", &name));
-                }
-                if let Some(tex) = tex_opt {
-                    let name = crate::gfx_select!(tex => global.texture_label(tex));
-                    ret.push_str(&format_label_line("destination", &name));
-                }
-            }
-            _ => {}
-        };
-        ret
-    }
-}
-
-impl PrettyError for crate::command::PassErrorScope {
-    fn fmt_pretty(&self, global: &Global<IdentityManagerFactory>) -> String {
-        // This error is not in the error chain, only notes are needed
-        match *self {
-            Self::Pass(id) => {
-                let name = crate::gfx_select!(id => global.command_buffer_label(id));
-                format_label_line("command buffer", &name)
-            }
-            Self::SetBindGroup(id) => {
-                let name = crate::gfx_select!(id => global.bind_group_label(id));
-                format_label_line("bind group", &name)
-            }
-            Self::SetPipelineRender(id) => {
-                let name = crate::gfx_select!(id => global.render_pipeline_label(id));
-                format_label_line("render pipeline", &name)
-            }
-            Self::SetPipelineCompute(id) => {
-                let name = crate::gfx_select!(id => global.compute_pipeline_label(id));
-                format_label_line("compute pipeline", &name)
-            }
-            Self::SetVertexBuffer(id) => {
-                let name = crate::gfx_select!(id => global.buffer_label(id));
-                format_label_line("buffer", &name)
-            }
-            Self::SetIndexBuffer(id) => {
-                let name = crate::gfx_select!(id => global.buffer_label(id));
-                format_label_line("buffer", &name)
-            }
-            Self::Draw { pipeline, .. } => {
-                if let Some(id) = pipeline {
-                    let name = crate::gfx_select!(id => global.render_pipeline_label(id));
-                    format_label_line("render pipeline", &name)
-                } else {
-                    String::new()
-                }
-            }
-            Self::Dispatch { pipeline, .. } => {
-                if let Some(id) = pipeline {
-                    let name = crate::gfx_select!(id => global.compute_pipeline_label(id));
-                    format_label_line("compute pipeline", &name)
-                } else {
-                    String::new()
-                }
-            }
-            _ => String::new(),
+    pub fn label(&mut self, label_key: &str, label_value: &str) {
+        if !label_key.is_empty() && !label_value.is_empty() {
+            self.note(&format!("{} = `{}`", label_key, label_value));
         }
     }
-}
 
-impl PrettyError for ContextError {
-    fn fmt_pretty(&self, _global: &Global<IdentityManagerFactory>) -> String {
-        format_error_line(self.as_display()) + &format_label_line(self.label_key, &self.label)
+    pub fn bind_group_label(&mut self, id: &crate::id::BindGroupId) {
+        let global = self.global;
+        let label = gfx_select!(id => global.bind_group_label(*id));
+        self.label("bind group", &label);
+    }
+
+    pub fn bind_group_layout_label(&mut self, id: &crate::id::BindGroupLayoutId) {
+        let global = self.global;
+        let label = gfx_select!(id => global.bind_group_layout_label(*id));
+        self.label("bind group layout", &label);
+    }
+
+    pub fn render_pipeline_label(&mut self, id: &crate::id::RenderPipelineId) {
+        let global = self.global;
+        let label = gfx_select!(id => global.render_pipeline_label(*id));
+        self.label("render pipeline", &label);
+    }
+
+    pub fn compute_pipeline_label(&mut self, id: &crate::id::ComputePipelineId) {
+        let global = self.global;
+        let label = gfx_select!(id => global.compute_pipeline_label(*id));
+        self.label("compute pipeline", &label);
+    }
+
+    pub fn buffer_label_with_key(&mut self, id: &crate::id::BufferId, key: &str) {
+        let global = self.global;
+        let label = gfx_select!(id => global.buffer_label(*id));
+        self.label(key, &label);
+    }
+
+    pub fn buffer_label(&mut self, id: &crate::id::BufferId) {
+        self.buffer_label_with_key(id, "buffer");
+    }
+
+    pub fn texture_label_with_key(&mut self, id: &crate::id::TextureId, key: &str) {
+        let global = self.global;
+        let label = gfx_select!(id => global.texture_label(*id));
+        self.label(key, &label);
+    }
+
+    pub fn texture_label(&mut self, id: &crate::id::TextureId) {
+        self.texture_label_with_key(id, "texture");
+    }
+
+    pub fn texture_view_label_with_key(&mut self, id: &crate::id::TextureViewId, key: &str) {
+        let global = self.global;
+        let label = gfx_select!(id => global.texture_view_label(*id));
+        self.label(key, &label);
+    }
+
+    pub fn texture_view_label(&mut self, id: &crate::id::TextureViewId) {
+        self.texture_view_label_with_key(id, "texture view");
+    }
+
+    pub fn sampler_label(&mut self, id: &crate::id::SamplerId) {
+        let global = self.global;
+        let label = gfx_select!(id => global.sampler_label(*id));
+        self.label("sampler", &label);
+    }
+
+    pub fn command_buffer_label(&mut self, id: &crate::id::CommandBufferId) {
+        let global = self.global;
+        let label = gfx_select!(id => global.command_buffer_label(*id));
+        self.label("command buffer", &label);
     }
 }
 
-pub fn format_error_line(err: &dyn fmt::Display) -> String {
-    format!("    {}\n", err)
-}
-
-pub fn format_note_line(note: &dyn fmt::Display) -> String {
-    format!("      note: {}\n", note)
-}
-
-pub fn format_label_line(label_key: &str, label_value: &str) -> String {
-    if label_key.is_empty() || label_value.is_empty() {
-        String::new()
-    } else {
-        format_note_line(&format!("{} = `{}`", label_key, label_value))
+pub trait PrettyError: Error {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self.as_display());
     }
 }
 
 pub fn format_pretty_any(
+    writer: &mut dyn fmt::Write,
     global: &Global<IdentityManagerFactory>,
     error: &(dyn Error + 'static),
-) -> String {
+) {
+    let mut fmt = ErrorFormatter { writer, global };
+
     if let Some(pretty_err) = error.downcast_ref::<ContextError>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
 
     if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderCommandError>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::binding_model::CreateBindGroupError>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) =
         error.downcast_ref::<crate::binding_model::CreatePipelineLayoutError>()
     {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::ExecutionError>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderPassErrorInner>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderPassError>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::ComputePassErrorInner>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::ComputePassError>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::RenderBundleError>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
     if let Some(pretty_err) = error.downcast_ref::<crate::command::TransferError>() {
-        return pretty_err.fmt_pretty(global);
+        return pretty_err.fmt_pretty(&mut fmt);
     }
 
     // default
-    format_error_line(error.as_display())
+    fmt.error(error.as_display())
 }
 
 #[derive(Debug)]
@@ -306,6 +163,13 @@ pub struct ContextError {
     pub cause: Box<dyn Error + Send + Sync + 'static>,
     pub label_key: &'static str,
     pub label: String,
+}
+
+impl PrettyError for ContextError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self.as_display());
+        fmt.label(self.label_key, &self.label);
+    }
 }
 
 impl fmt::Display for ContextError {

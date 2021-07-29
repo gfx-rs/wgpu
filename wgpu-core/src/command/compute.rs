@@ -6,6 +6,7 @@ use crate::{
         StateChange,
     },
     device::MissingDownlevelFlags,
+    error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
@@ -161,6 +162,24 @@ pub enum ComputePassErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
+impl PrettyError for ComputePassErrorInner {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self);
+        match *self {
+            Self::InvalidBindGroup(id) => {
+                fmt.bind_group_label(&id);
+            }
+            Self::InvalidPipeline(id) => {
+                fmt.compute_pipeline_label(&id);
+            }
+            Self::InvalidIndirectBuffer(id) => {
+                fmt.buffer_label(&id);
+            }
+            _ => {}
+        };
+    }
+}
+
 /// Error encountered when performing a compute pass.
 #[derive(Clone, Debug, Error)]
 #[error("{scope}")]
@@ -168,6 +187,14 @@ pub struct ComputePassError {
     pub scope: PassErrorScope,
     #[source]
     inner: ComputePassErrorInner,
+}
+impl PrettyError for ComputePassError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        // This error is wrapper for the inner error,
+        // but the scope has useful labels
+        fmt.error(self);
+        self.scope.fmt_pretty(fmt);
+    }
 }
 
 impl<T, E> MapPassErr<T, ComputePassError> for Result<T, E>
