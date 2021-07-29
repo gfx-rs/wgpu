@@ -393,8 +393,20 @@ impl crate::Device<super::Api> for super::Device {
             Height: desc.size.height,
             DepthOrArraySize: desc.size.depth_or_array_layers as u16,
             MipLevels: desc.mip_level_count as u16,
-            //TODO: map to surface format to allow view casting
-            Format: conv::map_texture_format(desc.format),
+            Format: if crate::FormatAspects::from(desc.format).contains(crate::FormatAspects::COLOR)
+                || !desc.usage.intersects(
+                    crate::TextureUses::RESOURCE
+                        | crate::TextureUses::STORAGE_READ
+                        | crate::TextureUses::STORAGE_WRITE,
+                ) {
+                conv::map_texture_format(desc.format)
+            } else {
+                // This branch is needed if it's a depth texture, and it's ever needed to be viewed as SRV or UAV,
+                // because then we'd create a non-depth format view of it.
+                // Note: we can skip this branch if
+                // `D3D12_FEATURE_D3D12_OPTIONS3::CastingFullyTypedFormatSupported`
+                conv::map_texture_format_depth_typeless(desc.format)
+            },
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: desc.sample_count,
                 Quality: 0,
@@ -912,6 +924,8 @@ impl crate::Device<super::Api> for super::Device {
             bind_group_infos.push(info);
         }
 
+        //Note: we populated them in reverse
+        bind_group_infos.reverse();
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
 
