@@ -48,3 +48,20 @@ jobs:
         with:
           command: clippy
           args: --all-features --workspace -- -D warnings
+  documentation:
+    name: Documentation
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: -p naga --all-features --document-private-items
