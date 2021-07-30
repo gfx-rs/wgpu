@@ -647,7 +647,8 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Panics
     /// - If type is either a image, a sampler, a pointer, or a struct
     /// - If it's an Array with a [`ArraySize::Constant`](crate::ArraySize::Constant) with a
-    /// constant that isn't [`Uint`](crate::ConstantInner::Uint)
+    /// constant that isn't a [`Scalar`](crate::ConstantInner::Scalar) or if the
+    /// scalar value isn't an [`Sint`](crate::ScalarValue::Sint) or [`Uint`](crate::ScalarValue::Uint)
     fn write_value_type(&mut self, inner: &TypeInner) -> BackendResult {
         match *inner {
             // Scalars are simple we just get the full name from `glsl_scalar`
@@ -712,7 +713,8 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Panics
     /// - If type is either a image or sampler
     /// - If it's an Array with a [`ArraySize::Constant`](crate::ArraySize::Constant) with a
-    /// constant that isn't [`Uint`](crate::ConstantInner::Uint)
+    /// constant that isn't a [`Scalar`](crate::ConstantInner::Scalar) or if the
+    /// scalar value isn't an [`Sint`](crate::ScalarValue::Sint) or [`Uint`](crate::ScalarValue::Uint)
     fn write_type(&mut self, ty: Handle<crate::Type>) -> BackendResult {
         match self.module.types[ty].inner {
             // glsl has no pointer types so just write types as normal and loads are skipped

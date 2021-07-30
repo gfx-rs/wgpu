@@ -1,25 +1,28 @@
-// Important note about `Expression::ImageQuery`/`Expression::ArrayLength` and hlsl backend:
-// Due to implementation of `GetDimensions` function in hlsl (https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions)
-// backend can't work with it as an expression.
-// Instead, it generates a unique wrapped function per `Expression::ImageQuery`, based on texure info and query function.
-// See `WrappedImageQuery` struct that represents a unique function and will be generated before writing all statements and expressions.
-// This allowed to works with `Expression::ImageQuery` as expression and write wrapped function.
-//
-// For example:
-// ```wgsl
-// let dim_1d = textureDimensions(image_1d);
-// ```
-//
-// ```hlsl
-// int NagaDimensions1D(Texture1D<float4>)
-// {
-//    uint4 ret;
-//    image_1d.GetDimensions(ret.x);
-//    return ret.x;
-// }
-//
-// int dim_1d = NagaDimensions1D(image_1d);
-// ```
+//! Helpers for the hlsl backend
+//!
+//! Important note about `Expression::ImageQuery`/`Expression::ArrayLength` and hlsl backend:
+//!
+//! Due to implementation of `GetDimensions` function in hlsl (<https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions>)
+//! backend can't work with it as an expression.
+//! Instead, it generates a unique wrapped function per `Expression::ImageQuery`, based on texure info and query function.
+//! See `WrappedImageQuery` struct that represents a unique function and will be generated before writing all statements and expressions.
+//! This allowed to works with `Expression::ImageQuery` as expression and write wrapped function.
+//!
+//! For example:
+//! ```wgsl
+//! let dim_1d = textureDimensions(image_1d);
+//! ```
+//!
+//! ```hlsl
+//! int NagaDimensions1D(Texture1D<float4>)
+//! {
+//!    uint4 ret;
+//!    image_1d.GetDimensions(ret.x);
+//!    return ret.x;
+//! }
+//!
+//! int dim_1d = NagaDimensions1D(image_1d);
+//! ```
 
 use super::{super::FunctionCtx, BackendResult};
 use crate::arena::Handle;
@@ -38,37 +41,37 @@ pub(super) struct WrappedImageQuery {
     pub(super) query: ImageQuery,
 }
 
-// HLSL backend requires its own `ImageQuery` enum.
-// It is used inside `WrappedImageQuery` and should be unique per ImageQuery function.
-// IR version can't be unique per function, because it's store mipmap level as an expression.
-//
-// For example:
-// ```wgsl
-// let dim_cube_array_lod = textureDimensions(image_cube_array, 1);
-// let dim_cube_array_lod2 = textureDimensions(image_cube_array, 1);
-// ```
-//
-// ```ir
-// ImageQuery {
-//  image: [1],
-//  query: Size {
-//      level: Some(
-//          [1],
-//      ),
-//  },
-// },
-// ImageQuery {
-//  image: [1],
-//  query: Size {
-//      level: Some(
-//          [2],
-//      ),
-//  },
-// },
-// ```
-//
-// HLSL should generate only 1 function for this case.
-//
+/// HLSL backend requires its own `ImageQuery` enum.
+///
+/// It is used inside `WrappedImageQuery` and should be unique per ImageQuery function.
+/// IR version can't be unique per function, because it's store mipmap level as an expression.
+///
+/// For example:
+/// ```wgsl
+/// let dim_cube_array_lod = textureDimensions(image_cube_array, 1);
+/// let dim_cube_array_lod2 = textureDimensions(image_cube_array, 1);
+/// ```
+///
+/// ```ir
+/// ImageQuery {
+///  image: [1],
+///  query: Size {
+///      level: Some(
+///          [1],
+///      ),
+///  },
+/// },
+/// ImageQuery {
+///  image: [1],
+///  query: Size {
+///      level: Some(
+///          [2],
+///      ),
+///  },
+/// },
+/// ```
+///
+/// HLSL should generate only 1 function for this case.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum ImageQuery {
     Size,
@@ -141,7 +144,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
     }
 
     /// Helper function that write wrapped function for `Expression::ArrayLength`
-    /// https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-object-rwbyteaddressbuffer-getdimensions
+    ///
+    /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-object-rwbyteaddressbuffer-getdimensions>
     pub(super) fn write_wrapped_array_length_function(
         &mut self,
         module: &crate::Module,
@@ -221,7 +225,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
     }
 
     /// Helper function that write wrapped function for `Expression::ImageQuery`
-    /// https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions
+    ///
+    /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions>
     pub(super) fn write_wrapped_image_query_function(
         &mut self,
         module: &crate::Module,
@@ -338,7 +343,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
     }
 
     /// Helper function that write wrapped function for `Expression::ImageQuery` and `Expression::ArrayLength`
-    /// https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions
+    ///
+    /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions>
     pub(super) fn write_wrapped_functions(
         &mut self,
         module: &crate::Module,

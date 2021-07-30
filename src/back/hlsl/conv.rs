@@ -11,7 +11,8 @@ impl crate::ScalarKind {
     }
 
     /// Helper function that returns scalar related strings
-    /// https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-scalar
+    ///
+    /// <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-scalar>
     pub(super) fn to_hlsl_str(self, width: crate::Bytes) -> Result<&'static str, Error> {
         match self {
             Self::Sint => Ok("int"),

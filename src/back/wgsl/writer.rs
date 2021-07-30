@@ -9,8 +9,7 @@ use std::fmt::Write;
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
 
-/// WGSL attribute
-/// https://gpuweb.github.io/gpuweb/wgsl/#attributes
+/// WGSL [attribute](https://gpuweb.github.io/gpuweb/wgsl/#attributes)
 enum Attribute {
     Binding(u32),
     Block,
@@ -137,7 +136,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Helper method used to write [`ScalarValue`](ScalarValue)
+    /// Helper method used to write [`ScalarValue`](crate::ScalarValue)
     ///
     /// # Notes
     /// Adds no trailing or leading whitespace
@@ -179,8 +178,8 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Helper method used to write structs
-    /// https://gpuweb.github.io/gpuweb/wgsl/#functions
+    /// Helper method used to write
+    /// [functions](https://gpuweb.github.io/gpuweb/wgsl/#functions)
     ///
     /// # Notes
     /// Ends in a newline

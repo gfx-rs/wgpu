@@ -1734,7 +1734,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
-    /// Helper method used to write [`ScalarValue`](ScalarValue)
+    /// Helper method used to write [`ScalarValue`](crate::ScalarValue)
     ///
     /// # Notes
     /// Adds no trailing or leading whitespace

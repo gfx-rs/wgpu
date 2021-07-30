@@ -134,7 +134,7 @@ fn name(option: &Option<String>) -> &str {
     }
 }
 
-/// set39 color scheme from https://graphviz.org/doc/info/colors.html
+/// set39 color scheme from <https://graphviz.org/doc/info/colors.html>
 const COLORS: &[&str] = &[
     "white", // pattern starts at 1
     "#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3", "#fdb462", "#b3de69", "#fccde5",

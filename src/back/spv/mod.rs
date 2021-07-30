@@ -268,7 +268,7 @@ enum Dimension {
     Matrix,
 }
 
-/// A map from evaluated [`Expression`s] to their SPIR-V ids.
+/// A map from evaluated [`Expression`](crate::Expression)s to their SPIR-V ids.
 ///
 /// When we emit code to evaluate a given `Expression`, we record the
 /// SPIR-V id of its value here, under its `Handle<Expression>` index.
@@ -343,7 +343,7 @@ struct BlockContext<'w> {
     /// [`ir_function`](BlockContext::ir_function).
     fun_info: &'w crate::valid::FunctionInfo,
 
-    /// The [`back::spv::Function`] to which we are contributing SPIR-V instructions.
+    /// The [`spv::Function`](Function) to which we are contributing SPIR-V instructions.
     function: &'w mut Function,
 
     /// SPIR-V ids for expressions we've evaluated.
