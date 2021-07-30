@@ -170,7 +170,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
         match *value {
-            StoreValue::Expression(expr) => self.write_expr(module, expr, &func_ctx)?,
+            StoreValue::Expression(expr) => self.write_expr(module, expr, func_ctx)?,
             StoreValue::TempIndex {
                 depth,
                 index,

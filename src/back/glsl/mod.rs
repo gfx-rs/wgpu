@@ -829,7 +829,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_array_size(size)?;
         }
 
-        if is_value_init_supported(&self.module, global.ty) {
+        if is_value_init_supported(self.module, global.ty) {
             write!(self.out, " = ")?;
             if let Some(init) = global.init {
                 self.write_constant(init)?;
@@ -1110,7 +1110,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Write the constant
                 // `write_constant` adds no trailing or leading space/newline
                 self.write_constant(init)?;
-            } else if is_value_init_supported(&self.module, local.ty) {
+            } else if is_value_init_supported(self.module, local.ty) {
                 write!(self.out, " = ")?;
                 self.write_zero_init_value(local.ty)?;
             }
