@@ -737,7 +737,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     // parse the body
                                     self.parse_compound_statement(&mut context, &mut body)?;
 
-                                    let Context { arg_use, .. } = context;
+                                    let Context {
+                                        arg_use, depth_set, ..
+                                    } = context;
                                     let handle = self.program.add_function(
                                         Function {
                                             name: Some(name.clone()),
@@ -750,6 +752,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                         },
                                         name,
                                         parameters,
+                                        depth_set,
                                         qualifiers,
                                         meta,
                                     )?;

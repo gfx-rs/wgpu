@@ -1,3 +1,5 @@
+use bit_set::BitSet;
+
 use super::{
     super::{Emitter, Typifier},
     constants::ConstantSolver,
@@ -11,6 +13,7 @@ use crate::{
     StorageClass, Type, TypeInner, UnaryOperator, VectorSize,
 };
 use core::convert::TryFrom;
+use std::ops::Index;
 
 #[derive(Debug, Clone, Copy)]
 pub enum GlobalLookupKind {
@@ -36,6 +39,10 @@ pub struct FunctionDeclaration {
     pub defined: bool,
     /// Wheter or not this function returns void (nothing)
     pub void: bool,
+    /// [`BitSet`](BitSet) where each bit indicates if the argument in the
+    /// corresponding position should be treated as a depth image instead of a
+    /// regular image
+    pub depth_set: BitSet,
 }
 
 bitflags::bitflags! {
@@ -180,6 +187,7 @@ pub struct Context<'function> {
     expressions: &'function mut Arena<Expression>,
     pub locals: &'function mut Arena<LocalVariable>,
     pub arguments: &'function mut Vec<FunctionArgument>,
+    pub depth_set: BitSet,
     pub arg_use: Vec<EntryArgUse>,
 
     //TODO: Find less allocation heavy representation
@@ -204,6 +212,7 @@ impl<'function> Context<'function> {
             expressions,
             locals,
             arguments,
+            depth_set: BitSet::new(),
             arg_use: vec![EntryArgUse::empty(); program.entry_args.len()],
 
             scopes: vec![FastHashMap::default()],
@@ -921,6 +930,14 @@ impl<'function> Context<'function> {
         }
 
         Ok(())
+    }
+}
+
+impl<'function> Index<Handle<Expression>> for Context<'function> {
+    type Output = Expression;
+
+    fn index(&self, index: Handle<Expression>) -> &Self::Output {
+        &self.expressions[index]
     }
 }
 

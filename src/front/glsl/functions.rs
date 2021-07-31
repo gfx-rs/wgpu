@@ -1,3 +1,5 @@
+use bit_set::BitSet;
+
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, ImageQuery, LocalVariable,
@@ -270,16 +272,15 @@ impl Program<'_> {
         meta: SourceMetadata,
     ) -> Result<Option<Handle<Expression>>, ErrorKind> {
         match name.as_str() {
-            "sampler1D"
-            | "sampler1DArray"
-            | "sampler2D"
-            | "sampler2DArray"
-            | "sampler2DMS"
-            | "sampler2DMSArray"
-            | "sampler3D"
-            | "samplerCube"
-            | "samplerCubeArray"
-            | "sampler1DShadow"
+            "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
+            | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
+                if args.len() != 2 {
+                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                }
+                ctx.samplers.insert(args[0].0, args[1].0);
+                Ok(Some(args[0].0))
+            }
+            "sampler1DShadow"
             | "sampler1DArrayShadow"
             | "sampler2DShadow"
             | "sampler2DArrayShadow"
@@ -288,7 +289,48 @@ impl Program<'_> {
                 if args.len() != 2 {
                     return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                 }
+
+                let ty = match ctx[args[0].0] {
+                    crate::Expression::GlobalVariable(handle) => {
+                        &mut self.module.global_variables.get_mut(handle).ty
+                    }
+                    crate::Expression::FunctionArgument(i) => {
+                        ctx.depth_set.insert(i as usize);
+                        &mut ctx.arguments[i as usize].ty
+                    }
+                    _ => {
+                        return Err(ErrorKind::SemanticError(
+                            args[0].1,
+                            "Not a valid texture expression".into(),
+                        ))
+                    }
+                };
+                match self.module.types[*ty].inner {
+                    TypeInner::Image {
+                        class,
+                        dim,
+                        arrayed,
+                    } => match class {
+                        crate::ImageClass::Sampled { multi, .. } => {
+                            *ty = self.module.types.fetch_or_append(Type {
+                                name: None,
+                                inner: TypeInner::Image {
+                                    dim,
+                                    arrayed,
+                                    class: crate::ImageClass::Depth { multi },
+                                },
+                            })
+                        }
+                        crate::ImageClass::Depth { .. } => {}
+                        _ => {
+                            return Err(ErrorKind::SemanticError(args[0].1, "Not a texture".into()))
+                        }
+                    },
+                    _ => return Err(ErrorKind::SemanticError(args[0].1, "Not a texture".into())),
+                };
+
                 ctx.samplers.insert(args[0].0, args[1].0);
+
                 Ok(Some(args[0].0))
             }
             "texture" => {
@@ -845,7 +887,58 @@ impl Program<'_> {
 
                     let mut exact = true;
 
-                    for (decl_arg, call_arg) in decl.parameters.iter().zip(args.iter()) {
+                    for ((i, decl_arg), call_arg) in
+                        decl.parameters.iter().enumerate().zip(args.iter())
+                    {
+                        if decl.depth_set.contains(i) {
+                            let ty = match ctx[args[0].0] {
+                                crate::Expression::GlobalVariable(handle) => {
+                                    &mut self.module.global_variables.get_mut(handle).ty
+                                }
+                                crate::Expression::FunctionArgument(i) => {
+                                    ctx.depth_set.insert(i as usize);
+                                    &mut ctx.arguments[i as usize].ty
+                                }
+                                _ => {
+                                    return Err(ErrorKind::SemanticError(
+                                        args[0].1,
+                                        "Not a valid texture expression".into(),
+                                    ))
+                                }
+                            };
+                            match self.module.types[*ty].inner {
+                                TypeInner::Image {
+                                    class,
+                                    dim,
+                                    arrayed,
+                                } => match class {
+                                    crate::ImageClass::Sampled { multi, .. } => {
+                                        *ty = self.module.types.fetch_or_append(Type {
+                                            name: None,
+                                            inner: TypeInner::Image {
+                                                dim,
+                                                arrayed,
+                                                class: crate::ImageClass::Depth { multi },
+                                            },
+                                        })
+                                    }
+                                    crate::ImageClass::Depth { .. } => {}
+                                    _ => {
+                                        return Err(ErrorKind::SemanticError(
+                                            args[0].1,
+                                            "Not a texture".into(),
+                                        ))
+                                    }
+                                },
+                                _ => {
+                                    return Err(ErrorKind::SemanticError(
+                                        args[0].1,
+                                        "Not a texture".into(),
+                                    ))
+                                }
+                            };
+                        }
+
                         let decl_inner = &self.module.types[*decl_arg].inner;
                         let call_inner = self.resolve_type(ctx, call_arg.0, call_arg.1)?;
 
@@ -1043,6 +1136,7 @@ impl Program<'_> {
         name: String,
         // Normalized function parameters, modifiers are not applied
         parameters: Vec<Handle<Type>>,
+        depth_set: BitSet,
         qualifiers: Vec<ParameterQualifier>,
         meta: SourceMetadata,
     ) -> Result<Handle<Function>, ErrorKind> {
@@ -1089,6 +1183,7 @@ impl Program<'_> {
 
                 decl.defined = true;
                 decl.qualifiers = qualifiers;
+                decl.depth_set = depth_set;
                 *self.module.functions.get_mut(decl.handle) = function;
                 return Ok(decl.handle);
             }
@@ -1101,6 +1196,7 @@ impl Program<'_> {
                 handle,
                 defined: true,
                 void,
+                depth_set,
             });
             handle
         })
@@ -1153,6 +1249,7 @@ impl Program<'_> {
             handle,
             defined: false,
             void,
+            depth_set: BitSet::new(),
         });
 
         Ok(())
