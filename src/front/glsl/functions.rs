@@ -2,12 +2,22 @@ use bit_set::BitSet;
 
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
-    Expression, Function, FunctionArgument, FunctionResult, Handle, ImageQuery, LocalVariable,
-    MathFunction, RelationalFunction, SampleLevel, ScalarKind, ScalarValue, ShaderStage, Statement,
-    StructMember, SwizzleComponent, Type, TypeInner, VectorSize,
+    Expression, Function, FunctionArgument, FunctionResult, Handle, ImageClass, ImageDimension,
+    ImageQuery, LocalVariable, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind,
+    ScalarValue, ShaderStage, Statement, StructMember, SwizzleComponent, Type, TypeInner,
+    VectorSize,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
+
+/// Helper struct for texture calls with the separate components from the vector argument
+///
+/// Obtained by calling [`coordinate_components`](Program::coordinate_components)
+struct CoordComponents {
+    coordinate: Handle<Expression>,
+    depth_ref: Option<Handle<Expression>>,
+    array_index: Option<Handle<Expression>>,
+}
 
 impl Program<'_> {
     fn add_constant_value(&mut self, scalar_kind: ScalarKind, value: u64) -> Handle<Constant> {
@@ -289,49 +299,9 @@ impl Program<'_> {
                 if args.len() != 2 {
                     return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                 }
-
-                let ty = match ctx[args[0].0] {
-                    crate::Expression::GlobalVariable(handle) => {
-                        &mut self.module.global_variables.get_mut(handle).ty
-                    }
-                    crate::Expression::FunctionArgument(i) => {
-                        ctx.depth_set.insert(i as usize);
-                        &mut ctx.arguments[i as usize].ty
-                    }
-                    _ => {
-                        return Err(ErrorKind::SemanticError(
-                            args[0].1,
-                            "Not a valid texture expression".into(),
-                        ))
-                    }
-                };
-                match self.module.types[*ty].inner {
-                    TypeInner::Image {
-                        class,
-                        dim,
-                        arrayed,
-                    } => match class {
-                        crate::ImageClass::Sampled { multi, .. } => {
-                            *ty = self.module.types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Image {
-                                    dim,
-                                    arrayed,
-                                    class: crate::ImageClass::Depth { multi },
-                                },
-                            })
-                        }
-                        crate::ImageClass::Depth { .. } => {}
-                        _ => {
-                            return Err(ErrorKind::SemanticError(args[0].1, "Not a texture".into()))
-                        }
-                    },
-                    _ => return Err(ErrorKind::SemanticError(args[0].1, "Not a texture".into())),
-                };
-
-                ctx.samplers.insert(args[0].0, args[1].0);
-
-                Ok(Some(args[0].0))
+                let expr = sampled_to_depth(&mut self.module, ctx, args[0], body)?;
+                ctx.samplers.insert(expr, args[1].0);
+                Ok(Some(expr))
             }
             "texture" => {
                 if !(2..=3).contains(&args.len()) {
@@ -342,19 +312,20 @@ impl Program<'_> {
                 if let Some(&mut (ref mut expr, meta)) = args.get_mut(2) {
                     ctx.implicit_conversion(self, expr, meta, ScalarKind::Float, 4)?;
                 }
+                let comps = self.coordinate_components(ctx, args[0], args[1], body)?;
                 if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
                     Ok(Some(
                         ctx.add_expression(
                             Expression::ImageSample {
                                 image: args[0].0,
                                 sampler,
-                                coordinate: args[1].0,
-                                array_index: None, //TODO
+                                coordinate: comps.coordinate,
+                                array_index: comps.array_index,
                                 offset: None,
                                 level: args.get(2).map_or(SampleLevel::Auto, |&(expr, _)| {
                                     SampleLevel::Bias(expr)
                                 }),
-                                depth_ref: None,
+                                depth_ref: comps.depth_ref,
                             },
                             body,
                         ),
@@ -371,16 +342,17 @@ impl Program<'_> {
                 ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
                 let arg_2 = &mut args[2];
                 ctx.implicit_conversion(self, &mut arg_2.0, arg_2.1, ScalarKind::Float, 4)?;
+                let comps = self.coordinate_components(ctx, args[0], args[1], body)?;
                 if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
                     Ok(Some(ctx.add_expression(
                         Expression::ImageSample {
                             image: args[0].0,
                             sampler,
-                            coordinate: args[1].0,
-                            array_index: None, //TODO
+                            coordinate: comps.coordinate,
+                            array_index: comps.array_index,
                             offset: None,
                             level: SampleLevel::Exact(args[2].0),
-                            depth_ref: None,
+                            depth_ref: comps.depth_ref,
                         },
                         body,
                     )))
@@ -403,18 +375,8 @@ impl Program<'_> {
                 let level = args
                     .get(2)
                     .map_or(SampleLevel::Auto, |&(expr, _)| SampleLevel::Bias(expr));
-                let dim = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
-                    TypeInner::Image { dim, .. } => match dim {
-                        crate::ImageDimension::D1 => 1,
-                        crate::ImageDimension::D2 => 2,
-                        crate::ImageDimension::D3 => 3,
-                        crate::ImageDimension::Cube => {
-                            return Err(ErrorKind::SemanticError(
-                                meta,
-                                "textureProj doesn't accept cube texture".into(),
-                            ))
-                        }
-                    },
+                let size = match *self.resolve_type(ctx, args[1].0, args[1].1)? {
+                    TypeInner::Vector { size, .. } => size,
                     _ => {
                         return Err(ErrorKind::SemanticError(
                             meta,
@@ -422,32 +384,50 @@ impl Program<'_> {
                         ))
                     }
                 };
-                match *self.resolve_type(ctx, args[1].0, args[1].1)? {
-                    TypeInner::Vector { size, .. } => {
-                        if !(size as usize + 1 == dim || size == VectorSize::Quad) {
-                            return Err(ErrorKind::SemanticError(
-                                meta,
-                                "Bad call to textureProj".into(),
-                            ));
-                        }
-                    }
-                    _ => {
-                        return Err(ErrorKind::SemanticError(
-                            meta,
-                            "Bad call to textureProj".into(),
-                        ))
-                    }
-                }
+                let (base, base_meta) = args[1];
+                let mut right = ctx.add_expression(
+                    Expression::AccessIndex {
+                        base,
+                        index: size as u32 - 1,
+                    },
+                    body,
+                );
+                let left = if let VectorSize::Bi = size {
+                    ctx.add_expression(Expression::AccessIndex { base, index: 0 }, body)
+                } else {
+                    let size = match size {
+                        VectorSize::Tri => VectorSize::Bi,
+                        _ => VectorSize::Tri,
+                    };
+                    right = ctx.add_expression(Expression::Splat { size, value: right }, body);
+                    ctx.add_expression(
+                        Expression::Swizzle {
+                            size,
+                            vector: base,
+                            pattern: SwizzleComponent::XYZW,
+                        },
+                        body,
+                    )
+                };
+                let coords = ctx.add_expression(
+                    Expression::Binary {
+                        op: BinaryOperator::Divide,
+                        left,
+                        right,
+                    },
+                    body,
+                );
+                let comps = self.coordinate_components(ctx, args[0], (coords, base_meta), body)?;
                 if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
                     Ok(Some(ctx.add_expression(
                         Expression::ImageSample {
                             image: args[0].0,
                             sampler,
-                            coordinate: args[1].0,
-                            array_index: None, //TODO
+                            coordinate: comps.coordinate,
+                            array_index: comps.array_index,
                             offset: None,
                             level,
-                            depth_ref: None,
+                            depth_ref: comps.depth_ref,
                         },
                         body,
                     )))
@@ -468,19 +448,20 @@ impl Program<'_> {
                 ctx.implicit_conversion(self, &mut arg_2.0, arg_2.1, ScalarKind::Float, 4)?;
                 let arg_3 = &mut args[3];
                 ctx.implicit_conversion(self, &mut arg_3.0, arg_3.1, ScalarKind::Float, 4)?;
+                let comps = self.coordinate_components(ctx, args[0], args[1], body)?;
                 if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
                     Ok(Some(ctx.add_expression(
                         Expression::ImageSample {
                             image: args[0].0,
                             sampler,
-                            coordinate: args[1].0,
-                            array_index: None, //TODO
+                            coordinate: comps.coordinate,
+                            array_index: comps.array_index,
                             offset: None,
                             level: SampleLevel::Gradient {
                                 x: args[2].0,
                                 y: args[3].0,
                             },
-                            depth_ref: None,
+                            depth_ref: comps.depth_ref,
                         },
                         body,
                     )))
@@ -516,61 +497,13 @@ impl Program<'_> {
                 ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Sint, 4)?;
                 let arg_2 = &mut args[2];
                 ctx.implicit_conversion(self, &mut arg_2.0, arg_2.1, ScalarKind::Sint, 4)?;
-                if ctx.samplers.get(&args[0].0).is_some() {
-                    let (arrayed, dims) = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
-                        TypeInner::Image { arrayed, dim, .. } => (arrayed, dim),
-                        _ => (false, crate::ImageDimension::D1),
-                    };
-
-                    let (coordinate, array_index) = if arrayed {
-                        (
-                            match dims {
-                                crate::ImageDimension::D1 => ctx.add_expression(
-                                    Expression::AccessIndex {
-                                        base: args[1].0,
-                                        index: 0,
-                                    },
-                                    body,
-                                ),
-                                crate::ImageDimension::D2 => ctx.add_expression(
-                                    Expression::Swizzle {
-                                        size: VectorSize::Bi,
-                                        vector: args[1].0,
-                                        pattern: SwizzleComponent::XYZW,
-                                    },
-                                    body,
-                                ),
-                                _ => ctx.add_expression(
-                                    Expression::Swizzle {
-                                        size: VectorSize::Tri,
-                                        vector: args[1].0,
-                                        pattern: SwizzleComponent::XYZW,
-                                    },
-                                    body,
-                                ),
-                            },
-                            Some(ctx.add_expression(
-                                Expression::AccessIndex {
-                                    base: args[1].0,
-                                    index: match dims {
-                                        crate::ImageDimension::D1 => 1,
-                                        crate::ImageDimension::D2 => 2,
-                                        crate::ImageDimension::D3 => 3,
-                                        crate::ImageDimension::Cube => 2,
-                                    },
-                                },
-                                body,
-                            )),
-                        )
-                    } else {
-                        (args[1].0, None)
-                    };
-
+                let comps = self.coordinate_components(ctx, args[0], args[1], body)?;
+                if ctx.samplers.get(&args[0].0).is_some() && comps.depth_ref.is_none() {
                     Ok(Some(ctx.add_expression(
                         Expression::ImageLoad {
                             image: args[0].0,
-                            coordinate,
-                            array_index,
+                            coordinate: comps.coordinate,
+                            array_index: comps.array_index,
                             index: Some(args[2].0),
                         },
                         body,
@@ -887,56 +820,11 @@ impl Program<'_> {
 
                     let mut exact = true;
 
-                    for ((i, decl_arg), call_arg) in
-                        decl.parameters.iter().enumerate().zip(args.iter())
+                    for ((i, decl_arg), mut call_arg) in
+                        decl.parameters.iter().enumerate().zip(args.iter().copied())
                     {
                         if decl.depth_set.contains(i) {
-                            let ty = match ctx[args[0].0] {
-                                crate::Expression::GlobalVariable(handle) => {
-                                    &mut self.module.global_variables.get_mut(handle).ty
-                                }
-                                crate::Expression::FunctionArgument(i) => {
-                                    ctx.depth_set.insert(i as usize);
-                                    &mut ctx.arguments[i as usize].ty
-                                }
-                                _ => {
-                                    return Err(ErrorKind::SemanticError(
-                                        args[0].1,
-                                        "Not a valid texture expression".into(),
-                                    ))
-                                }
-                            };
-                            match self.module.types[*ty].inner {
-                                TypeInner::Image {
-                                    class,
-                                    dim,
-                                    arrayed,
-                                } => match class {
-                                    crate::ImageClass::Sampled { multi, .. } => {
-                                        *ty = self.module.types.fetch_or_append(Type {
-                                            name: None,
-                                            inner: TypeInner::Image {
-                                                dim,
-                                                arrayed,
-                                                class: crate::ImageClass::Depth { multi },
-                                            },
-                                        })
-                                    }
-                                    crate::ImageClass::Depth { .. } => {}
-                                    _ => {
-                                        return Err(ErrorKind::SemanticError(
-                                            args[0].1,
-                                            "Not a texture".into(),
-                                        ))
-                                    }
-                                },
-                                _ => {
-                                    return Err(ErrorKind::SemanticError(
-                                        args[0].1,
-                                        "Not a texture".into(),
-                                    ))
-                                }
-                            };
+                            call_arg.0 = sampled_to_depth(&mut self.module, ctx, call_arg, body)?;
                         }
 
                         let decl_inner = &self.module.types[*decl_arg].inner;
@@ -1448,4 +1336,143 @@ impl Program<'_> {
             });
         }
     }
+
+    /// Helper function for texture calls, splits the vector argument into it's components
+    fn coordinate_components(
+        &self,
+        ctx: &mut Context,
+        (image, image_meta): (Handle<Expression>, SourceMetadata),
+        (coord, coord_meta): (Handle<Expression>, SourceMetadata),
+        body: &mut Block,
+    ) -> Result<CoordComponents, ErrorKind> {
+        if let TypeInner::Image {
+            dim,
+            arrayed,
+            class,
+        } = *self.resolve_type(ctx, image, image_meta)?
+        {
+            let image_size = match dim {
+                ImageDimension::D1 => None,
+                ImageDimension::D2 => Some(VectorSize::Bi),
+                ImageDimension::D3 => Some(VectorSize::Tri),
+                ImageDimension::Cube => Some(VectorSize::Tri),
+            };
+            let coord_size = match *self.resolve_type(ctx, coord, coord_meta)? {
+                TypeInner::Vector { size, .. } => Some(size),
+                _ => None,
+            };
+            let shadow = match class {
+                ImageClass::Depth { .. } => true,
+                _ => false,
+            };
+
+            let coordinate = match (image_size, coord_size) {
+                (Some(size), Some(coord_s)) if size != coord_s => ctx.add_expression(
+                    Expression::Swizzle {
+                        size,
+                        vector: coord,
+                        pattern: SwizzleComponent::XYZW,
+                    },
+                    body,
+                ),
+                (None, Some(_)) => ctx.add_expression(
+                    Expression::AccessIndex {
+                        base: coord,
+                        index: 0,
+                    },
+                    body,
+                ),
+                _ => coord,
+            };
+            let array_index = match arrayed {
+                true => {
+                    let index = match shadow {
+                        true => image_size.map_or(0, |s| s as u32 - 1),
+                        false => image_size.map_or(0, |s| s as u32),
+                    };
+
+                    Some(ctx.add_expression(Expression::AccessIndex { base: coord, index }, body))
+                }
+                _ => None,
+            };
+            let depth_ref = match shadow {
+                true => {
+                    let index = image_size.map_or(0, |s| s as u32);
+
+                    Some(ctx.add_expression(Expression::AccessIndex { base: coord, index }, body))
+                }
+                false => None,
+            };
+
+            Ok(CoordComponents {
+                coordinate,
+                depth_ref,
+                array_index,
+            })
+        } else {
+            Err(ErrorKind::SemanticError(
+                image_meta,
+                "Type is not an image".into(),
+            ))
+        }
+    }
+}
+
+/// Helper function to cast a expression holding a sampled a image to a
+/// depth one.
+///
+/// Creates a new expression to make sure the typifier doesn't return a
+/// cached evaluation.
+fn sampled_to_depth(
+    module: &mut Module,
+    ctx: &mut Context,
+    (image, meta): (Handle<Expression>, SourceMetadata),
+    body: &mut Block,
+) -> Result<Handle<Expression>, ErrorKind> {
+    let ty = match ctx[image] {
+        Expression::GlobalVariable(handle) => &mut module.global_variables.get_mut(handle).ty,
+        Expression::FunctionArgument(i) => {
+            ctx.depth_set.insert(i as usize);
+            &mut ctx.arguments[i as usize].ty
+        }
+        _ => {
+            return Err(ErrorKind::SemanticError(
+                meta,
+                "Not a valid texture expression".into(),
+            ))
+        }
+    };
+    match module.types[*ty].inner {
+        TypeInner::Image {
+            class,
+            dim,
+            arrayed,
+        } => match class {
+            ImageClass::Sampled { multi, .. } => {
+                *ty = module.types.fetch_or_append(Type {
+                    name: None,
+                    inner: TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class: ImageClass::Depth { multi },
+                    },
+                })
+            }
+            ImageClass::Depth { .. } => {}
+            _ => return Err(ErrorKind::SemanticError(meta, "Not a texture".into())),
+        },
+        _ => return Err(ErrorKind::SemanticError(meta, "Not a texture".into())),
+    };
+
+    // Add a new expression to not have problems with the Typifier
+    // caching the old type
+    Ok(match ctx[image] {
+        Expression::GlobalVariable(handle) => {
+            ctx.add_expression(Expression::GlobalVariable(handle), body)
+        }
+        Expression::FunctionArgument(i) => {
+            ctx.add_expression(Expression::FunctionArgument(i), body)
+        }
+        _ => unreachable!(),
+    })
 }
