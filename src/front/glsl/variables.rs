@@ -548,6 +548,7 @@ impl Program<'_> {
         }
 
         let mut mutable = true;
+        let mut precision = None;
 
         for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
@@ -561,6 +562,12 @@ impl Program<'_> {
 
                     mutable = false;
                 }
+                TypeQualifier::Precision(ref p) => qualifier_arm!(
+                    p,
+                    precision,
+                    meta,
+                    "Cannot use more than one precision qualifier per declaration"
+                ),
                 _ => {
                     return Err(ErrorKind::SemanticError(
                         meta,
