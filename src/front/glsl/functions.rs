@@ -679,6 +679,13 @@ impl Program<'_> {
                     &mut selector,
                     selector_meta,
                 )?;
+                ctx.binary_implicit_conversion(
+                    self,
+                    &mut arg1,
+                    arg1_meta,
+                    &mut selector,
+                    selector_meta,
+                )?;
 
                 let is_vector = match *self.resolve_type(ctx, selector, selector_meta)? {
                     TypeInner::Vector { .. } => true,
