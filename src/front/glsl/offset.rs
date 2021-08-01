@@ -51,14 +51,10 @@ pub fn calculate_offset(
         // consuming N basic machine units, the base alignment is 2N or 4N, respectively.
         // 3. If the member is a three-component vector with components consuming N
         // basic machine units, the base alignment is 4N.
-        TypeInner::Vector { size, width, .. } => {
-            let val = match size {
-                crate::VectorSize::Tri => 4 * width as u32,
-                _ => size as u32 * width as u32,
-            };
-
-            (val, val)
-        }
+        TypeInner::Vector { size, width, .. } => match size {
+            crate::VectorSize::Tri => (4 * width as u32, 3 * width as u32),
+            _ => (size as u32 * width as u32, size as u32 * width as u32),
+        },
         // 4. If the member is an array of scalars or vectors, the base alignment and array
         // stride are set to match the base alignment of a single array element, according
         // to rules (1), (2), and (3), and rounded up to the base alignment of a vec4.
