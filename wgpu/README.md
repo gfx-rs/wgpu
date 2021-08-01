@@ -45,7 +45,7 @@ The following environment variables can be used to configure how the framework e
 
 #### Run Examples on the Web (`wasm32-unknown-unknown`)
 
-See [wiki article](https://github.com/gfx-rs/wgpu-rs/wiki/Running-on-the-Web-with-WebGPU-and-WebGL).
+See [wiki article](https://github.com/gfx-rs/wgpu/wiki/Running-on-the-Web-with-WebGPU-and-WebGL).
 
 ## Shaders
 
