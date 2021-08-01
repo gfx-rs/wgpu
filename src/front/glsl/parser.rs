@@ -18,7 +18,7 @@ use crate::{
     StructMember, SwitchCase, Type, TypeInner, UnaryOperator,
 };
 use core::convert::TryFrom;
-use std::{iter::Peekable, mem};
+use std::iter::Peekable;
 
 type Result<T> = std::result::Result<T, ErrorKind>;
 
@@ -216,6 +216,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             | TokenValue::Out
             | TokenValue::Uniform
             | TokenValue::Buffer
+            | TokenValue::Restrict
+            | TokenValue::StorageAccess(_)
             | TokenValue::Layout => true,
             _ => false,
         })
@@ -249,6 +251,8 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                     ),
                     TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
                     TokenValue::PrecisionQualifier(p) => TypeQualifier::Precision(p),
+                    TokenValue::StorageAccess(access) => TypeQualifier::StorageAccess(access),
+                    TokenValue::Restrict => continue,
                     _ => unreachable!(),
                 },
                 token.meta,
@@ -1601,9 +1605,15 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 }
                             }
 
-                            let fall_through = body.iter().any(|s| {
-                                mem::discriminant(s) == mem::discriminant(&Statement::Break)
-                            });
+                            let mut fall_through = true;
+
+                            for (i, stmt) in body.iter().enumerate() {
+                                if let Statement::Break = *stmt {
+                                    fall_through = false;
+                                    body.drain(i..);
+                                    break;
+                                }
+                            }
 
                             cases.push(SwitchCase {
                                 value,
@@ -1625,7 +1635,14 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             loop {
                                 match self.expect_peek()?.value {
                                     TokenValue::Case | TokenValue::RightBrace => break,
-                                    _ => self.parse_statement(ctx, &mut &mut default)?,
+                                    _ => self.parse_statement(ctx, &mut default)?,
+                                }
+                            }
+
+                            for (i, stmt) in default.iter().enumerate() {
+                                if let Statement::Break = *stmt {
+                                    default.drain(i..);
+                                    break;
                                 }
                             }
                         }

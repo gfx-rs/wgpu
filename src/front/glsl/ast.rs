@@ -8,7 +8,7 @@ use crate::{
     proc::ResolveContext, Arena, BinaryOperator, Binding, Block, Constant, Expression, FastHashMap,
     Function, FunctionArgument, GlobalVariable, Handle, Interpolation, LocalVariable, Module,
     RelationalFunction, ResourceBinding, Sampling, ScalarKind, ScalarValue, ShaderStage, Statement,
-    StorageClass, Type, TypeInner, UnaryOperator, VectorSize,
+    StorageAccess, StorageClass, Type, TypeInner, UnaryOperator, VectorSize,
 };
 use core::convert::TryFrom;
 use std::ops::Index;
@@ -1054,6 +1054,7 @@ pub enum TypeQualifier {
     Layout(StructLayout),
     Precision(Precision),
     EarlyFragmentTests,
+    StorageAccess(StorageAccess),
 }
 
 #[derive(Debug, Clone)]

@@ -56,6 +56,10 @@ pub enum TokenValue {
     Uniform,
     Buffer,
     Const,
+
+    Restrict,
+    StorageAccess(crate::StorageAccess),
+
     Interpolation(Interpolation),
     Sampling(Sampling),
     Precision,

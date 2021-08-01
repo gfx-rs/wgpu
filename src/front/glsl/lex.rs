@@ -3,7 +3,7 @@ use super::{
     token::{SourceMetadata, Token, TokenValue},
     types::parse_type,
 };
-use crate::FastHashMap;
+use crate::{FastHashMap, StorageAccess};
 use pp_rs::{
     pp::Preprocessor,
     token::{Punct, Token as PPToken, TokenValue as PPTokenValue},
@@ -76,6 +76,9 @@ impl<'a> Iterator for Lexer<'a> {
                     "highp" => TokenValue::PrecisionQualifier(Precision::High),
                     "mediump" => TokenValue::PrecisionQualifier(Precision::Medium),
                     "lowp" => TokenValue::PrecisionQualifier(Precision::Low),
+                    "restrict" => TokenValue::Restrict,
+                    "readonly" => TokenValue::StorageAccess(StorageAccess::LOAD),
+                    "writeonly" => TokenValue::StorageAccess(StorageAccess::STORE),
                     // values
                     "true" => TokenValue::BoolConstant(true),
                     "false" => TokenValue::BoolConstant(false),

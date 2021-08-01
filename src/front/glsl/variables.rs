@@ -339,6 +339,7 @@ impl Program<'_> {
         let mut sampling = None;
         let mut layout = None;
         let mut precision = None;
+        let mut access = StorageAccess::all();
 
         for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
@@ -393,6 +394,7 @@ impl Program<'_> {
                     meta,
                     "Cannot use more than one precision qualifier per declaration"
                 ),
+                TypeQualifier::StorageAccess(a) => access &= a,
                 _ => {
                     return Err(ErrorKind::SemanticError(
                         meta,
@@ -488,15 +490,12 @@ impl Program<'_> {
             return Ok(GlobalOrConstant::Constant(init));
         }
 
-        // TODO: Add support for qualifiers such as readonly, writeonly and readwrite
         let class = match self.module.types[ty].inner {
             TypeInner::Image { .. } => StorageClass::Handle,
             TypeInner::Sampler { .. } => StorageClass::Handle,
             _ => {
                 if let StorageQualifier::StorageClass(StorageClass::Storage { .. }) = storage {
-                    StorageClass::Storage {
-                        access: StorageAccess::all(),
-                    }
+                    StorageClass::Storage { access }
                 } else {
                     match storage {
                         StorageQualifier::StorageClass(class) => class,
