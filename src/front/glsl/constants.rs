@@ -49,6 +49,8 @@ pub enum ConstantSolvingError {
     InvalidUnaryOpArg,
     #[error("Cannot apply the binary op to the arguments")]
     InvalidBinaryOpArgs,
+    #[error("Cannot apply math function to type")]
+    InvalidMathArg,
     #[error("Splat/swizzle type is not registered")]
     DestinationTypeNotFound,
     #[error("Not implemented: {0}")]
@@ -154,8 +156,48 @@ impl<'a> ConstantSolver<'a> {
 
                 self.binary_op(op, left_constant, right_constant)
             }
-            Expression::Math { fun, .. } => {
-                Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun)))
+            Expression::Math { fun, arg, arg1, .. } => {
+                let arg = self.solve(arg)?;
+                let arg1 = arg1.map(|arg| self.solve(arg)).transpose()?;
+
+                let const0 = &self.constants[arg].inner;
+                let const1 = arg1.map(|arg| &self.constants[arg].inner);
+
+                match fun {
+                    crate::MathFunction::Pow => {
+                        let (value, width) = match (const0, const1.unwrap()) {
+                            (
+                                &ConstantInner::Scalar {
+                                    width,
+                                    value: value0,
+                                },
+                                &ConstantInner::Scalar { value: value1, .. },
+                            ) => (
+                                match (value0, value1) {
+                                    (ScalarValue::Sint(a), ScalarValue::Sint(b)) => {
+                                        ScalarValue::Sint(a.pow(b as u32))
+                                    }
+                                    (ScalarValue::Uint(a), ScalarValue::Uint(b)) => {
+                                        ScalarValue::Uint(a.pow(b as u32))
+                                    }
+                                    (ScalarValue::Float(a), ScalarValue::Float(b)) => {
+                                        ScalarValue::Float(a.powf(b))
+                                    }
+                                    _ => return Err(ConstantSolvingError::InvalidMathArg),
+                                },
+                                width,
+                            ),
+                            _ => return Err(ConstantSolvingError::InvalidMathArg),
+                        };
+
+                        Ok(self.constants.fetch_or_append(Constant {
+                            name: None,
+                            specialization: None,
+                            inner: ConstantInner::Scalar { width, value },
+                        }))
+                    }
+                    _ => Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun))),
+                }
             }
             Expression::As {
                 convert,
