@@ -1,4 +1,4 @@
-use std::{borrow::Cow, convert::TryInto, str::FromStr};
+use std::{borrow::Cow, str::FromStr};
 use wgpu::util::DeviceExt;
 
 // Indicates a u32 overflow in an intermediate Collatz value
@@ -160,10 +160,7 @@ async fn execute_gpu_inner(
         // Gets contents of buffer
         let data = buffer_slice.get_mapped_range();
         // Since contents are got in bytes, this converts these bytes back to u32
-        let result = data
-            .chunks_exact(4)
-            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
-            .collect();
+        let result = bytemuck::cast_slice(&data).to_vec();
 
         // With the current interface, we have to make sure all mapped views are
         // dropped before we unmap the buffer.
