@@ -419,12 +419,12 @@ impl Program {
 
         if let Some(location) = location {
             let input = storage == StorageQualifier::Input;
-            let interpolation = self.module.types[ty].inner.scalar_kind().map(|kind| {
-                if let ScalarKind::Float = kind {
-                    Interpolation::Perspective
-                } else {
-                    Interpolation::Flat
-                }
+            let interpolation = interpolation.or_else(|| {
+                let kind = self.module.types[ty].inner.scalar_kind()?;
+                Some(match kind {
+                    ScalarKind::Float => Interpolation::Perspective,
+                    _ => Interpolation::Flat,
+                })
             });
 
             let handle = self.module.global_variables.append(GlobalVariable {
