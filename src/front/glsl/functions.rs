@@ -5,6 +5,7 @@ use crate::{
     ImageQuery, LocalVariable, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind,
     ScalarValue, Statement, StructMember, Type, TypeInner, VectorSize,
 };
+use std::iter;
 
 /// Helper struct for texture calls with the separate components from the vector argument
 ///
@@ -130,9 +131,52 @@ impl Program {
                                 ScalarKind::Float,
                                 width,
                             )?;
-                            let column = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
-                                TypeInner::Scalar { .. } => ctx
-                                    .add_expression(Expression::Splat { size: rows, value }, body),
+                            match *self.resolve_type(ctx, value, meta)? {
+                                TypeInner::Scalar { .. } => {
+                                    // If a matrix is constructed with a single scalar value, then that
+                                    // value is used to initialize all the values along the diagonal of
+                                    // the matrix; the rest are given zeros.
+                                    let mut components = Vec::with_capacity(columns as usize);
+                                    let vector_ty = self.module.types.fetch_or_append(Type {
+                                        name: None,
+                                        inner: TypeInner::Vector {
+                                            size: rows,
+                                            kind: ScalarKind::Float,
+                                            width,
+                                        },
+                                    });
+                                    let zero_constant =
+                                        self.module.constants.fetch_or_append(Constant {
+                                            name: None,
+                                            specialization: None,
+                                            inner: ConstantInner::Scalar {
+                                                width,
+                                                value: ScalarValue::Float(0.0),
+                                            },
+                                        });
+                                    let zero = ctx
+                                        .add_expression(Expression::Constant(zero_constant), body);
+
+                                    for i in 0..columns as u32 {
+                                        components.push(
+                                            ctx.add_expression(
+                                                Expression::Compose {
+                                                    ty: vector_ty,
+                                                    components: (0..rows as u32)
+                                                        .into_iter()
+                                                        .map(|r| match r == i {
+                                                            true => value,
+                                                            false => zero,
+                                                        })
+                                                        .collect(),
+                                                },
+                                                body,
+                                            ),
+                                        )
+                                    }
+
+                                    ctx.add_expression(Expression::Compose { ty, components }, body)
+                                }
                                 TypeInner::Matrix { rows: ori_rows, .. } => {
                                     let mut components = Vec::new();
 
@@ -152,26 +196,21 @@ impl Program {
                                         components.push(vector)
                                     }
 
-                                    let h = ctx.add_expression(
-                                        Expression::Compose { ty, components },
-                                        body,
-                                    );
-
-                                    return Ok(Some(h));
+                                    ctx.add_expression(Expression::Compose { ty, components }, body)
                                 }
-                                _ => value,
-                            };
+                                _ => {
+                                    let columns =
+                                        iter::repeat(value).take(columns as usize).collect();
 
-                            let columns =
-                                std::iter::repeat(column).take(columns as usize).collect();
-
-                            ctx.add_expression(
-                                Expression::Compose {
-                                    ty,
-                                    components: columns,
-                                },
-                                body,
-                            )
+                                    ctx.add_expression(
+                                        Expression::Compose {
+                                            ty,
+                                            components: columns,
+                                        },
+                                        body,
+                                    )
+                                }
+                            }
                         }
                         TypeInner::Struct { .. } => ctx.add_expression(
                             Expression::Compose {
