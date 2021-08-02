@@ -60,10 +60,10 @@ fn main([[location(0)]] Vertex_Position: vec3<f32>, [[location(1)]] Vertex_Norma
     Vertex_Uv1 = Vertex_Uv;
     Vertex_Tangent1 = Vertex_Tangent;
     main1();
-    let _e9: vec3<f32> = v_WorldPosition;
-    let _e11: vec3<f32> = v_WorldNormal;
-    let _e13: vec2<f32> = v_Uv;
-    let _e15: vec4<f32> = v_WorldTangent;
-    let _e17: vec4<f32> = gl_Position;
-    return VertexOutput(_e9, _e11, _e13, _e15, _e17);
+    let _e29: vec3<f32> = v_WorldPosition;
+    let _e31: vec3<f32> = v_WorldNormal;
+    let _e33: vec2<f32> = v_Uv;
+    let _e35: vec4<f32> = v_WorldTangent;
+    let _e37: vec4<f32> = gl_Position;
+    return VertexOutput(_e29, _e31, _e33, _e35, _e37);
 }

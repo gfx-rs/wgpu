@@ -34,15 +34,15 @@ fn comp_main1() {
 [[stage(vertex)]]
 fn vert_main() -> VertexOutput {
     vert_main1();
-    let _e1: vec4<f32> = gl_Position;
-    return VertexOutput(_e1);
+    let _e3: vec4<f32> = gl_Position;
+    return VertexOutput(_e3);
 }
 
 [[stage(fragment)]]
 fn frag_main() -> FragmentOutput {
     frag_main1();
-    let _e1: vec4<f32> = o_color;
-    return FragmentOutput(_e1);
+    let _e3: vec4<f32> = o_color;
+    return FragmentOutput(_e3);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]

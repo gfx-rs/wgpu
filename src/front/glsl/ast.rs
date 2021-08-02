@@ -220,66 +220,75 @@ impl<'function> Context<'function> {
         this.emit_start();
 
         for &(ref name, lookup) in program.global_variables.iter() {
-            this.emit_flush(body);
-            let GlobalLookup {
-                kind,
-                entry_arg,
-                mutable,
-            } = lookup;
-            let (expr, load) = match kind {
-                GlobalLookupKind::Variable(v) => {
-                    let res = (
-                        this.expressions.append(Expression::GlobalVariable(v)),
-                        program.module.global_variables[v].class != StorageClass::Handle,
-                    );
-                    this.emit_start();
-
-                    res
-                }
-                GlobalLookupKind::BlockSelect(handle, index) => {
-                    let base = this.expressions.append(Expression::GlobalVariable(handle));
-                    this.emit_start();
-                    let expr = this
-                        .expressions
-                        .append(Expression::AccessIndex { base, index });
-
-                    (expr, {
-                        let ty = program.module.global_variables[handle].ty;
-
-                        match program.module.types[ty].inner {
-                            TypeInner::Struct { ref members, .. } => {
-                                if let TypeInner::Array {
-                                    size: crate::ArraySize::Dynamic,
-                                    ..
-                                } = program.module.types[members[index as usize].ty].inner
-                                {
-                                    false
-                                } else {
-                                    true
-                                }
-                            }
-                            _ => true,
-                        }
-                    })
-                }
-                GlobalLookupKind::Constant(v) => {
-                    let res = (this.expressions.append(Expression::Constant(v)), false);
-                    this.emit_start();
-                    res
-                }
-            };
-
-            let var = VariableReference {
-                expr,
-                load,
-                mutable,
-                entry_arg,
-            };
-
-            this.lookup_global_var_exps.insert(name.into(), var);
+            this.add_global(name, lookup, program, body)
         }
 
         this
+    }
+
+    pub fn add_global(
+        &mut self,
+        name: &str,
+        GlobalLookup {
+            kind,
+            entry_arg,
+            mutable,
+        }: GlobalLookup,
+        program: &Program,
+        body: &mut Block,
+    ) {
+        self.emit_flush(body);
+        let (expr, load) = match kind {
+            GlobalLookupKind::Variable(v) => {
+                let res = (
+                    self.expressions.append(Expression::GlobalVariable(v)),
+                    program.module.global_variables[v].class != StorageClass::Handle,
+                );
+                self.emit_start();
+
+                res
+            }
+            GlobalLookupKind::BlockSelect(handle, index) => {
+                let base = self.expressions.append(Expression::GlobalVariable(handle));
+                self.emit_start();
+                let expr = self
+                    .expressions
+                    .append(Expression::AccessIndex { base, index });
+
+                (expr, {
+                    let ty = program.module.global_variables[handle].ty;
+
+                    match program.module.types[ty].inner {
+                        TypeInner::Struct { ref members, .. } => {
+                            if let TypeInner::Array {
+                                size: crate::ArraySize::Dynamic,
+                                ..
+                            } = program.module.types[members[index as usize].ty].inner
+                            {
+                                false
+                            } else {
+                                true
+                            }
+                        }
+                        _ => true,
+                    }
+                })
+            }
+            GlobalLookupKind::Constant(v) => {
+                let res = (self.expressions.append(Expression::Constant(v)), false);
+                self.emit_start();
+                res
+            }
+        };
+
+        let var = VariableReference {
+            expr,
+            load,
+            mutable,
+            entry_arg,
+        };
+
+        self.lookup_global_var_exps.insert(name.into(), var);
     }
 
     pub fn emit_start(&mut self) {

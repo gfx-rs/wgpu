@@ -26,6 +26,6 @@ fn main1() {
 fn main([[location(0)]] v_Uv: vec2<f32>) -> FragmentOutput {
     v_Uv1 = v_Uv;
     main1();
-    let _e3: vec4<f32> = o_Target;
-    return FragmentOutput(_e3);
+    let _e9: vec4<f32> = o_Target;
+    return FragmentOutput(_e9);
 }

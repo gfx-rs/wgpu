@@ -1142,10 +1142,21 @@ impl Program {
         Ok(())
     }
 
-    pub fn add_entry_point(&mut self, function: Handle<Function>) -> Result<(), ErrorKind> {
+    pub fn add_entry_point(
+        &mut self,
+        function: Handle<Function>,
+        mut global_init_body: Block,
+        mut expressions: Arena<Expression>,
+    ) -> Result<(), ErrorKind> {
         let mut arguments = Vec::new();
-        let mut expressions = Arena::new();
-        let mut body = Vec::new();
+        let mut body = Block::with_capacity(
+            // global init body
+            global_init_body.len() +
+                        // prologue and epilogue
+                        self.entry_args.len() * 2
+                        // Call, Emit for composing struct and return
+                        + 3,
+        );
 
         for arg in self.entry_args.iter() {
             if arg.storage != StorageQualifier::Input {
@@ -1166,6 +1177,8 @@ impl Program {
 
             body.push(Statement::Store { pointer, value });
         }
+
+        body.append(&mut global_init_body);
 
         body.push(Statement::Call {
             function,

@@ -77,12 +77,25 @@ impl<'source, 'program> Parser<'source, 'program> {
     pub fn parse(&mut self) -> Result<()> {
         self.parse_version()?;
 
+        // Body and expression arena for global initialization
+        let mut body = Block::new();
+        let mut expressions = Arena::new();
+        let mut arguments = Vec::new();
+        let mut locals = Arena::new();
+        let mut ctx = Context::new(
+            self.program,
+            &mut body,
+            &mut expressions,
+            &mut locals,
+            &mut arguments,
+        );
+
         while self.lexer.peek().is_some() {
-            self.parse_external_declaration()?;
+            self.parse_external_declaration(&mut ctx, &mut body)?;
         }
 
         if let Some(handle) = self.program.entry_point {
-            self.program.add_entry_point(handle)?;
+            self.program.add_entry_point(handle, body, expressions)?;
         }
 
         Ok(())
@@ -419,21 +432,12 @@ impl<'source, 'program> Parser<'source, 'program> {
         Ok((self.program.solve_constant(&ctx, root, meta)?, meta))
     }
 
-    fn parse_external_declaration(&mut self) -> Result<()> {
-        // TODO: Create body and expressions arena to be used in all entry
-        // points to handle this case
-        // ```glsl
-        // // This is valid and the body of main will contain the assignment
-        // float b;
-        // float a = b = 1;
-        //
-        // void main() {}
-        // ```
-        let (mut e, mut l, mut a) = (Arena::new(), Arena::new(), Vec::new());
-        let mut body = Block::new();
-        let mut ctx = Context::new(self.program, &mut body, &mut e, &mut l, &mut a);
-
-        if !self.parse_declaration(&mut ctx, &mut body, true)? {
+    fn parse_external_declaration(
+        &mut self,
+        global_ctx: &mut Context,
+        global_body: &mut Block,
+    ) -> Result<()> {
+        if !self.parse_declaration(global_ctx, global_body, true)? {
             let token = self.bump()?;
             match token.value {
                 TokenValue::Semicolon if self.program.version == 460 => Ok(()),
@@ -815,7 +819,13 @@ impl<'source, 'program> Parser<'source, 'program> {
                 match token.value {
                     TokenValue::Identifier(ty_name) => {
                         if self.bump_if(TokenValue::LeftBrace).is_some() {
-                            self.parse_block_declaration(&qualifiers, ty_name, token.meta)
+                            self.parse_block_declaration(
+                                ctx,
+                                body,
+                                &qualifiers,
+                                ty_name,
+                                token.meta,
+                            )
                         } else {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
@@ -905,6 +915,8 @@ impl<'source, 'program> Parser<'source, 'program> {
 
     fn parse_block_declaration(
         &mut self,
+        ctx: &mut Context,
+        body: &mut Block,
         qualifiers: &[(TypeQualifier, SourceMetadata)],
         ty_name: String,
         mut meta: SourceMetadata,
@@ -960,32 +972,34 @@ impl<'source, 'program> Parser<'source, 'program> {
         };
         meta = meta.union(&token.meta);
 
-        let global = self.program.add_global_var(VarDeclaration {
-            qualifiers,
-            ty,
-            name,
-            init: None,
-            meta,
-        })?;
+        let global = self.program.add_global_var(
+            ctx,
+            body,
+            VarDeclaration {
+                qualifiers,
+                ty,
+                name,
+                init: None,
+                meta,
+            },
+        )?;
 
         for (i, k) in members
             .into_iter()
             .enumerate()
             .filter_map(|(i, m)| m.name.map(|s| (i as u32, s)))
         {
-            self.program.global_variables.push((
-                k,
-                GlobalLookup {
-                    kind: match global {
-                        GlobalOrConstant::Global(handle) => {
-                            GlobalLookupKind::BlockSelect(handle, i)
-                        }
-                        GlobalOrConstant::Constant(handle) => GlobalLookupKind::Constant(handle),
-                    },
-                    entry_arg: None,
-                    mutable: true,
+            let lookup = GlobalLookup {
+                kind: match global {
+                    GlobalOrConstant::Global(handle) => GlobalLookupKind::BlockSelect(handle, i),
+                    GlobalOrConstant::Constant(handle) => GlobalLookupKind::Constant(handle),
                 },
-            ));
+                entry_arg: None,
+                mutable: true,
+            };
+            ctx.add_global(&k, lookup, self.program, body);
+
+            self.program.global_variables.push((k, lookup));
         }
 
         Ok(true)
@@ -1958,7 +1972,7 @@ impl<'ctx, 'fun> DeclarationContext<'ctx, 'fun> {
 
         match self.external {
             true => {
-                let global = program.add_global_var(decl)?;
+                let global = program.add_global_var(self.ctx, self.body, decl)?;
                 let expr = match global {
                     GlobalOrConstant::Global(handle) => Expression::GlobalVariable(handle),
                     GlobalOrConstant::Constant(handle) => Expression::Constant(handle),

@@ -314,6 +314,8 @@ impl Program {
 
     pub fn add_global_var(
         &mut self,
+        ctx: &mut Context,
+        body: &mut Block,
         VarDeclaration {
             qualifiers,
             ty,
@@ -446,14 +448,14 @@ impl Program {
             });
 
             if let Some(name) = name {
-                self.global_variables.push((
-                    name,
-                    GlobalLookup {
-                        kind: GlobalLookupKind::Variable(handle),
-                        entry_arg: Some(idx),
-                        mutable: !input,
-                    },
-                ));
+                let lookup = GlobalLookup {
+                    kind: GlobalLookupKind::Variable(handle),
+                    entry_arg: Some(idx),
+                    mutable: !input,
+                };
+                ctx.add_global(&name, lookup, self, body);
+
+                self.global_variables.push((name, lookup));
             }
 
             return Ok(GlobalOrConstant::Global(handle));
@@ -462,14 +464,14 @@ impl Program {
                 ErrorKind::SemanticError(meta, "const values must have an initializer".into())
             })?;
             if let Some(name) = name {
-                self.global_variables.push((
-                    name,
-                    GlobalLookup {
-                        kind: GlobalLookupKind::Constant(init),
-                        entry_arg: None,
-                        mutable: false,
-                    },
-                ));
+                let lookup = GlobalLookup {
+                    kind: GlobalLookupKind::Constant(init),
+                    entry_arg: None,
+                    mutable: false,
+                };
+                ctx.add_global(&name, lookup, self, body);
+
+                self.global_variables.push((name, lookup));
             }
             return Ok(GlobalOrConstant::Constant(init));
         }
@@ -498,14 +500,14 @@ impl Program {
         });
 
         if let Some(name) = name {
-            self.global_variables.push((
-                name,
-                GlobalLookup {
-                    kind: GlobalLookupKind::Variable(handle),
-                    entry_arg: None,
-                    mutable: true,
-                },
-            ));
+            let lookup = GlobalLookup {
+                kind: GlobalLookupKind::Variable(handle),
+                entry_arg: None,
+                mutable: true,
+            };
+            ctx.add_global(&name, lookup, self, body);
+
+            self.global_variables.push((name, lookup));
         }
 
         Ok(GlobalOrConstant::Global(handle))

@@ -849,6 +849,6 @@ fn main([[location(0)]] v_WorldPosition: vec3<f32>, [[location(1)]] v_WorldNorma
     v_WorldTangent1 = v_WorldTangent;
     gl_FrontFacing = param;
     main1();
-    let _e11: vec4<f32> = o_Target;
-    return FragmentOutput(_e11);
+    let _e72: vec4<f32> = o_Target;
+    return FragmentOutput(_e72);
 }

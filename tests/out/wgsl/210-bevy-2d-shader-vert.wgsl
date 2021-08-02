@@ -51,7 +51,7 @@ fn main([[location(0)]] Vertex_Position: vec3<f32>, [[location(1)]] Vertex_Norma
     Vertex_Normal1 = Vertex_Normal;
     Vertex_Uv1 = Vertex_Uv;
     main1();
-    let _e7: vec2<f32> = v_Uv;
-    let _e9: vec4<f32> = gl_Position;
-    return VertexOutput(_e7, _e9);
+    let _e21: vec2<f32> = v_Uv;
+    let _e23: vec4<f32> = gl_Position;
+    return VertexOutput(_e21, _e23);
 }

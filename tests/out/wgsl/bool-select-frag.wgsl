@@ -40,6 +40,6 @@ fn main1() {
 [[stage(fragment)]]
 fn main() -> FragmentOutput {
     main1();
-    let _e1: vec4<f32> = o_color;
-    return FragmentOutput(_e1);
+    let _e3: vec4<f32> = o_color;
+    return FragmentOutput(_e3);
 }
