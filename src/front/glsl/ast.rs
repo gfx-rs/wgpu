@@ -925,6 +925,22 @@ impl<'function> Context<'function> {
 
         Ok(())
     }
+
+    pub fn vector_resize(
+        &mut self,
+        size: VectorSize,
+        vector: Handle<Expression>,
+        body: &mut Block,
+    ) -> Handle<Expression> {
+        self.add_expression(
+            Expression::Swizzle {
+                size,
+                vector,
+                pattern: crate::SwizzleComponent::XYZW,
+            },
+            body,
+        )
+    }
 }
 
 impl<'function> Index<Handle<Expression>> for Context<'function> {

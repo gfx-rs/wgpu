@@ -1,11 +1,10 @@
+use super::{ast::*, error::ErrorKind, SourceMetadata};
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, ImageClass, ImageDimension,
     ImageQuery, LocalVariable, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind,
-    ScalarValue, Statement, StructMember, SwizzleComponent, Type, TypeInner, VectorSize,
+    ScalarValue, Statement, StructMember, Type, TypeInner, VectorSize,
 };
-
-use super::{ast::*, error::ErrorKind, SourceMetadata};
 
 /// Helper struct for texture calls with the separate components from the vector argument
 ///
@@ -99,14 +98,11 @@ impl Program {
                             body,
                         ),
                         TypeInner::Vector { size, kind, width } => {
-                            let expr = ctx.add_expression(
-                                Expression::Swizzle {
-                                    size,
-                                    vector: args[0].0,
-                                    pattern: SwizzleComponent::XYZW,
-                                },
-                                body,
-                            );
+                            let mut expr = args[0].0;
+
+                            if vector_size.map_or(true, |s| s != size) {
+                                expr = ctx.vector_resize(size, expr, body);
+                            }
 
                             ctx.add_expression(
                                 Expression::As {
@@ -137,11 +133,11 @@ impl Program {
                             let column = match *self.resolve_type(ctx, args[0].0, args[0].1)? {
                                 TypeInner::Scalar { .. } => ctx
                                     .add_expression(Expression::Splat { size: rows, value }, body),
-                                TypeInner::Matrix { .. } => {
+                                TypeInner::Matrix { rows: ori_rows, .. } => {
                                     let mut components = Vec::new();
 
                                     for n in 0..columns as u32 {
-                                        let vector = ctx.add_expression(
+                                        let mut vector = ctx.add_expression(
                                             Expression::AccessIndex {
                                                 base: value,
                                                 index: n,
@@ -149,16 +145,11 @@ impl Program {
                                             body,
                                         );
 
-                                        let c = ctx.add_expression(
-                                            Expression::Swizzle {
-                                                size: rows,
-                                                vector,
-                                                pattern: SwizzleComponent::XYZW,
-                                            },
-                                            body,
-                                        );
+                                        if ori_rows != rows {
+                                            vector = ctx.vector_resize(rows, vector, body);
+                                        }
 
-                                        components.push(c)
+                                        components.push(vector)
                                     }
 
                                     let h = ctx.add_expression(
@@ -398,14 +389,7 @@ impl Program {
                         _ => VectorSize::Tri,
                     };
                     right = ctx.add_expression(Expression::Splat { size, value: right }, body);
-                    ctx.add_expression(
-                        Expression::Swizzle {
-                            size,
-                            vector: base,
-                            pattern: SwizzleComponent::XYZW,
-                        },
-                        body,
-                    )
+                    ctx.vector_resize(size, base, body)
                 };
                 let coords = ctx.add_expression(
                     Expression::Binary {
@@ -1282,14 +1266,9 @@ impl Program {
             };
 
             let coordinate = match (image_size, coord_size) {
-                (Some(size), Some(coord_s)) if size != coord_s => ctx.add_expression(
-                    Expression::Swizzle {
-                        size,
-                        vector: coord,
-                        pattern: SwizzleComponent::XYZW,
-                    },
-                    body,
-                ),
+                (Some(size), Some(coord_s)) if size != coord_s => {
+                    ctx.vector_resize(size, coord, body)
+                }
                 (None, Some(_)) => ctx.add_expression(
                     Expression::AccessIndex {
                         base: coord,
