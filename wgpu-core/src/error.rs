@@ -6,23 +6,13 @@ use crate::{
     hub::{Global, IdentityManagerFactory},
 };
 
-pub trait AsDisplay {
-    fn as_display(&self) -> &dyn fmt::Display;
-}
-
-impl<T: fmt::Display> AsDisplay for T {
-    fn as_display(&self) -> &dyn fmt::Display {
-        self
-    }
-}
-
 pub struct ErrorFormatter<'a> {
     writer: &'a mut dyn fmt::Write,
     global: &'a Global<IdentityManagerFactory>,
 }
 
 impl<'a> ErrorFormatter<'a> {
-    pub fn error(&mut self, err: &dyn fmt::Display) {
+    pub fn error(&mut self, err: &dyn Error) {
         writeln!(self.writer, "    {}", err).expect("Error formatting error");
     }
 
@@ -103,9 +93,9 @@ impl<'a> ErrorFormatter<'a> {
     }
 }
 
-pub trait PrettyError: Error {
+pub trait PrettyError: Error + Sized {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self.as_display());
+        fmt.error(self);
     }
 }
 
@@ -154,7 +144,7 @@ pub fn format_pretty_any(
     }
 
     // default
-    fmt.error(error.as_display())
+    fmt.error(error)
 }
 
 #[derive(Debug)]
@@ -167,7 +157,7 @@ pub struct ContextError {
 
 impl PrettyError for ContextError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self.as_display());
+        fmt.error(self);
         fmt.label(self.label_key, &self.label);
     }
 }
