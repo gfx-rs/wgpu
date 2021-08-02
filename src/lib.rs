@@ -1340,7 +1340,46 @@ pub struct Function {
     pub body: Block,
 }
 
-/// Exported function, to be run at a certain stage in the pipeline.
+/// The main function for a pipeline stage.
+///
+/// An [`EntryPoint`] is a [`Function`] that serves as the main function for a
+/// graphics or compute pipeline stage. For example, an `EntryPoint` whose
+/// [`stage`] is [`ShaderStage::Vertex`] can serve as a graphics pipeline's
+/// vertex shader.
+///
+/// Since an entry point is called directly by the graphics or compute pipeline,
+/// not by other WGSL functions, you must specify what the pipeline should pass
+/// as the entry point's arguments, and what values it will return. For example,
+/// a vertex shader needs a vertex's attributes as its arguments, but if it's
+/// used for instanced draw calls, it will also want to know the instance id.
+/// The vertex shader's return value will usually include an output vertex
+/// position, and possibly other attributes to be interpolated and passed along
+/// to a fragment shader.
+///
+/// To specify this, the arguments and result of an `EntryPoint`'s [`function`]
+/// must each have a [`Binding`], or be structs whose members all have
+/// `Binding`s. This associates every value passed to or returned from the entry
+/// point with either a [`BuiltIn`] or a [`Location`]:
+///
+/// -   A [`BuiltIn`] has special semantics, usually specific to its pipeline
+///     stage. For example, the result of a vertex shader can include a
+///     [`BuiltIn::Position`] value, which determines the position of a vertex
+///     of a rendered primitive. Or, a compute shader might take an argument
+///     whose binding is [`BuiltIn::WorkGroupSize`], through which the compute
+///     pipeline would pass the number of invocations in your workgroup.
+///
+/// -   A [`Location`] indicates user-defined IO to be passed from one pipeline
+///     stage to the next. For example, a vertex shader might also produce a
+///     `uv` texture location as a user-defined IO value.
+///
+/// In other words, the pipeline stage's input and output interface are
+/// determined by the bindings of the arguments and result of the `EntryPoint`'s
+/// [`function`].
+///
+/// [`Function`]: crate::Function
+/// [`Location`]: Binding::Location
+/// [`function`]: EntryPoint::function
+/// [`stage`]: EntryPoint::stage
 #[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
