@@ -940,6 +940,25 @@ impl Writer {
         null_id
     }
 
+    /// Generate an `OpVariable` for one value in an [`EntryPoint`]'s IO interface.
+    ///
+    /// The [`Binding`]s of the arguments and result of an [`EntryPoint`]'s
+    /// [`Function`] describe a SPIR-V shader interface. In SPIR-V, the
+    /// interface is represented by global variables in the `Input` and `Output`
+    /// storage classes, with decorations indicating which builtin or location
+    /// each variable corresponds to.
+    ///
+    /// This function emits a single global `OpVariable` for a single value from
+    /// the interface, and adds appropriate decorations to indicate which
+    /// builtin or location it represents, how it should be interpolated, and so
+    /// on. The `class` argument gives the variable's SPIR-V storage class,
+    /// which should be either [`Input`] or [`Output`].
+    ///
+    /// [`Binding`]: crate::Binding
+    /// [`Function`]: crate::Function
+    /// [`EntryPoint`]: crate::EntryPoint
+    /// [`Input`]: spirv::StorageClass::Input
+    /// [`Output`]: spirv::StorageClass::Output
     fn write_varying(
         &mut self,
         ir_module: &crate::Module,
