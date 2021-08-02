@@ -730,10 +730,19 @@ impl Program {
                     .resolve_type(ctx, selector, selector_meta)?
                     .scalar_kind()
                 {
+                    // When the selector is a boolean vector the result is
+                    // calculated per component, for each component of the
+                    // selector if it's false the respective component from the
+                    // first argument is selected, if it's true the respective
+                    // component from the second argument is selected
+                    //
+                    // Note(jcapucho): yes, it's inverted in comparison with the
+                    // IR and SPIR-V and yes I spent a full debugging a shader
+                    // because of this weird behavior
                     Some(ScalarKind::Bool) => Expression::Select {
                         condition: selector,
-                        accept: arg,
-                        reject: arg1,
+                        accept: arg1,
+                        reject: arg,
                     },
                     _ => Expression::Math {
                         fun: MathFunction::Mix,
