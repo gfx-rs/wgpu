@@ -921,13 +921,24 @@ impl<'source, 'program> Parser<'source, 'program> {
         ty_name: String,
         mut meta: SourceMetadata,
     ) -> Result<bool> {
-        let layout = qualifiers
-            .iter()
-            .find_map(|&(ref qualifier, _)| match *qualifier {
-                TypeQualifier::Layout(layout) => Some(layout),
-                _ => None,
-            })
-            .unwrap_or(StructLayout::Std140);
+        let mut storage = None;
+        let mut layout = None;
+
+        for &(ref qualifier, _) in qualifiers {
+            match *qualifier {
+                TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(c)) => {
+                    storage = Some(c)
+                }
+                TypeQualifier::Layout(l) => layout = Some(l),
+                _ => continue,
+            }
+        }
+
+        let layout = match (layout, storage) {
+            (Some(layout), _) => layout,
+            (None, Some(StorageClass::Storage { .. })) => StructLayout::Std430,
+            _ => StructLayout::Std140,
+        };
 
         let mut members = Vec::new();
         let span = self.parse_struct_declaration_list(&mut members, layout)?;
