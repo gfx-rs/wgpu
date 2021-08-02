@@ -1763,13 +1763,11 @@ impl<'source, 'program> Parser<'source, 'program> {
                     if self.peek_type_name() || self.peek_type_qualifier() {
                         self.parse_declaration(ctx, body, false)?;
                     } else {
-                        self.parse_expression(ctx, body)?;
+                        let expr = self.parse_expression(ctx, body)?;
+                        ctx.lower(self.program, expr, false, body)?;
                         self.expect(TokenValue::Semicolon)?;
                     }
                 }
-
-                ctx.emit_flush(body);
-                ctx.emit_start();
 
                 let (mut block, mut continuing) = (Block::new(), Block::new());
 
