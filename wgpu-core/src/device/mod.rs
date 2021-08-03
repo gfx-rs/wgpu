@@ -895,7 +895,12 @@ impl<A: HalApi> Device<A> {
                     Ok(module) => module,
                     Err(err) => {
                         log::error!("Failed to parse WGSL code for {:?}: {}", desc.label, err);
-                        return Err(pipeline::CreateShaderModuleError::Parsing);
+                        return Err(pipeline::CreateShaderModuleError::Parsing(
+                            pipeline::NagaParseError {
+                                shader_source: code.to_string(),
+                                error: err,
+                            },
+                        ));
                     }
                 }
             }

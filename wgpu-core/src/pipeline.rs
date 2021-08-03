@@ -45,9 +45,24 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+pub struct NagaParseError {
+    pub shader_source: String,
+    pub error: naga::front::wgsl::ParseError,
+}
+impl std::fmt::Display for NagaParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "\nShader error:\n{}",
+            self.error.emit_to_string(&self.shader_source)
+        )
+    }
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum CreateShaderModuleError {
     #[error("Failed to parse a shader")]
-    Parsing,
+    Parsing(#[from] NagaParseError),
     #[error("Failed to generate the backend-specific code")]
     Generation,
     #[error(transparent)]
