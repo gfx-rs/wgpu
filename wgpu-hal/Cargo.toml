@@ -47,7 +47,6 @@ glow = { git = "https://github.com/grovesNL/glow", rev = "0864897a28bbdd43f89f4f
 
 # backend: Dx12
 bit-set = { version = "0.5", optional = true }
-native = { package = "d3d12", git = "https://github.com/gfx-rs/d3d12-rs", rev = "79f29c8", features = ["libloading"], optional = true }
 range-alloc = { version = "0.1", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -57,6 +56,7 @@ libloading = { version = "0.7", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
+native = { package = "d3d12", git = "https://github.com/gfx-rs/d3d12-rs", rev = "79f29c8", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 mtl = { package = "metal", version = "0.22", git="https://github.com/gfx-rs/metal-rs", rev="08cc15a3be5a57fc07bb27091eff3569dd60cfd3" }
