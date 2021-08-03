@@ -1,6 +1,0 @@
-(
-	spv_version: (1, 0),
-	glsl_vert_ep_name: Some("vert_main"),
-	glsl_frag_ep_name: Some("frag_main"),
-	glsl_comp_ep_name: Some("comp_main"),
-)

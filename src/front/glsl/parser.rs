@@ -22,13 +22,13 @@ use std::iter::Peekable;
 
 type Result<T> = std::result::Result<T, ErrorKind>;
 
-pub struct Parser<'source, 'program, 'options> {
-    program: &'program mut Program<'options>,
+pub struct Parser<'source, 'program> {
+    program: &'program mut Program,
     lexer: Peekable<Lexer<'source>>,
 }
 
-impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
-    pub fn new(program: &'program mut Program<'options>, lexer: Lexer<'source>) -> Self {
+impl<'source, 'program> Parser<'source, 'program> {
+    pub fn new(program: &'program mut Program, lexer: Lexer<'source>) -> Self {
         Parser {
             program,
             lexer: lexer.peekable(),
@@ -81,7 +81,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
             self.parse_external_declaration()?;
         }
 
-        self.program.add_entry_points();
+        if let Some(handle) = self.program.entry_point {
+            self.program.add_entry_point(handle)?;
+        }
 
         Ok(())
     }
@@ -741,11 +743,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     self.parse_compound_statement(&mut context, &mut body)?;
 
                                     let Context {
-                                        arg_use,
-                                        parameters_info,
-                                        ..
+                                        parameters_info, ..
                                     } = context;
-                                    let handle = self.program.add_function(
+                                    self.program.add_function(
                                         Function {
                                             name: Some(name.clone()),
                                             result,
@@ -760,8 +760,6 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                         parameters_info,
                                         meta,
                                     )?;
-
-                                    self.program.function_arg_use[handle.index()] = arg_use;
 
                                     Ok(true)
                                 }

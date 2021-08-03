@@ -20,15 +20,13 @@ mod token;
 mod types;
 mod variables;
 
-#[derive(Default)]
 pub struct Options {
-    pub entry_points: FastHashMap<String, ShaderStage>,
+    pub stage: ShaderStage,
     pub defines: FastHashMap<String, String>,
-    pub strip_unused_linkages: bool,
 }
 
 pub fn parse_str(source: &str, options: &Options) -> Result<Module, ParseError> {
-    let mut program = Program::new(&options.entry_points, options.strip_unused_linkages);
+    let mut program = Program::new(options.stage);
 
     let lex = lex::Lexer::new(source, &options.defines);
     let mut parser = parser::Parser::new(&mut program, lex);

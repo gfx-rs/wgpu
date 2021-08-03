@@ -31,7 +31,7 @@ pub enum GlobalOrConstant {
     Constant(Handle<Constant>),
 }
 
-impl Program<'_> {
+impl Program {
     pub fn lookup_variable(
         &mut self,
         ctx: &mut Context,
@@ -45,7 +45,7 @@ impl Program<'_> {
             return Ok(Some(global_var));
         }
 
-        let mut add_builtin = |inner, builtin, mutable, prologue, storage| {
+        let mut add_builtin = |inner, builtin, mutable, storage| {
             let ty = self
                 .module
                 .types
@@ -64,7 +64,6 @@ impl Program<'_> {
                 name: None,
                 binding: Binding::BuiltIn(builtin),
                 handle,
-                prologue,
                 storage,
             });
 
@@ -76,7 +75,6 @@ impl Program<'_> {
                     mutable,
                 },
             ));
-            ctx.arg_use.push(EntryArgUse::empty());
 
             let expr = ctx.add_expression(Expression::GlobalVariable(handle), body);
             ctx.lookup_global_var_exps.insert(
@@ -100,7 +98,6 @@ impl Program<'_> {
                 },
                 BuiltIn::Position,
                 true,
-                PrologueStage::empty(),
                 StorageQualifier::Output,
             ),
             "gl_FragCoord" => add_builtin(
@@ -111,7 +108,6 @@ impl Program<'_> {
                 },
                 BuiltIn::Position,
                 false,
-                PrologueStage::FRAGMENT,
                 StorageQualifier::Input,
             ),
             "gl_FragDepth" => add_builtin(
@@ -121,7 +117,6 @@ impl Program<'_> {
                 },
                 BuiltIn::FragDepth,
                 true,
-                PrologueStage::empty(),
                 StorageQualifier::Output,
             ),
             "gl_VertexIndex" => add_builtin(
@@ -131,7 +126,6 @@ impl Program<'_> {
                 },
                 BuiltIn::VertexIndex,
                 false,
-                PrologueStage::VERTEX,
                 StorageQualifier::Input,
             ),
             "gl_InstanceIndex" => add_builtin(
@@ -141,7 +135,6 @@ impl Program<'_> {
                 },
                 BuiltIn::InstanceIndex,
                 false,
-                PrologueStage::VERTEX,
                 StorageQualifier::Input,
             ),
             "gl_GlobalInvocationID" => add_builtin(
@@ -152,7 +145,6 @@ impl Program<'_> {
                 },
                 BuiltIn::GlobalInvocationId,
                 false,
-                PrologueStage::COMPUTE,
                 StorageQualifier::Input,
             ),
             "gl_FrontFacing" => add_builtin(
@@ -162,7 +154,6 @@ impl Program<'_> {
                 },
                 BuiltIn::FrontFacing,
                 false,
-                PrologueStage::FRAGMENT,
                 StorageQualifier::Input,
             ),
             "gl_PrimitiveID" => add_builtin(
@@ -172,7 +163,6 @@ impl Program<'_> {
                 },
                 BuiltIn::PrimitiveIndex,
                 false,
-                PrologueStage::FRAGMENT,
                 StorageQualifier::Input,
             ),
             _ => Ok(None),
@@ -427,11 +417,6 @@ impl Program<'_> {
 
         if let Some(location) = location {
             let input = storage == StorageQualifier::Input;
-            let prologue = if input {
-                PrologueStage::all()
-            } else {
-                PrologueStage::empty()
-            };
             let interpolation = self.module.types[ty].inner.scalar_kind().map(|kind| {
                 if let ScalarKind::Float = kind {
                     Interpolation::Perspective
@@ -457,7 +442,6 @@ impl Program<'_> {
                     sampling,
                 },
                 handle,
-                prologue,
                 storage,
             });
 

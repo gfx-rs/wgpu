@@ -2,8 +2,7 @@ use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, ImageClass, ImageDimension,
     ImageQuery, LocalVariable, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind,
-    ScalarValue, ShaderStage, Statement, StructMember, SwizzleComponent, Type, TypeInner,
-    VectorSize,
+    ScalarValue, Statement, StructMember, SwizzleComponent, Type, TypeInner, VectorSize,
 };
 
 use super::{ast::*, error::ErrorKind, SourceMetadata};
@@ -17,7 +16,7 @@ struct CoordComponents {
     array_index: Option<Handle<Expression>>,
 }
 
-impl Program<'_> {
+impl Program {
     fn add_constant_value(&mut self, scalar_kind: ScalarKind, value: u64) -> Handle<Constant> {
         let value = match scalar_kind {
             ScalarKind::Uint => ScalarValue::Uint(value),
@@ -1031,65 +1030,65 @@ impl Program<'_> {
         parameters: Vec<Handle<Type>>,
         parameters_info: Vec<ParameterInfo>,
         meta: SourceMetadata,
-    ) -> Result<Handle<Function>, ErrorKind> {
+    ) -> Result<(), ErrorKind> {
         ensure_block_returns(&mut function.body);
-        let stage = self.entry_points.get(&name);
 
-        Ok(if let Some(&stage) = stage {
+        if name.as_str() == "main" {
             let handle = self.module.functions.append(function);
-            self.entries.push((name, stage, handle));
-            self.function_arg_use.push(Vec::new());
-            handle
-        } else {
-            let void = function.result.is_none();
+            return if self.entry_point.replace(handle).is_some() {
+                Err(ErrorKind::SemanticError(meta, "main defined twice".into()))
+            } else {
+                Ok(())
+            };
+        }
 
-            let &mut Program {
-                ref mut lookup_function,
-                ref mut module,
-                ..
-            } = self;
+        let void = function.result.is_none();
 
-            let declarations = lookup_function.entry(name).or_default();
+        let &mut Program {
+            ref mut lookup_function,
+            ref mut module,
+            ..
+        } = self;
 
-            'outer: for decl in declarations.iter_mut() {
-                if parameters.len() != decl.parameters.len() {
-                    continue;
-                }
+        let declarations = lookup_function.entry(name).or_default();
 
-                for (new_parameter, old_parameter) in parameters.iter().zip(decl.parameters.iter())
-                {
-                    let new_inner = &module.types[*new_parameter].inner;
-                    let old_inner = &module.types[*old_parameter].inner;
-
-                    if new_inner != old_inner {
-                        continue 'outer;
-                    }
-                }
-
-                if decl.defined {
-                    return Err(ErrorKind::SemanticError(
-                        meta,
-                        "Function already defined".into(),
-                    ));
-                }
-
-                decl.defined = true;
-                decl.parameters_info = parameters_info;
-                *self.module.functions.get_mut(decl.handle) = function;
-                return Ok(decl.handle);
+        'outer: for decl in declarations.iter_mut() {
+            if parameters.len() != decl.parameters.len() {
+                continue;
             }
 
-            self.function_arg_use.push(Vec::new());
-            let handle = module.functions.append(function);
-            declarations.push(FunctionDeclaration {
-                parameters,
-                parameters_info,
-                handle,
-                defined: true,
-                void,
-            });
-            handle
-        })
+            for (new_parameter, old_parameter) in parameters.iter().zip(decl.parameters.iter()) {
+                let new_inner = &module.types[*new_parameter].inner;
+                let old_inner = &module.types[*old_parameter].inner;
+
+                if new_inner != old_inner {
+                    continue 'outer;
+                }
+            }
+
+            if decl.defined {
+                return Err(ErrorKind::SemanticError(
+                    meta,
+                    "Function already defined".into(),
+                ));
+            }
+
+            decl.defined = true;
+            decl.parameters_info = parameters_info;
+            *self.module.functions.get_mut(decl.handle) = function;
+            return Ok(());
+        }
+
+        let handle = module.functions.append(function);
+        declarations.push(FunctionDeclaration {
+            parameters,
+            parameters_info,
+            handle,
+            defined: true,
+            void,
+        });
+
+        Ok(())
     }
 
     pub fn add_prototype(
@@ -1131,7 +1130,6 @@ impl Program<'_> {
             ));
         }
 
-        self.function_arg_use.push(Vec::new());
         let handle = module.functions.append(function);
         declarations.push(FunctionDeclaration {
             parameters,
@@ -1144,198 +1142,101 @@ impl Program<'_> {
         Ok(())
     }
 
-    fn check_call_global(
-        &self,
-        caller: Handle<Function>,
-        function_arg_use: &mut [Vec<EntryArgUse>],
-        stmt: &Statement,
-    ) {
-        match *stmt {
-            Statement::Block(ref block) => {
-                for stmt in block {
-                    self.check_call_global(caller, function_arg_use, stmt)
-                }
-            }
-            Statement::If {
-                ref accept,
-                ref reject,
-                ..
-            } => {
-                for stmt in accept.iter().chain(reject.iter()) {
-                    self.check_call_global(caller, function_arg_use, stmt)
-                }
-            }
-            Statement::Switch {
-                ref cases,
-                ref default,
-                ..
-            } => {
-                for stmt in cases
-                    .iter()
-                    .flat_map(|c| c.body.iter())
-                    .chain(default.iter())
-                {
-                    self.check_call_global(caller, function_arg_use, stmt)
-                }
-            }
-            Statement::Loop {
-                ref body,
-                ref continuing,
-            } => {
-                for stmt in body.iter().chain(continuing.iter()) {
-                    self.check_call_global(caller, function_arg_use, stmt)
-                }
-            }
-            Statement::Call { function, .. } => {
-                let callee_len = function_arg_use[function.index()].len();
-                let caller_len = function_arg_use[caller.index()].len();
-                function_arg_use[caller.index()].extend(
-                    std::iter::repeat(EntryArgUse::empty())
-                        .take(callee_len.saturating_sub(caller_len)),
-                );
+    pub fn add_entry_point(&mut self, function: Handle<Function>) -> Result<(), ErrorKind> {
+        let mut arguments = Vec::new();
+        let mut expressions = Arena::new();
+        let mut body = Vec::new();
 
-                for i in 0..callee_len.min(caller_len) {
-                    let callee_use = function_arg_use[function.index()][i];
-                    function_arg_use[caller.index()][i] |= callee_use
-                }
-            }
-            _ => {}
-        }
-    }
-
-    pub fn add_entry_points(&mut self) {
-        let mut function_arg_use = Vec::new();
-        std::mem::swap(&mut self.function_arg_use, &mut function_arg_use);
-
-        for (handle, function) in self.module.functions.iter() {
-            for stmt in function.body.iter() {
-                self.check_call_global(handle, &mut function_arg_use, stmt)
-            }
-        }
-
-        for (name, stage, function) in self.entries.iter().cloned() {
-            let mut arguments = Vec::new();
-            let mut expressions = Arena::new();
-            let mut body = Vec::new();
-
-            let can_strip_stage_inputs =
-                self.strip_unused_linkages || stage != ShaderStage::Fragment;
-            let can_strip_stage_outputs =
-                self.strip_unused_linkages || stage != ShaderStage::Vertex;
-
-            for (i, arg) in self.entry_args.iter().enumerate() {
-                if arg.storage != StorageQualifier::Input {
-                    continue;
-                }
-
-                if !arg.prologue.contains(stage.into()) {
-                    continue;
-                }
-
-                let is_used = function_arg_use[function.index()]
-                    .get(i)
-                    .map_or(false, |u| u.contains(EntryArgUse::READ));
-
-                if can_strip_stage_inputs && !is_used {
-                    continue;
-                }
-
-                let ty = self.module.global_variables[arg.handle].ty;
-                let idx = arguments.len() as u32;
-
-                arguments.push(FunctionArgument {
-                    name: arg.name.clone(),
-                    ty,
-                    binding: Some(arg.binding.clone()),
-                });
-
-                let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
-                let value = expressions.append(Expression::FunctionArgument(idx));
-
-                body.push(Statement::Store { pointer, value });
+        for arg in self.entry_args.iter() {
+            if arg.storage != StorageQualifier::Input {
+                continue;
             }
 
-            body.push(Statement::Call {
-                function,
-                arguments: Vec::new(),
-                result: None,
+            let ty = self.module.global_variables[arg.handle].ty;
+            let idx = arguments.len() as u32;
+
+            arguments.push(FunctionArgument {
+                name: arg.name.clone(),
+                ty,
+                binding: Some(arg.binding.clone()),
             });
 
-            let mut span = 0;
-            let mut members = Vec::new();
-            let mut components = Vec::new();
+            let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
+            let value = expressions.append(Expression::FunctionArgument(idx));
 
-            for (i, arg) in self.entry_args.iter().enumerate() {
-                if arg.storage != StorageQualifier::Output {
-                    continue;
-                }
+            body.push(Statement::Store { pointer, value });
+        }
 
-                let is_used = function_arg_use[function.index()]
-                    .get(i)
-                    .map_or(false, |u| u.contains(EntryArgUse::WRITE));
+        body.push(Statement::Call {
+            function,
+            arguments: Vec::new(),
+            result: None,
+        });
 
-                if can_strip_stage_outputs && !is_used {
-                    continue;
-                }
+        let mut span = 0;
+        let mut members = Vec::new();
+        let mut components = Vec::new();
 
-                let ty = self.module.global_variables[arg.handle].ty;
-
-                members.push(StructMember {
-                    name: arg.name.clone(),
-                    ty,
-                    binding: Some(arg.binding.clone()),
-                    offset: span,
-                });
-
-                span += self.module.types[ty].inner.span(&self.module.constants);
-
-                let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
-                let len = expressions.len();
-                let load = expressions.append(Expression::Load { pointer });
-                body.push(Statement::Emit(expressions.range_from(len)));
-                components.push(load)
+        for arg in self.entry_args.iter() {
+            if arg.storage != StorageQualifier::Output {
+                continue;
             }
 
-            let (ty, value) = if !components.is_empty() {
-                let ty = self.module.types.append(Type {
-                    name: None,
-                    inner: TypeInner::Struct {
-                        top_level: false,
-                        members,
-                        span,
-                    },
-                });
+            let ty = self.module.global_variables[arg.handle].ty;
 
-                let len = expressions.len();
-                let res = expressions.append(Expression::Compose { ty, components });
-                body.push(Statement::Emit(expressions.range_from(len)));
+            members.push(StructMember {
+                name: arg.name.clone(),
+                ty,
+                binding: Some(arg.binding.clone()),
+                offset: span,
+            });
 
-                (Some(ty), Some(res))
-            } else {
-                (None, None)
-            };
+            span += self.module.types[ty].inner.span(&self.module.constants);
 
-            body.push(Statement::Return { value });
+            let pointer = expressions.append(Expression::GlobalVariable(arg.handle));
+            let len = expressions.len();
+            let load = expressions.append(Expression::Load { pointer });
+            body.push(Statement::Emit(expressions.range_from(len)));
+            components.push(load)
+        }
 
-            self.module.entry_points.push(EntryPoint {
-                name,
-                stage,
-                early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
-                    .filter(|_| self.early_fragment_tests && stage == crate::ShaderStage::Fragment),
-                workgroup_size: if let crate::ShaderStage::Compute = stage {
-                    self.workgroup_size
-                } else {
-                    [0; 3]
-                },
-                function: Function {
-                    arguments,
-                    expressions,
-                    body,
-                    result: ty.map(|ty| FunctionResult { ty, binding: None }),
-                    ..Default::default()
+        let (ty, value) = if !components.is_empty() {
+            let ty = self.module.types.append(Type {
+                name: None,
+                inner: TypeInner::Struct {
+                    top_level: false,
+                    members,
+                    span,
                 },
             });
-        }
+
+            let len = expressions.len();
+            let res = expressions.append(Expression::Compose { ty, components });
+            body.push(Statement::Emit(expressions.range_from(len)));
+
+            (Some(ty), Some(res))
+        } else {
+            (None, None)
+        };
+
+        body.push(Statement::Return { value });
+
+        self.module.entry_points.push(EntryPoint {
+            name: "main".to_string(),
+            stage: self.stage,
+            early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
+                .filter(|_| self.early_fragment_tests),
+            workgroup_size: self.workgroup_size,
+            function: Function {
+                arguments,
+                expressions,
+                body,
+                result: ty.map(|ty| FunctionResult { ty, binding: None }),
+                ..Default::default()
+            },
+        });
+
+        Ok(())
     }
 
     /// Helper function for texture calls, splits the vector argument into it's components

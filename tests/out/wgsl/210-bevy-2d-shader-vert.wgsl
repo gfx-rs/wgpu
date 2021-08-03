@@ -19,7 +19,7 @@ struct VertexOutput {
 };
 
 var<private> Vertex_Position1: vec3<f32>;
-var<private> Vertex_Normal: vec3<f32>;
+var<private> Vertex_Normal1: vec3<f32>;
 var<private> Vertex_Uv1: vec2<f32>;
 var<private> v_Uv: vec2<f32>;
 [[group(0), binding(0)]]
@@ -46,11 +46,12 @@ fn main1() {
 }
 
 [[stage(vertex)]]
-fn main([[location(0)]] Vertex_Position: vec3<f32>, [[location(2)]] Vertex_Uv: vec2<f32>) -> VertexOutput {
+fn main([[location(0)]] Vertex_Position: vec3<f32>, [[location(1)]] Vertex_Normal: vec3<f32>, [[location(2)]] Vertex_Uv: vec2<f32>) -> VertexOutput {
     Vertex_Position1 = Vertex_Position;
+    Vertex_Normal1 = Vertex_Normal;
     Vertex_Uv1 = Vertex_Uv;
     main1();
-    let _e5: vec2<f32> = v_Uv;
-    let _e7: vec4<f32> = gl_Position;
-    return VertexOutput(_e5, _e7);
+    let _e7: vec2<f32> = v_Uv;
+    let _e9: vec4<f32> = gl_Position;
+    return VertexOutput(_e7, _e9);
 }

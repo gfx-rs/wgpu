@@ -55,15 +55,6 @@ struct Parameters {
     #[cfg(all(not(feature = "deserialize"), feature = "glsl-out"))]
     #[serde(default)]
     glsl_custom: bool,
-    #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
-    #[serde(default)]
-    glsl_vert_ep_name: Option<String>,
-    #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
-    #[serde(default)]
-    glsl_frag_ep_name: Option<String>,
-    #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
-    #[serde(default)]
-    glsl_comp_ep_name: Option<String>,
     #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
     #[serde(default)]
     hlsl: naga::back::hlsl::Options,
@@ -530,50 +521,18 @@ fn convert_glsl_folder() {
             // No needed to validate ron files
             continue;
         }
-        let params_path = format!(
-            "{}/{}/glsl/{}.params.ron",
-            root,
-            BASE_DIR_IN,
-            PathBuf::from(&file_name).with_extension("").display()
-        );
-        let is_params_used = PathBuf::from(&params_path).exists();
         println!("Processing {}", file_name);
 
-        let mut entry_points = naga::FastHashMap::default();
-        if is_params_used {
-            let params: Parameters = match fs::read_to_string(&params_path) {
-                Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
-                Err(_) => panic!("Can't parse glsl params ron file: {:?}", &params_path),
-            };
-
-            if let Some(vert) = params.glsl_vert_ep_name {
-                entry_points.insert(vert, naga::ShaderStage::Vertex);
-            };
-
-            if let Some(frag) = params.glsl_frag_ep_name {
-                entry_points.insert(frag, naga::ShaderStage::Fragment);
-            };
-
-            if let Some(comp) = params.glsl_comp_ep_name {
-                entry_points.insert(comp, naga::ShaderStage::Compute);
-            };
-        } else {
-            let stage = match entry.path().extension().and_then(|s| s.to_str()).unwrap() {
-                "vert" => naga::ShaderStage::Vertex,
-                "frag" => naga::ShaderStage::Fragment,
-                "comp" => naga::ShaderStage::Compute,
-                ext => panic!("Unknown extension for glsl file {}", ext),
-            };
-            entry_points.insert("main".to_string(), stage);
-        }
-
-        let strip_unused_linkages = entry_points.len() > 1;
         let module = naga::front::glsl::parse_str(
             &fs::read_to_string(entry.path()).expect("Couldn't find glsl file"),
             &naga::front::glsl::Options {
-                entry_points,
+                stage: match entry.path().extension().and_then(|s| s.to_str()).unwrap() {
+                    "vert" => naga::ShaderStage::Vertex,
+                    "frag" => naga::ShaderStage::Fragment,
+                    "comp" => naga::ShaderStage::Compute,
+                    ext => panic!("Unknown extension for glsl file {}", ext),
+                },
                 defines: Default::default(),
-                strip_unused_linkages: strip_unused_linkages,
             },
         )
         .unwrap();

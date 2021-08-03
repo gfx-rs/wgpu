@@ -47,46 +47,19 @@ pub struct FunctionDeclaration {
     pub void: bool,
 }
 
-bitflags::bitflags! {
-    pub struct EntryArgUse: u32 {
-        const READ = 0x1;
-        const WRITE = 0x2;
-    }
-}
-
-bitflags::bitflags! {
-    pub struct PrologueStage: u32 {
-        const VERTEX = 0x1;
-        const FRAGMENT = 0x2;
-        const COMPUTE = 0x4;
-    }
-}
-
-impl From<ShaderStage> for PrologueStage {
-    fn from(stage: ShaderStage) -> Self {
-        match stage {
-            ShaderStage::Vertex => PrologueStage::VERTEX,
-            ShaderStage::Fragment => PrologueStage::FRAGMENT,
-            ShaderStage::Compute => PrologueStage::COMPUTE,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct EntryArg {
     pub name: Option<String>,
     pub binding: Binding,
     pub handle: Handle<GlobalVariable>,
-    pub prologue: PrologueStage,
     pub storage: StorageQualifier,
 }
 
 #[derive(Debug)]
-pub struct Program<'a> {
+pub struct Program {
     pub version: u16,
     pub profile: Profile,
-    pub entry_points: &'a FastHashMap<String, ShaderStage>,
-    pub strip_unused_linkages: bool,
+    pub stage: ShaderStage,
 
     pub workgroup_size: [u32; 3],
     pub early_fragment_tests: bool,
@@ -97,25 +70,19 @@ pub struct Program<'a> {
     pub global_variables: Vec<(String, GlobalLookup)>,
 
     pub entry_args: Vec<EntryArg>,
-    pub entries: Vec<(String, ShaderStage, Handle<Function>)>,
-    // TODO: More efficient representation
-    pub function_arg_use: Vec<Vec<EntryArgUse>>,
+    pub entry_point: Option<Handle<Function>>,
 
     pub module: Module,
 }
 
-impl<'a> Program<'a> {
-    pub fn new(
-        entry_points: &'a FastHashMap<String, ShaderStage>,
-        strip_unused_linkages: bool,
-    ) -> Program<'a> {
+impl Program {
+    pub fn new(stage: ShaderStage) -> Program {
         Program {
             version: 0,
             profile: Profile::Core,
-            entry_points,
-            strip_unused_linkages,
+            stage,
 
-            workgroup_size: [1; 3],
+            workgroup_size: [if stage == ShaderStage::Compute { 1 } else { 0 }; 3],
             early_fragment_tests: false,
 
             lookup_function: FastHashMap::default(),
@@ -123,8 +90,7 @@ impl<'a> Program<'a> {
             global_variables: Vec::new(),
 
             entry_args: Vec::new(),
-            entries: Vec::new(),
-            function_arg_use: Vec::new(),
+            entry_point: None,
 
             module: Module::default(),
         }
@@ -214,7 +180,6 @@ pub struct Context<'function> {
     pub locals: &'function mut Arena<LocalVariable>,
     pub arguments: &'function mut Vec<FunctionArgument>,
     pub parameters_info: Vec<ParameterInfo>,
-    pub arg_use: Vec<EntryArgUse>,
 
     //TODO: Find less allocation heavy representation
     pub scopes: Vec<FastHashMap<String, VariableReference>>,
@@ -239,7 +204,6 @@ impl<'function> Context<'function> {
             locals,
             arguments,
             parameters_info: Vec::new(),
-            arg_use: vec![EntryArgUse::empty(); program.entry_args.len()],
 
             scopes: vec![FastHashMap::default()],
             lookup_global_var_exps: FastHashMap::with_capacity_and_hasher(
@@ -647,21 +611,11 @@ impl<'function> Context<'function> {
                         ));
                     }
 
-                    if let Some(idx) = var.entry_arg {
-                        self.arg_use[idx] |= EntryArgUse::WRITE
-                    }
-
                     var.expr
+                } else if var.load {
+                    self.add_expression(Expression::Load { pointer: var.expr }, body)
                 } else {
-                    if let Some(idx) = var.entry_arg {
-                        self.arg_use[idx] |= EntryArgUse::READ
-                    }
-
-                    if var.load {
-                        self.add_expression(Expression::Load { pointer: var.expr }, body)
-                    } else {
-                        var.expr
-                    }
+                    var.expr
                 }
             }
             HirExprKind::Call(call) if !lhs => {

@@ -223,14 +223,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "vert" => {
             let input = fs::read_to_string(input_path)?;
-            let mut entry_points = naga::FastHashMap::default();
-            entry_points.insert("main".to_string(), naga::ShaderStage::Vertex);
             naga::front::glsl::parse_str(
                 &input,
                 &naga::front::glsl::Options {
-                    entry_points,
+                    stage: naga::ShaderStage::Vertex,
                     defines: Default::default(),
-                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {
@@ -241,14 +238,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "frag" => {
             let input = fs::read_to_string(input_path)?;
-            let mut entry_points = naga::FastHashMap::default();
-            entry_points.insert("main".to_string(), naga::ShaderStage::Fragment);
             naga::front::glsl::parse_str(
                 &input,
                 &naga::front::glsl::Options {
-                    entry_points,
+                    stage: naga::ShaderStage::Fragment,
                     defines: Default::default(),
-                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {
@@ -259,14 +253,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "comp" => {
             let input = fs::read_to_string(input_path)?;
-            let mut entry_points = naga::FastHashMap::default();
-            entry_points.insert("main".to_string(), naga::ShaderStage::Compute);
             naga::front::glsl::parse_str(
                 &input,
                 &naga::front::glsl::Options {
-                    entry_points,
+                    stage: naga::ShaderStage::Compute,
                     defines: Default::default(),
-                    strip_unused_linkages: false,
                 },
             )
             .unwrap_or_else(|err| {
