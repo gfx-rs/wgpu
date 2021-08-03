@@ -689,7 +689,6 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             let mut arguments = Vec::new();
                             // Normalized function parameters, modifiers are not applied
                             let mut parameters = Vec::new();
-                            let mut qualifiers = Vec::new();
                             let mut body = Block::new();
 
                             let mut context = Context::new(
@@ -700,12 +699,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                 &mut arguments,
                             );
 
-                            self.parse_function_args(
-                                &mut context,
-                                &mut body,
-                                &mut qualifiers,
-                                &mut parameters,
-                            )?;
+                            self.parse_function_args(&mut context, &mut body, &mut parameters)?;
 
                             let end_meta = self.expect(TokenValue::RightParen)?.meta;
                             meta = meta.union(&end_meta);
@@ -714,6 +708,11 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                             return match token.value {
                                 TokenValue::Semicolon => {
                                     // This branch handles function prototypes
+
+                                    let Context {
+                                        parameters_info, ..
+                                    } = context;
+
                                     self.program.add_prototype(
                                         Function {
                                             name: Some(name.clone()),
@@ -723,7 +722,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                         },
                                         name,
                                         parameters,
-                                        qualifiers,
+                                        parameters_info,
                                         meta,
                                     )?;
 
@@ -738,7 +737,9 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                     self.parse_compound_statement(&mut context, &mut body)?;
 
                                     let Context {
-                                        arg_use, depth_set, ..
+                                        arg_use,
+                                        parameters_info,
+                                        ..
                                     } = context;
                                     let handle = self.program.add_function(
                                         Function {
@@ -752,8 +753,7 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
                                         },
                                         name,
                                         parameters,
-                                        depth_set,
-                                        qualifiers,
+                                        parameters_info,
                                         meta,
                                     )?;
 
@@ -1864,13 +1864,11 @@ impl<'source, 'program, 'options> Parser<'source, 'program, 'options> {
         &mut self,
         context: &mut Context,
         body: &mut Block,
-        qualifiers: &mut Vec<ParameterQualifier>,
         parameters: &mut Vec<Handle<Type>>,
     ) -> Result<()> {
         loop {
             if self.peek_type_name() || self.peek_parameter_qualifier() {
                 let qualifier = self.parse_parameter_qualifier();
-                qualifiers.push(qualifier);
                 let ty = self.parse_type_non_void()?.0;
 
                 match self.expect_peek()?.value {

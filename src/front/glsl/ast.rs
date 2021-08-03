@@ -1,5 +1,3 @@
-use bit_set::BitSet;
-
 use super::{
     super::{Emitter, Typifier},
     constants::ConstantSolver,
@@ -30,19 +28,23 @@ pub struct GlobalLookup {
 }
 
 #[derive(Debug, Clone)]
+pub struct ParameterInfo {
+    pub qualifier: ParameterQualifier,
+    /// Wether the parameter should be treated as a depth image instead of a
+    /// sampled image
+    pub depth: bool,
+}
+
+#[derive(Debug)]
 pub struct FunctionDeclaration {
     /// Normalized function parameters, modifiers are not applied
     pub parameters: Vec<Handle<Type>>,
-    pub qualifiers: Vec<ParameterQualifier>,
+    pub parameters_info: Vec<ParameterInfo>,
     pub handle: Handle<Function>,
     /// Wheter this function was already defined or is just a prototype
     pub defined: bool,
     /// Wheter or not this function returns void (nothing)
     pub void: bool,
-    /// [`BitSet`](BitSet) where each bit indicates if the argument in the
-    /// corresponding position should be treated as a depth image instead of a
-    /// regular image
-    pub depth_set: BitSet,
 }
 
 bitflags::bitflags! {
@@ -187,7 +189,7 @@ pub struct Context<'function> {
     expressions: &'function mut Arena<Expression>,
     pub locals: &'function mut Arena<LocalVariable>,
     pub arguments: &'function mut Vec<FunctionArgument>,
-    pub depth_set: BitSet,
+    pub parameters_info: Vec<ParameterInfo>,
     pub arg_use: Vec<EntryArgUse>,
 
     //TODO: Find less allocation heavy representation
@@ -212,7 +214,7 @@ impl<'function> Context<'function> {
             expressions,
             locals,
             arguments,
-            depth_set: BitSet::new(),
+            parameters_info: Vec::new(),
             arg_use: vec![EntryArgUse::empty(); program.entry_args.len()],
 
             scopes: vec![FastHashMap::default()],
@@ -382,6 +384,11 @@ impl<'function> Context<'function> {
         }
 
         self.arguments.push(arg);
+
+        self.parameters_info.push(ParameterInfo {
+            qualifier,
+            depth: false,
+        });
 
         if let Some(name) = name {
             let expr = self.add_expression(Expression::FunctionArgument(index as u32), body);

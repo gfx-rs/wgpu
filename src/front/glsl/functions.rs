@@ -1,5 +1,3 @@
-use bit_set::BitSet;
-
 use crate::{
     proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
     Expression, Function, FunctionArgument, FunctionResult, Handle, ImageClass, ImageDimension,
@@ -823,7 +821,7 @@ impl Program<'_> {
                     for ((i, decl_arg), mut call_arg) in
                         decl.parameters.iter().enumerate().zip(args.iter().copied())
                     {
-                        if decl.depth_set.contains(i) {
+                        if decl.parameters_info[i].depth {
                             call_arg.0 = sampled_to_depth(&mut self.module, ctx, call_arg, body)?;
                         }
 
@@ -902,24 +900,24 @@ impl Program<'_> {
                     ErrorKind::SemanticError(meta, format!("Unknown function '{}'", name).into())
                 })?;
 
-                let qualifiers = decl.qualifiers.clone();
+                let parameters_info = decl.parameters_info.clone();
                 let parameters = decl.parameters.clone();
                 let function = decl.handle;
                 let is_void = decl.void;
 
                 let mut arguments = Vec::with_capacity(args.len());
                 let mut proxy_writes = Vec::new();
-                for (qualifier, (expr, parameter)) in qualifiers
+                for (parameter_info, (expr, parameter)) in parameters_info
                     .iter()
                     .zip(raw_args.iter().zip(parameters.iter()))
                 {
                     let (mut handle, meta) =
-                        ctx.lower_expect(self, *expr, qualifier.is_lhs(), body)?;
+                        ctx.lower_expect(self, *expr, parameter_info.qualifier.is_lhs(), body)?;
 
                     if let TypeInner::Vector { size, kind, width } =
                         *self.resolve_type(ctx, handle, meta)?
                     {
-                        if qualifier.is_lhs()
+                        if parameter_info.qualifier.is_lhs()
                             && matches!(*ctx.get_expression(handle), Expression::Swizzle { .. })
                         {
                             let ty = self.module.types.fetch_or_append(Type {
@@ -1024,8 +1022,7 @@ impl Program<'_> {
         name: String,
         // Normalized function parameters, modifiers are not applied
         parameters: Vec<Handle<Type>>,
-        depth_set: BitSet,
-        qualifiers: Vec<ParameterQualifier>,
+        parameters_info: Vec<ParameterInfo>,
         meta: SourceMetadata,
     ) -> Result<Handle<Function>, ErrorKind> {
         ensure_block_returns(&mut function.body);
@@ -1070,8 +1067,7 @@ impl Program<'_> {
                 }
 
                 decl.defined = true;
-                decl.qualifiers = qualifiers;
-                decl.depth_set = depth_set;
+                decl.parameters_info = parameters_info;
                 *self.module.functions.get_mut(decl.handle) = function;
                 return Ok(decl.handle);
             }
@@ -1080,11 +1076,10 @@ impl Program<'_> {
             let handle = module.functions.append(function);
             declarations.push(FunctionDeclaration {
                 parameters,
-                qualifiers,
+                parameters_info,
                 handle,
                 defined: true,
                 void,
-                depth_set,
             });
             handle
         })
@@ -1096,7 +1091,7 @@ impl Program<'_> {
         name: String,
         // Normalized function parameters, modifiers are not applied
         parameters: Vec<Handle<Type>>,
-        qualifiers: Vec<ParameterQualifier>,
+        parameters_info: Vec<ParameterInfo>,
         meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
         let void = function.result.is_none();
@@ -1133,11 +1128,10 @@ impl Program<'_> {
         let handle = module.functions.append(function);
         declarations.push(FunctionDeclaration {
             parameters,
-            qualifiers,
+            parameters_info,
             handle,
             defined: false,
             void,
-            depth_set: BitSet::new(),
         });
 
         Ok(())
@@ -1418,8 +1412,8 @@ impl Program<'_> {
     }
 }
 
-/// Helper function to cast a expression holding a sampled a image to a
-/// depth one.
+/// Helper function to cast a expression holding a sampled image to a
+/// depth image.
 ///
 /// Creates a new expression to make sure the typifier doesn't return a
 /// cached evaluation.
@@ -1432,7 +1426,7 @@ fn sampled_to_depth(
     let ty = match ctx[image] {
         Expression::GlobalVariable(handle) => &mut module.global_variables.get_mut(handle).ty,
         Expression::FunctionArgument(i) => {
-            ctx.depth_set.insert(i as usize);
+            ctx.parameters_info[i as usize].depth = true;
             &mut ctx.arguments[i as usize].ty
         }
         _ => {
