@@ -3,6 +3,7 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
     conv,
+    error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
@@ -92,6 +93,38 @@ pub enum TransferError {
     CopyToForbiddenTextureFormat(wgt::TextureFormat),
 }
 
+impl PrettyError for TransferError {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        fmt.error(self);
+        match *self {
+            Self::InvalidBuffer(id) => {
+                fmt.buffer_label(&id);
+            }
+            Self::InvalidTexture(id) => {
+                fmt.texture_label(&id);
+            }
+            // Self::MissingCopySrcUsageFlag(buf_opt, tex_opt) => {
+            //     if let Some(buf) = buf_opt {
+            //         let name = crate::gfx_select!(buf => global.buffer_label(buf));
+            //         ret.push_str(&format_label_line("source", &name));
+            //     }
+            //     if let Some(tex) = tex_opt {
+            //         let name = crate::gfx_select!(tex => global.texture_label(tex));
+            //         ret.push_str(&format_label_line("source", &name));
+            //     }
+            // }
+            Self::MissingCopyDstUsageFlag(buf_opt, tex_opt) => {
+                if let Some(buf) = buf_opt {
+                    fmt.buffer_label_with_key(&buf, "destination");
+                }
+                if let Some(tex) = tex_opt {
+                    fmt.texture_label_with_key(&tex, "destination");
+                }
+            }
+            _ => {}
+        };
+    }
+}
 /// Error encountered while attempting to do a copy on a command encoder.
 #[derive(Clone, Debug, Error)]
 pub enum CopyError {

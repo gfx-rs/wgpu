@@ -14,6 +14,7 @@ pub use self::query::*;
 pub use self::render::*;
 pub use self::transfer::*;
 
+use crate::error::{ErrorFormatter, PrettyError};
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
@@ -498,4 +499,41 @@ pub enum PassErrorScope {
     },
     #[error("In a pop_debug_group command")]
     PopDebugGroup,
+}
+
+impl PrettyError for PassErrorScope {
+    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
+        // This error is not in the error chain, only notes are needed
+        match *self {
+            Self::Pass(id) => {
+                fmt.command_buffer_label(&id);
+            }
+            Self::SetBindGroup(id) => {
+                fmt.bind_group_label(&id);
+            }
+            Self::SetPipelineRender(id) => {
+                fmt.render_pipeline_label(&id);
+            }
+            Self::SetPipelineCompute(id) => {
+                fmt.compute_pipeline_label(&id);
+            }
+            Self::SetVertexBuffer(id) => {
+                fmt.buffer_label(&id);
+            }
+            Self::SetIndexBuffer(id) => {
+                fmt.buffer_label(&id);
+            }
+            Self::Draw {
+                pipeline: Some(id), ..
+            } => {
+                fmt.render_pipeline_label(&id);
+            }
+            Self::Dispatch {
+                pipeline: Some(id), ..
+            } => {
+                fmt.compute_pipeline_label(&id);
+            }
+            _ => {}
+        }
+    }
 }

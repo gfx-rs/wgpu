@@ -34,6 +34,7 @@ pub mod binding_model;
 pub mod command;
 mod conv;
 pub mod device;
+pub mod error;
 pub mod hub;
 pub mod id;
 pub mod instance;
