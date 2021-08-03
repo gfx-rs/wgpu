@@ -1,9 +1,0 @@
-status = [
-  "Windows x86_64",
-  "MacOS x86_64",
-  "IOS aarch64",
-  "Linux x86_64",
-  "Android aarch64",
-  "WebAssembly",
-  "Format",
-]
