@@ -4,7 +4,7 @@ struct InOutBuffer {
 };
 
 [[group(0), binding(0)]]
-var<storage> buffer: [[access(read_write)]] InOutBuffer;
+var<storage, read_write> buffer: InOutBuffer;
 
 [[stage(compute), workgroup_size(1)]]
 fn main([[builtin(global_invocation_id)]] global_id: vec3<u32>) {

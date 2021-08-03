@@ -114,10 +114,14 @@ impl super::Device {
                     Some(ref br) => br.clone(),
                     None => continue,
                 };
-                // check for an immutable buffer
-                if !ep_info[var_handle].is_empty()
-                    && !var.storage_access.contains(naga::StorageAccess::STORE)
+                let storage_access_store = if let naga::StorageClass::Storage { access } = var.class
                 {
+                    access.contains(naga::StorageAccess::STORE)
+                } else {
+                    false
+                };
+                // check for an immutable buffer
+                if !ep_info[var_handle].is_empty() && !storage_access_store {
                     let psm = &layout.naga_options.per_stage_map[naga_stage];
                     let slot = psm.resources[&br].buffer.unwrap();
                     immutable_buffer_mask |= 1 << slot;
