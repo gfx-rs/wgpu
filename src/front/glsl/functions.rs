@@ -297,9 +297,10 @@ impl Program<'_> {
                 if args.len() != 2 {
                     return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
                 }
-                let expr = sampled_to_depth(&mut self.module, ctx, args[0], body)?;
-                ctx.samplers.insert(expr, args[1].0);
-                Ok(Some(expr))
+                sampled_to_depth(&mut self.module, ctx, args[0])?;
+                self.invalidate_expression(ctx, args[0].0, args[0].1)?;
+                ctx.samplers.insert(args[0].0, args[1].0);
+                Ok(Some(args[0].0))
             }
             "texture" => {
                 if !(2..=3).contains(&args.len()) {
@@ -818,11 +819,12 @@ impl Program<'_> {
 
                     let mut exact = true;
 
-                    for ((i, decl_arg), mut call_arg) in
-                        decl.parameters.iter().enumerate().zip(args.iter().copied())
+                    for ((i, decl_arg), call_arg) in
+                        decl.parameters.iter().enumerate().zip(args.iter())
                     {
                         if decl.parameters_info[i].depth {
-                            call_arg.0 = sampled_to_depth(&mut self.module, ctx, call_arg, body)?;
+                            sampled_to_depth(&mut self.module, ctx, *call_arg)?;
+                            self.invalidate_expression(ctx, call_arg.0, call_arg.1)?
                         }
 
                         let decl_inner = &self.module.types[*decl_arg].inner;
@@ -1414,15 +1416,11 @@ impl Program<'_> {
 
 /// Helper function to cast a expression holding a sampled image to a
 /// depth image.
-///
-/// Creates a new expression to make sure the typifier doesn't return a
-/// cached evaluation.
 fn sampled_to_depth(
     module: &mut Module,
     ctx: &mut Context,
     (image, meta): (Handle<Expression>, SourceMetadata),
-    body: &mut Block,
-) -> Result<Handle<Expression>, ErrorKind> {
+) -> Result<(), ErrorKind> {
     let ty = match ctx[image] {
         Expression::GlobalVariable(handle) => &mut module.global_variables.get_mut(handle).ty,
         Expression::FunctionArgument(i) => {
@@ -1458,15 +1456,5 @@ fn sampled_to_depth(
         _ => return Err(ErrorKind::SemanticError(meta, "Not a texture".into())),
     };
 
-    // Add a new expression to not have problems with the Typifier
-    // caching the old type
-    Ok(match ctx[image] {
-        Expression::GlobalVariable(handle) => {
-            ctx.add_expression(Expression::GlobalVariable(handle), body)
-        }
-        Expression::FunctionArgument(i) => {
-            ctx.add_expression(Expression::FunctionArgument(i), body)
-        }
-        _ => unreachable!(),
-    })
+    Ok(())
 }

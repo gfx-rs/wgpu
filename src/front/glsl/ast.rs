@@ -163,6 +163,30 @@ impl<'a> Program<'a> {
         Ok(context.typifier.get(handle, &self.module.types))
     }
 
+    /// Invalidates the cached type resolution for `handle` forcing a recomputation
+    pub fn invalidate_expression<'b>(
+        &'b self,
+        context: &'b mut Context,
+        handle: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<(), ErrorKind> {
+        let resolve_ctx = ResolveContext {
+            constants: &self.module.constants,
+            types: &self.module.types,
+            global_vars: &self.module.global_variables,
+            local_vars: context.locals,
+            functions: &self.module.functions,
+            arguments: context.arguments,
+        };
+
+        context
+            .typifier
+            .invalidate(handle, context.expressions, &resolve_ctx)
+            .map_err(|error| {
+                ErrorKind::SemanticError(meta, format!("Can't resolve type: {:?}", error).into())
+            })
+    }
+
     pub fn solve_constant(
         &mut self,
         ctx: &Context,

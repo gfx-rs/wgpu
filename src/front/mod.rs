@@ -85,6 +85,26 @@ impl Typifier {
         }
         Ok(())
     }
+
+    /// Invalidates the cached type resolution for `epxr_handle` forcing a recomputation
+    ///
+    /// If the type of the expression hasn't yet been calculated a
+    /// [`grow`](Self::grow) is performed instead
+    pub fn invalidate(
+        &mut self,
+        expr_handle: Handle<crate::Expression>,
+        expressions: &Arena<crate::Expression>,
+        ctx: &ResolveContext,
+    ) -> Result<(), ResolveError> {
+        if self.resolutions.len() <= expr_handle.index() {
+            self.grow(expr_handle, expressions, ctx)
+        } else {
+            let expr = &expressions[expr_handle];
+            let resolution = ctx.resolve(expr, |h| &self.resolutions[h.index()])?;
+            self.resolutions[expr_handle.index()] = resolution;
+            Ok(())
+        }
+    }
 }
 
 impl ops::Index<Handle<crate::Expression>> for Typifier {
