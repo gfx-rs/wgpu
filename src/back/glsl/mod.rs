@@ -2115,12 +2115,30 @@ impl<'a, W: Write> Writer<'a, W> {
                 accept,
                 reject,
             } => {
-                write!(self.out, "(")?;
-                self.write_expr(condition, ctx)?;
-                write!(self.out, " ? ")?;
-                self.write_expr(accept, ctx)?;
-                write!(self.out, " : ")?;
-                self.write_expr(reject, ctx)?;
+                let cond_ty = ctx.info[condition].ty.inner_with(&self.module.types);
+                let vec_select = if let TypeInner::Vector { .. } = *cond_ty {
+                    true
+                } else {
+                    false
+                };
+
+                // TODO: Boolean mix on desktop required GL_EXT_shader_integer_mix
+                if vec_select {
+                    write!(self.out, "mix(")?;
+                    self.write_expr(accept, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(reject, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(condition, ctx)?;
+                } else {
+                    write!(self.out, "(")?;
+                    self.write_expr(condition, ctx)?;
+                    write!(self.out, " ? ")?;
+                    self.write_expr(accept, ctx)?;
+                    write!(self.out, " : ")?;
+                    self.write_expr(reject, ctx)?;
+                }
+
                 write!(self.out, ")")?
             }
             // `Derivative` is a function call to a glsl provided function
