@@ -163,7 +163,7 @@ impl<'a> Error<'a> {
                         ExpectedToken::PrimaryExpression => "expression".to_string(),
                         ExpectedToken::AttributeSeparator => "attribute separator (',') or an end of the attribute list (']]')".to_string(),
                         ExpectedToken::FieldName => "field name or a closing curly bracket to signify the end of the struct".to_string(),
-                        ExpectedToken::TypeAttribute => "type attribute ('access' or 'stride') or an end of the attribute list (']]')".to_string(),
+                        ExpectedToken::TypeAttribute => "type attribute ('stride') or an end of the attribute list (']]')".to_string(),
                         ExpectedToken::Statement => "statement".to_string(),
                         ExpectedToken::SwitchItem => "switch item ('case' or 'default') or a closing curly bracket to signify the end of the switch statement ('}')".to_string(),
                         ExpectedToken::WorkgroupSizeSeparator => "workgroup size separator (',') or a closing parenthesis".to_string(),
