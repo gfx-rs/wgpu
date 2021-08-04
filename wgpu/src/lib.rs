@@ -199,6 +199,11 @@ trait Context: Debug + Send + Sized + Sync {
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
     fn instance_poll_all_devices(&self, force_wait: bool);
+    fn adapter_is_surface_supported(
+        &self,
+        adapter: &Self::AdapterId,
+        surface: &Self::SurfaceId,
+    ) -> bool;
     fn adapter_get_swap_chain_preferred_format(
         &self,
         adapter: &Self::AdapterId,
@@ -1562,6 +1567,11 @@ impl Adapter {
                     },
                 )
             })
+    }
+
+    /// Returns whether this adapter may present to the passed surface.
+    pub fn is_surface_supported(&self, surface: &Surface) -> bool {
+        Context::adapter_is_surface_supported(&*self.context, &self.id, &surface.id)
     }
 
     /// Returns an optimal texture format to use for the [`SwapChain`] with this adapter.
