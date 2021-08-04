@@ -2545,6 +2545,24 @@ impl<G: GlobalIdentityHandlerFactory> ImplicitPipelineIds<'_, G> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    pub fn adapter_is_surface_supported<A: HalApi>(
+        &self,
+        adapter_id: id::AdapterId,
+        surface_id: id::SurfaceId,
+    ) -> Result<bool, instance::IsSurfaceSupportedError> {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+        let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
+        let adapter = adapter_guard
+            .get(adapter_id)
+            .map_err(|_| instance::IsSurfaceSupportedError::InvalidAdapter)?;
+        let surface = surface_guard
+            .get_mut(surface_id)
+            .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
+        Ok(adapter.is_surface_supported(surface))
+    }
     pub fn adapter_get_swap_chain_preferred_format<A: HalApi>(
         &self,
         adapter_id: id::AdapterId,

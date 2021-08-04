@@ -795,6 +795,18 @@ impl crate::Context for Context {
         ready(Ok((device, device_id)))
     }
 
+    fn adapter_is_surface_supported(
+        &self,
+        adapter: &Self::AdapterId,
+        surface: &Self::SurfaceId,
+    ) -> bool {
+        let global = &self.0;
+        match wgc::gfx_select!(adapter => global.adapter_is_surface_supported(*adapter, *surface)) {
+            Ok(result) => result,
+            Err(err) => self.handle_error_fatal(err, "Adapter::is_surface_supported"),
+        }
+    }
+
     fn adapter_get_swap_chain_preferred_format(
         &self,
         adapter: &Self::AdapterId,

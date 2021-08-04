@@ -181,6 +181,15 @@ impl<A: HalApi> Adapter<A> {
         }
     }
 
+    pub fn is_surface_supported(&self, surface: &mut Surface) -> bool {
+        unsafe {
+            self.raw
+                .adapter
+                .surface_capabilities(A::get_surface_mut(surface))
+        }
+        .is_some()
+    }
+
     pub fn get_swap_chain_preferred_format(
         &self,
         surface: &mut Surface,
@@ -342,6 +351,14 @@ impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum IsSurfaceSupportedError {
+    #[error("invalid adapter")]
+    InvalidAdapter,
+    #[error("invalid surface")]
+    InvalidSurface,
 }
 
 #[derive(Clone, Debug, Error)]
