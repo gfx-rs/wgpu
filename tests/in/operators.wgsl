@@ -8,6 +8,7 @@ fn builtins() -> vec4<f32> {
     let condition = true;
     let s1 = select(0, 1, condition);
     let s2 = select(v_f32_zero, v_f32_one, condition);
+    let s3 = select(v_f32_one, v_f32_zero, vec4<bool>(false, false, false, false));
     // mix()
     let m1 = mix(v_f32_zero, v_f32_one, v_f32_half);
     let m2 = mix(v_f32_zero, v_f32_one, 0.1);

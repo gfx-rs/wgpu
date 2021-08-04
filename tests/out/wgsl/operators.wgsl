@@ -4,6 +4,7 @@ let v_f32_half: vec4<f32> = vec4<f32>(0.5, 0.5, 0.5, 0.5);
 fn builtins() -> vec4<f32> {
     let s1_: i32 = select(0, 1, true);
     let s2_: vec4<f32> = select(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), true);
+    let s3_: vec4<f32> = select(vec4<f32>(1.0, 1.0, 1.0, 1.0), vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<bool>(false, false, false, false));
     let m1_: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), vec4<f32>(0.5, 0.5, 0.5, 0.5));
     let m2_: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), 0.1);
     return (((vec4<f32>(vec4<i32>(s1_)) + s2_) + m1_) + m2_);
