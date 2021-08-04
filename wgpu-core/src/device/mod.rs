@@ -15,6 +15,7 @@ use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
 use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
+use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
 
@@ -109,7 +110,31 @@ impl RenderPassContext {
     }
 }
 
-type BufferMapPendingCallback = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
+pub type BufferMapPendingClosure = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
+
+#[derive(Default)]
+pub struct UserClosures {
+    pub mappings: Vec<BufferMapPendingClosure>,
+    pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
+}
+
+impl UserClosures {
+    fn extend(&mut self, other: UserClosures) {
+        self.mappings.extend(other.mappings);
+        self.submissions.extend(other.submissions);
+    }
+
+    unsafe fn fire(self) {
+        //Note: this logic is specifically moved out of `handle_mapping()` in order to
+        // have nothing locked by the time we execute users callback code.
+        for (operation, status) in self.mappings {
+            (operation.callback)(status, operation.user_data);
+        }
+        for closure in self.submissions {
+            (closure.callback)(closure.user_data);
+        }
+    }
+}
 
 fn map_buffer<A: hal::Api>(
     raw: &A::Device,
@@ -167,14 +192,6 @@ fn map_buffer<A: hal::Api>(
     }
 
     Ok(mapping.ptr)
-}
-
-//Note: this logic is specifically moved out of `handle_mapping()` in order to
-// have nothing locked by the time we execute users callback code.
-fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callbacks: I) {
-    for (operation, status) in callbacks {
-        unsafe { (operation.callback)(status, operation.user_data) }
-    }
 }
 
 struct CommandAllocator<A: hal::Api> {
@@ -356,7 +373,7 @@ impl<A: HalApi> Device<A> {
         hub: &Hub<A, G>,
         force_wait: bool,
         token: &mut Token<'token, Self>,
-    ) -> Result<Vec<BufferMapPendingCallback>, WaitIdleError> {
+    ) -> Result<UserClosures, WaitIdleError> {
         profiling::scope!("maintain", "Device");
         let mut life_tracker = self.lock_life(token);
 
@@ -389,11 +406,15 @@ impl<A: HalApi> Device<A> {
             }
         };
 
-        life_tracker.triage_submissions(last_done_index, &self.command_allocator);
-        let callbacks = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
+        let submission_closures =
+            life_tracker.triage_submissions(last_done_index, &self.command_allocator);
+        let mapping_closures = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw);
 
-        Ok(callbacks)
+        Ok(UserClosures {
+            mappings: mapping_closures,
+            submissions: submission_closures,
+        })
     }
 
     fn untrack<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
@@ -2380,8 +2401,13 @@ impl<A: HalApi> Device<A> {
                     .wait(&self.fence, submission_index, !0)
                     .map_err(DeviceError::from)?
             };
-            self.lock_life(token)
+            let closures = self
+                .lock_life(token)
                 .triage_submissions(submission_index, &self.command_allocator);
+            assert!(
+                closures.is_empty(),
+                "wait_for_submit is not expected to work with closures"
+            );
         }
         Ok(())
     }
@@ -2462,7 +2488,7 @@ impl<A: hal::Api> Device<A> {
         if let Err(error) = unsafe { self.raw.wait(&self.fence, current_index, CLEANUP_WAIT_MS) } {
             log::error!("failed to wait for the device: {:?}", error);
         }
-        life_tracker.triage_submissions(current_index, &self.command_allocator);
+        let _ = life_tracker.triage_submissions(current_index, &self.command_allocator);
         life_tracker.cleanup(&self.raw);
     }
 
@@ -4433,23 +4459,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         force_wait: bool,
     ) -> Result<(), WaitIdleError> {
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let callbacks = {
+        let closures = {
+            let hub = A::hub(self);
+            let mut token = Token::root();
             let (device_guard, mut token) = hub.devices.read(&mut token);
             device_guard
                 .get(device_id)
                 .map_err(|_| DeviceError::Invalid)?
                 .maintain(hub, force_wait, &mut token)?
         };
-        fire_map_callbacks(callbacks);
+        unsafe {
+            closures.fire();
+        }
         Ok(())
     }
 
     fn poll_devices<A: HalApi>(
         &self,
         force_wait: bool,
-        callbacks: &mut Vec<BufferMapPendingCallback>,
+        closures: &mut UserClosures,
     ) -> Result<(), WaitIdleError> {
         profiling::scope!("poll_devices");
 
@@ -4458,32 +4486,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         for (_, device) in device_guard.iter(A::VARIANT) {
             let cbs = device.maintain(hub, force_wait, &mut token)?;
-            callbacks.extend(cbs);
+            closures.extend(cbs);
         }
         Ok(())
     }
 
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<(), WaitIdleError> {
-        let mut callbacks = Vec::new();
+        let mut closures = UserClosures::default();
 
         #[cfg(vulkan)]
         {
-            self.poll_devices::<hal::api::Vulkan>(force_wait, &mut callbacks)?;
+            self.poll_devices::<hal::api::Vulkan>(force_wait, &mut closures)?;
         }
         #[cfg(metal)]
         {
-            self.poll_devices::<hal::api::Metal>(force_wait, &mut callbacks)?;
+            self.poll_devices::<hal::api::Metal>(force_wait, &mut closures)?;
         }
         #[cfg(dx12)]
         {
-            self.poll_devices::<hal::api::Dx12>(force_wait, &mut callbacks)?;
+            self.poll_devices::<hal::api::Dx12>(force_wait, &mut closures)?;
         }
         #[cfg(dx11)]
         {
-            self.poll_devices::<hal::api::Dx11>(force_wait, &mut callbacks)?;
+            self.poll_devices::<hal::api::Dx11>(force_wait, &mut closures)?;
         }
 
-        fire_map_callbacks(callbacks);
+        unsafe {
+            closures.fire();
+        }
 
         Ok(())
     }
@@ -4659,7 +4689,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     fn buffer_unmap_inner<A: HalApi>(
         &self,
         buffer_id: id::BufferId,
-    ) -> Result<Option<BufferMapPendingCallback>, resource::BufferAccessError> {
+    ) -> Result<Option<BufferMapPendingClosure>, resource::BufferAccessError> {
         profiling::scope!("unmap", "Buffer");
 
         let hub = A::hub(self);
@@ -4773,8 +4803,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
     ) -> Result<(), resource::BufferAccessError> {
-        self.buffer_unmap_inner::<A>(buffer_id)
-            //Note: outside inner function so no locks are held when calling the callback
-            .map(|pending_callback| fire_map_callbacks(pending_callback.into_iter()))
+        //Note: outside inner function so no locks are held when calling the callback
+        let closure = self.buffer_unmap_inner::<A>(buffer_id)?;
+        if let Some((operation, status)) = closure {
+            unsafe {
+                (operation.callback)(status, operation.user_data);
+            }
+        }
+        Ok(())
     }
 }
