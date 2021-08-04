@@ -955,6 +955,14 @@ impl crate::Context for Context {
         Sendable(context.into())
     }
 
+    fn adapter_is_surface_supported(
+        &self,
+        _adapter: &Self::AdapterId,
+        _surface: &Self::SurfaceId,
+    ) -> bool {
+        true
+    }
+
     fn instance_request_adapter(
         &self,
         options: &crate::RequestAdapterOptions<'_>,
