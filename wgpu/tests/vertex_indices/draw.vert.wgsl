@@ -4,7 +4,7 @@ struct Indices {
 }; // this is used as both input and output for convenience
 
 [[group(0), binding(0)]]
-var<storage> indices: [[access(read_write)]] Indices;
+var<storage, read_write> indices: Indices;
 
 [[stage(vertex)]]
 fn vs_main([[builtin(instance_index)]] instance: u32, [[builtin(vertex_index)]] index: u32) -> [[builtin(position)]] vec4<f32> {

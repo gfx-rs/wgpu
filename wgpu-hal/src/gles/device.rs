@@ -28,7 +28,7 @@ impl CompilationContext<'_> {
             }
             let register = match var.class {
                 naga::StorageClass::Uniform => super::BindingRegister::UniformBuffers,
-                naga::StorageClass::Storage => super::BindingRegister::StorageBuffers,
+                naga::StorageClass::Storage { .. } => super::BindingRegister::StorageBuffers,
                 _ => continue,
             };
 
@@ -48,10 +48,12 @@ impl CompilationContext<'_> {
 
         for (name, mapping) in reflection_info.texture_mapping {
             let var = &module.global_variables[mapping.texture];
-            let register = if var.storage_access.is_empty() {
-                super::BindingRegister::Textures
-            } else {
-                super::BindingRegister::Images
+            let register = match module.types[var.ty].inner {
+                naga::TypeInner::Image {
+                    class: naga::ImageClass::Storage { .. },
+                    ..
+                } => super::BindingRegister::Images,
+                _ => super::BindingRegister::Textures,
             };
 
             let tex_br = var.binding.as_ref().unwrap();
