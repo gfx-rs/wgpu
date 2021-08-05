@@ -26,3 +26,15 @@ pub fn write_string(
     let output = w.finish();
     Ok(output)
 }
+
+impl crate::BinaryOperator {
+    fn to_wgsl_atomic_suffix(self) -> &'static str {
+        match self {
+            Self::Add => "Add",
+            Self::And => "And",
+            Self::InclusiveOr => "Or",
+            Self::ExclusiveOr => "Xor",
+            _ => unreachable!(),
+        }
+    }
+}

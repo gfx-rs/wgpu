@@ -15,6 +15,10 @@ type BackendResult = Result<(), Error>;
 
 const NAMESPACE: &str = "metal";
 const WRAPPED_ARRAY_FIELD: &str = "inner";
+// This is a hack: we need to pass a pointer to an atomic,
+// but generally the backend isn't putting "&" in front of every pointer.
+// Some more general handling of pointers is needed to be implemented here.
+const ATOMIC_REFERENCE: &str = "&";
 
 #[derive(Clone)]
 struct Level(usize);
@@ -26,6 +30,18 @@ impl Level {
 impl Display for Level {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         (0..self.0).try_for_each(|_| formatter.write_str(back::INDENT))
+    }
+}
+
+impl crate::BinaryOperator {
+    fn to_msl_atomic_str(self) -> &'static str {
+        match self {
+            Self::Add => "add",
+            Self::And => "and",
+            Self::InclusiveOr => "or",
+            Self::ExclusiveOr => "xor",
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -46,16 +62,18 @@ impl<'a> Display for TypeContext<'a> {
         }
 
         match ty.inner {
-            // work around Metal toolchain bug with `uint` typedef
             crate::TypeInner::Scalar { kind, .. } => {
-                let kind_str = match kind {
-                    crate::ScalarKind::Uint => "metal::uint",
-                    _ => scalar_kind_string(kind),
-                };
-                write!(out, "{}", kind_str)
+                match kind {
+                    // work around Metal toolchain bug with `uint` typedef
+                    crate::ScalarKind::Uint => write!(out, "{}::uint", NAMESPACE),
+                    _ => {
+                        let kind_str = scalar_kind_string(kind);
+                        write!(out, "{}", kind_str)
+                    }
+                }
             }
             crate::TypeInner::Atomic { kind, .. } => {
-                write!(out, "atomic_{}", scalar_kind_string(kind))
+                write!(out, "{}::atomic_{}", NAMESPACE, scalar_kind_string(kind))
             }
             crate::TypeInner::Vector { size, kind, .. } => {
                 write!(
@@ -711,6 +729,25 @@ impl<W: Write> Writer<W> {
         }
     }
 
+    fn put_atomic_fetch(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        key: &str,
+        value: Handle<crate::Expression>,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        write!(
+            self.out,
+            "{}::atomic_fetch_{}_explicit({}",
+            NAMESPACE, key, ATOMIC_REFERENCE
+        )?;
+        self.put_expression(pointer, context, true)?;
+        write!(self.out, ", ")?;
+        self.put_expression(value, context, true)?;
+        write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
+        Ok(())
+    }
+
     fn put_expression(
         &mut self,
         expr_handle: Handle<crate::Expression>,
@@ -852,13 +889,11 @@ impl<W: Write> Writer<W> {
                 // matrices, we wrap them with `float3` on load.
                 let wrap_packed_vec_scalar_kind = match context.function.expressions[pointer] {
                     crate::Expression::AccessIndex { base, index } => {
-                        let ty = match context.resolve_type(base) {
-                            &crate::TypeInner::Pointer { base, .. } => {
+                        let ty = match *context.resolve_type(base) {
+                            crate::TypeInner::Pointer { base, .. } => {
                                 &context.module.types[base].inner
                             }
-                            // This path is unexpected and shouldn't happen, but it's easier
-                            // to leave in.
-                            ty => ty,
+                            ref ty => ty,
                         };
                         match *ty {
                             crate::TypeInner::Struct {
@@ -874,6 +909,15 @@ impl<W: Write> Writer<W> {
                     }
                     _ => None,
                 };
+                let is_atomic = match *context.resolve_type(pointer) {
+                    crate::TypeInner::Pointer { base, .. } => {
+                        match context.module.types[base].inner {
+                            crate::TypeInner::Atomic { .. } => true,
+                            _ => false,
+                        }
+                    }
+                    _ => false,
+                };
 
                 if let Some(scalar_kind) = wrap_packed_vec_scalar_kind {
                     write!(
@@ -884,6 +928,14 @@ impl<W: Write> Writer<W> {
                     )?;
                     self.put_expression(pointer, context, true)?;
                     write!(self.out, ")")?;
+                } else if is_atomic {
+                    write!(
+                        self.out,
+                        "{}::atomic_load_explicit({}",
+                        NAMESPACE, ATOMIC_REFERENCE
+                    )?;
+                    self.put_expression(pointer, context, true)?;
+                    write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
                 } else {
                     // We don't do any dereferencing with `*` here as pointer arguments to functions
                     // are done by `&` references and not `*` pointers. These do not need to be
@@ -1004,6 +1056,17 @@ impl<W: Write> Writer<W> {
                     }
                 }
             }
+            crate::Expression::Atomic { pointer, fun } => match fun {
+                crate::AtomicFunction::Binary { op, value } => {
+                    self.put_atomic_fetch(pointer, op.to_msl_atomic_str(), value, context)?;
+                }
+                crate::AtomicFunction::Min(value) => {
+                    self.put_atomic_fetch(pointer, "min", value, context)?;
+                }
+                crate::AtomicFunction::Max(value) => {
+                    self.put_atomic_fetch(pointer, "max", value, context)?;
+                }
+            },
             crate::Expression::Select {
                 condition,
                 accept,
@@ -1461,39 +1524,48 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 crate::Statement::Store { pointer, value } => {
-                    // we can't assign fixed-size arrays
                     let pointer_info = &context.expression.info[pointer];
-                    let array_size =
+                    let (array_size, is_atomic) =
                         match *pointer_info.ty.inner_with(&context.expression.module.types) {
                             crate::TypeInner::Pointer { base, .. } => {
                                 match context.expression.module.types[base].inner {
                                     crate::TypeInner::Array {
                                         size: crate::ArraySize::Constant(ch),
                                         ..
-                                    } => Some(ch),
-                                    _ => None,
+                                    } => (Some(ch), false),
+                                    crate::TypeInner::Atomic { .. } => (None, true),
+                                    _ => (None, false),
                                 }
                             }
-                            _ => None,
+                            _ => (None, false),
                         };
-                    match array_size {
-                        Some(const_handle) => {
-                            let size = context.expression.module.constants[const_handle]
-                                .to_array_length()
-                                .unwrap();
-                            write!(self.out, "{}for(int _i=0; _i<{}; ++_i) ", level, size)?;
-                            self.put_expression(pointer, &context.expression, true)?;
-                            write!(self.out, ".{}[_i] = ", WRAPPED_ARRAY_FIELD)?;
-                            self.put_expression(value, &context.expression, true)?;
-                            writeln!(self.out, ".{}[_i];", WRAPPED_ARRAY_FIELD)?;
-                        }
-                        None => {
-                            write!(self.out, "{}", level)?;
-                            self.put_expression(pointer, &context.expression, true)?;
-                            write!(self.out, " = ")?;
-                            self.put_expression(value, &context.expression, true)?;
-                            writeln!(self.out, ";")?;
-                        }
+
+                    // we can't assign fixed-size arrays
+                    if let Some(const_handle) = array_size {
+                        let size = context.expression.module.constants[const_handle]
+                            .to_array_length()
+                            .unwrap();
+                        write!(self.out, "{}for(int _i=0; _i<{}; ++_i) ", level, size)?;
+                        self.put_expression(pointer, &context.expression, true)?;
+                        write!(self.out, ".{}[_i] = ", WRAPPED_ARRAY_FIELD)?;
+                        self.put_expression(value, &context.expression, true)?;
+                        writeln!(self.out, ".{}[_i];", WRAPPED_ARRAY_FIELD)?;
+                    } else if is_atomic {
+                        write!(
+                            self.out,
+                            "{}{}::atomic_store_explicit({}",
+                            level, NAMESPACE, ATOMIC_REFERENCE
+                        )?;
+                        self.put_expression(pointer, &context.expression, true)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(value, &context.expression, true)?;
+                        writeln!(self.out, ", {}::memory_order_relaxed);", NAMESPACE)?;
+                    } else {
+                        write!(self.out, "{}", level)?;
+                        self.put_expression(pointer, &context.expression, true)?;
+                        write!(self.out, " = ")?;
+                        self.put_expression(value, &context.expression, true)?;
+                        writeln!(self.out, ";")?;
                     }
                 }
                 crate::Statement::ImageStore {

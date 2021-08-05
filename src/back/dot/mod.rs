@@ -9,7 +9,10 @@ use crate::{
     valid::{FunctionInfo, ModuleInfo},
 };
 
-use std::fmt::{Error as FmtError, Write as _};
+use std::{
+    borrow::Cow,
+    fmt::{Error as FmtError, Write as _},
+};
 
 #[derive(Default)]
 struct StatementGraph {
@@ -267,9 +270,9 @@ fn write_fun(
                         if let Some(expr) = level {
                             edges.insert("level", expr);
                         }
-                        std::borrow::Cow::from("ImageSize")
+                        Cow::from("ImageSize")
                     }
-                    _ => format!("{:?}", query).into(),
+                    _ => Cow::Owned(format!("{:?}", query)),
                 };
                 (args, 7)
             }
@@ -281,6 +284,24 @@ fn write_fun(
                 edges.insert("left", left);
                 edges.insert("right", right);
                 (format!("{:?}", op).into(), 6)
+            }
+            E::Atomic { pointer, fun } => {
+                edges.insert("pointer", pointer);
+                let description = match fun {
+                    crate::AtomicFunction::Binary { op, value } => {
+                        edges.insert("value", value);
+                        Cow::Owned(format!("{:?}", op))
+                    }
+                    crate::AtomicFunction::Min(value) => {
+                        edges.insert("value", value);
+                        Cow::Borrowed("Min")
+                    }
+                    crate::AtomicFunction::Max(value) => {
+                        edges.insert("value", value);
+                        Cow::Borrowed("Max")
+                    }
+                };
+                (description, 3)
             }
             E::Select {
                 condition,

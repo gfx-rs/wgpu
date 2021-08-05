@@ -25,6 +25,8 @@ pub enum ConstantSolvingError {
     ArrayLengthDynamic,
     #[error("Constants cannot call functions")]
     Call,
+    #[error("Constants don't support atomic functions")]
+    Atomic,
     #[error("Constants don't support relational functions")]
     Relational,
     #[error("Constants don't support derivative functions")]
@@ -231,6 +233,7 @@ impl<'a> ConstantSolver<'a> {
             }
 
             Expression::Load { .. } => Err(ConstantSolvingError::Load),
+            Expression::Atomic { .. } => Err(ConstantSolvingError::Atomic),
             Expression::Select { .. } => Err(ConstantSolvingError::Select),
             Expression::LocalVariable(_) => Err(ConstantSolvingError::LocalVariable),
             Expression::Derivative { .. } => Err(ConstantSolvingError::Derivative),

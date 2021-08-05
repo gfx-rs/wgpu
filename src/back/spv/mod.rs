@@ -211,12 +211,14 @@ struct LookupFunctionType {
 
 fn make_local(inner: &crate::TypeInner) -> Option<LocalType> {
     Some(match *inner {
-        crate::TypeInner::Scalar { kind, width } => LocalType::Value {
-            vector_size: None,
-            kind,
-            width,
-            pointer_class: None,
-        },
+        crate::TypeInner::Scalar { kind, width } | crate::TypeInner::Atomic { kind, width } => {
+            LocalType::Value {
+                vector_size: None,
+                kind,
+                width,
+                pointer_class: None,
+            }
+        }
         crate::TypeInner::Vector { size, kind, width } => LocalType::Value {
             vector_size: Some(size),
             kind,
@@ -365,6 +367,11 @@ impl BlockContext<'_> {
     fn get_index_constant(&mut self, index: Word) -> Result<Word, Error> {
         self.writer
             .get_constant_scalar(crate::ScalarValue::Uint(index as _), 4)
+    }
+
+    fn get_scope_constant(&mut self, scope: Word) -> Result<Word, Error> {
+        self.writer
+            .get_constant_scalar(crate::ScalarValue::Sint(scope as _), 4)
     }
 }
 

@@ -399,7 +399,10 @@ impl super::Validator {
                         _ => {}
                     }
                     let good = match *context.resolve_pointer_type(pointer)? {
-                        Ti::Pointer { base, class: _ } => *value_ty == context.types[base].inner,
+                        Ti::Pointer { base, class: _ } => match context.types[base].inner {
+                            Ti::Atomic { kind, width } => *value_ty == Ti::Scalar { kind, width },
+                            ref other => value_ty == other,
+                        },
                         Ti::ValuePointer {
                             size: Some(size),
                             kind,

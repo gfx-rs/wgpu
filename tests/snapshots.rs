@@ -421,7 +421,8 @@ fn convert_wgsl() {
         ),
         (
             "access",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+            //TODO: atomics on HLSL
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
             "control-flow",

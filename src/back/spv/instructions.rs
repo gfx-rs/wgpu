@@ -439,19 +439,49 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn atomic_load(
+        result_type_id: Word,
+        id: Word,
+        pointer_id: Word,
+        scope_id: Word,
+        semantics_id: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::AtomicLoad);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(pointer_id);
+        instruction.add_operand(scope_id);
+        instruction.add_operand(semantics_id);
+        instruction
+    }
+
     pub(super) fn store(
         pointer_id: Word,
-        object_id: Word,
+        value_id: Word,
         memory_access: Option<spirv::MemoryAccess>,
     ) -> Self {
         let mut instruction = Self::new(Op::Store);
         instruction.add_operand(pointer_id);
-        instruction.add_operand(object_id);
+        instruction.add_operand(value_id);
 
         if let Some(memory_access) = memory_access {
             instruction.add_operand(memory_access.bits());
         }
 
+        instruction
+    }
+
+    pub(super) fn atomic_store(
+        pointer_id: Word,
+        scope_id: Word,
+        semantics_id: Word,
+        value_id: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::AtomicStore);
+        instruction.add_operand(pointer_id);
+        instruction.add_operand(scope_id);
+        instruction.add_operand(semantics_id);
+        instruction.add_operand(value_id);
         instruction
     }
 
@@ -731,6 +761,25 @@ impl super::Instruction {
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(expr_id);
+        instruction
+    }
+
+    pub(super) fn atomic_binary(
+        op: Op,
+        result_type_id: Word,
+        id: Word,
+        pointer: Word,
+        scope_id: Word,
+        semantics_id: Word,
+        operand: Word,
+    ) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(pointer);
+        instruction.add_operand(scope_id);
+        instruction.add_operand(semantics_id);
+        instruction.add_operand(operand);
         instruction
     }
 

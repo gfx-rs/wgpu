@@ -498,6 +498,9 @@ impl<W: Write> Writer<W> {
             TypeInner::Scalar { kind, .. } => {
                 write!(self.out, "{}", scalar_kind_str(kind))?;
             }
+            TypeInner::Atomic { kind, .. } => {
+                write!(self.out, "atomic<{}>", scalar_kind_str(kind))?;
+            }
             TypeInner::Array { base, size, .. } => {
                 // More info https://gpuweb.github.io/gpuweb/wgsl/#array-types
                 // array<A, 3> -- Constant array
@@ -919,6 +922,29 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, right, func_ctx)?;
                 write!(self.out, ")")?;
             }
+            Expression::Atomic { pointer, fun } => match fun {
+                crate::AtomicFunction::Binary { op, value } => {
+                    write!(self.out, "atomic{}(", op.to_wgsl_atomic_suffix())?;
+                    self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    write!(self.out, ")")?;
+                }
+                crate::AtomicFunction::Min(value) => {
+                    write!(self.out, "atomicMin(")?;
+                    self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    write!(self.out, ")")?;
+                }
+                crate::AtomicFunction::Max(value) => {
+                    write!(self.out, "atomicMax(")?;
+                    self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    write!(self.out, ")")?;
+                }
+            },
             // TODO: copy-paste from glsl-out
             Expression::Access { base, index } => {
                 self.write_expr(module, base, func_ctx)?;

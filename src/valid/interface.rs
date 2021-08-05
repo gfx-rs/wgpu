@@ -338,6 +338,7 @@ impl super::Validator {
                 }
                 (
                     TypeFlags::DATA
+                        | TypeFlags::COPY
                         | TypeFlags::SIZED
                         | TypeFlags::HOST_SHARED
                         | TypeFlags::TOP_LEVEL,
@@ -361,7 +362,7 @@ impl super::Validator {
                     ));
                 }
                 (
-                    TypeFlags::DATA | TypeFlags::HOST_SHARED | TypeFlags::SIZED,
+                    TypeFlags::DATA | TypeFlags::COPY | TypeFlags::HOST_SHARED | TypeFlags::SIZED,
                     false,
                 )
             }

@@ -532,6 +532,17 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(left).or(self.add_ref(right)),
                 requirements: UniformityRequirements::empty(),
             },
+            E::Atomic { pointer, fun } => {
+                let non_uniform_result = match fun {
+                    crate::AtomicFunction::Binary { op: _, value }
+                    | crate::AtomicFunction::Min(value)
+                    | crate::AtomicFunction::Max(value) => self.add_ref(value),
+                };
+                Uniformity {
+                    non_uniform_result: self.add_ref(pointer).or(non_uniform_result),
+                    requirements: UniformityRequirements::empty(),
+                }
+            }
             E::Select {
                 condition,
                 accept,

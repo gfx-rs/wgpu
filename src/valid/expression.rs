@@ -105,6 +105,12 @@ pub enum ExpressionError {
     WrongArgumentCount(crate::MathFunction),
     #[error("Argument [{1}] to {0:?} as expression {2:?} has an invalid type.")]
     InvalidArgumentType(crate::MathFunction, u32, Handle<crate::Expression>),
+    #[error("Atomic function doesn't work on pointer to {0:?}.")]
+    InvalidAtomicPointer(Handle<crate::Expression>),
+    #[error("Atomic function doesn't work with operand {0:?}.")]
+    InvalidAtomicOperand(Handle<crate::Expression>),
+    #[error("Atomic binary op {0:?} doesn't work on {1:?}.")]
+    InvalidAtomicBinaryOp(crate::BinaryOperator, crate::ScalarKind),
 }
 
 struct ExpressionTypeResolver<'a> {
@@ -773,6 +779,41 @@ impl super::Validator {
                         right_inner
                     );
                     return Err(ExpressionError::InvalidBinaryOperandTypes(op, left, right));
+                }
+                ShaderStages::all()
+            }
+            E::Atomic { pointer, fun } => {
+                use crate::BinaryOperator as Bo;
+                let pointer_inner = resolver.resolve(pointer)?;
+                let (ptr_kind, ptr_width) = match *pointer_inner {
+                    Ti::Pointer { base, .. } => match module.types[base].inner {
+                        Ti::Atomic { kind, width } => (kind, width),
+                        ref other => {
+                            log::error!("Atomic pointer to type {:?}", other);
+                            return Err(ExpressionError::InvalidAtomicPointer(pointer));
+                        }
+                    },
+                    ref other => {
+                        log::error!("Atomic on type {:?}", other);
+                        return Err(ExpressionError::InvalidAtomicPointer(pointer));
+                    }
+                };
+                let value = match fun {
+                    crate::AtomicFunction::Binary { op, value } => {
+                        match op {
+                            Bo::Add | Bo::And | Bo::InclusiveOr | Bo::ExclusiveOr => {}
+                            _ => return Err(ExpressionError::InvalidAtomicBinaryOp(op, ptr_kind)),
+                        }
+                        value
+                    }
+                    crate::AtomicFunction::Min(value) | crate::AtomicFunction::Max(value) => value,
+                };
+                match *resolver.resolve(value)? {
+                    Ti::Scalar { width, kind } if kind == ptr_kind && width == ptr_width => {}
+                    ref other => {
+                        log::error!("Atomic operand type {:?}", other);
+                        return Err(ExpressionError::InvalidAtomicOperand(value));
+                    }
                 }
                 ShaderStages::all()
             }

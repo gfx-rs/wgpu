@@ -6,16 +6,18 @@ struct _mslBufferSizes {
     metal::uint size0;
 };
 
-struct type2 {
+struct type3 {
     metal::uint2 inner[2];
 };
-typedef int type4[1];
+typedef int type5[1];
 struct Bar {
     metal::float4x4 matrix;
-    type2 arr;
-    type4 data;
+    metal::atomic_int atom;
+    char _pad2[4];
+    type3 arr;
+    type5 data;
 };
-struct type8 {
+struct type9 {
     int inner[5];
 };
 
@@ -30,19 +32,36 @@ vertex fooOutput foo(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo1 = 0.0;
-    type8 c;
+    type9 c;
     float baz = foo1;
     foo1 = 1.0;
     metal::float4x4 matrix = bar.matrix;
-    type2 arr = bar.arr;
+    type3 arr = bar.arr;
     metal::float4 _e13 = bar.matrix[3];
     float b = _e13.x;
-    int a = bar.data[(1 + (_buffer_sizes.size0 - 80 - 4) / 4) - 2u];
+    int a = bar.data[(1 + (_buffer_sizes.size0 - 88 - 4) / 4) - 2u];
     bar.matrix[1].z = 1.0;
     bar.matrix = metal::float4x4(metal::float4(0.0), metal::float4(1.0), metal::float4(2.0), metal::float4(3.0));
-    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type2 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
-    for(int _i=0; _i<5; ++_i) c.inner[_i] = type8 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
+    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type3 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
+    for(int _i=0; _i<5; ++_i) c.inner[_i] = type9 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
     c.inner[vi + 1u] = 42;
     int value = c.inner[vi];
     return fooOutput { matrix * static_cast<float4>(metal::int4(value)) };
+}
+
+
+kernel void atomics(
+  device Bar& bar [[buffer(0)]]
+, constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
+) {
+    int tmp;
+    int value = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
+    tmp = metal::atomic_fetch_add_explicit(&bar.atom, 1, metal::memory_order_relaxed);
+    tmp = metal::atomic_fetch_and_explicit(&bar.atom, 1, metal::memory_order_relaxed);
+    tmp = metal::atomic_fetch_or_explicit(&bar.atom, 1, metal::memory_order_relaxed);
+    tmp = metal::atomic_fetch_xor_explicit(&bar.atom, 1, metal::memory_order_relaxed);
+    tmp = metal::atomic_fetch_min_explicit(&bar.atom, 1, metal::memory_order_relaxed);
+    tmp = metal::atomic_fetch_max_explicit(&bar.atom, 1, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&bar.atom, value, metal::memory_order_relaxed);
+    return;
 }

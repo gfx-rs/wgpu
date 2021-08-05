@@ -48,3 +48,13 @@ pub(super) fn contains_builtin(
         false // unreachable
     }
 }
+
+impl crate::StorageClass {
+    pub(super) fn to_spirv_semantics(self) -> spirv::MemorySemantics {
+        match self {
+            Self::Storage { .. } => spirv::MemorySemantics::UNIFORM_MEMORY,
+            Self::WorkGroup => spirv::MemorySemantics::WORKGROUP_MEMORY,
+            _ => spirv::MemorySemantics::empty(),
+        }
+    }
+}

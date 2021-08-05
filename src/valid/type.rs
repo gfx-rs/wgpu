@@ -16,7 +16,7 @@ bitflags::bitflags! {
         /// This flag is required on types of local variables, function
         /// arguments, array elements, and struct members.
         ///
-        /// This includes all types except `Image`, `Sampler`, `ValuePointer`,
+        /// This includes all types except `Image`, `Sampler`,
         /// and some `Pointer` types.
         const DATA = 0x1;
 
@@ -258,13 +258,16 @@ impl super::Validator {
                     return Err(TypeError::UnresolvedBase(base));
                 }
 
+                let base_info = &self.types[base.index()];
+                if !base_info.flags.contains(TypeFlags::DATA) {
+                    return Err(TypeError::InvalidPointerBase(base));
+                }
                 // Pointers to dynamically-sized arrays are needed, to serve as
                 // the type of an `AccessIndex` expression referring to a
                 // dynamically sized array appearing as the final member of a
                 // top-level `Struct`. But such pointers cannot be passed to
                 // functions, stored in variables, etc. So, we mark them as not
                 // `DATA`.
-                let base_info = &self.types[base.index()];
                 let data_flag = if base_info.flags.contains(TypeFlags::SIZED) {
                     TypeFlags::DATA | TypeFlags::ARGUMENT
                 } else if let crate::TypeInner::Struct { .. } = types[base].inner {
@@ -418,7 +421,7 @@ impl super::Validator {
                     if !base_info.flags.contains(TypeFlags::DATA) {
                         return Err(TypeError::InvalidData(member.ty));
                     }
-                    if top_level && !base_info.flags.contains(TypeFlags::INTERFACE) {
+                    if top_level && !base_info.flags.contains(TypeFlags::HOST_SHARED) {
                         return Err(TypeError::InvalidBlockType(member.ty));
                     }
                     if base_info.flags.contains(TypeFlags::TOP_LEVEL) {

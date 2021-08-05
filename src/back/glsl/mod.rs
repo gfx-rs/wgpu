@@ -653,7 +653,7 @@ impl<'a, W: Write> Writer<'a, W> {
         match *inner {
             // Scalars are simple we just get the full name from `glsl_scalar`
             TypeInner::Scalar { kind, width }
-            | TypeInner::Atomic { kind, width } //TODO?
+            | TypeInner::Atomic { kind, width }
             | TypeInner::ValuePointer {
                 size: None,
                 kind,
@@ -2109,6 +2109,36 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, ")")?
             }
+            Expression::Atomic { pointer, fun } => match fun {
+                crate::AtomicFunction::Binary { op, value } => {
+                    let fun_str = match op {
+                        crate::BinaryOperator::Add => "Add",
+                        crate::BinaryOperator::And => "And",
+                        crate::BinaryOperator::InclusiveOr => "Or",
+                        crate::BinaryOperator::ExclusiveOr => "Xor",
+                        _ => unreachable!(),
+                    };
+                    write!(self.out, "atomic{}(", fun_str)?;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(value, ctx)?;
+                    write!(self.out, ")")?;
+                }
+                crate::AtomicFunction::Min(value) => {
+                    write!(self.out, "atomicMin(")?;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(value, ctx)?;
+                    write!(self.out, ")")?;
+                }
+                crate::AtomicFunction::Max(value) => {
+                    write!(self.out, "atomicMax(")?;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(value, ctx)?;
+                    write!(self.out, ")")?;
+                }
+            },
             // `Select` is written as `condition ? accept : reject`
             // We wrap everything in parentheses to avoid precedence issues
             Expression::Select {

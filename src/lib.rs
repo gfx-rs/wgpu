@@ -737,6 +737,22 @@ pub enum BinaryOperator {
     ShiftRight,
 }
 
+/// Function on an atomic value.
+///
+/// Note: these do not include load/store, which use the existing
+/// [`Expression::Load`] and [`Statement::Store`].
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum AtomicFunction {
+    Binary {
+        op: BinaryOperator,
+        value: Handle<Expression>,
+    },
+    Min(Handle<Expression>),
+    Max(Handle<Expression>),
+}
+
 /// Axis on which to compute a derivative.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1100,6 +1116,12 @@ pub enum Expression {
         op: BinaryOperator,
         left: Handle<Expression>,
         right: Handle<Expression>,
+    },
+    /// Atomic function.
+    Atomic {
+        /// Pointer to an atomic value.
+        pointer: Handle<Expression>,
+        fun: AtomicFunction,
     },
     /// Select between two values based on a condition.
     ///

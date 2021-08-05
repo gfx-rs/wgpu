@@ -1088,6 +1088,23 @@ impl Parser {
         Ok(Some((fun_handle, arguments)))
     }
 
+    fn parse_atomic_binary_op<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        op: crate::BinaryOperator,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<crate::Expression, Error<'a>> {
+        lexer.open_arguments()?;
+        let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+        lexer.expect(Token::Separator(','))?;
+        let value = self.parse_singular_expression(lexer, ctx)?;
+        lexer.close_arguments()?;
+        Ok(crate::Expression::Atomic {
+            pointer,
+            fun: crate::AtomicFunction::Binary { op, value },
+        })
+    }
+
     fn parse_function_call_inner<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1127,27 +1144,74 @@ impl Parser {
                 arg1,
                 arg2,
             }
-        } else if name == "select" {
-            lexer.open_arguments()?;
-            let reject = self.parse_general_expression(lexer, ctx.reborrow())?;
-            lexer.expect(Token::Separator(','))?;
-            let accept = self.parse_general_expression(lexer, ctx.reborrow())?;
-            lexer.expect(Token::Separator(','))?;
-            let condition = self.parse_general_expression(lexer, ctx.reborrow())?;
-            lexer.close_arguments()?;
-            crate::Expression::Select {
-                condition,
-                accept,
-                reject,
-            }
-        } else if name == "arrayLength" {
-            lexer.open_arguments()?;
-            let array = self.parse_singular_expression(lexer, ctx.reborrow())?;
-            lexer.close_arguments()?;
-            crate::Expression::ArrayLength(array)
         } else {
-            // texture sampling
             match name {
+                "select" => {
+                    lexer.open_arguments()?;
+                    let reject = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Separator(','))?;
+                    let accept = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Separator(','))?;
+                    let condition = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    lexer.close_arguments()?;
+                    crate::Expression::Select {
+                        condition,
+                        accept,
+                        reject,
+                    }
+                }
+                "arrayLength" => {
+                    lexer.open_arguments()?;
+                    let array = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.close_arguments()?;
+                    crate::Expression::ArrayLength(array)
+                }
+                // atomics
+                "atomicLoad" => {
+                    lexer.open_arguments()?;
+                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.close_arguments()?;
+                    crate::Expression::Load { pointer }
+                }
+                "atomicAdd" => {
+                    self.parse_atomic_binary_op(lexer, crate::BinaryOperator::Add, ctx.reborrow())?
+                }
+                "atomicAnd" => {
+                    self.parse_atomic_binary_op(lexer, crate::BinaryOperator::And, ctx.reborrow())?
+                }
+                "atomicOr" => self.parse_atomic_binary_op(
+                    lexer,
+                    crate::BinaryOperator::InclusiveOr,
+                    ctx.reborrow(),
+                )?,
+                "atomicXor" => self.parse_atomic_binary_op(
+                    lexer,
+                    crate::BinaryOperator::ExclusiveOr,
+                    ctx.reborrow(),
+                )?,
+                "atomicMin" => {
+                    lexer.open_arguments()?;
+                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Separator(','))?;
+                    let value = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.close_arguments()?;
+                    crate::Expression::Atomic {
+                        pointer,
+                        fun: crate::AtomicFunction::Min(value),
+                    }
+                }
+                "atomicMax" => {
+                    lexer.open_arguments()?;
+                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Separator(','))?;
+                    let value = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.close_arguments()?;
+                    crate::Expression::Atomic {
+                        pointer,
+                        fun: crate::AtomicFunction::Max(value),
+                    }
+                }
+                // texture sampling
                 "textureSample" => {
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
@@ -2932,6 +2996,15 @@ impl Parser {
                 lexer.expect(Token::Paren('('))?;
                 lexer.expect(Token::Paren(')'))?;
                 block.push(crate::Statement::Barrier(crate::Barrier::WORK_GROUP));
+            }
+            "atomicStore" => {
+                lexer.open_arguments()?;
+                let mut expression_ctx = context.as_expression(block, &mut emitter);
+                let pointer = self.parse_general_expression(lexer, expression_ctx.reborrow())?;
+                lexer.expect(Token::Separator(','))?;
+                let value = self.parse_general_expression(lexer, expression_ctx)?;
+                lexer.close_arguments()?;
+                block.push(crate::Statement::Store { pointer, value });
             }
             "textureStore" => {
                 emitter.start(context.expressions);

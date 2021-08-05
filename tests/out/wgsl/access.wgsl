@@ -1,6 +1,7 @@
 [[block]]
 struct Bar {
     matrix: mat4x4<f32>;
+    atom: atomic<i32>;
     arr: [[stride(8)]] array<vec2<u32>,2>;
     data: [[stride(4)]] array<i32>;
 };
@@ -27,4 +28,19 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
     c[(vi + 1u)] = 42;
     let value: i32 = c[vi];
     return (matrix * vec4<f32>(vec4<i32>(value)));
+}
+
+[[stage(compute), workgroup_size(1, 1, 1)]]
+fn atomics() {
+    var tmp: i32;
+
+    let value: i32 = bar.atom;
+    tmp = atomicAdd(bar.atom, 1);
+    tmp = atomicAnd(bar.atom, 1);
+    tmp = atomicOr(bar.atom, 1);
+    tmp = atomicXor(bar.atom, 1);
+    tmp = atomicMin(bar.atom, 1);
+    tmp = atomicMax(bar.atom, 1);
+    bar.atom = value;
+    return;
 }

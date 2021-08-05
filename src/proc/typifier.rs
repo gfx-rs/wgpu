@@ -505,6 +505,11 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::ShiftLeft
                 | crate::BinaryOperator::ShiftRight => past(left).clone(),
             },
+            crate::Expression::Atomic { pointer: _, fun } => match fun {
+                crate::AtomicFunction::Binary { op: _, value }
+                | crate::AtomicFunction::Min(value)
+                | crate::AtomicFunction::Max(value) => past(value).clone(),
+            },
             crate::Expression::Select { accept, .. } => past(accept).clone(),
             crate::Expression::Derivative { axis: _, expr } => past(expr).clone(),
             crate::Expression::Relational { .. } => TypeResolution::Value(Ti::Scalar {

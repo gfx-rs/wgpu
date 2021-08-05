@@ -5,6 +5,7 @@ precision highp int;
 
 buffer Bar_block_0Vs {
     mat4x4 matrix;
+    int atom;
     uvec2 arr[2];
     int data[];
 } _group_0_binding_0;
