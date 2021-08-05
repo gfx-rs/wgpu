@@ -16,12 +16,13 @@ buffer Bar_block_0Cs {
 void main() {
     int tmp = 0;
     int value = _group_0_binding_0.atom;
-    tmp = atomicAdd(_group_0_binding_0.atom, 1);
-    tmp = atomicAnd(_group_0_binding_0.atom, 1);
-    tmp = atomicOr(_group_0_binding_0.atom, 1);
-    tmp = atomicXor(_group_0_binding_0.atom, 1);
-    tmp = atomicMin(_group_0_binding_0.atom, 1);
-    tmp = atomicMax(_group_0_binding_0.atom, 1);
+    tmp = atomicAdd(_group_0_binding_0.atom, 5);
+    tmp = atomicAnd(_group_0_binding_0.atom, 5);
+    tmp = atomicOr(_group_0_binding_0.atom, 5);
+    tmp = atomicXor(_group_0_binding_0.atom, 5);
+    tmp = atomicMin(_group_0_binding_0.atom, 5);
+    tmp = atomicMax(_group_0_binding_0.atom, 5);
+    tmp = atomicExchange(_group_0_binding_0.atom, 5);
     _group_0_binding_0.atom = value;
     return;
 }

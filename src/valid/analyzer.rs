@@ -536,7 +536,11 @@ impl FunctionInfo {
                 let non_uniform_result = match fun {
                     crate::AtomicFunction::Binary { op: _, value }
                     | crate::AtomicFunction::Min(value)
-                    | crate::AtomicFunction::Max(value) => self.add_ref(value),
+                    | crate::AtomicFunction::Max(value)
+                    | crate::AtomicFunction::Exchange(value) => self.add_ref(value),
+                    crate::AtomicFunction::CompareExchange { cmp, value } => {
+                        self.add_ref(value).or(self.add_ref(cmp))
+                    }
                 };
                 Uniformity {
                     non_uniform_result: self.add_ref(pointer).or(non_uniform_result),

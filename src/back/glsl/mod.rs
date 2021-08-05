@@ -2138,6 +2138,19 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_expr(value, ctx)?;
                     write!(self.out, ")")?;
                 }
+                crate::AtomicFunction::Exchange(value) => {
+                    write!(self.out, "atomicExchange(")?;
+                    self.write_expr(pointer, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(value, ctx)?;
+                    write!(self.out, ")")?;
+                }
+                crate::AtomicFunction::CompareExchange { .. } => {
+                    //TODO: write a wrapper function to return vec2
+                    return Err(Error::Custom(
+                        "atomic CompareExchange is not implemented".to_string(),
+                    ));
+                }
             },
             // `Select` is written as `condition ? accept : reject`
             // We wrap everything in parentheses to avoid precedence issues

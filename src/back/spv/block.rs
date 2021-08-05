@@ -567,6 +567,21 @@ impl<'w> BlockContext<'w> {
                             value_id,
                         )
                     }
+                    crate::AtomicFunction::Exchange(value) => {
+                        let value_id = self.cached[value];
+                        Instruction::atomic_binary(
+                            spirv::Op::AtomicExchange,
+                            result_type_id,
+                            id,
+                            pointer_id,
+                            scope_constant_id,
+                            semantics_id,
+                            value_id,
+                        )
+                    }
+                    crate::AtomicFunction::CompareExchange { .. } => {
+                        return Err(Error::FeatureNotImplemented("atomic CompareExchange"));
+                    }
                 };
 
                 block.body.push(instruction);

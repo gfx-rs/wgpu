@@ -508,7 +508,24 @@ impl<'a> ResolveContext<'a> {
             crate::Expression::Atomic { pointer: _, fun } => match fun {
                 crate::AtomicFunction::Binary { op: _, value }
                 | crate::AtomicFunction::Min(value)
-                | crate::AtomicFunction::Max(value) => past(value).clone(),
+                | crate::AtomicFunction::Max(value)
+                | crate::AtomicFunction::Exchange(value) => past(value).clone(),
+                crate::AtomicFunction::CompareExchange { cmp: _, value } => {
+                    let (kind, width) = match *past(value).inner_with(types) {
+                        Ti::Scalar { kind, width } => (kind, width),
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperands(format!(
+                                "atomic ptr {:?}",
+                                other
+                            )))
+                        }
+                    };
+                    TypeResolution::Value(Ti::Vector {
+                        size: crate::VectorSize::Bi,
+                        kind,
+                        width,
+                    })
+                }
             },
             crate::Expression::Select { accept, .. } => past(accept).clone(),
             crate::Expression::Derivative { axis: _, expr } => past(expr).clone(),

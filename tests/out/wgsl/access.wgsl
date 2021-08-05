@@ -35,12 +35,13 @@ fn atomics() {
     var tmp: i32;
 
     let value: i32 = bar.atom;
-    tmp = atomicAdd(bar.atom, 1);
-    tmp = atomicAnd(bar.atom, 1);
-    tmp = atomicOr(bar.atom, 1);
-    tmp = atomicXor(bar.atom, 1);
-    tmp = atomicMin(bar.atom, 1);
-    tmp = atomicMax(bar.atom, 1);
+    tmp = atomicAdd(&bar.atom, 5);
+    tmp = atomicAnd(&bar.atom, 5);
+    tmp = atomicOr(&bar.atom, 5);
+    tmp = atomicXor(&bar.atom, 5);
+    tmp = atomicMin(&bar.atom, 5);
+    tmp = atomicMax(&bar.atom, 5);
+    tmp = atomicExchange(&bar.atom, 5);
     bar.atom = value;
     return;
 }

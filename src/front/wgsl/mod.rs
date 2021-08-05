@@ -1211,6 +1211,30 @@ impl Parser {
                         fun: crate::AtomicFunction::Max(value),
                     }
                 }
+                "atomicExchange" => {
+                    lexer.open_arguments()?;
+                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Separator(','))?;
+                    let value = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.close_arguments()?;
+                    crate::Expression::Atomic {
+                        pointer,
+                        fun: crate::AtomicFunction::Exchange(value),
+                    }
+                }
+                "atomicCompareExchangeWeak" => {
+                    lexer.open_arguments()?;
+                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Separator(','))?;
+                    let cmp = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Separator(','))?;
+                    let value = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    lexer.close_arguments()?;
+                    crate::Expression::Atomic {
+                        pointer,
+                        fun: crate::AtomicFunction::CompareExchange { cmp, value },
+                    }
+                }
                 // texture sampling
                 "textureSample" => {
                     lexer.open_arguments()?;

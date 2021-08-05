@@ -42,11 +42,14 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 fn atomics() {
 	var tmp: i32;
 	let value = atomicLoad(&bar.atom);
-	tmp = atomicAdd(&bar.atom, 1);
-	tmp = atomicAnd(&bar.atom, 1);
-	tmp = atomicOr(&bar.atom, 1);
-	tmp = atomicXor(&bar.atom, 1);
-	tmp = atomicMin(&bar.atom, 1);
-	tmp = atomicMax(&bar.atom, 1);
+	tmp = atomicAdd(&bar.atom, 5);
+	tmp = atomicAnd(&bar.atom, 5);
+	tmp = atomicOr(&bar.atom, 5);
+	tmp = atomicXor(&bar.atom, 5);
+	tmp = atomicMin(&bar.atom, 5);
+	tmp = atomicMax(&bar.atom, 5);
+	tmp = atomicExchange(&bar.atom, 5);
+	// https://github.com/gpuweb/gpuweb/issues/2021
+	// tmp = atomicCompareExchangeWeak(&bar.atom, 5, 5);
 	atomicStore(&bar.atom, value);
 }

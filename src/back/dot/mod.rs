@@ -300,6 +300,15 @@ fn write_fun(
                         edges.insert("value", value);
                         Cow::Borrowed("Max")
                     }
+                    crate::AtomicFunction::Exchange(value) => {
+                        edges.insert("value", value);
+                        Cow::Borrowed("Exchange")
+                    }
+                    crate::AtomicFunction::CompareExchange { cmp, value } => {
+                        edges.insert("cmp", cmp);
+                        edges.insert("value", value);
+                        Cow::Borrowed("CompareExchange")
+                    }
                 };
                 (description, 3)
             }

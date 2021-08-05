@@ -1066,6 +1066,23 @@ impl<W: Write> Writer<W> {
                 crate::AtomicFunction::Max(value) => {
                     self.put_atomic_fetch(pointer, "max", value, context)?;
                 }
+                crate::AtomicFunction::Exchange(value) => {
+                    write!(
+                        self.out,
+                        "{}::atomic_exchange_explicit({}",
+                        NAMESPACE, ATOMIC_REFERENCE,
+                    )?;
+                    self.put_expression(pointer, context, true)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(value, context, true)?;
+                    write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
+                }
+                crate::AtomicFunction::CompareExchange { .. } => {
+                    //TODO: add a wrapper function to return the vector
+                    return Err(Error::FeatureNotImplemented(
+                        "atomic CompareExchange".to_string(),
+                    ));
+                }
             },
             crate::Expression::Select {
                 condition,
@@ -2570,8 +2587,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 17664
-        if stack_size < 14000 || stack_size > 19000 {
+        // last observed macOS value: 20752 (from CI)
+        if stack_size < 16000 || stack_size > 21000 {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }
@@ -2585,8 +2602,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 13600
-        if stack_size < 11000 || stack_size > 16000 {
+        // last observed macOS value: 16160 (on CI)
+        if stack_size < 12000 || stack_size > 17000 {
             panic!("`put_block` stack size {} has changed!", stack_size);
         }
     }

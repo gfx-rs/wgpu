@@ -806,7 +806,18 @@ impl super::Validator {
                         }
                         value
                     }
-                    crate::AtomicFunction::Min(value) | crate::AtomicFunction::Max(value) => value,
+                    crate::AtomicFunction::Min(value)
+                    | crate::AtomicFunction::Max(value)
+                    | crate::AtomicFunction::Exchange(value) => value,
+                    crate::AtomicFunction::CompareExchange { cmp, value } => {
+                        if resolver.resolve(cmp)? != resolver.resolve(value)? {
+                            log::error!(
+                                "Atomic exchange comparison has a different type from the value"
+                            );
+                            return Err(ExpressionError::InvalidAtomicOperand(cmp));
+                        }
+                        value
+                    }
                 };
                 match *resolver.resolve(value)? {
                     Ti::Scalar { width, kind } if kind == ptr_kind && width == ptr_width => {}

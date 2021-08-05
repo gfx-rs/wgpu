@@ -2,6 +2,7 @@
 
 ## TBD
   - API:
+    - atomic types and functions
     - WGSL `select()` order of true/false is swapped
 
 ## v0.5 (2021-06-18)

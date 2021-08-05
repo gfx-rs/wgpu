@@ -751,6 +751,11 @@ pub enum AtomicFunction {
     },
     Min(Handle<Expression>),
     Max(Handle<Expression>),
+    Exchange(Handle<Expression>),
+    CompareExchange {
+        cmp: Handle<Expression>,
+        value: Handle<Expression>,
+    },
 }
 
 /// Axis on which to compute a derivative.

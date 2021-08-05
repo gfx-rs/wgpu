@@ -6,6 +6,11 @@ use crate::{
 };
 use std::fmt::Write;
 
+// This is a hack: we need to pass a pointer to an atomic,
+// but generally the backend isn't putting "&" in front of every pointer.
+// Some more general handling of pointers is needed to be implemented here.
+const ATOMIC_REFERENCE: &str = "&";
+
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
 
@@ -924,22 +929,43 @@ impl<W: Write> Writer<W> {
             }
             Expression::Atomic { pointer, fun } => match fun {
                 crate::AtomicFunction::Binary { op, value } => {
-                    write!(self.out, "atomic{}(", op.to_wgsl_atomic_suffix())?;
+                    write!(
+                        self.out,
+                        "atomic{}({}",
+                        op.to_wgsl_atomic_suffix(),
+                        ATOMIC_REFERENCE
+                    )?;
                     self.write_expr(module, pointer, func_ctx)?;
                     write!(self.out, ", ")?;
                     self.write_expr(module, value, func_ctx)?;
                     write!(self.out, ")")?;
                 }
                 crate::AtomicFunction::Min(value) => {
-                    write!(self.out, "atomicMin(")?;
+                    write!(self.out, "atomicMin({}", ATOMIC_REFERENCE)?;
                     self.write_expr(module, pointer, func_ctx)?;
                     write!(self.out, ", ")?;
                     self.write_expr(module, value, func_ctx)?;
                     write!(self.out, ")")?;
                 }
                 crate::AtomicFunction::Max(value) => {
-                    write!(self.out, "atomicMax(")?;
+                    write!(self.out, "atomicMax({}", ATOMIC_REFERENCE)?;
                     self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    write!(self.out, ")")?;
+                }
+                crate::AtomicFunction::Exchange(value) => {
+                    write!(self.out, "atomicExchange({}", ATOMIC_REFERENCE)?;
+                    self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    write!(self.out, ")")?;
+                }
+                crate::AtomicFunction::CompareExchange { cmp, value } => {
+                    write!(self.out, "atomicCompareExchangeWeak({}", ATOMIC_REFERENCE)?;
+                    self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, cmp, func_ctx)?;
                     write!(self.out, ", ")?;
                     self.write_expr(module, value, func_ctx)?;
                     write!(self.out, ")")?;
