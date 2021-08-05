@@ -715,27 +715,46 @@ impl<'w> BlockContext<'w> {
                         }
                     };
 
-                let op = match (src_kind, kind, convert) {
-                    (_, _, None) => spirv::Op::Bitcast,
-                    (Sk::Float, Sk::Uint, Some(_)) => spirv::Op::ConvertFToU,
-                    (Sk::Float, Sk::Sint, Some(_)) => spirv::Op::ConvertFToS,
-                    (Sk::Float, Sk::Float, Some(dst_width)) if src_width != dst_width => {
-                        spirv::Op::FConvert
+                let id = self.gen_id();
+
+                let instruction = match (src_kind, kind, convert) {
+                    (_, Sk::Bool, Some(_)) if src_kind != Sk::Bool => {
+                        let (op, value) = match src_kind {
+                            Sk::Sint => (spirv::Op::INotEqual, crate::ScalarValue::Sint(0)),
+                            Sk::Uint => (spirv::Op::INotEqual, crate::ScalarValue::Uint(0)),
+                            Sk::Float => {
+                                (spirv::Op::FUnordNotEqual, crate::ScalarValue::Float(0.0))
+                            }
+                            Sk::Bool => unreachable!(),
+                        };
+                        let zero_id = self.writer.get_constant_scalar(value, 4)?;
+
+                        Instruction::binary(op, result_type_id, id, expr_id, zero_id)
                     }
-                    (Sk::Sint, Sk::Float, Some(_)) => spirv::Op::ConvertSToF,
-                    (Sk::Sint, Sk::Sint, Some(dst_width)) if src_width != dst_width => {
-                        spirv::Op::SConvert
+                    _ => {
+                        let op = match (src_kind, kind, convert) {
+                            (_, _, None) => spirv::Op::Bitcast,
+                            (Sk::Float, Sk::Uint, Some(_)) => spirv::Op::ConvertFToU,
+                            (Sk::Float, Sk::Sint, Some(_)) => spirv::Op::ConvertFToS,
+                            (Sk::Float, Sk::Float, Some(dst_width)) if src_width != dst_width => {
+                                spirv::Op::FConvert
+                            }
+                            (Sk::Sint, Sk::Float, Some(_)) => spirv::Op::ConvertSToF,
+                            (Sk::Sint, Sk::Sint, Some(dst_width)) if src_width != dst_width => {
+                                spirv::Op::SConvert
+                            }
+                            (Sk::Uint, Sk::Float, Some(_)) => spirv::Op::ConvertUToF,
+                            (Sk::Uint, Sk::Uint, Some(dst_width)) if src_width != dst_width => {
+                                spirv::Op::UConvert
+                            }
+                            // We assume it's either an identity cast, or int-uint.
+                            _ => spirv::Op::Bitcast,
+                        };
+
+                        Instruction::unary(op, result_type_id, id, expr_id)
                     }
-                    (Sk::Uint, Sk::Float, Some(_)) => spirv::Op::ConvertUToF,
-                    (Sk::Uint, Sk::Uint, Some(dst_width)) if src_width != dst_width => {
-                        spirv::Op::UConvert
-                    }
-                    // We assume it's either an identity cast, or int-uint.
-                    _ => spirv::Op::Bitcast,
                 };
 
-                let id = self.gen_id();
-                let instruction = Instruction::unary(op, result_type_id, id, expr_id);
                 block.body.push(instruction);
                 id
             }
