@@ -805,7 +805,7 @@
             name: Some("s_lights"),
             class: Storage(
                 access: (
-                    bits: 3,
+                    bits: 1,
                 ),
             ),
             binding: Some((

@@ -110,7 +110,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -121,7 +121,7 @@
                         base: 21,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -1176,7 +1176,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -1187,7 +1187,7 @@
                         base: 21,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -1884,7 +1884,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -1895,7 +1895,7 @@
                         base: 20,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -1913,7 +1913,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -1924,14 +1924,14 @@
                         base: 19,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -1942,14 +1942,14 @@
                         base: 18,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -1971,7 +1971,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2019,7 +2019,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -2030,7 +2030,7 @@
                         base: 20,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -2048,7 +2048,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2059,14 +2059,14 @@
                         base: 19,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2077,14 +2077,14 @@
                         base: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2097,14 +2097,14 @@
                         width: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2118,7 +2118,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -2129,7 +2129,7 @@
                         base: 20,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -2147,7 +2147,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2158,14 +2158,14 @@
                         base: 19,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2176,14 +2176,14 @@
                         base: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2196,14 +2196,14 @@
                         width: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2217,7 +2217,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -2228,7 +2228,7 @@
                         base: 20,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -2246,7 +2246,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2257,14 +2257,14 @@
                         base: 19,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2275,14 +2275,14 @@
                         base: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2295,14 +2295,14 @@
                         width: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2316,7 +2316,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2428,7 +2428,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2439,7 +2439,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2492,7 +2492,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -2503,7 +2503,7 @@
                         base: 20,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -2521,7 +2521,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2532,14 +2532,14 @@
                         base: 19,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2550,14 +2550,14 @@
                         base: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2570,14 +2570,14 @@
                         width: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2591,7 +2591,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -2602,7 +2602,7 @@
                         base: 20,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -2620,7 +2620,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2631,14 +2631,14 @@
                         base: 19,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2649,14 +2649,14 @@
                         base: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2669,14 +2669,14 @@
                         width: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2690,7 +2690,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (
                             bits: 0,
                         ),
@@ -2701,7 +2701,7 @@
                         base: 20,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
@@ -2719,7 +2719,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2730,14 +2730,14 @@
                         base: 19,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2748,14 +2748,14 @@
                         base: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2768,14 +2768,14 @@
                         width: 4,
                         class: Storage(
                             access: (
-                                bits: 3,
+                                bits: 1,
                             ),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2789,7 +2789,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
@@ -2800,7 +2800,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(48),
                         requirements: (
                             bits: 0,
                         ),
