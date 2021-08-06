@@ -1,53 +1,55 @@
 use pp_rs::token::PreprocessorError;
 
-use super::lex::Lexer;
-use super::parser;
-use super::{ast::Profile, error::ErrorKind};
-use super::{ast::Program, SourceMetadata};
-use crate::front::glsl::error::ExpectedToken;
 use crate::{
-    front::glsl::{token::TokenValue, Token},
-    ShaderStage,
+    front::glsl::{
+        ast::Profile, error::ErrorKind, error::ExpectedToken, token::TokenValue, Options, Parser,
+        SourceMetadata, Token,
+    },
+    Module, ShaderStage,
 };
 
-fn parse_program(source: &str, stage: ShaderStage) -> Result<Program, ErrorKind> {
-    let mut program = Program::new(stage);
+fn parse(parser: &mut Parser, source: &str, stage: ShaderStage) -> Result<Module, ErrorKind> {
     let defines = crate::FastHashMap::default();
-    let lex = Lexer::new(source, &defines);
-    let mut parser = parser::Parser::new(&mut program, lex);
 
-    parser.parse()?;
-    Ok(program)
+    parser
+        .parse(&Options { stage, defines }, source)
+        .map_err(|e| e.kind)
 }
 
 #[test]
 fn version() {
+    let mut parser = Parser::default();
+
     // invalid versions
     assert_eq!(
-        parse_program("#version 99000", ShaderStage::Vertex)
+        parse(&mut parser, "#version 99000", ShaderStage::Vertex)
             .err()
             .unwrap(),
         ErrorKind::InvalidVersion(SourceMetadata { start: 9, end: 14 }, 99000),
     );
 
     assert_eq!(
-        parse_program("#version 449", ShaderStage::Vertex)
+        parse(&mut parser, "#version 449", ShaderStage::Vertex)
             .err()
             .unwrap(),
         ErrorKind::InvalidVersion(SourceMetadata { start: 9, end: 12 }, 449)
     );
 
     assert_eq!(
-        parse_program("#version 450 smart", ShaderStage::Vertex)
+        parse(&mut parser, "#version 450 smart", ShaderStage::Vertex)
             .err()
             .unwrap(),
         ErrorKind::InvalidProfile(SourceMetadata { start: 13, end: 18 }, "smart".into())
     );
 
     assert_eq!(
-        parse_program("#version 450\nvoid f(){} #version 450", ShaderStage::Vertex)
-            .err()
-            .unwrap(),
+        parse(
+            &mut parser,
+            "#version 450\nvoid f(){} #version 450",
+            ShaderStage::Vertex
+        )
+        .err()
+        .unwrap(),
         ErrorKind::InvalidToken(
             Token {
                 value: TokenValue::Unknown(PreprocessorError::UnexpectedHash),
@@ -58,19 +60,46 @@ fn version() {
     );
 
     // valid versions
-    let program = parse_program("  #  version 450\nvoid main() {}", ShaderStage::Vertex).unwrap();
-    assert_eq!((program.version, program.profile), (450, Profile::Core));
+    parse(
+        &mut parser,
+        "  #  version 450\nvoid main() {}",
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+    assert_eq!(
+        (parser.metadata().version, parser.metadata().profile),
+        (450, Profile::Core)
+    );
 
-    let program = parse_program("#version 450\nvoid main() {}", ShaderStage::Vertex).unwrap();
-    assert_eq!((program.version, program.profile), (450, Profile::Core));
+    parse(
+        &mut parser,
+        "#version 450\nvoid main() {}",
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+    assert_eq!(
+        (parser.metadata().version, parser.metadata().profile),
+        (450, Profile::Core)
+    );
 
-    let program = parse_program("#version 450 core\nvoid main() {}", ShaderStage::Vertex).unwrap();
-    assert_eq!((program.version, program.profile), (450, Profile::Core));
+    parse(
+        &mut parser,
+        "#version 450 core\nvoid main() {}",
+        ShaderStage::Vertex,
+    )
+    .unwrap();
+    assert_eq!(
+        (parser.metadata().version, parser.metadata().profile),
+        (450, Profile::Core)
+    );
 }
 
 #[test]
 fn control_flow() {
-    let _program = parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -85,7 +114,8 @@ fn control_flow() {
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -98,7 +128,8 @@ fn control_flow() {
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -119,7 +150,8 @@ fn control_flow() {
         ShaderStage::Vertex,
     )
     .unwrap();
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -136,7 +168,8 @@ fn control_flow() {
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -155,7 +188,10 @@ fn control_flow() {
 
 #[test]
 fn declarations() {
-    let _program = parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #version 450
         layout(location = 0) in vec2 v_uv;
@@ -164,12 +200,15 @@ fn declarations() {
         layout(set = 1, binding = 2) uniform sampler tex_sampler;
 
         layout(early_fragment_tests) in;
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #version 450
         layout(std140, set = 2, binding = 0)
@@ -178,12 +217,15 @@ fn declarations() {
             float load_time;
             ivec4 atlas_offs;
         };
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #version 450
         layout(push_constant, set = 2, binding = 0)
@@ -192,12 +234,15 @@ fn declarations() {
             float load_time;
             ivec4 atlas_offs;
         };
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #version 450
         layout(std430, set = 2, binding = 0)
@@ -206,12 +251,15 @@ fn declarations() {
             float load_time;
             ivec4 atlas_offs;
         };
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #version 450
         layout(std140, set = 2, binding = 0)
@@ -229,19 +277,25 @@ fn declarations() {
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #version 450
         float vector = vec4(1.0 / 17.0,  9.0 / 17.0,  3.0 / 17.0, 11.0 / 17.0);
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #version 450
         precision highp float;
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
@@ -250,7 +304,10 @@ fn declarations() {
 
 #[test]
 fn textures() {
-    let _program = parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #version 450
         layout(location = 0) in vec2 v_uv;
@@ -269,7 +326,10 @@ fn textures() {
 
 #[test]
 fn functions() {
-    parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void test1(float);
@@ -281,7 +341,8 @@ fn functions() {
     )
     .unwrap();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void test2(float a) {}
@@ -294,7 +355,8 @@ fn functions() {
     )
     .unwrap();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         float test(float a) { return a; }
@@ -305,19 +367,23 @@ fn functions() {
     )
     .unwrap();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         float test(vec4 p) {
             return p.x;
         }
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
     // Function overloading
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         float test(vec2 p);
@@ -335,13 +401,16 @@ fn functions() {
         float test(vec4 p) {
             return p.x;
         }
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
     assert_eq!(
-        parse_program(
+        parse(
+            &mut parser,
             r#"
                 #  version 450
                 int test(vec4 p) {
@@ -351,6 +420,8 @@ fn functions() {
                 float test(vec4 p) {
                     return p.x;
                 }
+
+                void main() {}
                 "#,
             ShaderStage::Vertex
         )
@@ -367,7 +438,8 @@ fn functions() {
 
     println!();
 
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         float callee(uint q) {
@@ -377,13 +449,16 @@ fn functions() {
         float caller() {
             callee(1u);
         }
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
     // Nested function call
-    let _program = parse_program(
+    parse(
+        &mut parser,
         r#"
             #  version 450
             layout(set = 0, binding = 1) uniform texture2D t_noise;
@@ -397,7 +472,8 @@ fn functions() {
     )
     .unwrap();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void fun(vec2 in_parameter, out float out_parameter) {
@@ -417,19 +493,23 @@ fn functions() {
 #[test]
 fn constants() {
     use crate::{Constant, ConstantInner, ScalarValue};
+    let mut parser = Parser::default();
 
-    let program = parse_program(
+    let module = parse(
+        &mut parser,
         r#"
         #  version 450
         const float a = 1.0;
         float global = a;
         const float b = a;
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    let mut constants = program.module.constants.iter();
+    let mut constants = module.constants.iter();
 
     assert_eq!(
         constants.next().unwrap().1,
@@ -448,7 +528,10 @@ fn constants() {
 
 #[test]
 fn function_overloading() {
-    parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #  version 450
 
@@ -471,7 +554,10 @@ fn function_overloading() {
 
 #[test]
 fn implicit_conversions() {
-    parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -485,7 +571,8 @@ fn implicit_conversions() {
     .unwrap();
 
     assert_eq!(
-        parse_program(
+        parse(
+            &mut parser,
             r#"
                 #  version 450
                 void test(int a) {}
@@ -509,7 +596,8 @@ fn implicit_conversions() {
     );
 
     assert_eq!(
-        parse_program(
+        parse(
+            &mut parser,
             r#"
                 #  version 450
                 void test(float a) {}
@@ -535,41 +623,53 @@ fn implicit_conversions() {
 
 #[test]
 fn structs() {
-    parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #  version 450
         Test {
             vec4 pos;
           } xx;
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap_err();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         struct Test {
             vec4 pos;
         };
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         const int NUM_VECS = 42;
         struct Test {
             vec4 vecs[NUM_VECS];
         };
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         struct Hello {
@@ -577,26 +677,34 @@ fn structs() {
         } test() {
             return Hello( vec4(1.0) );
         }
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         struct Test {};
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
     .unwrap_err();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         inout struct Test {
             vec4 x;
         };
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )
@@ -605,7 +713,10 @@ fn structs() {
 
 #[test]
 fn swizzles() {
-    parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -619,7 +730,8 @@ fn swizzles() {
     )
     .unwrap();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -631,7 +743,8 @@ fn swizzles() {
     )
     .unwrap_err();
 
-    parse_program(
+    parse(
+        &mut parser,
         r#"
         #  version 450
         void main() {
@@ -646,13 +759,18 @@ fn swizzles() {
 
 #[test]
 fn vector_indexing() {
-    parse_program(
+    let mut parser = Parser::default();
+
+    parse(
+        &mut parser,
         r#"
         #  version 450
-        float main(int index) {
+        float test(int index) {
             vec4 v = vec4(1.0, 2.0, 3.0, 4.0);
             return v[index] + 1.0;
         }
+
+        void main() {}
         "#,
         ShaderStage::Vertex,
     )

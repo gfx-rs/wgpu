@@ -1,12 +1,9 @@
 use crate::{
+    front::glsl::{ast::*, context::Context, error::ErrorKind, Parser, SourceMetadata},
     Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
     LocalVariable, ScalarKind, StorageAccess, StorageClass, SwizzleComponent, Type, TypeInner,
     VectorSize,
 };
-
-use super::ast::*;
-use super::error::ErrorKind;
-use super::token::SourceMetadata;
 
 macro_rules! qualifier_arm {
     ($src:expr, $tgt:expr, $meta:expr, $msg:literal $(,)?) => {{
@@ -31,7 +28,7 @@ pub enum GlobalOrConstant {
     Constant(Handle<Constant>),
 }
 
-impl Program {
+impl Parser {
     pub fn lookup_variable(
         &mut self,
         ctx: &mut Context,
@@ -453,7 +450,7 @@ impl Program {
                     entry_arg: Some(idx),
                     mutable: !input,
                 };
-                ctx.add_global(&name, lookup, self, body);
+                ctx.add_global(self, &name, lookup, body);
 
                 self.global_variables.push((name, lookup));
             }
@@ -469,7 +466,7 @@ impl Program {
                     entry_arg: None,
                     mutable: false,
                 };
-                ctx.add_global(&name, lookup, self, body);
+                ctx.add_global(self, &name, lookup, body);
 
                 self.global_variables.push((name, lookup));
             }
@@ -505,7 +502,7 @@ impl Program {
                 entry_arg: None,
                 mutable: true,
             };
-            ctx.add_global(&name, lookup, self, body);
+            ctx.add_global(self, &name, lookup, body);
 
             self.global_variables.push((name, lookup));
         }

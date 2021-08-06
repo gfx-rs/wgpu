@@ -1,22 +1,29 @@
-use super::{ast::*, error::ErrorKind, SourceMetadata};
 use crate::{
-    proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
-    Expression, Function, FunctionArgument, FunctionResult, Handle, ImageClass, ImageDimension,
-    ImageQuery, LocalVariable, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind,
-    ScalarValue, Statement, StructMember, Type, TypeInner, VectorSize,
+    front::glsl::{
+        ast::*,
+        context::Context,
+        error::ErrorKind,
+        types::{scalar_components, type_power},
+        Parser, SourceMetadata,
+    },
+    proc::ensure_block_returns,
+    Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint, Expression, FastHashMap,
+    Function, FunctionArgument, FunctionResult, Handle, ImageClass, ImageDimension, ImageQuery,
+    LocalVariable, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind, ScalarValue,
+    Statement, StructMember, Type, TypeInner, VectorSize,
 };
 use std::iter;
 
 /// Helper struct for texture calls with the separate components from the vector argument
 ///
-/// Obtained by calling [`coordinate_components`](Program::coordinate_components)
+/// Obtained by calling [`coordinate_components`](Parser::coordinate_components)
 struct CoordComponents {
     coordinate: Handle<Expression>,
     depth_ref: Option<Handle<Expression>>,
     array_index: Option<Handle<Expression>>,
 }
 
-impl Program {
+impl Parser {
     fn add_constant_value(&mut self, scalar_kind: ScalarKind, value: u64) -> Handle<Constant> {
         let value = match scalar_kind {
             ScalarKind::Uint => ScalarValue::Uint(value),
@@ -1056,33 +1063,40 @@ impl Program {
 
     pub fn add_function(
         &mut self,
-        mut function: Function,
+        ctx: Context,
         name: String,
-        // Normalized function parameters, modifiers are not applied
-        parameters: Vec<Handle<Type>>,
-        parameters_info: Vec<ParameterInfo>,
+        result: Option<FunctionResult>,
+        mut body: Block,
         meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
-        ensure_block_returns(&mut function.body);
+        ensure_block_returns(&mut body);
 
-        if name.as_str() == "main" {
-            let handle = self.module.functions.append(function);
-            return if self.entry_point.replace(handle).is_some() {
-                Err(ErrorKind::SemanticError(meta, "main defined twice".into()))
-            } else {
-                Ok(())
-            };
-        }
+        let void = result.is_none();
 
-        let void = function.result.is_none();
-
-        let &mut Program {
+        let &mut Parser {
             ref mut lookup_function,
             ref mut module,
             ..
         } = self;
 
-        let declarations = lookup_function.entry(name).or_default();
+        let declarations = lookup_function.entry(name.clone()).or_default();
+        let Context {
+            expressions,
+            locals,
+            arguments,
+            parameters,
+            parameters_info,
+            ..
+        } = ctx;
+        let function = Function {
+            name: Some(name),
+            arguments,
+            result,
+            local_variables: locals,
+            expressions,
+            named_expressions: FastHashMap::default(),
+            body,
+        };
 
         'outer: for decl in declarations.iter_mut() {
             if parameters.len() != decl.parameters.len() {
@@ -1125,22 +1139,33 @@ impl Program {
 
     pub fn add_prototype(
         &mut self,
-        function: Function,
+        ctx: Context,
         name: String,
-        // Normalized function parameters, modifiers are not applied
-        parameters: Vec<Handle<Type>>,
-        parameters_info: Vec<ParameterInfo>,
+        result: Option<FunctionResult>,
         meta: SourceMetadata,
     ) -> Result<(), ErrorKind> {
-        let void = function.result.is_none();
+        let void = result.is_none();
 
-        let &mut Program {
+        let &mut Parser {
             ref mut lookup_function,
             ref mut module,
             ..
         } = self;
 
-        let declarations = lookup_function.entry(name).or_default();
+        let declarations = lookup_function.entry(name.clone()).or_default();
+
+        let Context {
+            arguments,
+            parameters,
+            parameters_info,
+            ..
+        } = ctx;
+        let function = Function {
+            name: Some(name),
+            arguments,
+            result,
+            ..Default::default()
+        };
 
         'outer: for decl in declarations.iter_mut() {
             if parameters.len() != decl.parameters.len() {
@@ -1268,10 +1293,10 @@ impl Program {
 
         self.module.entry_points.push(EntryPoint {
             name: "main".to_string(),
-            stage: self.stage,
+            stage: self.meta.stage,
             early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
-                .filter(|_| self.early_fragment_tests),
-            workgroup_size: self.workgroup_size,
+                .filter(|_| self.meta.early_fragment_tests),
+            workgroup_size: self.meta.workgroup_size,
             function: Function {
                 arguments,
                 expressions,
@@ -1286,7 +1311,7 @@ impl Program {
 
     /// Helper function for texture calls, splits the vector argument into it's components
     fn coordinate_components(
-        &self,
+        &mut self,
         ctx: &mut Context,
         (image, image_meta): (Handle<Expression>, SourceMetadata),
         (coord, coord_meta): (Handle<Expression>, SourceMetadata),

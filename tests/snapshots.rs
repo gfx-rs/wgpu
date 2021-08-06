@@ -523,19 +523,21 @@ fn convert_glsl_folder() {
         }
         println!("Processing {}", file_name);
 
-        let module = naga::front::glsl::parse_str(
-            &fs::read_to_string(entry.path()).expect("Couldn't find glsl file"),
-            &naga::front::glsl::Options {
-                stage: match entry.path().extension().and_then(|s| s.to_str()).unwrap() {
-                    "vert" => naga::ShaderStage::Vertex,
-                    "frag" => naga::ShaderStage::Fragment,
-                    "comp" => naga::ShaderStage::Compute,
-                    ext => panic!("Unknown extension for glsl file {}", ext),
+        let mut parser = naga::front::glsl::Parser::default();
+        let module = parser
+            .parse(
+                &naga::front::glsl::Options {
+                    stage: match entry.path().extension().and_then(|s| s.to_str()).unwrap() {
+                        "vert" => naga::ShaderStage::Vertex,
+                        "frag" => naga::ShaderStage::Fragment,
+                        "comp" => naga::ShaderStage::Compute,
+                        ext => panic!("Unknown extension for glsl file {}", ext),
+                    },
+                    defines: Default::default(),
                 },
-                defines: Default::default(),
-            },
-        )
-        .unwrap();
+                &fs::read_to_string(entry.path()).expect("Couldn't find glsl file"),
+            )
+            .unwrap();
 
         let info = naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),

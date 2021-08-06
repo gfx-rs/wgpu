@@ -50,7 +50,7 @@ impl super::ConstantInner {
 }
 
 /// Helper processor that derives the types of all expressions.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Typifier {
     resolutions: Vec<TypeResolution>,
 }
@@ -60,6 +60,10 @@ impl Typifier {
         Typifier {
             resolutions: Vec::new(),
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.resolutions.clear()
     }
 
     pub fn get<'a>(

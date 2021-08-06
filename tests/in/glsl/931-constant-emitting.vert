@@ -8,3 +8,5 @@ const int constant = 10;
 float function() {
     return 0.0;
 }
+
+void main() {}

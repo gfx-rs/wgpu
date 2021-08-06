@@ -221,50 +221,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        "vert" => {
+        ext @ "vert" | ext @ "frag" | ext @ "comp" => {
             let input = fs::read_to_string(input_path)?;
-            naga::front::glsl::parse_str(
-                &input,
-                &naga::front::glsl::Options {
-                    stage: naga::ShaderStage::Vertex,
-                    defines: Default::default(),
-                },
-            )
-            .unwrap_or_else(|err| {
-                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_glsl_parser_error(err, filename.unwrap_or("glsl"), &input);
-                std::process::exit(1);
-            })
-        }
-        "frag" => {
-            let input = fs::read_to_string(input_path)?;
-            naga::front::glsl::parse_str(
-                &input,
-                &naga::front::glsl::Options {
-                    stage: naga::ShaderStage::Fragment,
-                    defines: Default::default(),
-                },
-            )
-            .unwrap_or_else(|err| {
-                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_glsl_parser_error(err, filename.unwrap_or("glsl"), &input);
-                std::process::exit(1);
-            })
-        }
-        "comp" => {
-            let input = fs::read_to_string(input_path)?;
-            naga::front::glsl::parse_str(
-                &input,
-                &naga::front::glsl::Options {
-                    stage: naga::ShaderStage::Compute,
-                    defines: Default::default(),
-                },
-            )
-            .unwrap_or_else(|err| {
-                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_glsl_parser_error(err, filename.unwrap_or("glsl"), &input);
-                std::process::exit(1);
-            })
+            let mut parser = naga::front::glsl::Parser::default();
+
+            parser
+                .parse(
+                    &naga::front::glsl::Options {
+                        stage: match ext {
+                            "vert" => naga::ShaderStage::Vertex,
+                            "frag" => naga::ShaderStage::Fragment,
+                            "comp" => naga::ShaderStage::Compute,
+                            _ => unreachable!(),
+                        },
+                        defines: Default::default(),
+                    },
+                    &input,
+                )
+                .unwrap_or_else(|err| {
+                    let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                    emit_glsl_parser_error(err, filename.unwrap_or("glsl"), &input);
+                    std::process::exit(1);
+                })
         }
         _ => return Err(CliError("Unknown input file extension").into()),
     };

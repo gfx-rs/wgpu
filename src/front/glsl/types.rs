@@ -1,4 +1,11 @@
-use crate::{ImageClass, ImageDimension, ScalarKind, Type, TypeInner, VectorSize};
+use crate::{
+    front::glsl::{
+        constants::ConstantSolver, context::Context, ErrorKind, Parser, Result, SourceMetadata,
+    },
+    proc::ResolveContext,
+    ArraySize, Constant, Expression, Handle, ImageClass, ImageDimension, ScalarKind, Type,
+    TypeInner, VectorSize,
+};
 
 pub fn parse_type(type_name: &str) -> Option<Type> {
     match type_name {
@@ -150,5 +157,110 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                 .or_else(|| mat_parse(word))
                 .or_else(|| texture_parse(word))
         }
+    }
+}
+
+pub fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, crate::Bytes)> {
+    match *ty {
+        TypeInner::Scalar { kind, width } => Some((kind, width)),
+        TypeInner::Vector { kind, width, .. } => Some((kind, width)),
+        TypeInner::Matrix { width, .. } => Some((ScalarKind::Float, width)),
+        TypeInner::ValuePointer { kind, width, .. } => Some((kind, width)),
+        _ => None,
+    }
+}
+
+pub fn type_power(kind: ScalarKind) -> Option<u32> {
+    Some(match kind {
+        ScalarKind::Sint => 0,
+        ScalarKind::Uint => 1,
+        ScalarKind::Float => 2,
+        ScalarKind::Bool => return None,
+    })
+}
+
+impl Parser {
+    pub fn typifier_grow(
+        &self,
+        ctx: &mut Context,
+        handle: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<()> {
+        let resolve_ctx = ResolveContext {
+            constants: &self.module.constants,
+            types: &self.module.types,
+            global_vars: &self.module.global_variables,
+            local_vars: &ctx.locals,
+            functions: &self.module.functions,
+            arguments: &ctx.arguments,
+        };
+
+        ctx.typifier
+            .grow(handle, &ctx.expressions, &resolve_ctx)
+            .map_err(|error| {
+                ErrorKind::SemanticError(meta, format!("Can't resolve type: {:?}", error).into())
+            })
+    }
+
+    pub fn resolve_type<'b>(
+        &'b self,
+        ctx: &'b mut Context,
+        handle: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<&'b TypeInner> {
+        self.typifier_grow(ctx, handle, meta)?;
+        Ok(ctx.typifier.get(handle, &self.module.types))
+    }
+
+    /// Invalidates the cached type resolution for `handle` forcing a recomputation
+    pub fn invalidate_expression<'b>(
+        &'b self,
+        ctx: &'b mut Context,
+        handle: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<()> {
+        let resolve_ctx = ResolveContext {
+            constants: &self.module.constants,
+            types: &self.module.types,
+            global_vars: &self.module.global_variables,
+            local_vars: &ctx.locals,
+            functions: &self.module.functions,
+            arguments: &ctx.arguments,
+        };
+
+        ctx.typifier
+            .invalidate(handle, &ctx.expressions, &resolve_ctx)
+            .map_err(|error| {
+                ErrorKind::SemanticError(meta, format!("Can't resolve type: {:?}", error).into())
+            })
+    }
+
+    pub fn solve_constant(
+        &mut self,
+        ctx: &Context,
+        root: Handle<Expression>,
+        meta: SourceMetadata,
+    ) -> Result<Handle<Constant>> {
+        let mut solver = ConstantSolver {
+            types: &self.module.types,
+            expressions: &ctx.expressions,
+            constants: &mut self.module.constants,
+        };
+
+        solver.solve(root).map_err(|e| (meta, e).into())
+    }
+
+    pub fn maybe_array(&mut self, base: Handle<Type>, size: Option<ArraySize>) -> Handle<Type> {
+        size.map(|size| {
+            self.module.types.fetch_or_append(Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base,
+                    size,
+                    stride: self.module.types[base].inner.span(&self.module.constants),
+                },
+            })
+        })
+        .unwrap_or(base)
     }
 }
