@@ -840,6 +840,9 @@ impl Surface {
                 crate::SurfaceError::Lost
             })?;
 
+        gl.disable(glow::SCISSOR_TEST);
+        gl.color_mask(true, true, true, true);
+
         gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer));
         // Note the Y-flipping here. GL's presentation is not flipped,
