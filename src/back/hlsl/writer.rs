@@ -8,7 +8,7 @@ use crate::{
     proc::{self, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
 };
-use std::fmt;
+use std::{fmt, mem};
 
 const LOCATION_SEMANTIC: &str = "LOC";
 const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
@@ -992,38 +992,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, ";")?
                 }
             }
-            Statement::Call {
-                function,
-                ref arguments,
-                result,
-            } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
-                if let Some(expr) = result {
-                    write!(self.out, "const ")?;
-                    let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
-                    let expr_ty = &func_ctx.info[expr].ty;
-                    match *expr_ty {
-                        proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
-                        proc::TypeResolution::Value(ref value) => {
-                            self.write_value_type(module, value)?
-                        }
-                    };
-                    write!(self.out, " {} = ", name)?;
-                    self.write_expr(module, expr, func_ctx)?;
-                    self.named_expressions.insert(expr, name);
-                }
-                let func_name = &self.names[&NameKey::Function(function)];
-                write!(self.out, "{}(", func_name)?;
-                for (index, argument) in arguments.iter().enumerate() {
-                    self.write_expr(module, *argument, func_ctx)?;
-                    // Only write a comma if isn't the last element
-                    if index != arguments.len().saturating_sub(1) {
-                        // The leading space is for readability only
-                        write!(self.out, ", ")?;
-                    }
-                }
-                writeln!(self.out, ");")?
-            }
             Statement::Loop {
                 ref body,
                 ref continuing,
@@ -1107,7 +1075,94 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ";")?;
             }
-            _ => return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt))),
+            Statement::Call {
+                function,
+                ref arguments,
+                result,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                if let Some(expr) = result {
+                    write!(self.out, "const ")?;
+                    let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
+                    let expr_ty = &func_ctx.info[expr].ty;
+                    match *expr_ty {
+                        proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                        proc::TypeResolution::Value(ref value) => {
+                            self.write_value_type(module, value)?
+                        }
+                    };
+                    write!(self.out, " {} = ", name)?;
+                    self.named_expressions.insert(expr, name);
+                }
+                let func_name = &self.names[&NameKey::Function(function)];
+                write!(self.out, "{}(", func_name)?;
+                for (index, argument) in arguments.iter().enumerate() {
+                    self.write_expr(module, *argument, func_ctx)?;
+                    // Only write a comma if isn't the last element
+                    if index != arguments.len().saturating_sub(1) {
+                        // The leading space is for readability only
+                        write!(self.out, ", ")?;
+                    }
+                }
+                writeln!(self.out, ");")?
+            }
+            Statement::Atomic {
+                pointer,
+                fun,
+                result,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                match func_ctx.info[result].ty {
+                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    proc::TypeResolution::Value(ref value) => {
+                        self.write_value_type(module, value)?
+                    }
+                };
+
+                let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
+                // working around the borrow checker in `self.write_expr`
+                let chain = mem::take(&mut self.temp_access_chain);
+                let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+
+                write!(self.out, " {}; {}.Interlocked", res_name, var_name)?;
+                match fun {
+                    crate::AtomicFunction::Binary { op, value } => {
+                        let suffix = op.to_hlsl_atomic_suffix();
+                        write!(self.out, "{}(", suffix)?;
+                        self.write_storage_address(module, &chain, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                    crate::AtomicFunction::Min(value) => {
+                        write!(self.out, "Min(")?;
+                        self.write_storage_address(module, &chain, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                    crate::AtomicFunction::Max(value) => {
+                        write!(self.out, "Max(")?;
+                        self.write_storage_address(module, &chain, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                    crate::AtomicFunction::Exchange(value) => {
+                        write!(self.out, "Exchange(")?;
+                        self.write_storage_address(module, &chain, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                    crate::AtomicFunction::CompareExchange { .. } => {
+                        return Err(Error::Unimplemented("atomic CompareExchange".to_string()));
+                    }
+                }
+                writeln!(self.out, ", {});", res_name)?;
+                self.temp_access_chain = chain;
+                self.named_expressions.insert(result, res_name);
+            }
+            Statement::Switch { .. } => {
+                return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt)))
+            }
         }
 
         Ok(())
@@ -1667,7 +1722,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?
             }
             // Nothing to do here, since call expression already cached
-            Expression::CallResult(_) => {}
+            Expression::CallResult(_) | Expression::AtomicResult { .. } => {}
             _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 

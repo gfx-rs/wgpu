@@ -122,3 +122,16 @@ impl crate::Sampling {
         }
     }
 }
+
+impl crate::BinaryOperator {
+    /// Return the HLSL suffix for the `InterlockedXxx` method.
+    pub(super) fn to_hlsl_atomic_suffix(self) -> &'static str {
+        match self {
+            Self::Add => "Add",
+            Self::And => "And",
+            Self::InclusiveOr => "Or",
+            Self::ExclusiveOr => "Xor",
+            _ => "",
+        }
+    }
+}

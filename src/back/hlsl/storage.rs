@@ -40,7 +40,7 @@ pub(super) enum StoreValue {
 }
 
 impl<W: fmt::Write> super::Writer<'_, W> {
-    fn write_storage_address(
+    pub(super) fn write_storage_address(
         &mut self,
         module: &crate::Module,
         chain: &[SubAccess],
