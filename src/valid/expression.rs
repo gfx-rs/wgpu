@@ -105,12 +105,8 @@ pub enum ExpressionError {
     WrongArgumentCount(crate::MathFunction),
     #[error("Argument [{1}] to {0:?} as expression {2:?} has an invalid type.")]
     InvalidArgumentType(crate::MathFunction, u32, Handle<crate::Expression>),
-    #[error("Atomic function doesn't work on pointer to {0:?}.")]
-    InvalidAtomicPointer(Handle<crate::Expression>),
-    #[error("Atomic function doesn't work with operand {0:?}.")]
-    InvalidAtomicOperand(Handle<crate::Expression>),
-    #[error("Atomic binary op {0:?} doesn't work on {1:?}.")]
-    InvalidAtomicBinaryOp(crate::BinaryOperator, crate::ScalarKind),
+    #[error("Atomic result type can't be {0:?} of {1} bytes")]
+    InvalidAtomicResultType(crate::ScalarKind, crate::Bytes),
 }
 
 struct ExpressionTypeResolver<'a> {
@@ -782,52 +778,6 @@ impl super::Validator {
                 }
                 ShaderStages::all()
             }
-            E::Atomic { pointer, fun } => {
-                use crate::BinaryOperator as Bo;
-                let pointer_inner = resolver.resolve(pointer)?;
-                let (ptr_kind, ptr_width) = match *pointer_inner {
-                    Ti::Pointer { base, .. } => match module.types[base].inner {
-                        Ti::Atomic { kind, width } => (kind, width),
-                        ref other => {
-                            log::error!("Atomic pointer to type {:?}", other);
-                            return Err(ExpressionError::InvalidAtomicPointer(pointer));
-                        }
-                    },
-                    ref other => {
-                        log::error!("Atomic on type {:?}", other);
-                        return Err(ExpressionError::InvalidAtomicPointer(pointer));
-                    }
-                };
-                let value = match fun {
-                    crate::AtomicFunction::Binary { op, value } => {
-                        match op {
-                            Bo::Add | Bo::And | Bo::InclusiveOr | Bo::ExclusiveOr => {}
-                            _ => return Err(ExpressionError::InvalidAtomicBinaryOp(op, ptr_kind)),
-                        }
-                        value
-                    }
-                    crate::AtomicFunction::Min(value)
-                    | crate::AtomicFunction::Max(value)
-                    | crate::AtomicFunction::Exchange(value) => value,
-                    crate::AtomicFunction::CompareExchange { cmp, value } => {
-                        if resolver.resolve(cmp)? != resolver.resolve(value)? {
-                            log::error!(
-                                "Atomic exchange comparison has a different type from the value"
-                            );
-                            return Err(ExpressionError::InvalidAtomicOperand(cmp));
-                        }
-                        value
-                    }
-                };
-                match *resolver.resolve(value)? {
-                    Ti::Scalar { width, kind } if kind == ptr_kind && width == ptr_width => {}
-                    ref other => {
-                        log::error!("Atomic operand type {:?}", other);
-                        return Err(ExpressionError::InvalidAtomicOperand(value));
-                    }
-                }
-                ShaderStages::all()
-            }
             E::Select {
                 condition,
                 accept,
@@ -1243,7 +1193,23 @@ impl super::Validator {
                 }
                 ShaderStages::all()
             }
-            E::Call(function) => other_infos[function.index()].available_stages,
+            E::CallResult(function) => other_infos[function.index()].available_stages,
+            E::AtomicResult {
+                kind,
+                width,
+                comparison: _,
+            } => {
+                let good = match kind {
+                    crate::ScalarKind::Uint | crate::ScalarKind::Sint => {
+                        self.check_width(kind, width)
+                    }
+                    _ => false,
+                };
+                if !good {
+                    return Err(ExpressionError::InvalidAtomicResultType(kind, width));
+                }
+                ShaderStages::all()
+            }
             E::ArrayLength(expr) => match *resolver.resolve(expr)? {
                 Ti::Pointer { base, .. } => {
                     if let Some(&Ti::Array {

@@ -320,7 +320,7 @@
                     Load(
                         pointer: 8,
                     ),
-                    Call(1),
+                    CallResult(1),
                 ],
                 named_expressions: {},
                 body: [

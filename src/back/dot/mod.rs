@@ -123,6 +123,27 @@ impl StatementGraph {
                     self.calls.push((id, function));
                     "Call"
                 }
+                S::Atomic {
+                    pointer,
+                    fun,
+                    result,
+                } => {
+                    self.emits.push((id, result));
+                    self.dependencies.push((id, pointer, "pointer"));
+                    match fun {
+                        crate::AtomicFunction::Binary { op: _, value }
+                        | crate::AtomicFunction::Min(value)
+                        | crate::AtomicFunction::Max(value)
+                        | crate::AtomicFunction::Exchange(value) => {
+                            self.dependencies.push((id, value, "value"));
+                        }
+                        crate::AtomicFunction::CompareExchange { cmp, value } => {
+                            self.dependencies.push((id, cmp, "cmp"));
+                            self.dependencies.push((id, value, "value"));
+                        }
+                    }
+                    "Atomic"
+                }
             };
         }
         root
@@ -285,33 +306,6 @@ fn write_fun(
                 edges.insert("right", right);
                 (format!("{:?}", op).into(), 6)
             }
-            E::Atomic { pointer, fun } => {
-                edges.insert("pointer", pointer);
-                let description = match fun {
-                    crate::AtomicFunction::Binary { op, value } => {
-                        edges.insert("value", value);
-                        Cow::Owned(format!("{:?}", op))
-                    }
-                    crate::AtomicFunction::Min(value) => {
-                        edges.insert("value", value);
-                        Cow::Borrowed("Min")
-                    }
-                    crate::AtomicFunction::Max(value) => {
-                        edges.insert("value", value);
-                        Cow::Borrowed("Max")
-                    }
-                    crate::AtomicFunction::Exchange(value) => {
-                        edges.insert("value", value);
-                        Cow::Borrowed("Exchange")
-                    }
-                    crate::AtomicFunction::CompareExchange { cmp, value } => {
-                        edges.insert("cmp", cmp);
-                        edges.insert("value", value);
-                        Cow::Borrowed("CompareExchange")
-                    }
-                };
-                (description, 3)
-            }
             E::Select {
                 condition,
                 accept,
@@ -357,7 +351,8 @@ fn write_fun(
                 };
                 (string.into(), 3)
             }
-            E::Call(_function) => ("Call".into(), 4),
+            E::CallResult(_function) => ("CallResult".into(), 4),
+            E::AtomicResult { .. } => ("AtomicResult".into(), 4),
             E::ArrayLength(expr) => {
                 edges.insert("", expr);
                 ("ArrayLength".into(), 7)

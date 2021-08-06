@@ -1756,7 +1756,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result = if self.lookup_void_type == Some(result_type_id) {
                         None
                     } else {
-                        let expr_handle = expressions.append(crate::Expression::Call(function));
+                        let expr_handle =
+                            expressions.append(crate::Expression::CallResult(function));
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
@@ -2302,7 +2303,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | S::Kill
                 | S::Barrier(_)
                 | S::Store { .. }
-                | S::ImageStore { .. } => {}
+                | S::ImageStore { .. }
+                | S::Atomic { .. } => {}
                 S::Call {
                     function: ref mut callee,
                     ref arguments,
@@ -2355,7 +2357,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         fun: &mut crate::Function,
     ) -> Result<(), Error> {
         for (_, expr) in fun.expressions.iter_mut() {
-            if let crate::Expression::Call(ref mut function) = *expr {
+            if let crate::Expression::CallResult(ref mut function) = *expr {
                 let fun_id = self.deferred_function_calls[function.index()];
                 *function = *self.lookup_function.lookup(fun_id)?;
             }

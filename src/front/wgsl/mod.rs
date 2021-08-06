@@ -126,6 +126,7 @@ pub enum Error<'a> {
     UnknownLocalFunction(Span),
     InitializationTypeMismatch(Span, Handle<crate::Type>),
     MissingType(Span),
+    InvalidAtomicOperandType(Span),
     Other,
 }
 
@@ -335,6 +336,11 @@ impl<'a> Error<'a> {
             Error::MissingType(ref name_span) => ParseError {
                 message: format!("variable `{}` needs a type", &source[name_span.clone()]),
                 labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                notes: vec![],
+            },
+            Error::InvalidAtomicOperandType(ref span) => ParseError {
+                message: "atomic operand type is inconsistent with the operation".to_string(),
+                labels: vec![(span.clone(), "atomic operand type is invalid".into())],
                 notes: vec![],
             },
             Error::Other => ParseError {
@@ -779,6 +785,13 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         }
         Ok(left)
     }
+
+    fn interrupt_emitter(&mut self, expression: crate::Expression) -> Handle<crate::Expression> {
+        self.block.extend(self.emitter.finish(self.expressions));
+        let result = self.expressions.append(expression);
+        self.emitter.start(self.expressions);
+        result
+    }
 }
 
 enum Composition {
@@ -1088,21 +1101,49 @@ impl Parser {
         Ok(Some((fun_handle, arguments)))
     }
 
+    fn parse_atomic_helper<'a, F: FnOnce(Handle<crate::Expression>) -> crate::AtomicFunction>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        function_factory: F,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        lexer.open_arguments()?;
+        let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+        lexer.expect(Token::Separator(','))?;
+        let ctx_span = ctx.reborrow();
+        let (value, value_span) =
+            lexer.capture_span(|lexer| self.parse_singular_expression(lexer, ctx_span))?;
+        lexer.close_arguments()?;
+
+        let expression = match *ctx.resolve_type(value)? {
+            crate::TypeInner::Scalar { kind, width } => crate::Expression::AtomicResult {
+                kind,
+                width,
+                comparison: false,
+            },
+            _ => return Err(Error::InvalidAtomicOperandType(value_span)),
+        };
+
+        let result = ctx.interrupt_emitter(expression);
+        ctx.block.push(crate::Statement::Atomic {
+            pointer,
+            fun: function_factory(value),
+            result,
+        });
+        Ok(result)
+    }
+
     fn parse_atomic_binary_op<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         op: crate::BinaryOperator,
-        mut ctx: ExpressionContext<'a, '_, '_>,
-    ) -> Result<crate::Expression, Error<'a>> {
-        lexer.open_arguments()?;
-        let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
-        lexer.expect(Token::Separator(','))?;
-        let value = self.parse_singular_expression(lexer, ctx)?;
-        lexer.close_arguments()?;
-        Ok(crate::Expression::Atomic {
-            pointer,
-            fun: crate::AtomicFunction::Binary { op, value },
-        })
+        ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        self.parse_atomic_helper(
+            lexer,
+            |value| crate::AtomicFunction::Binary { op, value },
+            ctx,
+        )
     }
 
     fn parse_function_call_inner<'a>(
@@ -1174,53 +1215,51 @@ impl Parser {
                     crate::Expression::Load { pointer }
                 }
                 "atomicAdd" => {
-                    self.parse_atomic_binary_op(lexer, crate::BinaryOperator::Add, ctx.reborrow())?
+                    let handle = self.parse_atomic_binary_op(
+                        lexer,
+                        crate::BinaryOperator::Add,
+                        ctx.reborrow(),
+                    )?;
+                    return Ok(Some(handle));
                 }
                 "atomicAnd" => {
-                    self.parse_atomic_binary_op(lexer, crate::BinaryOperator::And, ctx.reborrow())?
+                    let handle = self.parse_atomic_binary_op(
+                        lexer,
+                        crate::BinaryOperator::And,
+                        ctx.reborrow(),
+                    )?;
+                    return Ok(Some(handle));
                 }
-                "atomicOr" => self.parse_atomic_binary_op(
-                    lexer,
-                    crate::BinaryOperator::InclusiveOr,
-                    ctx.reborrow(),
-                )?,
-                "atomicXor" => self.parse_atomic_binary_op(
-                    lexer,
-                    crate::BinaryOperator::ExclusiveOr,
-                    ctx.reborrow(),
-                )?,
+                "atomicOr" => {
+                    let handle = self.parse_atomic_binary_op(
+                        lexer,
+                        crate::BinaryOperator::InclusiveOr,
+                        ctx.reborrow(),
+                    )?;
+                    return Ok(Some(handle));
+                }
+                "atomicXor" => {
+                    let handle = self.parse_atomic_binary_op(
+                        lexer,
+                        crate::BinaryOperator::ExclusiveOr,
+                        ctx.reborrow(),
+                    )?;
+                    return Ok(Some(handle));
+                }
                 "atomicMin" => {
-                    lexer.open_arguments()?;
-                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
-                    lexer.expect(Token::Separator(','))?;
-                    let value = self.parse_singular_expression(lexer, ctx.reborrow())?;
-                    lexer.close_arguments()?;
-                    crate::Expression::Atomic {
-                        pointer,
-                        fun: crate::AtomicFunction::Min(value),
-                    }
+                    let handle =
+                        self.parse_atomic_helper(lexer, crate::AtomicFunction::Min, ctx)?;
+                    return Ok(Some(handle));
                 }
                 "atomicMax" => {
-                    lexer.open_arguments()?;
-                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
-                    lexer.expect(Token::Separator(','))?;
-                    let value = self.parse_singular_expression(lexer, ctx.reborrow())?;
-                    lexer.close_arguments()?;
-                    crate::Expression::Atomic {
-                        pointer,
-                        fun: crate::AtomicFunction::Max(value),
-                    }
+                    let handle =
+                        self.parse_atomic_helper(lexer, crate::AtomicFunction::Max, ctx)?;
+                    return Ok(Some(handle));
                 }
                 "atomicExchange" => {
-                    lexer.open_arguments()?;
-                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
-                    lexer.expect(Token::Separator(','))?;
-                    let value = self.parse_singular_expression(lexer, ctx.reborrow())?;
-                    lexer.close_arguments()?;
-                    crate::Expression::Atomic {
-                        pointer,
-                        fun: crate::AtomicFunction::Exchange(value),
-                    }
+                    let handle =
+                        self.parse_atomic_helper(lexer, crate::AtomicFunction::Exchange, ctx)?;
+                    return Ok(Some(handle));
                 }
                 "atomicCompareExchangeWeak" => {
                     lexer.open_arguments()?;
@@ -1228,12 +1267,29 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let cmp = self.parse_singular_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
-                    let value = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    let (value, value_span) = lexer.capture_span(|lexer| {
+                        self.parse_singular_expression(lexer, ctx.reborrow())
+                    })?;
                     lexer.close_arguments()?;
-                    crate::Expression::Atomic {
+
+                    let expression = match *ctx.resolve_type(value)? {
+                        crate::TypeInner::Scalar { kind, width } => {
+                            crate::Expression::AtomicResult {
+                                kind,
+                                width,
+                                comparison: true,
+                            }
+                        }
+                        _ => return Err(Error::InvalidAtomicOperandType(value_span)),
+                    };
+
+                    let result = ctx.interrupt_emitter(expression);
+                    ctx.block.push(crate::Statement::Atomic {
                         pointer,
                         fun: crate::AtomicFunction::CompareExchange { cmp, value },
-                    }
+                        result,
+                    });
+                    return Ok(Some(result));
                 }
                 // texture sampling
                 "textureSample" => {
@@ -1511,16 +1567,14 @@ impl Parser {
                     let handle =
                         match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
                             Some((function, arguments)) => {
-                                ctx.block.extend(ctx.emitter.finish(ctx.expressions));
-                                let result =
-                                    Some(ctx.expressions.append(crate::Expression::Call(function)));
+                                let result = Some(
+                                    ctx.interrupt_emitter(crate::Expression::CallResult(function)),
+                                );
                                 ctx.block.push(crate::Statement::Call {
                                     function,
                                     arguments,
                                     result,
                                 });
-                                // restart the emitter
-                                ctx.emitter.start(ctx.expressions);
                                 result
                             }
                             None => None,
@@ -1721,12 +1775,7 @@ impl Parser {
                 let const_handle =
                     self.parse_const_expression_impl(token, lexer, None, ctx.types, ctx.constants)?;
                 // pause the emitter while generating this expression, since it's pre-emitted
-                ctx.block.extend(ctx.emitter.finish(ctx.expressions));
-                let expr = ctx
-                    .expressions
-                    .append(crate::Expression::Constant(const_handle));
-                ctx.emitter.start(ctx.expressions);
-                expr
+                ctx.interrupt_emitter(crate::Expression::Constant(const_handle))
             }
             (Token::Word(word), span) => {
                 if let Some(&expr) = ctx.lookup_ident.get(word) {

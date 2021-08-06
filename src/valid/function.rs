@@ -36,6 +36,21 @@ pub enum CallError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
+pub enum AtomicError {
+    #[error("Pointer {0:?} to atomic is invalid.")]
+    InvalidPointer(Handle<crate::Expression>),
+    #[error("Operand {0:?} has invalid type.")]
+    InvalidOperand(Handle<crate::Expression>),
+    #[error("Binary op {0:?} doesn't work on {1:?}.")]
+    InvalidBinaryOp(crate::BinaryOperator, crate::ScalarKind),
+    #[error("Result expression {0:?} has already been introduced earlier")]
+    ResultAlreadyInScope(Handle<crate::Expression>),
+    #[error("Result type for {0:?} doesn't match the statement")]
+    ResultTypeMismatch(Handle<crate::Expression>),
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum LocalVariableError {
     #[error("Local variable has a type {0:?} that can't be stored in a local variable.")]
     InvalidType(Handle<crate::Type>),
@@ -98,6 +113,8 @@ pub enum FunctionError {
         #[source]
         error: CallError,
     },
+    #[error("Atomic operation is invalid")]
+    InvalidAtomic(#[from] AtomicError),
     #[error(
         "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
     )]
@@ -239,7 +256,8 @@ impl super::Validator {
                 return Err(CallError::ResultAlreadyInScope(expr));
             }
             match context.expressions[expr] {
-                crate::Expression::Call(callee) if fun.result.is_some() && callee == function => {}
+                crate::Expression::CallResult(callee)
+                    if fun.result.is_some() && callee == function => {}
                 _ => return Err(CallError::ExpressionMismatch(result)),
             }
         } else if fun.result.is_some() {
@@ -248,6 +266,77 @@ impl super::Validator {
 
         let callee_info = &context.prev_infos[function.index()];
         Ok(callee_info.available_stages)
+    }
+
+    fn validate_atomic(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        fun: crate::AtomicFunction,
+        result: Handle<crate::Expression>,
+        context: &BlockContext,
+    ) -> Result<(), FunctionError> {
+        use crate::BinaryOperator as Bo;
+
+        let pointer_inner = context.resolve_type(pointer, &self.valid_expression_set)?;
+        let (ptr_kind, ptr_width) = match *pointer_inner {
+            crate::TypeInner::Pointer { base, .. } => match context.types[base].inner {
+                crate::TypeInner::Atomic { kind, width } => (kind, width),
+                ref other => {
+                    log::error!("Atomic pointer to type {:?}", other);
+                    return Err(AtomicError::InvalidPointer(pointer).into());
+                }
+            },
+            ref other => {
+                log::error!("Atomic on type {:?}", other);
+                return Err(AtomicError::InvalidPointer(pointer).into());
+            }
+        };
+
+        let value = match fun {
+            crate::AtomicFunction::Binary { op, value } => {
+                match op {
+                    Bo::Add | Bo::And | Bo::InclusiveOr | Bo::ExclusiveOr => {}
+                    _ => return Err(AtomicError::InvalidBinaryOp(op, ptr_kind).into()),
+                }
+                value
+            }
+            crate::AtomicFunction::Min(value)
+            | crate::AtomicFunction::Max(value)
+            | crate::AtomicFunction::Exchange(value) => value,
+            crate::AtomicFunction::CompareExchange { cmp, value } => {
+                if context.resolve_type(cmp, &self.valid_expression_set)?
+                    != context.resolve_type(value, &self.valid_expression_set)?
+                {
+                    log::error!("Atomic exchange comparison has a different type from the value");
+                    return Err(AtomicError::InvalidOperand(cmp).into());
+                }
+                value
+            }
+        };
+
+        match *context.resolve_type(value, &self.valid_expression_set)? {
+            crate::TypeInner::Scalar { width, kind } if kind == ptr_kind && width == ptr_width => {}
+            ref other => {
+                log::error!("Atomic operand type {:?}", other);
+                return Err(AtomicError::InvalidOperand(value).into());
+            }
+        }
+
+        if self.valid_expression_set.insert(result.index()) {
+            self.valid_expression_list.push(result);
+        } else {
+            return Err(AtomicError::ResultAlreadyInScope(result).into());
+        }
+        match context.expressions[result] {
+            //TODO: support atomic result with comparison
+            crate::Expression::AtomicResult {
+                kind,
+                width,
+                comparison: false,
+            } if kind == ptr_kind && width == ptr_width => {}
+            _ => return Err(AtomicError::ResultTypeMismatch(result).into()),
+        }
+        Ok(())
     }
 
     fn validate_block_impl(
@@ -511,6 +600,13 @@ impl super::Validator {
                     Ok(callee_stages) => stages &= callee_stages,
                     Err(error) => return Err(FunctionError::InvalidCall { function, error }),
                 },
+                S::Atomic {
+                    pointer,
+                    fun,
+                    result,
+                } => {
+                    self.validate_atomic(pointer, fun, result, context)?;
+                }
             }
         }
         Ok(stages)

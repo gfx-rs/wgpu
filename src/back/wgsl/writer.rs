@@ -701,6 +701,58 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?
             }
+            Statement::Atomic {
+                pointer,
+                fun,
+                result,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                self.start_named_expr(module, result, func_ctx, &res_name)?;
+                self.write_expr(module, result, func_ctx)?;
+                self.named_expressions.insert(result, res_name);
+
+                match fun {
+                    crate::AtomicFunction::Binary { op, value } => {
+                        write!(
+                            self.out,
+                            "atomic{}({}",
+                            op.to_wgsl_atomic_suffix(),
+                            ATOMIC_REFERENCE
+                        )?;
+                        self.write_expr(module, pointer, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                    crate::AtomicFunction::Min(value) => {
+                        write!(self.out, "atomicMin({}", ATOMIC_REFERENCE)?;
+                        self.write_expr(module, pointer, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                    crate::AtomicFunction::Max(value) => {
+                        write!(self.out, "atomicMax({}", ATOMIC_REFERENCE)?;
+                        self.write_expr(module, pointer, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                    crate::AtomicFunction::Exchange(value) => {
+                        write!(self.out, "atomicExchange({}", ATOMIC_REFERENCE)?;
+                        self.write_expr(module, pointer, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                    crate::AtomicFunction::CompareExchange { cmp, value } => {
+                        write!(self.out, "atomicCompareExchangeWeak({}", ATOMIC_REFERENCE)?;
+                        self.write_expr(module, pointer, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, cmp, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, value, func_ctx)?;
+                    }
+                }
+                writeln!(self.out, ");")?
+            }
             Statement::ImageStore {
                 image,
                 coordinate,
@@ -927,50 +979,6 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, right, func_ctx)?;
                 write!(self.out, ")")?;
             }
-            Expression::Atomic { pointer, fun } => match fun {
-                crate::AtomicFunction::Binary { op, value } => {
-                    write!(
-                        self.out,
-                        "atomic{}({}",
-                        op.to_wgsl_atomic_suffix(),
-                        ATOMIC_REFERENCE
-                    )?;
-                    self.write_expr(module, pointer, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, value, func_ctx)?;
-                    write!(self.out, ")")?;
-                }
-                crate::AtomicFunction::Min(value) => {
-                    write!(self.out, "atomicMin({}", ATOMIC_REFERENCE)?;
-                    self.write_expr(module, pointer, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, value, func_ctx)?;
-                    write!(self.out, ")")?;
-                }
-                crate::AtomicFunction::Max(value) => {
-                    write!(self.out, "atomicMax({}", ATOMIC_REFERENCE)?;
-                    self.write_expr(module, pointer, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, value, func_ctx)?;
-                    write!(self.out, ")")?;
-                }
-                crate::AtomicFunction::Exchange(value) => {
-                    write!(self.out, "atomicExchange({}", ATOMIC_REFERENCE)?;
-                    self.write_expr(module, pointer, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, value, func_ctx)?;
-                    write!(self.out, ")")?;
-                }
-                crate::AtomicFunction::CompareExchange { cmp, value } => {
-                    write!(self.out, "atomicCompareExchangeWeak({}", ATOMIC_REFERENCE)?;
-                    self.write_expr(module, pointer, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, cmp, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, value, func_ctx)?;
-                    write!(self.out, ")")?;
-                }
-            },
             // TODO: copy-paste from glsl-out
             Expression::Access { base, index } => {
                 self.write_expr(module, base, func_ctx)?;
@@ -1339,7 +1347,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?
             }
             // Nothing to do here, since call expression already cached
-            Expression::Call(_) => {}
+            Expression::CallResult(_) | Expression::AtomicResult { .. } => {}
         }
 
         Ok(())

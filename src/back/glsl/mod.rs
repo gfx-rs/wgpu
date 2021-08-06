@@ -1327,7 +1327,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     } else {
                         let min_ref_count = ctx.expressions[handle].bake_ref_count();
                         if min_ref_count <= ctx.info[handle].ref_count {
-                            Some(format!("_expr{}", handle.index()))
+                            Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
                         } else {
                             None
                         }
@@ -1659,7 +1659,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 if let Some(expr) = result {
-                    let name = format!("_expr{}", expr.index());
+                    let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
                     let result = self.module.functions[function].result.as_ref().unwrap();
                     self.write_type(result.ty)?;
                     write!(self.out, " {} = ", name)?;
@@ -1679,6 +1679,57 @@ impl<'a, W: Write> Writer<'a, W> {
                     .collect();
                 self.write_slice(&arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
                 writeln!(self.out, ");")?
+            }
+            Statement::Atomic {
+                pointer,
+                fun,
+                result,
+            } => {
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                self.write_value_type(res_ty)?;
+                write!(self.out, " {} = ", res_name)?;
+                self.named_expressions.insert(result, res_name);
+                match fun {
+                    crate::AtomicFunction::Binary { op, value } => {
+                        let fun_str = match op {
+                            crate::BinaryOperator::Add => "Add",
+                            crate::BinaryOperator::And => "And",
+                            crate::BinaryOperator::InclusiveOr => "Or",
+                            crate::BinaryOperator::ExclusiveOr => "Xor",
+                            _ => unreachable!(),
+                        };
+                        write!(self.out, "atomic{}(", fun_str)?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(value, ctx)?;
+                    }
+                    crate::AtomicFunction::Min(value) => {
+                        write!(self.out, "atomicMin(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(value, ctx)?;
+                    }
+                    crate::AtomicFunction::Max(value) => {
+                        write!(self.out, "atomicMax(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(value, ctx)?;
+                    }
+                    crate::AtomicFunction::Exchange(value) => {
+                        write!(self.out, "atomicExchange(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(value, ctx)?;
+                    }
+                    crate::AtomicFunction::CompareExchange { .. } => {
+                        return Err(Error::Custom(
+                            "atomic CompareExchange is not implemented".to_string(),
+                        ));
+                    }
+                }
+                writeln!(self.out, ");")?;
             }
         }
 
@@ -2109,49 +2160,6 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, ")")?
             }
-            Expression::Atomic { pointer, fun } => match fun {
-                crate::AtomicFunction::Binary { op, value } => {
-                    let fun_str = match op {
-                        crate::BinaryOperator::Add => "Add",
-                        crate::BinaryOperator::And => "And",
-                        crate::BinaryOperator::InclusiveOr => "Or",
-                        crate::BinaryOperator::ExclusiveOr => "Xor",
-                        _ => unreachable!(),
-                    };
-                    write!(self.out, "atomic{}(", fun_str)?;
-                    self.write_expr(pointer, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(value, ctx)?;
-                    write!(self.out, ")")?;
-                }
-                crate::AtomicFunction::Min(value) => {
-                    write!(self.out, "atomicMin(")?;
-                    self.write_expr(pointer, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(value, ctx)?;
-                    write!(self.out, ")")?;
-                }
-                crate::AtomicFunction::Max(value) => {
-                    write!(self.out, "atomicMax(")?;
-                    self.write_expr(pointer, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(value, ctx)?;
-                    write!(self.out, ")")?;
-                }
-                crate::AtomicFunction::Exchange(value) => {
-                    write!(self.out, "atomicExchange(")?;
-                    self.write_expr(pointer, ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(value, ctx)?;
-                    write!(self.out, ")")?;
-                }
-                crate::AtomicFunction::CompareExchange { .. } => {
-                    //TODO: write a wrapper function to return vec2
-                    return Err(Error::Custom(
-                        "atomic CompareExchange is not implemented".to_string(),
-                    ));
-                }
-            },
             // `Select` is written as `condition ? accept : reject`
             // We wrap everything in parentheses to avoid precedence issues
             Expression::Select {
@@ -2363,7 +2371,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                 }
             }
-            Expression::Call(_function) => unreachable!(),
+            Expression::CallResult(_) | Expression::AtomicResult { .. } => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;

@@ -233,12 +233,12 @@ impl<'a> ConstantSolver<'a> {
             }
 
             Expression::Load { .. } => Err(ConstantSolvingError::Load),
-            Expression::Atomic { .. } => Err(ConstantSolvingError::Atomic),
             Expression::Select { .. } => Err(ConstantSolvingError::Select),
             Expression::LocalVariable(_) => Err(ConstantSolvingError::LocalVariable),
             Expression::Derivative { .. } => Err(ConstantSolvingError::Derivative),
             Expression::Relational { .. } => Err(ConstantSolvingError::Relational),
-            Expression::Call { .. } => Err(ConstantSolvingError::Call),
+            Expression::CallResult { .. } => Err(ConstantSolvingError::Call),
+            Expression::AtomicResult { .. } => Err(ConstantSolvingError::Atomic),
             Expression::FunctionArgument(_) => Err(ConstantSolvingError::FunctionArg),
             Expression::GlobalVariable(_) => Err(ConstantSolvingError::GlobalVariable),
             Expression::ImageSample { .. }

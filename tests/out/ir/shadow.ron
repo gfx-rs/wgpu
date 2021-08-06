@@ -1189,7 +1189,7 @@
                     left: 61,
                     right: 62,
                 ),
-                Call(1),
+                CallResult(1),
                 Load(
                     pointer: 2,
                 ),

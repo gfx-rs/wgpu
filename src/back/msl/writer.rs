@@ -1056,34 +1056,6 @@ impl<W: Write> Writer<W> {
                     }
                 }
             }
-            crate::Expression::Atomic { pointer, fun } => match fun {
-                crate::AtomicFunction::Binary { op, value } => {
-                    self.put_atomic_fetch(pointer, op.to_msl_atomic_str(), value, context)?;
-                }
-                crate::AtomicFunction::Min(value) => {
-                    self.put_atomic_fetch(pointer, "min", value, context)?;
-                }
-                crate::AtomicFunction::Max(value) => {
-                    self.put_atomic_fetch(pointer, "max", value, context)?;
-                }
-                crate::AtomicFunction::Exchange(value) => {
-                    write!(
-                        self.out,
-                        "{}::atomic_exchange_explicit({}",
-                        NAMESPACE, ATOMIC_REFERENCE,
-                    )?;
-                    self.put_expression(pointer, context, true)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(value, context, true)?;
-                    write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
-                }
-                crate::AtomicFunction::CompareExchange { .. } => {
-                    //TODO: add a wrapper function to return the vector
-                    return Err(Error::FeatureNotImplemented(
-                        "atomic CompareExchange".to_string(),
-                    ));
-                }
-            },
             crate::Expression::Select {
                 condition,
                 accept,
@@ -1249,7 +1221,9 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             // has to be a named expression
-            crate::Expression::Call(_) => unreachable!(),
+            crate::Expression::CallResult(_) | crate::Expression::AtomicResult { .. } => {
+                unreachable!()
+            }
             crate::Expression::ArrayLength(expr) => {
                 self.put_array_length(expr, context)?;
             }
@@ -1652,6 +1626,50 @@ impl<W: Write> Writer<W> {
 
                     // done
                     writeln!(self.out, ");")?;
+                }
+                crate::Statement::Atomic {
+                    pointer,
+                    fun,
+                    result,
+                } => {
+                    write!(self.out, "{}", level)?;
+                    let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                    self.start_baking_expression(result, &context.expression, &res_name)?;
+                    self.named_expressions.insert(result, res_name);
+                    match fun {
+                        crate::AtomicFunction::Binary { op, value } => {
+                            self.put_atomic_fetch(
+                                pointer,
+                                op.to_msl_atomic_str(),
+                                value,
+                                &context.expression,
+                            )?;
+                        }
+                        crate::AtomicFunction::Min(value) => {
+                            self.put_atomic_fetch(pointer, "min", value, &context.expression)?;
+                        }
+                        crate::AtomicFunction::Max(value) => {
+                            self.put_atomic_fetch(pointer, "max", value, &context.expression)?;
+                        }
+                        crate::AtomicFunction::Exchange(value) => {
+                            write!(
+                                self.out,
+                                "{}::atomic_exchange_explicit({}",
+                                NAMESPACE, ATOMIC_REFERENCE,
+                            )?;
+                            self.put_expression(pointer, &context.expression, true)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(value, &context.expression, true)?;
+                            write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
+                        }
+                        crate::AtomicFunction::CompareExchange { .. } => {
+                            return Err(Error::FeatureNotImplemented(
+                                "atomic CompareExchange".to_string(),
+                            ));
+                        }
+                    }
+                    // done
+                    writeln!(self.out, ";")?;
                 }
             }
         }
@@ -2587,8 +2605,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 20752 (from CI)
-        if stack_size < 16000 || stack_size > 21000 {
+        // last observed macOS value: 18304
+        if stack_size < 15000 || stack_size > 20000 {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }
@@ -2602,8 +2620,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 16160 (on CI)
-        if stack_size < 12000 || stack_size > 17000 {
+        // last observed macOS value: 17504
+        if stack_size < 14000 || stack_size > 19000 {
             panic!("`put_block` stack size {} has changed!", stack_size);
         }
     }

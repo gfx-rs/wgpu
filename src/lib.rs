@@ -49,7 +49,7 @@ element of an `Arena` has an index of 1, not 0.)
 Naga's representation of function calls is unusual. Most languages treat
 function calls as expressions, but because calls may have side effects, Naga
 represents them as a kind of statement, [`Statement::Call`]. If the function
-returns a value, a call statement designates a particular [`Expression::Call`]
+returns a value, a call statement designates a particular [`Expression::CallResult`]
 expression to represent its return value, for use by subsequent statements and
 expressions.
 
@@ -87,7 +87,7 @@ Naga's rules for when `Expression`s are evaluated are as follows:
         a pointer. Such global variables hold opaque types like shaders or
         images, and cannot be assigned to.
 
--   A [`Call`](Expression::Call) expression that is the `result` of a
+-   A [`Call`](Expression::CallResult) expression that is the `result` of a
     [`Statement::Call`], representing the call's return value, is evaluated when
     the `Call` statement is executed.
 
@@ -745,6 +745,9 @@ pub enum BinaryOperator {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum AtomicFunction {
+    /// Binary operation of an atomic with a value.
+    ///
+    /// Note: only supports a subset of operations, defined by the validator.
     Binary {
         op: BinaryOperator,
         value: Handle<Expression>,
@@ -1122,12 +1125,6 @@ pub enum Expression {
         left: Handle<Expression>,
         right: Handle<Expression>,
     },
-    /// Atomic function.
-    Atomic {
-        /// Pointer to an atomic value.
-        pointer: Handle<Expression>,
-        fun: AtomicFunction,
-    },
     /// Select between two values based on a condition.
     ///
     /// Note that, because expressions have no side effects, it is unobservable
@@ -1167,7 +1164,13 @@ pub enum Expression {
         convert: Option<Bytes>,
     },
     /// Result of calling another function.
-    Call(Handle<Function>),
+    CallResult(Handle<Function>),
+    /// Result of an atomic operation.
+    AtomicResult {
+        kind: ScalarKind,
+        width: Bytes,
+        comparison: bool,
+    },
     /// Get the length of an array.
     /// The expression must resolve to a pointer to an array with a dynamic size.
     ///
@@ -1311,10 +1314,19 @@ pub enum Statement {
         array_index: Option<Handle<Expression>>,
         value: Handle<Expression>,
     },
+    /// Atomic function.
+    Atomic {
+        /// Pointer to an atomic value.
+        pointer: Handle<Expression>,
+        /// Function to run on the atomic.
+        fun: AtomicFunction,
+        /// Emitted expression as a result.
+        result: Handle<Expression>,
+    },
     /// Calls a function.
     ///
     /// If the `result` is `Some`, the corresponding expression has to be
-    /// `Expression::Call`, and this statement serves as a barrier for any
+    /// `Expression::CallResult`, and this statement serves as a barrier for any
     /// operations on that expression.
     Call {
         function: Handle<Function>,

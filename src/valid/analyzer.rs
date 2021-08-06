@@ -532,21 +532,6 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(left).or(self.add_ref(right)),
                 requirements: UniformityRequirements::empty(),
             },
-            E::Atomic { pointer, fun } => {
-                let non_uniform_result = match fun {
-                    crate::AtomicFunction::Binary { op: _, value }
-                    | crate::AtomicFunction::Min(value)
-                    | crate::AtomicFunction::Max(value)
-                    | crate::AtomicFunction::Exchange(value) => self.add_ref(value),
-                    crate::AtomicFunction::CompareExchange { cmp, value } => {
-                        self.add_ref(value).or(self.add_ref(cmp))
-                    }
-                };
-                Uniformity {
-                    non_uniform_result: self.add_ref(pointer).or(non_uniform_result),
-                    requirements: UniformityRequirements::empty(),
-                }
-            }
             E::Select {
                 condition,
                 accept,
@@ -582,13 +567,17 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(expr),
                 requirements: UniformityRequirements::empty(),
             },
-            E::Call(function) => {
+            E::CallResult(function) => {
                 let info = other_functions
                     .get(function.index())
                     .ok_or(ExpressionError::CallToUndeclaredFunction(function))?;
 
                 info.uniformity.clone()
             }
+            E::AtomicResult { .. } => Uniformity {
+                non_uniform_result: Some(handle),
+                requirements: UniformityRequirements::empty(),
+            },
             E::ArrayLength(expr) => Uniformity {
                 non_uniform_result: self.add_ref_impl(expr, GlobalUse::QUERY),
                 requirements: UniformityRequirements::empty(),
@@ -788,6 +777,23 @@ impl FunctionInfo {
                     )?;
                     //Note: the result is validated by the Validator, not here
                     self.process_call(info, arguments, expression_arena)?
+                }
+                S::Atomic {
+                    pointer,
+                    fun,
+                    result: _,
+                } => {
+                    let _ = self.add_ref_impl(pointer, GlobalUse::WRITE);
+                    let _ = match fun {
+                        crate::AtomicFunction::Binary { op: _, value }
+                        | crate::AtomicFunction::Min(value)
+                        | crate::AtomicFunction::Max(value)
+                        | crate::AtomicFunction::Exchange(value) => self.add_ref(value),
+                        crate::AtomicFunction::CompareExchange { cmp, value } => {
+                            self.add_ref(value).or(self.add_ref(cmp))
+                        }
+                    };
+                    FunctionUniformity::new()
                 }
             };
 

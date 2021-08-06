@@ -1667,7 +1667,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?
             }
             // Nothing to do here, since call expression already cached
-            Expression::Call(_) => {}
+            Expression::CallResult(_) => {}
             _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 

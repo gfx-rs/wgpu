@@ -1020,7 +1020,7 @@ impl Parser {
                 ctx.emit_flush(body);
 
                 let result = if !is_void {
-                    Some(ctx.add_expression(Expression::Call(function), body))
+                    Some(ctx.add_expression(Expression::CallResult(function), body))
                 } else {
                     None
                 };
