@@ -633,7 +633,7 @@ impl RenderBundle {
                         &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
                         index as u32,
                         &bind_group.raw,
-                        &offsets[num_dynamic_offsets as usize..],
+                        &offsets[..num_dynamic_offsets as usize],
                     );
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }
