@@ -1104,10 +1104,22 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
-            if writable_storage == WritableStorage::Yes
-                && entry.visibility.contains(wgt::ShaderStages::VERTEX)
-            {
-                required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+            if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
+                if writable_storage == WritableStorage::Yes {
+                    required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+                }
+                if let Bt::Buffer {
+                    ty: wgt::BufferBindingType::Storage { .. },
+                    ..
+                } = entry.ty
+                {
+                    self.require_downlevel_flags(wgt::DownlevelFlags::VERTEX_STORAGE)
+                        .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
+                        .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                            binding: entry.binding,
+                            error,
+                        })?;
+                }
             }
             if writable_storage == WritableStorage::Yes
                 && entry.visibility.contains(wgt::ShaderStages::FRAGMENT)
