@@ -2,7 +2,7 @@ pub use ast::Profile;
 pub use error::{ErrorKind, ParseError};
 pub use token::{SourceMetadata, Token};
 
-use crate::{FastHashMap, Handle, Module, ShaderStage, Type};
+use crate::{FastHashMap, FastHashSet, Handle, Module, ShaderStage, Type};
 use ast::{EntryArg, FunctionDeclaration, GlobalLookup};
 use parser::ParsingContext;
 
@@ -36,7 +36,7 @@ pub struct ShaderMetadata {
     pub workgroup_size: [u32; 3],
     pub early_fragment_tests: bool,
 
-    pub extensions: FastHashMap<String, String>,
+    pub extensions: FastHashSet<String>,
 }
 
 impl ShaderMetadata {
@@ -58,7 +58,7 @@ impl Default for ShaderMetadata {
             stage: ShaderStage::Vertex,
             workgroup_size: [0; 3],
             early_fragment_tests: false,
-            extensions: FastHashMap::default(),
+            extensions: FastHashSet::default(),
         }
     }
 }
@@ -73,6 +73,8 @@ pub struct Parser {
     global_variables: Vec<(String, GlobalLookup)>,
 
     entry_args: Vec<EntryArg>,
+
+    errors: Vec<ParseError>,
 
     module: Module,
 }
@@ -95,17 +97,25 @@ impl Parser {
         &mut self,
         options: &Options,
         source: &str,
-    ) -> std::result::Result<Module, ParseError> {
+    ) -> std::result::Result<Module, Vec<ParseError>> {
         self.reset(options.stage);
 
         let lexer = lex::Lexer::new(source, &options.defines);
         let mut ctx = ParsingContext::new(lexer);
 
-        ctx.parse(self).map_err(|kind| ParseError { kind })?;
+        if let Err(kind) = ctx.parse(self) {
+            self.errors.push(ParseError { kind });
+        }
 
-        let mut module = Module::default();
-        std::mem::swap(&mut self.module, &mut module);
-        Ok(module)
+        if self.errors.is_empty() {
+            let mut module = Module::default();
+            std::mem::swap(&mut self.module, &mut module);
+            Ok(module)
+        } else {
+            let mut errors = Vec::new();
+            std::mem::swap(&mut self.errors, &mut errors);
+            Err(errors)
+        }
     }
 
     pub fn metadata(&self) -> &ShaderMetadata {

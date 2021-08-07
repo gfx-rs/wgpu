@@ -2,6 +2,7 @@ use super::{
     constants::ConstantSolvingError,
     token::{SourceMetadata, Token, TokenValue},
 };
+use pp_rs::token::PreprocessorError;
 use std::borrow::Cow;
 use thiserror::Error;
 
@@ -73,6 +74,8 @@ pub enum ErrorKind {
     VariableAlreadyDeclared(SourceMetadata, String),
     #[error("{1}")]
     SemanticError(SourceMetadata, Cow<'static, str>),
+    #[error("{1:?}")]
+    PreprocessorError(SourceMetadata, PreprocessorError),
 }
 
 impl ErrorKind {
@@ -116,6 +119,7 @@ impl From<(SourceMetadata, ConstantSolvingError)> for ErrorKind {
 
 #[derive(Debug, Error)]
 #[error("{kind}")]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct ParseError {
     pub kind: ErrorKind,
 }

@@ -1,19 +1,19 @@
-use pp_rs::token::PreprocessorError;
-
 use crate::{
     front::glsl::{
-        ast::Profile, error::ErrorKind, error::ExpectedToken, token::TokenValue, Options, Parser,
-        SourceMetadata, Token,
+        ast::Profile,
+        error::ExpectedToken,
+        error::{ErrorKind, ParseError},
+        token::TokenValue,
+        Options, Parser, SourceMetadata, Token,
     },
     Module, ShaderStage,
 };
+use pp_rs::token::PreprocessorError;
 
-fn parse(parser: &mut Parser, source: &str, stage: ShaderStage) -> Result<Module, ErrorKind> {
+fn parse(parser: &mut Parser, source: &str, stage: ShaderStage) -> Result<Module, Vec<ParseError>> {
     let defines = crate::FastHashMap::default();
 
-    parser
-        .parse(&Options { stage, defines }, source)
-        .map_err(|e| e.kind)
+    parser.parse(&Options { stage, defines }, source)
 }
 
 #[test]
@@ -22,41 +22,69 @@ fn version() {
 
     // invalid versions
     assert_eq!(
-        parse(&mut parser, "#version 99000", ShaderStage::Vertex)
-            .err()
-            .unwrap(),
-        ErrorKind::InvalidVersion(SourceMetadata { start: 9, end: 14 }, 99000),
-    );
-
-    assert_eq!(
-        parse(&mut parser, "#version 449", ShaderStage::Vertex)
-            .err()
-            .unwrap(),
-        ErrorKind::InvalidVersion(SourceMetadata { start: 9, end: 12 }, 449)
-    );
-
-    assert_eq!(
-        parse(&mut parser, "#version 450 smart", ShaderStage::Vertex)
-            .err()
-            .unwrap(),
-        ErrorKind::InvalidProfile(SourceMetadata { start: 13, end: 18 }, "smart".into())
+        parse(
+            &mut parser,
+            "#version 99000\n void main(){}",
+            ShaderStage::Vertex
+        )
+        .err()
+        .unwrap(),
+        vec![ParseError {
+            kind: ErrorKind::InvalidVersion(SourceMetadata { start: 9, end: 14 }, 99000)
+        }],
     );
 
     assert_eq!(
         parse(
             &mut parser,
-            "#version 450\nvoid f(){} #version 450",
+            "#version 449\n void main(){}",
             ShaderStage::Vertex
         )
         .err()
         .unwrap(),
-        ErrorKind::InvalidToken(
-            Token {
-                value: TokenValue::Unknown(PreprocessorError::UnexpectedHash),
-                meta: SourceMetadata { start: 24, end: 25 }
-            },
-            vec![ExpectedToken::Eof]
+        vec![ParseError {
+            kind: ErrorKind::InvalidVersion(SourceMetadata { start: 9, end: 12 }, 449)
+        }]
+    );
+
+    assert_eq!(
+        parse(
+            &mut parser,
+            "#version 450 smart\n void main(){}",
+            ShaderStage::Vertex
         )
+        .err()
+        .unwrap(),
+        vec![ParseError {
+            kind: ErrorKind::InvalidProfile(SourceMetadata { start: 13, end: 18 }, "smart".into())
+        }]
+    );
+
+    assert_eq!(
+        parse(
+            &mut parser,
+            "#version 450\nvoid main(){} #version 450",
+            ShaderStage::Vertex
+        )
+        .err()
+        .unwrap(),
+        vec![
+            ParseError {
+                kind: ErrorKind::PreprocessorError(
+                    SourceMetadata { start: 27, end: 28 },
+                    PreprocessorError::UnexpectedHash,
+                )
+            },
+            ParseError {
+                kind: ErrorKind::InvalidToken(
+                    Token {
+                        value: TokenValue::Identifier("version".into()),
+                        meta: SourceMetadata { start: 28, end: 35 }
+                    },
+                    vec![ExpectedToken::Eof]
+                )
+            }
+        ]
     );
 
     // valid versions
@@ -427,13 +455,15 @@ fn functions() {
         )
         .err()
         .unwrap(),
-        ErrorKind::SemanticError(
-            SourceMetadata {
-                start: 134,
-                end: 152
-            },
-            "Function already defined".into()
-        )
+        vec![ParseError {
+            kind: ErrorKind::SemanticError(
+                SourceMetadata {
+                    start: 134,
+                    end: 152
+                },
+                "Function already defined".into()
+            )
+        }]
     );
 
     println!();
@@ -586,13 +616,15 @@ fn implicit_conversions() {
         )
         .err()
         .unwrap(),
-        ErrorKind::SemanticError(
-            SourceMetadata {
-                start: 156,
-                end: 165
-            },
-            "Unknown function \'test\'".into()
-        )
+        vec![ParseError {
+            kind: ErrorKind::SemanticError(
+                SourceMetadata {
+                    start: 156,
+                    end: 165
+                },
+                "Unknown function \'test\'".into()
+            )
+        }]
     );
 
     assert_eq!(
@@ -611,13 +643,15 @@ fn implicit_conversions() {
         )
         .err()
         .unwrap(),
-        ErrorKind::SemanticError(
-            SourceMetadata {
-                start: 158,
-                end: 165
-            },
-            "Ambiguous best function for \'test\'".into()
-        )
+        vec![ParseError {
+            kind: ErrorKind::SemanticError(
+                SourceMetadata {
+                    start: 158,
+                    end: 165
+                },
+                "Ambiguous best function for \'test\'".into()
+            )
+        }]
     );
 }
 

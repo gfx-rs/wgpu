@@ -5,14 +5,16 @@ use crate::{
         context::Context,
         error::ErrorKind,
         error::ExpectedToken,
-        lex::Lexer,
+        lex::{Lexer, LexerResultKind},
+        token::{Directive, DirectiveKind},
         token::{SourceMetadata, Token, TokenValue},
         variables::{GlobalOrConstant, VarDeclaration},
-        Parser, Result,
+        ParseError, Parser, Result,
     },
     Block, Constant, ConstantInner, Expression, ScalarValue, Type,
 };
 use core::convert::TryFrom;
+use pp_rs::token::{PreprocessorError, Token as PPToken, TokenValue as PPTokenValue};
 use std::iter::Peekable;
 
 mod declarations;
@@ -53,8 +55,20 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn next(&mut self, _parser: &mut Parser) -> Option<Token> {
-        self.lexer.next()
+    pub fn next(&mut self, parser: &mut Parser) -> Option<Token> {
+        loop {
+            let res = self.lexer.next()?;
+
+            match res.kind {
+                LexerResultKind::Token(token) => break Some(token),
+                LexerResultKind::Directive(directive) => {
+                    parser.handle_directive(directive, res.meta)
+                }
+                LexerResultKind::Error(error) => parser.errors.push(ParseError {
+                    kind: ErrorKind::PreprocessorError(res.meta, error),
+                }),
+            }
+        }
     }
 
     pub fn bump(&mut self, parser: &mut Parser) -> Result<Token> {
@@ -70,8 +84,32 @@ impl<'source> ParsingContext<'source> {
         }
     }
 
-    pub fn peek(&mut self, _parser: &mut Parser) -> Option<&Token> {
-        self.lexer.peek()
+    pub fn peek(&mut self, parser: &mut Parser) -> Option<&Token> {
+        match self.lexer.peek()?.kind {
+            LexerResultKind::Token(_) => {
+                let res = self.lexer.peek()?;
+
+                match res.kind {
+                    LexerResultKind::Token(ref token) => Some(token),
+                    _ => unreachable!(),
+                }
+            }
+            LexerResultKind::Error(_) | LexerResultKind::Directive(_) => {
+                let res = self.lexer.next()?;
+
+                match res.kind {
+                    LexerResultKind::Directive(directive) => {
+                        parser.handle_directive(directive, res.meta)
+                    }
+                    LexerResultKind::Error(error) => parser.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(res.meta, error),
+                    }),
+                    _ => unreachable!(),
+                }
+
+                self.peek(parser)
+            }
+        }
     }
 
     pub fn expect_peek(&mut self, parser: &mut Parser) -> Result<&Token> {
@@ -79,8 +117,6 @@ impl<'source> ParsingContext<'source> {
     }
 
     pub fn parse(&mut self, parser: &mut Parser) -> Result<()> {
-        self.parse_version(parser)?;
-
         // Body and expression arena for global initialization
         let mut body = Block::new();
         let mut ctx = Context::new(parser, &mut body);
@@ -103,42 +139,6 @@ impl<'source> ParsingContext<'source> {
             })?;
 
         parser.add_entry_point(handle, body, ctx.expressions)?;
-
-        Ok(())
-    }
-
-    fn parse_version(&mut self, parser: &mut Parser) -> Result<()> {
-        self.expect(parser, TokenValue::Version)?;
-
-        let version = self.bump(parser)?;
-        match version.value {
-            TokenValue::IntConstant(i) => match i.value {
-                440 | 450 | 460 => parser.meta.version = i.value as u16,
-                _ => return Err(ErrorKind::InvalidVersion(version.meta, i.value)),
-            },
-            _ => {
-                return Err(ErrorKind::InvalidToken(
-                    version,
-                    vec![ExpectedToken::IntLiteral],
-                ))
-            }
-        }
-
-        let profile = self.lexer.peek();
-        parser.meta.profile = match profile {
-            Some(&Token {
-                value: TokenValue::Identifier(_),
-                ..
-            }) => {
-                let (name, meta) = self.expect_ident(parser)?;
-
-                match name.as_str() {
-                    "core" => Profile::Core,
-                    _ => return Err(ErrorKind::InvalidProfile(meta, name)),
-                }
-            }
-            _ => Profile::Core,
-        };
 
         Ok(())
     }
@@ -178,6 +178,171 @@ impl<'source> ParsingContext<'source> {
         let (root, meta) = ctx.lower_expect(parser, expr, false, &mut block)?;
 
         Ok((parser.solve_constant(&ctx, root, meta)?, meta))
+    }
+}
+
+impl Parser {
+    fn handle_directive(&mut self, directive: Directive, meta: SourceMetadata) {
+        let mut tokens = directive.tokens.into_iter();
+
+        match directive.kind {
+            DirectiveKind::Version { is_first_directive } => {
+                if !is_first_directive {
+                    self.errors.push(ParseError {
+                        kind: ErrorKind::SemanticError(
+                            meta,
+                            "#version must occur first in shader".into(),
+                        ),
+                    })
+                }
+
+                match tokens.next() {
+                    Some(PPToken {
+                        value: PPTokenValue::Integer(int),
+                        location,
+                    }) => match int.value {
+                        440 | 450 | 460 => self.meta.version = int.value as u16,
+                        _ => self.errors.push(ParseError {
+                            kind: ErrorKind::InvalidVersion(location.into(), int.value),
+                        }),
+                    },
+                    Some(PPToken { value, location }) => self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            location.into(),
+                            PreprocessorError::UnexpectedToken(value),
+                        ),
+                    }),
+                    None => self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            meta,
+                            PreprocessorError::UnexpectedNewLine,
+                        ),
+                    }),
+                };
+
+                match tokens.next() {
+                    Some(PPToken {
+                        value: PPTokenValue::Ident(name),
+                        location,
+                    }) => match name.as_str() {
+                        "core" => self.meta.profile = Profile::Core,
+                        _ => self.errors.push(ParseError {
+                            kind: ErrorKind::InvalidProfile(location.into(), name),
+                        }),
+                    },
+                    Some(PPToken { value, location }) => self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            location.into(),
+                            PreprocessorError::UnexpectedToken(value),
+                        ),
+                    }),
+                    None => {}
+                };
+
+                if let Some(PPToken { value, location }) = tokens.next() {
+                    self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            location.into(),
+                            PreprocessorError::UnexpectedToken(value),
+                        ),
+                    })
+                }
+            }
+            DirectiveKind::Extension => {
+                // TODO: Proper extension handling
+                // - Checking for extension support in the compiler
+                // - Handle behaviors such as warn
+                // - Handle the all extension
+                let name = match tokens.next() {
+                    Some(PPToken {
+                        value: PPTokenValue::Ident(name),
+                        ..
+                    }) => Some(name),
+                    Some(PPToken { value, location }) => {
+                        self.errors.push(ParseError {
+                            kind: ErrorKind::PreprocessorError(
+                                location.into(),
+                                PreprocessorError::UnexpectedToken(value),
+                            ),
+                        });
+
+                        None
+                    }
+                    None => {
+                        self.errors.push(ParseError {
+                            kind: ErrorKind::PreprocessorError(
+                                meta,
+                                PreprocessorError::UnexpectedNewLine,
+                            ),
+                        });
+
+                        None
+                    }
+                };
+
+                match tokens.next() {
+                    Some(PPToken {
+                        value: PPTokenValue::Punct(pp_rs::token::Punct::Colon),
+                        ..
+                    }) => {}
+                    Some(PPToken { value, location }) => self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            location.into(),
+                            PreprocessorError::UnexpectedToken(value),
+                        ),
+                    }),
+                    None => self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            meta,
+                            PreprocessorError::UnexpectedNewLine,
+                        ),
+                    }),
+                };
+
+                match tokens.next() {
+                    Some(PPToken {
+                        value: PPTokenValue::Ident(behavior),
+                        location,
+                    }) => match behavior.as_str() {
+                        "require" | "enable" | "warn" | "disable" => {
+                            if let Some(name) = name {
+                                self.meta.extensions.insert(name);
+                            }
+                        }
+                        _ => self.errors.push(ParseError {
+                            kind: ErrorKind::PreprocessorError(
+                                location.into(),
+                                PreprocessorError::UnexpectedToken(PPTokenValue::Ident(behavior)),
+                            ),
+                        }),
+                    },
+                    Some(PPToken { value, location }) => self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            location.into(),
+                            PreprocessorError::UnexpectedToken(value),
+                        ),
+                    }),
+                    None => self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            meta,
+                            PreprocessorError::UnexpectedNewLine,
+                        ),
+                    }),
+                }
+
+                if let Some(PPToken { value, location }) = tokens.next() {
+                    self.errors.push(ParseError {
+                        kind: ErrorKind::PreprocessorError(
+                            location.into(),
+                            PreprocessorError::UnexpectedToken(value),
+                        ),
+                    })
+                }
+            }
+            DirectiveKind::Pragma => {
+                // TODO: handle some common pragmas?
+            }
+        }
     }
 }
 

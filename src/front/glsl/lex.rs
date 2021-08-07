@@ -1,18 +1,31 @@
 use super::{
     ast::Precision,
-    token::{SourceMetadata, Token, TokenValue},
+    token::{Directive, DirectiveKind, SourceMetadata, Token, TokenValue},
     types::parse_type,
 };
 use crate::{FastHashMap, StorageAccess};
 use pp_rs::{
     pp::Preprocessor,
-    token::{Punct, Token as PPToken, TokenValue as PPTokenValue},
+    token::{PreprocessorError, Punct, TokenValue as PPTokenValue},
 };
-use std::collections::VecDeque;
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct LexerResult {
+    pub kind: LexerResultKind,
+    pub meta: SourceMetadata,
+}
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum LexerResultKind {
+    Token(Token),
+    Directive(Directive),
+    Error(PreprocessorError),
+}
 
 pub struct Lexer<'a> {
     pp: Preprocessor<'a>,
-    tokens: VecDeque<PPToken>,
 }
 
 impl<'a> Lexer<'a> {
@@ -21,40 +34,33 @@ impl<'a> Lexer<'a> {
         for (define, value) in defines {
             pp.add_define(define, value).unwrap(); //TODO: handle error
         }
-        Lexer {
-            pp,
-            tokens: Default::default(),
-        }
+        Lexer { pp }
     }
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Token;
+    type Item = LexerResult;
     fn next(&mut self) -> Option<Self::Item> {
-        let mut meta = SourceMetadata::default();
-        let pp_token = match self.tokens.pop_front() {
-            Some(t) => t,
-            None => match self.pp.next()? {
-                Ok(t) => t,
-                Err((err, loc)) => {
-                    meta.start = loc.start as usize;
-                    meta.end = loc.end as usize;
-                    return Some(Token {
-                        value: TokenValue::Unknown(err),
-                        meta,
-                    });
-                }
-            },
+        let pp_token = match self.pp.next()? {
+            Ok(t) => t,
+            Err((err, loc)) => {
+                return Some(LexerResult {
+                    kind: LexerResultKind::Error(err),
+                    meta: loc.into(),
+                });
+            }
         };
 
-        meta.start = pp_token.location.start as usize;
-        meta.end = pp_token.location.end as usize;
+        let meta = pp_token.location.into();
         let value = match pp_token.value {
             PPTokenValue::Extension(extension) => {
-                for t in extension.tokens {
-                    self.tokens.push_back(t);
-                }
-                TokenValue::Extension
+                return Some(LexerResult {
+                    kind: LexerResultKind::Directive(Directive {
+                        kind: DirectiveKind::Extension,
+                        tokens: extension.tokens,
+                    }),
+                    meta,
+                })
             }
             PPTokenValue::Float(float) => TokenValue::FloatConstant(float),
             PPTokenValue::Ident(ident) => {
@@ -162,30 +168,41 @@ impl<'a> Iterator for Lexer<'a> {
                 Punct::Question => TokenValue::Question,
             },
             PPTokenValue::Pragma(pragma) => {
-                for t in pragma.tokens {
-                    self.tokens.push_back(t);
-                }
-                TokenValue::Pragma
+                return Some(LexerResult {
+                    kind: LexerResultKind::Directive(Directive {
+                        kind: DirectiveKind::Pragma,
+                        tokens: pragma.tokens,
+                    }),
+                    meta,
+                })
             }
             PPTokenValue::Version(version) => {
-                for t in version.tokens {
-                    self.tokens.push_back(t);
-                }
-                TokenValue::Version
+                return Some(LexerResult {
+                    kind: LexerResultKind::Directive(Directive {
+                        kind: DirectiveKind::Version {
+                            is_first_directive: version.is_first_directive,
+                        },
+                        tokens: version.tokens,
+                    }),
+                    meta,
+                })
             }
         };
 
-        Some(Token { value, meta })
+        Some(LexerResult {
+            kind: LexerResultKind::Token(Token { value, meta }),
+            meta,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use pp_rs::token::Integer;
+    use pp_rs::token::{Integer, Location, Token as PPToken, TokenValue as PPTokenValue};
 
     use super::{
-        super::token::{SourceMetadata, Token, TokenValue},
-        Lexer,
+        super::token::{Directive, DirectiveKind, SourceMetadata, Token, TokenValue},
+        Lexer, LexerResult, LexerResultKind,
     };
 
     #[test]
@@ -194,63 +211,85 @@ mod tests {
 
         // line comments
         let mut lex = Lexer::new("#version 450\nvoid main () {}", &defines);
+        let mut location = Location::default();
+        location.start = 9;
+        location.end = 12;
         assert_eq!(
             lex.next().unwrap(),
-            Token {
-                value: TokenValue::Version,
+            LexerResult {
+                kind: LexerResultKind::Directive(Directive {
+                    kind: DirectiveKind::Version {
+                        is_first_directive: true
+                    },
+                    tokens: vec![PPToken {
+                        value: PPTokenValue::Integer(Integer {
+                            signed: true,
+                            value: 450,
+                            width: 32
+                        }),
+                        location
+                    }]
+                }),
                 meta: SourceMetadata { start: 1, end: 8 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
-            Token {
-                value: TokenValue::IntConstant(Integer {
-                    signed: true,
-                    value: 450,
-                    width: 32
+            LexerResult {
+                kind: LexerResultKind::Token(Token {
+                    value: TokenValue::Void,
+                    meta: SourceMetadata { start: 13, end: 17 }
                 }),
-                meta: SourceMetadata { start: 9, end: 12 },
-            }
-        );
-        assert_eq!(
-            lex.next().unwrap(),
-            Token {
-                value: TokenValue::Void,
                 meta: SourceMetadata { start: 13, end: 17 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
-            Token {
-                value: TokenValue::Identifier("main".into()),
+            LexerResult {
+                kind: LexerResultKind::Token(Token {
+                    value: TokenValue::Identifier("main".into()),
+                    meta: SourceMetadata { start: 18, end: 22 }
+                }),
                 meta: SourceMetadata { start: 18, end: 22 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
-            Token {
-                value: TokenValue::LeftParen,
+            LexerResult {
+                kind: LexerResultKind::Token(Token {
+                    value: TokenValue::LeftParen,
+                    meta: SourceMetadata { start: 23, end: 24 }
+                }),
                 meta: SourceMetadata { start: 23, end: 24 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
-            Token {
-                value: TokenValue::RightParen,
+            LexerResult {
+                kind: LexerResultKind::Token(Token {
+                    value: TokenValue::RightParen,
+                    meta: SourceMetadata { start: 24, end: 25 }
+                }),
                 meta: SourceMetadata { start: 24, end: 25 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
-            Token {
-                value: TokenValue::LeftBrace,
+            LexerResult {
+                kind: LexerResultKind::Token(Token {
+                    value: TokenValue::LeftBrace,
+                    meta: SourceMetadata { start: 26, end: 27 }
+                }),
                 meta: SourceMetadata { start: 26, end: 27 }
             }
         );
         assert_eq!(
             lex.next().unwrap(),
-            Token {
-                value: TokenValue::RightBrace,
+            LexerResult {
+                kind: LexerResultKind::Token(Token {
+                    value: TokenValue::RightBrace,
+                    meta: SourceMetadata { start: 27, end: 28 }
+                }),
                 meta: SourceMetadata { start: 27, end: 28 }
             }
         );

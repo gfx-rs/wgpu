@@ -238,9 +238,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     &input,
                 )
-                .unwrap_or_else(|err| {
+                .unwrap_or_else(|errors| {
                     let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                    emit_glsl_parser_error(err, filename.unwrap_or("glsl"), &input);
+                    emit_glsl_parser_error(errors, filename.unwrap_or("glsl"), &input);
                     std::process::exit(1);
                 })
         }
@@ -409,16 +409,23 @@ use codespan_reporting::{
     },
 };
 
-pub fn emit_glsl_parser_error(err: naga::front::glsl::ParseError, filename: &str, source: &str) {
-    let diagnostic = match err.kind.metadata() {
-        Some(metadata) => Diagnostic::error()
-            .with_message(err.kind.to_string())
-            .with_labels(vec![Label::primary((), metadata.start..metadata.end)]),
-        None => Diagnostic::error().with_message(err.kind.to_string()),
-    };
-
+pub fn emit_glsl_parser_error(
+    errors: Vec<naga::front::glsl::ParseError>,
+    filename: &str,
+    source: &str,
+) {
     let files = SimpleFile::new(filename, source);
     let config = codespan_reporting::term::Config::default();
     let writer = StandardStream::stderr(ColorChoice::Auto);
-    term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
+
+    for err in errors {
+        let diagnostic = match err.kind.metadata() {
+            Some(metadata) => Diagnostic::error()
+                .with_message(err.kind.to_string())
+                .with_labels(vec![Label::primary((), metadata.start..metadata.end)]),
+            None => Diagnostic::error().with_message(err.kind.to_string()),
+        };
+
+        term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
+    }
 }
