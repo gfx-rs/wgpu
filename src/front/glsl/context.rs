@@ -5,9 +5,9 @@ use crate::{
                 GlobalLookup, GlobalLookupKind, HirExpr, HirExprKind, ParameterInfo,
                 ParameterQualifier, VariableReference,
             },
-            error::ErrorKind,
+            error::{Error, ErrorKind},
             types::{scalar_components, type_power},
-            Parser, SourceMetadata,
+            Parser, Result, SourceMetadata,
         },
         Emitter, Typifier,
     },
@@ -288,16 +288,16 @@ impl Context {
         expr: Handle<HirExpr>,
         lhs: bool,
         body: &mut Block,
-    ) -> Result<(Handle<Expression>, SourceMetadata), ErrorKind> {
+    ) -> Result<(Handle<Expression>, SourceMetadata)> {
         let (maybe_expr, meta) = self.lower(parser, expr, lhs, body)?;
 
         let expr = match maybe_expr {
             Some(e) => e,
             None => {
-                return Err(ErrorKind::SemanticError(
+                return Err(Error {
+                    kind: ErrorKind::SemanticError("Expression returns void".into()),
                     meta,
-                    "Expression returns void".into(),
-                ))
+                })
             }
         };
 
@@ -310,7 +310,7 @@ impl Context {
         expr: Handle<HirExpr>,
         lhs: bool,
         body: &mut Block,
-    ) -> Result<(Option<Handle<Expression>>, SourceMetadata), ErrorKind> {
+    ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
         let HirExpr { kind, meta } = self.hir_exprs[expr].clone();
 
         let handle = match kind {
@@ -448,10 +448,12 @@ impl Context {
             HirExprKind::Variable(var) => {
                 if lhs {
                     if !var.mutable {
-                        return Err(ErrorKind::SemanticError(
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Variable cannot be used in LHS position".into(),
+                            ),
                             meta,
-                            "Variable cannot be used in LHS position".into(),
-                        ));
+                        })
                     }
 
                     var.expr
@@ -567,23 +569,18 @@ impl Context {
                 let pointer = self.lower_expect(parser, expr, true, body)?.0;
                 let left = self.add_expression(Expression::Load { pointer }, body);
 
-                let uint = if let Some(kind) = parser.resolve_type(self, left, meta)?.scalar_kind()
-                {
-                    match kind {
-                        ScalarKind::Sint => false,
-                        ScalarKind::Uint => true,
-                        _ => {
-                            return Err(ErrorKind::SemanticError(
-                                meta,
+                let uint = match parser.resolve_type(self, left, meta)?.scalar_kind() {
+                    Some(ScalarKind::Sint) => false,
+                    Some(ScalarKind::Uint) => true,
+                    _ => {
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
                                 "Increment/decrement operations must operate in integers".into(),
-                            ))
-                        }
+                            ),
+                            meta,
+                        });
+                        true
                     }
-                } else {
-                    return Err(ErrorKind::SemanticError(
-                        meta,
-                        "Increment/decrement operations must operate in integers".into(),
-                    ));
                 };
 
                 let one = parser.module.constants.append(Constant {
@@ -644,10 +641,13 @@ impl Context {
                 }
             }
             _ => {
-                return Err(ErrorKind::SemanticError(
+                return Err(Error {
+                    kind: ErrorKind::SemanticError(
+                        format!("{:?} cannot be in the left hand side", self.hir_exprs[expr])
+                            .into(),
+                    ),
                     meta,
-                    format!("{:?} cannot be in the left hand side", self.hir_exprs[expr]).into(),
-                ))
+                })
             }
         };
 
@@ -659,7 +659,7 @@ impl Context {
         parser: &mut Parser,
         expr: Handle<Expression>,
         meta: SourceMetadata,
-    ) -> Result<Option<(ScalarKind, crate::Bytes)>, ErrorKind> {
+    ) -> Result<Option<(ScalarKind, crate::Bytes)>> {
         let ty = parser.resolve_type(self, expr, meta)?;
         Ok(scalar_components(ty))
     }
@@ -669,14 +669,10 @@ impl Context {
         parser: &mut Parser,
         expr: Handle<Expression>,
         meta: SourceMetadata,
-    ) -> Result<Option<u32>, ErrorKind> {
+    ) -> Result<Option<u32>> {
         Ok(self
             .expr_scalar_components(parser, expr, meta)?
             .and_then(|(kind, _)| type_power(kind)))
-    }
-
-    pub fn get_expression(&self, expr: Handle<Expression>) -> &Expression {
-        &self.expressions[expr]
     }
 
     pub fn implicit_conversion(
@@ -686,7 +682,7 @@ impl Context {
         meta: SourceMetadata,
         kind: ScalarKind,
         width: crate::Bytes,
-    ) -> Result<(), ErrorKind> {
+    ) -> Result<()> {
         if let (Some(tgt_power), Some(expr_power)) =
             (type_power(kind), self.expr_power(parser, *expr, meta)?)
         {
@@ -709,7 +705,7 @@ impl Context {
         left_meta: SourceMetadata,
         right: &mut Handle<Expression>,
         right_meta: SourceMetadata,
-    ) -> Result<(), ErrorKind> {
+    ) -> Result<()> {
         let left_components = self.expr_scalar_components(parser, *left, left_meta)?;
         let right_components = self.expr_scalar_components(parser, *right, right_meta)?;
 
@@ -749,7 +745,7 @@ impl Context {
         expr: &mut Handle<Expression>,
         meta: SourceMetadata,
         vector_size: Option<VectorSize>,
-    ) -> Result<(), ErrorKind> {
+    ) -> Result<()> {
         let expr_type = parser.resolve_type(self, *expr, meta)?;
 
         if let (&TypeInner::Scalar { .. }, Some(size)) = (expr_type, vector_size) {

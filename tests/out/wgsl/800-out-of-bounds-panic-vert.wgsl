@@ -28,6 +28,9 @@ fn main1() {
     let _e10: mat4x4<f32> = global1.world_matrix;
     let _e12: vec2<f32> = position1;
     gl_Position = ((_e9 * _e10) * vec4<f32>(_e12, 0.0, 1.0));
+    let _e18: vec4<f32> = gl_Position;
+    let _e20: vec4<f32> = gl_Position;
+    gl_Position.z = ((_e18.z + _e20.w) / 2.0);
     return;
 }
 

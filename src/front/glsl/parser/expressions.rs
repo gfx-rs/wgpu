@@ -5,7 +5,7 @@ use crate::{
         error::{ErrorKind, ExpectedToken},
         parser::ParsingContext,
         token::{Token, TokenValue},
-        Parser, Result, SourceMetadata,
+        Error, Parser, Result, SourceMetadata,
     },
     ArraySize, BinaryOperator, Block, Constant, ConstantInner, Handle, ScalarValue, Type,
     TypeInner, UnaryOperator,
@@ -43,15 +43,18 @@ impl<'source> ParsingContext<'source> {
                 return Ok(expr);
             }
             _ => {
-                return Err(ErrorKind::InvalidToken(
-                    token,
-                    vec![
-                        TokenValue::LeftParen.into(),
-                        ExpectedToken::IntLiteral,
-                        ExpectedToken::FloatLiteral,
-                        ExpectedToken::BoolLiteral,
-                    ],
-                ))
+                return Err(Error {
+                    kind: ErrorKind::InvalidToken(
+                        token.value,
+                        vec![
+                            TokenValue::LeftParen.into(),
+                            ExpectedToken::IntLiteral,
+                            ExpectedToken::FloatLiteral,
+                            ExpectedToken::BoolLiteral,
+                        ],
+                    ),
+                    meta: token.meta,
+                });
             }
         };
 
@@ -89,10 +92,13 @@ impl<'source> ParsingContext<'source> {
                         break;
                     }
                     _ => {
-                        return Err(ErrorKind::InvalidToken(
-                            token,
-                            vec![TokenValue::Comma.into(), TokenValue::RightParen.into()],
-                        ))
+                        return Err(Error {
+                            kind: ErrorKind::InvalidToken(
+                                token.value,
+                                vec![TokenValue::Comma.into(), TokenValue::RightParen.into()],
+                            ),
+                            meta: token.meta,
+                        });
                     }
                 }
             }
@@ -124,9 +130,14 @@ impl<'source> ParsingContext<'source> {
                         meta,
                     }
                 } else {
-                    let var = match parser.lookup_variable(ctx, body, &name)? {
+                    let var = match parser.lookup_variable(ctx, body, &name) {
                         Some(var) => var,
-                        None => return Err(ErrorKind::UnknownVariable(meta, name)),
+                        None => {
+                            return Err(Error {
+                                kind: ErrorKind::UnknownVariable(name),
+                                meta,
+                            })
+                        }
                     };
 
                     HirExpr {

@@ -1,14 +1,22 @@
 use crate::{
-    front::glsl::{ast::*, context::Context, error::ErrorKind, Parser, SourceMetadata},
+    front::glsl::{
+        ast::*,
+        context::Context,
+        error::{Error, ErrorKind},
+        Parser, Result, SourceMetadata,
+    },
     Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
-    LocalVariable, ScalarKind, StorageAccess, StorageClass, SwizzleComponent, Type, TypeInner,
-    VectorSize,
+    LocalVariable, ResourceBinding, ScalarKind, StorageAccess, StorageClass, SwizzleComponent,
+    Type, TypeInner, VectorSize,
 };
 
 macro_rules! qualifier_arm {
-    ($src:expr, $tgt:expr, $meta:expr, $msg:literal $(,)?) => {{
+    ($src:expr, $tgt:expr, $meta:expr, $msg:literal, $errors:expr $(,)?) => {{
         if $tgt.is_some() {
-            return Err(ErrorKind::SemanticError($meta, $msg.into()));
+            $errors.push(Error {
+                kind: ErrorKind::SemanticError($msg.into()),
+                meta: $meta,
+            })
         }
 
         $tgt = Some($src);
@@ -34,12 +42,12 @@ impl Parser {
         ctx: &mut Context,
         body: &mut Block,
         name: &str,
-    ) -> Result<Option<VariableReference>, ErrorKind> {
+    ) -> Option<VariableReference> {
         if let Some(local_var) = ctx.lookup_local_var(name) {
-            return Ok(Some(local_var));
+            return Some(local_var);
         }
         if let Some(global_var) = ctx.lookup_global_var(name) {
-            return Ok(Some(global_var));
+            return Some(global_var);
         }
 
         let mut add_builtin = |inner, builtin, mutable, storage| {
@@ -84,7 +92,7 @@ impl Parser {
                 },
             );
 
-            Ok(ctx.lookup_global_var(name))
+            ctx.lookup_global_var(name)
         };
         match name {
             "gl_Position" => add_builtin(
@@ -162,7 +170,7 @@ impl Parser {
                 false,
                 StorageQualifier::Input,
             ),
-            _ => Ok(None),
+            _ => None,
         }
     }
 
@@ -174,7 +182,7 @@ impl Parser {
         expression: Handle<Expression>,
         name: &str,
         meta: SourceMetadata,
-    ) -> Result<Handle<Expression>, ErrorKind> {
+    ) -> Result<Handle<Expression>> {
         let (ty, is_pointer) = match *self.resolve_type(ctx, expression, meta)? {
             TypeInner::Pointer { base, .. } => (&self.module.types[base].inner, true),
             ref ty => (ty, false),
@@ -184,7 +192,10 @@ impl Parser {
                 let index = members
                     .iter()
                     .position(|m| m.name == Some(name.into()))
-                    .ok_or_else(|| ErrorKind::UnknownField(meta, name.into()))?;
+                    .ok_or_else(|| Error {
+                        kind: ErrorKind::UnknownField(name.into()),
+                        meta,
+                    })?;
                 Ok(ctx.add_expression(
                     Expression::AccessIndex {
                         base: expression,
@@ -215,14 +226,17 @@ impl Parser {
                         let not_unique = (1..components.len())
                             .any(|i| components[i..].contains(&components[i - 1]));
                         if not_unique {
-                            return Err(ErrorKind::SemanticError(
-                                meta,
+                            self.errors.push(Error {
+                                kind:
+                                ErrorKind::SemanticError(
                                 format!(
                                     "swizzle cannot have duplicate components in left-hand-side expression for \"{:?}\"",
                                     name
                                 )
                                 .into(),
-                            ));
+                            ),
+                                meta ,
+                            })
                         }
                     }
 
@@ -237,7 +251,7 @@ impl Parser {
                         size: _,
                         vector,
                         pattern: ref src_pattern,
-                    } = *ctx.get_expression(expression)
+                    } = ctx[expression]
                     {
                         expression = vector;
                         for pat in &mut pattern {
@@ -250,9 +264,7 @@ impl Parser {
                             // only single element swizzle, like pos.y, just return that component.
                             if lhs {
                                 // Because of possible nested swizzles, like pos.xy.x, we have to unwrap the potential load expr.
-                                if let Expression::Load { ref pointer } =
-                                    *ctx.get_expression(expression)
-                                {
+                                if let Expression::Load { ref pointer } = ctx[expression] {
                                     expression = *pointer;
                                 }
                             }
@@ -268,10 +280,14 @@ impl Parser {
                         3 => VectorSize::Tri,
                         4 => VectorSize::Quad,
                         _ => {
-                            return Err(ErrorKind::SemanticError(
+                            self.errors.push(Error {
+                                kind: ErrorKind::SemanticError(
+                                    format!("Bad swizzle size for \"{:?}\"", name).into(),
+                                ),
                                 meta,
-                                format!("Bad swizzle size for \"{:?}\"", name).into(),
-                            ));
+                            });
+
+                            VectorSize::Quad
                         }
                     };
 
@@ -296,16 +312,20 @@ impl Parser {
                         body,
                     ))
                 } else {
-                    Err(ErrorKind::SemanticError(
+                    Err(Error {
+                        kind: ErrorKind::SemanticError(
+                            format!("Invalid swizzle for vector \"{}\"", name).into(),
+                        ),
                         meta,
-                        format!("Invalid swizzle for vector \"{}\"", name).into(),
-                    ))
+                    })
                 }
             }
-            _ => Err(ErrorKind::SemanticError(
+            _ => Err(Error {
+                kind: ErrorKind::SemanticError(
+                    format!("Can't lookup field on this type \"{}\"", name).into(),
+                ),
                 meta,
-                format!("Can't lookup field on this type \"{}\"", name).into(),
-            )),
+            }),
         }
     }
 
@@ -320,9 +340,10 @@ impl Parser {
             init,
             meta,
         }: VarDeclaration,
-    ) -> Result<GlobalOrConstant, ErrorKind> {
+    ) -> Result<GlobalOrConstant> {
         let mut storage = StorageQualifier::StorageClass(StorageClass::Private);
         let mut interpolation = None;
+        let mut set = None;
         let mut binding = None;
         let mut location = None;
         let mut sampling = None;
@@ -339,10 +360,12 @@ impl Parser {
                         // Ignore the Uniform qualifier if the class was already set to PushConstant
                         continue;
                     } else if StorageQualifier::StorageClass(StorageClass::Private) != storage {
-                        return Err(ErrorKind::SemanticError(
+                        self.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Cannot use more than one storage qualifier per declaration".into(),
+                            ),
                             meta,
-                            "Cannot use more than one storage qualifier per declaration".into(),
-                        ));
+                        });
                     }
 
                     storage = s;
@@ -351,67 +374,103 @@ impl Parser {
                     i,
                     interpolation,
                     meta,
-                    "Cannot use more than one interpolation qualifier per declaration"
+                    "Cannot use more than one interpolation qualifier per declaration",
+                    self.errors
                 ),
-                TypeQualifier::ResourceBinding(ref r) => qualifier_arm!(
-                    r.clone(),
+                TypeQualifier::Binding(r) => qualifier_arm!(
+                    r,
                     binding,
                     meta,
-                    "Cannot use more than one binding per declaration"
+                    "Cannot use more than one binding per declaration",
+                    self.errors
+                ),
+                TypeQualifier::Set(s) => qualifier_arm!(
+                    s,
+                    set,
+                    meta,
+                    "Cannot use more than one binding per declaration",
+                    self.errors
                 ),
                 TypeQualifier::Location(l) => qualifier_arm!(
                     l,
                     location,
                     meta,
-                    "Cannot use more than one binding per declaration"
+                    "Cannot use more than one binding per declaration",
+                    self.errors
                 ),
                 TypeQualifier::Sampling(s) => qualifier_arm!(
                     s,
                     sampling,
                     meta,
-                    "Cannot use more than one sampling qualifier per declaration"
+                    "Cannot use more than one sampling qualifier per declaration",
+                    self.errors
                 ),
                 TypeQualifier::Layout(ref l) => qualifier_arm!(
                     l,
                     layout,
                     meta,
-                    "Cannot use more than one layout qualifier per declaration"
+                    "Cannot use more than one layout qualifier per declaration",
+                    self.errors
                 ),
                 TypeQualifier::Precision(ref p) => qualifier_arm!(
                     p,
                     precision,
                     meta,
-                    "Cannot use more than one precision qualifier per declaration"
+                    "Cannot use more than one precision qualifier per declaration",
+                    self.errors
                 ),
                 TypeQualifier::StorageAccess(a) => access &= a,
                 _ => {
-                    return Err(ErrorKind::SemanticError(
+                    self.errors.push(Error {
+                        kind: ErrorKind::SemanticError("Qualifier not supported in globals".into()),
                         meta,
-                        "Qualifier not supported in globals".into(),
-                    ));
+                    });
                 }
             }
         }
 
-        if binding.is_some() && storage != StorageQualifier::StorageClass(StorageClass::Uniform) {
-            match storage {
-                StorageQualifier::StorageClass(StorageClass::PushConstant)
-                | StorageQualifier::StorageClass(StorageClass::Uniform)
-                | StorageQualifier::StorageClass(StorageClass::Storage { .. }) => {}
-                _ => {
-                    return Err(ErrorKind::SemanticError(
+        match storage {
+            StorageQualifier::StorageClass(StorageClass::PushConstant) => {
+                if set.is_some() {
+                    self.errors.push(Error {
+                        kind: ErrorKind::SemanticError(
+                            "set cannot be used to decorate push constant".into(),
+                        ),
                         meta,
-                        "binding requires uniform or buffer storage qualifier".into(),
-                    ))
+                    })
+                }
+            }
+            StorageQualifier::StorageClass(StorageClass::Uniform)
+            | StorageQualifier::StorageClass(StorageClass::Storage { .. }) => {
+                if binding.is_none() {
+                    self.errors.push(Error {
+                        kind: ErrorKind::SemanticError(
+                            "uniform/buffer blocks require layout(binding=X)".into(),
+                        ),
+                        meta,
+                    })
+                }
+            }
+            _ => {
+                if set.is_some() || binding.is_some() {
+                    self.errors.push(Error {
+                        kind: ErrorKind::SemanticError(
+                            "set/binding can only be applied to uniform/buffer blocks".into(),
+                        ),
+                        meta,
+                    })
                 }
             }
         }
 
         if (sampling.is_some() || interpolation.is_some()) && location.is_none() {
-            return Err(ErrorKind::SemanticError(
+            return Err(Error {
+                kind: ErrorKind::SemanticError(
+                    "Sampling and interpolation qualifiers can only be used in in/out variables"
+                        .into(),
+                ),
                 meta,
-                "Sampling and interpolation qualifiers can only be used in in/out variables".into(),
-            ));
+            });
         }
 
         if let Some(location) = location {
@@ -457,8 +516,9 @@ impl Parser {
 
             return Ok(GlobalOrConstant::Global(handle));
         } else if let StorageQualifier::Const = storage {
-            let init = init.ok_or_else(|| {
-                ErrorKind::SemanticError(meta, "const values must have an initializer".into())
+            let init = init.ok_or_else(|| Error {
+                kind: ErrorKind::SemanticError("const values must have an initializer".into()),
+                meta,
             })?;
             if let Some(name) = name {
                 let lookup = GlobalLookup {
@@ -491,7 +551,10 @@ impl Parser {
         let handle = self.module.global_variables.append(GlobalVariable {
             name: name.clone(),
             class,
-            binding,
+            binding: binding.map(|binding| ResourceBinding {
+                group: set.unwrap_or(0),
+                binding,
+            }),
             ty,
             init,
         });
@@ -522,11 +585,14 @@ impl Parser {
             init,
             meta,
         }: VarDeclaration,
-    ) -> Result<Handle<Expression>, ErrorKind> {
+    ) -> Result<Handle<Expression>> {
         #[cfg(feature = "glsl-validate")]
         if let Some(ref name) = name {
             if ctx.lookup_local_var_current_scope(name).is_some() {
-                return Err(ErrorKind::VariableAlreadyDeclared(meta, name.clone()));
+                self.errors.push(Error {
+                    kind: ErrorKind::VariableAlreadyDeclared(name.clone()),
+                    meta,
+                })
             }
         }
 
@@ -537,10 +603,13 @@ impl Parser {
             match *qualifier {
                 TypeQualifier::StorageQualifier(StorageQualifier::Const) => {
                     if !mutable {
-                        return Err(ErrorKind::SemanticError(
+                        self.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Cannot use more than one constant qualifier per declaration"
+                                    .into(),
+                            ),
                             meta,
-                            "Cannot use more than one constant qualifier per declaration".into(),
-                        ));
+                        })
                     }
 
                     mutable = false;
@@ -549,14 +618,13 @@ impl Parser {
                     p,
                     precision,
                     meta,
-                    "Cannot use more than one precision qualifier per declaration"
+                    "Cannot use more than one precision qualifier per declaration",
+                    self.errors
                 ),
-                _ => {
-                    return Err(ErrorKind::SemanticError(
-                        meta,
-                        "Qualifier not supported in locals".into(),
-                    ));
-                }
+                _ => self.errors.push(Error {
+                    kind: ErrorKind::SemanticError("Qualifier not supported in locals".into()),
+                    meta,
+                }),
             }
         }
 

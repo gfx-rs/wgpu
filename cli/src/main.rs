@@ -409,22 +409,15 @@ use codespan_reporting::{
     },
 };
 
-pub fn emit_glsl_parser_error(
-    errors: Vec<naga::front::glsl::ParseError>,
-    filename: &str,
-    source: &str,
-) {
+pub fn emit_glsl_parser_error(errors: Vec<naga::front::glsl::Error>, filename: &str, source: &str) {
     let files = SimpleFile::new(filename, source);
     let config = codespan_reporting::term::Config::default();
     let writer = StandardStream::stderr(ColorChoice::Auto);
 
     for err in errors {
-        let diagnostic = match err.kind.metadata() {
-            Some(metadata) => Diagnostic::error()
-                .with_message(err.kind.to_string())
-                .with_labels(vec![Label::primary((), metadata.start..metadata.end)]),
-            None => Diagnostic::error().with_message(err.kind.to_string()),
-        };
+        let diagnostic = Diagnostic::error()
+            .with_message(err.kind.to_string())
+            .with_labels(vec![Label::primary((), err.meta.start..err.meta.end)]);
 
         term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
     }

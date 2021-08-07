@@ -1,7 +1,7 @@
 use crate::{
     front::glsl::{
         ast::ParameterQualifier, context::Context, parser::ParsingContext, token::TokenValue,
-        variables::VarDeclaration, ErrorKind, Parser, Result, Token,
+        variables::VarDeclaration, Error, ErrorKind, Parser, Result, Token,
     },
     Block, ConstantInner, Expression, ScalarValue, Statement, SwitchCase, UnaryOperator,
 };
@@ -147,10 +147,14 @@ impl<'source> ParsingContext<'source> {
                                         ..
                                     } => int as i32,
                                     _ => {
-                                        return Err(ErrorKind::SemanticError(
+                                        parser.errors.push(Error {
+                                            kind: ErrorKind::SemanticError(
+                                                "Case values can only be integers".into(),
+                                            ),
                                             meta,
-                                            "Case values can only be integers".into(),
-                                        ))
+                                        });
+
+                                        0
                                     }
                                 }
                             };
@@ -189,10 +193,13 @@ impl<'source> ParsingContext<'source> {
                             self.expect(parser, TokenValue::Colon)?;
 
                             if !default.is_empty() {
-                                return Err(ErrorKind::SemanticError(
+                                parser.errors.push(Error {
+                                    kind: ErrorKind::SemanticError(
+                                        "Can only have one default case per switch statement"
+                                            .into(),
+                                    ),
                                     meta,
-                                    "Can only have one default case per switch statement".into(),
-                                ));
+                                });
                             }
 
                             loop {
@@ -214,14 +221,18 @@ impl<'source> ParsingContext<'source> {
                             break;
                         }
                         _ => {
-                            return Err(ErrorKind::InvalidToken(
-                                self.bump(parser)?,
-                                vec![
-                                    TokenValue::Case.into(),
-                                    TokenValue::Default.into(),
-                                    TokenValue::RightBrace.into(),
-                                ],
-                            ))
+                            let Token { value, meta } = self.bump(parser)?;
+                            return Err(Error {
+                                kind: ErrorKind::InvalidToken(
+                                    value,
+                                    vec![
+                                        TokenValue::Case.into(),
+                                        TokenValue::Default.into(),
+                                        TokenValue::RightBrace.into(),
+                                    ],
+                                ),
+                                meta,
+                            });
                         }
                     }
                 }

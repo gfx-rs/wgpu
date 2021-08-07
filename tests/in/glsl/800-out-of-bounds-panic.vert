@@ -21,6 +21,5 @@ layout(location = 0) out vec4 frag_color;
 void main() {
     frag_color = color;
     gl_Position = view_matrix * world_matrix * vec4(position, 0.0, 1.0);
-    // TODO: https://github.com/gfx-rs/naga/issues/901
-    // gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
+    gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0;
 }

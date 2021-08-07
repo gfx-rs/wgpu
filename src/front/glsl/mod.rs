@@ -1,5 +1,5 @@
 pub use ast::Profile;
-pub use error::{ErrorKind, ParseError};
+pub use error::{Error, ErrorKind};
 pub use token::{SourceMetadata, Token};
 
 use crate::{FastHashMap, FastHashSet, Handle, Module, ShaderStage, Type};
@@ -20,7 +20,7 @@ mod token;
 mod types;
 mod variables;
 
-type Result<T> = std::result::Result<T, ErrorKind>;
+type Result<T> = std::result::Result<T, Error>;
 
 pub struct Options {
     pub stage: ShaderStage,
@@ -74,7 +74,7 @@ pub struct Parser {
 
     entry_args: Vec<EntryArg>,
 
-    errors: Vec<ParseError>,
+    errors: Vec<Error>,
 
     module: Module,
 }
@@ -97,14 +97,14 @@ impl Parser {
         &mut self,
         options: &Options,
         source: &str,
-    ) -> std::result::Result<Module, Vec<ParseError>> {
+    ) -> std::result::Result<Module, Vec<Error>> {
         self.reset(options.stage);
 
         let lexer = lex::Lexer::new(source, &options.defines);
         let mut ctx = ParsingContext::new(lexer);
 
-        if let Err(kind) = ctx.parse(self) {
-            self.errors.push(ParseError { kind });
+        if let Err(e) = ctx.parse(self) {
+            self.errors.push(e);
         }
 
         if self.errors.is_empty() {

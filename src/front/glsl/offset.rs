@@ -8,7 +8,11 @@
 //! The OpenGl spec (the layout rules are defined by the OpenGl spec in section
 //! 7.6.2.2 as opposed to the GLSL spec) uses the term basic machine units which are
 //! equivalent to bytes.
-use super::{ast::StructLayout, error::ErrorKind, SourceMetadata};
+use super::{
+    ast::StructLayout,
+    error::{Error, ErrorKind},
+    SourceMetadata,
+};
 use crate::{Arena, Constant, Handle, Type, TypeInner};
 
 /// Struct with information needed for defining a struct member.
@@ -37,7 +41,8 @@ pub fn calculate_offset(
     layout: StructLayout,
     types: &mut Arena<Type>,
     constants: &Arena<Constant>,
-) -> Result<TypeAlignSpan, ErrorKind> {
+    errors: &mut Vec<Error>,
+) -> TypeAlignSpan {
     // When using the std430 storage layout, shader storage blocks will be laid out in buffer storage
     // identically to uniform and shader storage blocks using the std140 layout, except
     // that the base alignment and stride of arrays of scalars and vectors in rule 4 and of
@@ -60,7 +65,7 @@ pub fn calculate_offset(
         // to rules (1), (2), and (3), and rounded up to the base alignment of a vec4.
         // TODO: Matrices array
         TypeInner::Array { base, size, .. } => {
-            let info = calculate_offset(base, meta, layout, types, constants)?;
+            let info = calculate_offset(base, meta, layout, types, constants, errors);
 
             let name = types[ty].name.clone();
             let mut align = info.align;
@@ -122,7 +127,7 @@ pub fn calculate_offset(
             let name = types[ty].name.clone();
 
             for member in members.iter_mut() {
-                let info = calculate_offset(member.ty, meta, layout, types, constants)?;
+                let info = calculate_offset(member.ty, meta, layout, types, constants, errors);
 
                 span = align_up(span, info.align);
                 align = align.max(info.align);
@@ -145,14 +150,15 @@ pub fn calculate_offset(
             (align, span)
         }
         _ => {
-            return Err(ErrorKind::SemanticError(
+            errors.push(Error {
+                kind: ErrorKind::SemanticError("Invalid struct member type".into()),
                 meta,
-                "Invalid struct member type".into(),
-            ))
+            });
+            (0, 0)
         }
     };
 
-    Ok(TypeAlignSpan { ty, align, span })
+    TypeAlignSpan { ty, align, span }
 }
 
 /// Helper function used for aligning `value` to the next multiple of `align`

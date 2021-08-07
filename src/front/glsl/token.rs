@@ -3,7 +3,7 @@ pub use pp_rs::token::{Float, Integer, PreprocessorError, Token as PPToken};
 
 use super::ast::Precision;
 use crate::{Interpolation, Sampling, Type};
-use std::{fmt, ops::Range};
+use std::ops::Range;
 
 #[derive(Debug, Clone, Copy, Default)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -21,6 +21,10 @@ impl SourceMetadata {
             start: self.start.min(other.start),
             end: self.end.max(other.end),
         }
+    }
+
+    pub fn none() -> Self {
+        SourceMetadata::default()
     }
 }
 
@@ -139,12 +143,6 @@ pub enum TokenValue {
     Caret,
     Ampersand,
     Question,
-}
-
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.value)
-    }
 }
 
 #[derive(Debug)]

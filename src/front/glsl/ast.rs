@@ -1,7 +1,7 @@
 use super::SourceMetadata;
 use crate::{
     BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle, Interpolation,
-    ResourceBinding, Sampling, StorageAccess, StorageClass, Type, UnaryOperator,
+    Sampling, StorageAccess, StorageClass, Type, UnaryOperator,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -102,7 +102,8 @@ pub enum HirExprKind {
 pub enum TypeQualifier {
     StorageQualifier(StorageQualifier),
     Interpolation(Interpolation),
-    ResourceBinding(ResourceBinding),
+    Set(u32),
+    Binding(u32),
     Location(u32),
     WorkGroupSize(usize, u32),
     Sampling(Sampling),

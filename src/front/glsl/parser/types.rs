@@ -4,9 +4,9 @@ use crate::{
         error::ExpectedToken,
         parser::ParsingContext,
         token::{SourceMetadata, TokenValue},
-        ErrorKind, Parser, Result,
+        Error, ErrorKind, Parser, Result,
     },
-    ArraySize, Handle, ResourceBinding, StorageClass, Type, TypeInner,
+    ArraySize, Handle, StorageClass, Type, TypeInner,
 };
 
 impl<'source> ParsingContext<'source> {
@@ -55,17 +55,25 @@ impl<'source> ParsingContext<'source> {
             }
             TokenValue::Identifier(ident) => match parser.lookup_type.get(&ident) {
                 Some(ty) => Some(*ty),
-                None => return Err(ErrorKind::UnknownType(token.meta, ident)),
+                None => {
+                    return Err(Error {
+                        kind: ErrorKind::UnknownType(ident),
+                        meta: token.meta,
+                    })
+                }
             },
             _ => {
-                return Err(ErrorKind::InvalidToken(
-                    token,
-                    vec![
-                        TokenValue::Void.into(),
-                        TokenValue::Struct.into(),
-                        ExpectedToken::TypeName,
-                    ],
-                ))
+                return Err(Error {
+                    kind: ErrorKind::InvalidToken(
+                        token.value,
+                        vec![
+                            TokenValue::Void.into(),
+                            TokenValue::Struct.into(),
+                            ExpectedToken::TypeName,
+                        ],
+                    ),
+                    meta: token.meta,
+                });
             }
         };
 
@@ -78,8 +86,10 @@ impl<'source> ParsingContext<'source> {
         parser: &mut Parser,
     ) -> Result<(Handle<Type>, SourceMetadata)> {
         let (maybe_ty, meta) = self.parse_type(parser)?;
-        let ty =
-            maybe_ty.ok_or_else(|| ErrorKind::SemanticError(meta, "Type can't be void".into()))?;
+        let ty = maybe_ty.ok_or_else(|| Error {
+            kind: ErrorKind::SemanticError("Type can't be void".into()),
+            meta,
+        })?;
 
         Ok((ty, meta))
     }
@@ -148,13 +158,9 @@ impl<'source> ParsingContext<'source> {
         parser: &mut Parser,
         qualifiers: &mut Vec<(TypeQualifier, SourceMetadata)>,
     ) -> Result<()> {
-        // We need both of these to produce a ResourceBinding
-        let mut group = None;
-        let mut binding = None;
-
         self.expect(parser, TokenValue::LeftParen)?;
         loop {
-            self.parse_layout_qualifier_id(parser, qualifiers, &mut group, &mut binding)?;
+            self.parse_layout_qualifier_id(parser, qualifiers)?;
 
             if self.bump_if(parser, TokenValue::Comma).is_some() {
                 continue;
@@ -164,27 +170,6 @@ impl<'source> ParsingContext<'source> {
         }
         self.expect(parser, TokenValue::RightParen)?;
 
-        match (group, binding) {
-            (Some((group, group_meta)), Some((binding, binding_meta))) => qualifiers.push((
-                TypeQualifier::ResourceBinding(ResourceBinding { group, binding }),
-                group_meta.union(&binding_meta),
-            )),
-            // Produce an error if we have one of group or binding but not the other
-            (Some((_, meta)), None) => {
-                return Err(ErrorKind::SemanticError(
-                    meta,
-                    "set specified with no binding".into(),
-                ))
-            }
-            (None, Some((_, meta))) => {
-                return Err(ErrorKind::SemanticError(
-                    meta,
-                    "binding specified with no set".into(),
-                ))
-            }
-            (None, None) => (),
-        }
-
         Ok(())
     }
 
@@ -192,8 +177,6 @@ impl<'source> ParsingContext<'source> {
         &mut self,
         parser: &mut Parser,
         qualifiers: &mut Vec<(TypeQualifier, SourceMetadata)>,
-        group: &mut Option<(u32, SourceMetadata)>,
-        binding: &mut Option<(u32, SourceMetadata)>,
     ) -> Result<()> {
         // layout_qualifier_id:
         //     IDENTIFIER
@@ -209,52 +192,60 @@ impl<'source> ParsingContext<'source> {
                     qualifiers.push((
                         match name.as_str() {
                             "location" => TypeQualifier::Location(value),
-                            "set" => {
-                                *group = Some((value, end_meta));
-                                return Ok(());
-                            }
-                            "binding" => {
-                                *binding = Some((value, end_meta));
-                                return Ok(());
-                            }
+                            "set" => TypeQualifier::Set(value),
+                            "binding" => TypeQualifier::Binding(value),
                             "local_size_x" => TypeQualifier::WorkGroupSize(0, value),
                             "local_size_y" => TypeQualifier::WorkGroupSize(1, value),
                             "local_size_z" => TypeQualifier::WorkGroupSize(2, value),
-                            _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
+                            _ => {
+                                parser.errors.push(Error {
+                                    kind: ErrorKind::UnknownLayoutQualifier(name),
+                                    meta: token.meta,
+                                });
+                                return Ok(());
+                            }
                         },
                         token.meta,
                     ))
                 } else {
-                    match name.as_str() {
-                        "push_constant" => {
-                            qualifiers.push((
-                                TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(
-                                    StorageClass::PushConstant,
-                                )),
-                                token.meta,
-                            ));
-                            qualifiers
-                                .push((TypeQualifier::Layout(StructLayout::Std430), token.meta));
-                        }
-                        "std140" => qualifiers
-                            .push((TypeQualifier::Layout(StructLayout::Std140), token.meta)),
-                        "std430" => qualifiers
-                            .push((TypeQualifier::Layout(StructLayout::Std430), token.meta)),
-                        "early_fragment_tests" => {
-                            qualifiers.push((TypeQualifier::EarlyFragmentTests, token.meta))
-                        }
-                        _ => return Err(ErrorKind::UnknownLayoutQualifier(token.meta, name)),
-                    }
+                    qualifiers.push((
+                        match name.as_str() {
+                            "push_constant" => {
+                                qualifiers.push((
+                                    TypeQualifier::Layout(StructLayout::Std430),
+                                    token.meta,
+                                ));
+                                qualifiers.push((
+                                    TypeQualifier::StorageQualifier(
+                                        StorageQualifier::StorageClass(StorageClass::PushConstant),
+                                    ),
+                                    token.meta,
+                                ));
+                                return Ok(());
+                            }
+                            "std140" => TypeQualifier::Layout(StructLayout::Std140),
+                            "std430" => TypeQualifier::Layout(StructLayout::Std430),
+                            "early_fragment_tests" => TypeQualifier::EarlyFragmentTests,
+                            _ => {
+                                parser.errors.push(Error {
+                                    kind: ErrorKind::UnknownLayoutQualifier(name),
+                                    meta: token.meta,
+                                });
+                                return Ok(());
+                            }
+                        },
+                        token.meta,
+                    ));
                 };
-
-                Ok(())
             }
             // TODO: handle Shared?
-            _ => Err(ErrorKind::InvalidToken(
-                token,
-                vec![ExpectedToken::Identifier],
-            )),
+            _ => parser.errors.push(Error {
+                kind: ErrorKind::InvalidToken(token.value, vec![ExpectedToken::Identifier]),
+                meta: token.meta,
+            }),
         }
+
+        Ok(())
     }
 
     pub fn peek_type_name(&mut self, parser: &mut Parser) -> bool {

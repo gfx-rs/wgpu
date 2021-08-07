@@ -1,6 +1,7 @@
 use crate::{
     front::glsl::{
-        constants::ConstantSolver, context::Context, ErrorKind, Parser, Result, SourceMetadata,
+        constants::ConstantSolver, context::Context, Error, ErrorKind, Parser, Result,
+        SourceMetadata,
     },
     proc::ResolveContext,
     ArraySize, Constant, Expression, Handle, ImageClass, ImageDimension, ScalarKind, Type,
@@ -197,8 +198,9 @@ impl Parser {
 
         ctx.typifier
             .grow(handle, &ctx.expressions, &resolve_ctx)
-            .map_err(|error| {
-                ErrorKind::SemanticError(meta, format!("Can't resolve type: {:?}", error).into())
+            .map_err(|error| Error {
+                kind: ErrorKind::SemanticError(format!("Can't resolve type: {:?}", error).into()),
+                meta,
             })
     }
 
@@ -230,8 +232,9 @@ impl Parser {
 
         ctx.typifier
             .invalidate(handle, &ctx.expressions, &resolve_ctx)
-            .map_err(|error| {
-                ErrorKind::SemanticError(meta, format!("Can't resolve type: {:?}", error).into())
+            .map_err(|error| Error {
+                kind: ErrorKind::SemanticError(format!("Can't resolve type: {:?}", error).into()),
+                meta,
             })
     }
 
@@ -247,7 +250,10 @@ impl Parser {
             constants: &mut self.module.constants,
         };
 
-        solver.solve(root).map_err(|e| (meta, e).into())
+        solver.solve(root).map_err(|e| Error {
+            kind: e.into(),
+            meta,
+        })
     }
 
     pub fn maybe_array(&mut self, base: Handle<Type>, size: Option<ArraySize>) -> Handle<Type> {

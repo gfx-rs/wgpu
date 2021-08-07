@@ -2,9 +2,9 @@ use crate::{
     front::glsl::{
         ast::*,
         context::Context,
-        error::ErrorKind,
+        error::{Error, ErrorKind},
         types::{scalar_components, type_power},
-        Parser, SourceMetadata,
+        Parser, Result, SourceMetadata,
     },
     proc::ensure_block_returns,
     Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint, Expression, FastHashMap,
@@ -46,11 +46,11 @@ impl Parser {
         fc: FunctionCallKind,
         raw_args: &[Handle<HirExpr>],
         meta: SourceMetadata,
-    ) -> Result<Option<Handle<Expression>>, ErrorKind> {
+    ) -> Result<Option<Handle<Expression>>> {
         let args: Vec<_> = raw_args
             .iter()
             .map(|e| ctx.lower_expect(self, *e, false, body))
-            .collect::<Result<_, _>>()?;
+            .collect::<Result<_>>()?;
 
         match fc {
             FunctionCallKind::TypeConstructor(ty) => {
@@ -226,7 +226,14 @@ impl Parser {
                             },
                             body,
                         ),
-                        _ => return Err(ErrorKind::SemanticError(meta, "Bad cast".into())),
+                        _ => {
+                            self.errors.push(Error {
+                                kind: ErrorKind::SemanticError("Bad cast".into()),
+                                meta,
+                            });
+
+                            args[0].0
+                        }
                     }
                 } else {
                     let mut components = Vec::with_capacity(args.len());
@@ -314,12 +321,12 @@ impl Parser {
         mut args: Vec<(Handle<Expression>, SourceMetadata)>,
         raw_args: &[Handle<HirExpr>],
         meta: SourceMetadata,
-    ) -> Result<Option<Handle<Expression>>, ErrorKind> {
+    ) -> Result<Option<Handle<Expression>>> {
         match name.as_str() {
             "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
             | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
                 if args.len() != 2 {
-                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
                 }
                 ctx.samplers.insert(args[0].0, args[1].0);
                 Ok(Some(args[0].0))
@@ -331,16 +338,16 @@ impl Parser {
             | "samplerCubeShadow"
             | "samplerCubeArrayShadow" => {
                 if args.len() != 2 {
-                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
                 }
-                sampled_to_depth(&mut self.module, ctx, args[0])?;
+                sampled_to_depth(&mut self.module, ctx, args[0], &mut self.errors)?;
                 self.invalidate_expression(ctx, args[0].0, args[0].1)?;
                 ctx.samplers.insert(args[0].0, args[1].0);
                 Ok(Some(args[0].0))
             }
             "texture" => {
                 if !(2..=3).contains(&args.len()) {
-                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
                 }
                 let arg_1 = &mut args[1];
                 ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
@@ -366,12 +373,15 @@ impl Parser {
                         ),
                     ))
                 } else {
-                    Err(ErrorKind::SemanticError(meta, "Bad call to texture".into()))
+                    Err(Error {
+                        kind: ErrorKind::SemanticError("Bad call to texture".into()),
+                        meta,
+                    })
                 }
             }
             "textureLod" => {
                 if args.len() != 3 {
-                    return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
                 }
                 let arg_1 = &mut args[1];
                 ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
@@ -392,15 +402,15 @@ impl Parser {
                         body,
                     )))
                 } else {
-                    Err(ErrorKind::SemanticError(
+                    Err(Error {
+                        kind: ErrorKind::SemanticError("Bad call to textureLod".into()),
                         meta,
-                        "Bad call to textureLod".into(),
-                    ))
+                    })
                 }
             }
             "textureProj" => {
                 if !(2..=3).contains(&args.len()) {
-                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
                 }
                 let arg_1 = &mut args[1];
                 ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
@@ -413,10 +423,10 @@ impl Parser {
                 let size = match *self.resolve_type(ctx, args[1].0, args[1].1)? {
                     TypeInner::Vector { size, .. } => size,
                     _ => {
-                        return Err(ErrorKind::SemanticError(
+                        return Err(Error {
+                            kind: ErrorKind::SemanticError("Bad call to textureProj".into()),
                             meta,
-                            "Bad call to textureProj".into(),
-                        ))
+                        })
                     }
                 };
                 let (base, base_meta) = args[1];
@@ -460,15 +470,15 @@ impl Parser {
                         body,
                     )))
                 } else {
-                    Err(ErrorKind::SemanticError(
+                    Err(Error {
+                        kind: ErrorKind::SemanticError("Bad call to textureProj".into()),
                         meta,
-                        "Bad call to textureProj".into(),
-                    ))
+                    })
                 }
             }
             "textureGrad" => {
                 if args.len() != 4 {
-                    return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
                 }
                 let arg_1 = &mut args[1];
                 ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
@@ -494,15 +504,15 @@ impl Parser {
                         body,
                     )))
                 } else {
-                    Err(ErrorKind::SemanticError(
+                    Err(Error {
+                        kind: ErrorKind::SemanticError("Bad call to textureGrad".into()),
                         meta,
-                        "Bad call to textureGrad".into(),
-                    ))
+                    })
                 }
             }
             "textureSize" => {
                 if !(1..=2).contains(&args.len()) {
-                    return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 1, args.len(), meta));
                 }
                 if let Some(&mut (ref mut expr, meta)) = args.get_mut(1) {
                     ctx.implicit_conversion(self, expr, meta, ScalarKind::Sint, 4)?;
@@ -519,7 +529,7 @@ impl Parser {
             }
             "texelFetch" => {
                 if args.len() != 3 {
-                    return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
                 }
                 let arg_1 = &mut args[1];
                 ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Sint, 4)?;
@@ -537,10 +547,10 @@ impl Parser {
                         body,
                     )))
                 } else {
-                    Err(ErrorKind::SemanticError(
+                    Err(Error {
+                        kind: ErrorKind::SemanticError("Bad call to texelFetch".into()),
                         meta,
-                        "Bad call to texelFetch".into(),
-                    ))
+                    })
                 }
             }
             "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" | "sqrt"
@@ -548,7 +558,7 @@ impl Parser {
             | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin" | "log" | "log2"
             | "length" | "determinant" | "bitCount" | "bitfieldReverse" => {
                 if args.len() != 1 {
-                    return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 1, args.len(), meta));
                 }
                 Ok(Some(ctx.add_expression(
                     Expression::Math {
@@ -604,13 +614,13 @@ impl Parser {
                         arg1: Some(args[1].0),
                         arg2: None,
                     },
-                    _ => return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta)),
+                    _ => return Err(Error::wrong_function_args(name, 2, args.len(), meta)),
                 };
                 Ok(Some(ctx.add_expression(expr, body)))
             }
             "mod" => {
                 if args.len() != 2 {
-                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
                 }
 
                 let (mut left, left_meta) = args[0];
@@ -629,7 +639,7 @@ impl Parser {
             }
             "min" | "max" => {
                 if args.len() != 2 {
-                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
                 }
 
                 let (mut arg0, arg0_meta) = args[0];
@@ -661,7 +671,7 @@ impl Parser {
             "pow" | "dot" | "reflect" | "cross" | "outerProduct" | "distance" | "step" | "modf"
             | "frexp" | "ldexp" => {
                 if args.len() != 2 {
-                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
                 }
 
                 let (mut arg0, arg0_meta) = args[0];
@@ -693,7 +703,7 @@ impl Parser {
             }
             "mix" => {
                 if args.len() != 3 {
-                    return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
                 }
 
                 let (mut arg, arg_meta) = args[0];
@@ -763,7 +773,7 @@ impl Parser {
             }
             "clamp" => {
                 if args.len() != 3 {
-                    return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
                 }
 
                 let (mut arg0, arg0_meta) = args[0];
@@ -794,7 +804,7 @@ impl Parser {
             }
             "faceforward" | "refract" | "fma" | "smoothstep" => {
                 if args.len() != 3 {
-                    return Err(ErrorKind::wrong_function_args(name, 3, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
                 }
                 Ok(Some(ctx.add_expression(
                     Expression::Math {
@@ -815,7 +825,7 @@ impl Parser {
             "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
             | "notEqual" => {
                 if args.len() != 2 {
-                    return Err(ErrorKind::wrong_function_args(name, 2, args.len(), meta));
+                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
                 }
                 Ok(Some(ctx.add_expression(
                     Expression::Binary {
@@ -848,8 +858,9 @@ impl Parser {
                 ))
             }
             _ => {
-                let declarations = self.lookup_function.get(&name).ok_or_else(|| {
-                    ErrorKind::SemanticError(meta, format!("Unknown function '{}'", name).into())
+                let declarations = self.lookup_function.get(&name).ok_or_else(|| Error {
+                    kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
+                    meta,
                 })?;
 
                 let mut maybe_decl = None;
@@ -866,7 +877,7 @@ impl Parser {
                         decl.parameters.iter().enumerate().zip(args.iter())
                     {
                         if decl.parameters_info[i].depth {
-                            sampled_to_depth(&mut self.module, ctx, *call_arg)?;
+                            sampled_to_depth(&mut self.module, ctx, *call_arg, &mut self.errors)?;
                             self.invalidate_expression(ctx, call_arg.0, call_arg.1)?
                         }
 
@@ -935,14 +946,17 @@ impl Parser {
                 }
 
                 if ambiguous {
-                    return Err(ErrorKind::SemanticError(
+                    self.errors.push(Error {
+                        kind: ErrorKind::SemanticError(
+                            format!("Ambiguous best function for '{}'", name).into(),
+                        ),
                         meta,
-                        format!("Ambiguous best function for '{}'", name).into(),
-                    ));
+                    })
                 }
 
-                let decl = maybe_decl.ok_or_else(|| {
-                    ErrorKind::SemanticError(meta, format!("Unknown function '{}'", name).into())
+                let decl = maybe_decl.ok_or_else(|| Error {
+                    kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
+                    meta,
                 })?;
 
                 let parameters_info = decl.parameters_info.clone();
@@ -963,7 +977,7 @@ impl Parser {
                         *self.resolve_type(ctx, handle, meta)?
                     {
                         if parameter_info.qualifier.is_lhs()
-                            && matches!(*ctx.get_expression(handle), Expression::Swizzle { .. })
+                            && matches!(ctx[handle], Expression::Swizzle { .. })
                         {
                             let ty = self.module.types.fetch_or_append(Type {
                                 name: None,
@@ -1047,9 +1061,9 @@ impl Parser {
         args: &[(Handle<Expression>, SourceMetadata)],
         fun: RelationalFunction,
         meta: SourceMetadata,
-    ) -> Result<Handle<Expression>, ErrorKind> {
+    ) -> Result<Handle<Expression>> {
         if args.len() != 1 {
-            return Err(ErrorKind::wrong_function_args(name, 1, args.len(), meta));
+            return Err(Error::wrong_function_args(name, 1, args.len(), meta));
         }
 
         Ok(ctx.add_expression(
@@ -1068,7 +1082,7 @@ impl Parser {
         result: Option<FunctionResult>,
         mut body: Block,
         meta: SourceMetadata,
-    ) -> Result<(), ErrorKind> {
+    ) {
         ensure_block_returns(&mut body);
 
         let void = result.is_none();
@@ -1113,16 +1127,16 @@ impl Parser {
             }
 
             if decl.defined {
-                return Err(ErrorKind::SemanticError(
+                return self.errors.push(Error {
+                    kind: ErrorKind::SemanticError("Function already defined".into()),
                     meta,
-                    "Function already defined".into(),
-                ));
+                });
             }
 
             decl.defined = true;
             decl.parameters_info = parameters_info;
             *self.module.functions.get_mut(decl.handle) = function;
-            return Ok(());
+            return;
         }
 
         let handle = module.functions.append(function);
@@ -1133,8 +1147,6 @@ impl Parser {
             defined: true,
             void,
         });
-
-        Ok(())
     }
 
     pub fn add_prototype(
@@ -1143,7 +1155,7 @@ impl Parser {
         name: String,
         result: Option<FunctionResult>,
         meta: SourceMetadata,
-    ) -> Result<(), ErrorKind> {
+    ) {
         let void = result.is_none();
 
         let &mut Parser {
@@ -1181,10 +1193,10 @@ impl Parser {
                 }
             }
 
-            return Err(ErrorKind::SemanticError(
+            return self.errors.push(Error {
+                kind: ErrorKind::SemanticError("Prototype already defined".into()),
                 meta,
-                "Prototype already defined".into(),
-            ));
+            });
         }
 
         let handle = module.functions.append(function);
@@ -1195,8 +1207,6 @@ impl Parser {
             defined: false,
             void,
         });
-
-        Ok(())
     }
 
     pub fn add_entry_point(
@@ -1204,7 +1214,7 @@ impl Parser {
         function: Handle<Function>,
         mut global_init_body: Block,
         mut expressions: Arena<Expression>,
-    ) -> Result<(), ErrorKind> {
+    ) {
         let mut arguments = Vec::new();
         let mut body = Block::with_capacity(
             // global init body
@@ -1305,8 +1315,6 @@ impl Parser {
                 ..Default::default()
             },
         });
-
-        Ok(())
     }
 
     /// Helper function for texture calls, splits the vector argument into it's components
@@ -1316,7 +1324,7 @@ impl Parser {
         (image, image_meta): (Handle<Expression>, SourceMetadata),
         (coord, coord_meta): (Handle<Expression>, SourceMetadata),
         body: &mut Block,
-    ) -> Result<CoordComponents, ErrorKind> {
+    ) -> Result<CoordComponents> {
         if let TypeInner::Image {
             dim,
             arrayed,
@@ -1377,10 +1385,16 @@ impl Parser {
                 array_index,
             })
         } else {
-            Err(ErrorKind::SemanticError(
-                image_meta,
-                "Type is not an image".into(),
-            ))
+            self.errors.push(Error {
+                kind: ErrorKind::SemanticError("Type is not an image".into()),
+                meta: image_meta,
+            });
+
+            Ok(CoordComponents {
+                coordinate: coord,
+                depth_ref: None,
+                array_index: None,
+            })
         }
     }
 }
@@ -1391,7 +1405,8 @@ fn sampled_to_depth(
     module: &mut Module,
     ctx: &mut Context,
     (image, meta): (Handle<Expression>, SourceMetadata),
-) -> Result<(), ErrorKind> {
+    errors: &mut Vec<Error>,
+) -> Result<()> {
     let ty = match ctx[image] {
         Expression::GlobalVariable(handle) => &mut module.global_variables.get_mut(handle).ty,
         Expression::FunctionArgument(i) => {
@@ -1399,10 +1414,10 @@ fn sampled_to_depth(
             &mut ctx.arguments[i as usize].ty
         }
         _ => {
-            return Err(ErrorKind::SemanticError(
+            return Err(Error {
+                kind: ErrorKind::SemanticError("Not a valid texture expression".into()),
                 meta,
-                "Not a valid texture expression".into(),
-            ))
+            })
         }
     };
     match module.types[*ty].inner {
@@ -1422,9 +1437,15 @@ fn sampled_to_depth(
                 })
             }
             ImageClass::Depth { .. } => {}
-            _ => return Err(ErrorKind::SemanticError(meta, "Not a texture".into())),
+            _ => errors.push(Error {
+                kind: ErrorKind::SemanticError("Not a texture".into()),
+                meta,
+            }),
         },
-        _ => return Err(ErrorKind::SemanticError(meta, "Not a texture".into())),
+        _ => errors.push(Error {
+            kind: ErrorKind::SemanticError("Not a texture".into()),
+            meta,
+        }),
     };
 
     Ok(())

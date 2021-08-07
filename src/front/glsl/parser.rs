@@ -9,7 +9,7 @@ use crate::{
         token::{Directive, DirectiveKind},
         token::{SourceMetadata, Token, TokenValue},
         variables::{GlobalOrConstant, VarDeclaration},
-        ParseError, Parser, Result,
+        Error, Parser, Result,
     },
     Block, Constant, ConstantInner, Expression, ScalarValue, Type,
 };
@@ -24,12 +24,14 @@ mod types;
 
 pub struct ParsingContext<'source> {
     lexer: Peekable<Lexer<'source>>,
+    last_meta: SourceMetadata,
 }
 
 impl<'source> ParsingContext<'source> {
     pub fn new(lexer: Lexer<'source>) -> Self {
         ParsingContext {
             lexer: lexer.peekable(),
+            last_meta: SourceMetadata::none(),
         }
     }
 
@@ -38,10 +40,10 @@ impl<'source> ParsingContext<'source> {
 
         match token.value {
             TokenValue::Identifier(name) => Ok((name, token.meta)),
-            _ => Err(ErrorKind::InvalidToken(
-                token,
-                vec![ExpectedToken::Identifier],
-            )),
+            _ => Err(Error {
+                kind: ErrorKind::InvalidToken(token.value, vec![ExpectedToken::Identifier]),
+                meta: token.meta,
+            }),
         }
     }
 
@@ -49,7 +51,10 @@ impl<'source> ParsingContext<'source> {
         let token = self.bump(parser)?;
 
         if token.value != value {
-            Err(ErrorKind::InvalidToken(token, vec![value.into()]))
+            Err(Error {
+                kind: ErrorKind::InvalidToken(token.value, vec![value.into()]),
+                meta: token.meta,
+            })
         } else {
             Ok(token)
         }
@@ -60,19 +65,26 @@ impl<'source> ParsingContext<'source> {
             let res = self.lexer.next()?;
 
             match res.kind {
-                LexerResultKind::Token(token) => break Some(token),
+                LexerResultKind::Token(token) => {
+                    self.last_meta = token.meta;
+                    break Some(token);
+                }
                 LexerResultKind::Directive(directive) => {
                     parser.handle_directive(directive, res.meta)
                 }
-                LexerResultKind::Error(error) => parser.errors.push(ParseError {
-                    kind: ErrorKind::PreprocessorError(res.meta, error),
+                LexerResultKind::Error(error) => parser.errors.push(Error {
+                    kind: ErrorKind::PreprocessorError(error),
+                    meta: res.meta,
                 }),
             }
         }
     }
 
     pub fn bump(&mut self, parser: &mut Parser) -> Result<Token> {
-        self.next(parser).ok_or(ErrorKind::EndOfFile)
+        self.next(parser).ok_or(Error {
+            kind: ErrorKind::EndOfFile,
+            meta: self.last_meta,
+        })
     }
 
     /// Returns None on the end of the file rather than an error like other methods
@@ -101,8 +113,9 @@ impl<'source> ParsingContext<'source> {
                     LexerResultKind::Directive(directive) => {
                         parser.handle_directive(directive, res.meta)
                     }
-                    LexerResultKind::Error(error) => parser.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(res.meta, error),
+                    LexerResultKind::Error(error) => parser.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(error),
+                        meta: res.meta,
                     }),
                     _ => unreachable!(),
                 }
@@ -113,7 +126,11 @@ impl<'source> ParsingContext<'source> {
     }
 
     pub fn expect_peek(&mut self, parser: &mut Parser) -> Result<&Token> {
-        self.peek(parser).ok_or(ErrorKind::EndOfFile)
+        let meta = self.last_meta;
+        self.peek(parser).ok_or(Error {
+            kind: ErrorKind::EndOfFile,
+            meta,
+        })
     }
 
     pub fn parse(&mut self, parser: &mut Parser) -> Result<()> {
@@ -125,20 +142,18 @@ impl<'source> ParsingContext<'source> {
             self.parse_external_declaration(parser, &mut ctx, &mut body)?;
         }
 
-        let handle = parser
-            .lookup_function
-            .get("main")
-            .and_then(|declarations| {
-                declarations
-                    .iter()
-                    .find(|decl| decl.defined && decl.parameters.is_empty())
-                    .map(|decl| decl.handle)
-            })
-            .ok_or_else(|| {
-                ErrorKind::SemanticError(SourceMetadata::default(), "Missing entry point".into())
-            })?;
-
-        parser.add_entry_point(handle, body, ctx.expressions)?;
+        match parser.lookup_function.get("main").and_then(|declarations| {
+            declarations
+                .iter()
+                .find(|decl| decl.defined && decl.parameters.is_empty())
+                .map(|decl| decl.handle)
+        }) {
+            Some(handle) => parser.add_entry_point(handle, body, ctx.expressions),
+            None => parser.errors.push(Error {
+                kind: ErrorKind::SemanticError("Missing entry point".into()),
+                meta: SourceMetadata::none(),
+            }),
+        }
 
         Ok(())
     }
@@ -150,18 +165,24 @@ impl<'source> ParsingContext<'source> {
             ConstantInner::Scalar {
                 value: ScalarValue::Uint(int),
                 ..
-            } => u32::try_from(int)
-                .map_err(|_| ErrorKind::SemanticError(meta, "int constant overflows".into())),
+            } => u32::try_from(int).map_err(|_| Error {
+                kind: ErrorKind::SemanticError("int constant overflows".into()),
+                meta,
+            })?,
             ConstantInner::Scalar {
                 value: ScalarValue::Sint(int),
                 ..
-            } => u32::try_from(int)
-                .map_err(|_| ErrorKind::SemanticError(meta, "int constant overflows".into())),
-            _ => Err(ErrorKind::SemanticError(
+            } => u32::try_from(int).map_err(|_| Error {
+                kind: ErrorKind::SemanticError("int constant overflows".into()),
                 meta,
-                "Expected a uint constant".into(),
-            )),
-        }?;
+            })?,
+            _ => {
+                return Err(Error {
+                    kind: ErrorKind::SemanticError("Expected a uint constant".into()),
+                    meta,
+                })
+            }
+        };
 
         Ok((int, meta))
     }
@@ -188,11 +209,11 @@ impl Parser {
         match directive.kind {
             DirectiveKind::Version { is_first_directive } => {
                 if !is_first_directive {
-                    self.errors.push(ParseError {
+                    self.errors.push(Error {
                         kind: ErrorKind::SemanticError(
-                            meta,
                             "#version must occur first in shader".into(),
                         ),
+                        meta,
                     })
                 }
 
@@ -202,21 +223,20 @@ impl Parser {
                         location,
                     }) => match int.value {
                         440 | 450 | 460 => self.meta.version = int.value as u16,
-                        _ => self.errors.push(ParseError {
-                            kind: ErrorKind::InvalidVersion(location.into(), int.value),
+                        _ => self.errors.push(Error {
+                            kind: ErrorKind::InvalidVersion(int.value),
+                            meta: location.into(),
                         }),
                     },
-                    Some(PPToken { value, location }) => self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            location.into(),
-                            PreprocessorError::UnexpectedToken(value),
-                        ),
+                    Some(PPToken { value, location }) => self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedToken(
+                            value,
+                        )),
+                        meta: location.into(),
                     }),
-                    None => self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            meta,
-                            PreprocessorError::UnexpectedNewLine,
-                        ),
+                    None => self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedNewLine),
+                        meta,
                     }),
                 };
 
@@ -226,25 +246,26 @@ impl Parser {
                         location,
                     }) => match name.as_str() {
                         "core" => self.meta.profile = Profile::Core,
-                        _ => self.errors.push(ParseError {
-                            kind: ErrorKind::InvalidProfile(location.into(), name),
+                        _ => self.errors.push(Error {
+                            kind: ErrorKind::InvalidProfile(name),
+                            meta: location.into(),
                         }),
                     },
-                    Some(PPToken { value, location }) => self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            location.into(),
-                            PreprocessorError::UnexpectedToken(value),
-                        ),
+                    Some(PPToken { value, location }) => self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedToken(
+                            value,
+                        )),
+                        meta: location.into(),
                     }),
                     None => {}
                 };
 
                 if let Some(PPToken { value, location }) = tokens.next() {
-                    self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            location.into(),
-                            PreprocessorError::UnexpectedToken(value),
-                        ),
+                    self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedToken(
+                            value,
+                        )),
+                        meta: location.into(),
                     })
                 }
             }
@@ -259,21 +280,21 @@ impl Parser {
                         ..
                     }) => Some(name),
                     Some(PPToken { value, location }) => {
-                        self.errors.push(ParseError {
-                            kind: ErrorKind::PreprocessorError(
-                                location.into(),
-                                PreprocessorError::UnexpectedToken(value),
-                            ),
+                        self.errors.push(Error {
+                            kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedToken(
+                                value,
+                            )),
+                            meta: location.into(),
                         });
 
                         None
                     }
                     None => {
-                        self.errors.push(ParseError {
+                        self.errors.push(Error {
                             kind: ErrorKind::PreprocessorError(
-                                meta,
                                 PreprocessorError::UnexpectedNewLine,
                             ),
+                            meta,
                         });
 
                         None
@@ -285,17 +306,15 @@ impl Parser {
                         value: PPTokenValue::Punct(pp_rs::token::Punct::Colon),
                         ..
                     }) => {}
-                    Some(PPToken { value, location }) => self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            location.into(),
-                            PreprocessorError::UnexpectedToken(value),
-                        ),
+                    Some(PPToken { value, location }) => self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedToken(
+                            value,
+                        )),
+                        meta: location.into(),
                     }),
-                    None => self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            meta,
-                            PreprocessorError::UnexpectedNewLine,
-                        ),
+                    None => self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedNewLine),
+                        meta,
                     }),
                 };
 
@@ -309,33 +328,31 @@ impl Parser {
                                 self.meta.extensions.insert(name);
                             }
                         }
-                        _ => self.errors.push(ParseError {
-                            kind: ErrorKind::PreprocessorError(
-                                location.into(),
-                                PreprocessorError::UnexpectedToken(PPTokenValue::Ident(behavior)),
-                            ),
+                        _ => self.errors.push(Error {
+                            kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedToken(
+                                PPTokenValue::Ident(behavior),
+                            )),
+                            meta: location.into(),
                         }),
                     },
-                    Some(PPToken { value, location }) => self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            location.into(),
-                            PreprocessorError::UnexpectedToken(value),
-                        ),
+                    Some(PPToken { value, location }) => self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedToken(
+                            value,
+                        )),
+                        meta: location.into(),
                     }),
-                    None => self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            meta,
-                            PreprocessorError::UnexpectedNewLine,
-                        ),
+                    None => self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedNewLine),
+                        meta,
                     }),
                 }
 
                 if let Some(PPToken { value, location }) = tokens.next() {
-                    self.errors.push(ParseError {
-                        kind: ErrorKind::PreprocessorError(
-                            location.into(),
-                            PreprocessorError::UnexpectedToken(value),
-                        ),
+                    self.errors.push(Error {
+                        kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedToken(
+                            value,
+                        )),
+                        meta: location.into(),
                     })
                 }
             }

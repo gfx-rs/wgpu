@@ -10,7 +10,7 @@ use crate::{
         token::TokenValue,
         types::scalar_components,
         variables::{GlobalOrConstant, VarDeclaration},
-        ErrorKind, Parser, SourceMetadata, Token,
+        Error, ErrorKind, Parser, SourceMetadata, Token,
     },
     Block, Expression, FunctionResult, Handle, ScalarKind, Statement, StorageClass, StructMember,
     Type, TypeInner,
@@ -34,7 +34,10 @@ impl<'source> ParsingContext<'source> {
                         460 => vec![TokenValue::Semicolon.into(), ExpectedToken::Eof],
                         _ => vec![ExpectedToken::Eof],
                     };
-                    Err(ErrorKind::InvalidToken(token, expected))
+                    Err(Error {
+                        kind: ErrorKind::InvalidToken(token.value, expected),
+                        meta: token.meta,
+                    })
                 }
             }
         } else {
@@ -79,10 +82,13 @@ impl<'source> ParsingContext<'source> {
                         break;
                     }
                     _ => {
-                        return Err(ErrorKind::InvalidToken(
-                            token,
-                            vec![TokenValue::Comma.into(), TokenValue::RightBrace.into()],
-                        ))
+                        return Err(Error {
+                            kind: ErrorKind::InvalidToken(
+                                token.value,
+                                vec![TokenValue::Comma.into(), TokenValue::RightBrace.into()],
+                            ),
+                            meta: token.meta,
+                        })
                     }
                 }
             }
@@ -147,10 +153,13 @@ impl<'source> ParsingContext<'source> {
                 TokenValue::Semicolon => break,
                 TokenValue::Identifier(name) => name,
                 _ => {
-                    return Err(ErrorKind::InvalidToken(
-                        token,
-                        vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
-                    ))
+                    return Err(Error {
+                        kind: ErrorKind::InvalidToken(
+                            token.value,
+                            vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
+                        ),
+                        meta: token.meta,
+                    })
                 }
             };
             let mut meta = token.meta;
@@ -201,10 +210,13 @@ impl<'source> ParsingContext<'source> {
                 TokenValue::Semicolon => break,
                 TokenValue::Comma => {}
                 _ => {
-                    return Err(ErrorKind::InvalidToken(
-                        token,
-                        vec![TokenValue::Comma.into(), TokenValue::Semicolon.into()],
-                    ))
+                    return Err(Error {
+                        kind: ErrorKind::InvalidToken(
+                            token.value,
+                            vec![TokenValue::Comma.into(), TokenValue::Semicolon.into()],
+                        ),
+                        meta: token.meta,
+                    })
                 }
             }
         }
@@ -261,7 +273,7 @@ impl<'source> ParsingContext<'source> {
                             return match token.value {
                                 TokenValue::Semicolon => {
                                     // This branch handles function prototypes
-                                    parser.add_prototype(context, name, result, meta)?;
+                                    parser.add_prototype(context, name, result, meta);
 
                                     Ok(true)
                                 }
@@ -273,21 +285,27 @@ impl<'source> ParsingContext<'source> {
                                     // parse the body
                                     self.parse_compound_statement(parser, &mut context, &mut body)?;
 
-                                    parser.add_function(context, name, result, body, meta)?;
+                                    parser.add_function(context, name, result, body, meta);
 
                                     Ok(true)
                                 }
-                                _ if external => Err(ErrorKind::InvalidToken(
-                                    token,
-                                    vec![
-                                        TokenValue::LeftBrace.into(),
-                                        TokenValue::Semicolon.into(),
-                                    ],
-                                )),
-                                _ => Err(ErrorKind::InvalidToken(
-                                    token,
-                                    vec![TokenValue::Semicolon.into()],
-                                )),
+                                _ if external => Err(Error {
+                                    kind: ErrorKind::InvalidToken(
+                                        token.value,
+                                        vec![
+                                            TokenValue::LeftBrace.into(),
+                                            TokenValue::Semicolon.into(),
+                                        ],
+                                    ),
+                                    meta: token.meta,
+                                }),
+                                _ => Err(Error {
+                                    kind: ErrorKind::InvalidToken(
+                                        token.value,
+                                        vec![TokenValue::Semicolon.into()],
+                                    ),
+                                    meta: token.meta,
+                                }),
                             };
                         }
                         // Pass the token to the init_declator_list parser
@@ -313,10 +331,10 @@ impl<'source> ParsingContext<'source> {
 
                     self.parse_init_declarator_list(parser, ty, Some(token_fallthrough), &mut ctx)?;
                 } else {
-                    return Err(ErrorKind::SemanticError(
+                    parser.errors.push(Error {
+                        kind: ErrorKind::SemanticError("Declaration cannot have void type".into()),
                         meta,
-                        "Declaration cannot have void type".into(),
-                    ));
+                    })
                 }
 
                 Ok(true)
@@ -341,7 +359,10 @@ impl<'source> ParsingContext<'source> {
                             //TODO: declaration
                             // type_qualifier IDENTIFIER SEMICOLON
                             // type_qualifier IDENTIFIER identifier_list SEMICOLON
-                            Err(ErrorKind::NotImplemented(token.meta, "variable qualifier"))
+                            Err(Error {
+                                kind: ErrorKind::NotImplemented("variable qualifier"),
+                                meta: token.meta,
+                            })
                         }
                     }
                     TokenValue::Semicolon => {
@@ -359,20 +380,25 @@ impl<'source> ParsingContext<'source> {
                                     // layout(early_fragment_tests) in;
                                 }
                                 _ => {
-                                    return Err(ErrorKind::SemanticError(
+                                    parser.errors.push(Error {
+                                        kind: ErrorKind::SemanticError(
+                                            "Qualifier not supported as standalone".into(),
+                                        ),
                                         meta,
-                                        "Qualifier not supported as standalone".into(),
-                                    ));
+                                    });
                                 }
                             }
                         }
 
                         Ok(true)
                     }
-                    _ => Err(ErrorKind::InvalidToken(
-                        token,
-                        vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
-                    )),
+                    _ => Err(Error {
+                        kind: ErrorKind::InvalidToken(
+                            token.value,
+                            vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
+                        ),
+                        meta: token.meta,
+                    }),
                 }
             }
         } else {
@@ -385,14 +411,17 @@ impl<'source> ParsingContext<'source> {
                     let _ = match token.value {
                         TokenValue::PrecisionQualifier(p) => p,
                         _ => {
-                            return Err(ErrorKind::InvalidToken(
-                                token,
-                                vec![
-                                    TokenValue::PrecisionQualifier(Precision::High).into(),
-                                    TokenValue::PrecisionQualifier(Precision::Medium).into(),
-                                    TokenValue::PrecisionQualifier(Precision::Low).into(),
-                                ],
-                            ))
+                            return Err(Error {
+                                kind: ErrorKind::InvalidToken(
+                                    token.value,
+                                    vec![
+                                        TokenValue::PrecisionQualifier(Precision::High).into(),
+                                        TokenValue::PrecisionQualifier(Precision::Medium).into(),
+                                        TokenValue::PrecisionQualifier(Precision::Low).into(),
+                                    ],
+                                ),
+                                meta: token.meta,
+                            })
                         }
                     };
 
@@ -407,12 +436,12 @@ impl<'source> ParsingContext<'source> {
                             kind: ScalarKind::Sint,
                             ..
                         } => {}
-                        _ => {
-                            return Err(ErrorKind::SemanticError(
-                                meta,
+                        _ => parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
                                 "Precision statement can only work on floats and ints".into(),
-                            ))
-                        }
+                            ),
+                            meta,
+                        }),
                     }
 
                     self.expect(parser, TokenValue::Semicolon)?;
@@ -485,10 +514,13 @@ impl<'source> ParsingContext<'source> {
                 Some(name)
             }
             _ => {
-                return Err(ErrorKind::InvalidToken(
-                    token,
-                    vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
-                ))
+                return Err(Error {
+                    kind: ErrorKind::InvalidToken(
+                        token.value,
+                        vec![ExpectedToken::Identifier, TokenValue::Semicolon.into()],
+                    ),
+                    meta: token.meta,
+                })
             }
         };
         meta = meta.union(&token.meta);
@@ -555,7 +587,8 @@ impl<'source> ParsingContext<'source> {
                 layout,
                 &mut parser.module.types,
                 &parser.module.constants,
-            )?;
+                &mut parser.errors,
+            );
 
             span = offset::align_up(span, info.align);
             align = align.max(info.align);
