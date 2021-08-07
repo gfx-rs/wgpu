@@ -181,7 +181,7 @@ pub fn type_power(kind: ScalarKind) -> Option<u32> {
 }
 
 impl Parser {
-    pub fn typifier_grow(
+    pub(crate) fn typifier_grow(
         &self,
         ctx: &mut Context,
         handle: Handle<Expression>,
@@ -204,7 +204,7 @@ impl Parser {
             })
     }
 
-    pub fn resolve_type<'b>(
+    pub(crate) fn resolve_type<'b>(
         &'b self,
         ctx: &'b mut Context,
         handle: Handle<Expression>,
@@ -215,7 +215,7 @@ impl Parser {
     }
 
     /// Invalidates the cached type resolution for `handle` forcing a recomputation
-    pub fn invalidate_expression<'b>(
+    pub(crate) fn invalidate_expression<'b>(
         &'b self,
         ctx: &'b mut Context,
         handle: Handle<Expression>,
@@ -238,7 +238,7 @@ impl Parser {
             })
     }
 
-    pub fn solve_constant(
+    pub(crate) fn solve_constant(
         &mut self,
         ctx: &Context,
         root: Handle<Expression>,
@@ -256,7 +256,11 @@ impl Parser {
         })
     }
 
-    pub fn maybe_array(&mut self, base: Handle<Type>, size: Option<ArraySize>) -> Handle<Type> {
+    pub(crate) fn maybe_array(
+        &mut self,
+        base: Handle<Type>,
+        size: Option<ArraySize>,
+    ) -> Handle<Type> {
         size.map(|size| {
             self.module.types.fetch_or_append(Type {
                 name: None,

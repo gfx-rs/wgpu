@@ -39,7 +39,7 @@ impl Parser {
         })
     }
 
-    pub fn function_or_constructor_call(
+    pub(crate) fn function_or_constructor_call(
         &mut self,
         ctx: &mut Context,
         body: &mut Block,
@@ -1053,7 +1053,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_relational_fun(
+    pub(crate) fn parse_relational_fun(
         &mut self,
         ctx: &mut Context,
         body: &mut Block,
@@ -1075,7 +1075,7 @@ impl Parser {
         ))
     }
 
-    pub fn add_function(
+    pub(crate) fn add_function(
         &mut self,
         ctx: Context,
         name: String,
@@ -1149,7 +1149,7 @@ impl Parser {
         });
     }
 
-    pub fn add_prototype(
+    pub(crate) fn add_prototype(
         &mut self,
         ctx: Context,
         name: String,
@@ -1209,7 +1209,7 @@ impl Parser {
         });
     }
 
-    pub fn add_entry_point(
+    pub(crate) fn add_entry_point(
         &mut self,
         function: Handle<Function>,
         mut global_init_body: Block,

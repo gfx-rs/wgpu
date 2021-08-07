@@ -16,14 +16,14 @@ pub struct SourceMetadata {
 }
 
 impl SourceMetadata {
-    pub fn union(&self, other: &Self) -> Self {
+    pub(crate) fn union(&self, other: &Self) -> Self {
         SourceMetadata {
             start: self.start.min(other.start),
             end: self.end.max(other.end),
         }
     }
 
-    pub fn none() -> Self {
+    pub(crate) fn none() -> Self {
         SourceMetadata::default()
     }
 }

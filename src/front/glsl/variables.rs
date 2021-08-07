@@ -37,7 +37,7 @@ pub enum GlobalOrConstant {
 }
 
 impl Parser {
-    pub fn lookup_variable(
+    pub(crate) fn lookup_variable(
         &mut self,
         ctx: &mut Context,
         body: &mut Block,
@@ -174,7 +174,7 @@ impl Parser {
         }
     }
 
-    pub fn field_selection(
+    pub(crate) fn field_selection(
         &mut self,
         ctx: &mut Context,
         lhs: bool,
@@ -329,7 +329,7 @@ impl Parser {
         }
     }
 
-    pub fn add_global_var(
+    pub(crate) fn add_global_var(
         &mut self,
         ctx: &mut Context,
         body: &mut Block,
@@ -573,7 +573,7 @@ impl Parser {
         Ok(GlobalOrConstant::Global(handle))
     }
 
-    pub fn add_local_var(
+    pub(crate) fn add_local_var(
         &mut self,
         ctx: &mut Context,
         body: &mut Block,

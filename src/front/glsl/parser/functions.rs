@@ -1,7 +1,11 @@
 use crate::{
     front::glsl::{
-        ast::ParameterQualifier, context::Context, parser::ParsingContext, token::TokenValue,
-        variables::VarDeclaration, Error, ErrorKind, Parser, Result, Token,
+        ast::ParameterQualifier,
+        context::Context,
+        parser::ParsingContext,
+        token::{Token, TokenValue},
+        variables::VarDeclaration,
+        Error, ErrorKind, Parser, Result,
     },
     Block, ConstantInner, Expression, ScalarValue, Statement, SwitchCase, UnaryOperator,
 };
