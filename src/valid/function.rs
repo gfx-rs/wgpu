@@ -271,12 +271,11 @@ impl super::Validator {
     fn validate_atomic(
         &mut self,
         pointer: Handle<crate::Expression>,
-        fun: crate::AtomicFunction,
+        fun: &crate::AtomicFunction,
+        value: Handle<crate::Expression>,
         result: Handle<crate::Expression>,
         context: &BlockContext,
     ) -> Result<(), FunctionError> {
-        use crate::BinaryOperator as Bo;
-
         let pointer_inner = context.resolve_type(pointer, &self.valid_expression_set)?;
         let (ptr_kind, ptr_width) = match *pointer_inner {
             crate::TypeInner::Pointer { base, .. } => match context.types[base].inner {
@@ -292,33 +291,19 @@ impl super::Validator {
             }
         };
 
-        let value = match fun {
-            crate::AtomicFunction::Binary { op, value } => {
-                match op {
-                    Bo::Add | Bo::And | Bo::InclusiveOr | Bo::ExclusiveOr => {}
-                    _ => return Err(AtomicError::InvalidBinaryOp(op, ptr_kind).into()),
-                }
-                value
-            }
-            crate::AtomicFunction::Min(value)
-            | crate::AtomicFunction::Max(value)
-            | crate::AtomicFunction::Exchange(value) => value,
-            crate::AtomicFunction::CompareExchange { cmp, value } => {
-                if context.resolve_type(cmp, &self.valid_expression_set)?
-                    != context.resolve_type(value, &self.valid_expression_set)?
-                {
-                    log::error!("Atomic exchange comparison has a different type from the value");
-                    return Err(AtomicError::InvalidOperand(cmp).into());
-                }
-                value
-            }
-        };
-
-        match *context.resolve_type(value, &self.valid_expression_set)? {
+        let value_inner = context.resolve_type(value, &self.valid_expression_set)?;
+        match *value_inner {
             crate::TypeInner::Scalar { width, kind } if kind == ptr_kind && width == ptr_width => {}
             ref other => {
                 log::error!("Atomic operand type {:?}", other);
                 return Err(AtomicError::InvalidOperand(value).into());
+            }
+        }
+
+        if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
+            if context.resolve_type(cmp, &self.valid_expression_set)? != value_inner {
+                log::error!("Atomic exchange comparison has a different type from the value");
+                return Err(AtomicError::InvalidOperand(cmp).into());
             }
         }
 
@@ -602,10 +587,11 @@ impl super::Validator {
                 },
                 S::Atomic {
                     pointer,
-                    fun,
+                    ref fun,
+                    value,
                     result,
                 } => {
-                    self.validate_atomic(pointer, fun, result, context)?;
+                    self.validate_atomic(pointer, fun, value, result, context)?;
                 }
             }
         }

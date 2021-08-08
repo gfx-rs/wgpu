@@ -33,18 +33,6 @@ impl Display for Level {
     }
 }
 
-impl crate::BinaryOperator {
-    fn to_msl_atomic_str(self) -> &'static str {
-        match self {
-            Self::Add => "add",
-            Self::And => "and",
-            Self::InclusiveOr => "or",
-            Self::ExclusiveOr => "xor",
-            _ => unreachable!(),
-        }
-    }
-}
-
 struct TypeContext<'a> {
     handle: Handle<crate::Type>,
     arena: &'a crate::Arena<crate::Type>,
@@ -1629,29 +1617,34 @@ impl<W: Write> Writer<W> {
                 }
                 crate::Statement::Atomic {
                     pointer,
-                    fun,
+                    ref fun,
+                    value,
                     result,
                 } => {
                     write!(self.out, "{}", level)?;
                     let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                     self.start_baking_expression(result, &context.expression, &res_name)?;
                     self.named_expressions.insert(result, res_name);
-                    match fun {
-                        crate::AtomicFunction::Binary { op, value } => {
-                            self.put_atomic_fetch(
-                                pointer,
-                                op.to_msl_atomic_str(),
-                                value,
-                                &context.expression,
-                            )?;
+                    match *fun {
+                        crate::AtomicFunction::Add => {
+                            self.put_atomic_fetch(pointer, "add", value, &context.expression)?;
                         }
-                        crate::AtomicFunction::Min(value) => {
+                        crate::AtomicFunction::And => {
+                            self.put_atomic_fetch(pointer, "and", value, &context.expression)?;
+                        }
+                        crate::AtomicFunction::InclusiveOr => {
+                            self.put_atomic_fetch(pointer, "or", value, &context.expression)?;
+                        }
+                        crate::AtomicFunction::ExclusiveOr => {
+                            self.put_atomic_fetch(pointer, "xor", value, &context.expression)?;
+                        }
+                        crate::AtomicFunction::Min => {
                             self.put_atomic_fetch(pointer, "min", value, &context.expression)?;
                         }
-                        crate::AtomicFunction::Max(value) => {
+                        crate::AtomicFunction::Max => {
                             self.put_atomic_fetch(pointer, "max", value, &context.expression)?;
                         }
-                        crate::AtomicFunction::Exchange(value) => {
+                        crate::AtomicFunction::Exchange { compare: None } => {
                             write!(
                                 self.out,
                                 "{}::atomic_exchange_explicit({}",
@@ -1662,7 +1655,7 @@ impl<W: Write> Writer<W> {
                             self.put_expression(value, &context.expression, true)?;
                             write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
                         }
-                        crate::AtomicFunction::CompareExchange { .. } => {
+                        crate::AtomicFunction::Exchange { .. } => {
                             return Err(Error::FeatureNotImplemented(
                                 "atomic CompareExchange".to_string(),
                             ));

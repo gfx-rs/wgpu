@@ -125,22 +125,15 @@ impl StatementGraph {
                 }
                 S::Atomic {
                     pointer,
-                    fun,
+                    ref fun,
+                    value,
                     result,
                 } => {
                     self.emits.push((id, result));
                     self.dependencies.push((id, pointer, "pointer"));
-                    match fun {
-                        crate::AtomicFunction::Binary { op: _, value }
-                        | crate::AtomicFunction::Min(value)
-                        | crate::AtomicFunction::Max(value)
-                        | crate::AtomicFunction::Exchange(value) => {
-                            self.dependencies.push((id, value, "value"));
-                        }
-                        crate::AtomicFunction::CompareExchange { cmp, value } => {
-                            self.dependencies.push((id, cmp, "cmp"));
-                            self.dependencies.push((id, value, "value"));
-                        }
+                    self.dependencies.push((id, value, "value"));
+                    if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
+                        self.dependencies.push((id, cmp, "cmp"));
                     }
                     "Atomic"
                 }

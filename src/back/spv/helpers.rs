@@ -50,11 +50,14 @@ pub(super) fn contains_builtin(
 }
 
 impl crate::StorageClass {
-    pub(super) fn to_spirv_semantics(self) -> spirv::MemorySemantics {
+    pub(super) fn to_spirv_semantics_and_scope(self) -> (spirv::MemorySemantics, spirv::Scope) {
         match self {
-            Self::Storage { .. } => spirv::MemorySemantics::UNIFORM_MEMORY,
-            Self::WorkGroup => spirv::MemorySemantics::WORKGROUP_MEMORY,
-            _ => spirv::MemorySemantics::empty(),
+            Self::Storage { .. } => (spirv::MemorySemantics::UNIFORM_MEMORY, spirv::Scope::Device),
+            Self::WorkGroup => (
+                spirv::MemorySemantics::WORKGROUP_MEMORY,
+                spirv::Scope::Workgroup,
+            ),
+            _ => (spirv::MemorySemantics::empty(), spirv::Scope::Invocation),
         }
     }
 }

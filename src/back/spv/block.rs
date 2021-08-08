@@ -8,9 +8,6 @@ use super::{
 use crate::{arena::Handle, proc::TypeResolution};
 use spirv::Word;
 
-//TODO: should this ever be `Workgroup`?
-const ATOMIC_SCOPE: spirv::Scope = spirv::Scope::Device;
-
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
     match *type_inner {
         crate::TypeInner::Scalar { .. } => Dimension::Scalar,
@@ -677,9 +674,8 @@ impl<'w> BlockContext<'w> {
                                 _ => None,
                             };
                         let instruction = if let Some(class) = atomic_class {
-                            let semantics =
-                                spirv::MemorySemantics::ACQUIRE | class.to_spirv_semantics();
-                            let scope_constant_id = self.get_scope_constant(ATOMIC_SCOPE as u32)?;
+                            let (semantics, scope) = class.to_spirv_semantics_and_scope();
+                            let scope_constant_id = self.get_scope_constant(scope as u32)?;
                             let semantics_id = self.get_index_constant(semantics.bits())?;
                             Instruction::atomic_load(
                                 result_type_id,
@@ -719,7 +715,7 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::FunctionArgument(index) => self.function.parameter_id(index),
             crate::Expression::CallResult(_) | crate::Expression::AtomicResult { .. } => {
-                self.writer.lookup_statement_result[&expr_handle]
+                self.cached[expr_handle]
             }
             crate::Expression::As {
                 expr,
@@ -1619,10 +1615,8 @@ impl<'w> BlockContext<'w> {
                                 _ => None,
                             };
                             let instruction = if let Some(class) = atomic_class {
-                                let semantics =
-                                    spirv::MemorySemantics::RELEASE | class.to_spirv_semantics();
-                                let scope_constant_id =
-                                    self.get_scope_constant(ATOMIC_SCOPE as u32)?;
+                                let (semantics, scope) = class.to_spirv_semantics_and_scope();
+                                let scope_constant_id = self.get_scope_constant(scope as u32)?;
                                 let semantics_id = self.get_index_constant(semantics.bits())?;
                                 Instruction::atomic_store(
                                     pointer_id,
@@ -1698,7 +1692,6 @@ impl<'w> BlockContext<'w> {
                     let type_id = match result {
                         Some(expr) => {
                             self.cached[expr] = id;
-                            self.writer.lookup_statement_result.insert(expr, id);
                             self.get_expression_type_id(&self.fun_info[expr].ty)?
                         }
                         None => self.writer.void_type,
@@ -1713,14 +1706,14 @@ impl<'w> BlockContext<'w> {
                 }
                 crate::Statement::Atomic {
                     pointer,
-                    fun,
+                    ref fun,
+                    value,
                     result,
                 } => {
                     let id = self.gen_id();
                     let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty)?;
 
                     self.cached[result] = id;
-                    self.writer.lookup_statement_result.insert(result, id);
 
                     let pointer_id = match self.write_expression_pointer(pointer, &mut block)? {
                         ExpressionPointer::Ready { pointer_id } => pointer_id,
@@ -1735,19 +1728,59 @@ impl<'w> BlockContext<'w> {
                         crate::TypeInner::Pointer { base: _, class } => class,
                         _ => unimplemented!(),
                     };
-                    let semantics =
-                        spirv::MemorySemantics::ACQUIRE_RELEASE | class.to_spirv_semantics();
-                    let scope_constant_id = self.get_scope_constant(ATOMIC_SCOPE as u32)?;
+                    let (semantics, scope) = class.to_spirv_semantics_and_scope();
+                    let scope_constant_id = self.get_scope_constant(scope as u32)?;
                     let semantics_id = self.get_index_constant(semantics.bits())?;
+                    let value_id = self.cached[value];
+                    let value_inner = self.fun_info[value].ty.inner_with(&self.ir_module.types);
 
-                    let instruction = match fun {
-                        crate::AtomicFunction::Binary { op, value } => {
-                            let value_id = self.cached[value];
-                            let spirv_op = match op {
-                                crate::BinaryOperator::Add => spirv::Op::AtomicIAdd,
-                                crate::BinaryOperator::And => spirv::Op::AtomicAnd,
-                                crate::BinaryOperator::InclusiveOr => spirv::Op::AtomicOr,
-                                crate::BinaryOperator::ExclusiveOr => spirv::Op::AtomicXor,
+                    let instruction = match *fun {
+                        crate::AtomicFunction::Add => Instruction::atomic_binary(
+                            spirv::Op::AtomicIAdd,
+                            result_type_id,
+                            id,
+                            pointer_id,
+                            scope_constant_id,
+                            semantics_id,
+                            value_id,
+                        ),
+                        crate::AtomicFunction::And => Instruction::atomic_binary(
+                            spirv::Op::AtomicAnd,
+                            result_type_id,
+                            id,
+                            pointer_id,
+                            scope_constant_id,
+                            semantics_id,
+                            value_id,
+                        ),
+                        crate::AtomicFunction::InclusiveOr => Instruction::atomic_binary(
+                            spirv::Op::AtomicOr,
+                            result_type_id,
+                            id,
+                            pointer_id,
+                            scope_constant_id,
+                            semantics_id,
+                            value_id,
+                        ),
+                        crate::AtomicFunction::ExclusiveOr => Instruction::atomic_binary(
+                            spirv::Op::AtomicXor,
+                            result_type_id,
+                            id,
+                            pointer_id,
+                            scope_constant_id,
+                            semantics_id,
+                            value_id,
+                        ),
+                        crate::AtomicFunction::Min => {
+                            let spirv_op = match *value_inner {
+                                crate::TypeInner::Scalar {
+                                    kind: crate::ScalarKind::Sint,
+                                    width: _,
+                                } => spirv::Op::AtomicSMin,
+                                crate::TypeInner::Scalar {
+                                    kind: crate::ScalarKind::Uint,
+                                    width: _,
+                                } => spirv::Op::AtomicUMin,
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -1760,20 +1793,18 @@ impl<'w> BlockContext<'w> {
                                 value_id,
                             )
                         }
-                        crate::AtomicFunction::Min(value) => {
-                            let value_id = self.cached[value];
-                            let spirv_op =
-                                match *self.fun_info[value].ty.inner_with(&self.ir_module.types) {
-                                    crate::TypeInner::Scalar {
-                                        kind: crate::ScalarKind::Sint,
-                                        width: _,
-                                    } => spirv::Op::AtomicSMin,
-                                    crate::TypeInner::Scalar {
-                                        kind: crate::ScalarKind::Uint,
-                                        width: _,
-                                    } => spirv::Op::AtomicUMin,
-                                    _ => unimplemented!(),
-                                };
+                        crate::AtomicFunction::Max => {
+                            let spirv_op = match *value_inner {
+                                crate::TypeInner::Scalar {
+                                    kind: crate::ScalarKind::Sint,
+                                    width: _,
+                                } => spirv::Op::AtomicSMax,
+                                crate::TypeInner::Scalar {
+                                    kind: crate::ScalarKind::Uint,
+                                    width: _,
+                                } => spirv::Op::AtomicUMax,
+                                _ => unimplemented!(),
+                            };
                             Instruction::atomic_binary(
                                 spirv_op,
                                 result_type_id,
@@ -1784,32 +1815,7 @@ impl<'w> BlockContext<'w> {
                                 value_id,
                             )
                         }
-                        crate::AtomicFunction::Max(value) => {
-                            let value_id = self.cached[value];
-                            let spirv_op =
-                                match *self.fun_info[value].ty.inner_with(&self.ir_module.types) {
-                                    crate::TypeInner::Scalar {
-                                        kind: crate::ScalarKind::Sint,
-                                        width: _,
-                                    } => spirv::Op::AtomicSMax,
-                                    crate::TypeInner::Scalar {
-                                        kind: crate::ScalarKind::Uint,
-                                        width: _,
-                                    } => spirv::Op::AtomicUMax,
-                                    _ => unimplemented!(),
-                                };
-                            Instruction::atomic_binary(
-                                spirv_op,
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                                value_id,
-                            )
-                        }
-                        crate::AtomicFunction::Exchange(value) => {
-                            let value_id = self.cached[value];
+                        crate::AtomicFunction::Exchange { compare: None } => {
                             Instruction::atomic_binary(
                                 spirv::Op::AtomicExchange,
                                 result_type_id,
@@ -1820,7 +1826,7 @@ impl<'w> BlockContext<'w> {
                                 value_id,
                             )
                         }
-                        crate::AtomicFunction::CompareExchange { .. } => {
+                        crate::AtomicFunction::Exchange { compare: Some(_) } => {
                             return Err(Error::FeatureNotImplemented("atomic CompareExchange"));
                         }
                     };

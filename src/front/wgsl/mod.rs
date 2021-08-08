@@ -1101,10 +1101,10 @@ impl Parser {
         Ok(Some((fun_handle, arguments)))
     }
 
-    fn parse_atomic_helper<'a, F: FnOnce(Handle<crate::Expression>) -> crate::AtomicFunction>(
+    fn parse_atomic_helper<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        function_factory: F,
+        fun: crate::AtomicFunction,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         lexer.open_arguments()?;
@@ -1127,23 +1127,11 @@ impl Parser {
         let result = ctx.interrupt_emitter(expression);
         ctx.block.push(crate::Statement::Atomic {
             pointer,
-            fun: function_factory(value),
+            fun,
+            value,
             result,
         });
         Ok(result)
-    }
-
-    fn parse_atomic_binary_op<'a>(
-        &mut self,
-        lexer: &mut Lexer<'a>,
-        op: crate::BinaryOperator,
-        ctx: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'a>> {
-        self.parse_atomic_helper(
-            lexer,
-            |value| crate::AtomicFunction::Binary { op, value },
-            ctx,
-        )
     }
 
     fn parse_function_call_inner<'a>(
@@ -1215,33 +1203,33 @@ impl Parser {
                     crate::Expression::Load { pointer }
                 }
                 "atomicAdd" => {
-                    let handle = self.parse_atomic_binary_op(
+                    let handle = self.parse_atomic_helper(
                         lexer,
-                        crate::BinaryOperator::Add,
+                        crate::AtomicFunction::Add,
                         ctx.reborrow(),
                     )?;
                     return Ok(Some(handle));
                 }
                 "atomicAnd" => {
-                    let handle = self.parse_atomic_binary_op(
+                    let handle = self.parse_atomic_helper(
                         lexer,
-                        crate::BinaryOperator::And,
+                        crate::AtomicFunction::And,
                         ctx.reborrow(),
                     )?;
                     return Ok(Some(handle));
                 }
                 "atomicOr" => {
-                    let handle = self.parse_atomic_binary_op(
+                    let handle = self.parse_atomic_helper(
                         lexer,
-                        crate::BinaryOperator::InclusiveOr,
+                        crate::AtomicFunction::InclusiveOr,
                         ctx.reborrow(),
                     )?;
                     return Ok(Some(handle));
                 }
                 "atomicXor" => {
-                    let handle = self.parse_atomic_binary_op(
+                    let handle = self.parse_atomic_helper(
                         lexer,
-                        crate::BinaryOperator::ExclusiveOr,
+                        crate::AtomicFunction::ExclusiveOr,
                         ctx.reborrow(),
                     )?;
                     return Ok(Some(handle));
@@ -1257,8 +1245,11 @@ impl Parser {
                     return Ok(Some(handle));
                 }
                 "atomicExchange" => {
-                    let handle =
-                        self.parse_atomic_helper(lexer, crate::AtomicFunction::Exchange, ctx)?;
+                    let handle = self.parse_atomic_helper(
+                        lexer,
+                        crate::AtomicFunction::Exchange { compare: None },
+                        ctx,
+                    )?;
                     return Ok(Some(handle));
                 }
                 "atomicCompareExchangeWeak" => {
@@ -1286,7 +1277,8 @@ impl Parser {
                     let result = ctx.interrupt_emitter(expression);
                     ctx.block.push(crate::Statement::Atomic {
                         pointer,
-                        fun: crate::AtomicFunction::CompareExchange { cmp, value },
+                        fun: crate::AtomicFunction::Exchange { compare: Some(cmp) },
+                        value,
                         result,
                     });
                     return Ok(Some(result));

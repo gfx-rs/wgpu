@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 107
+; Bound: 105
 OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
@@ -79,9 +79,7 @@ OpDecorate %37 BuiltIn Position
 %74 = OpTypePointer Function %4
 %78 = OpTypeVector %4 4
 %86 = OpTypePointer StorageBuffer %4
-%89 = OpConstant  %9  66
-%92 = OpConstant  %9  72
-%106 = OpConstant  %9  68
+%89 = OpConstant  %9  64
 %39 = OpFunction  %2  None %40
 %33 = OpLabel
 %29 = OpVariable  %30  Function %5
@@ -138,27 +136,27 @@ OpBranch %85
 %87 = OpAccessChain  %86  %27 %15
 %88 = OpAtomicLoad  %4  %87 %11 %89
 %91 = OpAccessChain  %86  %27 %15
-%90 = OpAtomicIAdd  %4  %91 %11 %92 %16
+%90 = OpAtomicIAdd  %4  %91 %11 %89 %16
 OpStore %82 %90
-%94 = OpAccessChain  %86  %27 %15
-%93 = OpAtomicAnd  %4  %94 %11 %92 %16
-OpStore %82 %93
-%96 = OpAccessChain  %86  %27 %15
-%95 = OpAtomicOr  %4  %96 %11 %92 %16
-OpStore %82 %95
-%98 = OpAccessChain  %86  %27 %15
-%97 = OpAtomicXor  %4  %98 %11 %92 %16
-OpStore %82 %97
-%100 = OpAccessChain  %86  %27 %15
-%99 = OpAtomicSMin  %4  %100 %11 %92 %16
-OpStore %82 %99
-%102 = OpAccessChain  %86  %27 %15
-%101 = OpAtomicSMax  %4  %102 %11 %92 %16
-OpStore %82 %101
+%93 = OpAccessChain  %86  %27 %15
+%92 = OpAtomicAnd  %4  %93 %11 %89 %16
+OpStore %82 %92
+%95 = OpAccessChain  %86  %27 %15
+%94 = OpAtomicOr  %4  %95 %11 %89 %16
+OpStore %82 %94
+%97 = OpAccessChain  %86  %27 %15
+%96 = OpAtomicXor  %4  %97 %11 %89 %16
+OpStore %82 %96
+%99 = OpAccessChain  %86  %27 %15
+%98 = OpAtomicSMin  %4  %99 %11 %89 %16
+OpStore %82 %98
+%101 = OpAccessChain  %86  %27 %15
+%100 = OpAtomicSMax  %4  %101 %11 %89 %16
+OpStore %82 %100
+%103 = OpAccessChain  %86  %27 %15
+%102 = OpAtomicExchange  %4  %103 %11 %89 %16
+OpStore %82 %102
 %104 = OpAccessChain  %86  %27 %15
-%103 = OpAtomicExchange  %4  %104 %11 %92 %16
-OpStore %82 %103
-%105 = OpAccessChain  %86  %27 %15
-OpAtomicStore %105 %11 %106 %88
+OpAtomicStore %104 %11 %89 %88
 OpReturn
 OpFunctionEnd

@@ -780,19 +780,15 @@ impl FunctionInfo {
                 }
                 S::Atomic {
                     pointer,
-                    fun,
+                    ref fun,
+                    value,
                     result: _,
                 } => {
                     let _ = self.add_ref_impl(pointer, GlobalUse::WRITE);
-                    let _ = match fun {
-                        crate::AtomicFunction::Binary { op: _, value }
-                        | crate::AtomicFunction::Min(value)
-                        | crate::AtomicFunction::Max(value)
-                        | crate::AtomicFunction::Exchange(value) => self.add_ref(value),
-                        crate::AtomicFunction::CompareExchange { cmp, value } => {
-                            self.add_ref(value).or(self.add_ref(cmp))
-                        }
-                    };
+                    let _ = self.add_ref(value);
+                    if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
+                        let _ = self.add_ref(cmp);
+                    }
                     FunctionUniformity::new()
                 }
             };

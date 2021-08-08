@@ -68,6 +68,21 @@ pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
+impl crate::AtomicFunction {
+    fn to_glsl(self) -> &'static str {
+        match self {
+            Self::Add => "Add",
+            Self::And => "And",
+            Self::InclusiveOr => "Or",
+            Self::ExclusiveOr => "Xor",
+            Self::Min => "Min",
+            Self::Max => "Max",
+            Self::Exchange { compare: None } => "Exchange",
+            Self::Exchange { compare: Some(_) } => "", //TODO
+        }
+    }
+}
+
 /// glsl version
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -1682,7 +1697,8 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             Statement::Atomic {
                 pointer,
-                fun,
+                ref fun,
+                value,
                 result,
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
@@ -1691,44 +1707,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_value_type(res_ty)?;
                 write!(self.out, " {} = ", res_name)?;
                 self.named_expressions.insert(result, res_name);
-                match fun {
-                    crate::AtomicFunction::Binary { op, value } => {
-                        let fun_str = match op {
-                            crate::BinaryOperator::Add => "Add",
-                            crate::BinaryOperator::And => "And",
-                            crate::BinaryOperator::InclusiveOr => "Or",
-                            crate::BinaryOperator::ExclusiveOr => "Xor",
-                            _ => unreachable!(),
-                        };
-                        write!(self.out, "atomic{}(", fun_str)?;
-                        self.write_expr(pointer, ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(value, ctx)?;
-                    }
-                    crate::AtomicFunction::Min(value) => {
-                        write!(self.out, "atomicMin(")?;
-                        self.write_expr(pointer, ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(value, ctx)?;
-                    }
-                    crate::AtomicFunction::Max(value) => {
-                        write!(self.out, "atomicMax(")?;
-                        self.write_expr(pointer, ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(value, ctx)?;
-                    }
-                    crate::AtomicFunction::Exchange(value) => {
-                        write!(self.out, "atomicExchange(")?;
-                        self.write_expr(pointer, ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(value, ctx)?;
-                    }
-                    crate::AtomicFunction::CompareExchange { .. } => {
-                        return Err(Error::Custom(
-                            "atomic CompareExchange is not implemented".to_string(),
-                        ));
-                    }
+
+                let fun_str = fun.to_glsl();
+                write!(self.out, "atomic{}(", fun_str)?;
+                self.write_expr(pointer, ctx)?;
+                if let crate::AtomicFunction::Exchange { compare: Some(_) } = *fun {
+                    return Err(Error::Custom(
+                        "atomic CompareExchange is not implemented".to_string(),
+                    ));
                 }
+                write!(self.out, ", ")?;
+                self.write_expr(value, ctx)?;
                 writeln!(self.out, ");")?;
             }
         }
@@ -2371,6 +2360,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                 }
             }
+            // These expressions never show up in `Emit`.
             Expression::CallResult(_) | Expression::AtomicResult { .. } => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {

@@ -771,7 +771,7 @@ impl super::Instruction {
         pointer: Word,
         scope_id: Word,
         semantics_id: Word,
-        operand: Word,
+        value: Word,
     ) -> Self {
         let mut instruction = Self::new(op);
         instruction.set_type(result_type_id);
@@ -779,7 +779,7 @@ impl super::Instruction {
         instruction.add_operand(pointer);
         instruction.add_operand(scope_id);
         instruction.add_operand(semantics_id);
-        instruction.add_operand(operand);
+        instruction.add_operand(value);
         instruction
     }
 

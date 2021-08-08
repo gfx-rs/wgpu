@@ -1108,7 +1108,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             Statement::Atomic {
                 pointer,
-                fun,
+                ref fun,
+                value,
                 result,
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
@@ -1125,37 +1126,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
 
-                write!(self.out, " {}; {}.Interlocked", res_name, var_name)?;
-                match fun {
-                    crate::AtomicFunction::Binary { op, value } => {
-                        let suffix = op.to_hlsl_atomic_suffix();
-                        write!(self.out, "{}(", suffix)?;
-                        self.write_storage_address(module, &chain, func_ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, value, func_ctx)?;
-                    }
-                    crate::AtomicFunction::Min(value) => {
-                        write!(self.out, "Min(")?;
-                        self.write_storage_address(module, &chain, func_ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, value, func_ctx)?;
-                    }
-                    crate::AtomicFunction::Max(value) => {
-                        write!(self.out, "Max(")?;
-                        self.write_storage_address(module, &chain, func_ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, value, func_ctx)?;
-                    }
-                    crate::AtomicFunction::Exchange(value) => {
-                        write!(self.out, "Exchange(")?;
-                        self.write_storage_address(module, &chain, func_ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, value, func_ctx)?;
-                    }
-                    crate::AtomicFunction::CompareExchange { .. } => {
-                        return Err(Error::Unimplemented("atomic CompareExchange".to_string()));
-                    }
+                let fun_str = fun.to_hlsl_suffix();
+                write!(
+                    self.out,
+                    " {}; {}.Interlocked{}(",
+                    res_name, var_name, fun_str
+                )?;
+                self.write_storage_address(module, &chain, func_ctx)?;
+                if let crate::AtomicFunction::Exchange { compare: Some(_) } = *fun {
+                    return Err(Error::Unimplemented("atomic CompareExchange".to_string()));
                 }
+                write!(self.out, ", ")?;
+                self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ", {});", res_name)?;
                 self.temp_access_chain = chain;
                 self.named_expressions.insert(result, res_name);

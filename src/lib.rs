@@ -745,20 +745,13 @@ pub enum BinaryOperator {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum AtomicFunction {
-    /// Binary operation of an atomic with a value.
-    ///
-    /// Note: only supports a subset of operations, defined by the validator.
-    Binary {
-        op: BinaryOperator,
-        value: Handle<Expression>,
-    },
-    Min(Handle<Expression>),
-    Max(Handle<Expression>),
-    Exchange(Handle<Expression>),
-    CompareExchange {
-        cmp: Handle<Expression>,
-        value: Handle<Expression>,
-    },
+    Add,
+    And,
+    ExclusiveOr,
+    InclusiveOr,
+    Min,
+    Max,
+    Exchange { compare: Option<Handle<Expression>> },
 }
 
 /// Axis on which to compute a derivative.
@@ -1320,6 +1313,8 @@ pub enum Statement {
         pointer: Handle<Expression>,
         /// Function to run on the atomic.
         fun: AtomicFunction,
+        /// Value to use in the function.
+        value: Handle<Expression>,
         /// Emitted expression as a result.
         result: Handle<Expression>,
     },
