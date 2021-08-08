@@ -5,6 +5,39 @@ use super::ast::Precision;
 use crate::{Interpolation, Sampling, Type};
 use std::ops::Range;
 
+/// Represents a range of the source code
+///
+/// The `SourceMetadata` is used in error reporting to indicate a range of the
+/// original source code where the error happened.
+///
+/// For easy interaction with error crates like
+/// [`codespan`][codespan] the [`From`](From) trait is
+/// implemeted for [`Range<usize>`](Range) allowing for conversions from `SourceMetadata`.
+///
+/// ```rust
+/// # use naga::front::glsl::SourceMetadata;
+/// # use std::ops::Range;
+/// # let meta = SourceMetadata::default();
+/// let range: Range<usize> = meta.into();
+/// ```
+///
+/// Or in the case of [`codespan`][codespan]
+///
+/// ```rust
+/// # use naga::front::glsl::SourceMetadata;
+/// use codespan_reporting::diagnostic::Label;
+/// # let file = ();
+/// # let meta = SourceMetadata::default();
+/// let label = Label::primary(file, meta);
+/// ```
+///
+/// # Notes
+///
+/// [`start`](SourceMetadata::start) can be equal to
+/// [`end`](SourceMetadata::end) especially when reporting errors which aren't
+/// associated with a specific portion of the code.
+///
+/// [codespan]: https://docs.rs/codespan-reporting
 #[derive(Debug, Clone, Copy, Default)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct SourceMetadata {
@@ -50,6 +83,10 @@ pub struct Token {
     pub meta: SourceMetadata,
 }
 
+/// A token passed from the lexing used in the parsing
+///
+/// This type is exported since it's returned in the
+/// [`InvalidToken`](super::ErrorKind::InvalidToken) error.
 #[derive(Debug, PartialEq)]
 pub enum TokenValue {
     Identifier(String),

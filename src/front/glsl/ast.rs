@@ -140,10 +140,30 @@ pub enum StructLayout {
 }
 
 // TODO: Encode precision hints in the IR
+/// A precision hint used in glsl declarations
+///
+/// Precision hints can be used to either speed up shader execution or control
+/// the precision of arithmetic operations.
+///
+/// To use a precision hint simply add it before the type in the declaration.
+/// ```glsl
+/// mediump float a;
+/// ```
+///
+/// The default when no precision is declared is `highp` which means that all
+/// operations operate with the type defined width.
+///
+/// For `mediump` and `lowp` operations follow the spir-v
+/// [`RelaxedPrecision`][RelaxedPrecision] decoration semantics.
+///
+/// [RelaxedPrecision]: https://www.khronos.org/registry/SPIR-V/specs/unified1/SPIRV.html#_a_id_relaxedprecisionsection_a_relaxed_precision
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Precision {
+    /// `lowp` precision
     Low,
+    /// `mediump` precision
     Medium,
+    /// `highp` precision
     High,
 }
 
@@ -165,7 +185,9 @@ impl ParameterQualifier {
     }
 }
 
+/// The glsl profile used by a shader
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Profile {
+    /// The `core` profile, default when no profile is specified.
     Core,
 }
