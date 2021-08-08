@@ -1,16 +1,15 @@
+use super::{
+    ast::*,
+    context::Context,
+    error::{Error, ErrorKind},
+    types::{scalar_components, type_power},
+    Parser, Result, SourceMetadata,
+};
 use crate::{
-    front::glsl::{
-        ast::*,
-        context::Context,
-        error::{Error, ErrorKind},
-        types::{scalar_components, type_power},
-        Parser, Result, SourceMetadata,
-    },
-    proc::ensure_block_returns,
-    Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint, Expression, FastHashMap,
-    Function, FunctionArgument, FunctionResult, Handle, ImageClass, ImageDimension, ImageQuery,
-    LocalVariable, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind, ScalarValue,
-    Statement, StructMember, Type, TypeInner, VectorSize,
+    proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
+    Expression, FastHashMap, Function, FunctionArgument, FunctionResult, Handle, ImageClass,
+    ImageDimension, ImageQuery, LocalVariable, MathFunction, Module, RelationalFunction,
+    SampleLevel, ScalarKind, ScalarValue, Statement, StructMember, Type, TypeInner, VectorSize,
 };
 use std::iter;
 

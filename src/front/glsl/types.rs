@@ -1,11 +1,9 @@
+use super::{
+    constants::ConstantSolver, context::Context, Error, ErrorKind, Parser, Result, SourceMetadata,
+};
 use crate::{
-    front::glsl::{
-        constants::ConstantSolver, context::Context, Error, ErrorKind, Parser, Result,
-        SourceMetadata,
-    },
-    proc::ResolveContext,
-    ArraySize, Constant, Expression, Handle, ImageClass, ImageDimension, ScalarKind, Type,
-    TypeInner, VectorSize,
+    proc::ResolveContext, ArraySize, Constant, Expression, Handle, ImageClass, ImageDimension,
+    ScalarKind, Type, TypeInner, VectorSize,
 };
 
 pub fn parse_type(type_name: &str) -> Option<Type> {

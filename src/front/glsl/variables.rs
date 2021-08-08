@@ -1,10 +1,10 @@
+use super::{
+    ast::*,
+    context::Context,
+    error::{Error, ErrorKind},
+    Parser, Result, SourceMetadata,
+};
 use crate::{
-    front::glsl::{
-        ast::*,
-        context::Context,
-        error::{Error, ErrorKind},
-        Parser, Result, SourceMetadata,
-    },
     Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
     LocalVariable, ResourceBinding, ScalarKind, StorageAccess, StorageClass, SwizzleComponent,
     Type, TypeInner, VectorSize,

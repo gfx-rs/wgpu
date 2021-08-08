@@ -1,16 +1,14 @@
-use crate::{
-    front::{
-        glsl::{
-            ast::{
-                GlobalLookup, GlobalLookupKind, HirExpr, HirExprKind, ParameterInfo,
-                ParameterQualifier, VariableReference,
-            },
-            error::{Error, ErrorKind},
-            types::{scalar_components, type_power},
-            Parser, Result, SourceMetadata,
-        },
-        Emitter, Typifier,
+use super::{
+    ast::{
+        GlobalLookup, GlobalLookupKind, HirExpr, HirExprKind, ParameterInfo, ParameterQualifier,
+        VariableReference,
     },
+    error::{Error, ErrorKind},
+    types::{scalar_components, type_power},
+    Parser, Result, SourceMetadata,
+};
+use crate::{
+    front::{Emitter, Typifier},
     Arena, BinaryOperator, Block, Constant, Expression, FastHashMap, FunctionArgument, Handle,
     LocalVariable, RelationalFunction, ScalarKind, ScalarValue, Statement, StorageClass, Type,
     TypeInner, VectorSize,

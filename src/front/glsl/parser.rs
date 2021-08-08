@@ -1,18 +1,15 @@
-use crate::{
-    arena::Handle,
-    front::glsl::{
-        ast::{Profile, TypeQualifier},
-        context::Context,
-        error::ErrorKind,
-        error::ExpectedToken,
-        lex::{Lexer, LexerResultKind},
-        token::{Directive, DirectiveKind},
-        token::{SourceMetadata, Token, TokenValue},
-        variables::{GlobalOrConstant, VarDeclaration},
-        Error, Parser, Result,
-    },
-    Block, Constant, ConstantInner, Expression, ScalarValue, Type,
+use super::{
+    ast::{Profile, TypeQualifier},
+    context::Context,
+    error::ExpectedToken,
+    error::{Error, ErrorKind},
+    lex::{Lexer, LexerResultKind},
+    token::{Directive, DirectiveKind},
+    token::{SourceMetadata, Token, TokenValue},
+    variables::{GlobalOrConstant, VarDeclaration},
+    Parser, Result,
 };
+use crate::{arena::Handle, Block, Constant, ConstantInner, Expression, ScalarValue, Type};
 use core::convert::TryFrom;
 use pp_rs::token::{PreprocessorError, Token as PPToken, TokenValue as PPTokenValue};
 use std::iter::Peekable;
