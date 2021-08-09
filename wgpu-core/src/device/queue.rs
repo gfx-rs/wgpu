@@ -15,7 +15,6 @@ use crate::{
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
-use smallvec::SmallVec;
 use std::{iter, mem, num::NonZeroU32, ptr};
 use thiserror::Error;
 
@@ -212,8 +211,10 @@ pub enum QueueSubmitError {
     DestroyedTexture(id::TextureId),
     #[error(transparent)]
     Unmap(#[from] BufferAccessError),
-    #[error("swap chain output was dropped before the command buffer got submitted")]
-    SwapChainOutputDropped,
+    #[error("surface output was dropped before the command buffer got submitted")]
+    SurfaceOutputDropped,
+    #[error("surface was unconfigured before the command buffer got submitted")]
+    SurfaceUnconfigured,
     #[error("GPU got stuck :(")]
     StuckGpu,
 }
@@ -510,6 +511,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let callbacks = {
+            let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
             let device = device_guard
                 .get_mut(queue_id)
@@ -520,8 +522,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut active_executions = Vec::new();
 
             {
-                let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
-                let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
 
                 if !command_buffer_ids.is_empty() {
@@ -569,16 +569,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // optimize the tracked states
                         cmdbuf.trackers.optimize();
 
-                        for sc_id in cmdbuf.used_swap_chains.drain(..) {
-                            let sc = &mut swap_chain_guard[sc_id.value];
-                            if sc.acquired_texture.is_none() {
-                                return Err(QueueSubmitError::SwapChainOutputDropped);
+                        for surface_id in cmdbuf.used_surfaces.drain(..) {
+                            let surface = &mut surface_guard[surface_id];
+                            let suf = A::get_surface_mut(surface);
+                            if suf.acquired_texture.is_none() {
+                                return Err(QueueSubmitError::SurfaceOutputDropped);
                             }
-                            if sc.active_submission_index != submit_index {
-                                sc.active_submission_index = submit_index;
-                                // Only add a signal if this is the first time for this swapchain
-                                // to be used in the submission.
-                                signal_swapchain_semaphores.push(sc_id.value);
+                            match surface.presentation {
+                                Some(ref mut present) => {
+                                    present.active_submission_index = submit_index;
+                                }
+                                None => return Err(QueueSubmitError::SurfaceUnconfigured),
                             }
                         }
 

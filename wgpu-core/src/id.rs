@@ -161,21 +161,6 @@ pub type ComputePassEncoderId = *mut crate::command::ComputePass;
 pub type RenderBundleEncoderId = *mut crate::command::RenderBundleEncoder;
 pub type RenderBundleId = Id<crate::command::RenderBundle>;
 pub type QuerySetId = Id<crate::resource::QuerySet<Dummy>>;
-// Swap chain
-pub type SwapChainId = Id<crate::swap_chain::SwapChain<Dummy>>;
-
-impl SurfaceId {
-    pub(crate) fn to_swap_chain_id(self, backend: Backend) -> SwapChainId {
-        let (index, epoch, _) = self.unzip();
-        Id::zip(index, epoch, backend)
-    }
-}
-impl SwapChainId {
-    pub fn to_surface_id(self) -> SurfaceId {
-        let (index, epoch, _) = self.unzip();
-        Id::zip(index, epoch, Backend::Empty)
-    }
-}
 
 #[test]
 fn test_id_backend() {

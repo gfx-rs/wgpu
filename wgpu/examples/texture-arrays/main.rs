@@ -85,7 +85,7 @@ impl framework::Example for Example {
         }
     }
     fn init(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -242,7 +242,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &fs_module,
                 entry_point: "main",
-                targets: &[sc_desc.format.into()],
+                targets: &[config.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Ccw,
@@ -263,7 +263,7 @@ impl framework::Example for Example {
     }
     fn resize(
         &mut self,
-        _sc_desc: &wgpu::SwapChainDescriptor,
+        _sc_desc: &wgpu::SurfaceConfiguration,
         _device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {

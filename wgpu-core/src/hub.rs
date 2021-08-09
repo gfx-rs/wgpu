@@ -3,10 +3,9 @@ use crate::{
     command::{CommandBuffer, RenderBundle},
     device::Device,
     id,
-    instance::{Adapter, Instance, Surface},
+    instance::{Adapter, HalSurface, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, QuerySet, Sampler, Texture, TextureView},
-    swap_chain::SwapChain,
     Epoch, Index,
 };
 
@@ -111,7 +110,7 @@ impl<T, I: id::TypedId> ops::IndexMut<id::Valid<I>> for Storage<T, I> {
 }
 
 impl<T, I: id::TypedId> Storage<T, I> {
-    pub(crate) fn contains(&self, id: I) -> bool {
+    pub(crate) fn _contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
         match self.map[index as usize] {
             Element::Vacant => false,
@@ -201,7 +200,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
     }
 
     // Prevents panic on out of range access, allows Vacant elements.
-    pub(crate) fn try_remove(&mut self, id: I) -> Option<T> {
+    pub(crate) fn _try_remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
         if index as usize >= self.map.len() {
             None
@@ -264,8 +263,6 @@ impl<A: hal::Api> Access<Adapter<A>> for Surface {}
 impl<A: hal::Api> Access<Device<A>> for Root {}
 impl<A: hal::Api> Access<Device<A>> for Surface {}
 impl<A: hal::Api> Access<Device<A>> for Adapter<A> {}
-impl<A: hal::Api> Access<SwapChain<A>> for Root {}
-impl<A: hal::Api> Access<SwapChain<A>> for Device<A> {}
 impl<A: hal::Api> Access<PipelineLayout<A>> for Root {}
 impl<A: hal::Api> Access<PipelineLayout<A>> for Device<A> {}
 impl<A: hal::Api> Access<PipelineLayout<A>> for RenderBundle {}
@@ -279,7 +276,6 @@ impl<A: hal::Api> Access<BindGroup<A>> for PipelineLayout<A> {}
 impl<A: hal::Api> Access<BindGroup<A>> for CommandBuffer<A> {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for Root {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for Device<A> {}
-impl<A: hal::Api> Access<CommandBuffer<A>> for SwapChain<A> {} //TODO: remove this (only used in `submit()`)
 impl<A: hal::Api> Access<RenderBundle> for Device<A> {}
 impl<A: hal::Api> Access<RenderBundle> for CommandBuffer<A> {}
 impl<A: hal::Api> Access<ComputePipeline<A>> for Device<A> {}
@@ -307,7 +303,6 @@ impl<A: hal::Api> Access<Texture<A>> for Root {}
 impl<A: hal::Api> Access<Texture<A>> for Device<A> {}
 impl<A: hal::Api> Access<Texture<A>> for Buffer<A> {}
 impl<A: hal::Api> Access<TextureView<A>> for Root {}
-impl<A: hal::Api> Access<TextureView<A>> for SwapChain<A> {} //TODO: remove this (only used in `get_next_texture()`)
 impl<A: hal::Api> Access<TextureView<A>> for Device<A> {}
 impl<A: hal::Api> Access<TextureView<A>> for Texture<A> {}
 impl<A: hal::Api> Access<Sampler<A>> for Root {}
@@ -395,7 +390,6 @@ impl<I: id::TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactor
 pub trait GlobalIdentityHandlerFactory:
     IdentityHandlerFactory<id::AdapterId>
     + IdentityHandlerFactory<id::DeviceId>
-    + IdentityHandlerFactory<id::SwapChainId>
     + IdentityHandlerFactory<id::PipelineLayoutId>
     + IdentityHandlerFactory<id::ShaderModuleId>
     + IdentityHandlerFactory<id::BindGroupLayoutId>
@@ -559,7 +553,6 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
 pub struct HubReport {
     pub adapters: StorageReport,
     pub devices: StorageReport,
-    pub swap_chains: StorageReport,
     pub pipeline_layouts: StorageReport,
     pub shader_modules: StorageReport,
     pub bind_group_layouts: StorageReport,
@@ -584,7 +577,6 @@ impl HubReport {
 pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
     pub adapters: Registry<Adapter<A>, id::AdapterId, F>,
     pub devices: Registry<Device<A>, id::DeviceId, F>,
-    pub swap_chains: Registry<SwapChain<A>, id::SwapChainId, F>,
     pub pipeline_layouts: Registry<PipelineLayout<A>, id::PipelineLayoutId, F>,
     pub shader_modules: Registry<ShaderModule<A>, id::ShaderModuleId, F>,
     pub bind_group_layouts: Registry<BindGroupLayout<A>, id::BindGroupLayoutId, F>,
@@ -605,7 +597,6 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         Self {
             adapters: Registry::new(A::VARIANT, factory),
             devices: Registry::new(A::VARIANT, factory),
-            swap_chains: Registry::new(A::VARIANT, factory),
             pipeline_layouts: Registry::new(A::VARIANT, factory),
             shader_modules: Registry::new(A::VARIANT, factory),
             bind_group_layouts: Registry::new(A::VARIANT, factory),
@@ -664,7 +655,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                                 device.raw.destroy_texture_view(texture_view.raw);
                             }
                         }
-                        TextureViewSource::SwapChain(_) => {} //TODO
+                        TextureViewSource::Surface(_) => {} //TODO
                     }
                 }
             }
@@ -731,16 +722,13 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             }
         }
 
-        for (index, element) in self.swap_chains.data.write().map.drain(..).enumerate() {
-            if let Element::Occupied(swap_chain, epoch) = element {
-                let device = &devices[swap_chain.device_id.value];
-                let suf_id = id::TypedId::zip(index as Index, epoch, A::VARIANT);
-                //TODO: hold the surface alive by the swapchain
-                if surface_guard.contains(suf_id) {
-                    let surface = surface_guard.get_mut(suf_id).unwrap();
-                    let suf = A::get_surface_mut(surface);
+        for element in surface_guard.map.drain(..) {
+            if let Element::Occupied(mut surface, _epoch) = element {
+                if let Some(present) = surface.presentation.take() {
+                    let device = &devices[present.device_id.value];
+                    let suf = A::get_surface_mut(&mut surface);
                     unsafe {
-                        suf.unconfigure(&device.raw);
+                        suf.raw.unconfigure(&device.raw);
                     }
                 }
             }
@@ -771,7 +759,6 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         HubReport {
             adapters: self.adapters.data.read().generate_report(),
             devices: self.devices.data.read().generate_report(),
-            swap_chains: self.swap_chains.data.read().generate_report(),
             pipeline_layouts: self.pipeline_layouts.data.read().generate_report(),
             shader_modules: self.shader_modules.data.read().generate_report(),
             bind_group_layouts: self.bind_group_layouts.data.read().generate_report(),
@@ -951,7 +938,8 @@ pub trait HalApi: hal::Api {
     const VARIANT: Backend;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
-    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
+    fn get_surface(surface: &Surface) -> &HalSurface<Self>;
+    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self>;
 }
 
 #[cfg(vulkan)]
@@ -967,7 +955,10 @@ impl HalApi for hal::api::Vulkan {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.vulkan
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
+    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+        surface.vulkan.as_ref().unwrap()
+    }
+    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
         surface.vulkan.as_mut().unwrap()
     }
 }
@@ -984,7 +975,10 @@ impl HalApi for hal::api::Metal {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
+    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+        surface.metal.as_ref().unwrap()
+    }
+    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
         surface.metal.as_mut().unwrap()
     }
 }
@@ -1002,7 +996,10 @@ impl HalApi for hal::api::Dx12 {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx12
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
+    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+        surface.dx12.as_ref().unwrap()
+    }
+    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
         surface.dx12.as_mut().unwrap()
     }
 }
@@ -1014,7 +1011,10 @@ impl HalApi for hal::api::Dx11 {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
+    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+        surface.dx11.as_ref().unwrap()
+    }
+    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
         surface.dx11.as_mut().unwrap()
     }
 }
@@ -1033,7 +1033,10 @@ impl HalApi for hal::api::Gles {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.gl
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
+    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+        surface.gl.as_ref().unwrap()
+    }
+    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
         surface.gl.as_mut().unwrap()
     }
 }

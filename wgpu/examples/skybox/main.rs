@@ -73,13 +73,13 @@ impl Skybox {
     const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 
     fn create_depth_texture(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
     ) -> wgpu::TextureView {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: sc_desc.width,
-                height: sc_desc.height,
+                width: config.width,
+                height: config.height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -102,7 +102,7 @@ impl framework::Example for Skybox {
     }
 
     fn init(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -182,7 +182,7 @@ impl framework::Example for Skybox {
         });
 
         let camera = Camera {
-            screen_size: (sc_desc.width, sc_desc.height),
+            screen_size: (config.width, config.height),
             angle_xz: 0.2,
             angle_y: 0.2,
             dist: 30.0,
@@ -212,7 +212,7 @@ impl framework::Example for Skybox {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_sky",
-                targets: &[sc_desc.format.into()],
+                targets: &[config.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,
@@ -242,7 +242,7 @@ impl framework::Example for Skybox {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_entity",
-                targets: &[sc_desc.format.into()],
+                targets: &[config.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,
@@ -354,7 +354,7 @@ impl framework::Example for Skybox {
             label: None,
         });
 
-        let depth_view = Self::create_depth_texture(sc_desc, device);
+        let depth_view = Self::create_depth_texture(config, device);
 
         Skybox {
             camera,
@@ -383,12 +383,12 @@ impl framework::Example for Skybox {
 
     fn resize(
         &mut self,
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {
-        self.depth_view = Self::create_depth_texture(sc_desc, device);
-        self.camera.screen_size = (sc_desc.width, sc_desc.height);
+        self.depth_view = Self::create_depth_texture(config, device);
+        self.camera.screen_size = (config.width, config.height);
     }
 
     fn render(

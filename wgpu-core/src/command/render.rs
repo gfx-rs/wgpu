@@ -13,10 +13,10 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
+    instance::Surface,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{Texture, TextureView, TextureViewSource},
-    swap_chain::SwapChain,
     track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -414,8 +414,6 @@ pub enum RenderPassErrorInner {
     InvalidResolveTargetSampleCount,
     #[error("not enough memory left")]
     OutOfMemory,
-    #[error("attempted to use a swap chain image as a depth/stencil attachment")]
-    SwapChainImageAsDepthStencil,
     #[error("unable to clear non-present/read-only depth")]
     InvalidDepthOps,
     #[error("unable to clear non-present/read-only stencil")]
@@ -522,7 +520,7 @@ struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
     trackers: StatefulTrackerSubset,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
-    used_swap_chain: Option<Stored<id::SwapChainId>>,
+    used_surface: Option<id::Valid<id::SurfaceId>>,
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
@@ -535,7 +533,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
-        swap_chain_guard: &'a Storage<SwapChain<A>, id::SwapChainId>,
+        surface_guard: &'a Storage<Surface, id::SurfaceId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
 
@@ -549,7 +547,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut attachment_type_name = "";
         let mut extent = None;
         let mut sample_count = 0;
-        let mut used_swap_chain = None::<(Stored<id::SwapChainId>, hal::TextureUses)>;
+        let mut used_surface = None::<(id::Valid<id::SurfaceId>, hal::TextureUses)>;
 
         let mut add_view = |view: &TextureView<A>, type_name| {
             if let Some(ex) = extent {
@@ -594,9 +592,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             let source_id = match view.source {
                 TextureViewSource::Native(ref source_id) => source_id,
-                TextureViewSource::SwapChain(_) => {
-                    return Err(RenderPassErrorInner::SwapChainImageAsDepthStencil);
-                }
+                TextureViewSource::Surface(_) => unreachable!(),
             };
 
             let usage = if at.is_read_only(ds_aspects)? {
@@ -648,14 +644,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                         usage: hal::TextureUses::COLOR_TARGET,
                     });
                 }
-                TextureViewSource::SwapChain(ref source_id) => {
+                TextureViewSource::Surface(source_id) => {
                     //HACK: guess the start usage based on the load op
                     let start_usage = match at.channel.load_op {
                         LoadOp::Load => hal::TextureUses::empty(),
                         LoadOp::Clear => hal::TextureUses::UNINITIALIZED,
                     };
-                    assert!(used_swap_chain.is_none());
-                    used_swap_chain = Some((source_id.clone(), start_usage));
+                    assert!(used_surface.is_none());
+                    used_surface = Some((source_id, start_usage));
                 }
             };
 
@@ -687,11 +683,11 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                             usage: hal::TextureUses::COLOR_TARGET,
                         });
                     }
-                    TextureViewSource::SwapChain(ref source_id) => {
+                    TextureViewSource::Surface(source_id) => {
                         //HACK: guess the start usage
                         let start_usage = hal::TextureUses::UNINITIALIZED;
-                        assert!(used_swap_chain.is_none());
-                        used_swap_chain = Some((source_id.clone(), start_usage));
+                        assert!(used_surface.is_none());
+                        used_surface = Some((source_id, start_usage));
                     }
                 };
 
@@ -716,8 +712,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             return Err(RenderPassErrorInner::InvalidSampleCount(sample_count));
         }
 
-        if let Some((ref sc_id, start_usage)) = used_swap_chain {
-            let &(_, ref suf_texture) = swap_chain_guard[sc_id.value]
+        if let Some((surface_id, start_usage)) = used_surface {
+            let suf_texture = A::get_surface(&surface_guard[surface_id])
                 .acquired_texture
                 .as_ref()
                 .unwrap();
@@ -764,7 +760,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             context,
             trackers: StatefulTrackerSubset::new(A::VARIANT),
             render_attachments,
-            used_swap_chain: used_swap_chain.map(|(sc_id, _)| sc_id),
+            used_surface: used_surface.map(|(sc_id, _)| sc_id),
             is_ds_read_only,
             extent,
             _phantom: PhantomData,
@@ -775,19 +771,17 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-        swap_chain_guard: &Storage<SwapChain<A>, id::SwapChainId>,
-    ) -> Result<(StatefulTrackerSubset, Option<Stored<id::SwapChainId>>), RenderPassErrorInner>
+        surface_guard: &Storage<Surface, id::SurfaceId>,
+    ) -> Result<(StatefulTrackerSubset, Option<id::Valid<id::SurfaceId>>), RenderPassErrorInner>
     {
         profiling::scope!("finish", "RenderPassInfo");
         unsafe {
             raw.end_render_pass();
         }
 
-        if let Some(ref sc_id) = self.used_swap_chain {
-            let &(_, ref suf_texture) = swap_chain_guard[sc_id.value]
-                .acquired_texture
-                .as_ref()
-                .unwrap();
+        if let Some(surface_id) = self.used_surface {
+            let suf = A::get_surface(&surface_guard[surface_id]);
+            let suf_texture = suf.acquired_texture.as_ref().unwrap();
             let barrier = hal::TextureBarrier {
                 texture: std::borrow::Borrow::borrow(suf_texture),
                 usage: hal::TextureUses::COLOR_TARGET..hal::TextureUses::empty(),
@@ -814,7 +808,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .map_err(UsageConflict::from)?;
         }
 
-        Ok((self.trackers, self.used_swap_chain))
+        Ok((self.trackers, self.used_surface))
     }
 }
 
@@ -848,10 +842,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
+        let (surface_guard, mut token) = self.surfaces.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (pass_raw, trackers, query_reset_state) = {
-            let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
@@ -895,7 +889,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_stencil_attachment,
                 cmd_buf,
                 &*view_guard,
-                &*swap_chain_guard,
+                &*surface_guard,
             )
             .map_pass_err(scope)?;
 
@@ -1762,8 +1756,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             log::trace!("Merging {:?} with the render pass", encoder_id);
-            let (trackers, used_swapchain) = info
-                .finish(raw, &*texture_guard, &*swap_chain_guard)
+            let (trackers, used_surface) = info
+                .finish(raw, &*texture_guard, &*surface_guard)
                 .map_pass_err(scope)?;
 
             let raw_cmd_buf = unsafe {
@@ -1772,7 +1766,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .map_pass_err(scope)?
             };
             cmd_buf.status = CommandEncoderStatus::Recording;
-            cmd_buf.used_swap_chains.extend(used_swapchain);
+            cmd_buf.used_surfaces.extend(used_surface);
             (raw_cmd_buf, trackers, query_reset_state)
         };
 

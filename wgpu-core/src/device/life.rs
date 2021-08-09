@@ -391,7 +391,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                             resource::TextureViewSource::Native(ref source_id) => {
                                 self.suspected_resources.textures.push(source_id.value);
                             }
-                            resource::TextureViewSource::SwapChain { .. } => {}
+                            resource::TextureViewSource::Surface { .. } => {}
                         };
                         self.schedule_texture_view_for_destruction(id, res);
                     }

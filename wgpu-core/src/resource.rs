@@ -1,7 +1,7 @@
 use crate::{
     device::{DeviceError, HostMap, MissingFeatures},
     hub::Resource,
-    id::{DeviceId, SwapChainId, TextureId},
+    id::{DeviceId, SurfaceId, TextureId, Valid},
     memory_init_tracker::MemoryInitTracker,
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
@@ -240,7 +240,7 @@ pub struct TextureViewDescriptor<'a> {
 #[derive(Debug)]
 pub(crate) enum TextureViewSource {
     Native(Stored<TextureId>),
-    SwapChain(Stored<SwapChainId>),
+    Surface(Valid<SurfaceId>),
 }
 
 #[derive(Debug)]
@@ -311,8 +311,8 @@ pub enum CreateTextureViewError {
 
 #[derive(Clone, Debug, Error)]
 pub enum TextureViewDestroyError {
-    #[error("cannot destroy swap chain image")]
-    SwapChainImage,
+    #[error("cannot destroy a surface image")]
+    SurfaceImage,
 }
 
 impl<A: hal::Api> Resource for TextureView<A> {

@@ -909,9 +909,8 @@ impl crate::Context for Context {
     type RenderBundleEncoderId = RenderBundleEncoder;
     type RenderBundleId = Sendable<web_sys::GpuRenderBundle>;
     type SurfaceId = Sendable<web_sys::GpuCanvasContext>;
-    type SwapChainId = Sendable<web_sys::GpuSwapChain>;
 
-    type SwapChainOutputDetail = SwapChainOutputDetail;
+    type SurfaceOutputDetail = SurfaceOutputDetail;
 
     type RequestAdapterFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
@@ -1043,16 +1042,6 @@ impl crate::Context for Context {
         )
     }
 
-    fn adapter_get_swap_chain_preferred_format(
-        &self,
-        adapter: &Self::AdapterId,
-        surface: &Self::SurfaceId,
-    ) -> Option<wgt::TextureFormat> {
-        let format =
-            map_texture_format_from_web_sys(surface.0.get_swap_chain_preferred_format(&adapter.0));
-        Some(format)
-    }
-
     fn adapter_features(&self, adapter: &Self::AdapterId) -> wgt::Features {
         // TODO
         let _features = adapter.0.features();
@@ -1112,6 +1101,49 @@ impl crate::Context for Context {
         format.describe().guaranteed_format_features
     }
 
+    fn surface_get_preferred_format(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Option<wgt::TextureFormat> {
+        let format =
+            map_texture_format_from_web_sys(surface.0.get_swap_chain_preferred_format(&adapter.0));
+        Some(format)
+    }
+
+    fn surface_configure(
+        &self,
+        surface: &Self::SurfaceId,
+        device: &Self::DeviceId,
+        config: &wgt::SurfaceConfiguration,
+    ) {
+        let mut mapped =
+            web_sys::GpuSwapChainDescriptor::new(&device.0, map_texture_format(config.format));
+        mapped.usage(config.usage.bits());
+        surface.0.configure_swap_chain(&mapped);
+    }
+
+    fn surface_get_current_texture_view(
+        &self,
+        _surface: &Self::SurfaceId,
+    ) -> (
+        Option<Self::TextureViewId>,
+        wgt::SurfaceStatus,
+        Self::SurfaceOutputDetail,
+    ) {
+        // TODO: Should we pass a descriptor here?
+        // Or is the default view always correct?
+        (
+            None, //TODO: surface.0.get_current_texture().create_view()
+            wgt::SurfaceStatus::Good,
+            (),
+        )
+    }
+
+    fn surface_present(&self, _view: &Self::TextureViewId, _detail: &Self::SurfaceOutputDetail) {
+        // Swapchain is presented automatically
+    }
+
     fn device_features(&self, _device: &Self::DeviceId) -> wgt::Features {
         // TODO
         wgt::Features::empty()
@@ -1125,18 +1157,6 @@ impl crate::Context for Context {
     fn device_downlevel_properties(&self, _device: &Self::DeviceId) -> wgt::DownlevelCapabilities {
         // WebGPU is assumed to be fully compliant
         wgt::DownlevelCapabilities::default()
-    }
-
-    fn device_create_swap_chain(
-        &self,
-        device: &Self::DeviceId,
-        surface: &Self::SurfaceId,
-        desc: &wgt::SwapChainDescriptor,
-    ) -> Self::SwapChainId {
-        let mut mapped =
-            web_sys::GpuSwapChainDescriptor::new(&device.0, map_texture_format(desc.format));
-        mapped.usage(desc.usage.bits());
-        Sendable(surface.0.configure_swap_chain(&mapped))
     }
 
     fn device_create_shader_module(
@@ -1582,31 +1602,6 @@ impl crate::Context for Context {
         buffer.0.unmap();
     }
 
-    fn swap_chain_get_current_texture_view(
-        &self,
-        swap_chain: &Self::SwapChainId,
-    ) -> (
-        Option<Self::TextureViewId>,
-        wgt::SwapChainStatus,
-        Self::SwapChainOutputDetail,
-    ) {
-        // TODO: Should we pass a descriptor here?
-        // Or is the default view always correct?
-        (
-            Some(Sendable(swap_chain.0.get_current_texture().create_view())),
-            wgt::SwapChainStatus::Good,
-            (),
-        )
-    }
-
-    fn swap_chain_present(
-        &self,
-        _view: &Self::TextureViewId,
-        _detail: &Self::SwapChainOutputDetail,
-    ) {
-        // Swapchain is presented automatically
-    }
-
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
@@ -2047,7 +2042,7 @@ impl crate::Context for Context {
     fn device_stop_capture(&self, _device: &Self::DeviceId) {}
 }
 
-pub(crate) type SwapChainOutputDetail = ();
+pub(crate) type SurfaceOutputDetail = ();
 
 #[derive(Debug)]
 pub struct BufferMappedRange {

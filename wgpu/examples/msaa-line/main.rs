@@ -31,13 +31,13 @@ struct Example {
     vertex_count: u32,
     sample_count: u32,
     rebuild_bundle: bool,
-    sc_desc: wgpu::SwapChainDescriptor,
+    config: wgpu::SurfaceConfiguration,
 }
 
 impl Example {
     fn create_bundle(
         device: &wgpu::Device,
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         shader: &wgpu::ShaderModule,
         pipeline_layout: &wgpu::PipelineLayout,
         sample_count: u32,
@@ -60,7 +60,7 @@ impl Example {
             fragment: Some(wgpu::FragmentState {
                 module: shader,
                 entry_point: "fs_main",
-                targets: &[sc_desc.format.into()],
+                targets: &[config.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::LineList,
@@ -76,7 +76,7 @@ impl Example {
         let mut encoder =
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,
-                color_formats: &[sc_desc.format],
+                color_formats: &[config.format],
                 depth_stencil: None,
                 sample_count,
             });
@@ -90,12 +90,12 @@ impl Example {
 
     fn create_multisampled_framebuffer(
         device: &wgpu::Device,
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         sample_count: u32,
     ) -> wgpu::TextureView {
         let multisampled_texture_extent = wgpu::Extent3d {
-            width: sc_desc.width,
-            height: sc_desc.height,
+            width: config.width,
+            height: config.height,
             depth_or_array_layers: 1,
         };
         let multisampled_frame_descriptor = &wgpu::TextureDescriptor {
@@ -103,7 +103,7 @@ impl Example {
             mip_level_count: 1,
             sample_count,
             dimension: wgpu::TextureDimension::D2,
-            format: sc_desc.format,
+            format: config.format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
         };
@@ -116,7 +116,7 @@ impl Example {
 
 impl framework::Example for Example {
     fn init(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
@@ -136,7 +136,7 @@ impl framework::Example for Example {
         });
 
         let multisampled_framebuffer =
-            Example::create_multisampled_framebuffer(device, sc_desc, sample_count);
+            Example::create_multisampled_framebuffer(device, config, sample_count);
 
         let mut vertex_data = vec![];
 
@@ -163,7 +163,7 @@ impl framework::Example for Example {
 
         let bundle = Example::create_bundle(
             device,
-            sc_desc,
+            config,
             &shader,
             &pipeline_layout,
             sample_count,
@@ -180,7 +180,7 @@ impl framework::Example for Example {
             vertex_count,
             sample_count,
             rebuild_bundle: false,
-            sc_desc: sc_desc.clone(),
+            config: config.clone(),
         }
     }
 
@@ -214,13 +214,13 @@ impl framework::Example for Example {
 
     fn resize(
         &mut self,
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {
-        self.sc_desc = sc_desc.clone();
+        self.config = config.clone();
         self.multisampled_framebuffer =
-            Example::create_multisampled_framebuffer(device, sc_desc, self.sample_count);
+            Example::create_multisampled_framebuffer(device, config, self.sample_count);
     }
 
     fn render(
@@ -233,7 +233,7 @@ impl framework::Example for Example {
         if self.rebuild_bundle {
             self.bundle = Example::create_bundle(
                 device,
-                &self.sc_desc,
+                &self.config,
                 &self.shader,
                 &self.pipeline_layout,
                 self.sample_count,
@@ -241,7 +241,7 @@ impl framework::Example for Example {
                 self.vertex_count,
             );
             self.multisampled_framebuffer =
-                Example::create_multisampled_framebuffer(device, &self.sc_desc, self.sample_count);
+                Example::create_multisampled_framebuffer(device, &self.config, self.sample_count);
             self.rebuild_bundle = false;
         }
 

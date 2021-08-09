@@ -2342,12 +2342,12 @@ bitflags::bitflags! {
     }
 }
 
-/// Describes a [`SwapChain`].
+/// Configures a [`Surface`] for presentation.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct SwapChainDescriptor {
+pub struct SurfaceConfiguration {
     /// The usage of the swap chain. The only supported usage is `RENDER_ATTACHMENT`.
     pub usage: TextureUsages,
     /// The texture format of the swap chain. The only formats that are guaranteed are
@@ -2362,10 +2362,10 @@ pub struct SwapChainDescriptor {
     pub present_mode: PresentMode,
 }
 
-/// Status of the recieved swapchain image.
+/// Status of the recieved surface image.
 #[repr(C)]
 #[derive(Debug)]
-pub enum SwapChainStatus {
+pub enum SurfaceStatus {
     /// No issues.
     Good,
     /// The swap chain is operational, but it does no longer perfectly

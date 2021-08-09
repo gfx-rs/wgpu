@@ -4,7 +4,7 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token},
     id, instance,
     memory_init_tracker::{MemoryInitKind, MemoryInitTracker, MemoryInitTrackerAction},
-    pipeline, resource, swap_chain,
+    pipeline, present, resource,
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
@@ -1439,8 +1439,8 @@ impl<A: HalApi> Device<A> {
                                 .map_err(UsageConflict::from)?;
                             check_texture_usage(texture.desc.usage, pub_usage)?;
                         }
-                        resource::TextureViewSource::SwapChain(_) => {
-                            return Err(Error::SwapChainImage);
+                        resource::TextureViewSource::Surface(_) => {
+                            return Err(Error::SurfaceImage);
                         }
                     }
 
@@ -1491,8 +1491,8 @@ impl<A: HalApi> Device<A> {
                                     .map_err(UsageConflict::from)?;
                                 check_texture_usage(texture.desc.usage, pub_usage)?;
                             }
-                            resource::TextureViewSource::SwapChain(_) => {
-                                return Err(Error::SwapChainImage);
+                            resource::TextureViewSource::Surface(_) => {
+                                return Err(Error::SurfaceImage);
                             }
                         }
 
@@ -2469,6 +2469,10 @@ impl<A: hal::Api> Device<A> {
         }
         life_tracker.triage_submissions(current_index, &self.command_allocator);
         life_tracker.cleanup(&self.raw);
+        #[cfg(feature = "trace")]
+        {
+            self.trace = None;
+        }
     }
 
     pub(crate) fn dispose(self) {
@@ -2558,34 +2562,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+        let (surface_guard, mut token) = self.surfaces.read(&mut token);
         let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
         let adapter = adapter_guard
             .get(adapter_id)
             .map_err(|_| instance::IsSurfaceSupportedError::InvalidAdapter)?;
         let surface = surface_guard
-            .get_mut(surface_id)
+            .get(surface_id)
             .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
         Ok(adapter.is_surface_supported(surface))
     }
-    pub fn adapter_get_swap_chain_preferred_format<A: HalApi>(
+    pub fn surface_get_preferred_format<A: HalApi>(
         &self,
-        adapter_id: id::AdapterId,
         surface_id: id::SurfaceId,
-    ) -> Result<TextureFormat, instance::GetSwapChainPreferredFormatError> {
+        adapter_id: id::AdapterId,
+    ) -> Result<TextureFormat, instance::GetSurfacePreferredFormatError> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+        let (surface_guard, mut token) = self.surfaces.read(&mut token);
         let (adapter_guard, mut _token) = hub.adapters.read(&mut token);
         let adapter = adapter_guard
             .get(adapter_id)
-            .map_err(|_| instance::GetSwapChainPreferredFormatError::InvalidAdapter)?;
+            .map_err(|_| instance::GetSurfacePreferredFormatError::InvalidAdapter)?;
         let surface = surface_guard
-            .get_mut(surface_id)
-            .map_err(|_| instance::GetSwapChainPreferredFormatError::InvalidSurface)?;
+            .get(surface_id)
+            .map_err(|_| instance::GetSurfacePreferredFormatError::InvalidSurface)?;
 
-        adapter.get_swap_chain_preferred_format(surface)
+        surface.get_preferred_format(adapter)
     }
 
     pub fn device_features<A: HalApi>(
@@ -3251,8 +3255,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         resource::TextureViewSource::Native(ref source_id) => {
                             texture_guard[source_id.value].device_id.value
                         }
-                        resource::TextureViewSource::SwapChain(_) => {
-                            return Err(resource::TextureViewDestroyError::SwapChainImage)
+                        resource::TextureViewSource::Surface(_) => {
+                            return Err(resource::TextureViewDestroyError::SurfaceImage)
                         }
                     };
                     (last_submit_index, device_id)
@@ -4280,19 +4284,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(layout_id);
     }
 
-    pub fn device_create_swap_chain<A: HalApi>(
+    pub fn surface_configure<A: HalApi>(
         &self,
-        device_id: id::DeviceId,
         surface_id: id::SurfaceId,
-        desc: &wgt::SwapChainDescriptor,
-    ) -> (id::SwapChainId, Option<swap_chain::CreateSwapChainError>) {
+        device_id: id::DeviceId,
+        config: &wgt::SurfaceConfiguration,
+    ) -> Option<present::ConfigureSurfaceError> {
         use hal::{Adapter as _, Surface as _};
-        profiling::scope!("create_swap_chain", "Device");
+        use present::ConfigureSurfaceError as E;
+        profiling::scope!("surface_configure");
 
-        fn validate_swap_chain_descriptor(
+        fn validate_surface_configuraiton(
             config: &mut hal::SurfaceConfiguration,
             caps: &hal::SurfaceCapabilities,
-        ) -> Result<(), swap_chain::CreateSwapChainError> {
+        ) -> Result<(), E> {
             let width = config.extent.width;
             let height = config.extent.height;
             if width < caps.extents.start().width
@@ -4315,29 +4320,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 config.present_mode = wgt::PresentMode::Fifo;
             }
             if !caps.formats.contains(&config.format) {
-                return Err(swap_chain::CreateSwapChainError::UnsupportedFormat {
+                return Err(E::UnsupportedFormat {
                     requested: config.format,
                     available: caps.formats.clone(),
                 });
             }
             if !caps.usage.contains(config.usage) {
-                return Err(swap_chain::CreateSwapChainError::UnsupportedUsage);
+                return Err(E::UnsupportedUsage);
             }
             if width == 0 || height == 0 {
-                return Err(swap_chain::CreateSwapChainError::ZeroArea);
+                return Err(E::ZeroArea);
             }
             Ok(())
         }
 
-        log::info!("creating swap chain {:?}", desc);
-        let sc_id = surface_id.to_swap_chain_id(A::VARIANT);
+        log::info!("configuring surface with {:?}", config);
         let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (mut swap_chain_guard, _) = hub.swap_chains.write(&mut token);
+        let (device_guard, _token) = hub.devices.read(&mut token);
 
         let error = loop {
             let device = match device_guard.get(device_id) {
@@ -4348,86 +4351,82 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref trace) = device.trace {
                 trace
                     .lock()
-                    .add(trace::Action::CreateSwapChain(sc_id, desc.clone()));
+                    .add(trace::Action::ConfigureSurface(surface_id, config.clone()));
             }
 
             let surface = match surface_guard.get_mut(surface_id) {
                 Ok(surface) => surface,
-                Err(_) => break swap_chain::CreateSwapChainError::InvalidSurface,
+                Err(_) => break E::InvalidSurface,
             };
 
             let caps = unsafe {
-                let surface = A::get_surface_mut(surface);
+                let suf = A::get_surface(surface);
                 let adapter = &adapter_guard[device.adapter_id.value];
-                match adapter.raw.adapter.surface_capabilities(surface) {
+                match adapter.raw.adapter.surface_capabilities(&suf.raw) {
                     Some(caps) => caps,
-                    None => break swap_chain::CreateSwapChainError::UnsupportedQueueFamily,
+                    None => break E::UnsupportedQueueFamily,
                 }
             };
 
-            let num_frames = swap_chain::DESIRED_NUM_FRAMES
+            let num_frames = present::DESIRED_NUM_FRAMES
                 .max(*caps.swap_chain_sizes.start())
                 .min(*caps.swap_chain_sizes.end());
-            let mut config = hal::SurfaceConfiguration {
+            let mut hal_config = hal::SurfaceConfiguration {
                 swap_chain_size: num_frames,
-                present_mode: desc.present_mode,
+                present_mode: config.present_mode,
                 composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
-                format: desc.format,
+                format: config.format,
                 extent: wgt::Extent3d {
-                    width: desc.width,
-                    height: desc.height,
+                    width: config.width,
+                    height: config.height,
                     depth_or_array_layers: 1,
                 },
-                usage: conv::map_texture_usage(desc.usage, hal::FormatAspects::COLOR),
+                usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
             };
 
-            if let Err(error) = validate_swap_chain_descriptor(&mut config, &caps) {
+            if let Err(error) = validate_surface_configuraiton(&mut hal_config, &caps) {
                 break error;
             }
 
-            match unsafe { A::get_surface_mut(surface).configure(&device.raw, &config) } {
+            match unsafe {
+                A::get_surface_mut(surface)
+                    .raw
+                    .configure(&device.raw, &hal_config)
+            } {
                 Ok(()) => (),
                 Err(error) => {
                     break match error {
-                        hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
-                            swap_chain::CreateSwapChainError::InvalidSurface
-                        }
-                        hal::SurfaceError::Device(error) => {
-                            swap_chain::CreateSwapChainError::Device(error.into())
-                        }
+                        hal::SurfaceError::Outdated | hal::SurfaceError::Lost => E::InvalidSurface,
+                        hal::SurfaceError::Device(error) => E::Device(error.into()),
                         hal::SurfaceError::Other(message) => {
                             log::error!("surface configuration failed: {}", message);
-                            swap_chain::CreateSwapChainError::InvalidSurface
+                            E::InvalidSurface
                         }
                     }
                 }
             }
 
-            if let Some(sc) = swap_chain_guard.try_remove(sc_id) {
-                if sc.acquired_texture.is_some() {
-                    break swap_chain::CreateSwapChainError::SwapChainOutputExists;
+            if let Some(present) = surface.presentation.take() {
+                if present.acquired_texture.is_some() {
+                    break E::PreviousOutputExists;
                 }
             }
 
-            let swap_chain = swap_chain::SwapChain {
-                life_guard: LifeGuard::new("<SwapChain>"),
+            surface.presentation = Some(present::Presentation {
                 device_id: Stored {
                     value: id::Valid(device_id),
                     ref_count: device.life_guard.add_ref(),
                 },
-                desc: desc.clone(),
+                config: config.clone(),
                 num_frames,
                 acquired_texture: None,
                 active_submission_index: 0,
-                marker: PhantomData,
-            };
-            swap_chain_guard.insert(sc_id, swap_chain);
+            });
 
-            return (sc_id, None);
+            return None;
         };
 
-        swap_chain_guard.insert_error(sc_id, "");
-        (sc_id, Some(error))
+        Some(error)
     }
 
     #[cfg(feature = "replay")]

@@ -149,8 +149,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             Action::Init { .. } => {
                 panic!("Unexpected Action::Init: has to be the first action only")
             }
-            Action::CreateSwapChain { .. } | Action::PresentSwapChain(_) => {
-                panic!("Unexpected SwapChain action: winit feature is not enabled")
+            Action::ConfigureSurface { .. } | Action::Present(_) => {
+                panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
@@ -202,9 +202,9 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             Action::DestroySampler(id) => {
                 self.sampler_drop::<A>(id);
             }
-            Action::GetSwapChainTexture { id, parent_id } => {
+            Action::GetSurfaceTexture { id, parent_id } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.swap_chain_get_current_texture_view::<A>(parent_id, id)
+                self.surface_get_current_texture_view::<A>(parent_id, id)
                     .unwrap()
                     .view_id
                     .unwrap();

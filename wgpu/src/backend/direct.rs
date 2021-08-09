@@ -4,7 +4,7 @@ use crate::{
     ComputePipelineDescriptor, DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode,
     Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
-    SwapChainStatus, TextureDescriptor, TextureFormat, TextureViewDescriptor,
+    SurfaceStatus, TextureDescriptor, TextureFormat, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -676,6 +676,14 @@ fn map_pass_channel<V: Copy + Default>(
 }
 
 #[derive(Debug)]
+pub struct Surface {
+    id: wgc::id::SurfaceId,
+    /// Configured device is needed to know which backend
+    /// code to execute when acquiring a new frame.
+    configured_device: Mutex<Option<wgc::id::DeviceId>>,
+}
+
+#[derive(Debug)]
 pub struct Device {
     id: wgc::id::DeviceId,
     error_sink: ErrorSink,
@@ -722,10 +730,9 @@ impl crate::Context for Context {
     type CommandBufferId = wgc::id::CommandBufferId;
     type RenderBundleEncoderId = wgc::command::RenderBundleEncoder;
     type RenderBundleId = wgc::id::RenderBundleId;
-    type SurfaceId = wgc::id::SurfaceId;
-    type SwapChainId = wgc::id::SwapChainId;
+    type SurfaceId = Surface;
 
-    type SwapChainOutputDetail = SwapChainOutputDetail;
+    type SurfaceOutputDetail = SurfaceOutputDetail;
 
     type RequestAdapterFuture = Ready<Option<Self::AdapterId>>;
     #[allow(clippy::type_complexity)]
@@ -745,7 +752,10 @@ impl crate::Context for Context {
         &self,
         handle: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Self::SurfaceId {
-        self.0.instance_create_surface(handle, PhantomData)
+        Surface {
+            id: self.0.instance_create_surface(handle, PhantomData),
+            configured_device: Mutex::new(None),
+        }
     }
 
     fn instance_request_adapter(
@@ -755,7 +765,7 @@ impl crate::Context for Context {
         let id = self.0.request_adapter(
             &wgc::instance::RequestAdapterOptions {
                 power_preference: options.power_preference,
-                compatible_surface: options.compatible_surface.map(|surface| surface.id),
+                compatible_surface: options.compatible_surface.map(|surface| surface.id.id),
             },
             wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| PhantomData),
         );
@@ -801,23 +811,10 @@ impl crate::Context for Context {
         surface: &Self::SurfaceId,
     ) -> bool {
         let global = &self.0;
-        match wgc::gfx_select!(adapter => global.adapter_is_surface_supported(*adapter, *surface)) {
+        match wgc::gfx_select!(adapter => global.adapter_is_surface_supported(*adapter, surface.id))
+        {
             Ok(result) => result,
             Err(err) => self.handle_error_fatal(err, "Adapter::is_surface_supported"),
-        }
-    }
-
-    fn adapter_get_swap_chain_preferred_format(
-        &self,
-        adapter: &Self::AdapterId,
-        surface: &Self::SurfaceId,
-    ) -> Option<TextureFormat> {
-        let global = &self.0;
-        match wgc::gfx_select!(adapter => global.adapter_get_swap_chain_preferred_format(*adapter, *surface))
-        {
-            Ok(swap_chain_preferred_format) => Some(swap_chain_preferred_format),
-            Err(wgc::instance::GetSwapChainPreferredFormatError::UnsupportedQueueFamily) => None,
-            Err(err) => self.handle_error_fatal(err, "Adapter::get_swap_chain_preferred_format"),
         }
     }
 
@@ -866,6 +863,71 @@ impl crate::Context for Context {
         }
     }
 
+    fn surface_get_preferred_format(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Option<TextureFormat> {
+        let global = &self.0;
+        match wgc::gfx_select!(adapter => global.surface_get_preferred_format(surface.id, *adapter))
+        {
+            Ok(format) => Some(format),
+            Err(wgc::instance::GetSurfacePreferredFormatError::UnsupportedQueueFamily) => None,
+            Err(err) => self.handle_error_fatal(err, "Surface::get_preferred_format"),
+        }
+    }
+
+    fn surface_configure(
+        &self,
+        surface: &Self::SurfaceId,
+        device: &Self::DeviceId,
+        config: &wgt::SurfaceConfiguration,
+    ) {
+        let global = &self.0;
+        let error =
+            wgc::gfx_select!(device.id => global.surface_configure(surface.id, device.id, config));
+        if let Some(e) = error {
+            self.handle_error_fatal(e, "Surface::configure");
+        } else {
+            *surface.configured_device.lock() = Some(device.id);
+        }
+    }
+
+    fn surface_get_current_texture_view(
+        &self,
+        surface: &Self::SurfaceId,
+    ) -> (
+        Option<Self::TextureViewId>,
+        SurfaceStatus,
+        Self::SurfaceOutputDetail,
+    ) {
+        let global = &self.0;
+        let device_id = surface
+            .configured_device
+            .lock()
+            .expect("Surface was not configured?");
+        match wgc::gfx_select!(
+            device_id => global.surface_get_current_texture_view(surface.id, PhantomData)
+        ) {
+            Ok(wgc::present::SurfaceOutput { status, view_id }) => (
+                view_id,
+                status,
+                SurfaceOutputDetail {
+                    surface_id: surface.id,
+                },
+            ),
+            Err(err) => self.handle_error_fatal(err, "Surface::get_current_texture_view"),
+        }
+    }
+
+    fn surface_present(&self, view: &Self::TextureViewId, detail: &Self::SurfaceOutputDetail) {
+        let global = &self.0;
+        match wgc::gfx_select!(*view => global.surface_present(detail.surface_id)) {
+            Ok(_status) => (),
+            Err(err) => self.handle_error_fatal(err, "Surface::present"),
+        }
+    }
+
     fn device_features(&self, device: &Self::DeviceId) -> Features {
         let global = &self.0;
         match wgc::gfx_select!(device.id => global.device_features(device.id)) {
@@ -887,20 +949,6 @@ impl crate::Context for Context {
         match wgc::gfx_select!(device.id => global.device_downlevel_properties(device.id)) {
             Ok(limits) => limits,
             Err(err) => self.handle_error_fatal(err, "Device::downlevel_properties"),
-        }
-    }
-
-    fn device_create_swap_chain(
-        &self,
-        device: &Self::DeviceId,
-        surface: &Self::SurfaceId,
-        desc: &wgt::SwapChainDescriptor,
-    ) -> Self::SwapChainId {
-        let global = &self.0;
-        let (sc, error) = wgc::gfx_select!(device.id => global.device_create_swap_chain(device.id, *surface, desc));
-        match error {
-            Some(e) => self.handle_error_fatal(e, "Device::create_swap_chain"),
-            None => sc,
         }
     }
 
@@ -1507,37 +1555,6 @@ impl crate::Context for Context {
         }
     }
 
-    fn swap_chain_get_current_texture_view(
-        &self,
-        swap_chain: &Self::SwapChainId,
-    ) -> (
-        Option<Self::TextureViewId>,
-        SwapChainStatus,
-        Self::SwapChainOutputDetail,
-    ) {
-        let global = &self.0;
-        match wgc::gfx_select!(
-            *swap_chain => global.swap_chain_get_current_texture_view(*swap_chain, PhantomData)
-        ) {
-            Ok(wgc::swap_chain::SwapChainOutput { status, view_id }) => (
-                view_id,
-                status,
-                SwapChainOutputDetail {
-                    swap_chain_id: *swap_chain,
-                },
-            ),
-            Err(err) => self.handle_error_fatal(err, "SwapChain::get_current_texture_view"),
-        }
-    }
-
-    fn swap_chain_present(&self, view: &Self::TextureViewId, detail: &Self::SwapChainOutputDetail) {
-        let global = &self.0;
-        match wgc::gfx_select!(*view => global.swap_chain_present(detail.swap_chain_id)) {
-            Ok(_status) => (),
-            Err(err) => self.handle_error_fatal(err, "SwapChain::present"),
-        }
-    }
-
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
@@ -2079,8 +2096,8 @@ impl crate::Context for Context {
 }
 
 #[derive(Debug)]
-pub(crate) struct SwapChainOutputDetail {
-    swap_chain_id: wgc::id::SwapChainId,
+pub(crate) struct SurfaceOutputDetail {
+    surface_id: wgc::id::SurfaceId,
 }
 
 type ErrorSink = Arc<Mutex<ErrorSinkRaw>>;

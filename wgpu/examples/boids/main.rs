@@ -33,7 +33,7 @@ struct Example {
 impl framework::Example for Example {
     /// constructs initial instance of Example struct
     fn init(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
@@ -143,7 +143,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &draw_shader,
                 entry_point: "main",
-                targets: &[sc_desc.format.into()],
+                targets: &[config.format.into()],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -246,7 +246,7 @@ impl framework::Example for Example {
     /// resize is called on WindowEvent::Resized events
     fn resize(
         &mut self,
-        _sc_desc: &wgpu::SwapChainDescriptor,
+        _sc_desc: &wgpu::SurfaceConfiguration,
         _device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {

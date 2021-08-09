@@ -2,6 +2,7 @@ use crate::{
     device::{Device, DeviceDescriptor},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
+    present::Presentation,
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
 };
 
@@ -12,7 +13,10 @@ use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 type HalInstance<A> = <A as hal::Api>::Instance;
-type HalSurface<A> = <A as hal::Api>::Surface;
+pub struct HalSurface<A: hal::Api> {
+    pub raw: A::Surface,
+    pub acquired_texture: Option<A::SurfaceTexture>,
+}
 
 #[derive(Clone, Debug, Error)]
 #[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
@@ -124,7 +128,7 @@ impl Instance {
             let map = |(surface_backend, self_backend)| {
                 unsafe {
                     if let Some(suf) = surface_backend {
-                        self_backend.as_ref().unwrap().destroy_surface(suf);
+                        self_backend.as_ref().unwrap().destroy_surface(suf.raw);
                     }
                 }
             };
@@ -144,6 +148,7 @@ impl Instance {
 }
 
 pub struct Surface {
+    pub(crate) presentation: Option<Presentation>,
     #[cfg(vulkan)]
     pub vulkan: Option<HalSurface<hal::api::Vulkan>>,
     #[cfg(metal)]
@@ -168,6 +173,38 @@ impl crate::hub::Resource for Surface {
     }
 }
 
+impl Surface {
+    pub fn get_preferred_format<A: HalApi>(
+        &self,
+        adapter: &Adapter<A>,
+    ) -> Result<wgt::TextureFormat, GetSurfacePreferredFormatError> {
+        // Check the four formats mentioned in the WebGPU spec.
+        // Also, prefer sRGB over linear as it is better in
+        // representing perceived colors.
+        let preferred_formats = [
+            wgt::TextureFormat::Bgra8UnormSrgb,
+            wgt::TextureFormat::Rgba8UnormSrgb,
+            wgt::TextureFormat::Bgra8Unorm,
+            wgt::TextureFormat::Rgba8Unorm,
+        ];
+
+        let suf = A::get_surface(self);
+        let caps = unsafe {
+            adapter
+                .raw
+                .adapter
+                .surface_capabilities(&suf.raw)
+                .ok_or(GetSurfacePreferredFormatError::UnsupportedQueueFamily)?
+        };
+
+        preferred_formats
+            .iter()
+            .cloned()
+            .find(|preferred| caps.formats.contains(preferred))
+            .ok_or(GetSurfacePreferredFormatError::NotFound)
+    }
+}
+
 pub struct Adapter<A: hal::Api> {
     pub(crate) raw: hal::ExposedAdapter<A>,
     life_guard: LifeGuard,
@@ -181,41 +218,9 @@ impl<A: HalApi> Adapter<A> {
         }
     }
 
-    pub fn is_surface_supported(&self, surface: &mut Surface) -> bool {
-        unsafe {
-            self.raw
-                .adapter
-                .surface_capabilities(A::get_surface_mut(surface))
-        }
-        .is_some()
-    }
-
-    pub fn get_swap_chain_preferred_format(
-        &self,
-        surface: &mut Surface,
-    ) -> Result<wgt::TextureFormat, GetSwapChainPreferredFormatError> {
-        // Check the four formats mentioned in the WebGPU spec.
-        // Also, prefer sRGB over linear as it is better in
-        // representing perceived colors.
-        let preferred_formats = [
-            wgt::TextureFormat::Bgra8UnormSrgb,
-            wgt::TextureFormat::Rgba8UnormSrgb,
-            wgt::TextureFormat::Bgra8Unorm,
-            wgt::TextureFormat::Rgba8Unorm,
-        ];
-
-        let caps = unsafe {
-            self.raw
-                .adapter
-                .surface_capabilities(A::get_surface_mut(surface))
-                .ok_or(GetSwapChainPreferredFormatError::UnsupportedQueueFamily)?
-        };
-
-        preferred_formats
-            .iter()
-            .cloned()
-            .find(|preferred| caps.formats.contains(preferred))
-            .ok_or(GetSwapChainPreferredFormatError::NotFound)
+    pub fn is_surface_supported(&self, surface: &Surface) -> bool {
+        let suf = A::get_surface(surface);
+        unsafe { self.raw.adapter.surface_capabilities(&suf.raw) }.is_some()
     }
 
     pub(crate) fn get_texture_format_features(
@@ -362,7 +367,7 @@ pub enum IsSurfaceSupportedError {
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum GetSwapChainPreferredFormatError {
+pub enum GetSurfacePreferredFormatError {
     #[error("no suitable format found")]
     NotFound,
     #[error("invalid adapter")]
@@ -433,29 +438,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> SurfaceId {
         profiling::scope!("create_surface", "Instance");
 
-        let surface = unsafe {
-            backends_map! {
-                let map = |inst| {
-                    inst
-                    .as_ref()
-                    .and_then(|inst| inst.create_surface(handle).map_err(|e| {
+        //Note: using adummy argument to work around the following error:
+        //> cannot provide explicit generic arguments when `impl Trait` is used in argument position
+        fn init<A: hal::Api>(
+            _: A,
+            inst: &Option<A::Instance>,
+            handle: &impl raw_window_handle::HasRawWindowHandle,
+        ) -> Option<HalSurface<A>> {
+            inst.as_ref().and_then(|inst| unsafe {
+                match inst.create_surface(handle) {
+                    Ok(raw) => Some(HalSurface {
+                        raw,
+                        acquired_texture: None,
+                    }),
+                    Err(e) => {
                         log::warn!("Error: {:?}", e);
-                    }).ok())
-                };
-
-                Surface {
-                    #[cfg(vulkan)]
-                    vulkan: map(&self.instance.vulkan),
-                    #[cfg(metal)]
-                    metal: map(&self.instance.metal),
-                    #[cfg(dx12)]
-                    dx12: map(&self.instance.dx12),
-                    #[cfg(dx11)]
-                    dx11: map(&self.instance.dx11),
-                    #[cfg(gl)]
-                    gl: map(&self.instance.gl),
+                        None
+                    }
                 }
-            }
+            })
+        }
+
+        let surface = Surface {
+            presentation: None,
+            #[cfg(vulkan)]
+            vulkan: init(hal::api::Vulkan, &self.instance.vulkan, handle),
+            #[cfg(metal)]
+            metal: init(hal::api::Metal, &self.instance.metal, handle),
+            #[cfg(dx12)]
+            dx12: init(hal::api::Dx12, &self.instance.dx12, handle),
+            #[cfg(dx11)]
+            dx11: init(hal::api::Dx11, &self.instance.dx11, handle),
+            #[cfg(gl)]
+            gl: init(hal::api::Gles, &self.instance.gl, handle),
         };
 
         let mut token = Token::root();
@@ -472,10 +487,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("create_surface_metal", "Instance");
 
         let surface = Surface {
-            metal: self.instance.metal.as_ref().map(|inst| {
-                // we don't want to link to metal-rs for this
-                #[allow(clippy::transmute_ptr_to_ref)]
-                inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
+            presentation: None,
+            metal: self.instance.metal.as_ref().map(|inst| HalSurface {
+                raw: {
+                    // we don't want to link to metal-rs for this
+                    #[allow(clippy::transmute_ptr_to_ref)]
+                    inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
+                },
+                acquired_texture: None,
             }),
         };
 
@@ -563,7 +582,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let mut adapters = unsafe { inst.enumerate_adapters() };
                         if let Some(surface_backend) = compatible_surface.and_then(surface_backend) {
                             adapters.retain(|exposed| unsafe {
-                                exposed.adapter.surface_capabilities(surface_backend).is_some()
+                                exposed.adapter.surface_capabilities(&surface_backend.raw).is_some()
                             });
                         }
                         device_types.extend(adapters.iter().map(|ad| ad.info.device_type));

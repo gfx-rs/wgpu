@@ -40,8 +40,8 @@ pub mod id;
 pub mod instance;
 mod memory_init_tracker;
 pub mod pipeline;
+pub mod present;
 pub mod resource;
-pub mod swap_chain;
 mod track;
 mod validation;
 

@@ -13,8 +13,7 @@ struct ViewportDesc {
 
 struct Viewport {
     desc: ViewportDesc,
-    sc_desc: wgpu::SwapChainDescriptor,
-    swap_chain: wgpu::SwapChain,
+    config: wgpu::SurfaceConfiguration,
 }
 
 impl ViewportDesc {
@@ -30,34 +29,29 @@ impl ViewportDesc {
     fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport {
         let size = self.window.inner_size();
 
-        let sc_desc = wgpu::SwapChainDescriptor {
+        let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: adapter
-                .get_swap_chain_preferred_format(&self.surface)
-                .unwrap(),
+            format: self.surface.get_preferred_format(adapter).unwrap(),
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
         };
 
-        let swap_chain = device.create_swap_chain(&self.surface, &sc_desc);
+        self.surface.configure(device, &config);
 
-        Viewport {
-            desc: self,
-            sc_desc,
-            swap_chain,
-        }
+        Viewport { desc: self, config }
     }
 }
 
 impl Viewport {
     fn resize(&mut self, device: &wgpu::Device, size: winit::dpi::PhysicalSize<u32>) {
-        self.sc_desc.width = size.width;
-        self.sc_desc.height = size.height;
-        self.swap_chain = device.create_swap_chain(&self.desc.surface, &self.sc_desc);
+        self.config.width = size.width;
+        self.config.height = size.height;
+        self.desc.surface.configure(device, &self.config);
     }
-    fn get_current_frame(&mut self) -> wgpu::SwapChainTexture {
-        self.swap_chain
+    fn get_current_frame(&mut self) -> wgpu::SurfaceTexture {
+        self.desc
+            .surface
             .get_current_frame()
             .expect("Failed to acquire next swap chain texture")
             .output
