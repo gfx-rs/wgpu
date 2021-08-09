@@ -24,7 +24,7 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
         let bit = wgpu::Features::from_bits(1 << i as u64);
         if let Some(bit) = bit {
             if wgpu::Features::all().contains(bit) {
-                println!("\t\t{:<44} {}", format!("{:?}:", bit), features.contains(bit));
+                println!("\t\t{:<63} {}", format!("{:?}:", bit), features.contains(bit));
             }
         }
     }

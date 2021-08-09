@@ -138,28 +138,28 @@ impl PhysicalDeviceFeatures {
                         .shader_sampled_image_array_non_uniform_indexing(
                             requested_features.contains(
                                 wgt::Features::TEXTURE_BINDING_ARRAY
-                                    | wgt::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+                                    | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
                         .shader_storage_image_array_non_uniform_indexing(
                             requested_features.contains(
                                 wgt::Features::TEXTURE_BINDING_ARRAY
                                     | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                                    | wgt::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+                                    | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
                         //.shader_storage_buffer_array_non_uniform_indexing(
                         .shader_uniform_buffer_array_non_uniform_indexing(
                             requested_features.contains(
                                 wgt::Features::BUFFER_BINDING_ARRAY
-                                    | wgt::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+                                    | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
                         .shader_storage_buffer_array_non_uniform_indexing(
                             requested_features.contains(
                                 wgt::Features::BUFFER_BINDING_ARRAY
                                     | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                                    | wgt::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+                                    | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
                         .runtime_descriptor_array(
@@ -181,28 +181,28 @@ impl PhysicalDeviceFeatures {
                         .shader_sampled_image_array_non_uniform_indexing(
                             requested_features.contains(
                                 wgt::Features::TEXTURE_BINDING_ARRAY
-                                    | wgt::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+                                    | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
                         .shader_storage_image_array_non_uniform_indexing(
                             requested_features.contains(
                                 wgt::Features::TEXTURE_BINDING_ARRAY
                                     | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                                    | wgt::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+                                    | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
                         //.shader_storage_buffer_array_non_uniform_indexing(
                         .shader_uniform_buffer_array_non_uniform_indexing(
                             requested_features.contains(
                                 wgt::Features::BUFFER_BINDING_ARRAY
-                                    | wgt::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+                                    | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
                         .shader_storage_buffer_array_non_uniform_indexing(
                             requested_features.contains(
                                 wgt::Features::BUFFER_BINDING_ARRAY
                                     | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                                    | wgt::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+                                    | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
                             ),
                         )
                         .runtime_descriptor_array(
@@ -331,10 +331,6 @@ impl PhysicalDeviceFeatures {
                 &features,
                 &[
                     (
-                        F::BUFFER_BINDING_ARRAY,
-                        vulkan_1_2.shader_uniform_buffer_array_non_uniform_indexing,
-                    ),
-                    (
                         F::TEXTURE_BINDING_ARRAY,
                         vulkan_1_2.shader_sampled_image_array_non_uniform_indexing,
                     ),
@@ -342,13 +338,24 @@ impl PhysicalDeviceFeatures {
                         F::BUFFER_BINDING_ARRAY | STORAGE,
                         vulkan_1_2.shader_storage_buffer_array_non_uniform_indexing,
                     ),
+                ],
+            ) {
+                features.insert(F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING);
+            }
+            if Self::all_features_supported(
+                &features,
+                &[
                     (
-                        F::TEXTURE_BINDING_ARRAY | STORAGE,
-                        vulkan_1_2.shader_storage_image_array_non_uniform_indexing,
+                        F::BUFFER_BINDING_ARRAY,
+                        vulkan_1_2.shader_uniform_buffer_array_non_uniform_indexing,
+                    ),
+                    (
+                        F::BUFFER_BINDING_ARRAY | STORAGE,
+                        vulkan_1_2.shader_storage_buffer_array_non_uniform_indexing,
                     ),
                 ],
             ) {
-                features.insert(F::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING);
+                features.insert(F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING);
             }
             if vulkan_1_2.runtime_descriptor_array != 0 {
                 features |= F::UNSIZED_BINDING_ARRAY;
@@ -366,10 +373,6 @@ impl PhysicalDeviceFeatures {
                 &features,
                 &[
                     (
-                        F::BUFFER_BINDING_ARRAY,
-                        descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing,
-                    ),
-                    (
                         F::TEXTURE_BINDING_ARRAY,
                         descriptor_indexing.shader_sampled_image_array_non_uniform_indexing,
                     ),
@@ -377,13 +380,24 @@ impl PhysicalDeviceFeatures {
                         F::BUFFER_BINDING_ARRAY | STORAGE,
                         descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing,
                     ),
+                ],
+            ) {
+                features.insert(F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING);
+            }
+            if Self::all_features_supported(
+                &features,
+                &[
+                    (
+                        F::BUFFER_BINDING_ARRAY,
+                        descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing,
+                    ),
                     (
                         F::TEXTURE_BINDING_ARRAY | STORAGE,
                         descriptor_indexing.shader_storage_image_array_non_uniform_indexing,
                     ),
                 ],
             ) {
-                features.insert(F::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING);
+                features.insert(F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING);
             }
             if descriptor_indexing.runtime_descriptor_array != 0 {
                 features |= F::UNSIZED_BINDING_ARRAY;
