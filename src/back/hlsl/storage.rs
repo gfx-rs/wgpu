@@ -16,6 +16,7 @@ use std::{fmt, mem};
 
 const STORE_TEMP_NAME: &str = "_value";
 
+#[derive(Debug)]
 pub(super) enum SubAccess {
     Offset(u32),
     Index {
@@ -365,7 +366,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
     ) -> Result<Handle<crate::GlobalVariable>, Error> {
         self.temp_access_chain.clear();
         loop {
-            // determine the size of the pontee
+            // determine the size of the pointee
             let stride = match *func_ctx.info[cur_expr].ty.inner_with(&module.types) {
                 crate::TypeInner::Pointer { base, class: _ } => {
                     module.types[base].inner.span(&module.constants)
@@ -386,12 +387,16 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     },
                 ),
                 crate::Expression::AccessIndex { base, index } => {
-                    match *func_ctx.info[base].ty.inner_with(&module.types) {
-                        crate::TypeInner::Struct { ref members, .. } => {
-                            (base, SubAccess::Offset(members[index as usize].offset))
-                        }
-                        _ => (base, SubAccess::Offset(index * stride)),
-                    }
+                    let sub = match *func_ctx.info[base].ty.inner_with(&module.types) {
+                        crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
+                            crate::TypeInner::Struct { ref members, .. } => {
+                                SubAccess::Offset(members[index as usize].offset)
+                            }
+                            _ => SubAccess::Offset(index * stride),
+                        },
+                        _ => SubAccess::Offset(index * stride),
+                    };
+                    (base, sub)
                 }
                 ref other => {
                     return Err(Error::Unimplemented(format!(
