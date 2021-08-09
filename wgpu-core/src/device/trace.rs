@@ -39,6 +39,7 @@ pub enum Action<'a> {
         desc: crate::device::DeviceDescriptor<'a>,
         backend: wgt::Backend,
     },
+    ConfigureSurface(id::SurfaceId, wgt::SurfaceConfiguration),
     CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
     FreeBuffer(id::BufferId),
     DestroyBuffer(id::BufferId),
@@ -53,12 +54,11 @@ pub enum Action<'a> {
     DestroyTextureView(id::TextureViewId),
     CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
     DestroySampler(id::SamplerId),
-    CreateSwapChain(id::SwapChainId, wgt::SwapChainDescriptor),
-    GetSwapChainTexture {
+    GetSurfaceTexture {
         id: id::TextureViewId,
-        parent_id: id::SwapChainId,
+        parent_id: id::SurfaceId,
     },
-    PresentSwapChain(id::SwapChainId),
+    Present(id::SurfaceId),
     CreateBindGroupLayout(
         id::BindGroupLayoutId,
         crate::binding_model::BindGroupLayoutDescriptor<'a>,

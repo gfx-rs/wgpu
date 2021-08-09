@@ -18,7 +18,7 @@ struct Example {
 
 impl Example {
     fn create_low_res_target(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         bind_group_layout_upscale: &wgpu::BindGroupLayout,
     ) -> (wgpu::TextureView, wgpu::BindGroup) {
@@ -26,8 +26,8 @@ impl Example {
             .create_texture(&wgpu::TextureDescriptor {
                 label: Some("Low Resolution Target"),
                 size: wgpu::Extent3d {
-                    width: sc_desc.width / 16,
-                    height: sc_desc.width / 16,
+                    width: config.width / 16,
+                    height: config.width / 16,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
@@ -73,7 +73,7 @@ impl framework::Example for Example {
         wgpu::Features::NON_FILL_POLYGON_MODE
     }
     fn init(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
@@ -150,7 +150,7 @@ impl framework::Example for Example {
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_triangle_and_lines,
                         entry_point: "fs_main_white",
-                        targets: &[sc_desc.format.into()],
+                        targets: &[config.format.into()],
                     }),
                     primitive: wgpu::PrimitiveState {
                         polygon_mode: wgpu::PolygonMode::Line,
@@ -213,7 +213,7 @@ impl framework::Example for Example {
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: "fs_main",
-                        targets: &[sc_desc.format.into()],
+                        targets: &[config.format.into()],
                     }),
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
@@ -224,7 +224,7 @@ impl framework::Example for Example {
         };
 
         let (low_res_target, bind_group_upscale) =
-            Self::create_low_res_target(sc_desc, device, &bind_group_layout_upscale);
+            Self::create_low_res_target(config, device, &bind_group_layout_upscale);
 
         Self {
             low_res_target,
@@ -240,12 +240,12 @@ impl framework::Example for Example {
 
     fn resize(
         &mut self,
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {
         let (low_res_target, bind_group_upscale) =
-            Self::create_low_res_target(sc_desc, device, &self.bind_group_layout_upscale);
+            Self::create_low_res_target(config, device, &self.bind_group_layout_upscale);
         self.low_res_target = low_res_target;
         self.bind_group_upscale = bind_group_upscale;
     }

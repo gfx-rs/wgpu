@@ -8,6 +8,7 @@
     - processing SPIR-V inputs for later translation now requires `spirv` compile feature enabled
     - new `Features::SPIRV_SHADER_PASSTHROUGH` run-time feature allows providing pass-through SPIR-V (orthogonal to the compile feature)
     - several bitflag names are renamed to plural: `TextureUsage`, `BufferUsage`, `ColorWrite`.
+    - the `SwapChain` is merged into `Surface`.
     - renamed `TextureUsage` bits: `SAMPLED` -> `TEXTURE_BINDING`, `STORAGE` -> `STORAGE_BINDING`.
     - renamed `InputStepMode` to `VertexStepMode`
     - Implemented `Rgb9e5Ufloat` format.

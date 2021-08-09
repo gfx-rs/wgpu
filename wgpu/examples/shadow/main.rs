@@ -187,13 +187,13 @@ impl Example {
     }
 
     fn create_depth_texture(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
     ) -> wgpu::TextureView {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: sc_desc.width,
-                height: sc_desc.height,
+                width: config.width,
+                height: config.height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -214,7 +214,7 @@ impl framework::Example for Example {
     }
 
     fn init(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
@@ -578,7 +578,7 @@ impl framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-            let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+            let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
             let forward_uniforms = GlobalUniforms {
                 proj: *mx_total.as_ref(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
@@ -625,7 +625,7 @@ impl framework::Example for Example {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: "fs_main",
-                    targets: &[sc_desc.format.into()],
+                    targets: &[config.format.into()],
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
@@ -649,7 +649,7 @@ impl framework::Example for Example {
             }
         };
 
-        let forward_depth = Self::create_depth_texture(sc_desc, device);
+        let forward_depth = Self::create_depth_texture(config, device);
 
         Example {
             entities,
@@ -670,12 +670,12 @@ impl framework::Example for Example {
 
     fn resize(
         &mut self,
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
         // update view-projection matrix
-        let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+        let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         queue.write_buffer(
             &self.forward_pass.uniform_buf,
@@ -683,7 +683,7 @@ impl framework::Example for Example {
             bytemuck::cast_slice(mx_ref),
         );
 
-        self.forward_depth = Self::create_depth_texture(sc_desc, device);
+        self.forward_depth = Self::create_depth_texture(config, device);
     }
 
     fn render(

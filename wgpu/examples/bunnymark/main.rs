@@ -39,7 +39,7 @@ struct Example {
 
 impl framework::Example for Example {
     fn init(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -118,7 +118,7 @@ impl framework::Example for Example {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[wgpu::ColorTargetState {
-                    format: sc_desc.format,
+                    format: config.format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::default(),
                 }],
@@ -179,9 +179,9 @@ impl framework::Example for Example {
         let globals = Globals {
             mvp: cgmath::ortho(
                 0.0,
-                sc_desc.width as f32,
+                config.width as f32,
                 0.0,
-                sc_desc.height as f32,
+                config.height as f32,
                 -1.0,
                 1.0,
             )
@@ -239,7 +239,7 @@ impl framework::Example for Example {
             local_group,
             bunnies: Vec::new(),
             local_buffer,
-            extent: [sc_desc.width, sc_desc.height],
+            extent: [config.width, config.height],
         }
     }
 
@@ -275,7 +275,7 @@ impl framework::Example for Example {
 
     fn resize(
         &mut self,
-        _sc_desc: &wgpu::SwapChainDescriptor,
+        _sc_desc: &wgpu::SurfaceConfiguration,
         _device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {

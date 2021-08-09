@@ -30,26 +30,6 @@ macro_rules! backends_map {
             }
         )*
     };
-
-    // a struct constructor with one field per backend with mapped data
-    (
-        let map = |$backend:pat| $map:block;
-        $Struct:ident {
-            $(
-                #[cfg($backend_cfg:meta)] $ident:ident : map($expr:expr),
-            )*
-        }
-    ) => {
-        $Struct {
-            $(
-                #[cfg($backend_cfg)]
-                $ident: {
-                    let $backend = $expr;
-                    $map
-                },
-            )*
-        }
-    };
 }
 
 #[test]
@@ -69,13 +49,16 @@ fn test_backend_macro() {
     }
 
     // test struct construction
-    let test_foo: Foo = backends_map! {
-        let map = |init| { init - 100 };
+    let test_foo: Foo = {
         Foo {
-            #[cfg(vulkan)] vulkan: map(101),
-            #[cfg(metal)] metal: map(102),
-            #[cfg(dx12)] dx12: map(103),
-            #[cfg(dx11)] dx11: map(104),
+            #[cfg(vulkan)]
+            vulkan: 101,
+            #[cfg(metal)]
+            metal: 102,
+            #[cfg(dx12)]
+            dx12: 103,
+            #[cfg(dx11)]
+            dx11: 104,
         }
     };
 

@@ -34,7 +34,7 @@ pub use wgt::{
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
     PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBorderColor,
     ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureDimension,
+    StorageTextureAccess, SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension,
     TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
     TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
     BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
@@ -174,9 +174,8 @@ trait Context: Debug + Send + Sized + Sync {
     type RenderBundleEncoderId: Debug + RenderInner<Self>;
     type RenderBundleId: Debug + Send + Sync + 'static;
     type SurfaceId: Debug + Send + Sync + 'static;
-    type SwapChainId: Debug + Send + Sync + 'static;
 
-    type SwapChainOutputDetail: Send;
+    type SurfaceOutputDetail: Send;
 
     type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>> + Send;
     type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
@@ -204,11 +203,6 @@ trait Context: Debug + Send + Sized + Sync {
         adapter: &Self::AdapterId,
         surface: &Self::SurfaceId,
     ) -> bool;
-    fn adapter_get_swap_chain_preferred_format(
-        &self,
-        adapter: &Self::AdapterId,
-        surface: &Self::SurfaceId,
-    ) -> Option<TextureFormat>;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
     fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities;
@@ -219,15 +213,30 @@ trait Context: Debug + Send + Sized + Sync {
         format: TextureFormat,
     ) -> TextureFormatFeatures;
 
+    fn surface_get_preferred_format(
+        &self,
+        surface: &Self::SurfaceId,
+        adapter: &Self::AdapterId,
+    ) -> Option<TextureFormat>;
+    fn surface_configure(
+        &self,
+        surface: &Self::SurfaceId,
+        device: &Self::DeviceId,
+        config: &SurfaceConfiguration,
+    );
+    fn surface_get_current_texture_view(
+        &self,
+        surface: &Self::SurfaceId,
+    ) -> (
+        Option<Self::TextureViewId>,
+        SurfaceStatus,
+        Self::SurfaceOutputDetail,
+    );
+    fn surface_present(&self, view: &Self::TextureViewId, detail: &Self::SurfaceOutputDetail);
+
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
     fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelCapabilities;
-    fn device_create_swap_chain(
-        &self,
-        device: &Self::DeviceId,
-        surface: &Self::SurfaceId,
-        desc: &SwapChainDescriptor,
-    ) -> Self::SwapChainId;
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
@@ -313,15 +322,6 @@ trait Context: Debug + Send + Sized + Sync {
         sub_range: Range<BufferAddress>,
     ) -> BufferMappedRange;
     fn buffer_unmap(&self, buffer: &Self::BufferId);
-    fn swap_chain_get_current_texture_view(
-        &self,
-        swap_chain: &Self::SwapChainId,
-    ) -> (
-        Option<Self::TextureViewId>,
-        SwapChainStatus,
-        Self::SwapChainOutputDetail,
-    );
-    fn swap_chain_present(&self, view: &Self::TextureViewId, detail: &Self::SwapChainOutputDetail);
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
@@ -668,16 +668,6 @@ impl Drop for Surface {
             self.context.surface_drop(&self.id)
         }
     }
-}
-
-/// Handle to a swap chain.
-///
-/// A `SwapChain` represents the image or series of images that will be presented to a [`Surface`].
-/// A `SwapChain` may be created with [`Device::create_swap_chain`].
-#[derive(Debug)]
-pub struct SwapChain {
-    context: Arc<C>,
-    id: <C as Context>::SwapChainId,
 }
 
 /// Handle to a binding group layout.
@@ -1337,27 +1327,27 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     pub sample_count: u32,
 }
 
-/// Swap chain image that can be rendered to.
+/// Surface texture that can be rendered to.
 #[derive(Debug)]
-pub struct SwapChainTexture {
+pub struct SurfaceTexture {
     /// Accessible view of the frame.
     pub view: TextureView,
-    detail: <C as Context>::SwapChainOutputDetail,
+    detail: <C as Context>::SurfaceOutputDetail,
 }
 
-/// Result of a successful call to [`SwapChain::get_current_frame`].
+/// Result of a successful call to [`Surface::get_current_frame`].
 #[derive(Debug)]
-pub struct SwapChainFrame {
+pub struct SurfaceFrame {
     /// The texture into which the next frame should be rendered.
-    pub output: SwapChainTexture,
+    pub output: SurfaceTexture,
     /// `true` if the acquired buffer can still be used for rendering,
     /// but should be recreated for maximum performance.
     pub suboptimal: bool,
 }
 
-/// Result of an unsuccessful call to [`SwapChain::get_current_frame`].
+/// Result of an unsuccessful call to [`Surface::get_current_frame`].
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum SwapChainError {
+pub enum SurfaceError {
     /// A timeout was encountered while trying to acquire the next frame.
     Timeout,
     /// The underlying surface has changed, and therefore the swap chain must be updated.
@@ -1368,7 +1358,7 @@ pub enum SwapChainError {
     OutOfMemory,
 }
 
-impl Display for SwapChainError {
+impl Display for SurfaceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
             Self::Timeout => "A timeout was encountered while trying to acquire the next frame",
@@ -1379,7 +1369,7 @@ impl Display for SwapChainError {
     }
 }
 
-impl error::Error for SwapChainError {}
+impl error::Error for SurfaceError {}
 
 impl Instance {
     /// Create an new instance of wgpu.
@@ -1572,13 +1562,6 @@ impl Adapter {
     /// Returns whether this adapter may present to the passed surface.
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
         Context::adapter_is_surface_supported(&*self.context, &self.id, &surface.id)
-    }
-
-    /// Returns an optimal texture format to use for the [`SwapChain`] with this adapter.
-    ///
-    /// Returns None if the surface is incompatible with the adapter.
-    pub fn get_swap_chain_preferred_format(&self, surface: &Surface) -> Option<TextureFormat> {
-        Context::adapter_get_swap_chain_preferred_format(&*self.context, &self.id, &surface.id)
     }
 
     /// List all features that are supported with this adapter.
@@ -1791,19 +1774,6 @@ impl Device {
         QuerySet {
             context: Arc::clone(&self.context),
             id: Context::device_create_query_set(&*self.context, &self.id, desc),
-        }
-    }
-
-    /// Create a new [`SwapChain`] which targets `surface`.
-    ///
-    /// # Panics
-    ///
-    /// - A old [`SwapChainFrame`] is still alive referencing an old swapchain.
-    /// - Texture format requested is unsupported on the swap chain.
-    pub fn create_swap_chain(&self, surface: &Surface, desc: &SwapChainDescriptor) -> SwapChain {
-        SwapChain {
-            context: Arc::clone(&self.context),
-            id: Context::device_create_swap_chain(&*self.context, &self.id, &surface.id, desc),
         }
     }
 
@@ -3083,26 +3053,43 @@ impl Queue {
     }
 }
 
-impl Drop for SwapChainTexture {
+impl Drop for SurfaceTexture {
     fn drop(&mut self) {
         if !thread::panicking() {
-            Context::swap_chain_present(&*self.view.context, &self.view.id, &self.detail);
+            Context::surface_present(&*self.view.context, &self.view.id, &self.detail);
         }
     }
 }
 
-impl SwapChain {
+impl Surface {
+    /// Returns an optimal texture format to use for the [`Surface`] with this adapter.
+    ///
+    /// Returns None if the surface is incompatible with the adapter.
+    pub fn get_preferred_format(&self, adapter: &Adapter) -> Option<TextureFormat> {
+        Context::surface_get_preferred_format(&*self.context, &self.id, &adapter.id)
+    }
+
+    /// Initializes [`Surface`] for presentation.
+    ///
+    /// # Panics
+    ///
+    /// - A old [`SurfaceFrame`] is still alive referencing an old surface.
+    /// - Texture format requested is unsupported on the surface.
+    pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
+        Context::surface_configure(&*self.context, &self.id, &device.id, config)
+    }
+
     /// Returns the next texture to be presented by the swapchain for drawing.
     ///
-    /// When the [`SwapChainFrame`] returned by this method is dropped, the swapchain will present
+    /// When the [`SurfaceFrame`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
     ///
-    /// If a SwapChainFrame referencing this surface is alive when the swapchain is recreated,
+    /// If a SurfaceFrame referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
-    pub fn get_current_frame(&self) -> Result<SwapChainFrame, SwapChainError> {
+    pub fn get_current_frame(&self) -> Result<SurfaceFrame, SurfaceError> {
         let (view_id, status, detail) =
-            Context::swap_chain_get_current_texture_view(&*self.context, &self.id);
-        let output = view_id.map(|id| SwapChainTexture {
+            Context::surface_get_current_texture_view(&*self.context, &self.id);
+        let output = view_id.map(|id| SurfaceTexture {
             view: TextureView {
                 context: Arc::clone(&self.context),
                 id,
@@ -3112,17 +3099,17 @@ impl SwapChain {
         });
 
         match status {
-            SwapChainStatus::Good => Ok(SwapChainFrame {
+            SurfaceStatus::Good => Ok(SurfaceFrame {
                 output: output.unwrap(),
                 suboptimal: false,
             }),
-            SwapChainStatus::Suboptimal => Ok(SwapChainFrame {
+            SurfaceStatus::Suboptimal => Ok(SurfaceFrame {
                 output: output.unwrap(),
                 suboptimal: true,
             }),
-            SwapChainStatus::Timeout => Err(SwapChainError::Timeout),
-            SwapChainStatus::Outdated => Err(SwapChainError::Outdated),
-            SwapChainStatus::Lost => Err(SwapChainError::Lost),
+            SurfaceStatus::Timeout => Err(SurfaceError::Timeout),
+            SurfaceStatus::Outdated => Err(SurfaceError::Outdated),
+            SurfaceStatus::Lost => Err(SurfaceError::Lost),
         }
     }
 }

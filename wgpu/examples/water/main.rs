@@ -156,7 +156,7 @@ impl Example {
     /// Initializes Uniforms and textures.
     ///
     fn initialize_resources(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         water_uniforms: &wgpu::Buffer,
@@ -170,7 +170,7 @@ impl Example {
             terrain_normal,
             terrain_flipped,
             water,
-        } = Self::generate_uniforms(sc_desc.width, sc_desc.height);
+        } = Self::generate_uniforms(config.width, config.height);
 
         // Put the uniforms into buffers on the GPU
         queue.write_buffer(
@@ -186,8 +186,8 @@ impl Example {
         queue.write_buffer(water_uniforms, 0, bytemuck::cast_slice(&[water]));
 
         let texture_extent = wgpu::Extent3d {
-            width: sc_desc.width,
-            height: sc_desc.height,
+            width: config.width,
+            height: config.height,
             depth_or_array_layers: 1,
         };
 
@@ -197,7 +197,7 @@ impl Example {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: sc_desc.format,
+            format: config.format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -263,7 +263,7 @@ impl Example {
 
 impl framework::Example for Example {
     fn init(
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -460,7 +460,7 @@ impl framework::Example for Example {
         // This puts values behind what was laid out in the bind group layout.
 
         let (reflect_view, depth_buffer, water_bind_group) = Self::initialize_resources(
-            sc_desc,
+            config,
             device,
             queue,
             &water_uniform_buf,
@@ -524,7 +524,7 @@ impl framework::Example for Example {
                 // Describes how the colour will be interpolated
                 // and assigned to the output attachment.
                 targets: &[wgpu::ColorTargetState {
-                    format: sc_desc.format,
+                    format: config.format,
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent {
                             src_factor: wgpu::BlendFactor::SrcAlpha,
@@ -583,7 +583,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &terrain_module,
                 entry_point: "fs_main",
-                targets: &[sc_desc.format.into()],
+                targets: &[config.format.into()],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Ccw,
@@ -633,11 +633,11 @@ impl framework::Example for Example {
 
     fn resize(
         &mut self,
-        sc_desc: &wgpu::SwapChainDescriptor,
+        config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
-        if sc_desc.width == 0 && sc_desc.height == 0 {
+        if config.width == 0 && config.height == 0 {
             // Stop rendering altogether.
             self.active = None;
             return;
@@ -647,7 +647,7 @@ impl framework::Example for Example {
         // Regenerate all of the buffers and textures.
 
         let (reflect_view, depth_buffer, water_bind_group) = Self::initialize_resources(
-            sc_desc,
+            config,
             device,
             queue,
             &self.water_uniform_buf,
