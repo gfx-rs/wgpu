@@ -98,8 +98,9 @@ impl<'source> ParsingContext<'source> {
                 meta,
             ))
         } else {
-            let expr = self.parse_assignment(parser, ctx, body)?;
-            let (mut init, init_meta) = ctx.lower_expect(parser, expr, false, body)?;
+            let mut stmt = ctx.stmt_ctx();
+            let expr = self.parse_assignment(parser, ctx, &mut stmt, body)?;
+            let (mut init, init_meta) = ctx.lower_expect(stmt, parser, expr, false, body)?;
 
             let scalar_components = scalar_components(&parser.module.types[ty].inner);
             if let Some((kind, width)) = scalar_components {

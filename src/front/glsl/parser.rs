@@ -192,8 +192,9 @@ impl<'source> ParsingContext<'source> {
 
         let mut ctx = Context::new(parser, &mut block);
 
-        let expr = self.parse_conditional(parser, &mut ctx, &mut block, None)?;
-        let (root, meta) = ctx.lower_expect(parser, expr, false, &mut block)?;
+        let mut stmt_ctx = ctx.stmt_ctx();
+        let expr = self.parse_conditional(parser, &mut ctx, &mut stmt_ctx, &mut block, None)?;
+        let (root, meta) = ctx.lower_expect(stmt_ctx, parser, expr, false, &mut block)?;
 
         Ok((parser.solve_constant(&ctx, root, meta)?, meta))
     }

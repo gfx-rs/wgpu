@@ -1,6 +1,6 @@
 use super::{
     ast::*,
-    context::Context,
+    context::{Context, StmtContext},
     error::{Error, ErrorKind},
     types::{scalar_components, type_power},
     Parser, Result, SourceMetadata,
@@ -41,6 +41,7 @@ impl Parser {
     pub(crate) fn function_or_constructor_call(
         &mut self,
         ctx: &mut Context,
+        stmt: &StmtContext,
         body: &mut Block,
         fc: FunctionCallKind,
         raw_args: &[Handle<HirExpr>],
@@ -48,7 +49,7 @@ impl Parser {
     ) -> Result<Option<Handle<Expression>>> {
         let args: Vec<_> = raw_args
             .iter()
-            .map(|e| ctx.lower_expect(self, *e, false, body))
+            .map(|e| ctx.lower_expect_inner(stmt, self, *e, false, body))
             .collect::<Result<_>>()?;
 
         match fc {
@@ -307,14 +308,16 @@ impl Parser {
                 Ok(Some(h))
             }
             FunctionCallKind::Function(name) => {
-                self.function_call(ctx, body, name, args, raw_args, meta)
+                self.function_call(ctx, stmt, body, name, args, raw_args, meta)
             }
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn function_call(
         &mut self,
         ctx: &mut Context,
+        stmt: &StmtContext,
         body: &mut Block,
         name: String,
         mut args: Vec<(Handle<Expression>, SourceMetadata)>,
@@ -969,8 +972,13 @@ impl Parser {
                     .iter()
                     .zip(raw_args.iter().zip(parameters.iter()))
                 {
-                    let (mut handle, meta) =
-                        ctx.lower_expect(self, *expr, parameter_info.qualifier.is_lhs(), body)?;
+                    let (mut handle, meta) = ctx.lower_expect_inner(
+                        stmt,
+                        self,
+                        *expr,
+                        parameter_info.qualifier.is_lhs(),
+                        body,
+                    )?;
 
                     if let TypeInner::Vector { size, kind, width } =
                         *self.resolve_type(ctx, handle, meta)?
@@ -1025,27 +1033,16 @@ impl Parser {
 
                 ctx.emit_start();
                 for (tgt, pointer) in proxy_writes {
-                    let temp_ref = ctx.hir_exprs.append(HirExpr {
-                        kind: HirExprKind::Variable(VariableReference {
-                            expr: pointer,
-                            load: true,
-                            mutable: true,
-                            entry_arg: None,
-                        }),
-                        meta,
-                    });
-                    let assign = ctx.hir_exprs.append(HirExpr {
-                        kind: HirExprKind::Assign {
-                            tgt,
-                            value: temp_ref,
-                        },
-                        meta,
-                    });
+                    let value = ctx.add_expression(Expression::Load { pointer }, body);
+                    let target = ctx.lower_expect_inner(stmt, self, tgt, true, body)?.0;
 
-                    let _ = ctx.lower_expect(self, assign, false, body)?;
+                    ctx.emit_flush(body);
+                    body.push(Statement::Store {
+                        pointer: target,
+                        value,
+                    });
+                    ctx.emit_start();
                 }
-                ctx.emit_flush(body);
-                ctx.emit_start();
 
                 Ok(result)
             }

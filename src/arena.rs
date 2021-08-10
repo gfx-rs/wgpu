@@ -240,6 +240,11 @@ impl<T> Arena<T> {
             marker: PhantomData,
         }
     }
+
+    /// Clears the arena keeping all allocations
+    pub fn clear(&mut self) {
+        self.data.clear()
+    }
 }
 
 impl<T> ops::Index<Handle<T>> for Arena<T> {

@@ -29,9 +29,9 @@ pub struct Context {
     pub lookup_global_var_exps: FastHashMap<String, VariableReference>,
     pub samplers: FastHashMap<Handle<Expression>, Handle<Expression>>,
 
-    pub hir_exprs: Arena<HirExpr>,
     pub typifier: Typifier,
     emitter: Emitter,
+    stmt_ctx: Option<StmtContext>,
 }
 
 impl Context {
@@ -51,9 +51,9 @@ impl Context {
             ),
             samplers: FastHashMap::default(),
 
-            hir_exprs: Arena::default(),
             typifier: Typifier::new(),
             emitter: Emitter::default(),
+            stmt_ctx: Some(StmtContext::new()),
         };
 
         this.emit_start();
@@ -280,14 +280,71 @@ impl Context {
         self.scopes.pop();
     }
 
+    /// Returns a [`StmtContext`](StmtContext) to be used in parsing and lowering
+    ///
+    /// # Panics
+    /// - If more than one [`StmtContext`](StmtContext) are active at the same
+    /// time or if the previous call didn't use it in lowering.
+    #[must_use]
+    pub fn stmt_ctx(&mut self) -> StmtContext {
+        self.stmt_ctx.take().unwrap()
+    }
+
+    /// Lowers a [`HirExpr`](HirExpr) which might produce a [`Expression`](Expression).
+    ///
+    /// consumes a [`StmtContext`](StmtContext) returning it to the context so
+    /// that it can be used again later.
+    pub fn lower(
+        &mut self,
+        mut stmt: StmtContext,
+        parser: &mut Parser,
+        expr: Handle<HirExpr>,
+        lhs: bool,
+        body: &mut Block,
+    ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
+        let res = self.lower_inner(&stmt, parser, expr, lhs, body);
+
+        stmt.hir_exprs.clear();
+        self.stmt_ctx = Some(stmt);
+
+        res
+    }
+
+    /// Similar to [`lower`](Self::lower) but returns an error if the expression
+    /// returns void (ie. doesn't produce a [`Expression`](Expression)).
+    ///
+    /// consumes a [`StmtContext`](StmtContext) returning it to the context so
+    /// that it can be used again later.
     pub fn lower_expect(
         &mut self,
+        mut stmt: StmtContext,
         parser: &mut Parser,
         expr: Handle<HirExpr>,
         lhs: bool,
         body: &mut Block,
     ) -> Result<(Handle<Expression>, SourceMetadata)> {
-        let (maybe_expr, meta) = self.lower(parser, expr, lhs, body)?;
+        let res = self.lower_expect_inner(&stmt, parser, expr, lhs, body);
+
+        stmt.hir_exprs.clear();
+        self.stmt_ctx = Some(stmt);
+
+        res
+    }
+
+    /// internal implementation of [`lower_expect`](Self::lower_expect)
+    ///
+    /// this method is only public because it's used in
+    /// [`function_call`](Parser::function_call), unless you know what
+    /// you're doing use [`lower_expect`](Self::lower_expect)
+    pub fn lower_expect_inner(
+        &mut self,
+        stmt: &StmtContext,
+        parser: &mut Parser,
+        expr: Handle<HirExpr>,
+        lhs: bool,
+        body: &mut Block,
+    ) -> Result<(Handle<Expression>, SourceMetadata)> {
+        let (maybe_expr, meta) = self.lower_inner(stmt, parser, expr, lhs, body)?;
 
         let expr = match maybe_expr {
             Some(e) => e,
@@ -302,19 +359,22 @@ impl Context {
         Ok((expr, meta))
     }
 
-    pub fn lower(
+    /// Internal implementation of [`lower`](Self::lower)
+    fn lower_inner(
         &mut self,
+        stmt: &StmtContext,
         parser: &mut Parser,
         expr: Handle<HirExpr>,
         lhs: bool,
         body: &mut Block,
     ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
-        let HirExpr { kind, meta } = self.hir_exprs[expr].clone();
+        let HirExpr { ref kind, meta } = stmt.hir_exprs[expr];
 
-        let handle = match kind {
+        let handle = match *kind {
             HirExprKind::Access { base, index } => {
-                let base = self.lower_expect(parser, base, true, body)?.0;
-                let (index, index_meta) = self.lower_expect(parser, index, false, body)?;
+                let base = self.lower_expect_inner(stmt, parser, base, true, body)?.0;
+                let (index, index_meta) =
+                    self.lower_expect_inner(stmt, parser, index, false, body)?;
 
                 let pointer = parser
                     .solve_constant(self, index, index_meta)
@@ -354,17 +414,19 @@ impl Context {
 
                 pointer
             }
-            HirExprKind::Select { base, field } => {
-                let base = self.lower_expect(parser, base, lhs, body)?.0;
+            HirExprKind::Select { base, ref field } => {
+                let base = self.lower_expect_inner(stmt, parser, base, lhs, body)?.0;
 
-                parser.field_selection(self, lhs, body, base, &field, meta)?
+                parser.field_selection(self, lhs, body, base, field, meta)?
             }
             HirExprKind::Constant(constant) if !lhs => {
                 self.add_expression(Expression::Constant(constant), body)
             }
             HirExprKind::Binary { left, op, right } if !lhs => {
-                let (mut left, left_meta) = self.lower_expect(parser, left, false, body)?;
-                let (mut right, right_meta) = self.lower_expect(parser, right, false, body)?;
+                let (mut left, left_meta) =
+                    self.lower_expect_inner(stmt, parser, left, false, body)?;
+                let (mut right, right_meta) =
+                    self.lower_expect_inner(stmt, parser, right, false, body)?;
 
                 match op {
                     BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => self
@@ -439,11 +501,11 @@ impl Context {
                 }
             }
             HirExprKind::Unary { op, expr } if !lhs => {
-                let expr = self.lower_expect(parser, expr, false, body)?.0;
+                let expr = self.lower_expect_inner(stmt, parser, expr, false, body)?.0;
 
                 self.add_expression(Expression::Unary { op, expr }, body)
             }
-            HirExprKind::Variable(var) => {
+            HirExprKind::Variable(ref var) => {
                 if lhs {
                     if !var.mutable {
                         parser.errors.push(Error {
@@ -461,9 +523,15 @@ impl Context {
                     var.expr
                 }
             }
-            HirExprKind::Call(call) if !lhs => {
-                let maybe_expr =
-                    parser.function_or_constructor_call(self, body, call.kind, &call.args, meta)?;
+            HirExprKind::Call(ref call) if !lhs => {
+                let maybe_expr = parser.function_or_constructor_call(
+                    self,
+                    stmt,
+                    body,
+                    call.kind.clone(),
+                    &call.args,
+                    meta,
+                )?;
                 return Ok((maybe_expr, meta));
             }
             HirExprKind::Conditional {
@@ -471,9 +539,13 @@ impl Context {
                 accept,
                 reject,
             } if !lhs => {
-                let condition = self.lower_expect(parser, condition, false, body)?.0;
-                let (mut accept, accept_meta) = self.lower_expect(parser, accept, false, body)?;
-                let (mut reject, reject_meta) = self.lower_expect(parser, reject, false, body)?;
+                let condition = self
+                    .lower_expect_inner(stmt, parser, condition, false, body)?
+                    .0;
+                let (mut accept, accept_meta) =
+                    self.lower_expect_inner(stmt, parser, accept, false, body)?;
+                let (mut reject, reject_meta) =
+                    self.lower_expect_inner(stmt, parser, reject, false, body)?;
 
                 self.binary_implicit_conversion(
                     parser,
@@ -493,8 +565,9 @@ impl Context {
                 )
             }
             HirExprKind::Assign { tgt, value } if !lhs => {
-                let (pointer, ptr_meta) = self.lower_expect(parser, tgt, true, body)?;
-                let (mut value, value_meta) = self.lower_expect(parser, value, false, body)?;
+                let (pointer, ptr_meta) = self.lower_expect_inner(stmt, parser, tgt, true, body)?;
+                let (mut value, value_meta) =
+                    self.lower_expect_inner(stmt, parser, value, false, body)?;
 
                 let scalar_components = self.expr_scalar_components(parser, pointer, ptr_meta)?;
 
@@ -564,7 +637,7 @@ impl Context {
                     false => BinaryOperator::Subtract,
                 };
 
-                let pointer = self.lower_expect(parser, expr, true, body)?.0;
+                let pointer = self.lower_expect_inner(stmt, parser, expr, true, body)?.0;
                 let left = self.add_expression(Expression::Load { pointer }, body);
 
                 let uint = match parser.resolve_type(self, left, meta)?.scalar_kind() {
@@ -641,7 +714,7 @@ impl Context {
             _ => {
                 return Err(Error {
                     kind: ErrorKind::SemanticError(
-                        format!("{:?} cannot be in the left hand side", self.hir_exprs[expr])
+                        format!("{:?} cannot be in the left hand side", stmt.hir_exprs[expr])
                             .into(),
                     ),
                     meta,
@@ -777,5 +850,24 @@ impl Index<Handle<Expression>> for Context {
 
     fn index(&self, index: Handle<Expression>) -> &Self::Output {
         &self.expressions[index]
+    }
+}
+
+/// Helper struct passed when parsing expressions
+///
+/// This struct should only be obtained trough [`stmt_ctx`](Context::stmt_ctx)
+/// and only one of these may be active at any time per context.
+#[derive(Debug)]
+pub struct StmtContext {
+    /// A arena of high level expressions which can be lowered trough a
+    /// [`Context`](Context) to naga's [`Expression`](crate::Expression)s
+    pub hir_exprs: Arena<HirExpr>,
+}
+
+impl StmtContext {
+    fn new() -> Self {
+        StmtContext {
+            hir_exprs: Arena::new(),
+        }
     }
 }
