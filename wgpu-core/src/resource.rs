@@ -157,8 +157,32 @@ impl<A: hal::Api> Borrow<()> for Buffer<A> {
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>>;
 
 #[derive(Debug)]
+pub(crate) enum TextureInner<A: hal::Api> {
+    Native {
+        raw: Option<A::Texture>,
+    },
+    Surface {
+        raw: A::SurfaceTexture,
+        parent_id: Valid<SurfaceId>,
+    },
+}
+
+impl<A: hal::Api> TextureInner<A> {
+    pub fn as_raw(&self) -> Option<&A::Texture> {
+        match *self {
+            TextureInner::Native { raw: Some(ref tex) } => Some(tex),
+            TextureInner::Native { raw: None } => None,
+            TextureInner::Surface {
+                ref raw,
+                parent_id: _,
+            } => Some(std::borrow::Borrow::borrow(raw)),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Texture<A: hal::Api> {
-    pub(crate) raw: Option<A::Texture>,
+    pub(crate) inner: TextureInner<A>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: wgt::TextureDescriptor<()>,
     pub(crate) hal_usage: hal::TextureUses,
@@ -238,12 +262,6 @@ pub struct TextureViewDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) enum TextureViewSource {
-    Native(Stored<TextureId>),
-    Surface(Valid<SurfaceId>),
-}
-
-#[derive(Debug)]
 pub(crate) struct HalTextureViewDescriptor {
     pub format: wgt::TextureFormat,
     pub dimension: wgt::TextureViewDimension,
@@ -259,7 +277,7 @@ impl HalTextureViewDescriptor {
 #[derive(Debug)]
 pub struct TextureView<A: hal::Api> {
     pub(crate) raw: A::TextureView,
-    pub(crate) source: TextureViewSource,
+    pub(crate) parent_id: Stored<TextureId>,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
@@ -310,10 +328,7 @@ pub enum CreateTextureViewError {
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum TextureViewDestroyError {
-    #[error("cannot destroy a surface image")]
-    SurfaceImage,
-}
+pub enum TextureViewDestroyError {}
 
 impl<A: hal::Api> Resource for TextureView<A> {
     const TYPE: &'static str = "TextureView";

@@ -96,13 +96,14 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     .get_current_frame()
                     .expect("Failed to acquire next swap chain texture")
                     .output;
+                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
                 {
                     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: None,
                         color_attachments: &[wgpu::RenderPassColorAttachment {
-                            view: &frame.view,
+                            view: &view,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),

@@ -55,7 +55,7 @@ pub enum Action<'a> {
     CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
     DestroySampler(id::SamplerId),
     GetSurfaceTexture {
-        id: id::TextureViewId,
+        id: id::TextureId,
         parent_id: id::SurfaceId,
     },
     Present(id::SurfaceId),

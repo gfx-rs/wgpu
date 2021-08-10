@@ -145,7 +145,7 @@ impl PendingTransition<TextureState> {
         tex: &'a resource::Texture<A>,
     ) -> hal::TextureBarrier<'a, A> {
         log::trace!("\ttexture -> {:?}", self);
-        let texture = tex.raw.as_ref().expect("Texture is destroyed");
+        let texture = tex.inner.as_raw().expect("Texture is destroyed");
         hal::TextureBarrier {
             texture,
             range: wgt::ImageSubresourceRange {

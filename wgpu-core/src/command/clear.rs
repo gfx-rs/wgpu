@@ -233,8 +233,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .map_err(ClearError::InvalidTexture)?;
         let _dst_raw = dst_texture
-            .raw
-            .as_ref()
+            .inner
+            .as_raw()
             .ok_or(ClearError::InvalidTexture(dst))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(ClearError::MissingCopyDstUsageFlag(None, Some(dst)));

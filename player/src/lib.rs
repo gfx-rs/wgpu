@@ -204,9 +204,9 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             Action::GetSurfaceTexture { id, parent_id } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.surface_get_current_texture_view::<A>(parent_id, id)
+                self.surface_get_current_texture::<A>(parent_id, id)
                     .unwrap()
-                    .view_id
+                    .texture_id
                     .unwrap();
             }
             Action::CreateBindGroupLayout(id, desc) => {

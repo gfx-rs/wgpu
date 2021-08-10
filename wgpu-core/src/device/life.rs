@@ -307,20 +307,6 @@ impl<A: hal::Api> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
-    pub(super) fn schedule_texture_view_for_destruction(
-        &mut self,
-        id: id::Valid<id::TextureViewId>,
-        view: resource::TextureView<A>,
-    ) {
-        let submit_index = view.life_guard.submission_index.load(Ordering::Acquire);
-        self.active
-            .iter_mut()
-            .find(|a| a.index == submit_index)
-            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-            .texture_views
-            .push((id, view.raw));
-    }
-
     pub(super) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<A, G>,
@@ -387,13 +373,14 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.texture_views.unregister_locked(id.0, &mut *guard) {
-                        match res.source {
-                            resource::TextureViewSource::Native(ref source_id) => {
-                                self.suspected_resources.textures.push(source_id.value);
-                            }
-                            resource::TextureViewSource::Surface { .. } => {}
-                        };
-                        self.schedule_texture_view_for_destruction(id, res);
+                        self.suspected_resources.textures.push(res.parent_id.value);
+                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .texture_views
+                            .push((id, res.raw));
                     }
                 }
             }
@@ -413,12 +400,16 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     if let Some(res) = hub.textures.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let raw = match res.inner {
+                            resource::TextureInner::Native { raw: Some(raw) } => raw,
+                            _ => continue,
+                        };
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                             .textures
-                            .extend(res.raw);
+                            .push(raw);
                     }
                 }
             }

@@ -91,8 +91,6 @@ pub enum CreateBindGroupError {
     MissingTextureUsage(#[from] MissingTextureUsageError),
     #[error("binding declared as a single item, but bind group is using it as an array")]
     SingleBindingExpected,
-    #[error("unable to create a bind group with a surface image")]
-    SurfaceImage,
     #[error("buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(wgt::BufferAddress),
     #[error(

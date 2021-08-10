@@ -893,11 +893,11 @@ impl crate::Context for Context {
         }
     }
 
-    fn surface_get_current_texture_view(
+    fn surface_get_current_texture(
         &self,
         surface: &Self::SurfaceId,
     ) -> (
-        Option<Self::TextureViewId>,
+        Option<Self::TextureId>,
         SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
@@ -907,10 +907,13 @@ impl crate::Context for Context {
             .lock()
             .expect("Surface was not configured?");
         match wgc::gfx_select!(
-            device_id => global.surface_get_current_texture_view(surface.id, PhantomData)
+            device_id => global.surface_get_current_texture(surface.id, PhantomData)
         ) {
-            Ok(wgc::present::SurfaceOutput { status, view_id }) => (
-                view_id,
+            Ok(wgc::present::SurfaceOutput { status, texture_id }) => (
+                texture_id.map(|id| Texture {
+                    id,
+                    error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+                }),
                 status,
                 SurfaceOutputDetail {
                     surface_id: surface.id,
@@ -920,9 +923,9 @@ impl crate::Context for Context {
         }
     }
 
-    fn surface_present(&self, view: &Self::TextureViewId, detail: &Self::SurfaceOutputDetail) {
+    fn surface_present(&self, texture: &Self::TextureId, detail: &Self::SurfaceOutputDetail) {
         let global = &self.0;
-        match wgc::gfx_select!(*view => global.surface_present(detail.surface_id)) {
+        match wgc::gfx_select!(texture.id => global.surface_present(detail.surface_id)) {
             Ok(_status) => (),
             Err(err) => self.handle_error_fatal(err, "Surface::present"),
         }

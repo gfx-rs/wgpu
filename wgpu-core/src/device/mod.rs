@@ -341,16 +341,6 @@ impl<A: HalApi> Device<A> {
         self.life_tracker.lock()
     }
 
-    pub(crate) fn schedule_rogue_texture_view_for_destruction<'this, 'token: 'this>(
-        &'this self,
-        view_id: id::Valid<id::TextureViewId>,
-        view: resource::TextureView<A>,
-        token: &mut Token<'token, Self>,
-    ) {
-        self.lock_life(token)
-            .schedule_texture_view_for_destruction(view_id, view);
-    }
-
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
         &'this self,
         hub: &Hub<A, G>,
@@ -570,7 +560,9 @@ impl<A: HalApi> Device<A> {
         }
 
         Ok(resource::Texture {
-            raw: Some(hal_texture),
+            inner: resource::TextureInner::Native {
+                raw: Some(hal_texture),
+            },
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -619,8 +611,8 @@ impl<A: HalApi> Device<A> {
         desc: &resource::TextureViewDescriptor,
     ) -> Result<resource::TextureView<A>, resource::CreateTextureViewError> {
         let texture_raw = texture
-            .raw
-            .as_ref()
+            .inner
+            .as_raw()
             .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
 
         let view_dim = match desc.dimension {
@@ -783,10 +775,10 @@ impl<A: HalApi> Device<A> {
 
         Ok(resource::TextureView {
             raw,
-            source: resource::TextureViewSource::Native(Stored {
+            parent_id: Stored {
                 value: id::Valid(texture_id),
                 ref_count: texture.life_guard.add_ref(),
-            }),
+            },
             desc: resource::HalTextureViewDescriptor {
                 format: hal_desc.format,
                 dimension: hal_desc.dimension,
@@ -1424,25 +1416,18 @@ impl<A: HalApi> Device<A> {
                         "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
                     )?;
 
-                    match view.source {
-                        resource::TextureViewSource::Native(ref source_id) => {
-                            // Careful here: the texture may no longer have its own ref count,
-                            // if it was deleted by the user.
-                            let texture = &texture_guard[source_id.value];
-                            used.textures
-                                .change_extend(
-                                    source_id.value,
-                                    &source_id.ref_count,
-                                    view.selector.clone(),
-                                    internal_use,
-                                )
-                                .map_err(UsageConflict::from)?;
-                            check_texture_usage(texture.desc.usage, pub_usage)?;
-                        }
-                        resource::TextureViewSource::Surface(_) => {
-                            return Err(Error::SurfaceImage);
-                        }
-                    }
+                    // Careful here: the texture may no longer have its own ref count,
+                    // if it was deleted by the user.
+                    used.textures
+                        .change_extend(
+                            view.parent_id.value,
+                            &view.parent_id.ref_count,
+                            view.selector.clone(),
+                            internal_use,
+                        )
+                        .map_err(UsageConflict::from)?;
+                    let texture = &texture_guard[view.parent_id.value];
+                    check_texture_usage(texture.desc.usage, pub_usage)?;
 
                     let res_index = hal_textures.len();
                     hal_textures.push(hal::TextureBinding {
@@ -1471,30 +1456,23 @@ impl<A: HalApi> Device<A> {
                             .views
                             .use_extend(&*texture_view_guard, id, (), ())
                             .map_err(|_| Error::InvalidTextureView(id))?;
-                        let (pub_usage, internal_use) =
-                            Self::texture_use_parameters(binding, decl, view,
-                                                         "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray"
-)?;
+                        let (pub_usage, internal_use) = Self::texture_use_parameters(
+                            binding, decl, view,
+                            "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray"
+                        )?;
 
-                        match view.source {
-                            resource::TextureViewSource::Native(ref source_id) => {
-                                // Careful here: the texture may no longer have its own ref count,
-                                // if it was deleted by the user.
-                                let texture = &texture_guard[source_id.value];
-                                used.textures
-                                    .change_extend(
-                                        source_id.value,
-                                        &source_id.ref_count,
-                                        view.selector.clone(),
-                                        internal_use,
-                                    )
-                                    .map_err(UsageConflict::from)?;
-                                check_texture_usage(texture.desc.usage, pub_usage)?;
-                            }
-                            resource::TextureViewSource::Surface(_) => {
-                                return Err(Error::SurfaceImage);
-                            }
-                        }
+                        // Careful here: the texture may no longer have its own ref count,
+                        // if it was deleted by the user.
+                        used.textures
+                            .change_extend(
+                                view.parent_id.value,
+                                &view.parent_id.ref_count,
+                                view.selector.clone(),
+                                internal_use,
+                            )
+                            .map_err(UsageConflict::from)?;
+                        let texture = &texture_guard[view.parent_id.value];
+                        check_texture_usage(texture.desc.usage, pub_usage)?;
 
                         hal_textures.push(hal::TextureBinding {
                             view: &view.raw,
@@ -2441,14 +2419,6 @@ impl<A: hal::Api> Device<A> {
         }
     }
 
-    pub(crate) fn destroy_texture(&self, texture: resource::Texture<A>) {
-        if let Some(raw) = texture.raw {
-            unsafe {
-                self.raw.destroy_texture(raw);
-            }
-        }
-    }
-
     pub(crate) fn destroy_command_buffer(&self, cmd_buf: command::CommandBuffer<A>) {
         let mut baked = cmd_buf.into_baked();
         unsafe {
@@ -3111,20 +3081,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             trace.lock().add(trace::Action::FreeTexture(texture_id));
         }
 
-        let raw = texture
-            .raw
-            .take()
-            .ok_or(resource::DestroyError::AlreadyDestroyed)?;
-        let temp = queue::TempResource::Texture(raw);
+        match texture.inner {
+            resource::TextureInner::Native { ref mut raw } => {
+                let raw = raw.take().ok_or(resource::DestroyError::AlreadyDestroyed)?;
+                let temp = queue::TempResource::Texture(raw);
 
-        if device.pending_writes.dst_textures.contains(&texture_id) {
-            device.pending_writes.temp_resources.push(temp);
-        } else {
-            let last_submit_index = texture.life_guard.submission_index.load(Ordering::Acquire);
-            drop(texture_guard);
-            device
-                .lock_life(&mut token)
-                .schedule_resource_destruction(temp, last_submit_index);
+                if device.pending_writes.dst_textures.contains(&texture_id) {
+                    device.pending_writes.temp_resources.push(temp);
+                } else {
+                    let last_submit_index =
+                        texture.life_guard.submission_index.load(Ordering::Acquire);
+                    drop(texture_guard);
+                    device
+                        .lock_life(&mut token)
+                        .schedule_resource_destruction(temp, last_submit_index);
+                }
+            }
+            resource::TextureInner::Surface { .. } => {} //TODO
         }
 
         Ok(())
@@ -3251,14 +3224,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let _ref_count = view.life_guard.ref_count.take();
                     let last_submit_index =
                         view.life_guard.submission_index.load(Ordering::Acquire);
-                    let device_id = match view.source {
-                        resource::TextureViewSource::Native(ref source_id) => {
-                            texture_guard[source_id.value].device_id.value
-                        }
-                        resource::TextureViewSource::Surface(_) => {
-                            return Err(resource::TextureViewDestroyError::SurfaceImage)
-                        }
-                    };
+                    let device_id = texture_guard[view.parent_id.value].device_id.value;
                     (last_submit_index, device_id)
                 }
                 Err(InvalidId) => {
@@ -4420,7 +4386,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 config: config.clone(),
                 num_frames,
                 acquired_texture: None,
-                active_submission_index: 0,
             });
 
             return None;

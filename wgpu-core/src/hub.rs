@@ -617,7 +617,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     // we should have `clear_device(device_id)` that specifically destroys
     // everything related to a logical device.
     fn clear(&self, surface_guard: &mut Storage<Surface, id::SurfaceId>, with_adapters: bool) {
-        use crate::resource::TextureViewSource;
+        use crate::resource::TextureInner;
         use hal::{Device as _, Surface as _};
 
         let mut devices = self.devices.data.write();
@@ -648,14 +648,9 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             let textures = self.textures.data.read();
             for element in self.texture_views.data.write().map.drain(..) {
                 if let Element::Occupied(texture_view, _) = element {
-                    match texture_view.source {
-                        TextureViewSource::Native(source_id) => {
-                            let device = &devices[textures[source_id.value].device_id.value];
-                            unsafe {
-                                device.raw.destroy_texture_view(texture_view.raw);
-                            }
-                        }
-                        TextureViewSource::Surface(_) => {} //TODO
+                    let device = &devices[textures[texture_view.parent_id.value].device_id.value];
+                    unsafe {
+                        device.raw.destroy_texture_view(texture_view.raw);
                     }
                 }
             }
@@ -663,7 +658,12 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 
         for element in self.textures.data.write().map.drain(..) {
             if let Element::Occupied(texture, _) = element {
-                devices[texture.device_id.value].destroy_texture(texture);
+                let device = &devices[texture.device_id.value];
+                if let TextureInner::Native { raw: Some(raw) } = texture.inner {
+                    unsafe {
+                        device.raw.destroy_texture(raw);
+                    }
+                }
             }
         }
         for element in self.buffers.data.write().map.drain(..) {
