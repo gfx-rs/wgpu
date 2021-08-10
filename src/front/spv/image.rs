@@ -420,6 +420,17 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     level = crate::SampleLevel::Exact(lod_handle);
                     words_left -= 1;
                 }
+                spirv::ImageOperands::GRAD => {
+                    let grad_x_expr = self.next()?;
+                    let grad_x_handle = self.lookup_expression.lookup(grad_x_expr)?.handle;
+                    let grad_y_expr = self.next()?;
+                    let grad_y_handle = self.lookup_expression.lookup(grad_y_expr)?.handle;
+                    level = crate::SampleLevel::Gradient {
+                        x: grad_x_handle,
+                        y: grad_y_handle,
+                    };
+                    words_left -= 2;
+                }
                 spirv::ImageOperands::CONST_OFFSET => {
                     let offset_constant = self.next()?;
                     let offset_handle = self.lookup_constant.lookup(offset_constant)?.handle;
