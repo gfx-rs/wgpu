@@ -13,9 +13,10 @@ use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 type HalInstance<A> = <A as hal::Api>::Instance;
+//TODO: remove this
 pub struct HalSurface<A: hal::Api> {
     pub raw: A::Surface,
-    pub acquired_texture: Option<A::SurfaceTexture>,
+    //pub acquired_texture: Option<A::SurfaceTexture>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -449,7 +450,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 match inst.create_surface(handle) {
                     Ok(raw) => Some(HalSurface {
                         raw,
-                        acquired_texture: None,
+                        //acquired_texture: None,
                     }),
                     Err(e) => {
                         log::warn!("Error: {:?}", e);
@@ -494,7 +495,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     #[allow(clippy::transmute_ptr_to_ref)]
                     inst.create_surface_from_layer(unsafe { std::mem::transmute(layer) })
                 },
-                acquired_texture: None,
+                //acquired_texture: None,
             }),
         };
 

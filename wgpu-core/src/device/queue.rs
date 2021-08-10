@@ -410,8 +410,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .unwrap();
         let dst_raw = dst
-            .raw
-            .as_ref()
+            .inner
+            .as_raw()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
@@ -569,15 +569,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // optimize the tracked states
                         cmdbuf.trackers.optimize();
 
+                        //TODO: do we need this code?
                         for surface_id in cmdbuf.used_surfaces.drain(..) {
-                            let surface = &mut surface_guard[surface_id];
-                            let suf = A::get_surface_mut(surface);
-                            if suf.acquired_texture.is_none() {
-                                return Err(QueueSubmitError::SurfaceOutputDropped);
-                            }
-                            match surface.presentation {
+                            match surface_guard[surface_id].presentation {
                                 Some(ref mut present) => {
-                                    present.active_submission_index = submit_index;
+                                    if present.acquired_texture.is_none() {
+                                        return Err(QueueSubmitError::SurfaceOutputDropped);
+                                    }
                                 }
                                 None => return Err(QueueSubmitError::SurfaceUnconfigured),
                             }
@@ -608,7 +606,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         for id in cmdbuf.trackers.textures.used() {
                             let texture = &texture_guard[id];
-                            if texture.raw.is_none() {
+                            if texture.inner.as_raw().is_none() {
                                 return Err(QueueSubmitError::DestroyedTexture(id.0));
                             }
                             if !texture.life_guard.use_at(submit_index) {

@@ -555,8 +555,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .unwrap();
         let dst_raw = dst_texture
-            .raw
-            .as_ref()
+            .inner
+            .as_raw()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(
@@ -664,8 +664,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .unwrap();
         let src_raw = src_texture
-            .raw
-            .as_ref()
+            .inner
+            .as_raw()
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
@@ -801,8 +801,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .unwrap();
         let src_raw = src_texture
-            .raw
-            .as_ref()
+            .inner
+            .as_raw()
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
@@ -824,8 +824,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .unwrap();
         let dst_raw = dst_texture
-            .raw
-            .as_ref()
+            .inner
+            .as_raw()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
             return Err(

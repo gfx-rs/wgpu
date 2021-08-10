@@ -112,13 +112,14 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
             Event::RedrawRequested(window_id) => {
                 if let Some(viewport) = viewports.get_mut(&window_id) {
                     let frame = viewport.get_current_frame();
+                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
                     let mut encoder = device
                         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
                     {
                         let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: None,
                             color_attachments: &[wgpu::RenderPassColorAttachment {
-                                view: &frame.view,
+                                view: &view,
                                 resolve_target: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(viewport.desc.background),

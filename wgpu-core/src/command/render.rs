@@ -16,7 +16,7 @@ use crate::{
     instance::Surface,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
-    resource::{Texture, TextureView, TextureViewSource},
+    resource::{Texture, TextureView},
     track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -513,6 +513,16 @@ struct RenderAttachment<'a> {
     usage: hal::TextureUses,
 }
 
+impl<A: hal::Api> TextureView<A> {
+    fn to_render_attachment(&self, usage: hal::TextureUses) -> RenderAttachment {
+        RenderAttachment {
+            texture_id: &self.parent_id,
+            selector: &self.selector,
+            usage,
+        }
+    }
+}
+
 const MAX_TOTAL_ATTACHMENTS: usize = hal::MAX_COLOR_TARGETS + hal::MAX_COLOR_TARGETS + 1;
 type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 
@@ -533,7 +543,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
-        surface_guard: &'a Storage<Surface, id::SurfaceId>,
+        _surface_guard: &'a Storage<Surface, id::SurfaceId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
 
@@ -547,7 +557,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut attachment_type_name = "";
         let mut extent = None;
         let mut sample_count = 0;
-        let mut used_surface = None::<(id::Valid<id::SurfaceId>, hal::TextureUses)>;
+        //TODO: remove this?
+        let used_surface = None::<(id::Valid<id::SurfaceId>, hal::TextureUses)>;
 
         let mut add_view = |view: &TextureView<A>, type_name| {
             if let Some(ex) = extent {
@@ -590,22 +601,13 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 ));
             }
 
-            let source_id = match view.source {
-                TextureViewSource::Native(ref source_id) => source_id,
-                TextureViewSource::Surface(_) => unreachable!(),
-            };
-
             let usage = if at.is_read_only(ds_aspects)? {
                 is_ds_read_only = true;
                 hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::RESOURCE
             } else {
                 hal::TextureUses::DEPTH_STENCIL_WRITE
             };
-            render_attachments.push(RenderAttachment {
-                texture_id: source_id,
-                selector: &view.selector,
-                usage,
-            });
+            render_attachments.push(view.to_render_attachment(usage));
 
             depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
@@ -636,24 +638,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 ));
             }
 
-            match color_view.source {
-                TextureViewSource::Native(ref source_id) => {
-                    render_attachments.push(RenderAttachment {
-                        texture_id: source_id,
-                        selector: &color_view.selector,
-                        usage: hal::TextureUses::COLOR_TARGET,
-                    });
-                }
-                TextureViewSource::Surface(source_id) => {
-                    //HACK: guess the start usage based on the load op
-                    let start_usage = match at.channel.load_op {
-                        LoadOp::Load => hal::TextureUses::empty(),
-                        LoadOp::Clear => hal::TextureUses::UNINITIALIZED,
-                    };
-                    assert!(used_surface.is_none());
-                    used_surface = Some((source_id, start_usage));
-                }
-            };
+            render_attachments
+                .push(color_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
             let mut hal_resolve_target = None;
             if let Some(resolve_target) = at.resolve_target {
@@ -675,21 +661,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     return Err(RenderPassErrorInner::InvalidResolveTargetSampleCount);
                 }
 
-                match resolve_view.source {
-                    TextureViewSource::Native(ref source_id) => {
-                        render_attachments.push(RenderAttachment {
-                            texture_id: source_id,
-                            selector: &resolve_view.selector,
-                            usage: hal::TextureUses::COLOR_TARGET,
-                        });
-                    }
-                    TextureViewSource::Surface(source_id) => {
-                        //HACK: guess the start usage
-                        let start_usage = hal::TextureUses::UNINITIALIZED;
-                        assert!(used_surface.is_none());
-                        used_surface = Some((source_id, start_usage));
-                    }
-                };
+                render_attachments
+                    .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
                     view: &resolve_view.raw,
@@ -710,21 +683,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         if sample_count != 1 && sample_count != 4 {
             return Err(RenderPassErrorInner::InvalidSampleCount(sample_count));
-        }
-
-        if let Some((surface_id, start_usage)) = used_surface {
-            let suf_texture = A::get_surface(&surface_guard[surface_id])
-                .acquired_texture
-                .as_ref()
-                .unwrap();
-            let barrier = hal::TextureBarrier {
-                texture: std::borrow::Borrow::borrow(suf_texture),
-                usage: start_usage..hal::TextureUses::COLOR_TARGET,
-                range: wgt::ImageSubresourceRange::default(),
-            };
-            unsafe {
-                cmd_buf.encoder.raw.transition_textures(iter::once(barrier));
-            }
         }
 
         let view_data = AttachmentData {
@@ -771,25 +729,12 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-        surface_guard: &Storage<Surface, id::SurfaceId>,
+        _surface_guard: &Storage<Surface, id::SurfaceId>,
     ) -> Result<(StatefulTrackerSubset, Option<id::Valid<id::SurfaceId>>), RenderPassErrorInner>
     {
         profiling::scope!("finish", "RenderPassInfo");
         unsafe {
             raw.end_render_pass();
-        }
-
-        if let Some(surface_id) = self.used_surface {
-            let suf = A::get_surface(&surface_guard[surface_id]);
-            let suf_texture = suf.acquired_texture.as_ref().unwrap();
-            let barrier = hal::TextureBarrier {
-                texture: std::borrow::Borrow::borrow(suf_texture),
-                usage: hal::TextureUses::COLOR_TARGET..hal::TextureUses::empty(),
-                range: wgt::ImageSubresourceRange::default(),
-            };
-            unsafe {
-                raw.transition_textures(iter::once(barrier));
-            }
         }
 
         for ra in self.render_attachments {

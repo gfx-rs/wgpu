@@ -224,15 +224,15 @@ trait Context: Debug + Send + Sized + Sync {
         device: &Self::DeviceId,
         config: &SurfaceConfiguration,
     );
-    fn surface_get_current_texture_view(
+    fn surface_get_current_texture(
         &self,
         surface: &Self::SurfaceId,
     ) -> (
-        Option<Self::TextureViewId>,
+        Option<Self::TextureId>,
         SurfaceStatus,
         Self::SurfaceOutputDetail,
     );
-    fn surface_present(&self, view: &Self::TextureViewId, detail: &Self::SurfaceOutputDetail);
+    fn surface_present(&self, texture: &Self::TextureId, detail: &Self::SurfaceOutputDetail);
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
@@ -630,7 +630,6 @@ pub struct Texture {
 pub struct TextureView {
     context: Arc<C>,
     id: <C as Context>::TextureViewId,
-    owned: bool,
 }
 
 /// Handle to a sampler.
@@ -1331,7 +1330,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[derive(Debug)]
 pub struct SurfaceTexture {
     /// Accessible view of the frame.
-    pub view: TextureView,
+    pub texture: Texture,
     detail: <C as Context>::SurfaceOutputDetail,
 }
 
@@ -2075,7 +2074,6 @@ impl Texture {
         TextureView {
             context: Arc::clone(&self.context),
             id: Context::texture_create_view(&*self.context, &self.id, desc),
-            owned: true,
         }
     }
 
@@ -2105,7 +2103,7 @@ impl Drop for Texture {
 
 impl Drop for TextureView {
     fn drop(&mut self) {
-        if self.owned && !thread::panicking() {
+        if !thread::panicking() {
             self.context.texture_view_drop(&self.id);
         }
     }
@@ -3056,7 +3054,7 @@ impl Queue {
 impl Drop for SurfaceTexture {
     fn drop(&mut self) {
         if !thread::panicking() {
-            Context::surface_present(&*self.view.context, &self.view.id, &self.detail);
+            Context::surface_present(&*self.texture.context, &self.texture.id, &self.detail);
         }
     }
 }
@@ -3087,10 +3085,10 @@ impl Surface {
     /// If a SurfaceFrame referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
     pub fn get_current_frame(&self) -> Result<SurfaceFrame, SurfaceError> {
-        let (view_id, status, detail) =
-            Context::surface_get_current_texture_view(&*self.context, &self.id);
-        let output = view_id.map(|id| SurfaceTexture {
-            view: TextureView {
+        let (texture_id, status, detail) =
+            Context::surface_get_current_texture(&*self.context, &self.id);
+        let output = texture_id.map(|id| SurfaceTexture {
+            texture: Texture {
                 context: Arc::clone(&self.context),
                 id,
                 owned: false,
