@@ -213,10 +213,12 @@ impl super::Adapter {
         // The hardware does not want us to write to these SSBOs, but GLES cannot express that. We detect this case and disable writing to SSBOs.
         let vertex_ssbo_false_zero =
             vertex_shader_storage_blocks == 0 && vertex_shader_storage_textures != 0;
-
-        let max_storage_buffers_per_shader_stage = if vertex_ssbo_false_zero {
+        if vertex_ssbo_false_zero {
             // We only care about fragment here as the 0 is a lie.
             log::warn!("Max vertex shader SSBO == 0 and SSTO != 0. Interpreting as false zero.");
+        }
+
+        let max_storage_buffers_per_shader_stage = if vertex_shader_storage_blocks == 0 {
             fragment_shader_storage_blocks
         } else {
             vertex_shader_storage_blocks.min(fragment_shader_storage_blocks)
@@ -259,6 +261,10 @@ impl super::Adapter {
         downlevel_flags.set(
             wgt::DownlevelFlags::INDEPENDENT_BLENDING,
             ver >= (3, 2) || extensions.contains("GL_EXT_draw_buffers_indexed"),
+        );
+        downlevel_flags.set(
+            wgt::DownlevelFlags::VERTEX_STORAGE,
+            ver >= (3, 1) && (vertex_shader_storage_blocks > 0 || vertex_ssbo_false_zero),
         );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;

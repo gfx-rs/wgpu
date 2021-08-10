@@ -736,12 +736,14 @@ bitflags::bitflags! {
         const COMPARISON_SAMPLERS = 1 << 8;
         /// Supports different blending modes per color target.
         const INDEPENDENT_BLENDING = 1 << 9;
+        /// Supports storage buffers in vertex shaders.
+        const VERTEX_STORAGE = 1 << 10;
 
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
         /// here for native backends so they can comunicate to the user of aniso is enabled.
-        const ANISOTROPIC_FILTERING = 1 << 10;
+        const ANISOTROPIC_FILTERING = 1 << 11;
     }
 }
 

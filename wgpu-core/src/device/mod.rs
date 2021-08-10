@@ -1039,6 +1039,7 @@ impl<A: HalApi> Device<A> {
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();
+            let mut required_downlevel_flags = wgt::DownlevelFlags::empty();
             let (array_feature, writable_storage) = match entry.ty {
                 Bt::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
@@ -1104,24 +1105,32 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
             }
-            if writable_storage == WritableStorage::Yes
-                && entry.visibility.contains(wgt::ShaderStages::VERTEX)
-            {
-                required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+            if entry.visibility.contains(wgt::ShaderStages::VERTEX) {
+                if writable_storage == WritableStorage::Yes {
+                    required_features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+                }
+                if let Bt::Buffer {
+                    ty: wgt::BufferBindingType::Storage { .. },
+                    ..
+                } = entry.ty
+                {
+                    required_downlevel_flags |= wgt::DownlevelFlags::VERTEX_STORAGE;
+                }
             }
             if writable_storage == WritableStorage::Yes
                 && entry.visibility.contains(wgt::ShaderStages::FRAGMENT)
             {
-                self.require_downlevel_flags(wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE)
-                    .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
-                    .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
-                        binding: entry.binding,
-                        error,
-                    })?;
+                required_downlevel_flags |= wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE;
             }
 
             self.require_features(required_features)
                 .map_err(binding_model::BindGroupLayoutEntryError::MissingFeatures)
+                .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
+                    binding: entry.binding,
+                    error,
+                })?;
+            self.require_downlevel_flags(required_downlevel_flags)
+                .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
                 .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
                     binding: entry.binding,
                     error,
