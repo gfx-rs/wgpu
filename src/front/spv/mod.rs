@@ -3090,15 +3090,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let inner = crate::TypeInner::Struct {
             top_level: block_decor.is_some(),
-            span: match members.last() {
-                Some(member) => {
+            span: members
+                .iter()
+                .map(|member| {
                     let end = member.offset + module.types[member.ty].inner.span(&module.constants);
                     ((end - 1) | (struct_alignment.get() - 1)) + 1
-                }
-                None => 4, //do we support this?
-            },
+                })
+                .max()
+                .unwrap_or(4), //do we support this?
             members,
         };
+
         let ty_handle = module.types.append(crate::Type {
             name: parent_decor.and_then(|dec| dec.name),
             inner,
