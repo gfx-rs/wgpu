@@ -69,6 +69,8 @@ pub enum Disalignment {
     },
     #[error("The struct member[{index}] is not statically sized")]
     UnsizedMember { index: u32 },
+    #[error("The type is not host-shareable")]
+    NonHostShareable,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -83,8 +85,6 @@ pub enum TypeError {
     InvalidPointerBase(Handle<crate::Type>),
     #[error("Expected data type, found {0:?}")]
     InvalidData(Handle<crate::Type>),
-    #[error("Structure type {0:?} can not be a block structure")]
-    InvalidBlockType(Handle<crate::Type>),
     #[error("Base type {0:?} for the array is invalid")]
     InvalidArrayBaseType(Handle<crate::Type>),
     #[error("The constant {0:?} can not be used for an array size")]
@@ -421,11 +421,16 @@ impl super::Validator {
                     if !base_info.flags.contains(TypeFlags::DATA) {
                         return Err(TypeError::InvalidData(member.ty));
                     }
-                    if top_level && !base_info.flags.contains(TypeFlags::HOST_SHARED) {
-                        return Err(TypeError::InvalidBlockType(member.ty));
-                    }
                     if base_info.flags.contains(TypeFlags::TOP_LEVEL) {
                         return Err(TypeError::NestedTopLevel);
+                    }
+                    if !base_info.flags.contains(TypeFlags::HOST_SHARED) {
+                        if ti.uniform_layout.is_ok() {
+                            ti.uniform_layout = Err((member.ty, Disalignment::NonHostShareable));
+                        }
+                        if ti.storage_layout.is_ok() {
+                            ti.storage_layout = Err((member.ty, Disalignment::NonHostShareable));
+                        }
                     }
                     ti.flags &= base_info.flags;
 

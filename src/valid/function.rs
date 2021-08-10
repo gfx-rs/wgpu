@@ -41,8 +41,6 @@ pub enum AtomicError {
     InvalidPointer(Handle<crate::Expression>),
     #[error("Operand {0:?} has invalid type.")]
     InvalidOperand(Handle<crate::Expression>),
-    #[error("Binary op {0:?} doesn't work on {1:?}.")]
-    InvalidBinaryOp(crate::BinaryOperator, crate::ScalarKind),
     #[error("Result expression {0:?} has already been introduced earlier")]
     ResultAlreadyInScope(Handle<crate::Expression>),
     #[error("Result type for {0:?} doesn't match the statement")]

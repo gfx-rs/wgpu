@@ -126,6 +126,7 @@ pub enum Error<'a> {
     UnknownLocalFunction(Span),
     InitializationTypeMismatch(Span, Handle<crate::Type>),
     MissingType(Span),
+    InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
     Other,
 }
@@ -336,6 +337,11 @@ impl<'a> Error<'a> {
             Error::MissingType(ref name_span) => ParseError {
                 message: format!("variable `{}` needs a type", &source[name_span.clone()]),
                 labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                notes: vec![],
+            },
+            Error::InvalidAtomicPointer(ref span) => ParseError {
+                message: "atomic operation is done on a pointer to a non-atomic".to_string(),
+                labels: vec![(span.clone(), "atomic pointer is invalid".into())],
                 notes: vec![],
             },
             Error::InvalidAtomicOperandType(ref span) => ParseError {
@@ -786,6 +792,10 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         Ok(left)
     }
 
+    /// Add a single expression to the expression table that is not covered by `self.emitter`.
+    ///
+    /// This is useful for `CallResult` and `AtomicResult` expressions, which should not be covered by
+    /// `Emit` statements.
     fn interrupt_emitter(&mut self, expression: crate::Expression) -> Handle<crate::Expression> {
         self.block.extend(self.emitter.finish(self.expressions));
         let result = self.expressions.append(expression);
@@ -1073,6 +1083,31 @@ impl Parser {
         })
     }
 
+    fn parse_atomic_pointer<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        let (pointer, pointer_span) =
+            lexer.capture_span(|lexer| self.parse_singular_expression(lexer, ctx.reborrow()))?;
+        // Check if the pointer expression is to an atomic.
+        // The IR uses regular `Expression::Load` and `Statement::Store` for atomic load/stores,
+        // and it will not catch the use of a non-atomic variable here.
+        match *ctx.resolve_type(pointer)? {
+            crate::TypeInner::Pointer { base, .. } => match ctx.types[base].inner {
+                crate::TypeInner::Atomic { .. } => Ok(pointer),
+                ref other => {
+                    log::error!("Pointer type to {:?} passed to atomic op", other);
+                    Err(Error::InvalidAtomicPointer(pointer_span))
+                }
+            },
+            ref other => {
+                log::error!("Type {:?} passed to atomic op", other);
+                Err(Error::InvalidAtomicPointer(pointer_span))
+            }
+        }
+    }
+
     fn parse_local_function_call<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1198,7 +1233,7 @@ impl Parser {
                 // atomics
                 "atomicLoad" => {
                     lexer.open_arguments()?;
-                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    let pointer = self.parse_atomic_pointer(lexer, ctx.reborrow())?;
                     lexer.close_arguments()?;
                     crate::Expression::Load { pointer }
                 }
@@ -3065,7 +3100,7 @@ impl Parser {
             "atomicStore" => {
                 lexer.open_arguments()?;
                 let mut expression_ctx = context.as_expression(block, &mut emitter);
-                let pointer = self.parse_general_expression(lexer, expression_ctx.reborrow())?;
+                let pointer = self.parse_atomic_pointer(lexer, expression_ctx.reborrow())?;
                 lexer.expect(Token::Separator(','))?;
                 let value = self.parse_general_expression(lexer, expression_ctx)?;
                 lexer.close_arguments()?;

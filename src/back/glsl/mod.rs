@@ -66,6 +66,9 @@ pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450]
 /// List of supported es glsl versions
 pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 
+//TODO: use `super::BAKE_PREFIX` instead
+const BAKE_PREFIX: &str = "_expr";
+
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
 impl crate::AtomicFunction {
@@ -1342,7 +1345,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     } else {
                         let min_ref_count = ctx.expressions[handle].bake_ref_count();
                         if min_ref_count <= ctx.info[handle].ref_count {
-                            Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
+                            Some(format!("{}{}", BAKE_PREFIX, handle.index()))
                         } else {
                             None
                         }
@@ -1674,7 +1677,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 if let Some(expr) = result {
-                    let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
+                    let name = format!("{}{}", BAKE_PREFIX, expr.index());
                     let result = self.module.functions[function].result.as_ref().unwrap();
                     self.write_type(result.ty)?;
                     write!(self.out, " {} = ", name)?;
@@ -1702,7 +1705,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_name = format!("{}{}", BAKE_PREFIX, result.index());
                 let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
                 self.write_value_type(res_ty)?;
                 write!(self.out, " {} = ", res_name)?;

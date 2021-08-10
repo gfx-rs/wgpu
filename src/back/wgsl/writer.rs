@@ -672,9 +672,25 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 write!(self.out, "{}", INDENT.repeat(indent))?;
-                self.write_expr(module, pointer, func_ctx)?;
-                write!(self.out, " = ")?;
-                self.write_expr(module, value, func_ctx)?;
+
+                let is_atomic = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
+                    crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
+                        crate::TypeInner::Atomic { .. } => true,
+                        _ => false,
+                    },
+                    _ => false,
+                };
+                if is_atomic {
+                    write!(self.out, "atomicStore({}", ATOMIC_REFERENCE)?;
+                    self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                    write!(self.out, ")")?;
+                } else {
+                    self.write_expr(module, pointer, func_ctx)?;
+                    write!(self.out, " = ")?;
+                    self.write_expr(module, value, func_ctx)?;
+                }
                 writeln!(self.out, ";")?
             }
             Statement::Call {
@@ -686,7 +702,6 @@ impl<W: Write> Writer<W> {
                 if let Some(expr) = result {
                     let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
                     self.start_named_expr(module, expr, func_ctx, &name)?;
-                    self.write_expr(module, expr, func_ctx)?;
                     self.named_expressions.insert(expr, name);
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
@@ -710,7 +725,6 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", INDENT.repeat(indent))?;
                 let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
-                self.write_expr(module, result, func_ctx)?;
                 self.named_expressions.insert(result, res_name);
 
                 let fun_str = fun.to_wgsl();
@@ -1154,7 +1168,22 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, value, func_ctx)?;
                 write!(self.out, ")")?;
             }
-            Expression::Load { pointer } => self.write_expr(module, pointer, func_ctx)?,
+            Expression::Load { pointer } => {
+                let is_atomic = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
+                    crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
+                        crate::TypeInner::Atomic { .. } => true,
+                        _ => false,
+                    },
+                    _ => false,
+                };
+                if is_atomic {
+                    write!(self.out, "atomicLoad({}", ATOMIC_REFERENCE)?;
+                }
+                self.write_expr(module, pointer, func_ctx)?;
+                if is_atomic {
+                    write!(self.out, ")")?;
+                }
+            }
             Expression::LocalVariable(handle) => {
                 write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
             }

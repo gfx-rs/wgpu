@@ -29,10 +29,10 @@ layout(location = 0) in vec2 _p2vs_location0;
 layout(location = 0) smooth out vec2 _vs2fs_location0;
 
 void main2() {
-    vec2 _e12 = a_uv1;
-    v_uv = _e12;
-    vec2 _e13 = a_pos1;
-    perVertexStruct.gen_gl_Position = vec4(_e13.x, _e13.y, 0.0, 1.0);
+    vec2 _expr12 = a_uv1;
+    v_uv = _expr12;
+    vec2 _expr13 = a_pos1;
+    perVertexStruct.gen_gl_Position = vec4(_expr13.x, _expr13.y, 0.0, 1.0);
     return;
 }
 
@@ -42,12 +42,12 @@ void main() {
     a_uv1 = a_uv;
     a_pos1 = a_pos;
     main2();
-    vec2 _e10 = v_uv;
-    vec4 _e11 = perVertexStruct.gen_gl_Position;
-    float _e12 = perVertexStruct.gen_gl_PointSize;
-    float _e13[1] = perVertexStruct.gen_gl_ClipDistance;
-    float _e14[1] = perVertexStruct.gen_gl_CullDistance;
-    type10 _tmp_return = type10(_e10, _e11, _e12, _e13, _e14);
+    vec2 _expr10 = v_uv;
+    vec4 _expr11 = perVertexStruct.gen_gl_Position;
+    float _expr12 = perVertexStruct.gen_gl_PointSize;
+    float _expr13[1] = perVertexStruct.gen_gl_ClipDistance;
+    float _expr14[1] = perVertexStruct.gen_gl_CullDistance;
+    type10 _tmp_return = type10(_expr10, _expr11, _expr12, _expr13, _expr14);
     _vs2fs_location0 = _tmp_return.member;
     gl_Position = _tmp_return.gen_gl_Position;
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);

@@ -620,14 +620,6 @@ fn invalid_structs() {
     }
 
     check_validation_error! {
-        "[[block]] struct Bad { data: ptr<storage, f32>; };":
-        Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::InvalidBlockType(_),
-            ..
-        })
-    }
-
-    check_validation_error! {
         "struct Bad { data: array<f32>; other: f32; };":
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::InvalidDynamicArray(_, _),
