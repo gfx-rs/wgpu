@@ -110,79 +110,82 @@ impl<'w> BlockContext<'w> {
     ) -> Result<Word, Error> {
         let coordinate_id = self.cached[coordinates];
 
-        Ok(if let Some(array_index) = array_index {
-            let coordinate_scalar_type_id =
-                self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                    pointer_class: None,
-                }))?;
+        // If there's no array index, the texture coordinates are exactly the
+        // `coordinate` field of the `Expression::ImageLoad`. No work is needed.
+        let array_index = match array_index {
+            None => return Ok(coordinate_id),
+            Some(ix) => ix,
+        };
 
-            let mut constituent_ids = [0u32; 4];
-            let size = match *self.fun_info[coordinates]
-                .ty
-                .inner_with(&self.ir_module.types)
-            {
-                crate::TypeInner::Scalar { .. } => {
-                    constituent_ids[0] = coordinate_id;
-                    crate::VectorSize::Bi
+        let coordinate_scalar_type_id =
+            self.get_type_id(LookupType::Local(LocalType::Value {
+                vector_size: None,
+                kind: crate::ScalarKind::Float,
+                width: 4,
+                pointer_class: None,
+            }))?;
+
+        let mut constituent_ids = [0u32; 4];
+        let size = match *self.fun_info[coordinates]
+            .ty
+            .inner_with(&self.ir_module.types)
+        {
+            crate::TypeInner::Scalar { .. } => {
+                constituent_ids[0] = coordinate_id;
+                crate::VectorSize::Bi
+            }
+            crate::TypeInner::Vector { size, .. } => {
+                for i in 0..size as u32 {
+                    let id = self.gen_id();
+                    constituent_ids[i as usize] = id;
+                    block.body.push(Instruction::composite_extract(
+                        coordinate_scalar_type_id,
+                        id,
+                        coordinate_id,
+                        &[i],
+                    ));
                 }
-                crate::TypeInner::Vector { size, .. } => {
-                    for i in 0..size as u32 {
-                        let id = self.gen_id();
-                        constituent_ids[i as usize] = id;
-                        block.body.push(Instruction::composite_extract(
-                            coordinate_scalar_type_id,
-                            id,
-                            coordinate_id,
-                            &[i],
-                        ));
+                match size {
+                    crate::VectorSize::Bi => crate::VectorSize::Tri,
+                    crate::VectorSize::Tri => crate::VectorSize::Quad,
+                    crate::VectorSize::Quad => {
+                        return Err(Error::Validation("extending vec4 coordinate"));
                     }
-                    match size {
-                        crate::VectorSize::Bi => crate::VectorSize::Tri,
-                        crate::VectorSize::Tri => crate::VectorSize::Quad,
-                        crate::VectorSize::Quad => {
-                            return Err(Error::Validation("extending vec4 coordinate"));
-                        }
-                    }
                 }
-                ref other => {
-                    log::error!("wrong coordinate type {:?}", other);
-                    return Err(Error::Validation("coordinate type"));
-                }
-            };
+            }
+            ref other => {
+                log::error!("wrong coordinate type {:?}", other);
+                return Err(Error::Validation("coordinate type"));
+            }
+        };
 
-            let array_index_f32_id = self.gen_id();
-            constituent_ids[size as usize - 1] = array_index_f32_id;
+        let array_index_f32_id = self.gen_id();
+        constituent_ids[size as usize - 1] = array_index_f32_id;
 
-            let array_index_u32_id = self.cached[array_index];
-            let cast_instruction = Instruction::unary(
-                spirv::Op::ConvertUToF,
-                coordinate_scalar_type_id,
-                array_index_f32_id,
-                array_index_u32_id,
-            );
-            block.body.push(cast_instruction);
+        let array_index_u32_id = self.cached[array_index];
+        let cast_instruction = Instruction::unary(
+            spirv::Op::ConvertUToF,
+            coordinate_scalar_type_id,
+            array_index_f32_id,
+            array_index_u32_id,
+        );
+        block.body.push(cast_instruction);
 
-            let extended_coordinate_type_id =
-                self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: Some(size),
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                    pointer_class: None,
-                }))?;
+        let extended_coordinate_type_id =
+            self.get_type_id(LookupType::Local(LocalType::Value {
+                vector_size: Some(size),
+                kind: crate::ScalarKind::Float,
+                width: 4,
+                pointer_class: None,
+            }))?;
 
-            let id = self.gen_id();
-            block.body.push(Instruction::composite_construct(
-                extended_coordinate_type_id,
-                id,
-                &constituent_ids[..size as usize],
-            ));
-            id
-        } else {
-            coordinate_id
-        })
+        let id = self.gen_id();
+        block.body.push(Instruction::composite_construct(
+            extended_coordinate_type_id,
+            id,
+            &constituent_ids[..size as usize],
+        ));
+        Ok(id)
     }
 
     /// Decide whether to put off emitting instructions for `expr_handle`.
