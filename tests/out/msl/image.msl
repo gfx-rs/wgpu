@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constant metal::int2 const_type6_ = {3, 1};
+constant metal::int2 const_type7_ = {3, 1};
 
 struct main1Input {
 };
@@ -12,6 +12,7 @@ kernel void main1(
 , metal::texture2d_ms<uint, metal::access::read> image_multisampled_src [[user(fake0)]]
 , metal::depth2d_ms<float, metal::access::read> image_depth_multisampled_src [[user(fake0)]]
 , metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
+, metal::texture2d_array<uint, metal::access::sample> image_array_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
     metal::int2 dim = int2(image_storage_src.get_width(), image_storage_src.get_height());
@@ -20,7 +21,8 @@ kernel void main1(
     metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     float value3_ = image_depth_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value4_ = image_storage_src.read(metal::uint2(itc));
-    image_dst.write(((value1_ + value2_) + metal::uint4(static_cast<uint>(value3_))) + value4_, metal::uint(itc.x));
+    metal::uint4 value5_ = image_array_src.read(metal::uint2(itc), static_cast<int>(local_id.z), static_cast<int>(local_id.z) + 1);
+    image_dst.write((((value1_ + value2_) + metal::uint4(static_cast<uint>(value3_))) + value4_) + value5_, metal::uint(itc.x));
     return;
 }
 
@@ -70,9 +72,9 @@ fragment sampleOutput sample(
 ) {
     metal::float2 tc = metal::float2(0.5);
     metal::float4 s2d = image_2d.sample(sampler_reg, tc);
-    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type6_);
+    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type7_);
     metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.3));
-    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_type6_);
+    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_type7_);
     return sampleOutput { ((s2d + s2d_offset) + s2d_level) + s2d_level_offset };
 }
 

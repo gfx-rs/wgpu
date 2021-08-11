@@ -6,6 +6,8 @@ var image_multisampled_src: texture_multisampled_2d<u32>;
 var image_depth_multisampled_src: texture_depth_multisampled_2d;
 [[group(0), binding(1)]]
 var image_storage_src: texture_storage_2d<rgba8uint>;
+[[group(0), binding(5)]]
+var image_array_src: texture_2d_array<u32>;
 [[group(0), binding(2)]]
 var image_dst: texture_storage_1d<r32uint,write>;
 
@@ -21,7 +23,8 @@ fn main(
     let value2 = textureLoad(image_multisampled_src, itc, i32(local_id.z));
     let value3 = textureLoad(image_depth_multisampled_src, itc, i32(local_id.z));
     let value4 = textureLoad(image_storage_src, itc);
-    textureStore(image_dst, itc.x, value1 + value2 + u32(value3) + value4);
+    let value5 = textureLoad(image_array_src, itc, i32(local_id.z), i32(local_id.z) + 1);
+    textureStore(image_dst, itc.x, value1 + value2 + u32(value3) + value4 + value5);
 }
 
 [[group(0), binding(0)]]

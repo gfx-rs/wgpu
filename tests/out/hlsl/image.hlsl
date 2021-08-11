@@ -3,6 +3,7 @@ Texture2D<uint4> image_mipmapped_src : register(t0);
 Texture2DMS<uint4> image_multisampled_src : register(t3);
 Texture2DMS<float> image_depth_multisampled_src : register(t4);
 RWTexture2D<uint4> image_storage_src : register(u1);
+Texture2DArray<uint4> image_array_src : register(t5);
 RWTexture1D<uint4> image_dst : register(u2);
 Texture1D<float4> image_1d : register(t0);
 Texture2D<float4> image_2d : register(t1);
@@ -35,7 +36,8 @@ void main(ComputeInput_main computeinput_main)
     uint4 value2_ = image_multisampled_src.Load(itc, int(computeinput_main.local_id1.z));
     float value3_ = image_depth_multisampled_src.Load(itc, int(computeinput_main.local_id1.z)).x;
     uint4 value4_ = image_storage_src.Load(itc);
-    image_dst[itc.x] = (((value1_ + value2_) + uint4(uint(value3_).xxxx)) + value4_);
+    uint4 value5_ = image_array_src.Load(int4(itc, int(computeinput_main.local_id1.z), (int(computeinput_main.local_id1.z) + 1)));
+    image_dst[itc.x] = ((((value1_ + value2_) + uint4(uint(value3_).xxxx)) + value4_) + value5_);
     return;
 }
 

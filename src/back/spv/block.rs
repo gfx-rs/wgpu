@@ -92,22 +92,34 @@ impl<'w> BlockContext<'w> {
 
     /// Extend texture coordinates with an array index, if necessary.
     ///
-    /// SPIR-V image read and write instructions take the coordinates of the
-    /// texel to access as a vector. If the image is arrayed, the array index
-    /// must be supplied as the final component of the coordinate vector.
+    /// Whereas [`Expression::ImageLoad`] and [`ImageSample`] treat the array
+    /// index as a separate operand from the coordinates, SPIR-V image access
+    /// instructions include the array index in the `coordinates` operand. This
+    /// function builds a SPIR-V coordinate vector from a Naga coordinate vector
+    /// and array index.
     ///
     /// If `array_index` is `Some(expr)`, then this function constructs a new
     /// vector that is `coordinates` with `array_index` concatenated onto the
     /// end: a `vec2` becomes a `vec3`, a scalar becomes a `vec2`, and so on.
     ///
+    /// Naga's `ImageLoad` and SPIR-V's `OpImageRead`, `OpImageFetch`, and
+    /// `OpImageWrite` all use integer coordinates, while Naga's `ImageSample`
+    /// and SPIR-V's `OpImageSample...` instructions all take floating-point
+    /// coordinate vectors. The array index, always an integer scalar, may need
+    /// to be converted to match the component type of `coordinates`.
+    ///
     /// If `array_index` is `None`, this function simply returns the id for
     /// `coordinates`.
+    ///
+    /// [`Expression::ImageLoad`]: crate::Expression::ImageLoad
+    /// [`ImageSample`]: crate::Expression::ImageSample
     fn write_texture_coordinates(
         &mut self,
         coordinates: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
         block: &mut Block,
     ) -> Result<Word, Error> {
+        use crate::TypeInner as Ti;
         use crate::VectorSize as Vs;
 
         let coordinate_id = self.cached[coordinates];
@@ -118,29 +130,25 @@ impl<'w> BlockContext<'w> {
             None => return Ok(coordinate_id),
             Some(ix) => ix,
         };
-        let array_index_u32_id = self.cached[array_index];
-        let coordinate_scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            kind: crate::ScalarKind::Float,
-            width: 4,
-            pointer_class: None,
-        }))?;
-        let array_index_f32_id = self.gen_id();
-        block.body.push(Instruction::unary(
-            spirv::Op::ConvertUToF,
-            coordinate_scalar_type_id,
-            array_index_f32_id,
-            array_index_u32_id,
-        ));
 
-        let size = match *self.fun_info[coordinates]
+        // Find the component type of `coordinates`, and figure out the size the
+        // combined coordinate vector will have.
+        let (component_kind, result_size) = match *self.fun_info[coordinates]
             .ty
             .inner_with(&self.ir_module.types)
         {
-            crate::TypeInner::Scalar { .. } => Vs::Bi,
-            crate::TypeInner::Vector { size: Vs::Bi, .. } => Vs::Tri,
-            crate::TypeInner::Vector { size: Vs::Tri, .. } => Vs::Quad,
-            crate::TypeInner::Vector { size: Vs::Quad, .. } => {
+            Ti::Scalar { kind, width: 4 } => (kind, Vs::Bi),
+            Ti::Vector {
+                kind,
+                width: 4,
+                size: Vs::Bi,
+            } => (kind, Vs::Tri),
+            Ti::Vector {
+                kind,
+                width: 4,
+                size: Vs::Tri,
+            } => (kind, Vs::Quad),
+            Ti::Vector { size: Vs::Quad, .. } => {
                 return Err(Error::Validation("extending vec4 coordinate"));
             }
             ref other => {
@@ -148,19 +156,44 @@ impl<'w> BlockContext<'w> {
                 return Err(Error::Validation("coordinate type"));
             }
         };
-        let extended_coordinate_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Value {
-                vector_size: Some(size),
-                kind: crate::ScalarKind::Float,
+
+        // Convert the index to the coordinate component type, if necessary.
+        let array_index_i32_id = self.cached[array_index];
+        let reconciled_array_index_id = if component_kind == crate::ScalarKind::Sint {
+            array_index_i32_id
+        } else {
+            let component_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                vector_size: None,
+                kind: component_kind,
                 width: 4,
                 pointer_class: None,
             }))?;
 
+            let reconciled_id = self.gen_id();
+            block.body.push(Instruction::unary(
+                spirv::Op::ConvertUToF,
+                component_type_id,
+                reconciled_id,
+                array_index_i32_id,
+            ));
+            reconciled_id
+        };
+
+        // Find the SPIR-V type for the combined coordinates/index vector.
+        let combined_coordinate_type_id =
+            self.get_type_id(LookupType::Local(LocalType::Value {
+                vector_size: Some(result_size),
+                kind: component_kind,
+                width: 4,
+                pointer_class: None,
+            }))?;
+
+        // Schmear the coordinates and index together.
         let id = self.gen_id();
         block.body.push(Instruction::composite_construct(
-            extended_coordinate_type_id,
+            combined_coordinate_type_id,
             id,
-            &[coordinate_id, array_index_f32_id],
+            &[coordinate_id, reconciled_array_index_id],
         ));
         Ok(id)
     }
