@@ -2,10 +2,11 @@
 
     ## Lifecycle
 
-    When a swapchain view is used in `begin_render_pass()`, we assume the start and end image
-    layouts purely based on whether or not this view was used in this command buffer before.
-    It always starts with `Uninitialized` and ends with `Present`, so that no barriers are
-    needed when we need to actually present it.
+    Whenever a submission detects the use of any surface texture, it adds it to the device
+    tracker for the duration of the submission (temporarily, while recording).
+    It's added with `UNINITIALIZED` state and transitioned into `empty()` state.
+    When this texture is presented, we remove it from the device tracker as well as
+    extract it from the hub.
 !*/
 
 #[cfg(feature = "trace")]
@@ -221,6 +222,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .acquired_texture
                 .take()
                 .ok_or(SurfaceError::AlreadyAcquired)?;
+
+            // The texture ID got added to the device tracker by `submit()`,
+            // and now we are moving it away.
+            device.trackers.lock().textures.remove(texture_id.value);
 
             let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);
             if let Some(texture) = texture {

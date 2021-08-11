@@ -9,8 +9,8 @@ use crate::{
     device::{DeviceError, WaitIdleError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id,
-    resource::{BufferAccessError, BufferMapState},
-    FastHashSet,
+    resource::{BufferAccessError, BufferMapState, TextureInner},
+    track, FastHashSet,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
@@ -511,7 +511,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let callbacks = {
-            let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
             let device = device_guard
                 .get_mut(queue_id)
@@ -520,6 +519,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.active_submission_index += 1;
             let submit_index = device.active_submission_index;
             let mut active_executions = Vec::new();
+            let mut used_surface_textures = track::ResourceTracker::new(A::VARIANT);
 
             {
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -569,18 +569,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // optimize the tracked states
                         cmdbuf.trackers.optimize();
 
-                        //TODO: do we need this code?
-                        for surface_id in cmdbuf.used_surfaces.drain(..) {
-                            match surface_guard[surface_id].presentation {
-                                Some(ref mut present) => {
-                                    if present.acquired_texture.is_none() {
-                                        return Err(QueueSubmitError::SurfaceOutputDropped);
-                                    }
-                                }
-                                None => return Err(QueueSubmitError::SurfaceUnconfigured),
-                            }
-                        }
-
                         // update submission IDs
                         for id in cmdbuf.trackers.buffers.used() {
                             let buffer = &mut buffer_guard[id];
@@ -606,8 +594,44 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         for id in cmdbuf.trackers.textures.used() {
                             let texture = &texture_guard[id];
-                            if texture.inner.as_raw().is_none() {
-                                return Err(QueueSubmitError::DestroyedTexture(id.0));
+                            match texture.inner {
+                                TextureInner::Native { raw: None } => {
+                                    return Err(QueueSubmitError::DestroyedTexture(id.0));
+                                }
+                                TextureInner::Native { raw: Some(_) } => {}
+                                TextureInner::Surface { .. } => {
+                                    use track::ResourceState as _;
+                                    let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
+                                    //TODO: better error handling here?
+                                    {
+                                        // first, register it in the device tracker with uninitialized,
+                                        // if it wasn't used before.
+                                        let mut ts = track::TextureState::default();
+                                        let _ = ts.change(
+                                            id,
+                                            texture.full_range.clone(),
+                                            hal::TextureUses::UNINITIALIZED,
+                                            None,
+                                        );
+                                        let _ = trackers.textures.init(
+                                            id,
+                                            ref_count.clone(),
+                                            ts.clone(),
+                                        );
+                                    }
+                                    {
+                                        // then, register it in the temporary tracker.
+                                        let mut ts = track::TextureState::default();
+                                        let _ = ts.change(
+                                            id,
+                                            texture.full_range.clone(),
+                                            hal::TextureUses::empty(),
+                                            None,
+                                        );
+                                        let _ =
+                                            used_surface_textures.init(id, ref_count.clone(), ts);
+                                    }
+                                }
                             }
                             if !texture.life_guard.use_at(submit_index) {
                                 device.temp_suspected.textures.push(id);
@@ -690,6 +714,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         let transit = unsafe { baked.encoder.end_encoding().unwrap() };
                         baked.list.insert(0, transit);
+
+                        // Transition surface textures into `Present` state.
+                        // Note: we could technically do it after all of the command buffers,
+                        // but here we have a command encoder by hand, so it's easier to use it.
+                        if !used_surface_textures.is_empty() {
+                            unsafe {
+                                baked
+                                    .encoder
+                                    .begin_encoding(Some("_Present"))
+                                    .map_err(DeviceError::from)?
+                            };
+                            let texture_barriers = trackers
+                                .textures
+                                .merge_replace(&used_surface_textures)
+                                .map(|pending| {
+                                    let tex = &texture_guard[pending.id];
+                                    pending.into_hal(tex)
+                                });
+                            let present = unsafe {
+                                baked.encoder.transition_textures(texture_barriers);
+                                baked.encoder.end_encoding().unwrap()
+                            };
+                            baked.list.push(present);
+                            used_surface_textures.clear();
+                        }
+
+                        // done
                         active_executions.push(EncoderInFlight {
                             raw: baked.encoder,
                             cmd_buffers: baked.list,

@@ -13,7 +13,6 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    instance::Surface,
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{Texture, TextureView},
@@ -530,7 +529,6 @@ struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
     trackers: StatefulTrackerSubset,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
-    used_surface: Option<id::Valid<id::SurfaceId>>,
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
@@ -543,7 +541,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
-        _surface_guard: &'a Storage<Surface, id::SurfaceId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
 
@@ -557,8 +554,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut attachment_type_name = "";
         let mut extent = None;
         let mut sample_count = 0;
-        //TODO: remove this?
-        let used_surface = None::<(id::Valid<id::SurfaceId>, hal::TextureUses)>;
 
         let mut add_view = |view: &TextureView<A>, type_name| {
             if let Some(ex) = extent {
@@ -718,7 +713,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             context,
             trackers: StatefulTrackerSubset::new(A::VARIANT),
             render_attachments,
-            used_surface: used_surface.map(|(sc_id, _)| sc_id),
             is_ds_read_only,
             extent,
             _phantom: PhantomData,
@@ -729,9 +723,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-        _surface_guard: &Storage<Surface, id::SurfaceId>,
-    ) -> Result<(StatefulTrackerSubset, Option<id::Valid<id::SurfaceId>>), RenderPassErrorInner>
-    {
+    ) -> Result<StatefulTrackerSubset, RenderPassErrorInner> {
         profiling::scope!("finish", "RenderPassInfo");
         unsafe {
             raw.end_render_pass();
@@ -753,7 +745,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .map_err(UsageConflict::from)?;
         }
 
-        Ok((self.trackers, self.used_surface))
+        Ok(self.trackers)
     }
 }
 
@@ -786,8 +778,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let mut token = Token::root();
-
-        let (surface_guard, mut token) = self.surfaces.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (pass_raw, trackers, query_reset_state) = {
@@ -834,7 +824,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_stencil_attachment,
                 cmd_buf,
                 &*view_guard,
-                &*surface_guard,
             )
             .map_pass_err(scope)?;
 
@@ -1701,9 +1690,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             log::trace!("Merging {:?} with the render pass", encoder_id);
-            let (trackers, used_surface) = info
-                .finish(raw, &*texture_guard, &*surface_guard)
-                .map_pass_err(scope)?;
+            let trackers = info.finish(raw, &*texture_guard).map_pass_err(scope)?;
 
             let raw_cmd_buf = unsafe {
                 raw.end_encoding()
@@ -1711,7 +1698,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .map_pass_err(scope)?
             };
             cmd_buf.status = CommandEncoderStatus::Recording;
-            cmd_buf.used_surfaces.extend(used_surface);
             (raw_cmd_buf, trackers, query_reset_state)
         };
 

@@ -25,7 +25,6 @@ use crate::{
 };
 
 use hal::CommandEncoder as _;
-use smallvec::SmallVec;
 use thiserror::Error;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
@@ -141,7 +140,6 @@ pub struct CommandBuffer<A: hal::Api> {
     status: CommandEncoderStatus,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
-    pub(crate) used_surfaces: SmallVec<[id::Valid<id::SurfaceId>; 1]>,
     buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
     limits: wgt::Limits,
     support_fill_buffer_texture: bool,
@@ -169,7 +167,6 @@ impl<A: HalApi> CommandBuffer<A> {
             status: CommandEncoderStatus::Recording,
             device_id,
             trackers: TrackerSet::new(A::VARIANT),
-            used_surfaces: Default::default(),
             buffer_memory_init_actions: Default::default(),
             limits,
             support_fill_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
