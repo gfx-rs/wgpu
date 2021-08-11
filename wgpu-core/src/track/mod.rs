@@ -218,7 +218,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Remove an id from the tracked map.
-    pub(crate) fn _remove(&mut self, id: Valid<S::Id>) -> bool {
+    pub(crate) fn remove(&mut self, id: Valid<S::Id>) -> bool {
         let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.remove(&index) {
@@ -263,13 +263,18 @@ impl<S: ResourceState> ResourceTracker<S> {
             .map(move |(&index, resource)| Valid(S::Id::zip(index, resource.epoch, backend)))
     }
 
+    pub fn get_ref_count(&self, id: Valid<S::Id>) -> &RefCount {
+        let (index, _, _) = id.0.unzip();
+        &self.map[&index].ref_count
+    }
+
     /// Return true if there is nothing here.
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
 
     /// Clear the tracked contents.
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.map.clear();
     }
 

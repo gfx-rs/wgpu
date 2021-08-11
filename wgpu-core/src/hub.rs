@@ -722,13 +722,14 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             }
         }
 
-        for element in surface_guard.map.drain(..) {
-            if let Element::Occupied(mut surface, _epoch) = element {
+        for element in surface_guard.map.iter_mut() {
+            if let Element::Occupied(ref mut surface, _epoch) = *element {
                 if let Some(present) = surface.presentation.take() {
                     let device = &devices[present.device_id.value];
-                    let suf = A::get_surface_mut(&mut surface);
+                    let suf = A::get_surface_mut(surface);
                     unsafe {
                         suf.raw.unconfigure(&device.raw);
+                        //TODO: we could destroy the surface here
                     }
                 }
             }

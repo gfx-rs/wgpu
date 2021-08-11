@@ -1123,24 +1123,22 @@ impl crate::Context for Context {
         surface.0.configure_swap_chain(&mapped);
     }
 
-    fn surface_get_current_texture_view(
+    fn surface_get_current_texture(
         &self,
         _surface: &Self::SurfaceId,
     ) -> (
-        Option<Self::TextureViewId>,
+        Option<Self::TextureId>,
         wgt::SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
-        // TODO: Should we pass a descriptor here?
-        // Or is the default view always correct?
         (
-            None, //TODO: surface.0.get_current_texture().create_view()
+            None, //TODO: surface.0.get_current_texture(),
             wgt::SurfaceStatus::Good,
             (),
         )
     }
 
-    fn surface_present(&self, _view: &Self::TextureViewId, _detail: &Self::SurfaceOutputDetail) {
+    fn surface_present(&self, _texture: &Self::TextureId, _detail: &Self::SurfaceOutputDetail) {
         // Swapchain is presented automatically
     }
 

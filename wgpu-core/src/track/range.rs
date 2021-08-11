@@ -1,3 +1,5 @@
+//Note: this could be the only place where we need `SmallVec`.
+//TODO: consider getting rid of it.
 use smallvec::SmallVec;
 
 use std::{cmp::Ordering, fmt::Debug, iter, ops::Range, slice::Iter};

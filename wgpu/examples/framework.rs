@@ -296,7 +296,10 @@ fn start<E: Example>(
                             .expect("Failed to acquire next surface texture!")
                     }
                 };
-                let view = frame.output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                let view = frame
+                    .output
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
 
                 example.render(&view, &device, &queue, &spawner);
             }
