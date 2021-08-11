@@ -41,6 +41,6 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
         | Some(&mut S::Call { .. })
         | Some(&mut S::Atomic { .. })
         | Some(&mut S::Barrier(_))
-        | None => block.push(S::Return { value: None }),
+        | None => block.push(S::Return { value: None }, Default::default()),
     }
 }

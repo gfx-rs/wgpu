@@ -1,6 +1,7 @@
 use crate::arena::{Arena, Handle};
 
 use super::{flow::*, Error, FunctionInfo, Instruction, LookupExpression, LookupHelper as _};
+use crate::front::Emitter;
 
 pub type BlockId = u32;
 
@@ -56,13 +57,16 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         from: spirv::Word,
         to: spirv::Word,
     ) -> Handle<crate::Function> {
-        let dummy_handle = self.dummy_functions.append(crate::Function::default());
+        let dummy_handle = self
+            .dummy_functions
+            .append(crate::Function::default(), Default::default());
         self.deferred_function_calls.push(to);
         self.function_call_graph.add_edge(from, to, ());
         dummy_handle
     }
 
     pub(super) fn parse_function(&mut self, module: &mut crate::Module) -> Result<(), Error> {
+        let start = self.data_offset;
         self.lookup_expression.clear();
         self.lookup_load_override.clear();
         self.lookup_sampled_image.clear();
@@ -90,14 +94,16 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     })
                 },
                 local_variables: Arena::new(),
-                expressions: self.make_expression_storage(),
+                expressions: self
+                    .make_expression_storage(&module.global_variables, &module.constants),
                 named_expressions: crate::FastHashMap::default(),
-                body: Vec::new(),
+                body: crate::Block::new(),
             }
         };
 
         // read parameters
         for i in 0..fun.arguments.capacity() {
+            let start = self.data_offset;
             match self.next_inst()? {
                 Instruction {
                     op: spirv::Op::FunctionParameter,
@@ -105,9 +111,10 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 } => {
                     let type_id = self.next()?;
                     let id = self.next()?;
-                    let handle = fun
-                        .expressions
-                        .append(crate::Expression::FunctionArgument(i as u32));
+                    let handle = fun.expressions.append(
+                        crate::Expression::FunctionArgument(i as u32),
+                        self.span_from(start),
+                    );
                     self.lookup_expression
                         .insert(id, LookupExpression { handle, type_id });
                     //Note: we redo the lookup in order to work around `self` borrowing
@@ -192,7 +199,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         fun.body = flow_graph.convert_to_naga()?;
 
         // done
-        let fun_handle = module.functions.append(fun);
+        let fun_handle = module.functions.append(fun, self.span_from_with_op(start));
         self.lookup_function.insert(fun_id, fun_handle);
         self.function_info.push(function_info);
         if let Some(ep) = self.lookup_entry_point.remove(&fun_id) {
@@ -204,41 +211,46 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 local_variables: Arena::new(),
                 expressions: Arena::new(),
                 named_expressions: crate::FastHashMap::default(),
-                body: Vec::new(),
+                body: crate::Block::new(),
             };
 
             // 1. copy the inputs from arguments to privates
             for &v_id in ep.variable_ids.iter() {
                 let lvar = self.lookup_variable.lookup(v_id)?;
                 if let super::Variable::Input(ref arg) = lvar.inner {
-                    let arg_expr =
-                        function
-                            .expressions
-                            .append(crate::Expression::FunctionArgument(
-                                function.arguments.len() as u32,
-                            ));
+                    let span = module.global_variables.get_span(lvar.handle).clone();
+                    let arg_expr = function.expressions.append(
+                        crate::Expression::FunctionArgument(function.arguments.len() as u32),
+                        span.clone(),
+                    );
                     let load_expr = if arg.ty == module.global_variables[lvar.handle].ty {
                         arg_expr
                     } else {
                         // The only case where the type is different is if we need to treat
                         // unsigned integer as signed.
-                        let old_len = function.expressions.len();
-                        let handle = function.expressions.append(crate::Expression::As {
-                            expr: arg_expr,
-                            kind: crate::ScalarKind::Sint,
-                            convert: Some(4),
-                        });
-                        function.body.push(crate::Statement::Emit(
-                            function.expressions.range_from(old_len),
-                        ));
+                        let mut emitter = Emitter::default();
+                        emitter.start(&function.expressions);
+                        let handle = function.expressions.append(
+                            crate::Expression::As {
+                                expr: arg_expr,
+                                kind: crate::ScalarKind::Sint,
+                                convert: Some(4),
+                            },
+                            span.clone(),
+                        );
+                        function.body.extend(emitter.finish(&function.expressions));
                         handle
                     };
-                    function.body.push(crate::Statement::Store {
-                        pointer: function
-                            .expressions
-                            .append(crate::Expression::GlobalVariable(lvar.handle)),
-                        value: load_expr,
-                    });
+                    function.body.push(
+                        crate::Statement::Store {
+                            pointer: function.expressions.append(
+                                crate::Expression::GlobalVariable(lvar.handle),
+                                span.clone(),
+                            ),
+                            value: load_expr,
+                        },
+                        span,
+                    );
 
                     let mut arg = arg.clone();
                     if ep.stage == crate::ShaderStage::Fragment {
@@ -257,11 +269,14 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             // 2. call the wrapped function
             let fake_id = !(module.entry_points.len() as u32); // doesn't matter, as long as it's not a collision
             let dummy_handle = self.add_call(fake_id, fun_id);
-            function.body.push(crate::Statement::Call {
-                function: dummy_handle,
-                arguments: Vec::new(),
-                result: None,
-            });
+            function.body.push(
+                crate::Statement::Call {
+                    function: dummy_handle,
+                    arguments: Vec::new(),
+                    result: None,
+                },
+                crate::Span::Unknown,
+            );
 
             // 3. copy the outputs from privates to the result
             let mut members = Vec::new();
@@ -269,9 +284,10 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             for &v_id in ep.variable_ids.iter() {
                 let lvar = self.lookup_variable.lookup(v_id)?;
                 if let super::Variable::Output(ref result) = lvar.inner {
+                    let span = module.global_variables.get_span(lvar.handle).clone();
                     let expr_handle = function
                         .expressions
-                        .append(crate::Expression::GlobalVariable(lvar.handle));
+                        .append(crate::Expression::GlobalVariable(lvar.handle), span.clone());
                     match module.types[result.ty].inner {
                         crate::TypeInner::Struct {
                             members: ref sub_members,
@@ -288,6 +304,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                         base: expr_handle,
                                         index: index as u32,
                                     },
+                                    span.clone(),
                                 ));
                             }
                         }
@@ -311,72 +328,94 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     Some(crate::Binding::BuiltIn(crate::BuiltIn::Position))
                         if self.options.adjust_coordinate_space =>
                     {
-                        let old_len = function.expressions.len();
+                        let mut emitter = Emitter::default();
+                        emitter.start(&function.expressions);
                         let global_expr = components[member_index];
-                        let access_expr =
-                            function.expressions.append(crate::Expression::AccessIndex {
+                        let span = function.expressions.get_span(global_expr).clone();
+                        let access_expr = function.expressions.append(
+                            crate::Expression::AccessIndex {
                                 base: global_expr,
                                 index: 1,
-                            });
-                        let load_expr = function.expressions.append(crate::Expression::Load {
-                            pointer: access_expr,
-                        });
-                        let neg_expr = function.expressions.append(crate::Expression::Unary {
-                            op: crate::UnaryOperator::Negate,
-                            expr: load_expr,
-                        });
-                        function.body.push(crate::Statement::Emit(
-                            function.expressions.range_from(old_len),
-                        ));
-                        function.body.push(crate::Statement::Store {
-                            pointer: access_expr,
-                            value: neg_expr,
-                        });
+                            },
+                            span.clone(),
+                        );
+                        let load_expr = function.expressions.append(
+                            crate::Expression::Load {
+                                pointer: access_expr,
+                            },
+                            span.clone(),
+                        );
+                        let neg_expr = function.expressions.append(
+                            crate::Expression::Unary {
+                                op: crate::UnaryOperator::Negate,
+                                expr: load_expr,
+                            },
+                            span.clone(),
+                        );
+                        function.body.extend(emitter.finish(&function.expressions));
+                        function.body.push(
+                            crate::Statement::Store {
+                                pointer: access_expr,
+                                value: neg_expr,
+                            },
+                            span,
+                        );
                     }
                     _ => {}
                 }
             }
 
-            let old_len = function.expressions.len();
+            let mut emitter = Emitter::default();
+            emitter.start(&function.expressions);
             for component in components.iter_mut() {
                 let load_expr = crate::Expression::Load {
                     pointer: *component,
                 };
-                *component = function.expressions.append(load_expr);
+                let span = function.expressions.get_span(*component).clone();
+                *component = function.expressions.append(load_expr, span);
             }
 
             match &members[..] {
                 [] => {}
                 [member] => {
-                    function.body.push(crate::Statement::Emit(
-                        function.expressions.range_from(old_len),
-                    ));
-                    function.body.push(crate::Statement::Return {
-                        value: components.first().cloned(),
-                    });
+                    function.body.extend(emitter.finish(&function.expressions));
+                    let span = function.expressions.get_span(components[0]).clone();
+                    function.body.push(
+                        crate::Statement::Return {
+                            value: components.first().cloned(),
+                        },
+                        span,
+                    );
                     function.result = Some(crate::FunctionResult {
                         ty: member.ty,
                         binding: member.binding.clone(),
                     });
                 }
                 _ => {
-                    let ty = module.types.append(crate::Type {
-                        name: None,
-                        inner: crate::TypeInner::Struct {
-                            top_level: false,
-                            members,
-                            span: 0xFFFF, // shouldn't matter
+                    let span = crate::Span::total_span(
+                        components.iter().map(|h| function.expressions.get_span(*h)),
+                    );
+                    let ty = module.types.append(
+                        crate::Type {
+                            name: None,
+                            inner: crate::TypeInner::Struct {
+                                top_level: false,
+                                members,
+                                span: 0xFFFF, // shouldn't matter
+                            },
                         },
-                    });
+                        span.clone(),
+                    );
                     let result_expr = function
                         .expressions
-                        .append(crate::Expression::Compose { ty, components });
-                    function.body.push(crate::Statement::Emit(
-                        function.expressions.range_from(old_len),
-                    ));
-                    function.body.push(crate::Statement::Return {
-                        value: Some(result_expr),
-                    });
+                        .append(crate::Expression::Compose { ty, components }, span.clone());
+                    function.body.extend(emitter.finish(&function.expressions));
+                    function.body.push(
+                        crate::Statement::Return {
+                            value: Some(result_expr),
+                        },
+                        span,
+                    );
                     function.result = Some(crate::FunctionResult { ty, binding: None });
                 }
             }

@@ -119,13 +119,12 @@ impl<'w> BlockContext<'w> {
             Some(ix) => ix,
         };
         let array_index_u32_id = self.cached[array_index];
-        let coordinate_scalar_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Value {
-                vector_size: None,
-                kind: crate::ScalarKind::Float,
-                width: 4,
-                pointer_class: None,
-            }))?;
+        let coordinate_scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Float,
+            width: 4,
+            pointer_class: None,
+        }))?;
         let array_index_f32_id = self.gen_id();
         block.body.push(Instruction::unary(
             spirv::Op::ConvertUToF,
@@ -161,7 +160,7 @@ impl<'w> BlockContext<'w> {
         block.body.push(Instruction::composite_construct(
             extended_coordinate_type_id,
             id,
-            &[coordinate_id, array_index_f32_id]
+            &[coordinate_id, array_index_f32_id],
         ));
         Ok(id)
     }

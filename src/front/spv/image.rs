@@ -89,59 +89,85 @@ fn extract_image_coordinates(
         index: required_size.map_or(1, |size| size as u32),
     };
 
+    let base_span = expressions.get_span(base).clone();
+
     match extra_coordinate {
         ExtraCoordinate::ArrayLayer => {
             let extracted = match required_size {
-                None => expressions.append(crate::Expression::AccessIndex { base, index: 0 }),
+                None => expressions.append(
+                    crate::Expression::AccessIndex { base, index: 0 },
+                    base_span.clone(),
+                ),
                 Some(size) => {
                     let mut components = Vec::with_capacity(size as usize);
                     for index in 0..size as u32 {
-                        let comp =
-                            expressions.append(crate::Expression::AccessIndex { base, index });
+                        let comp = expressions.append(
+                            crate::Expression::AccessIndex { base, index },
+                            base_span.clone(),
+                        );
                         components.push(comp);
                     }
-                    expressions.append(crate::Expression::Compose {
-                        ty: required_ty.unwrap(),
-                        components,
-                    })
+                    expressions.append(
+                        crate::Expression::Compose {
+                            ty: required_ty.unwrap(),
+                            components,
+                        },
+                        base_span.clone(),
+                    )
                 }
             };
-            let array_index_f32 = expressions.append(extra_expr);
-            let array_index = expressions.append(crate::Expression::As {
-                kind: crate::ScalarKind::Sint,
-                expr: array_index_f32,
-                convert: Some(4),
-            });
+            let array_index_f32 = expressions.append(extra_expr, base_span.clone());
+            let array_index = expressions.append(
+                crate::Expression::As {
+                    kind: crate::ScalarKind::Sint,
+                    expr: array_index_f32,
+                    convert: Some(4),
+                },
+                base_span,
+            );
             (extracted, Some(array_index))
         }
         ExtraCoordinate::Projection => {
-            let projection = expressions.append(extra_expr);
+            let projection = expressions.append(extra_expr, base_span.clone());
             let divided = match required_size {
                 None => {
-                    let temp =
-                        expressions.append(crate::Expression::AccessIndex { base, index: 0 });
-                    expressions.append(crate::Expression::Binary {
-                        op: crate::BinaryOperator::Divide,
-                        left: temp,
-                        right: projection,
-                    })
+                    let temp = expressions.append(
+                        crate::Expression::AccessIndex { base, index: 0 },
+                        base_span.clone(),
+                    );
+                    expressions.append(
+                        crate::Expression::Binary {
+                            op: crate::BinaryOperator::Divide,
+                            left: temp,
+                            right: projection,
+                        },
+                        base_span,
+                    )
                 }
                 Some(size) => {
                     let mut components = Vec::with_capacity(size as usize);
                     for index in 0..size as u32 {
-                        let temp =
-                            expressions.append(crate::Expression::AccessIndex { base, index });
-                        let comp = expressions.append(crate::Expression::Binary {
-                            op: crate::BinaryOperator::Divide,
-                            left: temp,
-                            right: projection,
-                        });
+                        let temp = expressions.append(
+                            crate::Expression::AccessIndex { base, index },
+                            base_span.clone(),
+                        );
+                        let comp = expressions.append(
+                            crate::Expression::Binary {
+                                op: crate::BinaryOperator::Divide,
+                                left: temp,
+                                right: projection,
+                            },
+                            base_span.clone(),
+                        );
                         components.push(comp);
                     }
-                    expressions.append(crate::Expression::Compose {
-                        ty: required_ty.unwrap(),
-                        components,
-                    })
+                    expressions.append(
+                        crate::Expression::Compose {
+                            ty: required_ty.unwrap(),
+                            components,
+                        },
+                        base_span,
+                    )
                 }
             };
             (divided, None)
@@ -157,7 +183,7 @@ fn extract_image_coordinates(
                     pattern: [Sc::X, Sc::Y, Sc::Z, Sc::W],
                 },
             };
-            (expressions.append(cut_expr), None)
+            (expressions.append(cut_expr, base_span), None)
         }
     }
 }
@@ -176,6 +202,7 @@ pub(super) fn patch_comparison_type(
 
     log::debug!("Flipping comparison for {:?}", var);
     let original_ty = &arena[var.ty];
+    let original_ty_span = arena.get_span(var.ty).clone();
     let ty_inner = match original_ty.inner {
         crate::TypeInner::Image {
             class: crate::ImageClass::Sampled { multi, .. },
@@ -191,10 +218,13 @@ pub(super) fn patch_comparison_type(
     };
 
     let name = original_ty.name.clone();
-    var.ty = arena.append(crate::Type {
-        name,
-        inner: ty_inner,
-    });
+    var.ty = arena.append(
+        crate::Type {
+            name,
+            inner: ty_inner,
+        },
+        original_ty_span,
+    );
     true
 }
 
@@ -295,6 +325,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         arguments: &[FunctionArgument],
         expressions: &mut Arena<crate::Expression>,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let image_id = self.next()?;
@@ -368,7 +399,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
             },
         );
@@ -386,6 +417,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         expressions: &mut Arena<crate::Expression>,
         function_info: &mut FunctionInfo,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let sampled_image_id = self.next()?;
@@ -522,7 +554,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
             },
         );
@@ -534,6 +566,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         at_level: bool,
         expressions: &mut Arena<crate::Expression>,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let image_id = self.next()?;
@@ -555,7 +588,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
             },
         );
@@ -567,6 +600,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         query: crate::ImageQuery,
         expressions: &mut Arena<crate::Expression>,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let image_id = self.next()?;
@@ -580,7 +614,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
             },
         );

@@ -59,16 +59,22 @@ impl<'source> ParsingContext<'source> {
             }
         };
 
-        let handle = parser.module.constants.fetch_or_append(Constant {
-            name: None,
-            specialization: None,
-            inner: ConstantInner::Scalar { width, value },
-        });
+        let handle = parser.module.constants.fetch_or_append(
+            Constant {
+                name: None,
+                specialization: None,
+                inner: ConstantInner::Scalar { width, value },
+            },
+            token.meta.as_span(),
+        );
 
-        Ok(stmt.hir_exprs.append(HirExpr {
-            kind: HirExprKind::Constant(handle),
-            meta: token.meta,
-        }))
+        Ok(stmt.hir_exprs.append(
+            HirExpr {
+                kind: HirExprKind::Constant(handle),
+                meta: token.meta,
+            },
+            Default::default(),
+        ))
     }
 
     pub fn parse_function_call_args(
@@ -133,7 +139,7 @@ impl<'source> ParsingContext<'source> {
                         meta,
                     }
                 } else {
-                    let var = match parser.lookup_variable(ctx, body, &name) {
+                    let var = match parser.lookup_variable(ctx, body, &name, meta) {
                         Some(var) => var,
                         None => {
                             return Err(Error {
@@ -149,13 +155,17 @@ impl<'source> ParsingContext<'source> {
                     }
                 };
 
-                stmt.hir_exprs.append(expr)
+                stmt.hir_exprs.append(expr, Default::default())
             }
             TokenValue::TypeName(_) => {
-                let Token { value, mut meta } = self.bump(parser)?;
+                let Token {
+                    value,
+                    meta: name_meta,
+                } = self.bump(parser)?;
+                let mut meta = name_meta;
 
                 let mut handle = if let TokenValue::TypeName(ty) = value {
-                    parser.module.types.fetch_or_append(ty)
+                    parser.module.types.fetch_or_append(ty, name_meta.as_span())
                 } else {
                     unreachable!()
                 };
@@ -165,7 +175,7 @@ impl<'source> ParsingContext<'source> {
                 self.expect(parser, TokenValue::LeftParen)?;
                 let args = self.parse_function_call_args(parser, ctx, stmt, body, &mut meta)?;
 
-                if let Some(array_size) = maybe_size {
+                if let Some((array_size, array_meta)) = maybe_size {
                     let stride = parser.module.types[handle]
                         .inner
                         .span(&parser.module.constants);
@@ -173,36 +183,45 @@ impl<'source> ParsingContext<'source> {
                     let size = match array_size {
                         ArraySize::Constant(size) => ArraySize::Constant(size),
                         ArraySize::Dynamic => {
-                            let constant = parser.module.constants.fetch_or_append(Constant {
-                                name: None,
-                                specialization: None,
-                                inner: ConstantInner::Scalar {
-                                    width: 4,
-                                    value: ScalarValue::Sint(args.len() as i64),
+                            let constant = parser.module.constants.fetch_or_append(
+                                Constant {
+                                    name: None,
+                                    specialization: None,
+                                    inner: ConstantInner::Scalar {
+                                        width: 4,
+                                        value: ScalarValue::Sint(args.len() as i64),
+                                    },
                                 },
-                            });
+                                meta.as_span(),
+                            );
 
                             ArraySize::Constant(constant)
                         }
                     };
 
-                    handle = parser.module.types.fetch_or_append(Type {
-                        name: None,
-                        inner: TypeInner::Array {
-                            base: handle,
-                            size,
-                            stride,
+                    handle = parser.module.types.fetch_or_append(
+                        Type {
+                            name: None,
+                            inner: TypeInner::Array {
+                                base: handle,
+                                size,
+                                stride,
+                            },
                         },
-                    })
+                        name_meta.union(&array_meta).as_span(),
+                    );
                 }
 
-                stmt.hir_exprs.append(HirExpr {
-                    kind: HirExprKind::Call(FunctionCall {
-                        kind: FunctionCallKind::TypeConstructor(handle),
-                        args,
-                    }),
-                    meta,
-                })
+                stmt.hir_exprs.append(
+                    HirExpr {
+                        kind: HirExprKind::Call(FunctionCall {
+                            kind: FunctionCallKind::TypeConstructor(handle),
+                            args,
+                        }),
+                        meta,
+                    },
+                    Default::default(),
+                )
             }
             _ => self.parse_primary(parser, ctx, stmt, body)?,
         };
@@ -219,38 +238,50 @@ impl<'source> ParsingContext<'source> {
                     let index = self.parse_expression(parser, ctx, stmt, body)?;
                     let end_meta = self.expect(parser, TokenValue::RightBracket)?.meta;
 
-                    base = stmt.hir_exprs.append(HirExpr {
-                        kind: HirExprKind::Access { base, index },
-                        meta: meta.union(&end_meta),
-                    })
+                    base = stmt.hir_exprs.append(
+                        HirExpr {
+                            kind: HirExprKind::Access { base, index },
+                            meta: meta.union(&end_meta),
+                        },
+                        Default::default(),
+                    )
                 }
                 TokenValue::Dot => {
                     let (field, end_meta) = self.expect_ident(parser)?;
 
-                    base = stmt.hir_exprs.append(HirExpr {
-                        kind: HirExprKind::Select { base, field },
-                        meta: meta.union(&end_meta),
-                    })
+                    base = stmt.hir_exprs.append(
+                        HirExpr {
+                            kind: HirExprKind::Select { base, field },
+                            meta: meta.union(&end_meta),
+                        },
+                        Default::default(),
+                    )
                 }
                 TokenValue::Increment => {
-                    base = stmt.hir_exprs.append(HirExpr {
-                        kind: HirExprKind::IncDec {
-                            increment: true,
-                            postfix: true,
-                            expr: base,
+                    base = stmt.hir_exprs.append(
+                        HirExpr {
+                            kind: HirExprKind::IncDec {
+                                increment: true,
+                                postfix: true,
+                                expr: base,
+                            },
+                            meta,
                         },
-                        meta,
-                    })
+                        Default::default(),
+                    )
                 }
                 TokenValue::Decrement => {
-                    base = stmt.hir_exprs.append(HirExpr {
-                        kind: HirExprKind::IncDec {
-                            increment: false,
-                            postfix: true,
-                            expr: base,
+                    base = stmt.hir_exprs.append(
+                        HirExpr {
+                            kind: HirExprKind::IncDec {
+                                increment: false,
+                                postfix: true,
+                                expr: base,
+                            },
+                            meta,
                         },
-                        meta,
-                    })
+                        Default::default(),
+                    )
                 }
                 _ => unreachable!(),
             }
@@ -286,28 +317,34 @@ impl<'source> ParsingContext<'source> {
                     _ => return Ok(expr),
                 };
 
-                stmt.hir_exprs.append(HirExpr {
-                    kind,
-                    meta: meta.union(&end_meta),
-                })
+                stmt.hir_exprs.append(
+                    HirExpr {
+                        kind,
+                        meta: meta.union(&end_meta),
+                    },
+                    Default::default(),
+                )
             }
             TokenValue::Increment | TokenValue::Decrement => {
                 let Token { value, meta } = self.bump(parser)?;
 
                 let expr = self.parse_unary(parser, ctx, stmt, body)?;
 
-                stmt.hir_exprs.append(HirExpr {
-                    kind: HirExprKind::IncDec {
-                        increment: match value {
-                            TokenValue::Increment => true,
-                            TokenValue::Decrement => false,
-                            _ => unreachable!(),
+                stmt.hir_exprs.append(
+                    HirExpr {
+                        kind: HirExprKind::IncDec {
+                            increment: match value {
+                                TokenValue::Increment => true,
+                                TokenValue::Decrement => false,
+                                _ => unreachable!(),
+                            },
+                            postfix: false,
+                            expr,
                         },
-                        postfix: false,
-                        expr,
+                        meta,
                     },
-                    meta,
-                })
+                    Default::default(),
+                )
             }
             _ => self.parse_postfix(parser, ctx, stmt, body)?,
         })
@@ -337,35 +374,38 @@ impl<'source> ParsingContext<'source> {
             let right = self.parse_binary(parser, ctx, stmt, body, None, r_bp)?;
             let end_meta = stmt.hir_exprs[right].meta;
 
-            left = stmt.hir_exprs.append(HirExpr {
-                kind: HirExprKind::Binary {
-                    left,
-                    op: match value {
-                        TokenValue::LogicalOr => BinaryOperator::LogicalOr,
-                        TokenValue::LogicalXor => BinaryOperator::NotEqual,
-                        TokenValue::LogicalAnd => BinaryOperator::LogicalAnd,
-                        TokenValue::VerticalBar => BinaryOperator::InclusiveOr,
-                        TokenValue::Caret => BinaryOperator::ExclusiveOr,
-                        TokenValue::Ampersand => BinaryOperator::And,
-                        TokenValue::Equal => BinaryOperator::Equal,
-                        TokenValue::NotEqual => BinaryOperator::NotEqual,
-                        TokenValue::GreaterEqual => BinaryOperator::GreaterEqual,
-                        TokenValue::LessEqual => BinaryOperator::LessEqual,
-                        TokenValue::LeftAngle => BinaryOperator::Less,
-                        TokenValue::RightAngle => BinaryOperator::Greater,
-                        TokenValue::LeftShift => BinaryOperator::ShiftLeft,
-                        TokenValue::RightShift => BinaryOperator::ShiftRight,
-                        TokenValue::Plus => BinaryOperator::Add,
-                        TokenValue::Dash => BinaryOperator::Subtract,
-                        TokenValue::Star => BinaryOperator::Multiply,
-                        TokenValue::Slash => BinaryOperator::Divide,
-                        TokenValue::Percent => BinaryOperator::Modulo,
-                        _ => unreachable!(),
+            left = stmt.hir_exprs.append(
+                HirExpr {
+                    kind: HirExprKind::Binary {
+                        left,
+                        op: match value {
+                            TokenValue::LogicalOr => BinaryOperator::LogicalOr,
+                            TokenValue::LogicalXor => BinaryOperator::NotEqual,
+                            TokenValue::LogicalAnd => BinaryOperator::LogicalAnd,
+                            TokenValue::VerticalBar => BinaryOperator::InclusiveOr,
+                            TokenValue::Caret => BinaryOperator::ExclusiveOr,
+                            TokenValue::Ampersand => BinaryOperator::And,
+                            TokenValue::Equal => BinaryOperator::Equal,
+                            TokenValue::NotEqual => BinaryOperator::NotEqual,
+                            TokenValue::GreaterEqual => BinaryOperator::GreaterEqual,
+                            TokenValue::LessEqual => BinaryOperator::LessEqual,
+                            TokenValue::LeftAngle => BinaryOperator::Less,
+                            TokenValue::RightAngle => BinaryOperator::Greater,
+                            TokenValue::LeftShift => BinaryOperator::ShiftLeft,
+                            TokenValue::RightShift => BinaryOperator::ShiftRight,
+                            TokenValue::Plus => BinaryOperator::Add,
+                            TokenValue::Dash => BinaryOperator::Subtract,
+                            TokenValue::Star => BinaryOperator::Multiply,
+                            TokenValue::Slash => BinaryOperator::Divide,
+                            TokenValue::Percent => BinaryOperator::Modulo,
+                            _ => unreachable!(),
+                        },
+                        right,
                     },
-                    right,
+                    meta: start_meta.union(&end_meta),
                 },
-                meta: start_meta.union(&end_meta),
-            })
+                Default::default(),
+            )
         }
 
         Ok(left)
@@ -388,14 +428,17 @@ impl<'source> ParsingContext<'source> {
             let reject = self.parse_assignment(parser, ctx, stmt, body)?;
             let end_meta = stmt.hir_exprs[reject].meta;
 
-            condition = stmt.hir_exprs.append(HirExpr {
-                kind: HirExprKind::Conditional {
-                    condition,
-                    accept,
-                    reject,
+            condition = stmt.hir_exprs.append(
+                HirExpr {
+                    kind: HirExprKind::Conditional {
+                        condition,
+                        accept,
+                        reject,
+                    },
+                    meta: start_meta.union(&end_meta),
                 },
-                meta: start_meta.union(&end_meta),
-            })
+                Default::default(),
+            )
         }
 
         Ok(condition)
@@ -417,10 +460,13 @@ impl<'source> ParsingContext<'source> {
                 let value = self.parse_assignment(parser, ctx, stmt, body)?;
                 let end_meta = stmt.hir_exprs[value].meta;
 
-                stmt.hir_exprs.append(HirExpr {
-                    kind: HirExprKind::Assign { tgt, value },
-                    meta: start_meta.union(&end_meta),
-                })
+                stmt.hir_exprs.append(
+                    HirExpr {
+                        kind: HirExprKind::Assign { tgt, value },
+                        meta: start_meta.union(&end_meta),
+                    },
+                    Default::default(),
+                )
             }
             TokenValue::OrAssign
             | TokenValue::AndAssign
@@ -436,31 +482,37 @@ impl<'source> ParsingContext<'source> {
                 let right = self.parse_assignment(parser, ctx, stmt, body)?;
                 let end_meta = stmt.hir_exprs[right].meta;
 
-                let value = stmt.hir_exprs.append(HirExpr {
-                    meta: start_meta.union(&end_meta),
-                    kind: HirExprKind::Binary {
-                        left: tgt,
-                        op: match token.value {
-                            TokenValue::OrAssign => BinaryOperator::InclusiveOr,
-                            TokenValue::AndAssign => BinaryOperator::And,
-                            TokenValue::AddAssign => BinaryOperator::Add,
-                            TokenValue::DivAssign => BinaryOperator::Divide,
-                            TokenValue::ModAssign => BinaryOperator::Modulo,
-                            TokenValue::SubAssign => BinaryOperator::Subtract,
-                            TokenValue::MulAssign => BinaryOperator::Multiply,
-                            TokenValue::LeftShiftAssign => BinaryOperator::ShiftLeft,
-                            TokenValue::RightShiftAssign => BinaryOperator::ShiftRight,
-                            TokenValue::XorAssign => BinaryOperator::ExclusiveOr,
-                            _ => unreachable!(),
+                let value = stmt.hir_exprs.append(
+                    HirExpr {
+                        meta: start_meta.union(&end_meta),
+                        kind: HirExprKind::Binary {
+                            left: tgt,
+                            op: match token.value {
+                                TokenValue::OrAssign => BinaryOperator::InclusiveOr,
+                                TokenValue::AndAssign => BinaryOperator::And,
+                                TokenValue::AddAssign => BinaryOperator::Add,
+                                TokenValue::DivAssign => BinaryOperator::Divide,
+                                TokenValue::ModAssign => BinaryOperator::Modulo,
+                                TokenValue::SubAssign => BinaryOperator::Subtract,
+                                TokenValue::MulAssign => BinaryOperator::Multiply,
+                                TokenValue::LeftShiftAssign => BinaryOperator::ShiftLeft,
+                                TokenValue::RightShiftAssign => BinaryOperator::ShiftRight,
+                                TokenValue::XorAssign => BinaryOperator::ExclusiveOr,
+                                _ => unreachable!(),
+                            },
+                            right,
                         },
-                        right,
                     },
-                });
+                    Default::default(),
+                );
 
-                stmt.hir_exprs.append(HirExpr {
-                    kind: HirExprKind::Assign { tgt, value },
-                    meta: start_meta.union(&end_meta),
-                })
+                stmt.hir_exprs.append(
+                    HirExpr {
+                        kind: HirExprKind::Assign { tgt, value },
+                        meta: start_meta.union(&end_meta),
+                    },
+                    Default::default(),
+                )
             }
             _ => self.parse_conditional(parser, ctx, stmt, body, Some(tgt))?,
         })

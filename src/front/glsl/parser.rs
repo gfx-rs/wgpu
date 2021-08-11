@@ -393,7 +393,7 @@ impl<'ctx> DeclarationContext<'ctx> {
                     GlobalOrConstant::Global(handle) => Expression::GlobalVariable(handle),
                     GlobalOrConstant::Constant(handle) => Expression::Constant(handle),
                 };
-                Ok(self.ctx.add_expression(expr, self.body))
+                Ok(self.ctx.add_expression(expr, meta, self.body))
             }
             false => parser.add_local_var(self.ctx, self.body, decl),
         }

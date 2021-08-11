@@ -1,3 +1,4 @@
+use crate::front::glsl::SourceMetadata;
 use crate::{
     front::glsl::{
         ast::ParameterQualifier,
@@ -38,7 +39,7 @@ impl<'source> ParsingContext<'source> {
         parser: &mut Parser,
         ctx: &mut Context,
         body: &mut Block,
-    ) -> Result<()> {
+    ) -> Result<Option<SourceMetadata>> {
         // TODO: This prevents snippets like the following from working
         // ```glsl
         // vec4(1.0);
@@ -47,55 +48,60 @@ impl<'source> ParsingContext<'source> {
         // declarations and since this statement is very unlikely and most
         // likely an error, for now we don't support it
         if self.peek_type_name(parser) || self.peek_type_qualifier(parser) {
-            self.parse_declaration(parser, ctx, body, false)?;
-            return Ok(());
+            return self.parse_declaration(parser, ctx, body, false);
         }
 
-        match self.expect_peek(parser)?.value {
+        let new_break = || {
+            let mut block = Block::new();
+            block.push(Statement::Break, crate::Span::Unknown);
+            block
+        };
+
+        let &Token { ref value, meta } = self.expect_peek(parser)?;
+
+        let meta_rest = match *value {
             TokenValue::Continue => {
-                self.bump(parser)?;
-                body.push(Statement::Continue);
-                self.expect(parser, TokenValue::Semicolon)?;
+                body.push(Statement::Continue, self.bump(parser)?.meta.as_span());
+                self.expect(parser, TokenValue::Semicolon)?.meta
             }
             TokenValue::Break => {
-                self.bump(parser)?;
-                body.push(Statement::Break);
-                self.expect(parser, TokenValue::Semicolon)?;
+                body.push(Statement::Break, self.bump(parser)?.meta.as_span());
+                self.expect(parser, TokenValue::Semicolon)?.meta
             }
             TokenValue::Return => {
                 self.bump(parser)?;
-                let value = match self.expect_peek(parser)?.value {
-                    TokenValue::Semicolon => {
-                        self.bump(parser)?;
-                        None
-                    }
+                let (value, meta) = match self.expect_peek(parser)?.value {
+                    TokenValue::Semicolon => (None, self.bump(parser)?.meta),
                     _ => {
                         // TODO: Implicit conversions
                         let mut stmt = ctx.stmt_ctx();
                         let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
                         self.expect(parser, TokenValue::Semicolon)?;
-                        Some(ctx.lower_expect(stmt, parser, expr, false, body)?.0)
+                        let (handle, meta) = ctx.lower_expect(stmt, parser, expr, false, body)?;
+                        (Some(handle), meta)
                     }
                 };
 
                 ctx.emit_flush(body);
                 ctx.emit_start();
 
-                body.push(Statement::Return { value })
+                body.push(Statement::Return { value }, meta.as_span());
+                meta
             }
             TokenValue::Discard => {
-                self.bump(parser)?;
-                body.push(Statement::Kill);
-                self.expect(parser, TokenValue::Semicolon)?;
+                body.push(Statement::Kill, self.bump(parser)?.meta.as_span());
+                self.expect(parser, TokenValue::Semicolon)?.meta
             }
             TokenValue::If => {
-                self.bump(parser)?;
+                let mut meta = self.bump(parser)?.meta;
 
                 self.expect(parser, TokenValue::LeftParen)?;
                 let condition = {
                     let mut stmt = ctx.stmt_ctx();
                     let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
-                    ctx.lower_expect(stmt, parser, expr, false, body)?.0
+                    let (handle, more_meta) = ctx.lower_expect(stmt, parser, expr, false, body)?;
+                    meta = meta.union(&more_meta);
+                    handle
                 };
                 self.expect(parser, TokenValue::RightParen)?;
 
@@ -103,21 +109,30 @@ impl<'source> ParsingContext<'source> {
                 ctx.emit_start();
 
                 let mut accept = Block::new();
-                self.parse_statement(parser, ctx, &mut accept)?;
+                if let Some(more_meta) = self.parse_statement(parser, ctx, &mut accept)? {
+                    meta = meta.union(&more_meta)
+                }
 
                 let mut reject = Block::new();
                 if self.bump_if(parser, TokenValue::Else).is_some() {
-                    self.parse_statement(parser, ctx, &mut reject)?;
+                    if let Some(more_meta) = self.parse_statement(parser, ctx, &mut reject)? {
+                        meta = meta.union(&more_meta);
+                    }
                 }
 
-                body.push(Statement::If {
-                    condition,
-                    accept,
-                    reject,
-                });
+                body.push(
+                    Statement::If {
+                        condition,
+                        accept,
+                        reject,
+                    },
+                    meta.as_span(),
+                );
+                meta
             }
             TokenValue::Switch => {
-                self.bump(parser)?;
+                let start_meta = self.bump(parser)?.meta;
+                let end_meta;
 
                 self.expect(parser, TokenValue::LeftParen)?;
                 // TODO: Implicit conversions
@@ -177,7 +192,9 @@ impl<'source> ParsingContext<'source> {
                                     TokenValue::Case
                                     | TokenValue::Default
                                     | TokenValue::RightBrace => break,
-                                    _ => self.parse_statement(parser, ctx, &mut body)?,
+                                    _ => {
+                                        self.parse_statement(parser, ctx, &mut body)?;
+                                    }
                                 }
                             }
 
@@ -186,7 +203,7 @@ impl<'source> ParsingContext<'source> {
                             for (i, stmt) in body.iter().enumerate() {
                                 if let Statement::Break = *stmt {
                                     fall_through = false;
-                                    body.drain(i..);
+                                    body.cull(i..);
                                     break;
                                 }
                             }
@@ -214,19 +231,21 @@ impl<'source> ParsingContext<'source> {
                             loop {
                                 match self.expect_peek(parser)?.value {
                                     TokenValue::Case | TokenValue::RightBrace => break,
-                                    _ => self.parse_statement(parser, ctx, &mut default)?,
+                                    _ => {
+                                        self.parse_statement(parser, ctx, &mut default)?;
+                                    }
                                 }
                             }
 
                             for (i, stmt) in default.iter().enumerate() {
                                 if let Statement::Break = *stmt {
-                                    default.drain(i..);
+                                    default.cull(i..);
                                     break;
                                 }
                             }
                         }
                         TokenValue::RightBrace => {
-                            self.bump(parser)?;
+                            end_meta = self.bump(parser)?.meta;
                             break;
                         }
                         _ => {
@@ -246,51 +265,67 @@ impl<'source> ParsingContext<'source> {
                     }
                 }
 
-                body.push(Statement::Switch {
-                    selector,
-                    cases,
-                    default,
-                });
+                let meta = start_meta.union(&end_meta);
+                body.push(
+                    Statement::Switch {
+                        selector,
+                        cases,
+                        default,
+                    },
+                    meta.as_span(),
+                );
+                meta
             }
             TokenValue::While => {
-                self.bump(parser)?;
+                let meta = self.bump(parser)?.meta;
 
                 let mut loop_body = Block::new();
 
                 let mut stmt = ctx.stmt_ctx();
                 self.expect(parser, TokenValue::LeftParen)?;
                 let root = self.parse_expression(parser, ctx, &mut stmt, &mut loop_body)?;
-                self.expect(parser, TokenValue::RightParen)?;
+                let meta = meta.union(&self.expect(parser, TokenValue::RightParen)?.meta);
 
-                let expr = ctx
-                    .lower_expect(stmt, parser, root, false, &mut loop_body)?
-                    .0;
+                let (expr, expr_meta) =
+                    ctx.lower_expect(stmt, parser, root, false, &mut loop_body)?;
                 let condition = ctx.add_expression(
                     Expression::Unary {
                         op: UnaryOperator::Not,
                         expr,
                     },
+                    expr_meta,
                     &mut loop_body,
                 );
 
                 ctx.emit_flush(&mut loop_body);
                 ctx.emit_start();
 
-                loop_body.push(Statement::If {
-                    condition,
-                    accept: vec![Statement::Break],
-                    reject: Block::new(),
-                });
+                loop_body.push(
+                    Statement::If {
+                        condition,
+                        accept: new_break(),
+                        reject: Block::new(),
+                    },
+                    crate::Span::Unknown,
+                );
 
-                self.parse_statement(parser, ctx, &mut loop_body)?;
+                let mut meta = meta.union(&expr_meta);
 
-                body.push(Statement::Loop {
-                    body: loop_body,
-                    continuing: Block::new(),
-                })
+                if let Some(body_meta) = self.parse_statement(parser, ctx, &mut loop_body)? {
+                    meta = meta.union(&body_meta);
+                }
+
+                body.push(
+                    Statement::Loop {
+                        body: loop_body,
+                        continuing: Block::new(),
+                    },
+                    meta.as_span(),
+                );
+                meta
             }
             TokenValue::Do => {
-                self.bump(parser)?;
+                let start_meta = self.bump(parser)?.meta;
 
                 let mut loop_body = Block::new();
                 self.parse_statement(parser, ctx, &mut loop_body)?;
@@ -300,35 +335,44 @@ impl<'source> ParsingContext<'source> {
                 self.expect(parser, TokenValue::While)?;
                 self.expect(parser, TokenValue::LeftParen)?;
                 let root = self.parse_expression(parser, ctx, &mut stmt, &mut loop_body)?;
-                self.expect(parser, TokenValue::RightParen)?;
+                let end_meta = self.expect(parser, TokenValue::RightParen)?.meta;
 
-                let expr = ctx
-                    .lower_expect(stmt, parser, root, false, &mut loop_body)?
-                    .0;
+                let meta = start_meta.union(&end_meta);
+
+                let (expr, expr_meta) =
+                    ctx.lower_expect(stmt, parser, root, false, &mut loop_body)?;
                 let condition = ctx.add_expression(
                     Expression::Unary {
                         op: UnaryOperator::Not,
                         expr,
                     },
+                    expr_meta,
                     &mut loop_body,
                 );
 
                 ctx.emit_flush(&mut loop_body);
                 ctx.emit_start();
 
-                loop_body.push(Statement::If {
-                    condition,
-                    accept: vec![Statement::Break],
-                    reject: Block::new(),
-                });
+                loop_body.push(
+                    Statement::If {
+                        condition,
+                        accept: new_break(),
+                        reject: Block::new(),
+                    },
+                    crate::Span::Unknown,
+                );
 
-                body.push(Statement::Loop {
-                    body: loop_body,
-                    continuing: Block::new(),
-                })
+                body.push(
+                    Statement::Loop {
+                        body: loop_body,
+                        continuing: Block::new(),
+                    },
+                    meta.as_span(),
+                );
+                meta
             }
             TokenValue::For => {
-                self.bump(parser)?;
+                let meta = self.bump(parser)?.meta;
 
                 ctx.push_scope();
                 self.expect(parser, TokenValue::LeftParen)?;
@@ -347,54 +391,60 @@ impl<'source> ParsingContext<'source> {
                 let (mut block, mut continuing) = (Block::new(), Block::new());
 
                 if self.bump_if(parser, TokenValue::Semicolon).is_none() {
-                    let expr = if self.peek_type_name(parser) || self.peek_type_qualifier(parser) {
-                        let qualifiers = self.parse_type_qualifiers(parser)?;
-                        let (ty, meta) = self.parse_type_non_void(parser)?;
-                        let name = self.expect_ident(parser)?.0;
+                    let (expr, expr_meta) =
+                        if self.peek_type_name(parser) || self.peek_type_qualifier(parser) {
+                            let qualifiers = self.parse_type_qualifiers(parser)?;
+                            let (ty, meta) = self.parse_type_non_void(parser)?;
+                            let name = self.expect_ident(parser)?.0;
 
-                        self.expect(parser, TokenValue::Assign)?;
+                            self.expect(parser, TokenValue::Assign)?;
 
-                        let (value, end_meta) =
-                            self.parse_initializer(parser, ty, ctx, &mut block)?;
+                            let (value, end_meta) =
+                                self.parse_initializer(parser, ty, ctx, &mut block)?;
+                            let meta = meta.union(&end_meta);
 
-                        let decl = VarDeclaration {
-                            qualifiers: &qualifiers,
-                            ty,
-                            name: Some(name),
-                            init: None,
-                            meta: meta.union(&end_meta),
+                            let decl = VarDeclaration {
+                                qualifiers: &qualifiers,
+                                ty,
+                                name: Some(name),
+                                init: None,
+                                meta,
+                            };
+
+                            let pointer = parser.add_local_var(ctx, &mut block, decl)?;
+
+                            ctx.emit_flush(&mut block);
+                            ctx.emit_start();
+
+                            block.push(Statement::Store { pointer, value }, meta.as_span());
+
+                            (value, end_meta)
+                        } else {
+                            let mut stmt = ctx.stmt_ctx();
+                            let root = self.parse_expression(parser, ctx, &mut stmt, &mut block)?;
+                            ctx.lower_expect(stmt, parser, root, false, &mut block)?
                         };
-
-                        let pointer = parser.add_local_var(ctx, &mut block, decl)?;
-
-                        ctx.emit_flush(&mut block);
-                        ctx.emit_start();
-
-                        block.push(Statement::Store { pointer, value });
-
-                        value
-                    } else {
-                        let mut stmt = ctx.stmt_ctx();
-                        let root = self.parse_expression(parser, ctx, &mut stmt, &mut block)?;
-                        ctx.lower_expect(stmt, parser, root, false, &mut block)?.0
-                    };
 
                     let condition = ctx.add_expression(
                         Expression::Unary {
                             op: UnaryOperator::Not,
                             expr,
                         },
+                        expr_meta,
                         &mut block,
                     );
 
                     ctx.emit_flush(&mut block);
                     ctx.emit_start();
 
-                    block.push(Statement::If {
-                        condition,
-                        accept: vec![Statement::Break],
-                        reject: Block::new(),
-                    });
+                    block.push(
+                        Statement::If {
+                            condition,
+                            accept: new_break(),
+                            reject: Block::new(),
+                        },
+                        crate::Span::Unknown,
+                    );
 
                     self.expect(parser, TokenValue::Semicolon)?;
                 }
@@ -409,27 +459,36 @@ impl<'source> ParsingContext<'source> {
                     }
                 }
 
-                self.expect(parser, TokenValue::RightParen)?;
+                let mut meta = meta.union(&self.expect(parser, TokenValue::RightParen)?.meta);
 
-                self.parse_statement(parser, ctx, &mut block)?;
+                if let Some(stmt_meta) = self.parse_statement(parser, ctx, &mut block)? {
+                    meta = meta.union(&stmt_meta);
+                }
 
-                body.push(Statement::Loop {
-                    body: block,
-                    continuing,
-                });
+                body.push(
+                    Statement::Loop {
+                        body: block,
+                        continuing,
+                    },
+                    meta.as_span(),
+                );
 
                 ctx.remove_current_scope();
+
+                meta
             }
             TokenValue::LeftBrace => {
-                self.bump(parser)?;
+                let meta = self.bump(parser)?.meta;
 
                 let mut block = Block::new();
                 ctx.push_scope();
 
-                self.parse_compound_statement(parser, ctx, &mut block)?;
+                let meta = self.parse_compound_statement(meta, parser, ctx, &mut block)?;
 
                 ctx.remove_current_scope();
-                body.push(Statement::Block(block));
+                body.push(Statement::Block(block), meta.as_span());
+
+                meta
             }
             TokenValue::Plus
             | TokenValue::Dash
@@ -444,32 +503,37 @@ impl<'source> ParsingContext<'source> {
                 let mut stmt = ctx.stmt_ctx();
                 let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
                 ctx.lower(stmt, parser, expr, false, body)?;
-                self.expect(parser, TokenValue::Semicolon)?;
+                self.expect(parser, TokenValue::Semicolon)?.meta
             }
-            TokenValue::Semicolon => {
-                self.bump(parser)?;
-            }
-            _ => {}
-        }
+            TokenValue::Semicolon => self.bump(parser)?.meta,
+            _ => meta,
+        };
 
-        Ok(())
+        Ok(Some(meta.union(&meta_rest)))
     }
 
     pub fn parse_compound_statement(
         &mut self,
+        mut meta: SourceMetadata,
         parser: &mut Parser,
         ctx: &mut Context,
         body: &mut Block,
-    ) -> Result<()> {
+    ) -> Result<SourceMetadata> {
         loop {
-            if self.bump_if(parser, TokenValue::RightBrace).is_some() {
+            if let Some(Token {
+                meta: brace_meta, ..
+            }) = self.bump_if(parser, TokenValue::RightBrace)
+            {
+                meta = meta.union(&brace_meta);
                 break;
             }
 
-            self.parse_statement(parser, ctx, body)?;
+            if let Some(stmt_meta) = self.parse_statement(parser, ctx, body)? {
+                meta = meta.union(&stmt_meta);
+            }
         }
 
-        Ok(())
+        Ok(meta)
     }
 
     pub fn parse_function_args(
@@ -490,12 +554,12 @@ impl<'source> ParsingContext<'source> {
                         continue;
                     }
                     TokenValue::Identifier(_) => {
-                        let name = self.expect_ident(parser)?.0;
+                        let name_meta = self.expect_ident(parser)?;
 
-                        let size = self.parse_array_specifier(parser)?;
-                        let ty = parser.maybe_array(ty, size);
+                        let array_specifier = self.parse_array_specifier(parser)?;
+                        let ty = parser.maybe_array(ty, name_meta.1, array_specifier);
 
-                        context.add_function_arg(parser, body, Some(name), ty, qualifier);
+                        context.add_function_arg(parser, body, Some(name_meta), ty, qualifier);
 
                         if self.bump_if(parser, TokenValue::Comma).is_some() {
                             continue;

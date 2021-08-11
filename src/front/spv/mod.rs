@@ -378,6 +378,7 @@ struct FunctionInfo {
 
 pub struct Parser<I> {
     data: I,
+    data_offset: usize,
     state: ModuleState,
     layouter: Layouter,
     temp_bytes: Vec<u8>,
@@ -417,6 +418,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     pub fn new(data: I, options: &Options) -> Self {
         Parser {
             data,
+            data_offset: 0,
             state: ModuleState::Empty,
             layouter: Layouter::default(),
             temp_bytes: Vec::new(),
@@ -446,8 +448,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
     }
 
+    fn span_from(&self, from: usize) -> crate::Span {
+        crate::Span::ByteRange(from..self.data_offset)
+    }
+
+    fn span_from_with_op(&self, from: usize) -> crate::Span {
+        crate::Span::ByteRange((from - 4)..self.data_offset)
+    }
+
     fn next(&mut self) -> Result<u32, Error> {
-        self.data.next().ok_or(Error::IncompleteData)
+        if let Some(res) = self.data.next() {
+            self.data_offset += 4;
+            Ok(res)
+        } else {
+            Err(Error::IncompleteData)
+        }
     }
 
     fn next_inst(&mut self) -> Result<Instruction, Error> {
@@ -566,6 +581,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         expressions: &mut Arena<crate::Expression>,
         op: crate::UnaryOperator,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let p_id = self.next()?;
@@ -579,7 +595,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
             },
         );
@@ -591,6 +607,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         expressions: &mut Arena<crate::Expression>,
         op: crate::BinaryOperator,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let p1_id = self.next()?;
@@ -607,7 +624,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
             },
         );
@@ -623,10 +640,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         op: crate::BinaryOperator,
         types: &Arena<crate::Type>,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let p1_id = self.next()?;
         let p2_id = self.next()?;
+        let span = self.span_from_with_op(start);
 
         let p1_lexp = self.lookup_expression.lookup(p1_id)?;
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
@@ -638,27 +657,33 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             left: if p1_lexp.type_id == result_type_id {
                 p1_lexp.handle
             } else {
-                expressions.append(crate::Expression::As {
-                    expr: p1_lexp.handle,
-                    kind,
-                    convert: None,
-                })
+                expressions.append(
+                    crate::Expression::As {
+                        expr: p1_lexp.handle,
+                        kind,
+                        convert: None,
+                    },
+                    span.clone(),
+                )
             },
             right: if p2_lexp.type_id == result_type_id {
                 p2_lexp.handle
             } else {
-                expressions.append(crate::Expression::As {
-                    expr: p2_lexp.handle,
-                    kind,
-                    convert: None,
-                })
+                expressions.append(
+                    crate::Expression::As {
+                        expr: p2_lexp.handle,
+                        kind,
+                        convert: None,
+                    },
+                    span.clone(),
+                )
             },
         };
 
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, span),
                 type_id: result_type_id,
             },
         );
@@ -670,19 +695,25 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         expressions: &mut Arena<crate::Expression>,
         op: crate::BinaryOperator,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let p1_id = self.next()?;
         let p2_id = self.next()?;
 
+        let span = self.span_from_with_op(start);
+
         let p1_lexp = self.lookup_expression.lookup(p1_id)?;
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
         // convert the shift to Uint
-        let p2_handle = expressions.append(crate::Expression::As {
-            expr: p2_lexp.handle,
-            kind: crate::ScalarKind::Uint,
-            convert: None,
-        });
+        let p2_handle = expressions.append(
+            crate::Expression::As {
+                expr: p2_lexp.handle,
+                kind: crate::ScalarKind::Uint,
+                convert: None,
+            },
+            span.clone(),
+        );
 
         let expr = crate::Expression::Binary {
             op,
@@ -692,7 +723,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, span),
                 type_id: result_type_id,
             },
         );
@@ -704,6 +735,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         expressions: &mut Arena<crate::Expression>,
         axis: crate::DerivativeAxis,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let arg_id = self.next()?;
@@ -717,13 +749,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr),
+                handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
             },
         );
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn insert_composite(
         &self,
         root_expr: Handle<crate::Expression>,
@@ -732,11 +765,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         selections: &[spirv::Word],
         type_arena: &Arena<crate::Type>,
         expressions: &mut Arena<crate::Expression>,
+        span: crate::Span,
     ) -> Result<Handle<crate::Expression>, Error> {
         let selection = match selections.first() {
             Some(&index) => index,
             None => return Ok(object_expr),
         };
+        let root_span = expressions.get_span(root_expr).clone();
         let root_lookup = self.lookup_type.lookup(root_type_id)?;
         let (count, child_type_id) = match type_arena[root_lookup.handle].inner {
             crate::TypeInner::Struct { ref members, .. } => {
@@ -759,10 +794,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let mut components = Vec::with_capacity(count);
         for index in 0..count as u32 {
-            let expr = expressions.append(crate::Expression::AccessIndex {
-                base: root_expr,
-                index,
-            });
+            let expr = expressions.append(
+                crate::Expression::AccessIndex {
+                    base: root_expr,
+                    index,
+                },
+                if index == selection {
+                    span.clone()
+                } else {
+                    root_span.clone()
+                },
+            );
             components.push(expr);
         }
         components[selection as usize] = self.insert_composite(
@@ -772,12 +814,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             &selections[1..],
             type_arena,
             expressions,
+            span.clone(),
         )?;
 
-        Ok(expressions.append(crate::Expression::Compose {
-            ty: root_lookup.handle,
-            components,
-        }))
+        Ok(expressions.append(
+            crate::Expression::Compose {
+                ty: root_lookup.handle,
+                components,
+            },
+            span,
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -793,14 +839,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         arguments: &[crate::FunctionArgument],
         function_info: &mut FunctionInfo,
     ) -> Result<ControlFlowNode, Error> {
-        let mut block = Vec::new();
+        let mut block = crate::Block::new();
         let mut phis = Vec::new();
         let mut emitter = super::Emitter::default();
         emitter.start(expressions);
         let mut merge = None;
         let terminator = loop {
             use spirv::Op;
+            let start = self.data_offset;
             let inst = self.next_inst()?;
+            let span = crate::Span::ByteRange(start..(start + 4 * (inst.wc as usize)));
             log::debug!("\t\t{:?} [{}]", inst.op, inst.wc);
 
             match inst.op {
@@ -812,9 +860,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Undef => {
                     inst.expect(3)?;
-                    let _result_type_id = self.next()?;
-                    let _result_id = self.next()?;
-                    //TODO?
+                    let (type_id, id, handle) =
+                        self.parse_null_constant(inst, type_arena, const_arena)?;
+                    self.lookup_expression.insert(
+                        id,
+                        LookupExpression {
+                            handle: expressions.append(crate::Expression::Constant(handle), span),
+                            type_id,
+                        },
+                    );
                 }
                 Op::Variable => {
                     inst.expect_at_least(4)?;
@@ -840,20 +894,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         log::debug!("\t\t\tid={} name={}", result_id, name);
                     }
                     let lookup_ty = self.lookup_type.lookup(result_type_id)?;
-                    let var_handle = local_arena.append(crate::LocalVariable {
-                        name,
-                        ty: match type_arena[lookup_ty.handle].inner {
-                            crate::TypeInner::Pointer { base, .. } => base,
-                            _ => lookup_ty.handle,
+                    let var_handle = local_arena.append(
+                        crate::LocalVariable {
+                            name,
+                            ty: match type_arena[lookup_ty.handle].inner {
+                                crate::TypeInner::Pointer { base, .. } => base,
+                                _ => lookup_ty.handle,
+                            },
+                            init,
                         },
-                        init,
-                    });
+                        span.clone(),
+                    );
 
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
                             handle: expressions
-                                .append(crate::Expression::LocalVariable(var_handle)),
+                                .append(crate::Expression::LocalVariable(var_handle), span),
                             type_id: result_type_id,
                         },
                     );
@@ -867,12 +924,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_id = self.next()?;
 
                     let name = format!("phi_{}", result_id);
-                    let var_handle = local_arena.append(crate::LocalVariable {
-                        name: Some(name),
-                        ty: self.lookup_type.lookup(result_type_id)?.handle,
-                        init: None,
-                    });
-                    let pointer = expressions.append(crate::Expression::LocalVariable(var_handle));
+                    let var_handle = local_arena.append(
+                        crate::LocalVariable {
+                            name: Some(name),
+                            ty: self.lookup_type.lookup(result_type_id)?.handle,
+                            init: None,
+                        },
+                        self.span_from(start),
+                    );
+                    let pointer = expressions
+                        .append(crate::Expression::LocalVariable(var_handle), span.clone());
 
                     let in_count = (inst.wc - 3) / 2;
                     let mut phi = PhiInstruction {
@@ -894,7 +955,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: expressions.append(crate::Expression::Load { pointer }),
+                            handle: expressions.append(crate::Expression::Load { pointer }, span),
                             type_id: result_type_id,
                         },
                     );
@@ -948,11 +1009,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     .lookup_member
                                     .get(&(type_lookup.handle, index))
                                     .ok_or(Error::InvalidAccessType(acex.type_id))?;
-                                let base_handle =
-                                    expressions.append(crate::Expression::AccessIndex {
+                                let base_handle = expressions.append(
+                                    crate::Expression::AccessIndex {
                                         base: acex.base_handle,
                                         index,
-                                    });
+                                    },
+                                    span.clone(),
+                                );
                                 AccessExpression {
                                     base_handle,
                                     type_id: lookup_member.type_id,
@@ -963,17 +1026,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                         Some(match type_arena[sub_type_lookup.handle].inner {
                                             // load it transposed, to match column major expectations
                                             crate::TypeInner::Matrix { .. } => {
-                                                let loaded =
-                                                    expressions.append(crate::Expression::Load {
+                                                let loaded = expressions.append(
+                                                    crate::Expression::Load {
                                                         pointer: base_handle,
-                                                    });
-                                                let transposed =
-                                                    expressions.append(crate::Expression::Math {
+                                                    },
+                                                    span.clone(),
+                                                );
+                                                let transposed = expressions.append(
+                                                    crate::Expression::Math {
                                                         fun: crate::MathFunction::Transpose,
                                                         arg: loaded,
                                                         arg1: None,
                                                         arg2: None,
-                                                    });
+                                                    },
+                                                    span.clone(),
+                                                );
                                                 LookupLoadOverride::Loaded(transposed)
                                             }
                                             _ => LookupLoadOverride::Pending,
@@ -990,11 +1057,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                         let index = index_maybe.ok_or_else(|| {
                                             Error::InvalidAccess(index_expr_data.clone())
                                         })?;
-                                        let sub_handle =
-                                            expressions.append(crate::Expression::AccessIndex {
+                                        let sub_handle = expressions.append(
+                                            crate::Expression::AccessIndex {
                                                 base: load_expr,
                                                 index,
-                                            });
+                                            },
+                                            span.clone(),
+                                        );
                                         Some(LookupLoadOverride::Loaded(sub_handle))
                                     }
                                     _ => None,
@@ -1010,7 +1079,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     },
                                 };
                                 AccessExpression {
-                                    base_handle: expressions.append(sub_expr),
+                                    base_handle: expressions.append(sub_expr, span.clone()),
                                     type_id: type_lookup
                                         .base_id
                                         .ok_or(Error::InvalidAccessType(acex.type_id))?,
@@ -1019,10 +1088,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             }
                             // This must be a vector or an array.
                             _ => {
-                                let base_handle = expressions.append(crate::Expression::Access {
-                                    base: acex.base_handle,
-                                    index: index_expr.handle,
-                                });
+                                let base_handle = expressions.append(
+                                    crate::Expression::Access {
+                                        base: acex.base_handle,
+                                        index: index_expr.handle,
+                                    },
+                                    span.clone(),
+                                );
                                 let load_override = match acex.load_override {
                                     // If there is a load override in place, then we always end up
                                     // with a side-loaded value here.
@@ -1031,23 +1103,31 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                             // We must be indexing into the array of row-major matrices.
                                             // Let's load the result of indexing and transpose it.
                                             LookupLoadOverride::Pending => {
-                                                let loaded =
-                                                    expressions.append(crate::Expression::Load {
+                                                let loaded = expressions.append(
+                                                    crate::Expression::Load {
                                                         pointer: base_handle,
-                                                    });
-                                                expressions.append(crate::Expression::Math {
-                                                    fun: crate::MathFunction::Transpose,
-                                                    arg: loaded,
-                                                    arg1: None,
-                                                    arg2: None,
-                                                })
+                                                    },
+                                                    span.clone(),
+                                                );
+                                                expressions.append(
+                                                    crate::Expression::Math {
+                                                        fun: crate::MathFunction::Transpose,
+                                                        arg: loaded,
+                                                        arg1: None,
+                                                        arg2: None,
+                                                    },
+                                                    span.clone(),
+                                                )
                                             }
                                             // We are indexing inside a row-major matrix.
                                             LookupLoadOverride::Loaded(load_expr) => expressions
-                                                .append(crate::Expression::Access {
-                                                    base: load_expr,
-                                                    index: index_expr.handle,
-                                                }),
+                                                .append(
+                                                    crate::Expression::Access {
+                                                        base: load_expr,
+                                                        index: index_expr.handle,
+                                                    },
+                                                    span.clone(),
+                                                ),
                                         };
                                         Some(LookupLoadOverride::Loaded(sub_expr))
                                     }
@@ -1090,25 +1170,37 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
 
-                    let mut handle = expressions.append(crate::Expression::Access {
-                        base: root_lexp.handle,
-                        index: self.index_constant_expressions[0],
-                    });
-                    for &index_expr in self.index_constant_expressions[1..num_components].iter() {
-                        let access_expr = expressions.append(crate::Expression::Access {
+                    let mut handle = expressions.append(
+                        crate::Expression::Access {
                             base: root_lexp.handle,
-                            index: index_expr,
-                        });
-                        let cond = expressions.append(crate::Expression::Binary {
-                            op: crate::BinaryOperator::Equal,
-                            left: index_expr,
-                            right: index_lexp.handle,
-                        });
-                        handle = expressions.append(crate::Expression::Select {
-                            condition: cond,
-                            accept: access_expr,
-                            reject: handle,
-                        });
+                            index: self.index_constant_expressions[0],
+                        },
+                        span.clone(),
+                    );
+                    for &index_expr in self.index_constant_expressions[1..num_components].iter() {
+                        let access_expr = expressions.append(
+                            crate::Expression::Access {
+                                base: root_lexp.handle,
+                                index: index_expr,
+                            },
+                            span.clone(),
+                        );
+                        let cond = expressions.append(
+                            crate::Expression::Binary {
+                                op: crate::BinaryOperator::Equal,
+                                left: index_expr,
+                                right: index_lexp.handle,
+                            },
+                            span.clone(),
+                        );
+                        handle = expressions.append(
+                            crate::Expression::Select {
+                                condition: cond,
+                                accept: access_expr,
+                                reject: handle,
+                            },
+                            span.clone(),
+                        );
                     }
 
                     self.lookup_expression.insert(
@@ -1139,26 +1231,38 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     };
                     let mut components = Vec::with_capacity(num_components);
                     for &index_expr in self.index_constant_expressions[..num_components].iter() {
-                        let access_expr = expressions.append(crate::Expression::Access {
-                            base: root_lexp.handle,
-                            index: index_expr,
-                        });
-                        let cond = expressions.append(crate::Expression::Binary {
-                            op: crate::BinaryOperator::Equal,
-                            left: index_expr,
-                            right: index_lexp.handle,
-                        });
-                        let handle = expressions.append(crate::Expression::Select {
-                            condition: cond,
-                            accept: object_lexp.handle,
-                            reject: access_expr,
-                        });
+                        let access_expr = expressions.append(
+                            crate::Expression::Access {
+                                base: root_lexp.handle,
+                                index: index_expr,
+                            },
+                            span.clone(),
+                        );
+                        let cond = expressions.append(
+                            crate::Expression::Binary {
+                                op: crate::BinaryOperator::Equal,
+                                left: index_expr,
+                                right: index_lexp.handle,
+                            },
+                            span.clone(),
+                        );
+                        let handle = expressions.append(
+                            crate::Expression::Select {
+                                condition: cond,
+                                accept: object_lexp.handle,
+                                reject: access_expr,
+                            },
+                            span.clone(),
+                        );
                         components.push(handle);
                     }
-                    let handle = expressions.append(crate::Expression::Compose {
-                        ty: root_type_lookup.handle,
-                        components,
-                    });
+                    let handle = expressions.append(
+                        crate::Expression::Compose {
+                            ty: root_type_lookup.handle,
+                            components,
+                        },
+                        span.clone(),
+                    );
 
                     self.lookup_expression.insert(
                         id,
@@ -1198,10 +1302,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             }
                         };
                         lexp = LookupExpression {
-                            handle: expressions.append(crate::Expression::AccessIndex {
-                                base: lexp.handle,
-                                index,
-                            }),
+                            handle: expressions.append(
+                                crate::Expression::AccessIndex {
+                                    base: lexp.handle,
+                                    index,
+                                },
+                                span.clone(),
+                            ),
                             type_id,
                         };
                     }
@@ -1235,6 +1342,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         &selections,
                         type_arena,
                         expressions,
+                        span,
                     )?;
 
                     self.lookup_expression.insert(
@@ -1272,7 +1380,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         id,
                         LookupExpression {
-                            handle: expressions.append(expr),
+                            handle: expressions.append(expr, span),
                             type_id: result_type_id,
                         },
                     );
@@ -1297,9 +1405,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => match self.lookup_load_override.get(&pointer_id) {
                             Some(&LookupLoadOverride::Loaded(handle)) => handle,
                             //Note: we aren't handling `LookupLoadOverride::Pending` properly here
-                            _ => expressions.append(crate::Expression::Load {
-                                pointer: base_lexp.handle,
-                            }),
+                            _ => expressions.append(
+                                crate::Expression::Load {
+                                    pointer: base_lexp.handle,
+                                },
+                                span,
+                            ),
                         },
                     };
 
@@ -1323,10 +1434,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     let base_expr = self.lookup_expression.lookup(pointer_id)?;
                     let value_expr = self.lookup_expression.lookup(value_id)?;
-                    block.push(crate::Statement::Store {
-                        pointer: base_expr.handle,
-                        value: value_expr.handle,
-                    });
+                    block.push(
+                        crate::Statement::Store {
+                            pointer: base_expr.handle,
+                            value: value_expr.handle,
+                        },
+                        span,
+                    );
                     emitter.start(expressions);
                 }
                 // Arithmetic Instructions +, -, *, /, %
@@ -1394,7 +1508,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: expressions.append(expr),
+                            handle: expressions.append(expr, span),
                             type_id: result_type_id,
                         },
                     );
@@ -1417,7 +1531,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: expressions.append(expr),
+                            handle: expressions.append(expr, span),
                             type_id: result_type_id,
                         },
                     );
@@ -1440,7 +1554,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: expressions.append(expr),
+                            handle: expressions.append(expr, span),
                             type_id: result_type_id,
                         },
                     );
@@ -1495,7 +1609,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         arguments,
                         expressions,
                     )?;
-                    block.push(stmt);
+                    block.push(stmt, span);
                     emitter.start(expressions);
                 }
                 Op::ImageFetch | Op::ImageRead => {
@@ -1603,7 +1717,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: expressions.append(expr),
+                            handle: expressions.append(expr, span),
                             type_id: result_type_id,
                         },
                     );
@@ -1681,7 +1795,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             } else {
                                 return Err(Error::InvalidAccessIndex(index));
                             };
-                            components.push(expressions.append(expr));
+                            components.push(expressions.append(expr, span.clone()));
                         }
                         crate::Expression::Compose {
                             ty: self.lookup_type.lookup(result_type_id)?.handle,
@@ -1692,7 +1806,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: expressions.append(expr),
+                            handle: expressions.append(expr, span),
                             type_id: result_type_id,
                         },
                     );
@@ -1705,7 +1819,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::FConvert
                 | Op::UConvert
                 | Op::SConvert => {
-                    inst.expect_at_least(4)?;
+                    inst.expect(4)?;
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let value_id = self.next()?;
@@ -1731,7 +1845,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: expressions.append(expr),
+                            handle: expressions.append(expr, span),
                             type_id: result_type_id,
                         },
                     );
@@ -1756,8 +1870,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result = if self.lookup_void_type == Some(result_type_id) {
                         None
                     } else {
-                        let expr_handle =
-                            expressions.append(crate::Expression::CallResult(function));
+                        let expr_handle = expressions
+                            .append(crate::Expression::CallResult(function), span.clone());
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
@@ -1767,11 +1881,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         );
                         Some(expr_handle)
                     };
-                    block.push(crate::Statement::Call {
-                        function,
-                        arguments,
-                        result,
-                    });
+                    block.push(
+                        crate::Statement::Call {
+                            function,
+                            arguments,
+                            result,
+                        },
+                        span,
+                    );
                     emitter.start(expressions);
                 }
                 Op::ExtInst => {
@@ -1797,30 +1914,38 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             self.lookup_expression.lookup(arg_id)?.handle
                         };
 
-                        let constant_handle = const_arena.fetch_or_append(crate::Constant {
-                            name: None,
-                            specialization: None,
-                            inner: crate::ConstantInner::Scalar {
-                                width: 4,
-                                value: crate::ScalarValue::Float(match gl_op {
-                                    Glo::Radians => std::f64::consts::PI / 180.0,
-                                    Glo::Degrees => 180.0 / std::f64::consts::PI,
-                                    _ => unreachable!(),
-                                }),
+                        let constant_handle = const_arena.fetch_or_append(
+                            crate::Constant {
+                                name: None,
+                                specialization: None,
+                                inner: crate::ConstantInner::Scalar {
+                                    width: 4,
+                                    value: crate::ScalarValue::Float(match gl_op {
+                                        Glo::Radians => std::f64::consts::PI / 180.0,
+                                        Glo::Degrees => 180.0 / std::f64::consts::PI,
+                                        _ => unreachable!(),
+                                    }),
+                                },
                             },
-                        });
+                            Default::default(),
+                        );
 
-                        let expr_handle =
-                            expressions.append(crate::Expression::Constant(constant_handle));
+                        let expr_handle = expressions.append(
+                            crate::Expression::Constant(constant_handle),
+                            Default::default(),
+                        );
 
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
-                                handle: expressions.append(crate::Expression::Binary {
-                                    op: crate::BinaryOperator::Multiply,
-                                    left: arg,
-                                    right: expr_handle,
-                                }),
+                                handle: expressions.append(
+                                    crate::Expression::Binary {
+                                        op: crate::BinaryOperator::Multiply,
+                                        left: arg,
+                                        right: expr_handle,
+                                    },
+                                    span,
+                                ),
                                 type_id: result_type_id,
                             },
                         );
@@ -1900,7 +2025,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
-                                handle: expressions.append(expr),
+                                handle: expressions.append(expr, span),
                                 type_id: result_type_id,
                             },
                         );
@@ -1962,7 +2087,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: expressions.append(expr),
+                            handle: expressions.append(expr, span),
                             type_id: result_type_id,
                         },
                     );
@@ -2020,11 +2145,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             width: _,
                         } => {
                             // IR expects a signed integer, so do a bitcast
-                            expressions.append(crate::Expression::As {
-                                kind: crate::ScalarKind::Sint,
-                                expr: selector_lexp.handle,
-                                convert: None,
-                            })
+                            expressions.append(
+                                crate::Expression::As {
+                                    kind: crate::ScalarKind::Sint,
+                                    expr: selector_lexp.handle,
+                                    convert: None,
+                                },
+                                span,
+                            )
                         }
                         crate::TypeInner::Scalar {
                             kind: crate::ScalarKind::Sint,
@@ -2093,12 +2221,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let structure_ptr = self.lookup_expression.lookup(structure_id)?;
 
-                    let member_ptr = expressions.append(crate::Expression::AccessIndex {
-                        base: structure_ptr.handle,
-                        index: member_index,
-                    });
+                    let member_ptr = expressions.append(
+                        crate::Expression::AccessIndex {
+                            base: structure_ptr.handle,
+                            index: member_index,
+                        },
+                        span.clone(),
+                    );
 
-                    let length = expressions.append(crate::Expression::ArrayLength(member_ptr));
+                    let length =
+                        expressions.append(crate::Expression::ArrayLength(member_ptr), span);
 
                     self.lookup_expression.insert(
                         result_id,
@@ -2125,15 +2257,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let source = self.lookup_expression.lookup(source_id)?;
 
                     // This operation is practically the same as loading and then storing, I think.
-                    let value_expr = expressions.append(crate::Expression::Load {
-                        pointer: source.handle,
-                    });
+                    let value_expr = expressions.append(
+                        crate::Expression::Load {
+                            pointer: source.handle,
+                        },
+                        span.clone(),
+                    );
 
                     block.extend(emitter.finish(expressions));
-                    block.push(crate::Statement::Store {
-                        pointer: target.handle,
-                        value: value_expr,
-                    });
+                    block.push(
+                        crate::Statement::Store {
+                            pointer: target.handle,
+                            value: value_expr,
+                        },
+                        span,
+                    );
 
                     emitter.start(expressions);
                 }
@@ -2172,7 +2310,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     .bits()
                                 != 0,
                         );
-                        block.push(crate::Statement::Barrier(flags));
+                        block.push(crate::Statement::Barrier(flags), span);
                     } else {
                         log::warn!("Unsupported barrier execution scope: {}", exec_scope);
                     }
@@ -2195,7 +2333,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         })
     }
 
-    fn make_expression_storage(&mut self) -> Arena<crate::Expression> {
+    fn make_expression_storage(
+        &mut self,
+        globals: &Arena<crate::GlobalVariable>,
+        constants: &Arena<crate::Constant>,
+    ) -> Arena<crate::Expression> {
         let mut expressions = Arena::new();
         #[allow(clippy::panic)]
         {
@@ -2203,7 +2345,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
         // register global variables
         for (&id, var) in self.lookup_variable.iter() {
-            let handle = expressions.append(crate::Expression::GlobalVariable(var.handle));
+            let span = globals.get_span(var.handle).clone();
+            let handle = expressions.append(crate::Expression::GlobalVariable(var.handle), span);
             self.lookup_expression.insert(
                 id,
                 LookupExpression {
@@ -2215,12 +2358,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         // register special constants
         self.index_constant_expressions.clear();
         for &con_handle in self.index_constants.iter() {
-            let handle = expressions.append(crate::Expression::Constant(con_handle));
+            let span = constants.get_span(con_handle).clone();
+            let handle = expressions.append(crate::Expression::Constant(con_handle), span);
             self.index_constant_expressions.push(handle);
         }
         // register constants
         for (&id, con) in self.lookup_constant.iter() {
-            let handle = expressions.append(crate::Expression::Constant(con.handle));
+            let span = constants.get_span(con.handle).clone();
+            let handle = expressions.append(crate::Expression::Constant(con.handle), span);
             self.lookup_expression.insert(
                 id,
                 LookupExpression {
@@ -2268,7 +2413,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     if let [S::Break] = reject[..] {
                         // uplift "accept" into the parent
                         let extracted = mem::take(accept);
-                        statements.splice(i + 1..i + 1, extracted.into_iter());
+                        statements.splice(i + 1..i + 1, extracted);
                     } else {
                         self.patch_statements(reject, expressions, function)?;
                         self.patch_statements(accept, expressions, function)?;
@@ -2282,7 +2427,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     if cases.is_empty() {
                         // uplift "default" into the parent
                         let extracted = mem::take(default);
-                        statements.splice(i + 1..i + 1, extracted.into_iter());
+                        statements.splice(i + 1..i + 1, extracted);
                     } else {
                         for case in cases.iter_mut() {
                             self.patch_statements(&mut case.body, expressions, function)?;
@@ -2382,14 +2527,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         // register indexing constants
         self.index_constants.clear();
         for i in 0..4 {
-            let handle = module.constants.append(crate::Constant {
-                name: None,
-                specialization: None,
-                inner: crate::ConstantInner::Scalar {
-                    width: 4,
-                    value: crate::ScalarValue::Sint(i),
+            let handle = module.constants.append(
+                crate::Constant {
+                    name: None,
+                    specialization: None,
+                    inner: crate::ConstantInner::Scalar {
+                        width: 4,
+                        value: crate::ScalarValue::Sint(i),
+                    },
                 },
-            });
+                Default::default(),
+            );
             self.index_constants.push(handle);
         }
 
@@ -2439,7 +2587,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::TypeSampler => self.parse_type_sampler(inst, &mut module),
                 Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
                 Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
-                Op::ConstantNull | Op::Undef => self.parse_null_constant(inst, &mut module),
+                Op::ConstantNull | Op::Undef => self
+                    .parse_null_constant(inst, &module.types, &mut module.constants)
+                    .map(|_| ()),
                 Op::ConstantTrue => self.parse_bool_constant(inst, true, &mut module),
                 Op::ConstantFalse => self.parse_bool_constant(inst, false, &mut module),
                 Op::Variable => self.parse_global_variable(inst, &mut module),
@@ -2457,7 +2607,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             let mut nodes = petgraph::algo::toposort(&self.function_call_graph, None)
                 .map_err(|cycle| Error::FunctionCallCycle(cycle.node_id()))?;
             nodes.reverse(); // we need dominated first
-            let mut functions = mem::take(&mut module.functions).into_inner();
+            let mut functions = mem::take(&mut module.functions);
             for fun_id in nodes {
                 if fun_id > !(functions.len() as u32) {
                     // skip all the fake IDs registered for the entry points
@@ -2465,9 +2615,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 let handle = self.lookup_function.get_mut(&fun_id).unwrap();
                 // take out the function from the old array
-                let fun = mem::take(&mut functions[handle.index()]);
+                let fun = mem::take(&mut functions[*handle]);
                 // add it to the newly formed arena, and adjust the lookup
-                *handle = module.functions.append(fun);
+                *handle = module
+                    .functions
+                    .append(fun, functions.get_span(*handle).clone());
             }
         }
         // patch all the functions
@@ -2734,6 +2886,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(2)?;
         let id = self.next()?;
@@ -2744,10 +2897,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                    inner,
-                }),
+                handle: module.types.append(
+                    crate::Type {
+                        name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                        inner,
+                    },
+                    self.span_from_with_op(start),
+                ),
                 base_id: None,
             },
         );
@@ -2759,6 +2915,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(4)?;
         let id = self.next()?;
@@ -2775,10 +2932,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                    inner,
-                }),
+                handle: module.types.append(
+                    crate::Type {
+                        name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                        inner,
+                    },
+                    self.span_from_with_op(start),
+                ),
                 base_id: None,
             },
         );
@@ -2790,6 +2950,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(3)?;
         let id = self.next()?;
@@ -2801,10 +2962,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                    inner,
-                }),
+                handle: module.types.append(
+                    crate::Type {
+                        name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                        inner,
+                    },
+                    self.span_from_with_op(start),
+                ),
                 base_id: None,
             },
         );
@@ -2816,6 +2980,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(4)?;
         let id = self.next()?;
@@ -2834,10 +2999,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                    inner,
-                }),
+                handle: module.types.append(
+                    crate::Type {
+                        name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                        inner,
+                    },
+                    self.span_from_with_op(start),
+                ),
                 base_id: Some(type_id),
             },
         );
@@ -2849,6 +3017,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(4)?;
         let id = self.next()?;
@@ -2869,10 +3038,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: decor.and_then(|dec| dec.name),
-                    inner,
-                }),
+                handle: module.types.append(
+                    crate::Type {
+                        name: decor.and_then(|dec| dec.name),
+                        inner,
+                    },
+                    self.span_from_with_op(start),
+                ),
                 base_id: Some(vector_type_id),
             },
         );
@@ -2900,6 +3072,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(4)?;
         let id = self.next()?;
@@ -2929,13 +3102,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             base_lookup_ty.clone()
         } else {
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: decor.and_then(|dec| dec.name),
-                    inner: crate::TypeInner::Pointer {
-                        base: base_lookup_ty.handle,
-                        class,
+                handle: module.types.append(
+                    crate::Type {
+                        name: decor.and_then(|dec| dec.name),
+                        inner: crate::TypeInner::Pointer {
+                            base: base_lookup_ty.handle,
+                            class,
+                        },
                     },
-                }),
+                    self.span_from_with_op(start),
+                ),
                 base_id: Some(type_id),
             }
         };
@@ -2948,6 +3124,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(4)?;
         let id = self.next()?;
@@ -2968,10 +3145,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: decor.name,
-                    inner,
-                }),
+                handle: module.types.append(
+                    crate::Type {
+                        name: decor.name,
+                        inner,
+                    },
+                    self.span_from_with_op(start),
+                ),
                 base_id: Some(type_id),
             },
         );
@@ -2983,6 +3163,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(3)?;
         let id = self.next()?;
@@ -3001,10 +3182,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: decor.name,
-                    inner,
-                }),
+                handle: module.types.append(
+                    crate::Type {
+                        name: decor.name,
+                        inner,
+                    },
+                    self.span_from_with_op(start),
+                ),
                 base_id: Some(type_id),
             },
         );
@@ -3016,6 +3200,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect_at_least(2)?;
         let id = self.next()?;
@@ -3103,10 +3288,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             members,
         };
 
-        let ty_handle = module.types.append(crate::Type {
-            name: parent_decor.and_then(|dec| dec.name),
-            inner,
-        });
+        let ty_handle = module.types.append(
+            crate::Type {
+                name: parent_decor.and_then(|dec| dec.name),
+                inner,
+            },
+            self.span_from_with_op(start),
+        );
 
         if block_decor == Some(Block { buffer: true }) {
             self.lookup_storage_buffer_types
@@ -3131,6 +3319,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(9)?;
 
@@ -3147,17 +3336,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let decor = self.future_decor.remove(&id).unwrap_or_default();
 
         // ensure there is a type for texture coordinate without extra components
-        module.types.fetch_or_append(crate::Type {
-            name: None,
-            inner: {
-                let kind = crate::ScalarKind::Float;
-                let width = 4;
-                match dim.required_coordinate_size() {
-                    None => crate::TypeInner::Scalar { kind, width },
-                    Some(size) => crate::TypeInner::Vector { size, kind, width },
-                }
+        module.types.fetch_or_append(
+            crate::Type {
+                name: None,
+                inner: {
+                    let kind = crate::ScalarKind::Float;
+                    let width = 4;
+                    match dim.required_coordinate_size() {
+                        None => crate::TypeInner::Scalar { kind, width },
+                        Some(size) => crate::TypeInner::Vector { size, kind, width },
+                    }
+                },
             },
-        });
+            Default::default(),
+        );
 
         let base_handle = self.lookup_type.lookup(sample_type_id)?.handle;
         let kind = module.types[base_handle]
@@ -3181,10 +3373,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             arrayed: is_array,
         };
 
-        let handle = module.types.append(crate::Type {
-            name: decor.name,
-            inner,
-        });
+        let handle = module.types.append(
+            crate::Type {
+                name: decor.name,
+                inner,
+            },
+            self.span_from_with_op(start),
+        );
 
         self.lookup_type.insert(
             id,
@@ -3216,14 +3411,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(2)?;
         let id = self.next()?;
         let decor = self.future_decor.remove(&id).unwrap_or_default();
-        let handle = module.types.append(crate::Type {
-            name: decor.name,
-            inner: crate::TypeInner::Sampler { comparison: false },
-        });
+        let handle = module.types.append(
+            crate::Type {
+                name: decor.name,
+                inner: crate::TypeInner::Sampler { comparison: false },
+            },
+            self.span_from_with_op(start),
+        );
         self.lookup_type.insert(
             id,
             LookupType {
@@ -3239,6 +3438,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect_at_least(4)?;
         let type_id = self.next()?;
@@ -3308,11 +3508,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_constant.insert(
             id,
             LookupConstant {
-                handle: module.constants.append(crate::Constant {
-                    specialization: decor.specialization,
-                    name: decor.name,
-                    inner,
-                }),
+                handle: module.constants.append(
+                    crate::Constant {
+                        specialization: decor.specialization,
+                        name: decor.name,
+                        inner,
+                    },
+                    self.span_from_with_op(start),
+                ),
                 type_id,
             },
         );
@@ -3324,6 +3527,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect_at_least(3)?;
         let type_id = self.next()?;
@@ -3341,11 +3545,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_constant.insert(
             id,
             LookupConstant {
-                handle: module.constants.append(crate::Constant {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                    specialization: None,
-                    inner: crate::ConstantInner::Composite { ty, components },
-                }),
+                handle: module.constants.append(
+                    crate::Constant {
+                        name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                        specialization: None,
+                        inner: crate::ConstantInner::Composite { ty, components },
+                    },
+                    self.span_from_with_op(start),
+                ),
                 type_id,
             },
         );
@@ -3355,29 +3562,30 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     fn parse_null_constant(
         &mut self,
         inst: Instruction,
-        module: &mut crate::Module,
-    ) -> Result<(), Error> {
+        types: &Arena<crate::Type>,
+        constants: &mut Arena<crate::Constant>,
+    ) -> Result<(u32, u32, Handle<crate::Constant>), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(3)?;
         let type_id = self.next()?;
         let id = self.next()?;
+        let span = self.span_from_with_op(start);
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let inner = null::generate_null_constant(ty, &mut module.types, &mut module.constants)?;
-
-        self.lookup_constant.insert(
-            id,
-            LookupConstant {
-                handle: module.constants.append(crate::Constant {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                    specialization: None, //TODO
-                    inner,
-                }),
-                type_id,
+        let inner = null::generate_null_constant(ty, types, constants, span.clone())?;
+        let handle = constants.append(
+            crate::Constant {
+                name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                specialization: None, //TODO
+                inner,
             },
+            span,
         );
-        Ok(())
+        self.lookup_constant
+            .insert(id, LookupConstant { handle, type_id });
+        Ok((type_id, id, handle))
     }
 
     fn parse_bool_constant(
@@ -3386,6 +3594,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         value: bool,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(3)?;
         let type_id = self.next()?;
@@ -3394,11 +3603,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_constant.insert(
             id,
             LookupConstant {
-                handle: module.constants.append(crate::Constant {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                    specialization: None, //TODO
-                    inner: crate::ConstantInner::boolean(value),
-                }),
+                handle: module.constants.append(
+                    crate::Constant {
+                        name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                        specialization: None, //TODO
+                        inner: crate::ConstantInner::boolean(value),
+                    },
+                    self.span_from_with_op(start),
+                ),
                 type_id,
             },
         );
@@ -3410,6 +3622,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         module: &mut crate::Module,
     ) -> Result<(), Error> {
+        let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect_at_least(4)?;
         let type_id = self.next()?;
@@ -3423,6 +3636,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         } else {
             None
         };
+        let span = self.span_from_with_op(start);
         let mut dec = self.future_decor.remove(&id).unwrap_or_default();
 
         let original_ty = self.lookup_type.lookup(type_id)?.handle;
@@ -3496,7 +3710,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ) {
                         unsigned_ty = module
                             .types
-                            .fetch_or_append(crate::Type { name: None, inner });
+                            .fetch_or_append(crate::Type { name: None, inner }, Default::default());
                     }
                 }
 
@@ -3522,8 +3736,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         match null::generate_default_built_in(
                             Some(built_in),
                             effective_ty,
-                            &mut module.types,
+                            &module.types,
                             &mut module.constants,
+                            span.clone(),
                         ) {
                             Ok(handle) => Some(handle),
                             Err(e) => {
@@ -3552,19 +3767,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 let handle = null::generate_default_built_in(
                                     built_in,
                                     member_ty,
-                                    &mut module.types,
+                                    &module.types,
                                     &mut module.constants,
+                                    span.clone(),
                                 )?;
                                 components.push(handle);
                             }
-                            Some(module.constants.append(crate::Constant {
-                                name: None,
-                                specialization: None,
-                                inner: crate::ConstantInner::Composite {
-                                    ty: effective_ty,
-                                    components,
+                            Some(module.constants.append(
+                                crate::Constant {
+                                    name: None,
+                                    specialization: None,
+                                    inner: crate::ConstantInner::Composite {
+                                        ty: effective_ty,
+                                        components,
+                                    },
                                 },
-                            }))
+                                span.clone(),
+                            ))
                         }
                         _ => None,
                     },
@@ -3585,7 +3804,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         };
 
-        let handle = module.global_variables.append(var);
+        let handle = module.global_variables.append(var, span);
         if module.types[effective_ty].inner.can_comparison_sample() {
             log::debug!("\t\ttracking {:?} for sampling properties", handle);
             self.handle_sampling

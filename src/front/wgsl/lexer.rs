@@ -201,6 +201,10 @@ impl<'a> Lexer<'a> {
         self.source.len() - self.input.len()
     }
 
+    pub(super) fn span_from(&self, offset: usize) -> Span {
+        offset..self.current_byte_offset()
+    }
+
     #[must_use]
     pub(super) fn next(&mut self) -> TokenSpan<'a> {
         let mut start_byte_offset = self.current_byte_offset();

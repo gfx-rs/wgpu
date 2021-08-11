@@ -2555,30 +2555,41 @@ fn test_stack_size() {
     use crate::valid::{Capabilities, ValidationFlags};
     // create a module with at least one expression nested
     let mut module = crate::Module::default();
-    let constant = module.constants.append(crate::Constant {
-        name: None,
-        specialization: None,
-        inner: crate::ConstantInner::Scalar {
-            value: crate::ScalarValue::Float(1.0),
-            width: 4,
+    let constant = module.constants.append(
+        crate::Constant {
+            name: None,
+            specialization: None,
+            inner: crate::ConstantInner::Scalar {
+                value: crate::ScalarValue::Float(1.0),
+                width: 4,
+            },
         },
-    });
+        Default::default(),
+    );
     let mut fun = crate::Function::default();
     let const_expr = fun
         .expressions
-        .append(crate::Expression::Constant(constant));
-    let nested_expr = fun.expressions.append(crate::Expression::Unary {
-        op: crate::UnaryOperator::Negate,
-        expr: const_expr,
-    });
-    fun.body
-        .push(crate::Statement::Emit(fun.expressions.range_from(1)));
-    fun.body.push(crate::Statement::If {
-        condition: nested_expr,
-        accept: Vec::new(),
-        reject: Vec::new(),
-    });
-    let _ = module.functions.append(fun);
+        .append(crate::Expression::Constant(constant), Default::default());
+    let nested_expr = fun.expressions.append(
+        crate::Expression::Unary {
+            op: crate::UnaryOperator::Negate,
+            expr: const_expr,
+        },
+        Default::default(),
+    );
+    fun.body.push(
+        crate::Statement::Emit(fun.expressions.range_from(1)),
+        Default::default(),
+    );
+    fun.body.push(
+        crate::Statement::If {
+            condition: nested_expr,
+            accept: crate::Block::new(),
+            reject: crate::Block::new(),
+        },
+        Default::default(),
+    );
+    let _ = module.functions.append(fun, Default::default());
     // analyse the module
     let info = crate::valid::Validator::new(ValidationFlags::empty(), Capabilities::empty())
         .validate(&module)

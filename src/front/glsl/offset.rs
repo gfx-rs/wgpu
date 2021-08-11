@@ -84,14 +84,18 @@ pub fn calculate_offset(
                 crate::ArraySize::Dynamic => stride,
             };
 
-            ty = types.fetch_or_append(Type {
-                name,
-                inner: TypeInner::Array {
-                    base: info.ty,
-                    size,
-                    stride,
+            let ty_span = types.get_span(ty).clone();
+            ty = types.fetch_or_append(
+                Type {
+                    name,
+                    inner: TypeInner::Array {
+                        base: info.ty,
+                        size,
+                        stride,
+                    },
                 },
-            });
+                ty_span,
+            );
 
             (align, span)
         }
@@ -138,14 +142,18 @@ pub fn calculate_offset(
                 span += info.span;
             }
 
-            ty = types.fetch_or_append(Type {
-                name,
-                inner: TypeInner::Struct {
-                    top_level,
-                    members,
-                    span,
+            let ty_span = types.get_span(ty).clone();
+            ty = types.fetch_or_append(
+                Type {
+                    name,
+                    inner: TypeInner::Struct {
+                        top_level,
+                        members,
+                        span,
+                    },
                 },
-            });
+                ty_span,
+            );
 
             (align, span)
         }

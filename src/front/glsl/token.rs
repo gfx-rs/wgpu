@@ -56,6 +56,10 @@ impl SourceMetadata {
         }
     }
 
+    pub fn as_span(&self) -> crate::Span {
+        crate::Span::ByteRange(self.start..self.end)
+    }
+
     pub(crate) fn none() -> Self {
         SourceMetadata::default()
     }

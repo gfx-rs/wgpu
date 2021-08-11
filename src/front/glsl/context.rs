@@ -79,8 +79,9 @@ impl Context {
         self.emit_flush(body);
         let (expr, load) = match kind {
             GlobalLookupKind::Variable(v) => {
+                let span = parser.module.global_variables.get_span(v).clone();
                 let res = (
-                    self.expressions.append(Expression::GlobalVariable(v)),
+                    self.expressions.append(Expression::GlobalVariable(v), span),
                     parser.module.global_variables[v].class != StorageClass::Handle,
                 );
                 self.emit_start();
@@ -88,11 +89,14 @@ impl Context {
                 res
             }
             GlobalLookupKind::BlockSelect(handle, index) => {
-                let base = self.expressions.append(Expression::GlobalVariable(handle));
+                let span = parser.module.global_variables.get_span(handle).clone();
+                let base = self
+                    .expressions
+                    .append(Expression::GlobalVariable(handle), span.clone());
                 self.emit_start();
                 let expr = self
                     .expressions
-                    .append(Expression::AccessIndex { base, index });
+                    .append(Expression::AccessIndex { base, index }, span);
 
                 (expr, {
                     let ty = parser.module.global_variables[handle].ty;
@@ -114,7 +118,11 @@ impl Context {
                 })
             }
             GlobalLookupKind::Constant(v) => {
-                let res = (self.expressions.append(Expression::Constant(v)), false);
+                let span = parser.module.constants.get_span(v).clone();
+                let res = (
+                    self.expressions.append(Expression::Constant(v), span),
+                    false,
+                );
                 self.emit_start();
                 res
             }
@@ -138,15 +146,21 @@ impl Context {
         body.extend(self.emitter.finish(&self.expressions))
     }
 
-    pub fn add_expression(&mut self, expr: Expression, body: &mut Block) -> Handle<Expression> {
-        if expr.needs_pre_emit() {
+    pub fn add_expression(
+        &mut self,
+        expr: Expression,
+        meta: SourceMetadata,
+        body: &mut Block,
+    ) -> Handle<Expression> {
+        let needs_pre_emit = expr.needs_pre_emit();
+        if needs_pre_emit {
             self.emit_flush(body);
-            let handle = self.expressions.append(expr);
-            self.emit_start();
-            handle
-        } else {
-            self.expressions.append(expr)
         }
+        let handle = self.expressions.append(expr, meta.as_span());
+        if needs_pre_emit {
+            self.emit_start();
+        }
+        handle
     }
 
     pub fn lookup_local_var(&self, name: &str) -> Option<VariableReference> {
@@ -191,13 +205,13 @@ impl Context {
         &mut self,
         parser: &mut Parser,
         body: &mut Block,
-        name: Option<String>,
+        name_meta: Option<(String, SourceMetadata)>,
         ty: Handle<Type>,
         qualifier: ParameterQualifier,
     ) {
         let index = self.arguments.len();
         let mut arg = FunctionArgument {
-            name: name.clone(),
+            name: name_meta.as_ref().map(|&(ref name, _)| name.clone()),
             ty,
             binding: None,
         };
@@ -209,13 +223,17 @@ impl Context {
         };
 
         if qualifier.is_lhs() {
-            arg.ty = parser.module.types.fetch_or_append(Type {
-                name: None,
-                inner: TypeInner::Pointer {
-                    base: arg.ty,
-                    class: StorageClass::Function,
+            let span = parser.module.types.get_span(arg.ty).clone();
+            arg.ty = parser.module.types.fetch_or_append(
+                Type {
+                    name: None,
+                    inner: TypeInner::Pointer {
+                        base: arg.ty,
+                        class: StorageClass::Function,
+                    },
                 },
-            })
+                span,
+            )
         }
 
         self.arguments.push(arg);
@@ -225,26 +243,32 @@ impl Context {
             depth: false,
         });
 
-        if let Some(name) = name {
-            let expr = self.add_expression(Expression::FunctionArgument(index as u32), body);
+        if let Some((name, meta)) = name_meta {
+            let expr = self.add_expression(Expression::FunctionArgument(index as u32), meta, body);
             let mutable = qualifier != ParameterQualifier::Const && !opaque;
             let load = qualifier.is_lhs();
 
             if mutable && !load {
-                let handle = self.locals.append(LocalVariable {
-                    name: Some(name.clone()),
-                    ty,
-                    init: None,
-                });
-                let local_expr = self.add_expression(Expression::LocalVariable(handle), body);
+                let handle = self.locals.append(
+                    LocalVariable {
+                        name: Some(name.clone()),
+                        ty,
+                        init: None,
+                    },
+                    meta.as_span(),
+                );
+                let local_expr = self.add_expression(Expression::LocalVariable(handle), meta, body);
 
                 self.emit_flush(body);
                 self.emit_start();
 
-                body.push(Statement::Store {
-                    pointer: local_expr,
-                    value: expr,
-                });
+                body.push(
+                    Statement::Store {
+                        pointer: local_expr,
+                        value: expr,
+                    },
+                    meta.as_span(),
+                );
 
                 if let Some(current) = self.scopes.last_mut() {
                     (*current).insert(
@@ -395,18 +419,19 @@ impl Context {
                                     _ => return None,
                                 },
                             },
+                            meta,
                             body,
                         ))
                     })
                     .unwrap_or_else(|| {
-                        self.add_expression(Expression::Access { base, index }, body)
+                        self.add_expression(Expression::Access { base, index }, meta, body)
                     });
 
                 if !lhs {
                     let resolved = parser.resolve_type(self, pointer, meta)?;
                     if resolved.pointer_class().is_some() {
                         return Ok((
-                            Some(self.add_expression(Expression::Load { pointer }, body)),
+                            Some(self.add_expression(Expression::Load { pointer }, meta, body)),
                             meta,
                         ));
                     }
@@ -420,7 +445,7 @@ impl Context {
                 parser.field_selection(self, lhs, body, base, field, meta)?
             }
             HirExprKind::Constant(constant) if !lhs => {
-                self.add_expression(Expression::Constant(constant), body)
+                self.add_expression(Expression::Constant(constant), meta, body)
             }
             HirExprKind::Binary { left, op, right } if !lhs => {
                 let (mut left, left_meta) =
@@ -453,13 +478,19 @@ impl Context {
                                 false => (BinaryOperator::NotEqual, RelationalFunction::Any),
                             };
 
-                            let argument =
-                                self.expressions
-                                    .append(Expression::Binary { op, left, right });
+                            let argument = self
+                                .expressions
+                                .append(Expression::Binary { op, left, right }, meta.as_span());
 
-                            self.add_expression(Expression::Relational { fun, argument }, body)
+                            self.add_expression(
+                                Expression::Relational { fun, argument },
+                                meta,
+                                body,
+                            )
                         }
-                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                        _ => {
+                            self.add_expression(Expression::Binary { left, op, right }, meta, body)
+                        }
                     },
                     (&TypeInner::Vector { size, .. }, &TypeInner::Scalar { .. }) => match op {
                         BinaryOperator::Add
@@ -467,8 +498,11 @@ impl Context {
                         | BinaryOperator::Divide
                         | BinaryOperator::ShiftLeft
                         | BinaryOperator::ShiftRight => {
-                            let scalar_vector =
-                                self.add_expression(Expression::Splat { size, value: right }, body);
+                            let scalar_vector = self.add_expression(
+                                Expression::Splat { size, value: right },
+                                meta,
+                                body,
+                            );
 
                             self.add_expression(
                                 Expression::Binary {
@@ -476,15 +510,21 @@ impl Context {
                                     left,
                                     right: scalar_vector,
                                 },
+                                meta,
                                 body,
                             )
                         }
-                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                        _ => {
+                            self.add_expression(Expression::Binary { left, op, right }, meta, body)
+                        }
                     },
                     (&TypeInner::Scalar { .. }, &TypeInner::Vector { size, .. }) => match op {
                         BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Divide => {
-                            let scalar_vector =
-                                self.add_expression(Expression::Splat { size, value: left }, body);
+                            let scalar_vector = self.add_expression(
+                                Expression::Splat { size, value: left },
+                                meta,
+                                body,
+                            );
 
                             self.add_expression(
                                 Expression::Binary {
@@ -492,18 +532,21 @@ impl Context {
                                     left: scalar_vector,
                                     right,
                                 },
+                                meta,
                                 body,
                             )
                         }
-                        _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                        _ => {
+                            self.add_expression(Expression::Binary { left, op, right }, meta, body)
+                        }
                     },
-                    _ => self.add_expression(Expression::Binary { left, op, right }, body),
+                    _ => self.add_expression(Expression::Binary { left, op, right }, meta, body),
                 }
             }
             HirExprKind::Unary { op, expr } if !lhs => {
                 let expr = self.lower_expect_inner(stmt, parser, expr, false, body)?.0;
 
-                self.add_expression(Expression::Unary { op, expr }, body)
+                self.add_expression(Expression::Unary { op, expr }, meta, body)
             }
             HirExprKind::Variable(ref var) => {
                 if lhs {
@@ -518,7 +561,7 @@ impl Context {
 
                     var.expr
                 } else if var.load {
-                    self.add_expression(Expression::Load { pointer: var.expr }, body)
+                    self.add_expression(Expression::Load { pointer: var.expr }, meta, body)
                 } else {
                     var.expr
                 }
@@ -561,6 +604,7 @@ impl Context {
                         accept,
                         reject,
                     },
+                    meta,
                     body,
                 )
             }
@@ -600,6 +644,7 @@ impl Context {
                                 base: vector,
                                 index: pattern[index].index(),
                             },
+                            meta,
                             body,
                         );
                         let src = self.add_expression(
@@ -607,22 +652,26 @@ impl Context {
                                 base: value,
                                 index: index as u32,
                             },
+                            meta,
                             body,
                         );
 
                         self.emit_flush(body);
                         self.emit_start();
 
-                        body.push(Statement::Store {
-                            pointer: dst,
-                            value: src,
-                        });
+                        body.push(
+                            Statement::Store {
+                                pointer: dst,
+                                value: src,
+                            },
+                            meta.as_span(),
+                        );
                     }
                 } else {
                     self.emit_flush(body);
                     self.emit_start();
 
-                    body.push(Statement::Store { pointer, value });
+                    body.push(Statement::Store { pointer, value }, meta.as_span());
                 }
 
                 value
@@ -638,7 +687,7 @@ impl Context {
                 };
 
                 let pointer = self.lower_expect_inner(stmt, parser, expr, true, body)?.0;
-                let left = self.add_expression(Expression::Load { pointer }, body);
+                let left = self.add_expression(Expression::Load { pointer }, meta, body);
 
                 let uint = match parser.resolve_type(self, left, meta)?.scalar_kind() {
                     Some(ScalarKind::Sint) => false,
@@ -654,59 +703,71 @@ impl Context {
                     }
                 };
 
-                let one = parser.module.constants.append(Constant {
-                    name: None,
-                    specialization: None,
-                    inner: crate::ConstantInner::Scalar {
-                        width: 4,
-                        value: match uint {
-                            true => crate::ScalarValue::Uint(1),
-                            false => crate::ScalarValue::Sint(1),
+                let one = parser.module.constants.append(
+                    Constant {
+                        name: None,
+                        specialization: None,
+                        inner: crate::ConstantInner::Scalar {
+                            width: 4,
+                            value: match uint {
+                                true => crate::ScalarValue::Uint(1),
+                                false => crate::ScalarValue::Sint(1),
+                            },
                         },
                     },
-                });
-                let right = self.add_expression(Expression::Constant(one), body);
+                    Default::default(),
+                );
+                let right = self.add_expression(Expression::Constant(one), meta, body);
 
-                let value = self.add_expression(Expression::Binary { op, left, right }, body);
+                let value = self.add_expression(Expression::Binary { op, left, right }, meta, body);
 
                 if postfix {
-                    let local = self.locals.append(LocalVariable {
-                        name: None,
-                        ty: parser.module.types.fetch_or_append(Type {
+                    let local = self.locals.append(
+                        LocalVariable {
                             name: None,
-                            inner: TypeInner::Scalar {
-                                kind: match uint {
-                                    true => ScalarKind::Uint,
-                                    false => ScalarKind::Sint,
+                            ty: parser.module.types.fetch_or_append(
+                                Type {
+                                    name: None,
+                                    inner: TypeInner::Scalar {
+                                        kind: match uint {
+                                            true => ScalarKind::Uint,
+                                            false => ScalarKind::Sint,
+                                        },
+                                        width: 4,
+                                    },
                                 },
-                                width: 4,
-                            },
-                        }),
-                        init: None,
-                    });
+                                meta.as_span(),
+                            ),
+                            init: None,
+                        },
+                        meta.as_span(),
+                    );
 
-                    let expr = self.add_expression(Expression::LocalVariable(local), body);
-                    let load = self.add_expression(Expression::Load { pointer: expr }, body);
-
-                    self.emit_flush(body);
-                    self.emit_start();
-
-                    body.push(Statement::Store {
-                        pointer: expr,
-                        value: left,
-                    });
+                    let expr = self.add_expression(Expression::LocalVariable(local), meta, body);
+                    let load = self.add_expression(Expression::Load { pointer: expr }, meta, body);
 
                     self.emit_flush(body);
                     self.emit_start();
 
-                    body.push(Statement::Store { pointer, value });
+                    body.push(
+                        Statement::Store {
+                            pointer: expr,
+                            value: left,
+                        },
+                        meta.as_span(),
+                    );
+
+                    self.emit_flush(body);
+                    self.emit_start();
+
+                    body.push(Statement::Store { pointer, value }, meta.as_span());
 
                     load
                 } else {
                     self.emit_flush(body);
                     self.emit_start();
 
-                    body.push(Statement::Store { pointer, value });
+                    body.push(Statement::Store { pointer, value }, meta.as_span());
 
                     left
                 }
@@ -758,11 +819,14 @@ impl Context {
             (type_power(kind), self.expr_power(parser, *expr, meta)?)
         {
             if tgt_power > expr_power {
-                *expr = self.expressions.append(Expression::As {
-                    expr: *expr,
-                    kind,
-                    convert: Some(width),
-                })
+                *expr = self.expressions.append(
+                    Expression::As {
+                        expr: *expr,
+                        kind,
+                        convert: Some(width),
+                    },
+                    meta.as_span(),
+                )
             }
         }
 
@@ -789,19 +853,25 @@ impl Context {
         ) {
             match left_power.cmp(&right_power) {
                 std::cmp::Ordering::Less => {
-                    *left = self.expressions.append(Expression::As {
-                        expr: *left,
-                        kind: right_kind,
-                        convert: Some(right_width),
-                    })
+                    *left = self.expressions.append(
+                        Expression::As {
+                            expr: *left,
+                            kind: right_kind,
+                            convert: Some(right_width),
+                        },
+                        left_meta.as_span(),
+                    )
                 }
                 std::cmp::Ordering::Equal => {}
                 std::cmp::Ordering::Greater => {
-                    *right = self.expressions.append(Expression::As {
-                        expr: *right,
-                        kind: left_kind,
-                        convert: Some(left_width),
-                    })
+                    *right = self.expressions.append(
+                        Expression::As {
+                            expr: *right,
+                            kind: left_kind,
+                            convert: Some(left_width),
+                        },
+                        right_meta.as_span(),
+                    )
                 }
             }
         }
@@ -822,7 +892,7 @@ impl Context {
         if let (&TypeInner::Scalar { .. }, Some(size)) = (expr_type, vector_size) {
             *expr = self
                 .expressions
-                .append(Expression::Splat { size, value: *expr })
+                .append(Expression::Splat { size, value: *expr }, meta.as_span())
         }
 
         Ok(())
@@ -832,6 +902,7 @@ impl Context {
         &mut self,
         size: VectorSize,
         vector: Handle<Expression>,
+        meta: SourceMetadata,
         body: &mut Block,
     ) -> Handle<Expression> {
         self.add_expression(
@@ -840,6 +911,7 @@ impl Context {
                 vector,
                 pattern: crate::SwizzleComponent::XYZW,
             },
+            meta,
             body,
         )
     }

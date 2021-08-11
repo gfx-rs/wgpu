@@ -42,6 +42,7 @@ spv-out = ["spirv"]
 wgsl-in = ["codespan-reporting"]
 wgsl-out = []
 hlsl-out = []
+span = ["codespan-reporting"]
 
 [dev-dependencies]
 diff = "0.1"

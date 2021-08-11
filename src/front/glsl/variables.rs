@@ -42,6 +42,7 @@ impl Parser {
         ctx: &mut Context,
         body: &mut Block,
         name: &str,
+        meta: SourceMetadata,
     ) -> Option<VariableReference> {
         if let Some(local_var) = ctx.lookup_local_var(name) {
             return Some(local_var);
@@ -54,15 +55,18 @@ impl Parser {
             let ty = self
                 .module
                 .types
-                .fetch_or_append(Type { name: None, inner });
+                .fetch_or_append(Type { name: None, inner }, meta.as_span());
 
-            let handle = self.module.global_variables.append(GlobalVariable {
-                name: Some(name.into()),
-                class: StorageClass::Private,
-                binding: None,
-                ty,
-                init: None,
-            });
+            let handle = self.module.global_variables.append(
+                GlobalVariable {
+                    name: Some(name.into()),
+                    class: StorageClass::Private,
+                    binding: None,
+                    ty,
+                    init: None,
+                },
+                meta.as_span(),
+            );
 
             let idx = self.entry_args.len();
             self.entry_args.push(EntryArg {
@@ -81,7 +85,7 @@ impl Parser {
                 },
             ));
 
-            let expr = ctx.add_expression(Expression::GlobalVariable(handle), body);
+            let expr = ctx.add_expression(Expression::GlobalVariable(handle), meta, body);
             ctx.lookup_global_var_exps.insert(
                 name.into(),
                 VariableReference {
@@ -201,6 +205,7 @@ impl Parser {
                         base: expression,
                         index: index as u32,
                     },
+                    meta,
                     body,
                 ))
             }
@@ -273,6 +278,7 @@ impl Parser {
                                     base: expression,
                                     index: pattern[0].index(),
                                 },
+                                meta,
                                 body,
                             ));
                         }
@@ -299,6 +305,7 @@ impl Parser {
                             Expression::Load {
                                 pointer: expression,
                             },
+                            meta,
                             body,
                         );
                     }
@@ -309,6 +316,7 @@ impl Parser {
                             vector: expression,
                             pattern,
                         },
+                        meta,
                         body,
                     ))
                 } else {
@@ -483,13 +491,16 @@ impl Parser {
                 })
             });
 
-            let handle = self.module.global_variables.append(GlobalVariable {
-                name: name.clone(),
-                class: StorageClass::Private,
-                binding: None,
-                ty,
-                init,
-            });
+            let handle = self.module.global_variables.append(
+                GlobalVariable {
+                    name: name.clone(),
+                    class: StorageClass::Private,
+                    binding: None,
+                    ty,
+                    init,
+                },
+                meta.as_span(),
+            );
 
             let idx = self.entry_args.len();
             self.entry_args.push(EntryArg {
@@ -548,16 +559,19 @@ impl Parser {
             }
         };
 
-        let handle = self.module.global_variables.append(GlobalVariable {
-            name: name.clone(),
-            class,
-            binding: binding.map(|binding| ResourceBinding {
-                group: set.unwrap_or(0),
-                binding,
-            }),
-            ty,
-            init,
-        });
+        let handle = self.module.global_variables.append(
+            GlobalVariable {
+                name: name.clone(),
+                class,
+                binding: binding.map(|binding| ResourceBinding {
+                    group: set.unwrap_or(0),
+                    binding,
+                }),
+                ty,
+                init,
+            },
+            meta.as_span(),
+        );
 
         if let Some(name) = name {
             let lookup = GlobalLookup {
@@ -628,12 +642,15 @@ impl Parser {
             }
         }
 
-        let handle = ctx.locals.append(LocalVariable {
-            name: name.clone(),
-            ty,
-            init,
-        });
-        let expr = ctx.add_expression(Expression::LocalVariable(handle), body);
+        let handle = ctx.locals.append(
+            LocalVariable {
+                name: name.clone(),
+                ty,
+                init,
+            },
+            meta.as_span(),
+        );
+        let expr = ctx.add_expression(Expression::LocalVariable(handle), meta, body);
 
         if let Some(name) = name {
             ctx.add_local_var(name, expr, mutable);

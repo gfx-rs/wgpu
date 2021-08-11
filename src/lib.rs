@@ -29,8 +29,8 @@ A Naga backend can generate code to evaluate an `Expression` however and
 whenever it pleases, as long as it is certain to observe the side effects of all
 previously executed `Statement`s.
 
-Many `Statement` variants use the [`Block`] type, which is simply `Vec<Statement>`,
-representing a series of statements executed in order. The body of an
+Many `Statement` variants use the [`Block`] type, which is `Vec<Statement>`,
+with optional span info, representing a series of statements executed in order. The body of an
 `EntryPoint`s or `Function` is a `Block`, and `Statement` has a
 [`Block`][Statement::Block] variant.
 
@@ -151,8 +151,10 @@ tree.
 
 mod arena;
 pub mod back;
+mod block;
 pub mod front;
 pub mod proc;
+mod span;
 pub mod valid;
 
 pub use crate::arena::{Arena, Handle, Range};
@@ -162,6 +164,7 @@ use std::{
     hash::BuildHasherDefault,
 };
 
+pub use crate::span::Span;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
@@ -1175,8 +1178,7 @@ pub enum Expression {
     ArrayLength(Handle<Expression>),
 }
 
-/// A code block is just a vector of statements.
-pub type Block = Vec<Statement>;
+pub use block::Block;
 
 /// A case for a switch statement.
 // Clone is used only for error reporting and is not intended for end users

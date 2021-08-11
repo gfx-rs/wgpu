@@ -857,59 +857,79 @@ fn uniform_control_flow() {
     use crate::{Expression as E, Statement as S};
 
     let mut constant_arena = Arena::new();
-    let constant = constant_arena.append(crate::Constant {
-        name: None,
-        specialization: None,
-        inner: crate::ConstantInner::Scalar {
-            width: 4,
-            value: crate::ScalarValue::Uint(0),
+    let constant = constant_arena.append(
+        crate::Constant {
+            name: None,
+            specialization: None,
+            inner: crate::ConstantInner::Scalar {
+                width: 4,
+                value: crate::ScalarValue::Uint(0),
+            },
         },
-    });
+        Default::default(),
+    );
     let mut type_arena = Arena::new();
-    let ty = type_arena.append(crate::Type {
-        name: None,
-        inner: crate::TypeInner::Vector {
-            size: crate::VectorSize::Bi,
-            kind: crate::ScalarKind::Float,
-            width: 4,
+    let ty = type_arena.append(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Vector {
+                size: crate::VectorSize::Bi,
+                kind: crate::ScalarKind::Float,
+                width: 4,
+            },
         },
-    });
+        Default::default(),
+    );
     let mut global_var_arena = Arena::new();
-    let non_uniform_global = global_var_arena.append(crate::GlobalVariable {
-        name: None,
-        init: None,
-        ty,
-        class: crate::StorageClass::Handle,
-        binding: None,
-    });
-    let uniform_global = global_var_arena.append(crate::GlobalVariable {
-        name: None,
-        init: None,
-        ty,
-        binding: None,
-        class: crate::StorageClass::Uniform,
-    });
+    let non_uniform_global = global_var_arena.append(
+        crate::GlobalVariable {
+            name: None,
+            init: None,
+            ty,
+            class: crate::StorageClass::Handle,
+            binding: None,
+        },
+        Default::default(),
+    );
+    let uniform_global = global_var_arena.append(
+        crate::GlobalVariable {
+            name: None,
+            init: None,
+            ty,
+            binding: None,
+            class: crate::StorageClass::Uniform,
+        },
+        Default::default(),
+    );
 
     let mut expressions = Arena::new();
     // checks the uniform control flow
-    let constant_expr = expressions.append(E::Constant(constant));
+    let constant_expr = expressions.append(E::Constant(constant), Default::default());
     // checks the non-uniform control flow
-    let derivative_expr = expressions.append(E::Derivative {
-        axis: crate::DerivativeAxis::X,
-        expr: constant_expr,
-    });
+    let derivative_expr = expressions.append(
+        E::Derivative {
+            axis: crate::DerivativeAxis::X,
+            expr: constant_expr,
+        },
+        Default::default(),
+    );
     let emit_range_constant_derivative = expressions.range_from(0);
-    let non_uniform_global_expr = expressions.append(E::GlobalVariable(non_uniform_global));
-    let uniform_global_expr = expressions.append(E::GlobalVariable(uniform_global));
+    let non_uniform_global_expr =
+        expressions.append(E::GlobalVariable(non_uniform_global), Default::default());
+    let uniform_global_expr =
+        expressions.append(E::GlobalVariable(uniform_global), Default::default());
     let emit_range_globals = expressions.range_from(2);
 
     // checks the QUERY flag
-    let query_expr = expressions.append(E::ArrayLength(uniform_global_expr));
+    let query_expr = expressions.append(E::ArrayLength(uniform_global_expr), Default::default());
     // checks the transitive WRITE flag
-    let access_expr = expressions.append(E::AccessIndex {
-        base: non_uniform_global_expr,
-        index: 1,
-    });
+    let access_expr = expressions.append(
+        E::AccessIndex {
+            base: non_uniform_global_expr,
+            index: 1,
+        },
+        Default::default(),
+    );
     let emit_range_query_access_globals = expressions.range_from(2);
 
     let mut info = FunctionInfo {
@@ -944,14 +964,15 @@ fn uniform_control_flow() {
     let stmt_emit1 = S::Emit(emit_range_globals.clone());
     let stmt_if_uniform = S::If {
         condition: uniform_global_expr,
-        accept: Vec::new(),
+        accept: crate::Block::new(),
         reject: vec![
             S::Emit(emit_range_constant_derivative.clone()),
             S::Store {
                 pointer: constant_expr,
                 value: derivative_expr,
             },
-        ],
+        ]
+        .into(),
     };
     assert_eq!(
         info.process_block(&[stmt_emit1, stmt_if_uniform], &[], None, &expressions),
@@ -975,8 +996,9 @@ fn uniform_control_flow() {
                 pointer: constant_expr,
                 value: derivative_expr,
             },
-        ],
-        reject: Vec::new(),
+        ]
+        .into(),
+        reject: crate::Block::new(),
     };
     assert_eq!(
         info.process_block(&[stmt_emit2, stmt_if_non_uniform], &[], None, &expressions),

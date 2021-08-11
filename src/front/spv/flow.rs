@@ -527,10 +527,13 @@ impl FlowGraph {
                     let variable = &lookup_expression[&variable_id];
                     let parent_node = &mut self.flow[self.block_to_node[&parent_id]];
 
-                    parent_node.block.push(crate::Statement::Store {
-                        pointer: phi.pointer,
-                        value: variable.handle,
-                    });
+                    parent_node.block.push(
+                        crate::Statement::Store {
+                            pointer: phi.pointer,
+                            value: variable.handle,
+                        },
+                        crate::Span::Unknown,
+                    );
                 }
             }
             self.flow[node_index].phis = phis;
@@ -548,7 +551,7 @@ impl FlowGraph {
         stop_nodes: std::collections::HashSet<BlockNodeIndex>,
     ) -> Result<crate::Block, Error> {
         if stop_nodes.contains(&node_index) {
-            return Ok(vec![]);
+            return Ok(crate::Block::new());
         }
 
         if self.flow[node_index].visited {
@@ -647,21 +650,25 @@ impl FlowGraph {
                                 || edge == ControlFlowEdgeType::LoopBreak
                             {
                                 // Do not add break if already has one as the last statement
-                                if let Some(&crate::Statement::Break) = statements.last() {
+                                if let Some(&crate::Statement::Break) = statements.as_ref().last() {
                                 } else {
-                                    statements.push(crate::Statement::Break);
+                                    statements.push(crate::Statement::Break, crate::Span::Unknown);
                                 }
                             }
                         }
                     }
 
-                    result.push(crate::Statement::If {
-                        condition,
-                        accept,
-                        reject,
-                    });
+                    result.push(
+                        crate::Statement::If {
+                            condition,
+                            accept,
+                            reject,
+                        },
+                        crate::Span::Unknown,
+                    );
 
-                    result.extend(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
+                    result
+                        .extend_block(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
 
                     Ok(result)
                 }
@@ -703,16 +710,20 @@ impl FlowGraph {
                         });
                     }
 
-                    result.push(crate::Statement::Switch {
-                        selector,
-                        cases,
-                        default: self.convert_to_naga_traverse(
-                            self.block_to_node[&default_id],
-                            stop_nodes_cases,
-                        )?,
-                    });
+                    result.push(
+                        crate::Statement::Switch {
+                            selector,
+                            cases,
+                            default: self.convert_to_naga_traverse(
+                                self.block_to_node[&default_id],
+                                stop_nodes_cases,
+                            )?,
+                        },
+                        crate::Span::Unknown,
+                    );
 
-                    result.extend(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
+                    result
+                        .extend_block(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
 
                     Ok(result)
                 }
@@ -745,25 +756,31 @@ impl FlowGraph {
                         let true_node_index = self.block_to_node[&true_id];
                         let false_node_index = self.block_to_node[&false_id];
 
-                        body.push(crate::Statement::If {
-                            condition,
-                            accept: if true_node_index == merge_node_index {
-                                vec![crate::Statement::Break]
-                            } else {
-                                self.convert_to_naga_traverse(
-                                    true_node_index,
-                                    stop_nodes_merge.clone(),
-                                )?
+                        body.push(
+                            crate::Statement::If {
+                                condition,
+                                accept: if true_node_index == merge_node_index {
+                                    crate::Block::from_vec(vec![crate::Statement::Break])
+                                } else {
+                                    self.convert_to_naga_traverse(
+                                        true_node_index,
+                                        stop_nodes_merge.clone(),
+                                    )?
+                                },
+                                reject: if false_node_index == merge_node_index {
+                                    crate::Block::from_vec(vec![crate::Statement::Break])
+                                } else {
+                                    self.convert_to_naga_traverse(
+                                        false_node_index,
+                                        stop_nodes_merge,
+                                    )?
+                                },
                             },
-                            reject: if false_node_index == merge_node_index {
-                                vec![crate::Statement::Break]
-                            } else {
-                                self.convert_to_naga_traverse(false_node_index, stop_nodes_merge)?
-                            },
-                        });
+                            crate::Span::Unknown,
+                        );
                     }
                     Terminator::Branch { target_id } => {
-                        body.extend(self.convert_to_naga_traverse(
+                        body.extend_block(self.convert_to_naga_traverse(
                             self.block_to_node[&target_id],
                             stop_nodes_merge,
                         )?)
@@ -771,8 +788,9 @@ impl FlowGraph {
                     _ => return Err(Error::InvalidTerminator),
                 };
 
-                let mut result = vec![crate::Statement::Loop { body, continuing }];
-                result.extend(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
+                let mut result =
+                    crate::Block::from_vec(vec![crate::Statement::Loop { body, continuing }]);
+                result.extend_block(self.convert_to_naga_traverse(merge_node_index, stop_nodes)?);
 
                 Ok(result)
             }
@@ -795,27 +813,35 @@ impl FlowGraph {
                         if true_edge == ControlFlowEdgeType::LoopBreak
                             || true_edge == ControlFlowEdgeType::IfBreak
                         {
-                            result.push(crate::Statement::If {
-                                condition,
-                                accept: if true_edge == ControlFlowEdgeType::LoopBreak {
-                                    vec![crate::Statement::Break]
-                                } else {
-                                    vec![]
+                            result.push(
+                                crate::Statement::If {
+                                    condition,
+                                    accept: if true_edge == ControlFlowEdgeType::LoopBreak {
+                                        crate::Block::from_vec(vec![crate::Statement::Break])
+                                    } else {
+                                        crate::Block::new()
+                                    },
+                                    reject: self
+                                        .convert_to_naga_traverse(false_node_id, stop_nodes)?,
                                 },
-                                reject: self.convert_to_naga_traverse(false_node_id, stop_nodes)?,
-                            });
+                                crate::Span::Unknown,
+                            );
                         } else if false_edge == ControlFlowEdgeType::LoopBreak
                             || false_edge == ControlFlowEdgeType::IfBreak
                         {
-                            result.push(crate::Statement::If {
-                                condition,
-                                accept: self.convert_to_naga_traverse(true_node_id, stop_nodes)?,
-                                reject: if false_edge == ControlFlowEdgeType::LoopBreak {
-                                    vec![crate::Statement::Break]
-                                } else {
-                                    vec![]
+                            result.push(
+                                crate::Statement::If {
+                                    condition,
+                                    accept: self
+                                        .convert_to_naga_traverse(true_node_id, stop_nodes)?,
+                                    reject: if false_edge == ControlFlowEdgeType::LoopBreak {
+                                        crate::Block::from_vec(vec![crate::Statement::Break])
+                                    } else {
+                                        crate::Block::new()
+                                    },
                                 },
-                            });
+                                crate::Span::Unknown,
+                            );
                         } else {
                             return Err(Error::InvalidEdgeClassification);
                         }
@@ -827,7 +853,7 @@ impl FlowGraph {
                             self.flow[self.flow.find_edge(node_index, target_index).unwrap()];
 
                         if edge == ControlFlowEdgeType::LoopBreak {
-                            result.push(crate::Statement::Break);
+                            result.push(crate::Statement::Break, crate::Span::Unknown);
                         }
                     }
                     _ => return Err(Error::InvalidTerminator),
@@ -839,7 +865,7 @@ impl FlowGraph {
             }
             Some(ControlFlowNodeType::Kill) => {
                 let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
-                result.push(crate::Statement::Kill);
+                result.push(crate::Statement::Kill, crate::Span::Unknown);
                 Ok(result)
             }
             Some(ControlFlowNodeType::Return) => {
@@ -848,13 +874,13 @@ impl FlowGraph {
                     _ => return Err(Error::InvalidTerminator),
                 };
                 let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
-                result.push(crate::Statement::Return { value });
+                result.push(crate::Statement::Return { value }, crate::Span::Unknown);
                 Ok(result)
             }
             Some(ControlFlowNodeType::Merge) | None => match self.flow[node_index].terminator {
                 Terminator::Branch { target_id } => {
-                    let mut result: crate::Block = std::mem::take(&mut self.flow[node_index].block);
-                    result.extend(
+                    let mut result = std::mem::take(&mut self.flow[node_index].block);
+                    result.extend_block(
                         self.convert_to_naga_traverse(self.block_to_node[&target_id], stop_nodes)?,
                     );
                     Ok(result)

@@ -29,10 +29,20 @@ impl Emitter {
         self.start_len = Some(arena.len());
     }
     #[must_use]
-    fn finish(&mut self, arena: &Arena<crate::Expression>) -> Option<crate::Statement> {
+    fn finish(
+        &mut self,
+        arena: &Arena<crate::Expression>,
+    ) -> Option<(crate::Statement, crate::span::Span)> {
         let start_len = self.start_len.take().unwrap();
         if start_len != arena.len() {
-            Some(crate::Statement::Emit(arena.range_from(start_len)))
+            #[allow(unused_mut)]
+            let mut span = crate::span::Span::Unknown;
+            let range = arena.range_from(start_len);
+            #[cfg(feature = "span")]
+            for handle in range.clone() {
+                span.subsume(arena.get_span(handle))
+            }
+            Some((crate::Statement::Emit(range), span))
         } else {
             None
         }
