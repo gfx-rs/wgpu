@@ -19,25 +19,25 @@ fn collatz_iterations(n: u32) -> u32 {
             break;
         }
         {
-            let _e12: u32 = n1;
-            if (((_e12 % u32(2)) == u32(0))) {
+            let _e14: u32 = n1;
+            if (((f32(_e14) % f32(2)) == f32(0))) {
                 {
-                    let _e19: u32 = n1;
-                    n1 = (_e19 / u32(2));
+                    let _e22: u32 = n1;
+                    n1 = (_e22 / u32(2));
                 }
             } else {
                 {
-                    let _e24: u32 = n1;
-                    n1 = ((u32(3) * _e24) + u32(1));
+                    let _e27: u32 = n1;
+                    n1 = ((u32(3) * _e27) + u32(1));
                 }
             }
-            let _e30: u32 = i;
-            local = _e30;
-            i = (_e30 + 1u);
+            let _e33: u32 = i;
+            local = _e33;
+            i = (_e33 + 1u);
         }
     }
-    let _e35: u32 = i;
-    return _e35;
+    let _e38: u32 = i;
+    return _e38;
 }
 
 fn main1() {

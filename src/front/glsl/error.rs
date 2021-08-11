@@ -124,22 +124,3 @@ pub struct Error {
     /// Holds information about the range of the source code where the error happened.
     pub meta: SourceMetadata,
 }
-
-impl Error {
-    pub(crate) fn wrong_function_args(
-        name: String,
-        expected: usize,
-        got: usize,
-        meta: SourceMetadata,
-    ) -> Self {
-        let msg = format!(
-            "Function \"{}\" expects {} arguments, got {}",
-            name, expected, got
-        );
-
-        Error {
-            kind: ErrorKind::SemanticError(msg.into()),
-            meta,
-        }
-    }
-}

@@ -1,4 +1,6 @@
-use super::SourceMetadata;
+use std::fmt;
+
+use super::{builtins::MacroCall, SourceMetadata};
 use crate::{
     BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle, Interpolation,
     Sampling, StorageAccess, StorageClass, Type, UnaryOperator,
@@ -26,12 +28,31 @@ pub struct ParameterInfo {
     pub depth: bool,
 }
 
+/// How the function is implemented
+#[derive(Clone, Copy)]
+pub enum FunctionKind {
+    /// The function is user defined
+    Call(Handle<Function>),
+    /// The function is a buitin
+    Macro(MacroCall),
+}
+
+impl fmt::Debug for FunctionKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Call(_) => write!(f, "Call"),
+            Self::Macro(_) => write!(f, "Macro"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct FunctionDeclaration {
     /// Normalized function parameters, modifiers are not applied
     pub parameters: Vec<Handle<Type>>,
     pub parameters_info: Vec<ParameterInfo>,
-    pub handle: Handle<Function>,
+    /// How the function is implemented
+    pub kind: FunctionKind,
     /// Wheter this function was already defined or is just a prototype
     pub defined: bool,
     /// Wheter or not this function returns void (nothing)

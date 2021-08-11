@@ -804,7 +804,7 @@ impl Context {
     ) -> Result<Option<u32>> {
         Ok(self
             .expr_scalar_components(parser, expr, meta)?
-            .and_then(|(kind, _)| type_power(kind)))
+            .and_then(|(kind, width)| type_power(kind, width)))
     }
 
     pub fn implicit_conversion(
@@ -815,9 +815,10 @@ impl Context {
         kind: ScalarKind,
         width: crate::Bytes,
     ) -> Result<()> {
-        if let (Some(tgt_power), Some(expr_power)) =
-            (type_power(kind), self.expr_power(parser, *expr, meta)?)
-        {
+        if let (Some(tgt_power), Some(expr_power)) = (
+            type_power(kind, width),
+            self.expr_power(parser, *expr, meta)?,
+        ) {
             if tgt_power > expr_power {
                 *expr = self.expressions.append(
                     Expression::As {
@@ -848,8 +849,9 @@ impl Context {
             Some((left_power, left_width, left_kind)),
             Some((right_power, right_width, right_kind)),
         ) = (
-            left_components.and_then(|(kind, width)| Some((type_power(kind)?, width, kind))),
-            right_components.and_then(|(kind, width)| Some((type_power(kind)?, width, kind))),
+            left_components.and_then(|(kind, width)| Some((type_power(kind, width)?, width, kind))),
+            right_components
+                .and_then(|(kind, width)| Some((type_power(kind, width)?, width, kind))),
         ) {
             match left_power.cmp(&right_power) {
                 std::cmp::Ordering::Less => {
@@ -882,7 +884,6 @@ impl Context {
     pub fn implicit_splat(
         &mut self,
         parser: &mut Parser,
-
         expr: &mut Handle<Expression>,
         meta: SourceMetadata,
         vector_size: Option<VectorSize>,

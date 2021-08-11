@@ -2,8 +2,8 @@ use super::{
     constants::ConstantSolver, context::Context, Error, ErrorKind, Parser, Result, SourceMetadata,
 };
 use crate::{
-    proc::ResolveContext, ArraySize, Constant, Expression, Handle, ImageClass, ImageDimension,
-    ScalarKind, Type, TypeInner, VectorSize,
+    proc::ResolveContext, ArraySize, Bytes, Constant, Expression, Handle, ImageClass,
+    ImageDimension, ScalarKind, Type, TypeInner, VectorSize,
 };
 
 pub fn parse_type(type_name: &str) -> Option<Type> {
@@ -159,7 +159,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
     }
 }
 
-pub fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, crate::Bytes)> {
+pub fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, Bytes)> {
     match *ty {
         TypeInner::Scalar { kind, width } => Some((kind, width)),
         TypeInner::Vector { kind, width, .. } => Some((kind, width)),
@@ -169,11 +169,12 @@ pub fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, crate::Bytes)> {
     }
 }
 
-pub fn type_power(kind: ScalarKind) -> Option<u32> {
+pub fn type_power(kind: ScalarKind, width: Bytes) -> Option<u32> {
     Some(match kind {
         ScalarKind::Sint => 0,
         ScalarKind::Uint => 1,
-        ScalarKind::Float => 2,
+        ScalarKind::Float if width == 4 => 2,
+        ScalarKind::Float => 3,
         ScalarKind::Bool => return None,
     })
 }

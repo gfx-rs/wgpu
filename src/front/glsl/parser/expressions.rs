@@ -297,7 +297,6 @@ impl<'source> ParsingContext<'source> {
         stmt: &mut StmtContext,
         body: &mut Block,
     ) -> Result<Handle<HirExpr>> {
-        // TODO: prefix inc/dec
         Ok(match self.expect_peek(parser)?.value {
             TokenValue::Plus | TokenValue::Dash | TokenValue::Bang | TokenValue::Tilde => {
                 let Token { value, meta } = self.bump(parser)?;

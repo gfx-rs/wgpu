@@ -21,9 +21,9 @@ fn TevPerCompGT1(a2: vec3<f32>, b2: vec3<f32>) -> vec3<f32> {
 
     a3 = a2;
     b3 = b2;
-    let _e5: vec3<f32> = a3;
-    let _e6: vec3<f32> = b3;
-    return select(vec3<f32>(0.0), vec3<f32>(1.0), (_e5 > _e6));
+    let _e7: vec3<f32> = a3;
+    let _e8: vec3<f32> = b3;
+    return select(vec3<f32>(0.0), vec3<f32>(1.0), (_e7 > _e8));
 }
 
 fn main1() {

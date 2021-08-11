@@ -1,26 +1,17 @@
 use super::{
     ast::*,
+    builtins::sampled_to_depth,
     context::{Context, StmtContext},
     error::{Error, ErrorKind},
-    types::{scalar_components, type_power},
+    types::scalar_components,
     Parser, Result, SourceMetadata,
 };
 use crate::{
-    proc::ensure_block_returns, Arena, BinaryOperator, Block, Constant, ConstantInner, EntryPoint,
-    Expression, FastHashMap, Function, FunctionArgument, FunctionResult, Handle, ImageClass,
-    ImageDimension, ImageQuery, LocalVariable, MathFunction, Module, RelationalFunction,
-    SampleLevel, ScalarKind, ScalarValue, Statement, StructMember, Type, TypeInner, VectorSize,
+    front::glsl::types::type_power, proc::ensure_block_returns, Arena, Block, Constant,
+    ConstantInner, EntryPoint, Expression, FastHashMap, Function, FunctionArgument, FunctionResult,
+    Handle, LocalVariable, ScalarKind, ScalarValue, Span, Statement, StructMember, Type, TypeInner,
 };
 use std::iter;
-
-/// Helper struct for texture calls with the separate components from the vector argument
-///
-/// Obtained by calling [`coordinate_components`](Parser::coordinate_components)
-struct CoordComponents {
-    coordinate: Handle<Expression>,
-    depth_ref: Option<Handle<Expression>>,
-    array_index: Option<Handle<Expression>>,
-}
 
 impl Parser {
     fn add_constant_value(
@@ -359,729 +350,266 @@ impl Parser {
         stmt: &StmtContext,
         body: &mut Block,
         name: String,
-        mut args: Vec<(Handle<Expression>, SourceMetadata)>,
+        args: Vec<(Handle<Expression>, SourceMetadata)>,
         raw_args: &[Handle<HirExpr>],
         meta: SourceMetadata,
     ) -> Result<Option<Handle<Expression>>> {
-        match name.as_str() {
-            "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
-            | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
-                if args.len() != 2 {
-                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
-                }
-                ctx.samplers.insert(args[0].0, args[1].0);
-                Ok(Some(args[0].0))
+        // If the name for the function hasn't yet been initialized check if any
+        // builtin can be injected.
+        //
+        // NOTE: A name not being initialized is not the same as no declarations
+        // being existing.
+        if self.lookup_function.get(&name).is_none() {
+            self.inject_builtin(name.clone());
+        }
+
+        let declarations = self.lookup_function.get(&name).ok_or_else(|| Error {
+            kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
+            meta,
+        })?;
+
+        // Helper enum containing the type of conversion need for a call
+        #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+        enum Conversion {
+            // No conversion needed
+            Exact,
+            // Float to double conversion needed
+            FloatToDouble,
+            // Int or uint to float conversion needed
+            IntToFloat,
+            // Int or uint to double conversion needed
+            IntToDouble,
+            // Other type of conversion needed
+            Other,
+            // No conversion was yet registered
+            None,
+        }
+
+        let mut maybe_decl = None;
+        let mut old_conversions = vec![Conversion::None; args.len()];
+        let mut ambiguous = false;
+
+        'outer: for decl in declarations {
+            if args.len() != decl.parameters.len() {
+                continue;
             }
-            "sampler1DShadow"
-            | "sampler1DArrayShadow"
-            | "sampler2DShadow"
-            | "sampler2DArrayShadow"
-            | "samplerCubeShadow"
-            | "samplerCubeArrayShadow" => {
-                if args.len() != 2 {
-                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
-                }
-                sampled_to_depth(&mut self.module, ctx, args[0], &mut self.errors)?;
-                self.invalidate_expression(ctx, args[0].0, args[0].1)?;
-                ctx.samplers.insert(args[0].0, args[1].0);
-                Ok(Some(args[0].0))
-            }
-            "texture" => {
-                if !(2..=3).contains(&args.len()) {
-                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
-                }
-                let arg_1 = &mut args[1];
-                ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
-                if let Some(&mut (ref mut expr, meta)) = args.get_mut(2) {
-                    ctx.implicit_conversion(self, expr, meta, ScalarKind::Float, 4)?;
-                }
-                let comps = self.coordinate_components(ctx, args[0], args[1], body)?;
-                if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
-                    Ok(Some(
-                        ctx.add_expression(
-                            Expression::ImageSample {
-                                image: args[0].0,
-                                sampler,
-                                coordinate: comps.coordinate,
-                                array_index: comps.array_index,
-                                offset: None,
-                                level: args.get(2).map_or(SampleLevel::Auto, |&(expr, _)| {
-                                    SampleLevel::Bias(expr)
-                                }),
-                                depth_ref: comps.depth_ref,
-                            },
-                            meta,
-                            body,
-                        ),
-                    ))
-                } else {
-                    Err(Error {
-                        kind: ErrorKind::SemanticError("Bad call to texture".into()),
-                        meta,
-                    })
-                }
-            }
-            "textureLod" => {
-                if args.len() != 3 {
-                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
-                }
-                let arg_1 = &mut args[1];
-                ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
-                let arg_2 = &mut args[2];
-                ctx.implicit_conversion(self, &mut arg_2.0, arg_2.1, ScalarKind::Float, 4)?;
-                let comps = self.coordinate_components(ctx, args[0], args[1], body)?;
-                if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
-                    Ok(Some(ctx.add_expression(
-                        Expression::ImageSample {
-                            image: args[0].0,
-                            sampler,
-                            coordinate: comps.coordinate,
-                            array_index: comps.array_index,
-                            offset: None,
-                            level: SampleLevel::Exact(args[2].0),
-                            depth_ref: comps.depth_ref,
-                        },
-                        meta,
-                        body,
-                    )))
-                } else {
-                    Err(Error {
-                        kind: ErrorKind::SemanticError("Bad call to textureLod".into()),
-                        meta,
-                    })
-                }
-            }
-            "textureProj" => {
-                if !(2..=3).contains(&args.len()) {
-                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
-                }
-                let arg_1 = &mut args[1];
-                ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
-                if let Some(&mut (ref mut expr, meta)) = args.get_mut(2) {
-                    ctx.implicit_conversion(self, expr, meta, ScalarKind::Float, 4)?;
-                }
-                let level = args
-                    .get(2)
-                    .map_or(SampleLevel::Auto, |&(expr, _)| SampleLevel::Bias(expr));
-                let size = match *self.resolve_type(ctx, args[1].0, args[1].1)? {
-                    TypeInner::Vector { size, .. } => size,
-                    _ => {
-                        return Err(Error {
-                            kind: ErrorKind::SemanticError("Bad call to textureProj".into()),
-                            meta,
-                        })
-                    }
-                };
-                let (base, base_meta) = args[1];
-                let mut right = ctx.add_expression(
-                    Expression::AccessIndex {
-                        base,
-                        index: size as u32 - 1,
-                    },
-                    meta,
-                    body,
-                );
-                let left = if let VectorSize::Bi = size {
-                    ctx.add_expression(Expression::AccessIndex { base, index: 0 }, meta, body)
-                } else {
-                    let size = match size {
-                        VectorSize::Tri => VectorSize::Bi,
-                        _ => VectorSize::Tri,
-                    };
-                    right =
-                        ctx.add_expression(Expression::Splat { size, value: right }, meta, body);
-                    ctx.vector_resize(size, base, meta, body)
-                };
-                let coords = ctx.add_expression(
-                    Expression::Binary {
-                        op: BinaryOperator::Divide,
-                        left,
-                        right,
-                    },
-                    meta,
-                    body,
-                );
-                let comps = self.coordinate_components(ctx, args[0], (coords, base_meta), body)?;
-                if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
-                    Ok(Some(ctx.add_expression(
-                        Expression::ImageSample {
-                            image: args[0].0,
-                            sampler,
-                            coordinate: comps.coordinate,
-                            array_index: comps.array_index,
-                            offset: None,
-                            level,
-                            depth_ref: comps.depth_ref,
-                        },
-                        meta,
-                        body,
-                    )))
-                } else {
-                    Err(Error {
-                        kind: ErrorKind::SemanticError("Bad call to textureProj".into()),
-                        meta,
-                    })
-                }
-            }
-            "textureGrad" => {
-                if args.len() != 4 {
-                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
-                }
-                let arg_1 = &mut args[1];
-                ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Float, 4)?;
-                let arg_2 = &mut args[2];
-                ctx.implicit_conversion(self, &mut arg_2.0, arg_2.1, ScalarKind::Float, 4)?;
-                let arg_3 = &mut args[3];
-                ctx.implicit_conversion(self, &mut arg_3.0, arg_3.1, ScalarKind::Float, 4)?;
-                let comps = self.coordinate_components(ctx, args[0], args[1], body)?;
-                if let Some(sampler) = ctx.samplers.get(&args[0].0).copied() {
-                    Ok(Some(ctx.add_expression(
-                        Expression::ImageSample {
-                            image: args[0].0,
-                            sampler,
-                            coordinate: comps.coordinate,
-                            array_index: comps.array_index,
-                            offset: None,
-                            level: SampleLevel::Gradient {
-                                x: args[2].0,
-                                y: args[3].0,
-                            },
-                            depth_ref: comps.depth_ref,
-                        },
-                        meta,
-                        body,
-                    )))
-                } else {
-                    Err(Error {
-                        kind: ErrorKind::SemanticError("Bad call to textureGrad".into()),
-                        meta,
-                    })
-                }
-            }
-            "textureSize" => {
-                if !(1..=2).contains(&args.len()) {
-                    return Err(Error::wrong_function_args(name, 1, args.len(), meta));
-                }
-                if let Some(&mut (ref mut expr, meta)) = args.get_mut(1) {
-                    ctx.implicit_conversion(self, expr, meta, ScalarKind::Sint, 4)?;
-                }
-                Ok(Some(ctx.add_expression(
-                    Expression::ImageQuery {
-                        image: args[0].0,
-                        query: ImageQuery::Size {
-                            level: args.get(1).map(|e| e.0),
-                        },
-                    },
-                    meta,
-                    body,
-                )))
-            }
-            "texelFetch" => {
-                if args.len() != 3 {
-                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
-                }
-                let arg_1 = &mut args[1];
-                ctx.implicit_conversion(self, &mut arg_1.0, arg_1.1, ScalarKind::Sint, 4)?;
-                let arg_2 = &mut args[2];
-                ctx.implicit_conversion(self, &mut arg_2.0, arg_2.1, ScalarKind::Sint, 4)?;
-                let comps = self.coordinate_components(ctx, args[0], args[1], body)?;
-                if ctx.samplers.get(&args[0].0).is_some() && comps.depth_ref.is_none() {
-                    Ok(Some(ctx.add_expression(
-                        Expression::ImageLoad {
-                            image: args[0].0,
-                            coordinate: comps.coordinate,
-                            array_index: comps.array_index,
-                            index: Some(args[2].0),
-                        },
-                        meta,
-                        body,
-                    )))
-                } else {
-                    Err(Error {
-                        kind: ErrorKind::SemanticError("Bad call to texelFetch".into()),
-                        meta,
-                    })
-                }
-            }
-            "ceil" | "round" | "floor" | "fract" | "trunc" | "sin" | "abs" | "sqrt"
-            | "inversesqrt" | "exp" | "exp2" | "sign" | "transpose" | "inverse" | "normalize"
-            | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin" | "log" | "log2"
-            | "length" | "determinant" | "bitCount" | "bitfieldReverse" => {
-                if args.len() != 1 {
-                    return Err(Error::wrong_function_args(name, 1, args.len(), meta));
-                }
-                Ok(Some(ctx.add_expression(
-                    Expression::Math {
-                        fun: match name.as_str() {
-                            "ceil" => MathFunction::Ceil,
-                            "round" => MathFunction::Round,
-                            "floor" => MathFunction::Floor,
-                            "fract" => MathFunction::Fract,
-                            "trunc" => MathFunction::Trunc,
-                            "sin" => MathFunction::Sin,
-                            "abs" => MathFunction::Abs,
-                            "sqrt" => MathFunction::Sqrt,
-                            "inversesqrt" => MathFunction::InverseSqrt,
-                            "exp" => MathFunction::Exp,
-                            "exp2" => MathFunction::Exp2,
-                            "sign" => MathFunction::Sign,
-                            "transpose" => MathFunction::Transpose,
-                            "inverse" => MathFunction::Inverse,
-                            "normalize" => MathFunction::Normalize,
-                            "sinh" => MathFunction::Sinh,
-                            "cos" => MathFunction::Cos,
-                            "cosh" => MathFunction::Cosh,
-                            "tan" => MathFunction::Tan,
-                            "tanh" => MathFunction::Tanh,
-                            "acos" => MathFunction::Acos,
-                            "asin" => MathFunction::Asin,
-                            "log" => MathFunction::Log,
-                            "log2" => MathFunction::Log2,
-                            "length" => MathFunction::Length,
-                            "determinant" => MathFunction::Determinant,
-                            "bitCount" => MathFunction::CountOneBits,
-                            "bitfieldReverse" => MathFunction::ReverseBits,
-                            _ => unreachable!(),
-                        },
-                        arg: args[0].0,
-                        arg1: None,
-                        arg2: None,
-                    },
-                    meta,
-                    body,
-                )))
-            }
-            "atan" => {
-                let expr = match args.len() {
-                    1 => Expression::Math {
-                        fun: MathFunction::Atan,
-                        arg: args[0].0,
-                        arg1: None,
-                        arg2: None,
-                    },
-                    2 => Expression::Math {
-                        fun: MathFunction::Atan2,
-                        arg: args[0].0,
-                        arg1: Some(args[1].0),
-                        arg2: None,
-                    },
-                    _ => return Err(Error::wrong_function_args(name, 2, args.len(), meta)),
-                };
-                Ok(Some(ctx.add_expression(expr, meta, body)))
-            }
-            "mod" => {
-                if args.len() != 2 {
-                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
-                }
 
-                let (mut left, left_meta) = args[0];
-                let (mut right, right_meta) = args[1];
+            let mut exact = true;
+            // State of the selection
+            // If None we still don't know what is the best declaration
+            // If Some(true) the new declaration is better
+            // If Some(false) the old declaration is better
+            let mut superior = None;
+            let mut new_conversions = vec![Conversion::None; args.len()];
 
-                ctx.binary_implicit_conversion(self, &mut left, left_meta, &mut right, right_meta)?;
+            for ((i, decl_arg), call_arg) in decl.parameters.iter().enumerate().zip(args.iter()) {
+                use ScalarKind::*;
 
-                Ok(Some(ctx.add_expression(
-                    Expression::Binary {
-                        op: BinaryOperator::Modulo,
-                        left,
-                        right,
-                    },
-                    meta,
-                    body,
-                )))
-            }
-            "min" | "max" => {
-                if args.len() != 2 {
-                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
-                }
-
-                let (mut arg0, arg0_meta) = args[0];
-                let (mut arg1, arg1_meta) = args[1];
-
-                ctx.binary_implicit_conversion(self, &mut arg0, arg0_meta, &mut arg1, arg1_meta)?;
-
-                if let TypeInner::Vector { size, .. } = *self.resolve_type(ctx, arg0, arg0_meta)? {
-                    ctx.implicit_splat(self, &mut arg1, arg1_meta, Some(size))?;
-                }
-                if let TypeInner::Vector { size, .. } = *self.resolve_type(ctx, arg1, arg1_meta)? {
-                    ctx.implicit_splat(self, &mut arg0, arg0_meta, Some(size))?;
-                }
-
-                Ok(Some(ctx.add_expression(
-                    Expression::Math {
-                        fun: match name.as_str() {
-                            "min" => MathFunction::Min,
-                            "max" => MathFunction::Max,
-                            _ => unreachable!(),
-                        },
-                        arg: arg0,
-                        arg1: Some(arg1),
-                        arg2: None,
-                    },
-                    meta,
-                    body,
-                )))
-            }
-            "pow" | "dot" | "reflect" | "cross" | "outerProduct" | "distance" | "step" | "modf"
-            | "frexp" | "ldexp" => {
-                if args.len() != 2 {
-                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
-                }
-
-                let (mut arg0, arg0_meta) = args[0];
-                let (mut arg1, arg1_meta) = args[1];
-
-                ctx.binary_implicit_conversion(self, &mut arg0, arg0_meta, &mut arg1, arg1_meta)?;
-
-                Ok(Some(ctx.add_expression(
-                    Expression::Math {
-                        fun: match name.as_str() {
-                            "pow" => MathFunction::Pow,
-                            "dot" => MathFunction::Dot,
-                            "reflect" => MathFunction::Reflect,
-                            "cross" => MathFunction::Cross,
-                            "outerProduct" => MathFunction::Outer,
-                            "distance" => MathFunction::Distance,
-                            "step" => MathFunction::Step,
-                            "modf" => MathFunction::Modf,
-                            "frexp" => MathFunction::Frexp,
-                            "ldexp" => MathFunction::Ldexp,
-                            _ => unreachable!(),
-                        },
-                        arg: arg0,
-                        arg1: Some(arg1),
-                        arg2: None,
-                    },
-                    meta,
-                    body,
-                )))
-            }
-            "mix" => {
-                if args.len() != 3 {
-                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
-                }
-
-                let (mut arg, arg_meta) = args[0];
-                let (mut arg1, arg1_meta) = args[1];
-                let (mut selector, selector_meta) = args[2];
-
-                ctx.binary_implicit_conversion(self, &mut arg, arg_meta, &mut arg1, arg1_meta)?;
-                ctx.binary_implicit_conversion(
-                    self,
-                    &mut arg,
-                    arg_meta,
-                    &mut selector,
-                    selector_meta,
-                )?;
-                ctx.binary_implicit_conversion(
-                    self,
-                    &mut arg1,
-                    arg1_meta,
-                    &mut selector,
-                    selector_meta,
-                )?;
-
-                let is_vector = match *self.resolve_type(ctx, selector, selector_meta)? {
-                    TypeInner::Vector { .. } => true,
-                    _ => false,
-                };
-                match *self.resolve_type(ctx, args[0].0, args[0].1)? {
-                    TypeInner::Vector { size, .. } if !is_vector => {
-                        selector = ctx.add_expression(
-                            Expression::Splat {
-                                size,
-                                value: selector,
-                            },
-                            meta,
-                            body,
-                        )
-                    }
-                    _ => {}
-                };
-
-                let expr = match self
-                    .resolve_type(ctx, selector, selector_meta)?
-                    .scalar_kind()
-                {
-                    // When the selector is a boolean vector the result is
-                    // calculated per component, for each component of the
-                    // selector if it's false the respective component from the
-                    // first argument is selected, if it's true the respective
-                    // component from the second argument is selected
-                    //
-                    // Note(jcapucho): yes, it's inverted in comparison with the
-                    // IR and SPIR-V and yes I spent a full debugging a shader
-                    // because of this weird behavior
-                    Some(ScalarKind::Bool) => Expression::Select {
-                        condition: selector,
-                        accept: arg1,
-                        reject: arg,
-                    },
-                    _ => Expression::Math {
-                        fun: MathFunction::Mix,
-                        arg,
-                        arg1: Some(arg1),
-                        arg2: Some(selector),
-                    },
-                };
-
-                Ok(Some(ctx.add_expression(expr, meta, body)))
-            }
-            "clamp" => {
-                if args.len() != 3 {
-                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
-                }
-
-                let (mut arg0, arg0_meta) = args[0];
-                let (mut arg1, arg1_meta) = args[1];
-                let (mut arg2, arg2_meta) = args[2];
-
-                let vector_size = match *(self.resolve_type(ctx, arg0, arg0_meta)?) {
-                    TypeInner::Vector { size, .. } => Some(size),
-                    _ => None,
-                };
-
-                ctx.binary_implicit_conversion(self, &mut arg0, arg0_meta, &mut arg1, arg1_meta)?;
-                ctx.binary_implicit_conversion(self, &mut arg1, arg1_meta, &mut arg2, arg2_meta)?;
-                ctx.binary_implicit_conversion(self, &mut arg2, arg2_meta, &mut arg0, arg0_meta)?;
-
-                ctx.implicit_splat(self, &mut arg1, arg1_meta, vector_size)?;
-                ctx.implicit_splat(self, &mut arg2, arg2_meta, vector_size)?;
-
-                Ok(Some(ctx.add_expression(
-                    Expression::Math {
-                        fun: MathFunction::Clamp,
-                        arg: arg0,
-                        arg1: Some(arg1),
-                        arg2: Some(arg2),
-                    },
-                    meta,
-                    body,
-                )))
-            }
-            "faceforward" | "refract" | "fma" | "smoothstep" => {
-                if args.len() != 3 {
-                    return Err(Error::wrong_function_args(name, 3, args.len(), meta));
-                }
-                Ok(Some(ctx.add_expression(
-                    Expression::Math {
-                        fun: match name.as_str() {
-                            "faceforward" => MathFunction::FaceForward,
-                            "refract" => MathFunction::Refract,
-                            "fma" => MathFunction::Fma,
-                            "smoothstep" => MathFunction::SmoothStep,
-                            _ => unreachable!(),
-                        },
-                        arg: args[0].0,
-                        arg1: Some(args[1].0),
-                        arg2: Some(args[2].0),
-                    },
-                    meta,
-                    body,
-                )))
-            }
-            "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
-            | "notEqual" => {
-                if args.len() != 2 {
-                    return Err(Error::wrong_function_args(name, 2, args.len(), meta));
-                }
-                Ok(Some(ctx.add_expression(
-                    Expression::Binary {
-                        op: match name.as_str() {
-                            "lessThan" => BinaryOperator::Less,
-                            "greaterThan" => BinaryOperator::Greater,
-                            "lessThanEqual" => BinaryOperator::LessEqual,
-                            "greaterThanEqual" => BinaryOperator::GreaterEqual,
-                            "equal" => BinaryOperator::Equal,
-                            "notEqual" => BinaryOperator::NotEqual,
-                            _ => unreachable!(),
-                        },
-                        left: args[0].0,
-                        right: args[1].0,
-                    },
-                    meta,
-                    body,
-                )))
-            }
-            "isinf" | "isnan" | "all" | "any" => {
-                let fun = match name.as_str() {
-                    "isinf" => RelationalFunction::IsInf,
-                    "isnan" => RelationalFunction::IsNan,
-                    "all" => RelationalFunction::All,
-                    "any" => RelationalFunction::Any,
-                    _ => unreachable!(),
-                };
-
-                Ok(Some(
-                    self.parse_relational_fun(ctx, body, name, &args, fun, meta)?,
-                ))
-            }
-            _ => {
-                let declarations = self.lookup_function.get(&name).ok_or_else(|| Error {
-                    kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
-                    meta,
-                })?;
-
-                let mut maybe_decl = None;
-                let mut ambiguous = false;
-
-                'outer: for decl in declarations {
-                    if args.len() != decl.parameters.len() {
-                        continue;
-                    }
-
-                    let mut exact = true;
-
-                    for ((i, decl_arg), call_arg) in
-                        decl.parameters.iter().enumerate().zip(args.iter())
-                    {
-                        if decl.parameters_info[i].depth {
-                            sampled_to_depth(&mut self.module, ctx, *call_arg, &mut self.errors)?;
-                            self.invalidate_expression(ctx, call_arg.0, call_arg.1)?
-                        }
-
-                        let decl_inner = &self.module.types[*decl_arg].inner;
-                        let call_inner = self.resolve_type(ctx, call_arg.0, call_arg.1)?;
-
-                        if decl_inner == call_inner {
-                            continue;
-                        }
-
-                        exact = false;
-
-                        let (decl_kind, call_kind) = match (decl_inner, call_inner) {
-                            (
-                                &TypeInner::Scalar {
-                                    kind: decl_kind, ..
-                                },
-                                &TypeInner::Scalar {
-                                    kind: call_kind, ..
-                                },
-                            ) => (decl_kind, call_kind),
-                            (
-                                &TypeInner::Vector {
-                                    kind: decl_kind,
-                                    size: decl_size,
-                                    ..
-                                },
-                                &TypeInner::Vector {
-                                    kind: call_kind,
-                                    size: call_size,
-                                    ..
-                                },
-                            ) if decl_size == call_size => (decl_kind, call_kind),
-                            (
-                                &TypeInner::Matrix {
-                                    rows: decl_rows,
-                                    columns: decl_columns,
-                                    ..
-                                },
-                                &TypeInner::Matrix {
-                                    rows: call_rows,
-                                    columns: call_columns,
-                                    ..
-                                },
-                            ) if decl_columns == call_columns && decl_rows == call_rows => {
-                                (ScalarKind::Float, ScalarKind::Float)
-                            }
-                            _ => continue 'outer,
-                        };
-
-                        match (type_power(decl_kind), type_power(call_kind)) {
-                            (Some(decl_power), Some(call_power)) if decl_power > call_power => {}
-                            _ => continue 'outer,
-                        }
-                    }
-
-                    if exact {
-                        maybe_decl = Some(decl);
-                        ambiguous = false;
-                        break;
-                    } else if maybe_decl.is_some() {
-                        ambiguous = true;
-                    } else {
-                        maybe_decl = Some(decl)
-                    }
-                }
-
-                if ambiguous {
-                    self.errors.push(Error {
-                        kind: ErrorKind::SemanticError(
-                            format!("Ambiguous best function for '{}'", name).into(),
-                        ),
-                        meta,
-                    })
-                }
-
-                let decl = maybe_decl.ok_or_else(|| Error {
-                    kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
-                    meta,
-                })?;
-
-                let parameters_info = decl.parameters_info.clone();
-                let parameters = decl.parameters.clone();
-                let function = decl.handle;
-                let is_void = decl.void;
-
-                let mut arguments = Vec::with_capacity(args.len());
-                let mut proxy_writes = Vec::new();
-                for (parameter_info, (expr, parameter)) in parameters_info
-                    .iter()
-                    .zip(raw_args.iter().zip(parameters.iter()))
-                {
-                    let (mut handle, meta) = ctx.lower_expect_inner(
-                        stmt,
-                        self,
-                        *expr,
-                        parameter_info.qualifier.is_lhs(),
-                        body,
+                if decl.parameters_info[i].depth {
+                    sampled_to_depth(
+                        &mut self.module,
+                        ctx,
+                        call_arg.0,
+                        call_arg.1,
+                        &mut self.errors,
                     )?;
-
-                    if let TypeInner::Vector { size, kind, width } =
-                        *self.resolve_type(ctx, handle, meta)?
-                    {
-                        if parameter_info.qualifier.is_lhs()
-                            && matches!(ctx[handle], Expression::Swizzle { .. })
-                        {
-                            let ty = self.module.types.fetch_or_append(
-                                Type {
-                                    name: None,
-                                    inner: TypeInner::Vector { size, kind, width },
-                                },
-                                meta.as_span(),
-                            );
-                            let temp_var = ctx.locals.append(
-                                LocalVariable {
-                                    name: None,
-                                    ty,
-                                    init: None,
-                                },
-                                meta.as_span(),
-                            );
-                            let temp_expr =
-                                ctx.add_expression(Expression::LocalVariable(temp_var), meta, body);
-
-                            body.push(
-                                Statement::Store {
-                                    pointer: temp_expr,
-                                    value: handle,
-                                },
-                                meta.as_span(),
-                            );
-
-                            arguments.push(temp_expr);
-                            proxy_writes.push((*expr, temp_expr));
-                            continue;
-                        }
-                    }
-
-                    let scalar_components = scalar_components(&self.module.types[*parameter].inner);
-                    if let Some((kind, width)) = scalar_components {
-                        ctx.implicit_conversion(self, &mut handle, meta, kind, width)?;
-                    }
-
-                    arguments.push(handle)
+                    self.invalidate_expression(ctx, call_arg.0, call_arg.1)?
                 }
 
+                let decl_inner = &self.module.types[*decl_arg].inner;
+                let call_inner = self.resolve_type(ctx, call_arg.0, call_arg.1)?;
+
+                if decl_inner == call_inner {
+                    new_conversions[i] = Conversion::Exact;
+                    continue;
+                }
+
+                exact = false;
+
+                let (decl_kind, decl_width, call_kind, call_width) = match (decl_inner, call_inner)
+                {
+                    (
+                        &TypeInner::Scalar {
+                            kind: decl_kind,
+                            width: decl_width,
+                        },
+                        &TypeInner::Scalar {
+                            kind: call_kind,
+                            width: call_width,
+                        },
+                    ) => (decl_kind, decl_width, call_kind, call_width),
+                    (
+                        &TypeInner::Vector {
+                            kind: decl_kind,
+                            size: decl_size,
+                            width: decl_width,
+                        },
+                        &TypeInner::Vector {
+                            kind: call_kind,
+                            size: call_size,
+                            width: call_width,
+                        },
+                    ) if decl_size == call_size => (decl_kind, decl_width, call_kind, call_width),
+                    (
+                        &TypeInner::Matrix {
+                            rows: decl_rows,
+                            columns: decl_columns,
+                            width: decl_width,
+                        },
+                        &TypeInner::Matrix {
+                            rows: call_rows,
+                            columns: call_columns,
+                            width: call_width,
+                        },
+                    ) if decl_columns == call_columns && decl_rows == call_rows => {
+                        (Float, decl_width, Float, call_width)
+                    }
+                    _ => continue 'outer,
+                };
+
+                if type_power(decl_kind, decl_width) < type_power(call_kind, call_width) {
+                    continue 'outer;
+                }
+
+                let conversion = match ((decl_kind, decl_width), (call_kind, call_width)) {
+                    ((Float, 8), (Float, 4)) => Conversion::FloatToDouble,
+                    ((Float, 4), (Sint, _)) | ((Float, 4), (Uint, _)) => Conversion::IntToFloat,
+                    ((Float, 8), (Sint, _)) | ((Float, 8), (Uint, _)) => Conversion::IntToDouble,
+                    _ => Conversion::Other,
+                };
+
+                // true - New declaration argument has a better conversion
+                // false - Old declaration argument has a better conversion
+                let best_arg = match (conversion, old_conversions[i]) {
+                    (_, Conversion::Exact) => false,
+                    (Conversion::FloatToDouble, _)
+                    | (_, Conversion::None)
+                    | (Conversion::IntToFloat, Conversion::IntToDouble) => true,
+                    (_, Conversion::FloatToDouble)
+                    | (Conversion::IntToDouble, Conversion::IntToFloat) => false,
+                    _ => continue,
+                };
+
+                match best_arg {
+                    true => match superior {
+                        Some(false) => ambiguous = true,
+                        _ => {
+                            superior = Some(true);
+                            new_conversions[i] = conversion
+                        }
+                    },
+                    false => match superior {
+                        Some(true) => ambiguous = true,
+                        _ => superior = Some(false),
+                    },
+                }
+            }
+
+            if exact {
+                maybe_decl = Some(decl);
+                ambiguous = false;
+                break;
+            }
+
+            match superior {
+                // New declaration is better keep it
+                Some(true) => {
+                    maybe_decl = Some(decl);
+                    // Replace the conversions
+                    old_conversions = new_conversions;
+                }
+                // Old declaration is better do nothing
+                Some(false) => {}
+                // No declaration was better than the other this can be caused
+                // when
+                None => {
+                    ambiguous = true;
+                    // Assign the new declaration to make sure we always have
+                    // one to make error reporting happy
+                    maybe_decl = Some(decl);
+                }
+            }
+        }
+
+        if ambiguous {
+            self.errors.push(Error {
+                kind: ErrorKind::SemanticError(
+                    format!("Ambiguous best function for '{}'", name).into(),
+                ),
+                meta,
+            })
+        }
+
+        let decl = maybe_decl.ok_or_else(|| Error {
+            kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
+            meta,
+        })?;
+
+        let parameters_info = decl.parameters_info.clone();
+        let parameters = decl.parameters.clone();
+        let is_void = decl.void;
+        let kind = decl.kind;
+
+        let mut arguments = Vec::with_capacity(args.len());
+        let mut proxy_writes = Vec::new();
+        for (parameter_info, (expr, parameter)) in parameters_info
+            .iter()
+            .zip(raw_args.iter().zip(parameters.iter()))
+        {
+            let (mut handle, meta) =
+                ctx.lower_expect_inner(stmt, self, *expr, parameter_info.qualifier.is_lhs(), body)?;
+
+            if let TypeInner::Vector { size, kind, width } =
+                *self.resolve_type(ctx, handle, meta)?
+            {
+                if parameter_info.qualifier.is_lhs()
+                    && matches!(ctx[handle], Expression::Swizzle { .. })
+                {
+                    let ty = self.module.types.fetch_or_append(
+                        Type {
+                            name: None,
+                            inner: TypeInner::Vector { size, kind, width },
+                        },
+                        Span::Unknown,
+                    );
+                    let temp_var = ctx.locals.append(
+                        LocalVariable {
+                            name: None,
+                            ty,
+                            init: None,
+                        },
+                        Span::Unknown,
+                    );
+                    let temp_expr = ctx.add_expression(
+                        Expression::LocalVariable(temp_var),
+                        SourceMetadata::none(),
+                        body,
+                    );
+
+                    body.push(
+                        Statement::Store {
+                            pointer: temp_expr,
+                            value: handle,
+                        },
+                        Span::Unknown,
+                    );
+
+                    arguments.push(temp_expr);
+                    proxy_writes.push((*expr, temp_expr));
+                    continue;
+                }
+            }
+
+            let scalar_components = scalar_components(&self.module.types[*parameter].inner);
+            if let Some((kind, width)) = scalar_components {
+                ctx.implicit_conversion(self, &mut handle, meta, kind, width)?;
+            }
+
+            arguments.push(handle)
+        }
+
+        match kind {
+            FunctionKind::Call(function) => {
                 ctx.emit_flush(body);
 
                 let result = if !is_void {
@@ -1117,30 +645,10 @@ impl Parser {
 
                 Ok(result)
             }
+            FunctionKind::Macro(builtin) => builtin
+                .call(self, ctx, body, arguments.as_mut_slice(), meta)
+                .map(Some),
         }
-    }
-
-    pub(crate) fn parse_relational_fun(
-        &mut self,
-        ctx: &mut Context,
-        body: &mut Block,
-        name: String,
-        args: &[(Handle<Expression>, SourceMetadata)],
-        fun: RelationalFunction,
-        meta: SourceMetadata,
-    ) -> Result<Handle<Expression>> {
-        if args.len() != 1 {
-            return Err(Error::wrong_function_args(name, 1, args.len(), meta));
-        }
-
-        Ok(ctx.add_expression(
-            Expression::Relational {
-                fun,
-                argument: args[0].0,
-            },
-            meta,
-            body,
-        ))
     }
 
     pub(crate) fn add_function(
@@ -1151,6 +659,10 @@ impl Parser {
         mut body: Block,
         meta: SourceMetadata,
     ) {
+        if self.lookup_function.get(&name).is_none() {
+            self.inject_builtin(name.clone());
+        }
+
         ensure_block_returns(&mut body);
 
         let void = result.is_none();
@@ -1203,7 +715,13 @@ impl Parser {
 
             decl.defined = true;
             decl.parameters_info = parameters_info;
-            *self.module.functions.get_mut(decl.handle) = function;
+            match decl.kind {
+                FunctionKind::Call(handle) => *self.module.functions.get_mut(handle) = function,
+                FunctionKind::Macro(_) => {
+                    let handle = module.functions.append(function, meta.as_span());
+                    decl.kind = FunctionKind::Call(handle)
+                }
+            }
             return;
         }
 
@@ -1211,7 +729,7 @@ impl Parser {
         declarations.push(FunctionDeclaration {
             parameters,
             parameters_info,
-            handle,
+            kind: FunctionKind::Call(handle),
             defined: true,
             void,
         });
@@ -1224,6 +742,10 @@ impl Parser {
         result: Option<FunctionResult>,
         meta: SourceMetadata,
     ) {
+        if self.lookup_function.get(&name).is_none() {
+            self.inject_builtin(name.clone());
+        }
+
         let void = result.is_none();
 
         let &mut Parser {
@@ -1271,7 +793,7 @@ impl Parser {
         declarations.push(FunctionDeclaration {
             parameters,
             parameters_info,
-            handle,
+            kind: FunctionKind::Call(handle),
             defined: false,
             void,
         });
@@ -1399,149 +921,4 @@ impl Parser {
             },
         });
     }
-
-    /// Helper function for texture calls, splits the vector argument into it's components
-    fn coordinate_components(
-        &mut self,
-        ctx: &mut Context,
-        (image, image_meta): (Handle<Expression>, SourceMetadata),
-        (coord, coord_meta): (Handle<Expression>, SourceMetadata),
-        body: &mut Block,
-    ) -> Result<CoordComponents> {
-        if let TypeInner::Image {
-            dim,
-            arrayed,
-            class,
-        } = *self.resolve_type(ctx, image, image_meta)?
-        {
-            let image_size = match dim {
-                ImageDimension::D1 => None,
-                ImageDimension::D2 => Some(VectorSize::Bi),
-                ImageDimension::D3 => Some(VectorSize::Tri),
-                ImageDimension::Cube => Some(VectorSize::Tri),
-            };
-            let coord_size = match *self.resolve_type(ctx, coord, coord_meta)? {
-                TypeInner::Vector { size, .. } => Some(size),
-                _ => None,
-            };
-            let shadow = match class {
-                ImageClass::Depth { .. } => true,
-                _ => false,
-            };
-
-            let coordinate = match (image_size, coord_size) {
-                (Some(size), Some(coord_s)) if size != coord_s => {
-                    ctx.vector_resize(size, coord, coord_meta, body)
-                }
-                (None, Some(_)) => ctx.add_expression(
-                    Expression::AccessIndex {
-                        base: coord,
-                        index: 0,
-                    },
-                    coord_meta,
-                    body,
-                ),
-                _ => coord,
-            };
-            let array_index = match arrayed {
-                true => {
-                    let index = match shadow {
-                        true => image_size.map_or(0, |s| s as u32 - 1),
-                        false => image_size.map_or(0, |s| s as u32),
-                    };
-
-                    Some(ctx.add_expression(
-                        Expression::AccessIndex { base: coord, index },
-                        coord_meta,
-                        body,
-                    ))
-                }
-                _ => None,
-            };
-            let depth_ref = match shadow {
-                true => {
-                    let index = image_size.map_or(0, |s| s as u32);
-
-                    Some(ctx.add_expression(
-                        Expression::AccessIndex { base: coord, index },
-                        coord_meta,
-                        body,
-                    ))
-                }
-                false => None,
-            };
-
-            Ok(CoordComponents {
-                coordinate,
-                depth_ref,
-                array_index,
-            })
-        } else {
-            self.errors.push(Error {
-                kind: ErrorKind::SemanticError("Type is not an image".into()),
-                meta: image_meta,
-            });
-
-            Ok(CoordComponents {
-                coordinate: coord,
-                depth_ref: None,
-                array_index: None,
-            })
-        }
-    }
-}
-
-/// Helper function to cast a expression holding a sampled image to a
-/// depth image.
-fn sampled_to_depth(
-    module: &mut Module,
-    ctx: &mut Context,
-    (image, meta): (Handle<Expression>, SourceMetadata),
-    errors: &mut Vec<Error>,
-) -> Result<()> {
-    let ty = match ctx[image] {
-        Expression::GlobalVariable(handle) => &mut module.global_variables.get_mut(handle).ty,
-        Expression::FunctionArgument(i) => {
-            ctx.parameters_info[i as usize].depth = true;
-            &mut ctx.arguments[i as usize].ty
-        }
-        _ => {
-            return Err(Error {
-                kind: ErrorKind::SemanticError("Not a valid texture expression".into()),
-                meta,
-            })
-        }
-    };
-    match module.types[*ty].inner {
-        TypeInner::Image {
-            class,
-            dim,
-            arrayed,
-        } => match class {
-            ImageClass::Sampled { multi, .. } => {
-                *ty = module.types.fetch_or_append(
-                    Type {
-                        name: None,
-                        inner: TypeInner::Image {
-                            dim,
-                            arrayed,
-                            class: ImageClass::Depth { multi },
-                        },
-                    },
-                    module.types.get_span(*ty).clone(),
-                )
-            }
-            ImageClass::Depth { .. } => {}
-            _ => errors.push(Error {
-                kind: ErrorKind::SemanticError("Not a texture".into()),
-                meta,
-            }),
-        },
-        _ => errors.push(Error {
-            kind: ErrorKind::SemanticError("Not a texture".into()),
-            meta,
-        }),
-    };
-
-    Ok(())
 }

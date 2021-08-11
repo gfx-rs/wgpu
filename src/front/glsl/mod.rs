@@ -15,6 +15,7 @@ use ast::{EntryArg, FunctionDeclaration, GlobalLookup};
 use parser::ParsingContext;
 
 mod ast;
+mod builtins;
 mod constants;
 mod context;
 mod error;
