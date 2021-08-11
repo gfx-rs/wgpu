@@ -108,6 +108,8 @@ impl<'w> BlockContext<'w> {
         array_index: Option<Handle<crate::Expression>>,
         block: &mut Block,
     ) -> Result<Word, Error> {
+        use crate::VectorSize as Vs;
+
         let coordinate_id = self.cached[coordinates];
 
         // If there's no array index, the texture coordinates are exactly the
@@ -116,7 +118,7 @@ impl<'w> BlockContext<'w> {
             None => return Ok(coordinate_id),
             Some(ix) => ix,
         };
-
+        let array_index_u32_id = self.cached[array_index];
         let coordinate_scalar_type_id =
             self.get_type_id(LookupType::Local(LocalType::Value {
                 vector_size: None,
@@ -124,53 +126,29 @@ impl<'w> BlockContext<'w> {
                 width: 4,
                 pointer_class: None,
             }))?;
+        let array_index_f32_id = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::ConvertUToF,
+            coordinate_scalar_type_id,
+            array_index_f32_id,
+            array_index_u32_id,
+        ));
 
-        let mut constituent_ids = [0u32; 4];
         let size = match *self.fun_info[coordinates]
             .ty
             .inner_with(&self.ir_module.types)
         {
-            crate::TypeInner::Scalar { .. } => {
-                constituent_ids[0] = coordinate_id;
-                crate::VectorSize::Bi
-            }
-            crate::TypeInner::Vector { size, .. } => {
-                for i in 0..size as u32 {
-                    let id = self.gen_id();
-                    constituent_ids[i as usize] = id;
-                    block.body.push(Instruction::composite_extract(
-                        coordinate_scalar_type_id,
-                        id,
-                        coordinate_id,
-                        &[i],
-                    ));
-                }
-                match size {
-                    crate::VectorSize::Bi => crate::VectorSize::Tri,
-                    crate::VectorSize::Tri => crate::VectorSize::Quad,
-                    crate::VectorSize::Quad => {
-                        return Err(Error::Validation("extending vec4 coordinate"));
-                    }
-                }
+            crate::TypeInner::Scalar { .. } => Vs::Bi,
+            crate::TypeInner::Vector { size: Vs::Bi, .. } => Vs::Tri,
+            crate::TypeInner::Vector { size: Vs::Tri, .. } => Vs::Quad,
+            crate::TypeInner::Vector { size: Vs::Quad, .. } => {
+                return Err(Error::Validation("extending vec4 coordinate"));
             }
             ref other => {
                 log::error!("wrong coordinate type {:?}", other);
                 return Err(Error::Validation("coordinate type"));
             }
         };
-
-        let array_index_f32_id = self.gen_id();
-        constituent_ids[size as usize - 1] = array_index_f32_id;
-
-        let array_index_u32_id = self.cached[array_index];
-        let cast_instruction = Instruction::unary(
-            spirv::Op::ConvertUToF,
-            coordinate_scalar_type_id,
-            array_index_f32_id,
-            array_index_u32_id,
-        );
-        block.body.push(cast_instruction);
-
         let extended_coordinate_type_id =
             self.get_type_id(LookupType::Local(LocalType::Value {
                 vector_size: Some(size),
@@ -183,7 +161,7 @@ impl<'w> BlockContext<'w> {
         block.body.push(Instruction::composite_construct(
             extended_coordinate_type_id,
             id,
-            &constituent_ids[..size as usize],
+            &[coordinate_id, array_index_f32_id]
         ));
         Ok(id)
     }
