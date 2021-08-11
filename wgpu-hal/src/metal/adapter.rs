@@ -864,7 +864,9 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
 
         features.set(
-            F::TEXTURE_BINDING_ARRAY | F::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+            F::TEXTURE_BINDING_ARRAY
+                | F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                | F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
             self.msl_version >= MTLLanguageVersion::V2_0 && self.supports_arrays_of_textures,
         );
         //// XXX: this is technically not true, as read-only storage images can be used in arrays

@@ -72,7 +72,7 @@ struct Example {
 impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::UNSIZED_BINDING_ARRAY
-            | wgpu::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::PUSH_CONSTANTS
     }
     fn required_features() -> wgpu::Features {
@@ -96,7 +96,10 @@ impl framework::Example for Example {
             f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
                 wgpu::include_spirv_raw!("unsized-non-uniform.frag.spv")
             }
-            f if f.contains(wgpu::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING) => {
+            f if f.contains(
+                wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            ) =>
+            {
                 wgpu::include_spirv_raw!("non-uniform.frag.spv")
             }
             f if f.contains(wgpu::Features::TEXTURE_BINDING_ARRAY) => {
@@ -355,7 +358,7 @@ fn texture_arrays_non_uniform() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
         tolerance: 0,
         max_outliers: 0,
@@ -370,7 +373,7 @@ fn texture_arrays_unsized_non_uniform() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::RESOURCE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::UNSIZED_BINDING_ARRAY,
         base_test_parameters: framework::test_common::TestParameters::default().failure(),
         tolerance: 0,
