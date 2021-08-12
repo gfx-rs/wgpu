@@ -1,10 +1,12 @@
 use crate::{
     device::{Device, DeviceDescriptor},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
-    id::{AdapterId, DeviceId, SurfaceId, Valid},
+    id::{self, AdapterId, AnyBackend, DeviceId, Hkt, SurfaceId},
     present::Presentation,
-    LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
+    LifeGuard, DOWNLEVEL_WARNING_MESSAGE,
 };
+/* #[cfg(feature = "trace")]
+use crate::hub::IdentityHandler; */
 
 use wgt::{Backend, Backends, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
@@ -135,21 +137,25 @@ impl Instance {
             };
 
             #[cfg(vulkan)]
-            map((surface.vulkan, &self.vulkan)),
+            map((surface.raw.vulkan, &self.vulkan)),
             #[cfg(metal)]
-            map((surface.metal, &self.metal)),
+            map((surface.raw.metal, &self.metal)),
             #[cfg(dx12)]
-            map((surface.dx12, &self.dx12)),
+            map((surface.raw.dx12, &self.dx12)),
             #[cfg(dx11)]
-            map((surface.dx11, &self.dx11)),
+            map((surface.raw.dx11, &self.dx11)),
             #[cfg(gl)]
-            map((surface.gl, &self.gl)),
+            map((surface.raw.gl, &self.gl)),
         }
     }
 }
 
 pub struct Surface {
     pub(crate) presentation: Option<Presentation>,
+    pub raw: SurfaceRaw,
+}
+
+pub struct SurfaceRaw {
     #[cfg(vulkan)]
     pub vulkan: Option<HalSurface<hal::api::Vulkan>>,
     #[cfg(metal)]
@@ -164,6 +170,18 @@ pub struct Surface {
 
 impl crate::hub::Resource for Surface {
     const TYPE: &'static str = "Surface";
+
+    /* #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        _: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: HalApi,
+    {
+        // Nothing to trace.
+        Ok(())
+    } */
 
     fn life_guard(&self) -> &LifeGuard {
         unreachable!()
@@ -189,7 +207,7 @@ impl Surface {
             wgt::TextureFormat::Rgba8Unorm,
         ];
 
-        let suf = A::get_surface(self);
+        let suf = A::get_surface(&self.raw);
         let caps = unsafe {
             adapter
                 .raw
@@ -208,19 +226,17 @@ impl Surface {
 
 pub struct Adapter<A: hal::Api> {
     pub(crate) raw: hal::ExposedAdapter<A>,
-    life_guard: LifeGuard,
 }
 
 impl<A: HalApi> Adapter<A> {
     fn new(raw: hal::ExposedAdapter<A>) -> Self {
         Self {
             raw,
-            life_guard: LifeGuard::new("<Adapter>"),
         }
     }
 
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
-        let suf = A::get_surface(surface);
+        let suf = A::get_surface(&surface.raw);
         unsafe { self.raw.adapter.surface_capabilities(&suf.raw) }.is_some()
     }
 
@@ -271,8 +287,8 @@ impl<A: HalApi> Adapter<A> {
     }
 
     fn create_device_from_hal(
-        &self,
-        self_id: AdapterId,
+        self,
+        /*self_id: AdapterId,*/
         open: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
@@ -324,12 +340,10 @@ impl<A: HalApi> Adapter<A> {
 
         Device::new(
             open,
-            Stored {
+            /*Stored {
                 value: Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
-            },
-            caps.alignments.clone(),
-            caps.downlevel.clone(),
+            }*/self,
             desc,
             trace_path,
         )
@@ -337,8 +351,8 @@ impl<A: HalApi> Adapter<A> {
     }
 
     fn create_device(
-        &self,
-        self_id: AdapterId,
+        self,
+        // self_id: AdapterId,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
@@ -347,15 +361,28 @@ impl<A: HalApi> Adapter<A> {
             hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
         })?;
 
-        self.create_device_from_hal(self_id, open, desc, trace_path)
+        self.create_device_from_hal(/*self_id, */open, desc, trace_path)
     }
 }
 
 impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
     const TYPE: &'static str = "Adapter";
 
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        _: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: HalApi + 'b,
+    {
+        // Nothing to trace.
+        Ok(())
+    }
+
     fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+        unimplemented!("FIXME: This method needs to go away!")
+        // &self.life_guard
     }
 }
 
@@ -398,12 +425,29 @@ pub enum RequestDeviceError {
     UnsupportedFeature(wgt::Features),
 }
 
-pub enum AdapterInputs<'a, I> {
-    IdSet(&'a [I], fn(&I) -> Backend),
-    Mask(Backends, fn(Backend) -> I),
+/* pub enum AdapterInputs</* #[cfg(feature="replay")] *//*'a, I*/> {
+    /* #[cfg(feature="replay")] */
+    // IdSet(&'a [I], fn(&I) -> Backend),
+    Mask(Backends/*, fn(Backend) -> I*/),
 }
 
-impl<I: Clone> AdapterInputs<'_, I> {
+/* #[cfg(feature="replay")] */
+pub trait AdapterFind : Clone {}
+/* #[cfg(not(feature="replay"))]
+pub trait AdapterFind {} */
+
+/* #[cfg(feature="replay")] */
+impl<I: Clone> AdapterFind for I {}
+/* #[cfg(not(feature="replay"))]
+impl<I> AdapterFind for I {} */
+
+// #[cfg(feature="replay")]
+pub type AdapterInputMap<G> = Input<G, id::Id<Adapter<hal::api::Empty>>>;
+/* #[cfg(not(feature="replay"))]
+pub type AdapterInputMap<G> = Input<G, id::Id<Adapter<hal::api::Empty>>>; */
+
+/* #[cfg(feature="replay")] */
+impl<I: AdapterFind> AdapterInputs<'_, I> {
     fn find(&self, b: Backend) -> Option<I> {
         match *self {
             Self::IdSet(ids, ref fun) => ids.iter().find(|id| fun(id) == b).cloned(),
@@ -416,7 +460,19 @@ impl<I: Clone> AdapterInputs<'_, I> {
             }
         }
     }
-}
+} */
+
+/* #[cfg(not(feature="replay"))]
+impl<I: AdapterFind> AdapterInputs<I> {
+    fn find(&self, b: Backend) -> Option<I> {
+        let Self::Mask(bits, ref fun) = *self;
+        if bits.contains(b.into()) {
+            Some(fun(b))
+        } else {
+            None
+        }
+    }
+} */
 
 #[derive(Clone, Debug, Error)]
 #[error("adapter is invalid")]
@@ -460,8 +516,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             })
         }
 
-        let surface = Surface {
-            presentation: None,
+        let raw = SurfaceRaw {
             #[cfg(vulkan)]
             vulkan: init(hal::api::Vulkan, &self.instance.vulkan, handle),
             #[cfg(metal)]
@@ -472,6 +527,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dx11: init(hal::api::Dx11, &self.instance.dx11, handle),
             #[cfg(gl)]
             gl: init(hal::api::Gles, &self.instance.gl, handle),
+        };
+        let surface = Surface {
+            presentation: None,
+            raw,
         };
 
         let mut token = Token::root();
@@ -487,8 +546,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> SurfaceId {
         profiling::scope!("create_surface_metal", "Instance");
 
-        let surface = Surface {
-            presentation: None,
+        let raw = SurfaceRaw {
             metal: self.instance.metal.as_ref().map(|inst| HalSurface {
                 raw: {
                     // we don't want to link to metal-rs for this
@@ -497,6 +555,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 //acquired_texture: None,
             }),
+        };
+        let surface = Surface {
+            presentation: None,
+            raw,
         };
 
         let mut token = Token::root();
@@ -511,25 +573,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.instance.destroy_surface(surface.unwrap());
     }
 
-    pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
+    pub fn enumerate_adapters(&self, inputs: /*AdapterInputs<AdapterInputMap<G>>*/Backends) -> Vec<AdapterId> {
         profiling::scope!("enumerate_adapters", "Instance");
 
         let instance = &self.instance;
-        let mut token = Token::root();
+        // let mut token = Token::root();
         let mut adapters = Vec::new();
 
         backends_map! {
             let map = |(instance_field, backend, backend_info)| {
                 if let Some(ref inst) = *instance_field {
-                    let hub = HalApi::hub(self);
-                    if let Some(id_backend) = inputs.find(backend) {
+                    if /*let Some(_id_backend) = */inputs.contains(backend.into()) {
                         for raw in unsafe {inst.enumerate_adapters()} {
                             let adapter = Adapter::new(raw);
                             log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
-                            let id = hub.adapters
-                                .prepare(id_backend.clone())
-                                .assign(adapter, &mut token);
-                            adapters.push(id.0);
+                            /* #[cfg(feature="trace")]
+                            {
+                                fn get_hub<'a, A: HalApi, G: GlobalIdentityHandlerFactory>
+                                    (_: &Adapter<A>, global: &'a Global<G>) -> &'a crate::hub::Hub<A, G> {
+                                    HalApi::hub(global)
+                                }
+                                fn get_variant<A: HalApi>(_: &Adapter<A>) -> Backend { A::VARIANT }
+                                let hub = get_hub(&adapter, self);
+                                /*let id = */hub.adapters
+                                    .process(_id_backend.clone(), get_variant(&adapter))
+                                    /* .prepare(id_backend.clone())
+                                    .assign(adapter, &mut token) */;
+                            } */
+                            adapters.push(/*id.0*/id::BoxId2::upcast_backend(Box::new(adapter)));
                         }
                     }
                 }
@@ -550,16 +621,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapters
     }
 
+    #[allow(unused_assignments)] // Can error spuriously if only one backend is available.
     pub fn request_adapter(
         &self,
         desc: &RequestAdapterOptions,
-        inputs: AdapterInputs<Input<G, AdapterId>>,
+        inputs: /*AdapterInputs<AdapterInputMap<G>>*/Backends,
     ) -> Result<AdapterId, RequestAdapterError> {
         profiling::scope!("pick_adapter", "Instance");
 
         let instance = &self.instance;
         let mut token = Token::root();
-        let (surface_guard, mut token) = self.surfaces.read(&mut token);
+        let (surface_guard, _) = self.surfaces.read(&mut token);
         let compatible_surface = desc
             .compatible_surface
             .map(|id| {
@@ -570,18 +642,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .transpose()?;
         let mut device_types = Vec::new();
 
-        let mut id_vulkan = inputs.find(Backend::Vulkan);
-        let mut id_metal = inputs.find(Backend::Metal);
-        let mut id_dx12 = inputs.find(Backend::Dx12);
-        let mut id_dx11 = inputs.find(Backend::Dx11);
-        let mut id_gl = inputs.find(Backend::Gl);
+        // let mut id_vulkan = inputs.contains(Backend::Vulkan);
+        // let mut id_metal = inputs.contains(Backend::Metal);
+        // let mut id_dx12 = inputs.contains(Backend::Dx12);
+        // let mut id_dx11 = inputs.contains(Backend::Dx11);
+        // let mut id_gl = inputs.contains(Backend::Gl);
 
         backends_map! {
-            let map = |(instance_backend, id_backend, surface_backend)| {
+            let map = |(instance_backend, backend, surface_backend)| {
                 match *instance_backend {
-                    Some(ref inst) if id_backend.is_some() => {
+                    Some(ref inst) if /*id_backend.is_some()*/inputs.contains(backend.into()) => {
                         let mut adapters = unsafe { inst.enumerate_adapters() };
-                        if let Some(surface_backend) = compatible_surface.and_then(surface_backend) {
+                        if let Some(surface_backend) = compatible_surface.and_then(|suf| surface_backend(&suf.raw)) {
                             adapters.retain(|exposed| unsafe {
                                 exposed.adapter.surface_capabilities(&surface_backend.raw).is_some()
                             });
@@ -596,36 +668,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // NB: The internal function definitions are a workaround for Rust
             // being weird with lifetimes for closure literals...
             #[cfg(vulkan)]
-            let adapters_vk = map((&instance.vulkan, &id_vulkan, {
-                fn surface_vulkan(surf: &Surface) -> Option<&HalSurface<hal::api::Vulkan>> {
+            let adapters_vk = map((&instance.vulkan, /*&id_vulkan*/Backend::Vulkan, {
+                fn surface_vulkan(surf: &SurfaceRaw) -> Option<&HalSurface<hal::api::Vulkan>> {
                     surf.vulkan.as_ref()
                 }
                 surface_vulkan
             }));
             #[cfg(metal)]
-            let adapters_mtl = map((&instance.metal, &id_metal, {
-                fn surface_metal(surf: &Surface) -> Option<&HalSurface<hal::api::Metal>> {
+            let adapters_mtl = map((&instance.metal, /*&id_metal*/Backend::Metal, {
+                fn surface_metal(surf: &SurfaceRaw) -> Option<&HalSurface<hal::api::Metal>> {
                     surf.metal.as_ref()
                 }
                 surface_metal
             }));
             #[cfg(dx12)]
-            let adapters_dx12 = map((&instance.dx12, &id_dx12, {
-                fn surface_dx12(surf: &Surface) -> Option<&HalSurface<hal::api::Dx12>> {
+            let adapters_dx12 = map((&instance.dx12, /*&id_dx12*/Backend::Dx12, {
+                fn surface_dx12(surf: &SurfaceRaw) -> Option<&HalSurface<hal::api::Dx12>> {
                     surf.dx12.as_ref()
                 }
                 surface_dx12
             }));
             #[cfg(dx11)]
-            let adapters_dx11 = map((&instance.dx11, &id_dx11, {
-                fn surface_dx11(surf: &Surface) -> Option<&HalSurface<hal::api::Dx11>> {
+            let adapters_dx11 = map((&instance.dx11, /*&id_dx11*/Backend::Dx11, {
+                fn surface_dx11(surf: &SurfaceRaw) -> Option<&HalSurface<hal::api::Dx11>> {
                     surf.dx11.as_ref()
                 }
                 surface_dx11
             }));
             #[cfg(gl)]
-            let adapters_gl = map((&instance.gl, &id_gl, {
-                fn surface_gl(surf: &Surface) -> Option<&HalSurface<hal::api::Gles>> {
+            let adapters_gl = map((&instance.gl, /*&id_gl*/Backend::Gles, {
+                fn surface_gl(surf: &SurfaceRaw) -> Option<&HalSurface<hal::api::Gles>> {
                     surf.gl.as_ref()
                 }
                 surface_gl
@@ -664,41 +736,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt).or(cpu),
         };
 
+        #[allow(unused_assignments)]
         let mut selected = preferred_gpu.unwrap_or(0);
 
         backends_map! {
-            let map = |(info_adapter, id_backend, mut adapters_backend)| {
+            let map = |(info_adapter, _id_backend, mut adapters_backend)| {
                 if selected < adapters_backend.len() {
                     let adapter = Adapter::new(adapters_backend.swap_remove(selected));
                     log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
-                    let id = HalApi::hub(self).adapters
-                        .prepare(id_backend.take().unwrap())
-                        .assign(adapter, &mut token);
-                    return Ok(id.0);
+                    /* #[cfg(feature="trace")]
+                    {
+                        fn get_hub<'a, A: HalApi, G: GlobalIdentityHandlerFactory>
+                            (_: &Adapter<A>, global: &'a Global<G>) -> &'a crate::hub::Hub<A, G> {
+                            HalApi::hub(global)
+                        }
+                        fn get_variant<A: HalApi>(_: &Adapter<A>) -> Backend { A::VARIANT }
+                        let hub = get_hub(&adapter, self);
+                        /*let id = *//*HalApi::hub::<G>(self)*/hub.adapters
+                            .process(_id_backend.take().unwrap(), get_variant(&adapter))
+                            /* .prepare(id_backend.take().unwrap())
+                            .assign(adapter, &mut token) */;
+                    } */
+                    return Ok(id::BoxId2::upcast_backend(Box::new(adapter)));
                 }
                 selected -= adapters_backend.len();
             };
 
             #[cfg(vulkan)]
-            map(("Vulkan", &mut id_vulkan, adapters_vk)),
+            map(("Vulkan", /*&mut id_vulkan, */(), adapters_vk)),
             #[cfg(metal)]
-            map(("Metal", &mut id_metal, adapters_mtl)),
+            map(("Metal", /*&mut id_metal, */(), adapters_mtl)),
             #[cfg(dx12)]
-            map(("Dx12", &mut id_dx12, adapters_dx12)),
+            map(("Dx12", /*&mut id_dx12, */(), adapters_dx12)),
             #[cfg(dx11)]
-            map(("Dx11", &mut id_dx11, adapters_dx11)),
+            map(("Dx11", /*&mut id_dx11, */(), adapters_dx11)),
             #[cfg(gl)]
-            map(("GL", &mut id_gl, adapters_gl)),
+            map(("GL", /*&mut id_gl, */(), adapters_gl)),
         }
 
-        let _ = (
+        /* let _ = (
             selected,
             id_vulkan.take(),
             id_metal.take(),
             id_dx12.take(),
             id_dx11.take(),
             id_gl.take(),
-        );
+        ); */
         log::warn!("Some adapters are present, but enumerating them failed!");
         Err(RequestAdapterError::NotFound)
     }
@@ -707,100 +790,88 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ///
     /// `hal_adapter` must be created from this global internal instance handle.
     pub unsafe fn create_adapter_from_hal<A: HalApi>(
-        &self,
         hal_adapter: hal::ExposedAdapter<A>,
-        input: Input<G, AdapterId>,
     ) -> AdapterId {
         profiling::scope!("create_adapter_from_hal", "Instance");
 
-        let mut token = Token::root();
-        let fid = A::hub(self).adapters.prepare(input);
-
-        match A::VARIANT {
-            #[cfg(vulkan)]
-            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter), &mut token).0,
-            #[cfg(metal)]
-            Backend::Metal => fid.assign(Adapter::new(hal_adapter), &mut token).0,
-            #[cfg(dx12)]
-            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter), &mut token).0,
-            #[cfg(dx11)]
-            Backend::Dx11 => fid.assign(Adapter::new(hal_adapter), &mut token).0,
-            #[cfg(gl)]
-            Backend::Gl => fid.assign(Adapter::new(hal_adapter), &mut token).0,
-            _ => unreachable!(),
-        }
+        id::BoxId2::upcast_backend(Box::new(Adapter::new(hal_adapter)))
     }
 
     pub fn adapter_get_info<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        let hub = A::hub(self);
+        // &self,
+        adapter: &Adapter<A>,
+        // adapter_id: AdapterId,
+    ) -> /*Result<*/wgt::AdapterInfo/*, InvalidAdapter>*/ {
+        /* let hub = A::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.raw.info.clone())
-            .map_err(|_| InvalidAdapter)
+            .map(|adapter| */adapter.raw.info.clone()/*)
+            .map_err(|_| InvalidAdapter)*/
     }
 
     pub fn adapter_get_texture_format_features<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
+        // &self,
+        adapter: &Adapter<A>,
+        // adapter_id: AdapterId,
         format: wgt::TextureFormat,
-    ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        let hub = A::hub(self);
+    ) -> /*Result<*/wgt::TextureFormatFeatures/*, InvalidAdapter>*/ {
+        /* let hub = A::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.get_texture_format_features(format))
-            .map_err(|_| InvalidAdapter)
+            .map(|adapter| */adapter.get_texture_format_features(format)/*)
+            .map_err(|_| InvalidAdapter)*/
     }
 
     pub fn adapter_features<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::Features, InvalidAdapter> {
-        let hub = A::hub(self);
+        // &self,
+        adapter: &Adapter<A>,
+        // adapter_id: AdapterId,
+    ) -> /*Result<*/wgt::Features/*, InvalidAdapter>*/ {
+        /* let hub = A::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.raw.features)
-            .map_err(|_| InvalidAdapter)
+            .map(|adapter| */adapter.raw.features/*)
+            .map_err(|_| InvalidAdapter)*/
     }
 
     pub fn adapter_limits<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::Limits, InvalidAdapter> {
-        let hub = A::hub(self);
+        // &self,
+        adapter: &Adapter<A>,
+        // adapter_id: AdapterId,
+    ) -> /*Result<*/wgt::Limits/*, InvalidAdapter>*/ {
+        /*let hub = A::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.limits.clone())
-            .map_err(|_| InvalidAdapter)
+            .map(|adapter| */adapter.raw.capabilities.limits.clone()/*)
+            .map_err(|_| InvalidAdapter)*/
     }
 
     pub fn adapter_downlevel_properties<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::DownlevelCapabilities, InvalidAdapter> {
-        let hub = A::hub(self);
+        // &self,
+        adapter: &Adapter<A>,
+        // adapter_id: AdapterId,
+    ) -> /*Result<*/wgt::DownlevelCapabilities/*, InvalidAdapter>*/ {
+        /* let hub = A::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         adapter_guard
             .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.downlevel.clone())
-            .map_err(|_| InvalidAdapter)
+            .map(|adapter| */adapter.raw.capabilities.downlevel.clone()/*)
+            .map_err(|_| InvalidAdapter)*/
     }
 
-    pub fn adapter_drop<A: HalApi>(&self, adapter_id: AdapterId) {
+    /* pub fn adapter_drop<A: HalApi>(&self, _adapter_id: /*AdapterId*/id::Id<Adapter<hal::api::Empty>>) {
         profiling::scope!("drop", "Adapter");
 
-        let hub = A::hub(self);
+        /* let hub = A::hub(self);
         let mut token = Token::root();
         let (mut adapter_guard, _) = hub.adapters.write(&mut token);
 
@@ -811,40 +882,53 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if free {
             hub.adapters
                 .unregister_locked(adapter_id, &mut *adapter_guard);
-        }
-    }
+        } */
+        /* #[cfg(feature="trace")]
+        let _ = A::hub(self)
+            .adapters
+            .free(_adapter_id); */
+    } */
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_request_device<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
+        /* #[cfg(feature = "trace")]
+        &self, */
+        // adapter_id: AdapterId,
+        adapter: Adapter<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-        id_in: Input<G, DeviceId>,
-    ) -> (DeviceId, Option<RequestDeviceError>) {
+        /* #[cfg(feature = "trace")]
+        id_in: Input<G, id::Id<Device<hal::api::Empty>>>, */
+    ) -> Result<DeviceId, RequestDeviceError> {
         profiling::scope!("request_device", "Adapter");
 
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let fid = hub.devices.prepare(id_in);
+        /* #[cfg(feature = "trace")]
+        let hub = A::hub(self); */
+        // let mut token = Token::root();
+        /* #[cfg(feature = "trace")]
+        let fid;// = hub.devices.prepare(id_in); */
 
         let error = loop {
-            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+            /* let (adapter_guard, mut token) = hub.adapters.read(&mut token);
             let adapter = match adapter_guard.get(adapter_id) {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
-            };
-            let device = match adapter.create_device(adapter_id, desc, trace_path) {
+            }; */
+            let device = match adapter.create_device(/*adapter_id, */desc, trace_path) {
                 Ok(device) => device,
                 Err(e) => break e,
             };
-            let id = fid.assign(device, &mut token);
-            return (id.0, None);
+            /* #[cfg(feature = "trace")]
+            { /*fid = */hub.devices./*prepare(id_in)*/process(id_in, A::VARIANT); } */
+            let id = id::ValidId2::<Device<A>>::new(std::sync::Arc::new(device));
+            let id = id::Id2::upcast_backend(id)/*fid.assign(device, &mut token)*/;
+            return Ok(id);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        // let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        // (id, Some(error))
+        Err(error)
     }
 
     /// # Safety
@@ -852,35 +936,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// - `hal_device` must be created from `adapter_id` or its internal handle.
     /// - `desc` must be a subset of `hal_device` features and limits.
     pub unsafe fn create_device_from_hal<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
+        adapter: Adapter<A>,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-        id_in: Input<G, DeviceId>,
-    ) -> (DeviceId, Option<RequestDeviceError>) {
+    ) -> Result<DeviceId, RequestDeviceError> {
         profiling::scope!("request_device", "Adapter");
 
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let fid = hub.devices.prepare(id_in);
-
-        let error = loop {
-            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-            let adapter = match adapter_guard.get(adapter_id) {
-                Ok(adapter) => adapter,
-                Err(_) => break RequestDeviceError::InvalidAdapter,
-            };
-            let device =
-                match adapter.create_device_from_hal(adapter_id, hal_device, desc, trace_path) {
-                    Ok(device) => device,
-                    Err(e) => break e,
-                };
-            let id = fid.assign(device, &mut token);
-            return (id.0, None);
-        };
-
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        let device = adapter.create_device_from_hal(hal_device, desc, trace_path)?;
+        let id = id::ValidId2::<Device<A>>::new(std::sync::Arc::new(device));
+        Ok(id::Id2::upcast_backend(id))
     }
 }

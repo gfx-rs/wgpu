@@ -83,7 +83,7 @@ impl Example {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: Some("blit"),
             layout: None,
             vertex: wgpu::VertexState {
@@ -204,7 +204,6 @@ impl framework::Example for Example {
 
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -276,7 +275,7 @@ impl framework::Example for Example {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
         });
 
-        let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let draw_pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: Some("draw"),
             layout: None,
             vertex: wgpu::VertexState {

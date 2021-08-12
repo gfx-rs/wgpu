@@ -178,8 +178,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
     unsafe fn discard_encoding(&mut self) {
         if let Some(list) = self.list.take() {
-            list.close();
-            self.free_lists.push(list);
+            list.destroy();
         }
     }
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {

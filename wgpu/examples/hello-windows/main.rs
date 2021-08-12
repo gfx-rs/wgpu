@@ -26,15 +26,15 @@ impl ViewportDesc {
         }
     }
 
-    fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport {
+    fn build(self, device: &wgpu::Device, format: wgpu::TextureFormat) -> Viewport {
         let size = self.window.inner_size();
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self.surface.get_preferred_format(adapter).unwrap(),
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
+            format: format,
         };
 
         self.surface.configure(device, &config);
@@ -60,18 +60,21 @@ impl Viewport {
 
 async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
     let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
-    let viewports: Vec<_> = viewports
+    let mut viewports = viewports
         .into_iter()
         .map(|(window, color)| ViewportDesc::new(window, color, &instance))
-        .collect();
+        .peekable();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
             // Request an adapter which can render to our surface
-            compatible_surface: viewports.first().map(|desc| &desc.surface),
+            compatible_surface: viewports.peek().map(|desc| &desc.surface),
         })
         .await
         .expect("Failed to find an appropriate adapter");
+    let viewports: Vec<_> = viewports
+        .map(|viewport| (viewport.surface.get_preferred_format(&adapter).unwrap(), viewport))
+        .collect();
 
     // Create the logical device and command queue
     let (device, queue) = adapter
@@ -88,14 +91,14 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
 
     let mut viewports: HashMap<WindowId, Viewport> = viewports
         .into_iter()
-        .map(|desc| (desc.window.id(), desc.build(&adapter, &device)))
+        .map(|(format, desc)| (desc.window.id(), desc.build(&device, format)))
         .collect();
 
     event_loop.run(move |event, _, control_flow| {
         // Have the closure take ownership of the resources.
         // `event_loop.run` never returns, therefore we must do this to ensure
         // the resources are properly cleaned up.
-        let _ = (&instance, &adapter);
+        let _ = &instance;
 
         *control_flow = ControlFlow::Wait;
         match event {

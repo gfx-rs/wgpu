@@ -134,29 +134,44 @@ pub enum SurfaceError {
 #[error("Not supported")]
 pub struct InstanceError;
 
-pub trait Api: Clone + Sized {
+pub trait Api: Clone + fmt::Debug + Sized {
     type Instance: Instance<Self>;
     type Surface: Surface<Self>;
     type Adapter: Adapter<Self>;
+
+    /// Resource guarantees apply (sort of; see [Device::exit]).
     type Device: Device<Self>;
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
     type CommandBuffer: Send + Sync;
 
-    type Buffer: fmt::Debug + Send + Sync + 'static;
-    type Texture: fmt::Debug + Send + Sync + 'static;
     type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
+
+    /// Resource guarantees apply
+    type Buffer: fmt::Debug + Send + Sync + 'static;
+    /// Resource guarantees apply
+    type Texture: fmt::Debug + Send + Sync + 'static;
+    /// Resource guarantees apply
     type TextureView: fmt::Debug + Send + Sync;
+    /// Resource guarantees apply
     type Sampler: fmt::Debug + Send + Sync;
+    /// Resource guarantees apply
     type QuerySet: fmt::Debug + Send + Sync;
+    /// Resource guarantees apply
     type Fence: fmt::Debug + Send + Sync;
 
+    /// Resource guarantees apply
     type BindGroupLayout: Send + Sync;
+    /// Resource guarantees apply
     type BindGroup: fmt::Debug + Send + Sync;
+    /// Resource guarantees apply
     type PipelineLayout: Send + Sync;
+    /// Resource guarantees apply
     type ShaderModule: fmt::Debug + Send + Sync;
+    /// Resource guarantees apply
     type RenderPipeline: Send + Sync;
+    /// Resource guarantees apply
     type ComputePipeline: Send + Sync;
 }
 
@@ -202,8 +217,27 @@ pub trait Adapter<A: Api>: Send + Sync {
     unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
 }
 
-pub trait Device<A: Api>: Send + Sync {
-    /// Exit connection to this logical device.
+/// Guarantee for *all* associated resources (TODO: elaborate
+/// and find more exceptions):
+///
+/// * If the resource is not currently active on the GPU,
+/// it is uniquely owned on the CPU (what this means
+/// varies per resource; TODO: document), and the device
+/// is still alive on the CPU, then it is safe to
+/// call the associated
+///
+/// `device.destroy_resource(resource)`
+///
+/// method, provided that the resource was initialized as
+///
+/// `device.create_resource(...)`
+///
+/// (i.e. it is being deallocated with the same device with
+/// which it was created).
+pub unsafe trait Device<A: Api>: Send + Sync {
+    /// Exit connection to this logical device (this is equivalent to destroy_device, with
+    /// self == device automatically satisfied, so the only safety requirement is that the
+    /// device can no longer be in use).
     unsafe fn exit(self, queue: A::Queue);
     /// Creates a new buffer.
     ///
@@ -250,10 +284,13 @@ pub trait Device<A: Api>: Send + Sync {
         desc: &BindGroupLayoutDescriptor,
     ) -> Result<A::BindGroupLayout, DeviceError>;
     unsafe fn destroy_bind_group_layout(&self, bg_layout: A::BindGroupLayout);
-    unsafe fn create_pipeline_layout(
+    unsafe fn create_pipeline_layout<'a, I: Iterator<Item=&'a A::BindGroupLayout>>(
         &self,
-        desc: &PipelineLayoutDescriptor<A>,
-    ) -> Result<A::PipelineLayout, DeviceError>;
+        desc: PipelineLayoutDescriptor<I>,
+    ) -> Result<A::PipelineLayout, DeviceError>
+        where
+            A::BindGroupLayout: 'a,
+            I: Clone + DoubleEndedIterator + ExactSizeIterator;
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: A::PipelineLayout);
     unsafe fn create_bind_group(
         &self,
@@ -791,10 +828,10 @@ pub struct BindGroupLayoutDescriptor<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct PipelineLayoutDescriptor<'a, A: Api> {
+pub struct PipelineLayoutDescriptor<'a, I> {
     pub label: Label<'a>,
     pub flags: PipelineLayoutFlags,
-    pub bind_group_layouts: &'a [&'a A::BindGroupLayout],
+    pub bind_group_layouts: I,
     pub push_constant_ranges: &'a [wgt::PushConstantRange],
 }
 

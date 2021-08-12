@@ -81,13 +81,14 @@
             queued: true,
         ),
         CreateShaderModule(
-            id: Id(0, 1, Empty),
+            id: 0x03,
             desc: (
                 label: None,
                 flags: (bits: 3),
             ),
             data: "buffer-zero-init-for-binding.wgsl",
         ),
+        Assign(trace_id: 0x03, resource_id: 0x03),
         CreateBuffer(Id(3, 1, Empty), (
             label: Some("used in binding"),
             size: 16,
@@ -96,7 +97,7 @@
             ),
             mapped_at_creation: false,
         )),
-        CreateBindGroupLayout(Id(0, 1, Empty), (
+        CreateBindGroupLayout(0x07, (
             label: None,
             entries: [
                 (
@@ -115,9 +116,10 @@
                 ),
             ],
         )),
-        CreateBindGroup(Id(0, 1, Empty), (
+        Assign(trace_id: 0x07, resource_id: 0x07),
+        CreateBindGroup(0x01, (
             label: None,
-            layout: Id(0, 1, Empty),
+            layout: 0x07,
             entries: [
                 (
                     binding: 0,
@@ -129,34 +131,37 @@
                 ),
             ],
         )),
-        CreatePipelineLayout(Id(0, 1, Empty), (
+        Assign(trace_id: 0x01, resource_id: 0x01),
+        CreatePipelineLayout(0x04, (
             label: None,
             bind_group_layouts: [
-                Id(0, 1, Empty),
+                0x07,
             ],
             push_constant_ranges: [],
         )),
+        Assign(trace_id: 0x04, resource_id: 0x04),
         CreateComputePipeline(
-            id: Id(0, 1, Empty),
+            id: 0x06,
             desc: (
                 label: None,
-                layout: Some(Id(0, 1, Empty)),
+                layout: Some(0x04),
                 stage: (
-                    module: Id(0, 1, Empty),
+                    module: 0x03,
                     entry_point: "main",
                 ),
             ),
         ),
+        Assign(trace_id: 0x06, resource_id: 0x06),
         Submit(1, [
             RunComputePass(
                 base: (
                     label: None,
                     commands: [
-                        SetPipeline(Id(0, 1, Empty)),
+                        SetPipeline(0x06),
                         SetBindGroup(
                             index: 0,
                             num_dynamic_offsets: 0,
-                            bind_group_id: Id(0, 1, Empty),
+                            bind_group_id: 0x01,
                         ),
                         Dispatch((4, 1, 1)),
                     ],

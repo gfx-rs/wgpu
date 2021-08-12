@@ -46,7 +46,7 @@ const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_TARGETS * 2 + 1;
 
 pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {

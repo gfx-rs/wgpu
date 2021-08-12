@@ -74,7 +74,6 @@ impl framework::Example for Example {
     }
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
@@ -94,9 +93,9 @@ impl framework::Example for Example {
             });
 
         let pipeline_triangle_conservative =
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
                 label: Some("Conservative Rasterization"),
-                layout: Some(&pipeline_layout_empty),
+                layout: Some(pipeline_layout_empty.clone()),
                 vertex: wgpu::VertexState {
                     module: &shader_triangle_and_lines,
                     entry_point: "vs_main",
@@ -116,9 +115,9 @@ impl framework::Example for Example {
             });
 
         let pipeline_triangle_regular =
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
                 label: Some("Regular Rasterization"),
-                layout: Some(&pipeline_layout_empty),
+                layout: Some(pipeline_layout_empty.clone()),
                 vertex: wgpu::VertexState {
                     module: &shader_triangle_and_lines,
                     entry_point: "vs_main",
@@ -139,9 +138,9 @@ impl framework::Example for Example {
             .contains(wgpu::Features::NON_FILL_POLYGON_MODE)
         {
             Some(
-                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
                     label: Some("Lines"),
-                    layout: Some(&pipeline_layout_empty),
+                    layout: Some(pipeline_layout_empty.clone()),
                     vertex: wgpu::VertexState {
                         module: &shader_triangle_and_lines,
                         entry_point: "vs_main",
@@ -167,9 +166,9 @@ impl framework::Example for Example {
 
         let (pipeline_upscale, bind_group_layout_upscale) = {
             let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
                     label: Some("upscale bindgroup"),
-                    entries: &[
+                    entries: &mut [
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
                             visibility: wgpu::ShaderStages::FRAGMENT,
@@ -202,9 +201,9 @@ impl framework::Example for Example {
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
             });
             (
-                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
                     label: Some("Upscale"),
-                    layout: Some(&pipeline_layout),
+                    layout: Some(pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: "vs_main",

@@ -560,7 +560,7 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+unsafe impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
         self.mem_allocator.into_inner().cleanup(&*self.shared);
         self.desc_allocator.into_inner().cleanup(&*self.shared);
@@ -979,14 +979,15 @@ impl crate::Device<super::Api> for super::Device {
             .destroy_descriptor_set_layout(bg_layout.raw, None);
     }
 
-    unsafe fn create_pipeline_layout(
+    unsafe fn create_pipeline_layout<'a, I: Iterator<Item=&'a super::BindGroupLayout>>(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> Result<super::PipelineLayout, crate::DeviceError> {
+        desc: crate::PipelineLayoutDescriptor<I>,
+    ) -> Result<super::PipelineLayout, crate::DeviceError>
+        where I: Clone + DoubleEndedIterator + ExactSizeIterator,
+    {
         //Note: not bothering with inplace_or_alloc_from_iter her as it's low frequency
         let vk_set_layouts = desc
             .bind_group_layouts
-            .iter()
             .map(|bgl| bgl.raw)
             .collect::<Vec<_>>();
         let vk_push_constant_ranges = desc

@@ -273,7 +273,7 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+unsafe impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
         self.rtv_pool.into_inner().destroy();
         self.dsv_pool.into_inner().destroy();
@@ -633,7 +633,6 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
         if let Some(list) = encoder.list {
-            list.close();
             list.destroy();
         }
         for list in encoder.free_lists {
@@ -696,10 +695,12 @@ impl crate::Device<super::Api> for super::Device {
         }
     }
 
-    unsafe fn create_pipeline_layout(
+    unsafe fn create_pipeline_layout<'a, I: Iterator<Item=&'a super::BindGroupLayout>>(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> Result<super::PipelineLayout, crate::DeviceError> {
+        desc: crate::PipelineLayoutDescriptor<I>,
+    ) -> Result<super::PipelineLayout, crate::DeviceError>
+        where I: Clone + DoubleEndedIterator + ExactSizeIterator,
+    {
         use naga::back::hlsl;
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
@@ -767,7 +768,7 @@ impl crate::Device<super::Api> for super::Device {
         // which could cause invalid pointers.
         let total_non_dynamic_entries = desc
             .bind_group_layouts
-            .iter()
+            .clone()
             .flat_map(|bgl| {
                 bgl.entries.iter().map(|entry| match entry.ty {
                     wgt::BindingType::Buffer {
@@ -782,7 +783,8 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut bind_group_infos =
             arrayvec::ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
-        for (index, bgl) in desc.bind_group_layouts.iter().enumerate().rev() {
+        for (index, bgl) in desc.bind_group_layouts.enumerate().rev() {
+            let space = root_space_offset + index as u32;
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
                 base_root_index: parameters.len() as u32,

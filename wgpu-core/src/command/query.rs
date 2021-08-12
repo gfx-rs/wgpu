@@ -1,57 +1,59 @@
 use hal::CommandEncoder as _;
 
 #[cfg(feature = "trace")]
+use core::borrow::Borrow;
+use core::iter;
+#[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
-    id::{self, Id, TypedId},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
+    id::{self, Dummy, IdGuard},
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::QuerySet,
-    track::UseExtendError,
-    Epoch, FastHashMap, Index,
+    track::UseExtendError2,
+    FastHashMap,
 };
-use std::{iter, marker::PhantomData};
 use thiserror::Error;
 use wgt::BufferAddress;
 
 #[derive(Debug)]
-pub(super) struct QueryResetMap<A: hal::Api> {
-    map: FastHashMap<Index, (Vec<bool>, Epoch)>,
-    _phantom: PhantomData<A>,
+pub(super) struct QueryResetMap<'a, A: HalApi + 'a> {
+    map: FastHashMap</*Index*/IdGuard<'a, A, QuerySet<Dummy>>, /*(Vec<bool>, Epoch)*/Vec<bool>>,
+    // _phantom: PhantomData<A>,
 }
-impl<A: hal::Api> QueryResetMap<A> {
+impl<'a, A: HalApi> QueryResetMap<'a, A> {
     pub fn new() -> Self {
         Self {
             map: FastHashMap::default(),
-            _phantom: PhantomData,
+            // _phantom: PhantomData,
         }
     }
 
     pub fn use_query_set(
         &mut self,
-        id: id::QuerySetId,
-        query_set: &QuerySet<A>,
+        // id: id::QuerySetId,
+        query_set: IdGuard<'a, A, QuerySet<Dummy>>,
         query: u32,
     ) -> bool {
-        let (index, epoch, _) = id.unzip();
+        // let (index, epoch, _) = id.unzip();
         let vec_pair = self
             .map
-            .entry(index)
-            .or_insert_with(|| (vec![false; query_set.desc.count as usize], epoch));
+            .entry(/*index*/query_set)
+            .or_insert_with(|| (vec![false; query_set.desc.count as usize]/*, epoch*/));
 
-        std::mem::replace(&mut vec_pair.0[query as usize], true)
+        std::mem::replace(&mut vec_pair/*.0*/[query as usize], true)
     }
 
     pub fn reset_queries(
         self,
         raw_encoder: &mut A::CommandEncoder,
-        query_set_storage: &Storage<QuerySet<A>, id::QuerySetId>,
-        backend: wgt::Backend,
-    ) -> Result<(), id::QuerySetId> {
-        for (query_set_id, (state, epoch)) in self.map.into_iter() {
-            let id = Id::zip(query_set_id, epoch, backend);
-            let query_set = query_set_storage.get(id).map_err(|_| id)?;
+        // query_set_storage: &Storage<QuerySet<A>, id::QuerySetId>,
+        /*backend: wgt::Backend,*/
+    ) -> Result<(), id::QuerySetId> where A: HalApi {
+        for (/*query_set_id*/query_set, /*(state, epoch)*/state) in self.map.into_iter() {
+            /* let id = Id::zip(query_set_id, epoch, /*backend*/A::VARIANT);
+            let query_set = query_set_storage.get(id).map_err(|_| id)?; */
 
             debug_assert_eq!(state.len(), query_set.desc.count as usize);
 
@@ -159,17 +161,17 @@ pub enum ResolveError {
     },
 }
 
-impl<A: HalApi> QuerySet<A> {
-    fn validate_query(
-        &self,
-        query_set_id: id::QuerySetId,
+impl<'a, A: HalApi> IdGuard<'a, A, QuerySet<Dummy>> {
+    fn validate_query<'b>(
+        &'b self,
+        // query_set_id: id::QuerySetId,
         query_type: SimplifiedQueryType,
         query_index: u32,
-        reset_state: Option<&mut QueryResetMap<A>>,
-    ) -> Result<&A::QuerySet, QueryUseError> {
+        reset_state: Option<&'b mut QueryResetMap<'a, A>>,
+    ) -> Result<&'b A::QuerySet, QueryUseError> {
         // We need to defer our resets because we are in a renderpass, add the usage to the reset map.
         if let Some(reset) = reset_state {
-            let used = reset.use_query_set(query_set_id, self, query_index);
+            let used = reset.use_query_set(/*query_set_id*/ *self, query_index);
             if used {
                 return Err(QueryUseError::UsedTwiceInsideRenderpass { query_index });
             }
@@ -193,16 +195,16 @@ impl<A: HalApi> QuerySet<A> {
         Ok(&self.raw)
     }
 
-    pub(super) fn validate_and_write_timestamp(
-        &self,
+    pub(super) fn validate_and_write_timestamp<'b>(
+        self,
         raw_encoder: &mut A::CommandEncoder,
-        query_set_id: id::QuerySetId,
+        // query_set_id: id::QuerySetId,
         query_index: u32,
-        reset_state: Option<&mut QueryResetMap<A>>,
+        reset_state: Option<&'b mut QueryResetMap<'a, A>>,
     ) -> Result<(), QueryUseError> {
         let needs_reset = reset_state.is_none();
         let query_set = self.validate_query(
-            query_set_id,
+            // query_set_id,
             SimplifiedQueryType::Timestamp,
             query_index,
             reset_state,
@@ -219,23 +221,23 @@ impl<A: HalApi> QuerySet<A> {
         Ok(())
     }
 
-    pub(super) fn validate_and_begin_pipeline_statistics_query(
-        &self,
+    pub(super) fn validate_and_begin_pipeline_statistics_query<'b>(
+        self,
         raw_encoder: &mut A::CommandEncoder,
-        query_set_id: id::QuerySetId,
+        // query_set_id: id::QuerySetId,
         query_index: u32,
-        reset_state: Option<&mut QueryResetMap<A>>,
-        active_query: &mut Option<(id::QuerySetId, u32)>,
+        reset_state: Option<&'b mut QueryResetMap<'a, A>>,
+        active_query: &'b mut Option<(/*id::QuerySetId*/Self, u32)>,
     ) -> Result<(), QueryUseError> {
         let needs_reset = reset_state.is_none();
         let query_set = self.validate_query(
-            query_set_id,
+            // query_set_id,
             SimplifiedQueryType::PipelineStatistics,
             query_index,
             reset_state,
         )?;
 
-        if let Some((_old_id, old_idx)) = active_query.replace((query_set_id, query_index)) {
+        if let Some((_old_id, old_idx)) = active_query.replace((/*query_set_id*/self, query_index)) {
             return Err(QueryUseError::AlreadyStarted {
                 active_query_index: old_idx,
                 new_query_index: query_index,
@@ -254,16 +256,16 @@ impl<A: HalApi> QuerySet<A> {
     }
 }
 
-pub(super) fn end_pipeline_statistics_query<A: HalApi>(
+pub(super) fn end_pipeline_statistics_query<'a, A: HalApi>(
     raw_encoder: &mut A::CommandEncoder,
-    storage: &Storage<QuerySet<A>, id::QuerySetId>,
-    active_query: &mut Option<(id::QuerySetId, u32)>,
+    // storage: &Storage<QuerySet<A>, id::QuerySetId>,
+    active_query: &mut Option<(/*id::QuerySetId*/IdGuard<'a, A, QuerySet<Dummy>>, u32)>,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set_id, query_index)) = active_query.take() {
         // We can unwrap here as the validity was validated when the active query was set
-        let query_set = storage.get(query_set_id).unwrap();
+        // let query_set = storage.get(query_set_id).unwrap();
 
-        unsafe { raw_encoder.end_query(&query_set.raw, query_index) };
+        unsafe { raw_encoder.end_query(&query_set_id.raw, query_index) };
 
         Ok(())
     } else {
@@ -275,20 +277,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_write_timestamp<A: HalApi>(
         &self,
         command_encoder_id: id::CommandEncoderId,
-        query_set_id: id::QuerySetId,
+        query_set_id: &id::QuerySetId,
         query_index: u32,
     ) -> Result<(), QueryError> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let (query_set_guard, _) = hub.query_sets.read(&mut token);
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        // let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
         let raw_encoder = cmd_buf.encoder.open();
 
+        let query_set_id = id::expect_backend(query_set_id);
+        // FIXME: if bind_group.device() != cmd_buf.device() {
+        //   return Err(RenderCommandError::InvalidBindGroup(bind_group_id.clone()))
+        //          .map_pass_err(scope);
+        // }
+
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
+            let query_set_id = id::QuerySetId::as_usize::<A>(query_set_id.borrow());
             list.push(TraceCommand::WriteTimestamp {
                 query_set_id,
                 query_index,
@@ -298,13 +307,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let query_set = cmd_buf
             .trackers
             .query_sets
-            .use_extend(&*query_set_guard, query_set_id, (), ())
-            .map_err(|e| match e {
+            .use_extend(/*&*query_set_guard, */query_set_id, (), ())
+            .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+            /*.map_err(|e| match e {
                 UseExtendError::InvalidResource => QueryError::InvalidQuerySet(query_set_id),
                 _ => unreachable!(),
-            })?;
+            })?*/;
 
-        query_set.validate_and_write_timestamp(raw_encoder, query_set_id, query_index, None)?;
+        query_set.validate_and_write_timestamp(raw_encoder, /*query_set_id, */query_index, None)?;
 
         Ok(())
     }
@@ -312,7 +322,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_resolve_query_set<A: HalApi>(
         &self,
         command_encoder_id: id::CommandEncoderId,
-        query_set_id: id::QuerySetId,
+        query_set_id: &id::QuerySetId,
         start_query: u32,
         query_count: u32,
         destination: id::BufferId,
@@ -321,15 +331,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        // let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut cmd_buf_guard, command_encoder_id)?;
         let raw_encoder = cmd_buf.encoder.open();
 
+        let query_set_id = id::expect_backend(query_set_id);
+        // FIXME: if bind_group.device() != cmd_buf.device() {
+        //   return Err(RenderCommandError::InvalidBindGroup(bind_group_id.clone()))
+        //          .map_pass_err(scope);
+        // }
+
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
+            let query_set_id = id::QuerySetId::as_usize::<A>(query_set_id.borrow());
             list.push(TraceCommand::ResolveQuerySet {
                 query_set_id,
                 start_query,
@@ -342,11 +359,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let query_set = cmd_buf
             .trackers
             .query_sets
-            .use_extend(&*query_set_guard, query_set_id, (), ())
-            .map_err(|e| match e {
+            .use_extend(/*&*query_set_guard, */query_set_id, (), ())
+            .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+            /* .map_err(|e| match e {
                 UseExtendError::InvalidResource => QueryError::InvalidQuerySet(query_set_id),
                 _ => unreachable!(),
-            })?;
+            })?*/;
 
         let (dst_buffer, dst_pending) = cmd_buf
             .trackers

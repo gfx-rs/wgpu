@@ -34,8 +34,10 @@ impl BufferState {
 
 impl ResourceState for BufferState {
     type Id = BufferId;
+    type ValidId = Valid<BufferId>;
     type Selector = ();
     type Usage = BufferUses;
+    type Pending = BufferUses;
 
     fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(self.last)
@@ -43,7 +45,7 @@ impl ResourceState for BufferState {
 
     fn change(
         &mut self,
-        id: Valid<Self::Id>,
+        &id: &Valid<Self::Id>,
         _selector: Self::Selector,
         usage: Self::Usage,
         output: Option<&mut Vec<PendingTransition<Self>>>,
@@ -77,7 +79,7 @@ impl ResourceState for BufferState {
 
     fn merge(
         &mut self,
-        id: Valid<Self::Id>,
+        &id: &Valid<Self::Id>,
         other: &Self,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
@@ -129,15 +131,15 @@ mod test {
         };
         let id = Id::dummy();
         assert_eq!(
-            bs.change(id, (), BufferUses::STORAGE_WRITE, None),
+            bs.change(&id, (), BufferUses::STORAGE_WRITE, None),
             Err(PendingTransition {
                 id,
                 selector: (),
                 usage: BufferUses::INDEX..BufferUses::STORAGE_WRITE,
             }),
         );
-        bs.change(id, (), BufferUses::VERTEX, None).unwrap();
-        bs.change(id, (), BufferUses::INDEX, None).unwrap();
+        bs.change(&id, (), BufferUses::VERTEX, None).unwrap();
+        bs.change(&id, (), BufferUses::INDEX, None).unwrap();
         assert_eq!(bs, Unit::new(BufferUses::VERTEX | BufferUses::INDEX));
     }
 
@@ -149,7 +151,7 @@ mod test {
         };
         let id = Id::dummy();
         let mut list = Vec::new();
-        bs.change(id, (), BufferUses::VERTEX, Some(&mut list))
+        bs.change(&id, (), BufferUses::VERTEX, Some(&mut list))
             .unwrap();
         assert_eq!(
             &list,
@@ -168,7 +170,7 @@ mod test {
         );
 
         list.clear();
-        bs.change(id, (), BufferUses::STORAGE_WRITE, Some(&mut list))
+        bs.change(&id, (), BufferUses::STORAGE_WRITE, Some(&mut list))
             .unwrap();
         assert_eq!(
             &list,

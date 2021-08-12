@@ -30,7 +30,7 @@ use arrayvec::ArrayVec;
 use foreign_types::ForeignTypeRef as _;
 use parking_lot::Mutex;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 type ResourceIndex = u32;

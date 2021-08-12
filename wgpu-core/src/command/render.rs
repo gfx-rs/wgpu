@@ -35,7 +35,7 @@ use serde::Deserialize;
 #[cfg(any(feature = "serial-pass", feature = "trace"))]
 use serde::Serialize;
 
-use crate::track::UseExtendError;
+use crate::track::{UseExtendError2};
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
@@ -151,15 +151,17 @@ pub struct RenderPassDescriptor<'a> {
     pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
 }
 
-#[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
-pub struct RenderPass {
-    base: BasePass<RenderCommand>,
+type RenderPassCommand<'a> = RenderCommand<hal::api::Empty, /*F*/&'a id::IdCon>;
+
+// #[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
+pub struct RenderPass<'a/*, F: AllResources<hal::api::Empty>*/> {
+    base: BasePass<RenderPassCommand</*F*/'a>>,
     parent_id: id::CommandEncoderId,
     color_targets: ArrayVec<RenderPassColorAttachment, { hal::MAX_COLOR_TARGETS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
 }
 
-impl RenderPass {
+impl<'a> RenderPass<'a> {
     pub fn new(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
         Self {
             base: BasePass::new(&desc.label),
@@ -176,7 +178,7 @@ impl RenderPass {
     #[cfg(feature = "trace")]
     pub fn into_command(self) -> crate::device::trace::Command {
         crate::device::trace::Command::RunRenderPass {
-            base: self.base,
+            base: BasePass::from_owned(self.base),
             target_colors: self.color_targets.into_iter().collect(),
             target_depth_stencil: self.depth_stencil_target,
         }
@@ -184,7 +186,7 @@ impl RenderPass {
 
     pub fn set_index_buffer(
         &mut self,
-        buffer_id: id::BufferId,
+        &buffer_id: &'a id::BufferId,
         index_format: IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
@@ -198,7 +200,7 @@ impl RenderPass {
     }
 }
 
-impl fmt::Debug for RenderPass {
+impl<'a> fmt::Debug for RenderPass<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -325,18 +327,18 @@ impl VertexState {
 }
 
 #[derive(Debug)]
-struct State {
+struct State<'a, A: HalApi> {
     pipeline_flags: PipelineFlags,
-    binder: Binder,
+    binder: Binder<'a, A>,
     blend_constant: OptionalState,
     stencil_reference: u32,
-    pipeline: StateChange<id::RenderPipelineId>,
+    pipeline: StateChange</*id::IdGuard<'a, A, pipeline::RenderPipeline<hal::api::Empty>>*/&'a id::RenderPipelineId>,
     index: IndexState,
     vertex: VertexState,
     debug_scope_depth: u32,
 }
 
-impl State {
+impl<'a, A: HalApi> State<'a, A> {
     fn is_ready(&self, indexed: bool) -> Result<(), DrawError> {
         // Determine how many vertex buffers have already been bound
         let bound_buffers = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
@@ -498,9 +500,9 @@ impl<T, E> MapPassErr<T, RenderPassError> for Result<T, E>
 where
     E: Into<RenderPassErrorInner>,
 {
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, RenderPassError> {
+    fn map_pass_err<F: Fn() -> PassErrorScope>(self, scope: F) -> Result<T, RenderPassError> {
         self.map_err(|inner| RenderPassError {
-            scope,
+            scope: scope(),
             inner: inner.into(),
         })
     }
@@ -752,10 +754,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_run_render_pass<A: HalApi>(
+    pub fn command_encoder_run_render_pass<'a, A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        pass: &RenderPass,
+        pass: &RenderPass<'a>,
     ) -> Result<(), RenderPassError> {
         self.command_encoder_run_render_pass_impl::<A>(
             encoder_id,
@@ -766,21 +768,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_render_pass_impl<A: HalApi>(
+    pub fn command_encoder_run_render_pass_impl<'a, A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePassRef<RenderCommand>,
+        base: BasePassRef<RenderPassCommand<'a>>,
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
     ) -> Result<(), RenderPassError> {
         profiling::scope!("run_render_pass", "CommandEncoder");
-        let scope = PassErrorScope::Pass(encoder_id);
+        let scope = || PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        // let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (pass_raw, trackers, query_reset_state) = {
+            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+            let (texture_guard, mut token) = hub.textures.read(&mut token);
+            // read-only lock guard
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
@@ -799,18 +804,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let device = &device_guard[cmd_buf.device_id.value];
+            // let device = /*&device_guard[*/&*cmd_buf.device_id/*.value]*/;
             unsafe {
                 cmd_buf.encoder.raw.begin_encoding(base.label).unwrap() //TODO: handle this better
             };
 
-            let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
-            let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-            let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
-            let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-            let (texture_guard, mut token) = hub.textures.read(&mut token);
+            // let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
+            // let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+            // let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            // let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
+            // let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (view_guard, _) = hub.texture_views.read(&mut token);
 
             log::trace!(
@@ -826,6 +829,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*view_guard,
             )
             .map_pass_err(scope)?;
+            let device = /*&device_guard[*/&*cmd_buf.device_id/*.value]*/;
 
             let raw = &mut cmd_buf.encoder.raw;
 
@@ -852,7 +856,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         num_dynamic_offsets,
                         bind_group_id,
                     } => {
-                        let scope = PassErrorScope::SetBindGroup(bind_group_id);
+                        let scope = || PassErrorScope::SetBindGroup(bind_group_id.to_owned());
                         let max_bind_groups = device.limits.max_bind_groups;
                         if (index as u32) >= max_bind_groups {
                             return Err(RenderCommandError::BindGroupIndexOutOfRange {
@@ -869,12 +873,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         dynamic_offset_count += num_dynamic_offsets as usize;
 
+                        let bind_group_id_ = id::expect_backend(bind_group_id);
+                        // FIXME: if bind_group.device() != self.device() {
+                        //   return Err(RenderCommandError::InvalidBindGroup(bind_group_id.clone()))
+                        //          .map_pass_err(scope);
+                        // }
                         let bind_group = cmd_buf
                             .trackers
                             .bind_groups
-                            .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
-                            .map_pass_err(scope)?;
+                            .use_extend(/*&*bind_group_guard, */bind_group_id_, (), ())
+                            // FIXME: Should not be necessary when never-type (!) stabilizes, since
+                            // it can automatically work out that this branch can't be taken and
+                            // make the Ok() branch irrefutable.
+                            .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                            /* .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))
+                            .map_pass_err(scope)?*/;
                         bind_group
                             .validate_dynamic_bindings(&temp_offsets)
                             .map_pass_err(scope)?;
@@ -905,16 +918,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let pipeline_layout_id = state.binder.pipeline_layout_id;
                         let entries = state.binder.assign_group(
                             index as usize,
-                            id::Valid(bind_group_id),
+                            // id::Valid(bind_group_id),
                             bind_group,
                             &temp_offsets,
                         );
                         if !entries.is_empty() {
                             let pipeline_layout =
-                                &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                                &/*pipeline_layout_guard[*/pipeline_layout_id.unwrap()/*]*/.raw;
                             for (i, e) in entries.iter().enumerate() {
                                 let raw_bg =
-                                    &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+                                    &/*bind_group_guard[e.group_id.as_ref().unwrap().value]*/
+                                    e.group_id.as_ref().unwrap().raw;
 
                                 unsafe {
                                     raw.set_bind_group(
@@ -928,17 +942,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
-                        let scope = PassErrorScope::SetPipelineRender(pipeline_id);
+                        let scope = || PassErrorScope::SetPipelineRender(pipeline_id.to_owned());
                         if state.pipeline.set_and_check_redundant(pipeline_id) {
                             continue;
                         }
 
+                        let pipeline_id_ = id::expect_backend(pipeline_id);
+                        // FIXME: if pipeline_id_.device() != self.device() {
+                        //   return Err(RenderCommandError::InvalidPipeline(pipeline_id.to_owned()))
+                        //          .map_pass_err(scope);
+                        // }
                         let pipeline = cmd_buf
                             .trackers
                             .render_pipes
-                            .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                            .map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
-                            .map_pass_err(scope)?;
+                            .use_extend(/*&*pipeline_guard, */pipeline_id_, (), ())
+                            // FIXME: Should not be necessary when never-type (!) stabilizes, since
+                            // it can automatically work out that this branch can't be taken and
+                            // make the Ok() branch irrefutable.
+                            .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                            /*.map_err(|_| RenderCommandError::InvalidPipeline(pipeline_id))
+                            .map_pass_err(scope)?*/;
 
                         info.context
                             .check_compatible(&pipeline.pass_context)
@@ -969,17 +992,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         // Rebind resource
-                        if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
-                            let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                        if state.binder.pipeline_layout_id != Some(pipeline.layout_id/*.value*/.borrow()) {
+                            let pipeline_layout = &/*pipeline_layout_guard[*/pipeline.layout_id/*.value]*/;
 
                             let (start_index, entries) = state.binder.change_pipeline_layout(
-                                &*pipeline_layout_guard,
-                                pipeline.layout_id.value,
+                                //&*pipeline_layout_guard,
+                                pipeline_id_.as_ref().layout_id/*.value*/.borrow(),
                             );
                             if !entries.is_empty() {
                                 for (i, e) in entries.iter().enumerate() {
                                     let raw_bg =
-                                        &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+                                        &/*bind_group_guard[e.group_id.as_ref().unwrap().value]*/
+                                        e.group_id.as_ref().unwrap().raw;
 
                                     unsafe {
                                         raw.set_bind_group(
@@ -1042,7 +1066,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
-                        let scope = PassErrorScope::SetIndexBuffer(buffer_id);
+                        let scope = || PassErrorScope::SetIndexBuffer(buffer_id);
                         let buffer = info
                             .trackers
                             .buffers
@@ -1092,7 +1116,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
-                        let scope = PassErrorScope::SetVertexBuffer(buffer_id);
+                        let scope = || PassErrorScope::SetVertexBuffer(buffer_id);
                         let buffer = info
                             .trackers
                             .buffers
@@ -1170,7 +1194,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         depth_min,
                         depth_max,
                     } => {
-                        let scope = PassErrorScope::SetViewport;
+                        let scope = || PassErrorScope::SetViewport;
                         if rect.w <= 0.0
                             || rect.h <= 0.0
                             || depth_min < 0.0
@@ -1196,7 +1220,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size_bytes,
                         values_offset,
                     } => {
-                        let scope = PassErrorScope::SetPushConstant;
+                        let scope = || PassErrorScope::SetPushConstant;
                         let values_offset = values_offset
                             .ok_or(RenderPassErrorInner::InvalidValuesOffset)
                             .map_pass_err(scope)?;
@@ -1212,7 +1236,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .pipeline_layout_id
                             .ok_or(DrawError::MissingPipeline)
                             .map_pass_err(scope)?;
-                        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
+                        let pipeline_layout = &/*pipeline_layout_guard[*/pipeline_layout_id/*]*/;
 
                         pipeline_layout
                             .validate_push_constant_ranges(stages, offset, end_offset_bytes)
@@ -1224,7 +1248,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::SetScissor(ref rect) => {
-                        let scope = PassErrorScope::SetScissorRect;
+                        let scope = || PassErrorScope::SetScissorRect;
                         if rect.w == 0
                             || rect.h == 0
                             || rect.x + rect.w > info.extent.width
@@ -1249,10 +1273,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_instance,
                     } => {
                         let indexed = false;
-                        let scope = PassErrorScope::Draw {
+                        let scope = || PassErrorScope::Draw {
                             indexed,
                             indirect: false,
-                            pipeline: state.pipeline.last_state,
+                            pipeline: state.pipeline.last_state.cloned(),
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
@@ -1289,10 +1313,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_instance,
                     } => {
                         let indexed = true;
-                        let scope = PassErrorScope::Draw {
+                        let scope = || PassErrorScope::Draw {
                             indexed,
                             indirect: false,
-                            pipeline: state.pipeline.last_state,
+                            pipeline: state.pipeline.last_state.cloned(),
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
@@ -1333,10 +1357,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         count,
                         indexed,
                     } => {
-                        let scope = PassErrorScope::Draw {
+                        let scope = || PassErrorScope::Draw {
                             indexed,
                             indirect: true,
-                            pipeline: state.pipeline.last_state,
+                            pipeline: state.pipeline.last_state.cloned(),
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
@@ -1409,10 +1433,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         max_count,
                         indexed,
                     } => {
-                        let scope = PassErrorScope::Draw {
+                        let scope = || PassErrorScope::Draw {
                             indexed,
                             indirect: true,
-                            pipeline: state.pipeline.last_state,
+                            pipeline: state.pipeline.last_state.cloned(),
                         };
                         state.is_ready(indexed).map_pass_err(scope)?;
 
@@ -1535,7 +1559,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::PopDebugGroup => {
-                        let scope = PassErrorScope::PopDebugGroup;
+                        let scope = || PassErrorScope::PopDebugGroup;
                         if state.debug_scope_depth == 0 {
                             return Err(RenderPassErrorInner::InvalidPopDebugGroup)
                                 .map_pass_err(scope);
@@ -1558,24 +1582,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         query_set_id,
                         query_index,
                     } => {
-                        let scope = PassErrorScope::WriteTimestamp;
+                        let query_set_id_ = id::expect_backend(query_set_id);
+                        // FIXME: if query_set_id_.device() != self.device() {
+                        //   return Err(ComputePassErrorInner::InvalidQuerySet(query_set_id_.to_owned()))
+                        //          .map_pass_err(scope);
+                        // }
+                        let scope = || PassErrorScope::WriteTimestamp;
 
                         let query_set = cmd_buf
                             .trackers
                             .query_sets
-                            .use_extend(&*query_set_guard, query_set_id, (), ())
-                            .map_err(|e| match e {
+                            .use_extend(/*&*query_set_guard, */query_set_id_, (), ())
+                            // FIXME: Should not be necessary when never-type (!) stabilizes, since
+                            // it can automatically work out that this branch can't be taken and
+                            // make the Ok() branch irrefutable.
+                            .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                            /* .map_err(|e| match e {
                                 UseExtendError::InvalidResource => {
                                     RenderCommandError::InvalidQuerySet(query_set_id)
                                 }
                                 _ => unreachable!(),
                             })
-                            .map_pass_err(scope)?;
+                            .map_pass_err(scope)?*/;
 
                         query_set
                             .validate_and_write_timestamp(
                                 raw,
-                                query_set_id,
+                                // query_set_id,
                                 query_index,
                                 Some(&mut query_reset_state),
                             )
@@ -1585,24 +1618,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         query_set_id,
                         query_index,
                     } => {
-                        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+                        let query_set_id_ = id::expect_backend(query_set_id);
+                        // FIXME: if query_set_id_.device() != self.device() {
+                        //   return Err(ComputePassErrorInner::InvalidQuerySet(query_set_id_.to_owned()))
+                        //          .map_pass_err(scope);
+                        // }
+                        let scope = || PassErrorScope::BeginPipelineStatisticsQuery;
 
                         let query_set = cmd_buf
                             .trackers
                             .query_sets
-                            .use_extend(&*query_set_guard, query_set_id, (), ())
-                            .map_err(|e| match e {
+                            .use_extend(/*&*query_set_guard, */query_set_id_, (), ())
+                            // FIXME: Should not be necessary when never-type (!) stabilizes, since
+                            // it can automatically work out that this branch can't be taken and
+                            // make the Ok() branch irrefutable.
+                            .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                            /* .map_err(|e| match e {
                                 UseExtendError::InvalidResource => {
                                     RenderCommandError::InvalidQuerySet(query_set_id)
                                 }
                                 _ => unreachable!(),
                             })
-                            .map_pass_err(scope)?;
+                            .map_pass_err(scope)? */;
 
                         query_set
                             .validate_and_begin_pipeline_statistics_query(
                                 raw,
-                                query_set_id,
+                                // query_set_id,
                                 query_index,
                                 Some(&mut query_reset_state),
                                 &mut active_query,
@@ -1610,19 +1652,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::EndPipelineStatisticsQuery => {
-                        let scope = PassErrorScope::EndPipelineStatisticsQuery;
+                        let scope = || PassErrorScope::EndPipelineStatisticsQuery;
 
-                        end_pipeline_statistics_query(raw, &*query_set_guard, &mut active_query)
+                        end_pipeline_statistics_query(raw, /* &*query_set_guard, */&mut active_query)
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
-                        let scope = PassErrorScope::ExecuteBundle;
+                        let scope = || PassErrorScope::ExecuteBundle;
+                        let bundle_id_ = id::expect_backend(bundle_id);
+                        // FIXME: if bundle_id_.device() != self.device() {
+                        //   return Err(RenderCommandError::InvalidRenderBundle(bundle_id.to_owned()))
+                        //          .map_pass_err(scope);
+                        // }
                         let bundle = cmd_buf
                             .trackers
                             .bundles
-                            .use_extend(&*bundle_guard, bundle_id, (), ())
-                            .map_err(|_| RenderCommandError::InvalidRenderBundle(bundle_id))
-                            .map_pass_err(scope)?;
+                            .use_extend(/*&*bundle_guard, */bundle_id_, (), ())
+                            // FIXME: Should not be necessary when never-type (!) stabilizes, since
+                            // it can automatically work out that this branch can't be taken and
+                            // make the Ok() branch irrefutable.
+                            .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                            /*.map_err(|_| RenderCommandError::InvalidRenderBundle(bundle_id))
+                            .map_pass_err(scope)?*/;
 
                         info.context
                             .check_compatible(&bundle.context)
@@ -1657,9 +1708,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         unsafe {
                             bundle.execute(
                                 raw,
-                                &*pipeline_layout_guard,
-                                &*bind_group_guard,
-                                &*pipeline_guard,
+                                // &*pipeline_layout_guard,
+                                // &*bind_group_guard,
+                                // &*pipeline_guard,
                                 &*buffer_guard,
                             )
                         }
@@ -1676,14 +1727,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         info.trackers
                             .merge_extend(&bundle.used)
                             .map_pass_err(scope)?;
-                        // Start tracking the bind groups specifically, as they are the only
+                        /* // Start tracking the bind groups specifically, as they are the only
                         // compound resources, to make it easier to update submission indices
                         // later at submission time.
                         cmd_buf
                             .trackers
                             .bind_groups
                             .merge_extend(&bundle.used.bind_groups)
-                            .unwrap();
+                            .unwrap(); */
                         state.reset_bundle();
                     }
                 }
@@ -1701,10 +1752,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (raw_cmd_buf, trackers, query_reset_state)
         };
 
-        let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
-        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token);
+        let (mut cmb_guard, _) = hub.command_buffers.write(&mut token);
+        // let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
@@ -1713,11 +1764,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             query_reset_state
                 .reset_queries(
                     transit,
-                    &query_set_guard,
-                    cmd_buf.device_id.value.0.backend(),
+                    /*&query_set_guard,*/
+                    /*cmd_buf.device_id.value.0.backend(),*/
                 )
                 .map_err(RenderCommandError::InvalidQuerySet)
-                .map_pass_err(PassErrorScope::QueryReset)?;
+                .map_pass_err(|| PassErrorScope::QueryReset)?;
 
             super::CommandBuffer::insert_barriers(
                 transit,
@@ -1740,49 +1791,50 @@ pub mod render_ffi {
         super::{Rect, RenderCommand},
         RenderPass,
     };
-    use crate::{id, RawString};
-    use std::{convert::TryInto, ffi, num::NonZeroU32, slice};
+    use crate::{id/*, RawString*/};
+    use std::{convert::TryInto, /*ffi, */num::NonZeroU32/*, slice*/};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_set_bind_group(
-        pass: &mut RenderPass,
+    #[no_mangle] */
+    pub /* unsafe extern "C" */fn wgpu_render_pass_set_bind_group<'a>(
+        pass: &mut RenderPass<'a>,
         index: u32,
-        bind_group_id: id::BindGroupId,
-        offsets: *const DynamicOffset,
-        offset_length: usize,
+        bind_group_id: &'a id::BindGroupId,
+        offsets: &[DynamicOffset]/* *const DynamicOffset,
+        offset_length: usize */,
     ) {
+        let offset_length = offsets.len();
         pass.base.commands.push(RenderCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
-        if offset_length != 0 {
+        // if offset_length != 0 {
             pass.base
                 .dynamic_offsets
-                .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
-        }
+                .extend_from_slice(/*slice::from_raw_parts(offsets, offset_length)*/offsets);
+        // }
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_pipeline(
-        pass: &mut RenderPass,
-        pipeline_id: id::RenderPipelineId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_set_pipeline<'a>(
+        pass: &mut RenderPass<'a>,
+        pipeline_id: &'a id::RenderPipelineId,
     ) {
         pass.base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_vertex_buffer(
-        pass: &mut RenderPass,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_set_vertex_buffer<'a>(
+        pass: &mut RenderPass<'a>,
         slot: u32,
-        buffer_id: id::BufferId,
+        &buffer_id: &'a id::BufferId,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
@@ -1794,23 +1846,23 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_blend_constant(pass: &mut RenderPass, color: &Color) {
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_set_blend_constant<'a>(pass: &mut RenderPass<'a>, color: &Color) {
         pass.base
             .commands
             .push(RenderCommand::SetBlendConstant(*color));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass: &mut RenderPass, value: u32) {
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_set_stencil_reference<'a>(pass: &mut RenderPass<'a>, value: u32) {
         pass.base
             .commands
             .push(RenderCommand::SetStencilReference(value));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_viewport(
-        pass: &mut RenderPass,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_set_viewport<'a>(
+        pass: &mut RenderPass<'a>,
         x: f32,
         y: f32,
         w: f32,
@@ -1825,9 +1877,9 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_set_scissor_rect(
-        pass: &mut RenderPass,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_set_scissor_rect<'a>(
+        pass: &mut RenderPass<'a>,
         x: u32,
         y: u32,
         w: u32,
@@ -1838,33 +1890,39 @@ pub mod render_ffi {
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
     }
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `size_bytes` bytes.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_set_push_constants(
-        pass: &mut RenderPass,
+    #[no_mangle]*/
+    pub /* unsafe extern "C" */fn wgpu_render_pass_set_push_constants<'a>(
+        pass: &mut RenderPass<'a>,
         stages: wgt::ShaderStages,
         offset: u32,
-        size_bytes: u32,
-        data: *const u8,
+        /* size_bytes: u32,
+        data: *const u8,*/
+        data_slice: &[u8],
     ) {
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant offset must be aligned to 4 bytes."
         );
+        let size_bytes = data_slice.len().try_into().expect(
+            "Don't push 4gb of push constants in a single push constant"
+        );
         assert_eq!(
             size_bytes & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant size must be aligned to 4 bytes."
         );
-        let data_slice = slice::from_raw_parts(data, size_bytes as usize);
+        // let data_slice = slice::from_raw_parts(data, size_bytes as usize);
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per RenderPass.",
         );
 
+        // TODO: Consider using something like bytemuck instead of chunks_exact and map, since
+        // extend is specialized for slices.
         pass.base.push_constant_data.extend(
             data_slice
                 .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
@@ -1879,9 +1937,9 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_draw(
-        pass: &mut RenderPass,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_draw<'a>(
+        pass: &mut RenderPass<'a>,
         vertex_count: u32,
         instance_count: u32,
         first_vertex: u32,
@@ -1895,9 +1953,9 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_draw_indexed(
-        pass: &mut RenderPass,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_draw_indexed<'a>(
+        pass: &mut RenderPass<'a>,
         index_count: u32,
         instance_count: u32,
         first_index: u32,
@@ -1913,10 +1971,10 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_draw_indirect(
-        pass: &mut RenderPass,
-        buffer_id: id::BufferId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_draw_indirect<'a>(
+        pass: &mut RenderPass<'a>,
+        &buffer_id: &'a id::BufferId,
         offset: BufferAddress,
     ) {
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
@@ -1927,10 +1985,10 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_draw_indexed_indirect(
-        pass: &mut RenderPass,
-        buffer_id: id::BufferId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_draw_indexed_indirect<'a>(
+        pass: &mut RenderPass<'a>,
+        &buffer_id: &'a id::BufferId,
         offset: BufferAddress,
     ) {
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
@@ -1941,10 +1999,10 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_multi_draw_indirect(
-        pass: &mut RenderPass,
-        buffer_id: id::BufferId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_multi_draw_indirect<'a>(
+        pass: &mut RenderPass<'a>,
+        &buffer_id: &'a id::BufferId,
         offset: BufferAddress,
         count: u32,
     ) {
@@ -1956,10 +2014,10 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_multi_draw_indexed_indirect(
-        pass: &mut RenderPass,
-        buffer_id: id::BufferId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_multi_draw_indexed_indirect<'a>(
+        pass: &mut RenderPass<'a>,
+        &buffer_id: &'a id::BufferId,
         offset: BufferAddress,
         count: u32,
     ) {
@@ -1971,12 +2029,12 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_multi_draw_indirect_count(
-        pass: &mut RenderPass,
-        buffer_id: id::BufferId,
+    // #[no_mangle]
+    pub /*extern "C" */fn wgpu_render_pass_multi_draw_indirect_count<'a>(
+        pass: &mut RenderPass<'a>,
+        &buffer_id: &'a id::BufferId,
         offset: BufferAddress,
-        count_buffer_id: id::BufferId,
+        &count_buffer_id: &'a id::BufferId,
         count_buffer_offset: BufferAddress,
         max_count: u32,
     ) {
@@ -1992,12 +2050,12 @@ pub mod render_ffi {
             });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_multi_draw_indexed_indirect_count(
-        pass: &mut RenderPass,
-        buffer_id: id::BufferId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_multi_draw_indexed_indirect_count<'a>(
+        pass: &mut RenderPass<'a>,
+        &buffer_id: &'a id::BufferId,
         offset: BufferAddress,
-        count_buffer_id: id::BufferId,
+        &count_buffer_id: &'a id::BufferId,
         count_buffer_offset: BufferAddress,
         max_count: u32,
     ) {
@@ -2013,17 +2071,19 @@ pub mod render_ffi {
             });
     }
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
     /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_push_debug_group(
-        pass: &mut RenderPass,
-        label: RawString,
+    #[no_mangle] */
+    pub /*unsafe extern "C" */fn wgpu_render_pass_push_debug_group<'a>(
+        pass: &mut RenderPass<'a>,
+        label: /*RawString*/&str,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        // let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        // TODO: collect slices at end of pass?
+        let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(RenderCommand::PushDebugGroup {
@@ -2032,22 +2092,24 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_pop_debug_group(pass: &mut RenderPass) {
+    // #[no_mangle]
+    pub /*extern "C" */fn wgpu_render_pass_pop_debug_group<'a>(pass: &mut RenderPass<'a>) {
         pass.base.commands.push(RenderCommand::PopDebugGroup);
     }
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
     /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_insert_debug_marker(
-        pass: &mut RenderPass,
-        label: RawString,
+    #[no_mangle] */
+    pub /* unsafe extern "C" */fn wgpu_render_pass_insert_debug_marker<'a>(
+        pass: &mut RenderPass<'a>,
+        label: /*RawString*/&str,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        // let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        // TODO: collect slices at end of pass?
+        let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(RenderCommand::InsertDebugMarker {
@@ -2056,10 +2118,10 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_write_timestamp(
-        pass: &mut RenderPass,
-        query_set_id: id::QuerySetId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_write_timestamp<'a>(
+        pass: &mut RenderPass<'a>,
+        query_set_id: &'a id::QuerySetId,
         query_index: u32,
     ) {
         pass.base.commands.push(RenderCommand::WriteTimestamp {
@@ -2068,10 +2130,10 @@ pub mod render_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_begin_pipeline_statistics_query(
-        pass: &mut RenderPass,
-        query_set_id: id::QuerySetId,
+    // #[no_mangle]
+    pub /*extern "C" */fn wgpu_render_pass_begin_pipeline_statistics_query<'a>(
+        pass: &mut RenderPass<'a>,
+        query_set_id: &'a id::QuerySetId,
         query_index: u32,
     ) {
         pass.base
@@ -2082,27 +2144,29 @@ pub mod render_ffi {
             });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_render_pass_end_pipeline_statistics_query<'a>(pass: &mut RenderPass<'a>) {
         pass.base
             .commands
             .push(RenderCommand::EndPipelineStatisticsQuery);
     }
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `render_bundle_ids_length` elements.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_execute_bundles(
-        pass: &mut RenderPass,
-        render_bundle_ids: *const id::RenderBundleId,
-        render_bundle_ids_length: usize,
+    #[no_mangle] */
+    pub /*unsafe extern "C" */fn wgpu_render_pass_execute_bundles<'a>(
+        pass: &mut RenderPass<'a>,
+        render_bundle_ids: impl Iterator<Item = &'a id::RenderBundleId>,
+        /* render_bundle_ids: *const id::RenderBundleId,
+        render_bundle_ids_length: usize, */
     ) {
-        for &bundle_id in slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) {
+        pass.base.commands.extend(render_bundle_ids.map(RenderCommand::ExecuteBundle));
+        /* for &bundle_id in slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) {
             pass.base
                 .commands
                 .push(RenderCommand::ExecuteBundle(bundle_id));
-        }
+        } */
     }
 }

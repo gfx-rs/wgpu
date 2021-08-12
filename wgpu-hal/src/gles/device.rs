@@ -294,7 +294,7 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+unsafe impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
         let gl = &self.shared.context.lock();
         gl.delete_vertex_array(self.main_vao);
@@ -697,10 +697,12 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
 
-    unsafe fn create_pipeline_layout(
+    unsafe fn create_pipeline_layout<'a, I: Iterator<Item=&'a super::BindGroupLayout>>(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> Result<super::PipelineLayout, crate::DeviceError> {
+        desc: crate::PipelineLayoutDescriptor<I>,
+    ) -> Result<super::PipelineLayout, crate::DeviceError>
+        where I: Clone + DoubleEndedIterator + ExactSizeIterator,
+    {
         use naga::back::glsl;
 
         let mut group_infos = Vec::with_capacity(desc.bind_group_layouts.len());
@@ -719,7 +721,7 @@ impl crate::Device<super::Api> for super::Device {
         );
         let mut binding_map = glsl::BindingMap::default();
 
-        for (group_index, bg_layout) in desc.bind_group_layouts.iter().enumerate() {
+        for (group_index, bg_layout) in desc.bind_group_layouts.enumerate() {
             // create a vector with the size enough to hold all the bindings, filled with `!0`
             let mut binding_to_slot = vec![
                 !0;

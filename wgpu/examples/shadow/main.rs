@@ -215,7 +215,6 @@ impl framework::Example for Example {
 
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
@@ -332,8 +331,8 @@ impl framework::Example for Example {
         }
 
         let local_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
+            device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+                entries: &mut [wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
@@ -449,9 +448,9 @@ impl framework::Example for Example {
             let uniform_size = mem::size_of::<GlobalUniforms>() as wgpu::BufferAddress;
             // Create pipeline layout
             let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
                     label: None,
-                    entries: &[wgpu::BindGroupLayoutEntry {
+                    entries: &mut [wgpu::BindGroupLayoutEntry {
                         binding: 0, // global
                         visibility: wgpu::ShaderStages::VERTEX,
                         ty: wgpu::BindingType::Buffer {
@@ -486,9 +485,9 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            let pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
                 label: Some("shadow"),
-                layout: Some(&pipeline_layout),
+                layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_bake",
@@ -526,8 +525,8 @@ impl framework::Example for Example {
         let forward_pass = {
             // Create pipeline layout
             let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[
+                device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+                    entries: &mut [
                         wgpu::BindGroupLayoutEntry {
                             binding: 0, // global
                             visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
@@ -614,9 +613,9 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            let pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
                 label: Some("main"),
-                layout: Some(&pipeline_layout),
+                layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_main",

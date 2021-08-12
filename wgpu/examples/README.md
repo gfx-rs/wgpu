@@ -32,7 +32,7 @@ All framework-based examples render to the window and are reftested against the 
 | depth biasing                |        |           |        |        |           | :star: |        |                |        |                     |
 | read-only depth              |        |           |        |        |           |        |        |                | :star: |                     |
 | blending                     |        | :star:    | :star: |        |           |        |        |                | :star: |                     |
-| render bundles               |        |           |        |        | :star:    |        |        |                | :star: |                     |
+| render bundles               |        | :star:    |        |        | :star:    |        |        |                | :star: |                     |
 | compute passes               | :star: |           |        |        |           |        |        |                |        |                     |
 | *optional extensions*        |        |           |        |        |           |        |        | :star:         |        |                     |
 | - SPIR-V shaders             |        |           |        |        |           |        |        | :star:         |        |                     |

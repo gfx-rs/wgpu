@@ -197,15 +197,16 @@ impl<A: hal::Api> Example<A> {
         let local_group_layout =
             unsafe { device.create_bind_group_layout(&local_bgl_desc).unwrap() };
 
+        let bind_group_layouts = [&global_group_layout, &local_group_layout];
         let pipeline_layout_desc = hal::PipelineLayoutDescriptor {
             label: None,
             flags: hal::PipelineLayoutFlags::empty(),
-            bind_group_layouts: &[&global_group_layout, &local_group_layout],
+            bind_group_layouts: bind_group_layouts.iter().copied(),
             push_constant_ranges: &[],
         };
         let pipeline_layout = unsafe {
             device
-                .create_pipeline_layout(&pipeline_layout_desc)
+                .create_pipeline_layout(pipeline_layout_desc)
                 .unwrap()
         };
 

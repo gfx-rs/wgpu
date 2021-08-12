@@ -2630,7 +2630,7 @@ impl<L> TextureDescriptor<L> {
     /// # use wgpu_types as wgpu;
     /// let desc = wgpu::TextureDescriptor {
     ///   label: (),
-    ///   size: Extent3d { width: 100, height: 60, depth_or_array_layers: 2 },
+    ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 2 },
     ///   mip_level_count: 7,
     ///   sample_count: 1,
     ///   dimension: wgpu::TextureDimension::D3,
@@ -2638,7 +2638,7 @@ impl<L> TextureDescriptor<L> {
     ///   usage: wgpu::TextureUsages::empty(),
     /// };
     ///
-    /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
+    /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 2 }));
     /// assert_eq!(desc.mip_level_size(1), Some(wgpu::Extent3d { width: 50, height: 30, depth_or_array_layers: 1 }));
     /// assert_eq!(desc.mip_level_size(2), Some(wgpu::Extent3d { width: 25, height: 15, depth_or_array_layers: 1 }));
     /// assert_eq!(desc.mip_level_size(3), Some(wgpu::Extent3d { width: 12, height: 7, depth_or_array_layers: 1 }));

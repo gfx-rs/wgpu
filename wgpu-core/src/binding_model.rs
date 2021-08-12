@@ -1,12 +1,17 @@
 use crate::{
-    device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
     hub::Resource,
-    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
+    id::{self, AllResources, AnyBackend, BufferId, Hkt, TextureViewId},
     memory_init_tracker::MemoryInitTrackerAction,
-    track::{TrackerSet, UsageConflict, DUMMY_SELECTOR},
+    track::{TrackerSet, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
+    FastHashMap, Label, LifeGuard,
+};
+#[cfg(feature = "trace")]
+use crate::{
+    command::FromCommand,
+    id::BorrowHkt,
 };
 
 use arrayvec::ArrayVec;
@@ -16,11 +21,14 @@ use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
 
+#[cfg(feature = "replay")] use core::convert::{TryFrom, TryInto};
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::Cow,
+    mem::ManuallyDrop,
     ops::Range,
 };
 
+use hal::{Device as _};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
@@ -61,8 +69,8 @@ pub enum CreateBindGroupError {
     InvalidBuffer(BufferId),
     #[error("texture view {0:?} is invalid")]
     InvalidTextureView(TextureViewId),
-    #[error("sampler {0:?} is invalid")]
-    InvalidSampler(SamplerId),
+    #[error("sampler binding at index {0:?} is invalid")]
+    InvalidSampler(/*SamplerId*/u32),
     #[error("binding count declared with {expected} items, but {actual} items were provided")]
     BindingArrayLengthMismatch { actual: usize, expected: usize },
     #[error("bound buffer range {range:?} does not fit in buffer of size {size}")]
@@ -157,24 +165,25 @@ pub enum CreateBindGroupError {
 impl PrettyError for CreateBindGroupError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        match *self {
+        match self {
             Self::BindingZeroSize(id) => {
-                fmt.buffer_label(&id);
+                fmt.buffer_label(id);
             }
             Self::BindingRangeTooLarge { buffer, .. } => {
-                fmt.buffer_label(&buffer);
+                fmt.buffer_label(buffer);
             }
             Self::BindingSizeTooSmall { buffer, .. } => {
-                fmt.buffer_label(&buffer);
+                fmt.buffer_label(buffer);
             }
             Self::InvalidBuffer(id) => {
-                fmt.buffer_label(&id);
+                fmt.buffer_label(id);
             }
             Self::InvalidTextureView(id) => {
-                fmt.texture_view_label(&id);
+                fmt.texture_view_label(id);
             }
-            Self::InvalidSampler(id) => {
-                fmt.sampler_label(&id);
+            Self::InvalidSampler(_id) => {
+                // TODO: Figure out what to do here?
+                // fmt.sampler_label(id);
             }
             _ => {}
         };
@@ -372,32 +381,133 @@ impl BindingTypeMaxCountValidator {
 }
 
 /// Bindable resource and the slot to bind it to.
-#[derive(Clone, Debug)]
+#[derive(/*Clone, */Debug)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BindGroupEntry<'a> {
+pub struct BindGroupEntry<'a, A: hal::Api, F: AllResources<A>> {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
     pub binding: u32,
     /// Resource to attach to the binding
-    pub resource: BindingResource<'a>,
+    #[cfg_attr(any(feature = "trace"),
+      serde(bound(serialize = "BindingResource<'a, A, F>: serde::Serialize")))]
+    #[cfg_attr(any(feature = "replay"),
+      serde(bound(deserialize = "BindingResource<'a, A, F>: serde::Deserialize<'de>")))]
+    pub resource: BindingResource<'a, A, F>,
+}
+pub type BindGroupEntryIn<'a, A> = BindGroupEntry<'a, A, id::IdGuardCon<'a>>;
+
+impl<'a, A: hal::Api, F: AllResources<A>> BindGroupEntry<'a, A, F> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, E>(&'b self, f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>) -> Result<(), E> {
+        self.resource.trace_resources(f)
+    }
+}
+
+#[cfg(feature = "trace")]
+impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    FromCommand<BindGroupEntry<'a, A, F>> for BindGroupEntry<'b, B, G>
+    where
+        BindingResource<'b, B, G>:
+            FromCommand<BindingResource<'a, A, F>>,
+{
+    fn from(desc: BindGroupEntry<'a, A, F>) -> Self {
+        Self {
+            binding: desc.binding,
+            resource: FromCommand::from(desc.resource),
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl<'a: 'b, 'b, A: hal::Api + 'b, B: hal::Api, F: AllResources<A> + 'b, G: AllResources<B>, E>
+    TryFrom<(&'b id::IdCache2, &'b BindGroupEntry<'a, A, F>)> for BindGroupEntry<'b, B, G>
+    where
+        /*(&'b id::IdCache2, &'b <F as Hkt<crate::resource::Sampler<A>>>::Output):
+            TryInto<<G as Hkt<crate::resource::Sampler<B>>>::Output, Error=E>,*/
+        (&'b id::IdCache2, &'b BindingResource<'a, A, F>):
+            TryInto<BindingResource<'b, B, G>, Error=E>,
+{
+    type Error = E;
+
+    fn try_from((cache, desc): (&'b id::IdCache2, &'b BindGroupEntry<'a, A, F>)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            binding: desc.binding,
+            resource: (cache, &desc.resource).try_into()?,
+        })
+    }
 }
 
 /// Describes a group of bindings and the resources to be bound.
-#[derive(Clone, Debug)]
+#[derive(/*Clone, */Debug)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BindGroupDescriptor<'a> {
+pub struct BindGroupDescriptor<'a, A: hal::Api, F: AllResources<A>, I> {
     /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// The [`BindGroupLayout`] that corresponds to this bind group.
-    pub layout: BindGroupLayoutId,
+    #[cfg_attr(any(feature = "trace"),
+      serde(bound(serialize = "<F::Owned as Hkt<BindGroupLayout<A>>>::Output: serde::Serialize")))]
+    #[cfg_attr(any(feature = "replay"),
+      serde(bound(deserialize = "<F::Owned as Hkt<BindGroupLayout<A>>>::Output: serde::Deserialize<'de>")))]
+    pub layout: <F::Owned as Hkt<BindGroupLayout<A>>>::Output,
     /// The resources to bind to this bind group.
-    pub entries: Cow<'a, [BindGroupEntry<'a>]>,
+    /* #[cfg_attr(any(feature = "trace"),
+      serde(bound(serialize = "I: serde::Serialize")))]
+    #[cfg_attr(any(feature = "replay"),
+      serde(bound(deserialize = "I: serde::Deserialize<'de>")))] */
+    pub entries: /*Vec<BindGroupEntry<'a, A, F>>*/I,
 }
 
+pub type BindGroupDescriptorIn<'a, A, I> = BindGroupDescriptor<'a, A, id::IdGuardCon<'a>, I>;
+
+impl<'a, A: hal::Api, F: AllResources<A>, I> BindGroupDescriptor<'a, A, F, I> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, E>(
+        &'b self,
+        mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where
+            id::Cached<A, &'b F>: 'b,
+            <&'b F::Owned as Hkt<BindGroupLayout<A>>>::Output:
+                Into<&'b <F as Hkt<BindGroupLayout<A>>>::Output>,
+            &'b I: IntoIterator<Item=&'b BindGroupEntry<'a, A, F>>,
+    {
+        f(BindGroupLayout::upcast((&self.layout).into()))?;
+        self.entries.into_iter().try_for_each(|entry| entry.trace_resources(&mut f))
+    }
+}
+
+/* #[cfg(feature = "trace")]
+impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    FromCommand<BindGroupDescriptor<'a, A, F>> for BindGroupDescriptor<'b, B, G>
+    where
+        I: IntoIterator<Item=&'b BindGroupEntry<'a, A, F>>,
+        ProgrammableStageDescriptor<'a, B, G>:
+            FromCommand<&'b ProgrammableStageDescriptor<'a, A, F>>,
+        A: crate::hub::HalApi,
+        G::Owned: BorrowHkt<A, BindGroupLayout<B>, BindGroupLayout<hal::api::Empty>, F::Owned>,
+
+        <F as Hkt<crate::resource::Sampler<A>>>::Output:
+            Into<<G as Hkt<crate::resource::Sampler<B>>>::Output>,
+{
+    fn from(desc: BindingResource<'a, A, F>) -> Self {
+        use BindingResource::*;
+
+        match desc {
+            Buffer(bb) => Buffer(bb),
+            BufferArray(bindings_array) => BufferArray(bindings_array),
+            Sampler(id) => Sampler(id.into()),
+            TextureView(id) => TextureView(id),
+            TextureViewArray(bindings_array) => TextureViewArray(bindings_array),
+        }
+    }
+} */
+
 /// Describes a [`BindGroupLayout`].
-#[derive(Clone, Debug)]
+#[derive(/*Clone, */Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct BindGroupLayoutDescriptor<'a> {
@@ -407,25 +517,65 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
 }
 
+impl<'a> BindGroupLayoutDescriptor<'a> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, A: hal::Api, F: AllResources<A>, E>(
+        &'b self,
+        _f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where id::Cached<A, &'b F>: 'b,
+    {
+        // Nothing to trace.
+        Ok(())
+    }
+}
+
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
 #[derive(Debug)]
 pub struct BindGroupLayout<A: hal::Api> {
-    pub(crate) raw: A::BindGroupLayout,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) multi_ref_count: MultiRefCount,
-    pub(crate) entries: BindEntryMap,
+    pub(crate) raw: ManuallyDrop<A::BindGroupLayout>,
+    pub(crate) device_id: /*Stored<DeviceId>*/id::ValidId2<Device<A>>,
+    // pub(crate) multi_ref_count: MultiRefCount,
+    /// Invariant: no duplicates, sorted in ascending order by entry key.
+    pub(crate) entries: Box<[wgt::BindGroupLayoutEntry]>,
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
+impl<A: hal::Api> BindGroupLayout<A> {
+    /// Used to help with implementing bind group deduplication outside of wgpu-core.
+    pub fn entries(&self) -> &[wgt::BindGroupLayoutEntry] {
+        &self.entries
+    }
+
+    /// Used to help with implementing bind group deduplication outside of wgpu-core.
+    pub fn device_id(&self) -> id::IdGuard<A, Device<id::Dummy>> where A: crate::hub::HalApi {
+        self.device_id.borrow()
+    }
+}
+
 impl<A: hal::Api> Resource for BindGroupLayout<A> {
     const TYPE: &'static str = "BindGroupLayout";
 
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        _: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: crate::hub::HalApi + 'b,
+    {
+        // Nothing to trace.
+        Ok(())
+    }
+
     fn life_guard(&self) -> &LifeGuard {
-        unreachable!()
+        unimplemented!("FIXME: This method needs to go away!")
+        // unreachable!()
     }
 
     fn label(&self) -> &str {
@@ -436,12 +586,28 @@ impl<A: hal::Api> Resource for BindGroupLayout<A> {
     }
 }
 
+impl<A: hal::Api> Drop for BindGroupLayout<A> {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            unsafe {
+                // Safety: the bind group layout is uniquely owned, so it is unused by any CPU
+                // resources, and bind group layouts do not directly hold onto GPU resources, so
+                // calling destroy_bind_group_layout is safe.
+                //
+                // We never use self.raw again after calling ManuallyDrop::take, so calling that
+                // is also safe.
+                self.device_id.raw.destroy_bind_group_layout(ManuallyDrop::take(&mut self.raw));
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("bind group layout {0:?} is invalid")]
-    InvalidBindGroupLayout(BindGroupLayoutId),
+    #[error("bind group layout at index {0:?} is invalid")]
+    InvalidBindGroupLayout(usize),
     #[error(
         "push constant at index {index} has range bound {bound} not aligned to {}",
         wgt::PUSH_CONSTANT_ALIGNMENT
@@ -470,8 +636,9 @@ pub enum CreatePipelineLayoutError {
 impl PrettyError for CreatePipelineLayoutError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        if let Self::InvalidBindGroupLayout(id) = *self {
-            fmt.bind_group_layout_label(&id);
+        if let Self::InvalidBindGroupLayout(_id) = self {
+            // TODO: Figure out what to do here?
+            // fmt.bind_group_layout_label(&id);
         };
     }
 }
@@ -509,15 +676,19 @@ pub enum PushConstantUploadError {
 /// Describes a pipeline layout.
 ///
 /// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(/*Clone, */Debug/*, PartialEq, Eq, Hash*/)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct PipelineLayoutDescriptor<'a> {
+pub struct PipelineLayoutDescriptor<'a, A: hal::Api, F: AllResources<A>> {
     /// Debug label of the pipeine layout. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
-    pub bind_group_layouts: Cow<'a, [BindGroupLayoutId]>,
+    #[cfg_attr(any(feature = "trace"),
+      serde(bound(serialize = "<F::Owned as Hkt<BindGroupLayout<A>>>::Output: serde::Serialize")))]
+    #[cfg_attr(any(feature = "replay"),
+      serde(bound(deserialize = "<F::Owned as Hkt<BindGroupLayout<A>>>::Output: serde::Deserialize<'de>")))]
+    pub bind_group_layouts: /*Cow<'a, [BindGroupLayoutId]>*/ArrayVec<<F::Owned as Hkt<BindGroupLayout<A>>>::Output, { hal::MAX_BIND_GROUPS }>,
     /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
     /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
     /// uniform block.
@@ -526,12 +697,70 @@ pub struct PipelineLayoutDescriptor<'a> {
     pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 
+pub type PipelineLayoutDescriptorIn<'a, A> = PipelineLayoutDescriptor<'a, A, id::IdGuardCon<'a>>;
+
+impl<'a, A: hal::Api, F: AllResources<A>> PipelineLayoutDescriptor<'a, A, F> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, E>(
+        &'b self,
+        mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where
+            id::Cached<A, &'b F>: 'b,
+            <&'b F::Owned as Hkt<BindGroupLayout<A>>>::Output:
+                Into<&'b <F as Hkt<BindGroupLayout<A>>>::Output>,
+    {
+        self.bind_group_layouts.iter()
+            .try_for_each(|bind_group_layout| f(BindGroupLayout::upcast(bind_group_layout.into())))
+    }
+}
+
+#[cfg(feature = "trace")]
+impl<'a, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    FromCommand<&'b PipelineLayoutDescriptor<'a, A, F>> for PipelineLayoutDescriptor<'b, B, G>
+    where
+        A: crate::hub::HalApi,
+        G::Owned: BorrowHkt<A, BindGroupLayout<B>, BindGroupLayout<hal::api::Empty>, F::Owned>,
+{
+    fn from(desc: &'b PipelineLayoutDescriptor<'a, A, F>) -> Self {
+        Self {
+            label: desc.label.as_deref().map(Cow::Borrowed),
+            bind_group_layouts: desc.bind_group_layouts.iter().map(G::Owned::borrow).collect(),
+            push_constant_ranges: Cow::Borrowed(&*desc.push_constant_ranges),
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl<'a, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>, E>
+    TryFrom<(&'a id::IdCache2, PipelineLayoutDescriptor<'a, A, F>)> for PipelineLayoutDescriptor<'a, B, G>
+    where
+        (&'a id::IdCache2, <F::Owned as Hkt<BindGroupLayout<A>>>::Output):
+            TryInto<<G as Hkt<BindGroupLayout<B>>>::Output, Error=E>,
+        <G as Hkt<BindGroupLayout<B>>>::Output:
+            Into<<G::Owned as Hkt<BindGroupLayout<B>>>::Output>,
+{
+    type Error = E;
+
+    fn try_from((cache, desc): (&'a id::IdCache2, PipelineLayoutDescriptor<'a, A, F>)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            label: desc.label,
+            bind_group_layouts: desc.bind_group_layouts.into_iter()
+                .map(|layout| Ok(TryInto::<<G as Hkt<BindGroupLayout<B>>>::Output>::try_into((cache, layout))?.into()))
+                .collect::<Result<_, _>>()?,
+            push_constant_ranges: desc.push_constant_ranges,
+        })
+    }
+}
+
+
 #[derive(Debug)]
 pub struct PipelineLayout<A: hal::Api> {
-    pub(crate) raw: A::PipelineLayout,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
-    pub(crate) bind_group_layout_ids: ArrayVec<Valid<BindGroupLayoutId>, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) raw: ManuallyDrop<A::PipelineLayout>,
+    pub(crate) device_id: /*Stored<DeviceId>*/id::ValidId2<Device<A>>,
+    // pub(crate) life_guard: LifeGuard,
+    pub(crate) bind_group_layout_ids: ArrayVec</*Valid<BindGroupLayoutId>*/id::ValidId2<BindGroupLayout<A>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
 }
 
@@ -618,8 +847,37 @@ impl<A: hal::Api> PipelineLayout<A> {
 impl<A: hal::Api> Resource for PipelineLayout<A> {
     const TYPE: &'static str = "PipelineLayout";
 
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        id: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        mut f: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: crate::hub::HalApi + 'b,
+    {
+        id.bind_group_layout_ids.iter().try_for_each(|id| f(BindGroupLayout::upcast(id.borrow())))
+    }
+
     fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+        unimplemented!("FIXME: This method needs to go away!")
+        // &self.life_guard
+    }
+}
+
+impl<A: hal::Api> Drop for PipelineLayout<A> {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            unsafe {
+                // Safety: the pipeline layout is uniquely owned, so it is unused by any CPU
+                // resources, and the rest of the program guarantees that it's not used by
+                // any GPU resources either (absent panics), so calling destroy_bind_group is
+                // safe.
+                //
+                // We never use self.raw again after calling ManuallyDrop::take, so calling that
+                // is also safe.
+                self.device_id.raw.destroy_pipeline_layout(ManuallyDrop::take(&mut self.raw));
+            }
+        }
     }
 }
 
@@ -633,17 +891,103 @@ pub struct BufferBinding {
     pub size: Option<wgt::BufferSize>,
 }
 
+impl BufferBinding {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, A: hal::Api, F: AllResources<A>, E>(
+        &'b self,
+        _f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where id::Cached<A, &'b F>: 'b,
+    {
+        // FIXME: Perform when we update BufferId!
+        // f(crate::resource::Buffer::upcast(buffer_id))
+        Ok(())
+    }
+}
+
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
-#[derive(Debug, Clone)]
+#[derive(Debug/*, Clone*/)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum BindingResource<'a> {
+pub enum BindingResource<'a, A: hal::Api, F: AllResources<A>> {
     Buffer(BufferBinding),
     BufferArray(Cow<'a, [BufferBinding]>),
-    Sampler(SamplerId),
+    Sampler(
+    #[cfg_attr(any(feature = "trace"),
+      serde(bound(serialize = "<F as Hkt<crate::resource::Sampler<A>>>::Output: serde::Serialize")))]
+    #[cfg_attr(any(feature = "replay"),
+      serde(bound(deserialize = "<F as Hkt<crate::resource::Sampler<A>>>::Output: serde::Deserialize<'de>")))]
+    <F as Hkt<crate::resource::Sampler<A>>>::Output),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),
+}
+
+impl<'a, A: hal::Api, F: AllResources<A>> BindingResource<'a, A, F> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, E>(&'b self, mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>) -> Result<(), E> {
+        use BindingResource::*;
+
+        match self {
+            Buffer(bb) => bb.trace_resources(f),
+            BufferArray(bindings_array) => bindings_array.iter().try_for_each(|bb| bb.trace_resources(&mut f)),
+            Sampler(id) => f(crate::resource::Sampler::upcast(id)),
+            TextureView(_id) => {
+                // FIXME: Perform when we update TextureViewId!
+                // f(crate::resource::TextureView::upcast(id))
+                Ok(())
+            },
+            TextureViewArray(bindings_array) => bindings_array.iter().try_for_each(|_id| {
+                // FIXME: Perform when we update TextureViewId!
+                // f(crate::resource::TextureView::upcast(id))
+                Ok(())
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "trace")]
+impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    FromCommand<BindingResource<'a, A, F>> for BindingResource<'b, B, G>
+    where
+        <F as Hkt<crate::resource::Sampler<A>>>::Output:
+            Into<<G as Hkt<crate::resource::Sampler<B>>>::Output>,
+{
+    fn from(desc: BindingResource<'a, A, F>) -> Self {
+        use BindingResource::*;
+
+        match desc {
+            Buffer(bb) => Buffer(bb),
+            BufferArray(bindings_array) => BufferArray(bindings_array),
+            Sampler(id) => Sampler(id.into()),
+            TextureView(id) => TextureView(id),
+            TextureViewArray(bindings_array) => TextureViewArray(bindings_array),
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>, E>
+    TryFrom<(&'b id::IdCache2, &'b BindingResource<'a, A, F>)> for BindingResource<'b, B, G>
+    where
+        (&'b id::IdCache2, &'b <F as Hkt<crate::resource::Sampler<A>>>::Output):
+            TryInto<<G as Hkt<crate::resource::Sampler<B>>>::Output, Error=E>,
+{
+    type Error = E;
+
+    fn try_from((cache, desc): (&'b id::IdCache2, &'b BindingResource<'a, A, F>)) -> Result<Self, Self::Error> {
+        use BindingResource::*;
+
+        Ok(match desc {
+            Buffer(bb) => Buffer(bb.clone()),
+            BufferArray(bindings_array) => BufferArray(Cow::Borrowed(&*bindings_array)),
+            Sampler(id) => Sampler((cache, id).try_into()?),
+            TextureView(id) => TextureView(*id),
+            TextureViewArray(bindings_array) => TextureViewArray(Cow::Borrowed(&*bindings_array)),
+        })
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -666,11 +1010,16 @@ pub struct BindGroupDynamicBindingData {
 
 #[derive(Debug)]
 pub struct BindGroup<A: hal::Api> {
-    pub(crate) raw: A::BindGroup,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) layout_id: Valid<BindGroupLayoutId>,
-    pub(crate) life_guard: LifeGuard,
-    pub(crate) used: TrackerSet,
+    pub(crate) raw: ManuallyDrop<A::BindGroup>,
+    pub(crate) device_id: /*Stored<DeviceId>*/id::ValidId2<Device<A>>,
+    /// Unfortunately, even though we don't need to access the BindGroup through this ID, we need
+    /// to hold onto it to make sure (i) deduplication semantics are respected, and (ii) for memory
+    /// safety (the Vulkan spec requires both the pipeline layout and binding group to be pointing
+    /// to BGLs that are alive on command buffer submission, even though in theory only one should
+    /// be needed).
+    pub(crate) layout_id: id::ValidId2<BindGroupLayout<A>>,
+    // pub(crate) life_guard: LifeGuard,
+    pub(crate) used: TrackerSet<A>,
     pub(crate) used_buffer_ranges: Vec<MemoryInitTrackerAction<BufferId>>,
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
 }
@@ -710,17 +1059,48 @@ impl<A: hal::Api> BindGroup<A> {
     }
 }
 
-impl<A: hal::Api> Borrow<()> for BindGroup<A> {
+/* impl<A: hal::Api> Borrow<()> for BindGroup<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
-}
+} */
 
-impl<A: hal::Api> Resource for BindGroup<A> {
+impl<A: hal::Api> Resource for BindGroup<A>
+/*where for<'c> id::IdGuardCon<'c>: Hkt<Self, Output=id::IdGuard<'c, A, BindGroup<id::Dummy>>> */{
     const TYPE: &'static str = "BindGroup";
 
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        id: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        mut f: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: crate::hub::HalApi + 'b,
+    {
+        f(BindGroupLayout::upcast(id.layout_id.borrow()))?;
+        // Does *not* trace `used_buffer_ranges`, because they are already covered by `used`.
+        id.used.trace_resources(f)
+    }
+
     fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+        unimplemented!("FIXME: This method needs to go away!")
+        // &self.life_guard
+    }
+}
+
+impl<A: hal::Api> Drop for BindGroup<A> {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            unsafe {
+                // Safety: the bind group is uniquely owned, so it is unused by any CPU resources,
+                // and the rest of the program guarantees that it's not used by any GPU resources
+                // either (absent panics), so calling destroy_bind_group is safe.
+                //
+                // We never use self.raw again after calling ManuallyDrop::take, so calling that
+                // is also safe.
+                self.device_id.raw.destroy_bind_group(ManuallyDrop::take(&mut self.raw));
+            }
+        }
     }
 }
 

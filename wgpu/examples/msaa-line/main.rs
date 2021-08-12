@@ -45,9 +45,9 @@ impl Example {
         vertex_count: u32,
     ) -> wgpu::RenderBundle {
         log::info!("sample_count: {}", sample_count);
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: None,
-            layout: Some(pipeline_layout),
+            layout: Some(pipeline_layout.clone()),
             vertex: wgpu::VertexState {
                 module: shader,
                 entry_point: "vs_main",
@@ -117,7 +117,6 @@ impl Example {
 impl framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {

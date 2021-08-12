@@ -1,12 +1,14 @@
 use crate::id;
+#[cfg(feature = "trace")]
+use parking_lot::Mutex;
 use std::ops::Range;
 #[cfg(feature = "trace")]
-use std::{borrow::Cow, io::Write as _};
+use std::{borrow::Cow, io::Write as _, sync::atomic::{AtomicU64, Ordering}};
 
-//TODO: consider a readable Id that doesn't include the backend
-
+#[cfg(any(feature = "trace", feature="replay"))]
 type FileName = String;
 
+#[cfg(any(feature = "trace", feature="replay"))]
 pub const FILE_NAME: &str = "trace.ron";
 
 #[cfg(feature = "trace")]
@@ -34,77 +36,99 @@ pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg(any(feature = "trace", feature="replay"))]
 pub enum Action<'a> {
     Init {
+        #[serde(borrow)]
         desc: crate::device::DeviceDescriptor<'a>,
         backend: wgt::Backend,
     },
+    /// Resolves a temporary TraceResourceId to its final address.
+    Assign { trace_id: TraceResourceId, resource_id: usize },
     ConfigureSurface(id::SurfaceId, wgt::SurfaceConfiguration),
-    CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
+    CreateBuffer(id::BufferId,
+                 #[serde(borrow)]
+                 crate::resource::BufferDescriptor<'a>),
     FreeBuffer(id::BufferId),
     DestroyBuffer(id::BufferId),
-    CreateTexture(id::TextureId, crate::resource::TextureDescriptor<'a>),
+    CreateTexture(id::TextureId,
+                  #[serde(borrow)]
+                  crate::resource::TextureDescriptor<'a>),
     FreeTexture(id::TextureId),
     DestroyTexture(id::TextureId),
     CreateTextureView {
         id: id::TextureViewId,
         parent_id: id::TextureId,
+        #[serde(borrow)]
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
     DestroyTextureView(id::TextureViewId),
-    CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
-    DestroySampler(id::SamplerId),
+    CreateSampler(/*id::SamplerId*/TraceResourceId,
+                  #[serde(borrow)]
+                  crate::resource::SamplerDescriptor<'a>
+                  ),
     GetSurfaceTexture {
         id: id::TextureId,
         parent_id: id::SurfaceId,
     },
     Present(id::SurfaceId),
     CreateBindGroupLayout(
-        id::BindGroupLayoutId,
+        /*id::BindGroupLayoutId*/TraceResourceId,
+        #[serde(borrow)]
         crate::binding_model::BindGroupLayoutDescriptor<'a>,
     ),
-    DestroyBindGroupLayout(id::BindGroupLayoutId),
     CreatePipelineLayout(
-        id::PipelineLayoutId,
-        crate::binding_model::PipelineLayoutDescriptor<'a>,
+        /*id::PipelineLayoutId*/TraceResourceId,
+        #[serde(borrow)]
+        crate::binding_model::PipelineLayoutDescriptor<'a, hal::api::Empty, id::UsizeCon>,
     ),
-    DestroyPipelineLayout(id::PipelineLayoutId),
     CreateBindGroup(
-        id::BindGroupId,
-        crate::binding_model::BindGroupDescriptor<'a>,
+        /*id::Id<crate::binding_model::BindGroup<hal::api::Empty>>*/TraceResourceId,
+        #[serde(borrow)]
+        crate::binding_model::BindGroupDescriptor<'a, hal::api::Empty, id::UsizeCon,
+        Vec<crate::binding_model::BindGroupEntry<'a, hal::api::Empty, id::UsizeCon>>>,
     ),
-    DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
-        id: id::ShaderModuleId,
+        id: /*id::ShaderModuleId*/TraceResourceId,
+        #[serde(borrow)]
         desc: crate::pipeline::ShaderModuleDescriptor<'a>,
         data: FileName,
     },
-    DestroyShaderModule(id::ShaderModuleId),
     CreateComputePipeline {
-        id: id::ComputePipelineId,
-        desc: crate::pipeline::ComputePipelineDescriptor<'a>,
-        #[cfg_attr(feature = "replay", serde(default))]
-        implicit_context: Option<super::ImplicitPipelineContext>,
+        id: /*id::ComputePipelineId*/TraceResourceId,
+        #[serde(borrow)]
+        desc: crate::pipeline::ComputePipelineDescriptor<'a, hal::api::Empty, id::UsizeCon>,
+        /* #[cfg_attr(feature = "replay", serde(default))]
+        implicit_context: Option<super::ImplicitPipelineContext>, */
     },
-    DestroyComputePipeline(id::ComputePipelineId),
+    GetComputePipelineBindGroupLayout {
+        pipeline_id: usize,
+        index: u32,
+        resource_id: usize,
+    },
     CreateRenderPipeline {
-        id: id::RenderPipelineId,
-        desc: crate::pipeline::RenderPipelineDescriptor<'a>,
-        #[cfg_attr(feature = "replay", serde(default))]
-        implicit_context: Option<super::ImplicitPipelineContext>,
+        id: /*id::RenderPipelineId*/TraceResourceId,
+        #[serde(borrow)]
+        desc: crate::pipeline::RenderPipelineDescriptor<'a, hal::api::Empty, id::UsizeCon>,
+        /* #[cfg_attr(feature = "replay", serde(default))]
+        implicit_context: Option<super::ImplicitPipelineContext>, */
     },
-    DestroyRenderPipeline(id::RenderPipelineId),
+    GetRenderPipelineBindGroupLayout {
+        pipeline_id: usize,
+        index: u32,
+        resource_id: usize,
+    },
     CreateRenderBundle {
-        id: id::RenderBundleId,
+        id: /*id::RenderBundleId*/TraceResourceId,
+        #[serde(borrow)]
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,
-        base: crate::command::BasePass<crate::command::RenderCommand>,
+        base: crate::command::BasePass<crate::command::RenderCommand<hal::api::Empty, /*id::IdCon*/id::UsizeCon>>,
     },
-    DestroyRenderBundle(id::RenderBundleId),
     CreateQuerySet {
-        id: id::QuerySetId,
+        id: /*id::QuerySetId*/TraceResourceId,
+        #[serde(borrow)]
         desc: crate::resource::QuerySetDescriptor<'a>,
     },
-    DestroyQuerySet(id::QuerySetId),
     WriteBuffer {
         id: id::BufferId,
         data: FileName,
@@ -121,6 +145,7 @@ pub enum Action<'a> {
 }
 
 #[derive(Debug)]
+#[cfg(any(feature = "trace", feature="replay"))]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum Command {
@@ -156,33 +181,109 @@ pub enum Command {
         subresource_range: wgt::ImageSubresourceRange,
     },
     WriteTimestamp {
-        query_set_id: id::QuerySetId,
+        query_set_id: /*id::QuerySetId*/usize,
         query_index: u32,
     },
     ResolveQuerySet {
-        query_set_id: id::QuerySetId,
+        query_set_id: /*id::QuerySetId*/usize,
         start_query: u32,
         query_count: u32,
         destination: id::BufferId,
         destination_offset: wgt::BufferAddress,
     },
     RunComputePass {
-        base: crate::command::BasePass<crate::command::ComputeCommand>,
+        base: crate::command::BasePass<crate::command::ComputeCommand<hal::api::Empty, /*id::IdCon*/id::UsizeCon>>,
     },
     RunRenderPass {
-        base: crate::command::BasePass<crate::command::RenderCommand>,
+        base: crate::command::BasePass<crate::command::RenderCommand<hal::api::Empty, /*id::IdCon*/id::UsizeCon>>,
         target_colors: Vec<crate::command::RenderPassColorAttachment>,
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
     },
 }
 
+#[cfg(feature = "replay")]
+impl Command {
+    #[inline]
+    pub fn trace_resources<'b, E>(
+        &'b self,
+        mut f: impl FnMut(id::Cached<hal::api::Empty, &'b id::UsizeCon>) -> Result<(), E>,
+    ) -> Result<(), E>
+    {
+        use id::Cached;
+        use Command::*;
+
+        match self {
+            CopyBufferToBuffer { src: _, dst: _, .. } => {
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(&src.buffer))?;
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(&dst.buffer))
+                Ok(())
+            },
+            CopyBufferToTexture { src: _, dst: _, .. } => {
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(&src.buffer))?;
+                // FIXME: Uncomment when Texture is Arc'd.
+                // f(Cached::Texture(&dst.texture))
+                Ok(())
+            },
+            CopyTextureToBuffer { src: _, dst: _, .. } => {
+                // FIXME: Uncomment when Texture is Arc'd.
+                // f(Cached::Texture(&src.texture))?;
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(&dst.buffer))
+                Ok(())
+            },
+            CopyTextureToTexture { src: _, dst: _, .. } => {
+                // FIXME: Uncomment when Texture is Arc'd.
+                // f(Cached::Texture(&src.texture))?;
+                // FIXME: Uncomment when Texture is Arc'd.
+                // f(Cached::Texture(&dst.texture))
+                Ok(())
+            },
+            ClearBuffer { dst: _, .. } =>
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(dst))
+                Ok(()),
+            ClearImage { dst: _, .. } =>
+                // FIXME: Uncomment when Texture is Arc'd.
+                // f(Cached::Texture(dst)),
+                Ok(()),
+            WriteTimestamp { query_set_id, .. } => f(Cached::QuerySet(query_set_id)),
+            ResolveQuerySet { query_set_id, destination: _, .. } => {
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(destination))?;
+                f(Cached::QuerySet(query_set_id))
+            },
+            RunComputePass { base } =>
+                base.commands.iter().try_for_each(|command| command.trace_resources(&mut f)),
+            RunRenderPass { base, .. } =>
+                base.commands.iter().try_for_each(|command| command.trace_resources(&mut f)),
+        }
+    }
+}
+
+/// Unique temporary id used for associating descriptors with ids, so we can write a message
+/// with resource creation information before we construct an actual pointer for the resource.
+/// This makes sure creation messages are written before execution of the creation action
+/// (so if creation crashes, we can still figure out what caused it) without needing unsafe
+/// code (since to figure out the real address for the resource without initializing it, we would
+/// need to allocate uninitialized memory, then fill it in).
+#[cfg(any(feature = "trace", feature="replay"))]
+pub type TraceResourceId = u64;
+
 #[cfg(feature = "trace")]
 #[derive(Debug)]
 pub struct Trace {
     path: std::path::PathBuf,
-    file: std::fs::File,
+    /// TODO: Consider exposing synchronization to the user of wgpu-core, since soon
+    /// there will be thread-local contexts which might be a more appropriate place to trace.
+    file: Mutex<std::fs::File>,
     config: ron::ser::PrettyConfig,
-    binary_id: usize,
+    /// TODO: If we need AtomicCell for something else, use
+    /// AtomicCell<NonZeroUsize> to create a niche for `Option<Trace>` to
+    /// take up the same amount of space as `Trace`.
+    binary_id: AtomicU64,
 }
 
 #[cfg(feature = "trace")]
@@ -191,25 +292,44 @@ impl Trace {
         log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
+        let _ = file.sync_all();
         Ok(Self {
             path: path.to_path_buf(),
-            file,
+            file: Mutex::new(file),
             config: ron::ser::PrettyConfig::default(),
-            binary_id: 0,
+            binary_id: AtomicU64::new(0),
         })
     }
 
-    pub fn make_binary(&mut self, kind: &str, data: &[u8]) -> String {
-        self.binary_id += 1;
-        let name = format!("data{}.{}", self.binary_id, kind);
-        let _ = std::fs::write(self.path.join(&name), data);
+    pub(crate) fn make_binary(&self, kind: &str, data: &[u8]) -> String {
+        let binary_id = self.create_resource_id();
+        let name = format!("data{}.{}", binary_id, kind);
+        let _ = std::fs::File::create(&self.path.join(&name)).and_then(|mut file| {
+            file.write_all(data)/*?;*/
+            // Survive crashes of various kinds; see documentation in add.
+            // file.sync_all()
+        });
         name
     }
 
-    pub(crate) fn add(&mut self, action: Action) {
+    pub(crate) fn create_resource_id(&self) -> TraceResourceId {
+        // This id is unique for the `Trace` instance it came from (modulo overflow, which we
+        // don't care to handle as tracing is not relied on for memory safety), so it can be
+        // used to create a unique resource id across the trace instance without locking.
+        self.binary_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub(crate) fn add(&self, action: Action) {
         match ron::ser::to_string_pretty(&action, self.config.clone()) {
             Ok(string) => {
-                let _ = writeln!(self.file, "{},", string);
+                let mut file = self.file.lock();
+                // We want to try to make sure data are flushed on crash, so we conservatively
+                // fsync every successful write.  This is slow, but it's currently considered
+                // acceptable overhead.  If in the future people want to leave tracing on for other
+                // purposes and don't care about crash safety, we may add other options (like
+                // buffered or thread-local writes) that avoid this overhead.
+                let _ = writeln!(&mut *file, "{},", string);
+                    // .and_then(|_| file.sync_all());
             }
             Err(e) => {
                 log::warn!("RON serialization failure: {:?}", e);
@@ -221,6 +341,6 @@ impl Trace {
 #[cfg(feature = "trace")]
 impl Drop for Trace {
     fn drop(&mut self) {
-        let _ = self.file.write_all(b"]");
+        let _ = self.file.get_mut().write_all(b"]");
     }
 }

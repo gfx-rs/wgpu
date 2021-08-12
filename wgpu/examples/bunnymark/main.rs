@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, mem, iter};
 use wgpu::util::DeviceExt;
 
 #[path = "../framework.rs"]
@@ -27,20 +27,55 @@ struct Locals {
     _pad: u32,
 }
 
+/// Bundle state: None if the bundle needs to be rebuilt.
+type BundleState = Option<wgpu::RenderBundle>;
+
 /// Example struct holds references to wgpu resources and frame persistent data
 struct Example {
+    /// Toggled on and off depending on whether we should use a bundle or not.
+    bundle: Option<BundleState>,
     global_group: wgpu::BindGroup,
     local_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
     bunnies: Vec<Locals>,
     local_buffer: wgpu::Buffer,
     extent: [u32; 2],
+    config: wgpu::SurfaceConfiguration,
+}
+
+impl Example {
+    fn create_bundle(
+        device: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        pipeline: &wgpu::RenderPipeline,
+        global_group: &wgpu::BindGroup,
+        local_group: &wgpu::BindGroup,
+        bunnies: &[Locals],
+    ) -> wgpu::RenderBundle {
+        let mut encoder =
+            device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+                label: None,
+                color_formats: &[config.format],
+                depth_stencil: None,
+                sample_count: 1,
+            });
+        encoder.set_pipeline(pipeline);
+        encoder.set_bind_group(0, global_group, &[]);
+        for i in 0..bunnies.len() {
+            let offset = (i as wgpu::DynamicOffset)
+                * (wgpu::BIND_BUFFER_ALIGNMENT as wgpu::DynamicOffset);
+            encoder.set_bind_group(1, local_group, &[offset]);
+            encoder.draw(0..4, 0..1);
+        }
+        encoder.finish(&wgpu::RenderBundleDescriptor {
+            label: Some("main"),
+        })
+    }
 }
 
 impl framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -52,8 +87,8 @@ impl framework::Example for Example {
         });
 
         let global_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
+            device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+                entries: &mut [
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::VERTEX,
@@ -87,8 +122,8 @@ impl framework::Example for Example {
                 label: None,
             });
         let local_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
+            device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+                entries: &mut [wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
@@ -106,9 +141,9 @@ impl framework::Example for Example {
             push_constant_ranges: &[],
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: None,
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
@@ -139,8 +174,8 @@ impl framework::Example for Example {
             reader.next_frame(&mut buf).unwrap();
 
             let size = wgpu::Extent3d {
-                width: info.width,
-                height: info.height,
+                width: /*info.width*/1,
+                height: /*info.height*/1,
                 depth_or_array_layers: 1,
             };
             let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -154,7 +189,8 @@ impl framework::Example for Example {
             });
             queue.write_texture(
                 texture.as_image_copy(),
-                &buf,
+                &[0xFFu8; 4],
+                // &buf,
                 wgpu::ImageDataLayout {
                     offset: 0,
                     bytes_per_row: std::num::NonZeroU32::new(info.width * 4),
@@ -234,12 +270,14 @@ impl framework::Example for Example {
         });
 
         Example {
+            bundle: None,
             pipeline,
             global_group,
             local_group,
             bunnies: Vec::new(),
             local_buffer,
             extent: [config.width, config.height],
+            config: config.clone(),
         }
     }
 
@@ -247,28 +285,40 @@ impl framework::Example for Example {
         if let winit::event::WindowEvent::KeyboardInput {
             input:
                 winit::event::KeyboardInput {
-                    virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
+                    virtual_keycode,
                     state: winit::event::ElementState::Pressed,
                     ..
                 },
             ..
         } = event
         {
-            let spawn_count = 64 + self.bunnies.len() / 2;
-            let color = rand::random::<u32>();
-            println!(
-                "Spawning {} bunnies, total at {}",
-                spawn_count,
-                self.bunnies.len() + spawn_count
-            );
-            for _ in 0..spawn_count {
-                let speed = rand::random::<f32>() * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
-                self.bunnies.push(Locals {
-                    position: [0.0, 0.5 * (self.extent[1] as f32)],
-                    velocity: [speed, 0.0],
-                    color,
-                    _pad: 0,
-                });
+            match virtual_keycode {
+                Some(winit::event::VirtualKeyCode::Space) => {
+                    // Clear any bundle state.
+                    let _ = self.bundle.as_mut().and_then(Option::take);
+                    // Spawn more bunnies.
+                    let spawn_count = 64 + self.bunnies.len() / 2;
+                    let color = rand::random::<u32>();
+                    println!(
+                        "Spawning {} bunnies, total at {}",
+                        spawn_count,
+                        self.bunnies.len() + spawn_count
+                    );
+                    for _ in 0..spawn_count {
+                        let speed = rand::random::<f32>() * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
+                        self.bunnies.push(Locals {
+                            position: [0.0, 0.5 * (self.extent[1] as f32)],
+                            velocity: [speed, 0.0],
+                            color,
+                            _pad: 0,
+                        });
+                    }
+                },
+                Some(winit::event::VirtualKeyCode::B) => {
+                    // Toggle bundle state.
+                    self.bundle = self.bundle.take().xor(Some(None));
+                },
+                _ => {}
             }
         }
     }
@@ -332,13 +382,31 @@ impl framework::Example for Example {
                 }],
                 depth_stencil_attachment: None,
             });
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.global_group, &[]);
-            for i in 0..self.bunnies.len() {
-                let offset = (i as wgpu::DynamicOffset)
-                    * (wgpu::BIND_BUFFER_ALIGNMENT as wgpu::DynamicOffset);
-                rpass.set_bind_group(1, &self.local_group, &[offset]);
-                rpass.draw(0..4, 0..1);
+            if let Some(bundle) = self.bundle.as_mut() {
+                let (config, pipeline, global_group, local_group, bunnies) =
+                    (&self.config, &self.pipeline, &self.global_group,
+                     &self.local_group, &self.bunnies);
+                let bundle = bundle.get_or_insert_with(|| {
+                    // Buffer needs to be rebuilt.
+                    Example::create_bundle(
+                        device,
+                        config,
+                        pipeline,
+                        global_group,
+                        local_group,
+                        bunnies,
+                    )
+                });
+                rpass.execute_bundles(iter::once(&*bundle));
+            } else {
+                rpass.set_pipeline(&self.pipeline);
+                rpass.set_bind_group(0, &self.global_group, &[]);
+                for i in 0..self.bunnies.len() {
+                    let offset = (i as wgpu::DynamicOffset)
+                        * (wgpu::BIND_BUFFER_ALIGNMENT as wgpu::DynamicOffset);
+                    rpass.set_bind_group(1, &self.local_group, &[offset]);
+                    rpass.draw(0..4, 0..1);
+                }
             }
         }
 

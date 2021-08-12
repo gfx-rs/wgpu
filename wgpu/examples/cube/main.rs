@@ -113,7 +113,6 @@ impl framework::Example for Example {
 
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -134,9 +133,9 @@ impl framework::Example for Example {
         });
 
         // Create pipeline layout
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let bind_group_layout = device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
             label: None,
-            entries: &[
+            entries: &mut [
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
@@ -241,9 +240,9 @@ impl framework::Example for Example {
             ],
         }];
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: None,
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout.clone()),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
@@ -266,9 +265,9 @@ impl framework::Example for Example {
             .features()
             .contains(wgt::Features::NON_FILL_POLYGON_MODE)
         {
-            let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            let pipeline_wire = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
                 label: None,
-                layout: Some(&pipeline_layout),
+                layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_main",

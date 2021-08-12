@@ -34,7 +34,6 @@ impl framework::Example for Example {
     /// constructs initial instance of Example struct
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
@@ -68,8 +67,8 @@ impl framework::Example for Example {
         // create compute bind layout group and compute pipeline layout
 
         let compute_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
+            device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+                entries: &mut [
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -121,9 +120,9 @@ impl framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let render_pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: None,
-            layout: Some(&render_pipeline_layout),
+            layout: Some(render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &draw_shader,
                 entry_point: "main",
@@ -152,9 +151,9 @@ impl framework::Example for Example {
 
         // create compute pipeline
 
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        let compute_pipeline = device.create_compute_pipeline(wgpu::ComputePipelineDescriptor {
             label: Some("Compute pipeline"),
-            layout: Some(&compute_pipeline_layout),
+            layout: Some(compute_pipeline_layout),
             module: &compute_shader,
             entry_point: "main",
         });

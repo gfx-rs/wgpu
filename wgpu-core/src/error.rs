@@ -3,6 +3,7 @@ use std::error::Error;
 
 use crate::{
     gfx_select,
+    gfx_select2,
     hub::{Global, IdentityManagerFactory},
 };
 
@@ -27,26 +28,22 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     pub fn bind_group_label(&mut self, id: &crate::id::BindGroupId) {
-        let global = self.global;
-        let label = gfx_select!(id => global.bind_group_label(*id));
+        let label = gfx_select2!(&Arc id => Global::<IdentityManagerFactory>::bind_group_label(id));
         self.label("bind group", &label);
     }
 
     pub fn bind_group_layout_label(&mut self, id: &crate::id::BindGroupLayoutId) {
-        let global = self.global;
-        let label = gfx_select!(id => global.bind_group_layout_label(*id));
+        let label = gfx_select2!(&Arc id => Global::<IdentityManagerFactory>::bind_group_layout_label(id));
         self.label("bind group layout", &label);
     }
 
     pub fn render_pipeline_label(&mut self, id: &crate::id::RenderPipelineId) {
-        let global = self.global;
-        let label = gfx_select!(id => global.render_pipeline_label(*id));
+        let label = gfx_select2!(&Arc id => Global::<IdentityManagerFactory>::render_pipeline_label(id));
         self.label("render pipeline", &label);
     }
 
     pub fn compute_pipeline_label(&mut self, id: &crate::id::ComputePipelineId) {
-        let global = self.global;
-        let label = gfx_select!(id => global.compute_pipeline_label(*id));
+        let label = gfx_select2!(&Arc id => Global::<IdentityManagerFactory>::compute_pipeline_label(id));
         self.label("compute pipeline", &label);
     }
 
@@ -81,8 +78,7 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     pub fn sampler_label(&mut self, id: &crate::id::SamplerId) {
-        let global = self.global;
-        let label = gfx_select!(id => global.sampler_label(*id));
+        let label = gfx_select2!(&Arc id => Global::<IdentityManagerFactory>::sampler_label(id));
         self.label("sampler", &label);
     }
 

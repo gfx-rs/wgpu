@@ -9,38 +9,42 @@
         ),
     ],
     actions: [
-        CreatePipelineLayout(Id(0, 1, Empty), (
+        CreatePipelineLayout(0x04, (
             label: Some("empty"),
             bind_group_layouts: [],
             push_constant_ranges: [],
         )),
+        Assign(trace_id: 0x04, resource_id: 0x04),
         CreateShaderModule(
-            id: Id(0, 1, Empty),
+            id: 0x03,
             desc: (
                 label: None,
                 flags: (bits: 3),
             ),
             data: "empty.wgsl",
         ),
+        Assign(trace_id: 0x03, resource_id: 0x03),
         CreateComputePipeline(
-            id: Id(0, 1, Empty),
+            id: 0x06,
             desc: (
                 label: None,
-                layout: Some(Id(0, 1, Empty)),
+                layout: Some(0x04),
                 stage: (
-                    module: Id(0, 1, Empty),
+                    module: 0x03,
                     entry_point: "main",
                 ),
             ),
         ),
+        Assign(trace_id: 0x06, resource_id: 0x06),
         CreateQuerySet(
-            id: Id(0, 1, Empty),
+            id: 0x02,
             desc: (
                 label: Some("Compute Invocation QuerySet"),
                 count: 2,
                 ty: PipelineStatistics((bits: 0x18)), // FRAGMENT_SHADER_INVOCATIONS | COMPUTE_SHADER_INVOCATIONS
             ),
         ),
+        Assign(trace_id: 0x02, resource_id: 0x02),
         CreateBuffer(
             Id(0, 1, Empty),
             (
@@ -56,9 +60,9 @@
             RunComputePass(
                 base: (
                     commands: [
-                        SetPipeline(Id(0, 1, Empty)),
+                        SetPipeline(0x06),
                         BeginPipelineStatisticsQuery(
-                            query_set_id: Id(0, 1, Empty),
+                            query_set_id: 0x02,
                             query_index: 0,
                         ),
                         Dispatch((2, 3, 7,)),
@@ -70,7 +74,7 @@
                 ),
             ),
             ResolveQuerySet(
-                query_set_id: Id(0, 1, Empty),
+                query_set_id: 0x02,
                 start_query: 0,
                 query_count: 1,
                 destination: Id(0, 1, Empty),

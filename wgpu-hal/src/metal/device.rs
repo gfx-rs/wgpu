@@ -164,7 +164,7 @@ impl super::Device {
     }
 }
 
-impl crate::Device<super::Api> for super::Device {
+unsafe impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, _queue: super::Queue) {}
 
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
@@ -403,10 +403,12 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
 
-    unsafe fn create_pipeline_layout(
+    unsafe fn create_pipeline_layout<'a, I: Iterator<Item=&'a super::BindGroupLayout>>(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
-    ) -> DeviceResult<super::PipelineLayout> {
+        desc: crate::PipelineLayoutDescriptor<I>,
+    ) -> DeviceResult<super::PipelineLayout>
+        where I: Clone + DoubleEndedIterator + ExactSizeIterator,
+    {
         #[derive(Debug)]
         struct StageInfo {
             stage: naga::ShaderStage,
@@ -454,7 +456,7 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         // Second, place the described resources
-        for (group_index, &bgl) in desc.bind_group_layouts.iter().enumerate() {
+        for (group_index, bgl) in desc.bind_group_layouts.enumerate() {
             // remember where the resources for this set start at each shader stage
             let mut dynamic_buffers = Vec::new();
             let base_resource_indices = stage_data.map(|info| info.counters.clone());

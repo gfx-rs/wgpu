@@ -16,12 +16,13 @@ pub use self::transfer::*;
 
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::{
+    device::Device,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
-    id,
+    id::{self, AnyBackend, Hkt},
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, Texture},
     track::{BufferState, ResourceTracker, TextureState, TrackerSet},
-    Label, Stored,
+    Label,
 };
 
 use hal::CommandEncoder as _;
@@ -64,9 +65,10 @@ impl<A: hal::Api> CommandEncoder<A> {
 }
 
 pub struct BakedCommands<A: hal::Api> {
+    pub(crate) device_id: id::ValidId2<Device<A>>,
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
-    pub(crate) trackers: TrackerSet,
+    pub(crate) trackers: TrackerSet<A>,
     buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
 }
 
@@ -75,7 +77,7 @@ pub(crate) struct DestroyedBufferError(pub id::BufferId);
 impl<A: hal::Api> BakedCommands<A> {
     pub(crate) fn initialize_buffer_memory(
         &mut self,
-        device_tracker: &mut TrackerSet,
+        device_tracker: &mut crate::device::Trackers<A>,
         buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
     ) -> Result<(), DestroyedBufferError> {
         let mut ranges = Vec::new();
@@ -138,10 +140,10 @@ impl<A: hal::Api> BakedCommands<A> {
 pub struct CommandBuffer<A: hal::Api> {
     encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
-    pub(crate) device_id: Stored<id::DeviceId>,
-    pub(crate) trackers: TrackerSet,
+    pub(crate) device_id: /*Stored<id::DeviceId>*/id::ValidId2<Device<A>>,
+    pub(crate) trackers: TrackerSet<A>,
     buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
-    limits: wgt::Limits,
+    // limits: wgt::Limits,
     support_fill_buffer_texture: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
@@ -150,13 +152,17 @@ pub struct CommandBuffer<A: hal::Api> {
 impl<A: HalApi> CommandBuffer<A> {
     pub(crate) fn new(
         encoder: A::CommandEncoder,
-        device_id: Stored<id::DeviceId>,
-        limits: wgt::Limits,
-        _downlevel: wgt::DownlevelCapabilities,
-        features: wgt::Features,
-        #[cfg(feature = "trace")] enable_tracing: bool,
+        device_id: /*Stored<id::DeviceId>*/id::ValidId2<Device<A>>,
+        // limits: wgt::Limits,
+        // _downlevel: wgt::DownlevelCapabilities,
+        // features: wgt::Features,
+        // #[cfg(feature = "trace")] enable_tracing: bool,
         label: &Label,
     ) -> Self {
+        let support_fill_buffer_texture =
+            device_id.features.contains(wgt::Features::CLEAR_COMMANDS);
+        #[cfg(feature = "trace")]
+        let commands = device_id.trace.as_ref().and(Some(Vec::new()));
         CommandBuffer {
             encoder: CommandEncoder {
                 raw: encoder,
@@ -168,20 +174,20 @@ impl<A: HalApi> CommandBuffer<A> {
             device_id,
             trackers: TrackerSet::new(A::VARIANT),
             buffer_memory_init_actions: Default::default(),
-            limits,
-            support_fill_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
+            // limits,
+            support_fill_buffer_texture/*: features.contains(wgt::Features::CLEAR_COMMANDS)*/,
             #[cfg(feature = "trace")]
-            commands: if enable_tracing {
+            commands/*: if enable_tracing {
                 Some(Vec::new())
             } else {
                 None
-            },
+            }*/,
         }
     }
 
     pub(crate) fn insert_barriers(
         raw: &mut A::CommandEncoder,
-        base: &mut TrackerSet,
+        base: &mut TrackerSet<A>,
         head_buffers: &ResourceTracker<BufferState>,
         head_textures: &ResourceTracker<TextureState>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
@@ -230,6 +236,7 @@ impl<A: hal::Api> CommandBuffer<A> {
 
     pub(crate) fn into_baked(self) -> BakedCommands<A> {
         BakedCommands {
+            device_id: self.device_id,
             encoder: self.encoder.raw,
             list: self.encoder.list,
             trackers: self.trackers,
@@ -240,6 +247,21 @@ impl<A: hal::Api> CommandBuffer<A> {
 
 impl<A: hal::Api> crate::hub::Resource for CommandBuffer<A> {
     const TYPE: &'static str = "CommandBuffer";
+
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        id: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        f: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: HalApi + 'b,
+    {
+        id.trackers.trace_resources(f)
+        // Does *not* trace `used_swap_chains`, because they are already covered by
+        // `trackers`.
+        // Does *not* trace `buffer_memory_init_actions`, because they are already covered by
+        // `trackers`.
+    }
 
     fn life_guard(&self) -> &crate::LifeGuard {
         unreachable!()
@@ -277,7 +299,7 @@ pub struct BasePass<C> {
     pub push_constant_data: Vec<u32>,
 }
 
-impl<C: Clone> BasePass<C> {
+impl<C> BasePass<C> {
     fn new(label: &Label) -> Self {
         Self {
             label: label.as_ref().map(|cow| cow.to_string()),
@@ -288,14 +310,60 @@ impl<C: Clone> BasePass<C> {
         }
     }
 
-    #[cfg(feature = "trace")]
-    fn from_ref(base: BasePassRef<C>) -> Self {
-        Self {
+    #[cfg(any(feature = "replay", feature = "trace"))]
+    pub fn from_ref<U>(base: BasePassRef<C>) -> BasePass<U>
+        where
+            U: FromCommand<C>,
+            C: Clone,
+    {
+        BasePass {
             label: base.label.map(str::to_string),
-            commands: base.commands.to_vec(),
+            commands: base.commands.into_iter().cloned().map(FromCommand::from).collect(),
             dynamic_offsets: base.dynamic_offsets.to_vec(),
             string_data: base.string_data.to_vec(),
             push_constant_data: base.push_constant_data.to_vec(),
+        }
+    }
+
+    #[cfg(feature = "replay")]
+    pub fn by_ref<'a, U>(&'a self) -> BasePass<U>
+        where U: FromCommand<&'a C>,
+    {
+        BasePass {
+            label: self.label.clone(),
+            commands: self.commands.iter().map(FromCommand::from).collect(),
+            dynamic_offsets: self.dynamic_offsets.clone(),
+            string_data: self.string_data.clone(),
+            push_constant_data: self.push_constant_data.clone(),
+        }
+    }
+
+    #[cfg(feature = "replay")]
+    pub fn try_from_owned<'a, U>(self, cache: &'a id::IdCache2) ->
+        Result<BasePass<U>, U::Error>
+        where U: core::convert::TryFrom<(&'a id::IdCache2, C)>,
+    {
+        Ok(BasePass {
+            label: self.label,
+            commands: self.commands.into_iter()
+                .map(|command| core::convert::TryFrom::try_from((cache, command))).collect::<Result<_, U::Error>>()?,
+            dynamic_offsets: self.dynamic_offsets.clone(),
+            string_data: self.string_data.clone(),
+            push_constant_data: self.push_constant_data.clone(),
+        })
+    }
+
+    #[cfg(any(feature = "replay", feature = "trace"))]
+    pub fn from_owned<U>(base: BasePass<C>) -> BasePass<U>
+        where
+            U: FromCommand<C>,
+    {
+        BasePass {
+            label: base.label,
+            commands: base.commands.into_iter().map(FromCommand::from).collect(),
+            dynamic_offsets: base.dynamic_offsets,
+            string_data: base.string_data,
+            push_constant_data: base.push_constant_data,
         }
     }
 
@@ -448,11 +516,15 @@ impl<T: Copy + PartialEq> StateChange<T> {
 }
 
 trait MapPassErr<T, O> {
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, O>;
+    fn map_pass_err<F: Fn() -> PassErrorScope>(self, scope: F) -> Result<T, O>;
 }
 
-#[derive(Clone, Copy, Debug, Error)]
-pub enum PassErrorScope {
+pub trait FromCommand<C> {
+    fn from(command: C) -> Self;
+}
+
+#[derive(Clone, /* Copy, */Debug, Error)]
+pub enum PassErrorScope</*'a, A*/> {
     #[error("In a bundle parameter")]
     Bundle,
     #[error("In a pass parameter")]
@@ -501,34 +573,34 @@ pub enum PassErrorScope {
 impl PrettyError for PassErrorScope {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         // This error is not in the error chain, only notes are needed
-        match *self {
+        match self {
             Self::Pass(id) => {
-                fmt.command_buffer_label(&id);
+                fmt.command_buffer_label(id);
             }
             Self::SetBindGroup(id) => {
-                fmt.bind_group_label(&id);
+                fmt.bind_group_label(id);
             }
             Self::SetPipelineRender(id) => {
-                fmt.render_pipeline_label(&id);
+                fmt.render_pipeline_label(id);
             }
             Self::SetPipelineCompute(id) => {
-                fmt.compute_pipeline_label(&id);
+                fmt.compute_pipeline_label(id);
             }
             Self::SetVertexBuffer(id) => {
-                fmt.buffer_label(&id);
+                fmt.buffer_label(id);
             }
             Self::SetIndexBuffer(id) => {
-                fmt.buffer_label(&id);
+                fmt.buffer_label(id);
             }
             Self::Draw {
                 pipeline: Some(id), ..
             } => {
-                fmt.render_pipeline_label(&id);
+                fmt.render_pipeline_label(id);
             }
             Self::Dispatch {
                 pipeline: Some(id), ..
             } => {
-                fmt.compute_pipeline_label(&id);
+                fmt.compute_pipeline_label(id);
             }
             _ => {}
         }

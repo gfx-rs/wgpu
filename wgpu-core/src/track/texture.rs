@@ -51,8 +51,10 @@ impl TextureState {
 
 impl ResourceState for TextureState {
     type Id = TextureId;
+    type ValidId = Valid<TextureId>;
     type Selector = TextureSelector;
     type Usage = TextureUses;
+    type Pending = TextureUses;
 
     fn query(&self, selector: Self::Selector) -> Option<Self::Usage> {
         let mut result = None;
@@ -81,7 +83,7 @@ impl ResourceState for TextureState {
 
     fn change(
         &mut self,
-        id: Valid<Self::Id>,
+        &id: &Valid<Self::Id>,
         selector: Self::Selector,
         usage: Self::Usage,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
@@ -138,7 +140,7 @@ impl ResourceState for TextureState {
 
     fn merge(
         &mut self,
-        id: Valid<Self::Id>,
+        &id: &Valid<Self::Id>,
         other: &Self,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
@@ -153,7 +155,7 @@ impl ResourceState for TextureState {
 
         for (mip_id, (mip_self, mip_other)) in self.mips.iter_mut().zip(&other.mips).enumerate() {
             let level = mip_id as u32;
-            temp.extend(mip_self.merge(mip_other, 0));
+            temp.extend(mip_self.merge(&mip_other, 0));
             mip_self.clear();
 
             for (layers, states) in temp.drain(..) {
@@ -290,7 +292,7 @@ mod test {
         )]));
         let mut ts2 = TextureState::default();
         assert_eq!(
-            ts1.merge(id, &ts2, None),
+            ts1.merge(&id, &ts2, None),
             Ok(()),
             "failed to merge with an empty"
         );
@@ -300,7 +302,7 @@ mod test {
             Unit::new(TextureUses::COPY_SRC),
         )]));
         assert_eq!(
-            ts1.merge(Id::dummy(), &ts2, None),
+            ts1.merge(&Id::dummy(), &ts2, None),
             Ok(()),
             "failed to extend a compatible state"
         );
@@ -315,7 +317,7 @@ mod test {
 
         ts2.mips[0] = PlaneStates::from_slice(&[(1..2, Unit::new(TextureUses::COPY_DST))]);
         assert_eq!(
-            ts1.clone().merge(Id::dummy(), &ts2, None),
+            ts1.clone().merge(&Id::dummy(), &ts2, None),
             Err(PendingTransition {
                 id,
                 selector: TextureSelector {
@@ -338,7 +340,7 @@ mod test {
                 },
             ),
         ]);
-        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(&Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(
             &list,
             &[
@@ -388,7 +390,7 @@ mod test {
                 last: TextureUses::COPY_SRC,
             },
         )]);
-        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(&Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(&list, &[], "unexpected replacing transition");
 
         list.clear();
@@ -399,7 +401,7 @@ mod test {
                 last: TextureUses::COPY_DST,
             },
         )]);
-        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(&Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(
             &list,
             &[PendingTransition {

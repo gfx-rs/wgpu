@@ -4,7 +4,7 @@
 use crate::{
     binding_model::PushConstantUploadError,
     error::ErrorFormatter,
-    id,
+    id::{self, AllResources, Hkt},
     track::UseExtendError,
     validation::{MissingBufferUsageError, MissingTextureUsageError},
 };
@@ -97,15 +97,15 @@ pub enum RenderCommandError {
 impl crate::error::PrettyError for RenderCommandError {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        match *self {
+        match self {
             Self::InvalidBindGroup(id) => {
-                fmt.bind_group_label(&id);
+                fmt.bind_group_label(id);
             }
             Self::InvalidPipeline(id) => {
-                fmt.render_pipeline_label(&id);
+                fmt.render_pipeline_label(id);
             }
             Self::Buffer(id, ..) | Self::DestroyedBuffer(id) => {
-                fmt.buffer_label(&id);
+                fmt.buffer_label(id);
             }
             _ => {}
         };
@@ -129,7 +129,7 @@ pub struct Rect<T> {
 }
 
 #[doc(hidden)]
-#[derive(Clone, Copy, Debug)]
+#[derive(/* Clone, Copy, */Debug)]
 #[cfg_attr(
     any(feature = "serial-pass", feature = "trace"),
     derive(serde::Serialize)
@@ -138,13 +138,23 @@ pub struct Rect<T> {
     any(feature = "serial-pass", feature = "replay"),
     derive(serde::Deserialize)
 )]
-pub enum RenderCommand {
+pub enum RenderCommand<A: hal::Api, F: AllResources<A>> {
     SetBindGroup {
         index: u8,
         num_dynamic_offsets: u8,
-        bind_group_id: id::BindGroupId,
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::binding_model::BindGroup<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::binding_model::BindGroup<A>>>::Output: serde::Deserialize<'de>")))]
+        bind_group_id: <F as Hkt<crate::binding_model::BindGroup<A>>>::Output,
     },
-    SetPipeline(id::RenderPipelineId),
+    SetPipeline(
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::pipeline::RenderPipeline<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::pipeline::RenderPipeline<A>>>::Output: serde::Deserialize<'de>")))]
+        <F as Hkt<crate::pipeline::RenderPipeline<A>>>::Output,
+    ),
     SetIndexBuffer {
         buffer_id: id::BufferId,
         index_format: wgt::IndexFormat,
@@ -213,13 +223,253 @@ pub enum RenderCommand {
         len: usize,
     },
     WriteTimestamp {
-        query_set_id: id::QuerySetId,
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::resource::QuerySet<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::resource::QuerySet<A>>>::Output: serde::Deserialize<'de>")))]
+        query_set_id: <F as Hkt<crate::resource::QuerySet<A>>>::Output,
         query_index: u32,
     },
     BeginPipelineStatisticsQuery {
-        query_set_id: id::QuerySetId,
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::resource::QuerySet<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::resource::QuerySet<A>>>::Output: serde::Deserialize<'de>")))]
+        query_set_id: <F as Hkt<crate::resource::QuerySet<A>>>::Output,
         query_index: u32,
     },
     EndPipelineStatisticsQuery,
-    ExecuteBundle(id::RenderBundleId),
+    ExecuteBundle(
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::command::RenderBundle<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::command::RenderBundle<A>>>::Output: serde::Deserialize<'de>")))]
+        <F as Hkt<crate::command::RenderBundle<A>>>::Output,
+    ),
+}
+
+impl<A: hal::Api, F: AllResources<A>> RenderCommand<A, F> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, E>(
+        &'b self,
+        mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where id::Cached<A, &'b F>: 'b,
+    {
+        use self::RenderCommand::*;
+        use id::Cached;
+
+        match self {
+            SetBindGroup { bind_group_id, .. } => f(Cached::BindGroup(bind_group_id)),
+            SetPipeline(pipeline_id) => f(Cached::RenderPipeline(pipeline_id)),
+            SetIndexBuffer { buffer_id: _, .. } =>
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(buffer_id)),
+                Ok(()),
+            SetVertexBuffer { buffer_id: _, .. } =>
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(buffer_id)),
+                Ok(()),
+            MultiDrawIndirect { buffer_id: _, .. } =>
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(buffer_id)),
+                Ok(()),
+            MultiDrawIndirectCount { buffer_id: _, count_buffer_id: _, .. } => {
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(buffer_id))?;
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(count_buffer_id)),
+                Ok(())
+            }
+            WriteTimestamp { query_set_id, .. } => f(Cached::QuerySet(query_set_id)),
+            BeginPipelineStatisticsQuery { query_set_id, .. } => f(Cached::QuerySet(query_set_id)),
+            ExecuteBundle(bundle_id) => f(Cached::RenderBundle(bundle_id)),
+            SetBlendConstant(..) | SetStencilReference(..)
+            | SetViewport { .. } | SetScissor(..)
+            | SetPushConstant { .. }
+            | Draw { .. } | DrawIndexed { .. }
+            | PushDebugGroup { .. } | PopDebugGroup | InsertDebugMarker { .. }
+            | EndPipelineStatisticsQuery => Ok(()),
+        }
+    }
+}
+
+
+impl<A: hal::Api, F: AllResources<A>> Clone for RenderCommand<A, F>
+    where
+        <F as Hkt<crate::binding_model::BindGroup<A>>>::Output: Copy,
+        <F as Hkt<crate::resource::QuerySet<A>>>::Output: Copy,
+        <F as Hkt<crate::pipeline::RenderPipeline<A>>>::Output: Copy,
+        <F as Hkt<crate::command::RenderBundle<A>>>::Output: Copy,
+{
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<A: hal::Api, F: AllResources<A>> Copy for RenderCommand<A, F>
+    where
+        <F as Hkt<crate::binding_model::BindGroup<A>>>::Output: Copy,
+        <F as Hkt<crate::resource::QuerySet<A>>>::Output: Copy,
+        <F as Hkt<crate::pipeline::RenderPipeline<A>>>::Output: Copy,
+        <F as Hkt<crate::command::RenderBundle<A>>>::Output: Copy,
+{}
+
+impl<A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    super::FromCommand<RenderCommand<A, F>> for RenderCommand<B, G>
+    where
+        <F as Hkt<crate::binding_model::BindGroup<A>>>::Output:
+            Into<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output>,
+        <F as Hkt<crate::resource::QuerySet<A>>>::Output:
+            Into<<G as Hkt<crate::resource::QuerySet<B>>>::Output>,
+        <F as Hkt<crate::pipeline::RenderPipeline<A>>>::Output:
+            Into<<G as Hkt<crate::pipeline::RenderPipeline<B>>>::Output>,
+        <F as Hkt<crate::command::RenderBundle<A>>>::Output:
+            Into<<G as Hkt<crate::command::RenderBundle<B>>>::Output>,
+{
+    fn from(command: RenderCommand<A, F>) -> Self {
+        use self::RenderCommand::*;
+
+        match command {
+            SetBindGroup { index, num_dynamic_offsets, bind_group_id } =>
+                SetBindGroup { index, num_dynamic_offsets, bind_group_id: bind_group_id.into() },
+            SetPipeline(pipeline_id) => SetPipeline(pipeline_id.into()),
+            SetIndexBuffer { buffer_id, index_format, offset, size} =>
+                SetIndexBuffer { buffer_id, index_format, offset, size},
+            SetVertexBuffer { slot, buffer_id, offset, size } =>
+                SetVertexBuffer { slot, buffer_id, offset, size },
+            SetBlendConstant(color) => SetBlendConstant(color),
+            SetStencilReference(value) => SetStencilReference(value),
+            SetViewport { rect, depth_min, depth_max } =>
+                SetViewport { rect, depth_min, depth_max },
+            SetScissor(rect) => SetScissor(rect),
+            SetPushConstant { stages, offset, size_bytes, values_offset } =>
+                SetPushConstant { stages, offset, size_bytes, values_offset },
+            Draw { vertex_count, instance_count, first_vertex, first_instance } =>
+                Draw { vertex_count, instance_count, first_vertex, first_instance },
+            DrawIndexed { index_count, instance_count, first_index, base_vertex, first_instance } =>
+                DrawIndexed { index_count, instance_count, first_index, base_vertex, first_instance },
+            MultiDrawIndirect { buffer_id, offset, count, indexed } =>
+                MultiDrawIndirect { buffer_id, offset, count, indexed },
+            MultiDrawIndirectCount { buffer_id, offset, count_buffer_id, count_buffer_offset, max_count, indexed } =>
+                MultiDrawIndirectCount { buffer_id, offset, count_buffer_id, count_buffer_offset, max_count, indexed },
+            PushDebugGroup { color, len } => PushDebugGroup { color, len },
+            PopDebugGroup => PopDebugGroup,
+            InsertDebugMarker { color, len } => InsertDebugMarker { color, len },
+            WriteTimestamp { query_set_id, query_index } =>
+                WriteTimestamp { query_set_id: query_set_id.into(), query_index },
+            BeginPipelineStatisticsQuery { query_set_id, query_index } =>
+                BeginPipelineStatisticsQuery { query_set_id: query_set_id.into(), query_index },
+            EndPipelineStatisticsQuery => EndPipelineStatisticsQuery,
+            ExecuteBundle(bundle_id) => ExecuteBundle(bundle_id.into()),
+        }
+    }
+}
+
+impl<'a, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    super::FromCommand<&'a RenderCommand<A, F>> for RenderCommand<B, G>
+    where
+        &'a <F as Hkt<crate::binding_model::BindGroup<A>>>::Output:
+            Into<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output>,
+        &'a <F as Hkt<crate::resource::QuerySet<A>>>::Output:
+            Into<<G as Hkt<crate::resource::QuerySet<B>>>::Output>,
+        &'a <F as Hkt<crate::pipeline::RenderPipeline<A>>>::Output:
+            Into<<G as Hkt<crate::pipeline::RenderPipeline<B>>>::Output>,
+        &'a <F as Hkt<crate::command::RenderBundle<A>>>::Output:
+            Into<<G as Hkt<crate::command::RenderBundle<B>>>::Output>,
+{
+    fn from(command: &'a RenderCommand<A, F>) -> Self {
+        use self::RenderCommand::*;
+
+        match *command {
+            SetBindGroup { index, num_dynamic_offsets, ref bind_group_id } =>
+                SetBindGroup { index, num_dynamic_offsets, bind_group_id: bind_group_id.into() },
+            SetPipeline(ref pipeline_id) => SetPipeline(pipeline_id.into()),
+            SetIndexBuffer { buffer_id, index_format, offset, size} =>
+                SetIndexBuffer { buffer_id, index_format, offset, size},
+            SetVertexBuffer { slot, buffer_id, offset, size } =>
+                SetVertexBuffer { slot, buffer_id, offset, size },
+            SetBlendConstant(color) => SetBlendConstant(color),
+            SetStencilReference(value) => SetStencilReference(value),
+            SetViewport { rect, depth_min, depth_max } =>
+                SetViewport { rect, depth_min, depth_max },
+            SetScissor(rect) => SetScissor(rect),
+            SetPushConstant { stages, offset, size_bytes, values_offset } =>
+                SetPushConstant { stages, offset, size_bytes, values_offset },
+            Draw { vertex_count, instance_count, first_vertex, first_instance } =>
+                Draw { vertex_count, instance_count, first_vertex, first_instance },
+            DrawIndexed { index_count, instance_count, first_index, base_vertex, first_instance } =>
+                DrawIndexed { index_count, instance_count, first_index, base_vertex, first_instance },
+            MultiDrawIndirect { buffer_id, offset, count, indexed } =>
+                MultiDrawIndirect { buffer_id, offset, count, indexed },
+            MultiDrawIndirectCount { buffer_id, offset, count_buffer_id, count_buffer_offset, max_count, indexed } =>
+                MultiDrawIndirectCount { buffer_id, offset, count_buffer_id, count_buffer_offset, max_count, indexed },
+            PushDebugGroup { color, len } => PushDebugGroup { color, len },
+            PopDebugGroup => PopDebugGroup,
+            InsertDebugMarker { color, len } => InsertDebugMarker { color, len },
+            WriteTimestamp { ref query_set_id, query_index } =>
+                WriteTimestamp { query_set_id: query_set_id.into(), query_index },
+            BeginPipelineStatisticsQuery { ref query_set_id, query_index } =>
+                BeginPipelineStatisticsQuery { query_set_id: query_set_id.into(), query_index },
+            EndPipelineStatisticsQuery => EndPipelineStatisticsQuery,
+            ExecuteBundle(ref bundle_id) => ExecuteBundle(bundle_id.into()),
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl<'a, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>, E>
+    core::convert::TryFrom<(&'a id::IdCache2, RenderCommand<A, F>)> for RenderCommand<B, G>
+    where
+        (&'a id::IdCache2, <F as Hkt<crate::binding_model::BindGroup<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output, Error=E>,
+        (&'a id::IdCache2, <F as Hkt<crate::resource::QuerySet<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<crate::resource::QuerySet<B>>>::Output, Error=E>,
+        (&'a id::IdCache2, <F as Hkt<crate::pipeline::RenderPipeline<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<crate::pipeline::RenderPipeline<B>>>::Output, Error=E>,
+        (&'a id::IdCache2, <F as Hkt<crate::command::RenderBundle<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<crate::command::RenderBundle<B>>>::Output, Error=E>,
+{
+    type Error = /*<(&'a id::IdCache2,  <F as Hkt<crate::binding_model::BindGroup<A>>>::Output)
+                  as core::convert::TryInto<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output>>::Error*/E;
+
+    fn try_from((cache, command): (&'a id::IdCache2, RenderCommand<A, F>)) -> Result<Self, Self::Error> {
+        use core::convert::TryInto;
+        use self::RenderCommand::*;
+
+        Ok(match command {
+            SetBindGroup { index, num_dynamic_offsets, bind_group_id } =>
+                SetBindGroup { index, num_dynamic_offsets, bind_group_id: (cache, bind_group_id).try_into()? },
+            SetPipeline(pipeline_id) => SetPipeline((cache, pipeline_id).try_into()?),
+            SetIndexBuffer { buffer_id, index_format, offset, size} =>
+                SetIndexBuffer { buffer_id, index_format, offset, size},
+            SetVertexBuffer { slot, buffer_id, offset, size } =>
+                SetVertexBuffer { slot, buffer_id, offset, size },
+            SetBlendConstant(color) => SetBlendConstant(color),
+            SetStencilReference(value) => SetStencilReference(value),
+            SetViewport { rect, depth_min, depth_max } =>
+                SetViewport { rect, depth_min, depth_max },
+            SetScissor(rect) => SetScissor(rect),
+            SetPushConstant { stages, offset, size_bytes, values_offset } =>
+                SetPushConstant { stages, offset, size_bytes, values_offset },
+            Draw { vertex_count, instance_count, first_vertex, first_instance } =>
+                Draw { vertex_count, instance_count, first_vertex, first_instance },
+            DrawIndexed { index_count, instance_count, first_index, base_vertex, first_instance } =>
+                DrawIndexed { index_count, instance_count, first_index, base_vertex, first_instance },
+            MultiDrawIndirect { buffer_id, offset, count, indexed } =>
+                MultiDrawIndirect { buffer_id, offset, count, indexed },
+            MultiDrawIndirectCount { buffer_id, offset, count_buffer_id, count_buffer_offset, max_count, indexed } =>
+                MultiDrawIndirectCount { buffer_id, offset, count_buffer_id, count_buffer_offset, max_count, indexed },
+            PushDebugGroup { color, len } => PushDebugGroup { color, len },
+            PopDebugGroup => PopDebugGroup,
+            InsertDebugMarker { color, len } => InsertDebugMarker { color, len },
+            WriteTimestamp { query_set_id, query_index } =>
+                WriteTimestamp { query_set_id: (cache, query_set_id).try_into()?, query_index },
+            BeginPipelineStatisticsQuery { query_set_id, query_index } =>
+                BeginPipelineStatisticsQuery { query_set_id: (cache, query_set_id).try_into()?, query_index },
+            EndPipelineStatisticsQuery => EndPipelineStatisticsQuery,
+            ExecuteBundle(bundle_id) => ExecuteBundle((cache, bundle_id).try_into()?),
+        })
+    }
 }

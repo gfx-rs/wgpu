@@ -1,10 +1,11 @@
 /*! This is a player for WebGPU traces.
 !*/
 
-use player::{GlobalPlay as _, IdentityPassThroughFactory};
-use wgc::{device::trace, gfx_select};
+use player::{Action, GlobalPlay as _, IdentityPassThroughFactory};
+use wgc::{device::trace, gfx_select2};
 
 use std::{
+    io::Read,
     fs,
     path::{Path, PathBuf},
 };
@@ -24,9 +25,11 @@ fn main() {
     };
 
     log::info!("Loading trace '{:?}'", dir);
-    let file = fs::File::open(dir.join(trace::FILE_NAME)).unwrap();
-    let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
-    actions.reverse(); // allows us to pop from the top
+    let mut bytes = Vec::new();
+    fs::File::open(dir.join(trace::FILE_NAME)).unwrap().read_to_end(&mut bytes).unwrap();
+    // NOTE: Required since the closure to winit has a 'static lifetime, for some reason... most
+    // likely this is not necessary.
+    let actions: Vec<trace::Action> = ron::de::from_bytes(bytes.leak()).unwrap();
     log::info!("Found {} actions", actions.len());
 
     #[cfg(feature = "winit")]
@@ -44,14 +47,17 @@ fn main() {
     let global = wgc::hub::Global::new("player", IdentityPassThroughFactory, wgt::Backends::all());
     let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
 
+    // NOTE: Returns reversed action list, so we can pop from the top.
+    let mut actions = global.init_actions(actions);
+
     #[cfg(feature = "winit")]
     let surface =
         global.instance_create_surface(&window, wgc::id::TypedId::zip(0, 1, wgt::Backend::Empty));
 
-    let device = match actions.pop() {
-        Some(trace::Action::Init { desc, backend }) => {
+    let device_ = match actions.pop() {
+        Some(Action::Trace(trace::Action::Init { desc, backend })) => {
             log::info!("Initializing the device for backend: {:?}", backend);
-            let adapter = global
+            let adapter_ = global
                 .request_adapter(
                     &wgc::instance::RequestAdapterOptions {
                         power_preference: wgt::PowerPreference::LowPower,
@@ -60,26 +66,27 @@ fn main() {
                         #[cfg(not(feature = "winit"))]
                         compatible_surface: None,
                     },
-                    wgc::instance::AdapterInputs::IdSet(
+                    /*wgc::instance::AdapterInputs::IdSet(
                         &[wgc::id::TypedId::zip(0, 0, backend)],
                         |id| id.backend(),
-                    ),
+                    )*/backend.into(),
                 )
                 .expect("Unable to find an adapter for selected backend");
 
-            let info = gfx_select!(adapter => global.adapter_get_info(adapter)).unwrap();
+            let adapter = &adapter_;
+            let info = gfx_select2!(&Box adapter => wgc::hub::Global::<IdentityPassThroughFactory>::adapter_get_info(&adapter))/*.unwrap()*/;
             log::info!("Picked '{}'", info.name);
-            let id = wgc::id::TypedId::zip(1, 0, backend);
-            let (_, error) = gfx_select!(adapter => global.adapter_request_device(
-                adapter,
+            // let id = wgc::id::TypedId::zip(1, 0, backend);
+            /*let (_, error) = */gfx_select2!(Box adapter_ => wgc::hub::Global::<IdentityPassThroughFactory>::adapter_request_device(
+                *adapter_,
                 &desc,
                 None,
-                id
-            ));
-            if let Some(e) = error {
+                // id
+            )).unwrap()
+            /* if let Some(e) = error {
                 panic!("{:?}", e);
-            }
-            id
+            } */
+            // id
         }
         _ => panic!("Expected Action::Init"),
     };
@@ -87,26 +94,36 @@ fn main() {
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {
-        gfx_select!(device => global.device_start_capture(device));
+        let device = &device_;
+        gfx_select2!(&Arc device => global.device_start_capture(device));
+
+        let mut trace_cache = wgc::id::IdMap::default();
+        let mut cache = wgc::id::IdCache2::default();
 
         while let Some(action) = actions.pop() {
-            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+            gfx_select2!(&Arc device =>
+                         global.process(device, action, &dir, &mut trace_cache, &mut cache, &mut command_buffer_id_manager));
         }
 
-        gfx_select!(device => global.device_stop_capture(device));
-        gfx_select!(device => global.device_poll(device, true)).unwrap();
+        gfx_select2!(&Arc device => global.device_stop_capture(device));
+        gfx_select2!(&Arc device => global.device_poll(device, true)).unwrap();
     }
     #[cfg(feature = "winit")]
     {
+        use wgc::gfx_select;
         use winit::{
             event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
             event_loop::ControlFlow,
         };
 
+        let mut trace_cache = wgc::id::IdMap::default();
+        let mut cache = wgc::id::IdCache2::default();
+
         let mut resize_config = None;
         let mut frame_count = 0;
         let mut done = false;
         event_loop.run(move |event, _, control_flow| {
+            let device = &device_;
             *control_flow = ControlFlow::Poll;
             match event {
                 Event::MainEventsCleared => {
@@ -114,7 +131,7 @@ fn main() {
                 }
                 Event::RedrawRequested(_) if resize_config.is_none() => loop {
                     match actions.pop() {
-                        Some(trace::Action::ConfigureSurface(_device_id, config)) => {
+                        Some(Action::Trace(trace::Action::ConfigureSurface(_device_id, config))) => {
                             log::info!("Configuring the surface");
                             let current_size: (u32, u32) = window.inner_size().into();
                             let size = (config.width, config.height);
@@ -126,20 +143,23 @@ fn main() {
                                 resize_config = Some(config);
                                 break;
                             } else {
-                                let error = gfx_select!(device => global.surface_configure(surface, device, &config));
+                                let device = device.clone();
+                                let error = gfx_select2!(Arc device => global.surface_configure(surface, device, &config));
                                 if let Some(e) = error {
                                     panic!("{:?}", e);
                                 }
                             }
                         }
-                        Some(trace::Action::Present(id)) => {
+                        Some(Action::Trace(trace::Action::Present(id))) => {
                             frame_count += 1;
                             log::debug!("Presenting frame {}", frame_count);
                             gfx_select!(device => global.surface_present(id)).unwrap();
                             break;
                         }
                         Some(action) => {
-                            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+                            gfx_select2!(&Arc device =>
+                                         global.process(device, action, &dir, &mut trace_cache, &mut cache,
+                                                        &mut command_buffer_id_manager));
                         }
                         None => {
                             if !done {
@@ -153,7 +173,8 @@ fn main() {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(_) => {
                         if let Some(config) = resize_config.take() {
-                            let error = gfx_select!(device => global.surface_configure(surface, device, &config));
+                            let device = device.clone();
+                            let error = gfx_select2!(Arc device => global.surface_configure(surface, device, &config));
                             if let Some(e) = error {
                                 panic!("{:?}", e);
                             }
@@ -175,7 +196,7 @@ fn main() {
                 },
                 Event::LoopDestroyed => {
                     log::info!("Closing");
-                    gfx_select!(device => global.device_poll(device, true)).unwrap();
+                    gfx_select2!(&Arc device => global.device_poll(device, true)).unwrap();
                 }
                 _ => {}
             }

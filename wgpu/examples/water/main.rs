@@ -264,7 +264,6 @@ impl Example {
 impl framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -349,9 +348,9 @@ impl framework::Example for Example {
 
         // Create the bind group layout. This is what our uniforms will look like.
         let water_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
                 label: Some("Water Bind Group Layout"),
-                entries: &[
+                entries: &mut [
                     // Uniform variables such as projection/view.
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -401,9 +400,9 @@ impl framework::Example for Example {
             });
 
         let terrain_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
                 label: Some("Terrain Bind Group Layout"),
-                entries: &[
+                entries: &mut [
                     // Regular uniform variables like view/projection.
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -498,10 +497,10 @@ impl framework::Example for Example {
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
-        let water_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let water_pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: Some("water"),
             // The "layout" is what uniforms will be needed.
-            layout: Some(&water_pipeline_layout),
+            layout: Some(water_pipeline_layout),
             // Vertex shader and input buffers
             vertex: wgpu::VertexState {
                 module: &water_module,
@@ -568,9 +567,9 @@ impl framework::Example for Example {
         });
 
         // Same idea as the water pipeline.
-        let terrain_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let terrain_pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: Some("terrain"),
-            layout: Some(&terrain_pipeline_layout),
+            layout: Some(terrain_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &terrain_module,
                 entry_point: "vs_main",

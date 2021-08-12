@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 pub struct Context;
 pub struct Encoder;
@@ -105,7 +105,7 @@ impl crate::Queue<Api> for Context {
     }
 }
 
-impl crate::Device<Api> for Context {
+unsafe impl crate::Device<Api> for Context {
     unsafe fn exit(self, queue: Context) {}
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
@@ -156,10 +156,12 @@ impl crate::Device<Api> for Context {
         Ok(Resource)
     }
     unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
-    unsafe fn create_pipeline_layout(
+    unsafe fn create_pipeline_layout<'a, I: Iterator<Item=&'a Resource>>(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<Api>,
-    ) -> DeviceResult<Resource> {
+        desc: crate::PipelineLayoutDescriptor<I>,
+    ) -> DeviceResult<Resource>
+        where I: Clone + DoubleEndedIterator + ExactSizeIterator,
+    {
         Ok(Resource)
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}

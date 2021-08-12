@@ -10,7 +10,7 @@ use wgpu::{util, Adapter, Device, DownlevelFlags, Instance, Queue};
 pub mod image;
 
 async fn initialize_device(
-    adapter: &Adapter,
+    adapter: Adapter,
     features: Features,
     limits: Limits,
 ) -> (Device, Queue) {
@@ -32,7 +32,6 @@ async fn initialize_device(
 }
 
 pub struct TestingContext {
-    pub adapter: Adapter,
     pub adapter_info: wgt::AdapterInfo,
     pub device: Device,
     pub queue: Queue,
@@ -227,13 +226,12 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     }
 
     let (device, queue) = pollster::block_on(initialize_device(
-        &adapter,
+        adapter,
         parameters.required_features,
         parameters.required_limits,
     ));
 
     let context = TestingContext {
-        adapter,
         adapter_info: adapter_info.clone(),
         device,
         queue,

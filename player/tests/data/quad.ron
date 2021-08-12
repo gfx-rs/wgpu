@@ -10,13 +10,14 @@
     ],
     actions: [
         CreateShaderModule(
-            id: Id(0, 1, Empty),
+            id: 0x03,
             desc: (
                 label: None,
                 flags: (bits: 3),
             ),
             data: "quad.wgsl",
         ),
+        Assign(trace_id: 0x03, resource_id: 0x03),
         CreateTexture(Id(0, 1, Empty), (
             label: Some("Output Texture"),
             size: (
@@ -48,26 +49,27 @@
                 mapped_at_creation: false,
             ),
         ),
-        CreatePipelineLayout(Id(0, 1, Empty), (
+        CreatePipelineLayout(0x04, (
             label: None,
             bind_group_layouts: [],
             push_constant_ranges: [],
         )),
+        Assign(trace_id: 0x04, resource_id: 0x04),
         CreateRenderPipeline(
-            id: Id(0, 1, Empty),
+            id: 0x05,
             desc: (
                 label: None,
-                layout: Some(Id(0, 1, Empty)),
+                layout: Some(0x04),
                 vertex: (
                     stage: (
-                        module: Id(0, 1, Empty),
+                        module: 0x03,
                         entry_point: "vs_main",
                     ),
                     buffers: [],
                 ),
                 fragment: Some((
                     stage: (
-                        module: Id(0, 1, Empty),
+                        module: 0x03,
                         entry_point: "fs_main",
                     ),
                     targets: [
@@ -78,11 +80,12 @@
                 )),
             ),
         ),
+        Assign(trace_id: 0x05, resource_id: 0x05),
         Submit(1, [
             RunRenderPass(
                 base: (
                     commands: [
-                        SetPipeline(Id(0, 1, Empty)),
+                        SetPipeline(0x05),
                         Draw(
                             vertex_count: 3,
                             instance_count: 1,

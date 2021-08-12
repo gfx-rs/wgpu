@@ -6,16 +6,17 @@ use crate::{
         CommandBuffer, CopySide, ImageCopyTexture, TransferError,
     },
     conv,
-    device::{DeviceError, WaitIdleError},
+    device::{Device, DeviceError, Device as Queue, WaitIdleError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
-    id,
+    id::{self, Dummy},
     resource::{BufferAccessError, BufferMapState, TextureInner},
-    track, FastHashSet,
+    track::{self, ResourceTracker, TrackerSet},
+    FastHashSet,
 };
 
+use core::{iter, mem, num::NonZeroU32, ptr};
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
-use std::{iter, mem, num::NonZeroU32, ptr};
 use thiserror::Error;
 
 /// Number of command buffers that we generate from the same pool
@@ -68,11 +69,14 @@ pub enum TempResource<A: hal::Api> {
 pub(super) struct EncoderInFlight<A: hal::Api> {
     raw: A::CommandEncoder,
     cmd_buffers: Vec<A::CommandBuffer>,
+    /// NOTE: This is deliberately not used for anything, it's just there to be dropped.
+    _trackers: TrackerSet<A>,
 }
 
 impl<A: hal::Api> EncoderInFlight<A> {
     pub(super) unsafe fn land(mut self) -> A::CommandEncoder {
         self.raw.reset_all(self.cmd_buffers.into_iter());
+        // NOTE: trackers get dropped automatically.
         self.raw
     }
 }
@@ -99,22 +103,25 @@ impl<A: hal::Api> PendingWrites<A> {
         }
     }
 
-    pub fn dispose(mut self, device: &A::Device) {
-        unsafe {
+    /// Safety: The device has to match the device used to construct the encoder.
+    pub(super) unsafe fn dispose(mut self, device: &A::Device) {
+        {
             if self.is_active {
                 self.command_encoder.discard_encoding();
             }
             self.command_encoder
                 .reset_all(self.executing_command_buffers.into_iter());
+            // NOTE: Safe because of the requirement on `dispose` (that `self` is never accessed
+            // again outside of moving or dropping it).
             device.destroy_command_encoder(self.command_encoder);
         }
 
-        for resource in self.temp_resources {
+        for resource in self.temp_resources.drain(..) {
             match resource {
-                TempResource::Buffer(buffer) => unsafe {
+                TempResource::Buffer(buffer) => {
                     device.destroy_buffer(buffer);
                 },
-                TempResource::Texture(texture) => unsafe {
+                TempResource::Texture(texture) => {
                     device.destroy_texture(texture);
                 },
             }
@@ -142,7 +149,9 @@ impl<A: hal::Api> PendingWrites<A> {
             None
         }
     }
+}
 
+impl<A: HalApi> PendingWrites<A> {
     #[must_use]
     fn post_submit(
         &mut self,
@@ -158,6 +167,8 @@ impl<A: hal::Api> PendingWrites<A> {
             Some(EncoderInFlight {
                 raw: mem::replace(&mut self.command_encoder, new_encoder),
                 cmd_buffers: mem::take(&mut self.executing_command_buffers),
+                // TODO: add more trackers
+                _trackers: TrackerSet::new(A::VARIANT)
             })
         } else {
             None
@@ -175,7 +186,9 @@ impl<A: hal::Api> PendingWrites<A> {
         }
         &mut self.command_encoder
     }
+}
 
+impl<A: hal::Api> PendingWrites<A> {
     pub fn deactivate(&mut self) {
         if self.is_active {
             unsafe {
@@ -186,8 +199,8 @@ impl<A: hal::Api> PendingWrites<A> {
     }
 }
 
-impl<A: hal::Api> super::Device<A> {
-    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
+impl<A: hal::Api> Queue<A> {
+    fn prepare_stage(&self, size: wgt::BufferAddress) -> Result<StagingData<A>, DeviceError> {
         profiling::scope!("prepare_stage");
         let stage_desc = hal::BufferDescriptor {
             label: Some("_Staging"),
@@ -235,7 +248,7 @@ pub enum QueueSubmitError {
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn queue_write_buffer<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: /*id::QueueId*/id::IdGuard<A, Queue<Dummy>>,
         buffer_id: id::BufferId,
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
@@ -243,16 +256,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("write_buffer", "Queue");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = device_guard
+        let mut token_ = Token::root();
+        // let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let device = /*device_guard
             .get_mut(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
+            .map_err(|_| DeviceError::Invalid)?*/&*queue_id;
+        let (buffer_guard, mut token1) = hub.buffers.read(&mut token_);
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
-            let mut trace = trace.lock();
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteBuffer {
                 id: buffer_id,
@@ -271,7 +283,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let stage = device.prepare_stage(data_size)?;
         unsafe { stage.write(&device.raw, 0, data) }.map_err(DeviceError::from)?;
 
-        let mut trackers = device.trackers.lock();
+        let (mut trackers, mut token2) = token1.lock(&device.trackers);
         let (dst, transition) = trackers
             .buffers
             .use_replace(&*buffer_guard, buffer_id, (), hal::BufferUses::COPY_DST)
@@ -283,7 +295,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !dst.usage.contains(wgt::BufferUsages::COPY_DST) {
             return Err(TransferError::MissingCopyDstUsageFlag(Some(buffer_id), None).into());
         }
-        dst.life_guard.use_at(device.active_submission_index + 1);
 
         if data_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(data_size).into());
@@ -311,19 +322,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
         .chain(transition.map(|pending| pending.into_hal(dst)));
-        let encoder = device.pending_writes.activate();
-        unsafe {
-            encoder.transition_buffers(barriers);
-            encoder.copy_buffer_to_buffer(&stage.buffer, dst_raw, region.into_iter());
-        }
+        {
+            let (mut queue_inner_guard, _) = token2.lock(&device.queue.inner);
+            // let pending_writes = token.lock(&device.queue.pending_writes).0;
+            // let pending_writes = &mut queue_inner_guard.pending_writes;
+            // NOTE: Must wait until the pending writes are locked to assign a submission index, to
+            // make sure we don't miss the scheduled writes.
+            dst.life_guard.use_at(queue_inner_guard.active_submission_index + 1);
+            let encoder = queue_inner_guard.pending_writes.activate();
+            unsafe {
+                encoder.transition_buffers(barriers);
+                encoder.copy_buffer_to_buffer(&stage.buffer, dst_raw, region.into_iter());
+            }
 
-        device.pending_writes.consume(stage);
-        device.pending_writes.dst_buffers.insert(buffer_id);
+            queue_inner_guard.pending_writes.consume(stage);
+            queue_inner_guard.pending_writes.dst_buffers.insert(buffer_id);
+        }
 
         // Ensure the overwritten bytes are marked as initialized so they don't need to be nulled prior to mapping or binding.
         {
-            drop(buffer_guard);
-            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+            drop((trackers, token2));
+            drop((buffer_guard, token1));
+            let (mut buffer_guard, _) = hub.buffers.write(&mut token_);
 
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
             dst.initialization_status
@@ -335,7 +355,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn queue_write_texture<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: id::IdGuard<A, Queue<Dummy>>,
         destination: &ImageCopyTexture,
         data: &[u8],
         data_layout: &wgt::ImageDataLayout,
@@ -345,14 +365,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = device_guard
+        // let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        // let (mut queue_inner_guard, mut token) = token.lock(&self.queue.inner);
+        let device = /*device_guard
             .get_mut(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::Invalid)?*/&*queue_id;
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
-            let mut trace = trace.lock();
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteTexture {
                 to: destination.clone(),
@@ -367,7 +387,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token);
         let (selector, dst_base, texture_format) =
             extract_texture_selector(destination, size, &*texture_guard)?;
         let format_desc = texture_format.describe();
@@ -397,7 +417,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let bytes_per_row_alignment = get_lowest_common_denom(
-            device.alignments.buffer_copy_pitch.get() as u32,
+            device.adapter_id.raw.capabilities.alignments.buffer_copy_pitch.get() as u32,
             format_desc.block_size as u32,
         );
         let stage_bytes_per_row = align_to(
@@ -410,7 +430,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
         let stage = device.prepare_stage(stage_size)?;
 
-        let mut trackers = device.trackers.lock();
+        let (mut trackers, mut token) = token.lock(&device.trackers);
         let (dst, transition) = trackers
             .textures
             .use_replace(
@@ -432,7 +452,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
-        dst.life_guard.use_at(device.active_submission_index + 1);
 
         let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
             bytes_per_row.get()
@@ -495,26 +514,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         };
 
-        let encoder = device.pending_writes.activate();
-        unsafe {
-            encoder.transition_buffers(iter::once(barrier));
-            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
-            encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
-        }
+        {
+            let (mut queue_inner_guard, _) = token.lock(&device.queue.inner);
+            // let pending_writes = token.lock(&device.queue.pending_writes).0;
+            // let pending_writes = &mut queue_inner_guard.pending_writes;
+            // NOTE: Must wait until the pending writes are locked to assign a submission index, to
+            // make sure we don't miss the scheduled writes.
+            dst.life_guard.use_at(queue_inner_guard.active_submission_index + 1);
+            let encoder = queue_inner_guard.pending_writes.activate();
+            unsafe {
+                encoder.transition_buffers(iter::once(barrier));
+                encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
+                encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
+            }
 
-        device.pending_writes.consume(stage);
-        device
-            .pending_writes
-            .dst_textures
-            .insert(destination.texture);
+            queue_inner_guard.pending_writes.consume(stage);
+            queue_inner_guard.pending_writes
+                .dst_textures
+                .insert(destination.texture);
+        }
 
         Ok(())
     }
 
-    pub fn queue_submit<A: HalApi>(
+    pub fn queue_submit<A: HalApi + core::fmt::Debug, I: Iterator<Item=id::CommandBufferId>>(
         &self,
-        queue_id: id::QueueId,
-        command_buffer_ids: &[id::CommandBufferId],
+        queue_id: /*id::QueueId*/id::IdGuard<A, Queue<Dummy>>,
+        command_buffer_ids: /*&[id::CommandBufferId]*/I,
     ) -> Result<(), QueueSubmitError> {
         profiling::scope!("submit", "Queue");
 
@@ -522,42 +548,67 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let hub = A::hub(self);
             let mut token = Token::root();
 
-            let (mut device_guard, mut token) = hub.devices.write(&mut token);
-            let device = device_guard
-                .get_mut(queue_id)
-                .map_err(|_| DeviceError::Invalid)?;
-            device.temp_suspected.clear();
-            device.active_submission_index += 1;
-            let submit_index = device.active_submission_index;
+            // let (mut device_guard, mut token) = hub.devices.write(&mut token);
+            let device = /*device_guard
+                .get_mut(*/&*queue_id/*)
+                .map_err(|_| DeviceError::Invalid)?*/;
+            let (mut temp_suspected, mut token) = token.lock(&hub.temp_suspected);
+            temp_suspected.clear();
+
+            // FIXME: I didn't bother to optimize the locks here, for the simple reason that they
+            // are all (hopefully!) going to go away after the hubs refactor.  But if any are still
+            // here, remember to try to drop as soon as possible to avoid blocking the queue.
+            // let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
+            // let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+            let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
+            let (mut texture_guard, mut token) = hub.textures.write(&mut token);
+            let (mut trackers, mut token) = token.lock::<super::Trackers<A>>(&device.trackers);
+            let (mut queue_inner_guard, mut token) = token.lock(&device.queue.inner);
+            // let pending_writes = token.lock(&device.queue.pending_writes).0;
+            let super::QueueInner {
+                ref mut pending_writes,
+                raw: ref mut queue,
+                ref mut fence,
+                ref mut active_submission_index,
+            } = &mut **queue_inner_guard;
+
+            // NOTE: Must wait until the pending writes are locked to assign a submission index, to
+            // make sure we synchronize with reads of the index from concurrent writers trying to add
+            // new pending operations.
+            let submit_index = active_submission_index.checked_add(1)
+                // TODO: Abort?  Not clear just panicking is sound here (especially if we switch
+                // this to an atomic).
+                .expect("SubmissionIndex overflow: please try to avoid submitting to a queue more than\
+                        u64::MAX times! (in the likely case that you did not actually do this, this is\
+                        probably a bug in wgpu-core)");
+            *active_submission_index = submit_index;
             let mut active_executions = Vec::new();
             let mut used_surface_textures = track::ResourceTracker::new(A::VARIANT);
 
             {
                 let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
 
-                if !command_buffer_ids.is_empty() {
+                // NOTE: If the iterator lies about its upper bound, the worst thing that can
+                // happen is that no commands are processed; we don't rely on this for memory
+                // safety, only correctness.
+                if command_buffer_ids.size_hint().1 != Some(0) {
                     profiling::scope!("prepare");
 
-                    let (render_bundle_guard, mut token) = hub.render_bundles.read(&mut token);
-                    let (_, mut token) = hub.pipeline_layouts.read(&mut token);
-                    let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-                    let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
-                    let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
-                    let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
-                    let (texture_guard, mut token) = hub.textures.write(&mut token);
-                    let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
-                    let (sampler_guard, mut token) = hub.samplers.read(&mut token);
-                    let (query_set_guard, _) = hub.query_sets.read(&mut token);
-
-                    //Note: locking the trackers has to be done after the storages
-                    let mut trackers = device.trackers.lock();
+                    // let (render_bundle_guard, mut token) = hub.render_bundles.read(&mut token);
+                    // let (_, mut token) = hub.pipeline_layouts.read(&mut token);
+                    // let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+                    // let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
+                    // let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
+                    // let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
+                    let (texture_view_guard, _) = hub.texture_views.read(&mut token);
+                    // let (sampler_guard, _) = hub.samplers.read(&mut token);
 
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
                     // a temporary one, since the chains are not finished.
 
                     // finish all the command buffers first
-                    for &cmb_id in command_buffer_ids {
+                    for cmb_id in command_buffer_ids {
                         let mut cmdbuf = match hub
                             .command_buffers
                             .unregister_locked(cmb_id, &mut *command_buffer_guard)
@@ -567,21 +618,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         #[cfg(feature = "trace")]
                         if let Some(ref trace) = device.trace {
-                            trace.lock().add(Action::Submit(
+                            trace.add(Action::Submit(
                                 submit_index,
                                 cmdbuf.commands.take().unwrap(),
                             ));
                         }
                         if !cmdbuf.is_finished() {
-                            device.destroy_command_buffer(cmdbuf);
+                            /*device.*/Device::destroy_command_buffer(cmdbuf);
                             continue;
                         }
 
                         // optimize the tracked states
                         cmdbuf.trackers.optimize();
 
+                        let mut baked = cmdbuf.into_baked();
+
                         // update submission IDs
-                        for id in cmdbuf.trackers.buffers.used() {
+                        for id in baked.trackers.buffers.used() {
                             let buffer = &mut buffer_guard[id];
                             let raw_buf = match buffer.raw {
                                 Some(ref raw) => raw,
@@ -595,7 +648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     unsafe { device.raw.unmap_buffer(raw_buf) }
                                         .map_err(DeviceError::from)?;
                                 }
-                                device.temp_suspected.buffers.push(id);
+                                temp_suspected.buffers.push(id);
                             } else {
                                 match buffer.map_state {
                                     BufferMapState::Idle => (),
@@ -603,7 +656,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }
                         }
-                        for id in cmdbuf.trackers.textures.used() {
+                        for id in baked.trackers.textures.used() {
                             let texture = &texture_guard[id];
                             match texture.inner {
                                 TextureInner::Native { raw: None } => {
@@ -612,14 +665,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 TextureInner::Native { raw: Some(_) } => {}
                                 TextureInner::Surface { .. } => {
                                     use track::ResourceState as _;
-                                    let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
+                                    let ref_count = baked.trackers.textures.get_ref_count(id);
                                     //TODO: better error handling here?
                                     {
                                         // first, register it in the device tracker with uninitialized,
                                         // if it wasn't used before.
                                         let mut ts = track::TextureState::default();
                                         let _ = ts.change(
-                                            id,
+                                            &id,
                                             texture.full_range.clone(),
                                             hal::TextureUses::UNINITIALIZED,
                                             None,
@@ -634,7 +687,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         // then, register it in the temporary tracker.
                                         let mut ts = track::TextureState::default();
                                         let _ = ts.change(
-                                            id,
+                                            &id,
                                             texture.full_range.clone(),
                                             hal::TextureUses::empty(),
                                             None,
@@ -645,62 +698,62 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }
                             if !texture.life_guard.use_at(submit_index) {
-                                device.temp_suspected.textures.push(id);
+                                temp_suspected.textures.push(id);
                             }
                         }
-                        for id in cmdbuf.trackers.views.used() {
+                        for id in baked.trackers.views.used() {
                             if !texture_view_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.texture_views.push(id);
+                                temp_suspected.texture_views.push(id);
                             }
                         }
-                        for id in cmdbuf.trackers.bind_groups.used() {
-                            let bg = &bind_group_guard[id];
-                            if !bg.life_guard.use_at(submit_index) {
-                                device.temp_suspected.bind_groups.push(id);
-                            }
+                        for bg in baked.trackers.bind_groups.used() {
+                            /* if !bg.life_guard.use_at(submit_index) {
+                                temp_suspected.bind_groups.push(id);
+                            } */
                             // We need to update the submission indices for the contained
                             // state-less (!) resources as well, so that they don't get
                             // deleted too early if the parent bind group goes out of scope.
                             for sub_id in bg.used.views.used() {
                                 texture_view_guard[sub_id].life_guard.use_at(submit_index);
                             }
-                            for sub_id in bg.used.samplers.used() {
+                            /* for sub_id in bg.used.samplers.used() {
                                 sampler_guard[sub_id].life_guard.use_at(submit_index);
-                            }
+                            } */
                         }
-                        assert!(cmdbuf.trackers.samplers.is_empty());
-                        for id in cmdbuf.trackers.compute_pipes.used() {
+                        assert!(baked.trackers.samplers.is_empty());
+                        /* for id in baked.trackers.compute_pipes.used() {
                             if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.compute_pipelines.push(id);
+                                temp_suspected.compute_pipelines.push(id);
                             }
-                        }
-                        for id in cmdbuf.trackers.render_pipes.used() {
+                        } */
+                        /* for id in baked.trackers.render_pipes.used() {
                             if !render_pipe_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.render_pipelines.push(id);
+                                temp_suspected.render_pipelines.push(id);
                             }
-                        }
-                        for id in cmdbuf.trackers.query_sets.used() {
+                        } */
+                        /* for id in baked.trackers.query_sets.used() {
                             if !query_set_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.query_sets.push(id);
+                                temp_suspected.query_sets.push(id);
                             }
-                        }
-                        for id in cmdbuf.trackers.bundles.used() {
+                        } */
+                        /* for id in baked.trackers.bundles.used() {
                             let bundle = &render_bundle_guard[id];
                             if !bundle.life_guard.use_at(submit_index) {
-                                device.temp_suspected.render_bundles.push(id);
+                                temp_suspected.render_bundles.push(id);
                             }
                             // We need to update the submission indices for the contained
                             // state-less (!) resources as well, excluding the bind groups.
                             // They don't get deleted too early if the bundle goes out of scope.
-                            for sub_id in bundle.used.compute_pipes.used() {
+                            // FIXME: Until render bundles are Arc'd, these being commented out is
+                            // unsound!
+                            /* for sub_id in bundle.used.compute_pipes.used() {
                                 compute_pipe_guard[sub_id].life_guard.use_at(submit_index);
-                            }
-                            for sub_id in bundle.used.render_pipes.used() {
+                            } */
+                            /* for sub_id in bundle.used.render_pipes.used() {
                                 render_pipe_guard[sub_id].life_guard.use_at(submit_index);
-                            }
-                        }
+                            } */
+                        } */
 
-                        let mut baked = cmdbuf.into_baked();
                         // execute resource transitions
                         unsafe {
                             baked
@@ -722,6 +775,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*buffer_guard,
                             &*texture_guard,
                         );
+
+                        // FIXME: Remove this.
+                        //
+                        // Creating new TrackerSet (temporarily) to hold the contents of any
+                        // tracked resources not in the hub.
+                        let backend = A::VARIANT;
+                        let temp_tracker_set = TrackerSet {
+                            buffers: ResourceTracker::new(backend),
+                            textures: ResourceTracker::new(backend),
+                            views: ResourceTracker::new(backend),
+                            bind_groups: baked.trackers.bind_groups,
+                            samplers: baked.trackers.samplers,
+                            compute_pipes: baked.trackers.compute_pipes,
+                            render_pipes: baked.trackers.render_pipes,
+                            bundles: baked.trackers.bundles,
+                            query_sets: baked.trackers.query_sets,
+                        };
 
                         let transit = unsafe { baked.encoder.end_encoding().unwrap() };
                         baked.list.insert(0, transit);
@@ -755,18 +825,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         active_executions.push(EncoderInFlight {
                             raw: baked.encoder,
                             cmd_buffers: baked.list,
+                            _trackers: temp_tracker_set,
                         });
                     }
 
                     log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
                 }
 
-                let super::Device {
-                    ref mut pending_writes,
-                    ref mut queue,
-                    ref mut fence,
-                    ..
-                } = *device;
                 let refs = pending_writes
                     .pre_submit()
                     .into_iter()
@@ -784,17 +849,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             profiling::scope!("cleanup");
-            if let Some(pending_execution) = device.pending_writes.post_submit(
-                &device.command_allocator,
+            if let Some(pending_execution) = pending_writes.post_submit(
+                &device.queue.command_allocator,
                 &device.raw,
-                &device.queue,
+                queue,
             ) {
                 active_executions.push(pending_execution);
             }
 
             // this will register the new submission to the life time tracker
-            let mut pending_write_resources = mem::take(&mut device.pending_writes.temp_resources);
-            device.lock_life(&mut token).track_submission(
+            let mut pending_write_resources = mem::take(&mut pending_writes.temp_resources);
+            token.lock(&device.queue.life_tracker).0.track_submission(
                 submit_index,
                 pending_write_resources.drain(..),
                 active_executions,
@@ -802,15 +867,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let closures = match device.maintain(hub, false, &mut token) {
+            let closures = match device.maintain(hub, false, &*temp_suspected, /* &mut *bgl_guard, */&mut *buffer_guard, &mut *texture_guard, &mut *trackers, &*queue_inner_guard, &mut token) {
                 Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
             };
 
-            device.pending_writes.temp_resources = pending_write_resources;
-            device.temp_suspected.clear();
-            device.lock_life(&mut token).post_submit();
+            queue_inner_guard.pending_writes.temp_resources = pending_write_resources;
+            temp_suspected.clear();
+            token.lock(&device.queue.life_tracker).0.post_submit();
 
             closures
         };
@@ -824,31 +889,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn queue_get_timestamp_period<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
-    ) -> Result<f32, InvalidQueue> {
-        let hub = A::hub(self);
+        _queue_id: /*id::QueueId*/id::IdGuard<A, Queue<Dummy>>,
+    ) -> /*Result<f32, InvalidQueue>*/f32 {
+        /* let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         match device_guard.get(queue_id) {
-            Ok(_device) => Ok(1.0), //TODO?
-            Err(_) => Err(InvalidQueue),
-        }
+            Ok(_device) => Ok(*/1.0/*),*/ //TODO?
+            /*Err(_) => Err(InvalidQueue),
+        } */
     }
 
     pub fn queue_on_submitted_work_done<A: HalApi>(
-        &self,
-        queue_id: id::QueueId,
+        // &self,
+        queue_id: /*id::QueueId*/id::IdGuard<A, Queue<Dummy>>,
         closure: SubmittedWorkDoneClosure,
     ) -> Result<(), InvalidQueue> {
         //TODO: flush pending writes
+        let mut token = Token::root();
         let added = {
-            let hub = A::hub(self);
-            let mut token = Token::root();
-            let (device_guard, mut token) = hub.devices.read(&mut token);
-            match device_guard.get(queue_id) {
-                Ok(device) => device.lock_life(&mut token).add_work_done_closure(closure),
+            // let hub = A::hub(self);
+            // let (device_guard, mut token) = hub.devices.read(&mut token);
+            /*match device_guard.get(queue_id) {
+                Ok(device) => device.lock_life(&mut token)*/token.lock(&queue_id.queue.life_tracker).0.add_work_done_closure(closure)/*,
                 Err(_) => return Err(InvalidQueue),
-            }
+            }*/
         };
         if !added {
             unsafe {

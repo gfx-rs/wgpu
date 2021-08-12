@@ -103,7 +103,6 @@ impl framework::Example for Skybox {
 
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -140,9 +139,9 @@ impl framework::Example for Skybox {
             }
         }
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let bind_group_layout = device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
             label: None,
-            entries: &[
+            entries: &mut [
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
@@ -201,9 +200,9 @@ impl framework::Example for Skybox {
         });
 
         // Create the render pipelines
-        let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let sky_pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: Some("Sky"),
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout.clone()),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_sky",
@@ -227,9 +226,9 @@ impl framework::Example for Skybox {
             }),
             multisample: wgpu::MultisampleState::default(),
         });
-        let entity_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let entity_pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: Some("Entity"),
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_entity",

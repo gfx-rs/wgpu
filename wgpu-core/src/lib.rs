@@ -43,7 +43,7 @@ pub mod pipeline;
 pub mod present;
 pub mod resource;
 mod track;
-mod validation;
+pub mod validation;
 
 pub use hal::api;
 
@@ -114,7 +114,7 @@ impl Drop for RefCount {
     }
 }
 
-/// Reference count object that tracks multiple references.
+/* /// Reference count object that tracks multiple references.
 /// Unlike `RefCount`, it's manually inc()/dec() called.
 #[derive(Debug)]
 struct MultiRefCount(ptr::NonNull<AtomicUsize>);
@@ -142,7 +142,7 @@ impl Drop for MultiRefCount {
     fn drop(&mut self) {
         let _ = unsafe { Box::from_raw(self.0.as_ptr()) };
     }
-}
+} */
 
 #[derive(Debug)]
 pub struct LifeGuard {
@@ -194,28 +194,221 @@ platform supports.";
 
 #[macro_export]
 macro_rules! gfx_select {
-    ($id:expr => $global:ident.$method:ident( $($param:expr),* )) => {
+    ($id:expr => $(< $( $typaram:ty ),* >)? $global:ident.$method:ident( $($param:expr),* )) => {
         // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
         // macro so we must specify their equivalents manually
         match $id.backend() {
             #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
-            wgt::Backend::Vulkan => $global.$method::<$crate::api::Vulkan>( $($param),* ),
+            wgt::Backend::Vulkan => $global.$method::<$crate::api::Vulkan $($(, $typaram)*)?>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
-            wgt::Backend::Metal => $global.$method::<$crate::api::Metal>( $($param),* ),
+            wgt::Backend::Metal => $global.$method::<$crate::api::Metal  $($(, $typaram)*)?>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), windows))]
-            wgt::Backend::Dx12 => $global.$method::<$crate::api::Dx12>( $($param),* ),
+            wgt::Backend::Dx12 => $global.$method::<$crate::api::Dx12 $($(, $typaram)*)?>( $($param),* ),
             //#[cfg(all(not(target_arch = "wasm32"), windows))]
-            //wgt::Backend::Dx11 => $global.$method::<$crate::api::Dx11>( $($param),* ),
-            #[cfg(all(not(target_arch = "wasm32"), unix, not(any(target_os = "ios", target_os = "macos"))))]
-            wgt::Backend::Gl => $global.$method::<$crate::api::Gles>( $($param),+ ),
+            //wgt::Backend::Dx11 => $global.$method::<$crate::api::Dx11 $($(, $typaram)*)?>( $($param),* ),
+            #[cfg(any(target_arch = "wasm32", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
+            wgt::Backend::Gl => $global.$method::<$crate::api::Gles $($(, $typaram)*)?>( $($param),+ ),
             other => panic!("Unexpected backend {:?}", other),
 
         }
     };
 }
 
+#[macro_export]
+macro_rules! gfx_select2 {
+    (&Box $id:ident => $expr:expr) => { {
+        // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
+        // macro so we must specify their equivalents manually
+
+        // Safety: assert that this is really a &BoxId2.
+        let _ : &$crate::id::BoxId2<_> = $id;
+        // let ptr : usize = ((*core::borrow::Borrow::<usize>::borrow($id)) & !$crate::id::BACKEND_MASK);
+        match $id.backend() {
+            #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
+            wgt::Backend::Vulkan => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_box_unchecked::<_, $crate::api::Vulkan>($id)
+                };
+                $expr
+            },
+            #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
+            wgt::Backend::Metal => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_box_unchecked::<_, $crate::api::Metal>($id)
+                };
+                $expr
+            },
+            #[cfg(all(not(target_arch = "wasm32"), windows))]
+            wgt::Backend::Dx12 => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_box_unchecked::<_, $crate::api::Dx12>($id)
+                };
+                $expr
+            },
+            //#[cfg(all(not(target_arch = "wasm32"), windows))]
+            //wgt::Backend::Dx11 => {
+            //    let $id = unsafe {
+            //        $crate::id::expect_backend_box_unchecked::<_, $crate::api::Dx11>($id)
+            //    };
+            //    $expr
+            //},
+            #[cfg(any(target_arch = "wasm32", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
+            wgt::Backend::Gl => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_box_unchecked::<_, $crate::api::Gles>($id)
+                };
+                $expr
+            },
+            other => panic!("Unexpected backend {:?}", other),
+        }
+    } };
+    (Box $id:ident => $expr:expr) => { {
+        // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
+        // macro so we must specify their equivalents manually
+        // Safety: assert that this is really a BoxId2.
+        let $id : $crate::id::BoxId2<_> = $id;
+        /* // Also, make sure not to run the BoxId2 destructor directly.
+        let $id : ::core::mem::ManuallyDrop<$crate::id::BoxId2<$idty>> = ::core::mem::ManuallyDrop::new($id);
+        let ptr : usize = ((*core::borrow::Borrow::<usize>::borrow(&*$id)) & !$crate::id::BACKEND_MASK); */
+        /*let backend = $id.backend();*/
+        match /*backend*/$id.backend() {
+            #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
+            wgt::Backend::Vulkan => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_box_owned_unchecked::<_, $crate::api::Vulkan>($id)
+                    // Box::from_raw(ptr as *mut <$idty as $crate::id::CastBackend<$crate::api::Vulkan, Id=$crate::id::BoxId2<$idty>>>::Output)
+                };
+                $expr
+            },
+            #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
+            wgt::Backend::Metal => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_box_owned_unchecked::<_, $crate::api::Metal>($id)
+                    // Box::from_raw(ptr as *mut <$idty as $crate::id::CastBackend<$crate::api::Metal, Id=$crate::id::BoxId2<$idty>>>::Output)
+                };
+                $expr
+            },
+            #[cfg(all(not(target_arch = "wasm32"), windows))]
+            wgt::Backend::Dx12 => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_box_owned_unchecked::<_, $crate::api::Dx12>($id)
+                    // Box::from_raw(ptr as *mut <$idty as $crate::id::CastBackend<$crate::api::Dx12, Id=$crate::id::BoxId2<$idty>>>::Output)
+                };
+                $expr
+            },
+            //#[cfg(all(not(target_arch = "wasm32"), windows))]
+            //wgt::Backend::Dx11 => {
+            //    let $id = unsafe {
+            //        $crate::id::expect_backend_box_owned_unchecked::<_, $crate::api::Dx122>($id)
+            //        // Box::from_raw(ptr as *mut <$idty as $crate::id::CastBackend<$crate::api::Dx11, Id=$crate::id::BoxId2<$idty>>>::Output)
+            //    };
+            //    $expr
+            //},
+            #[cfg(any(target_arch = "wasm32", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
+            wgt::Backend::Gl => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_box_owned_unchecked::<_, $crate::api::Gles>($id)
+                    // Box::from_raw(ptr as *mut <$idty as $crate::id::CastBackend<$crate::api::Gles, Id=$crate::id::BoxId2<$idty>>>::Output)
+                };
+                $expr
+            },
+            other => panic!("Unexpected backend {:?}", other),
+        }
+    } };
+    (&Arc $id:ident => $expr:expr) => { {
+        // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
+        // macro so we must specify their equivalents manually
+
+        // Safety: assert that this is really a &Id2.
+        let _ : &$crate::id::Id2<_> = $id;
+        match $id.backend() {
+            #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
+            wgt::Backend::Vulkan => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_unchecked::<_, $crate::api::Vulkan>($id)
+                };
+                $expr
+            },
+            #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
+            wgt::Backend::Metal => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_unchecked::<_, $crate::api::Metal>($id)
+                };
+                $expr
+            },
+            #[cfg(all(not(target_arch = "wasm32"), windows))]
+            wgt::Backend::Dx12 => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_unchecked::<_, $crate::api::Dx12>($id)
+                };
+                $expr
+            },
+            //#[cfg(all(not(target_arch = "wasm32"), windows))]
+            //wgt::Backend::Dx11 => {
+            //    let $id = unsafe {
+            //        $crate::id::expect_backend_unchecked::<_, $crate::api::Dx11>($id)
+            //    };
+            //    $expr
+            //},
+            #[cfg(any(target_arch = "wasm32", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
+            wgt::Backend::Gl => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_unchecked::<_, $crate::api::Gles>($id)
+                };
+                $expr
+            },
+            other => panic!("Unexpected backend {:?}", other),
+        }
+    } };
+    (Arc $id:ident => $expr:expr) => { {
+        // Note: For some reason the cfg aliases defined in build.rs don't succesfully apply in this
+        // macro so we must specify their equivalents manually
+
+        // Safety: assert that this is really an Id2.
+        let $id : $crate::id::Id2<_> = $id;
+        match $id.backend() {
+            #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")))]
+            wgt::Backend::Vulkan => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_owned_unchecked::<_, $crate::api::Vulkan>($id)
+                };
+                $expr
+            },
+            #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
+            wgt::Backend::Metal => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_owned_unchecked::<_, $crate::api::Metal>($id)
+                };
+                $expr
+            },
+            #[cfg(all(not(target_arch = "wasm32"), windows))]
+            wgt::Backend::Dx12 => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_owned_unchecked::<_, $crate::api::Dx12>($id)
+                };
+                $expr
+            },
+            //#[cfg(all(not(target_arch = "wasm32"), windows))]
+            //wgt::Backend::Dx11 => {
+            //    let $id = unsafe {
+            //        $crate::id::expect_backend_owned_unchecked::<_, $crate::api::Dx11>($id)
+            //    };
+            //    $expr
+            //},
+            #[cfg(any(target_arch = "wasm32", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
+            wgt::Backend::Gl => {
+                let $id = unsafe {
+                    $crate::id::expect_backend_owned_unchecked::<_, $crate::api::Gles>($id)
+                };
+                $expr
+            },
+            other => panic!("Unexpected backend {:?}", other),
+        }
+    } };
+}
+
 /// Fast hash map used internally.
 type FastHashMap<K, V> =
-    std::collections::HashMap<K, V, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
+    hashbrown::HashMap<K, V, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
 /// Fast hash set used internally.
-type FastHashSet<K> = std::collections::HashSet<K, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
+type FastHashSet<K> = hashbrown::HashSet<K, std::hash::BuildHasherDefault<fxhash::FxHasher>>;

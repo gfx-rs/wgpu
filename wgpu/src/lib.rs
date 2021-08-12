@@ -43,40 +43,40 @@ pub use wgt::{
 
 use backend::{BufferMappedRange, Context as C};
 
-trait ComputePassInner<Ctx: Context> {
-    fn set_pipeline(&mut self, pipeline: &Ctx::ComputePipelineId);
+trait ComputePassInner<'a, Ctx: Context<'a>> {
+    fn set_pipeline(&mut self, pipeline: &'a Ctx::ComputePipelineId);
     fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &Ctx::BindGroupId,
+        bind_group: &'a Ctx::BindGroupId,
         offsets: &[DynamicOffset],
     );
     fn set_push_constants(&mut self, offset: u32, data: &[u8]);
     fn insert_debug_marker(&mut self, label: &str);
     fn push_debug_group(&mut self, group_label: &str);
     fn pop_debug_group(&mut self);
-    fn write_timestamp(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
-    fn begin_pipeline_statistics_query(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
+    fn write_timestamp(&mut self, query_set: &'a Ctx::QuerySetId, query_index: u32);
+    fn begin_pipeline_statistics_query(&mut self, query_set: &'a Ctx::QuerySetId, query_index: u32);
     fn end_pipeline_statistics_query(&mut self);
     fn dispatch(&mut self, x: u32, y: u32, z: u32);
     fn dispatch_indirect(
         &mut self,
-        indirect_buffer: &Ctx::BufferId,
+        indirect_buffer: &'a Ctx::BufferId,
         indirect_offset: BufferAddress,
     );
 }
 
-trait RenderInner<Ctx: Context> {
-    fn set_pipeline(&mut self, pipeline: &Ctx::RenderPipelineId);
+trait RenderInner<'a, Ctx: Context<'a>> {
+    fn set_pipeline(&mut self, pipeline: &'a Ctx::RenderPipelineId);
     fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &Ctx::BindGroupId,
+        bind_group: &'a Ctx::BindGroupId,
         offsets: &[DynamicOffset],
     );
     fn set_index_buffer(
         &mut self,
-        buffer: &Ctx::BufferId,
+        buffer: &'a Ctx::BufferId,
         index_format: IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
@@ -84,50 +84,50 @@ trait RenderInner<Ctx: Context> {
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &Ctx::BufferId,
+        buffer: &'a Ctx::BufferId,
         offset: BufferAddress,
         size: Option<BufferSize>,
     );
     fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]);
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
-    fn draw_indirect(&mut self, indirect_buffer: &Ctx::BufferId, indirect_offset: BufferAddress);
+    fn draw_indirect(&mut self, indirect_buffer: &'a Ctx::BufferId, indirect_offset: BufferAddress);
     fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &Ctx::BufferId,
+        indirect_buffer: &'a Ctx::BufferId,
         indirect_offset: BufferAddress,
     );
     fn multi_draw_indirect(
         &mut self,
-        indirect_buffer: &Ctx::BufferId,
+        indirect_buffer: &'a Ctx::BufferId,
         indirect_offset: BufferAddress,
         count: u32,
     );
     fn multi_draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &Ctx::BufferId,
+        indirect_buffer: &'a Ctx::BufferId,
         indirect_offset: BufferAddress,
         count: u32,
     );
     fn multi_draw_indirect_count(
         &mut self,
-        indirect_buffer: &Ctx::BufferId,
+        indirect_buffer: &'a Ctx::BufferId,
         indirect_offset: BufferAddress,
-        count_buffer: &Ctx::BufferId,
+        count_buffer: &'a Ctx::BufferId,
         count_buffer_offset: BufferAddress,
         max_count: u32,
     );
     fn multi_draw_indexed_indirect_count(
         &mut self,
-        indirect_buffer: &Ctx::BufferId,
+        indirect_buffer: &'a Ctx::BufferId,
         indirect_offset: BufferAddress,
-        count_buffer: &Ctx::BufferId,
+        count_buffer: &'a Ctx::BufferId,
         count_buffer_offset: BufferAddress,
         max_count: u32,
     );
 }
 
-trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
+trait RenderPassInner<'a, Ctx: Context<'a>> : RenderInner<'a, Ctx> {
     fn set_blend_constant(&mut self, color: Color);
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32);
     fn set_viewport(
@@ -143,16 +143,18 @@ trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
     fn insert_debug_marker(&mut self, label: &str);
     fn push_debug_group(&mut self, group_label: &str);
     fn pop_debug_group(&mut self);
-    fn write_timestamp(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
-    fn begin_pipeline_statistics_query(&mut self, query_set: &Ctx::QuerySetId, query_index: u32);
+    fn write_timestamp(&mut self, query_set: &'a Ctx::QuerySetId, query_index: u32);
+    fn begin_pipeline_statistics_query(&mut self, query_set: &'a Ctx::QuerySetId, query_index: u32);
     fn end_pipeline_statistics_query(&mut self);
-    fn execute_bundles<'a, I: Iterator<Item = &'a Ctx::RenderBundleId>>(
+    fn execute_bundles<I: Iterator<Item = &'a Ctx::RenderBundleId>>(
         &mut self,
         render_bundles: I,
     );
 }
 
-trait Context: Debug + Send + Sized + Sync {
+trait Context<'a> : Debug + Send + Sized + Sync {
+    // type IdCon: AllResources<wgc::hal::api::Empty>;
+
     type AdapterId: Debug + Send + Sync + 'static;
     type DeviceId: Debug + Send + Sync + 'static;
     type QueueId: Debug + Send + Sync + 'static;
@@ -168,10 +170,10 @@ trait Context: Debug + Send + Sized + Sync {
     type RenderPipelineId: Debug + Send + Sync + 'static;
     type ComputePipelineId: Debug + Send + Sync + 'static;
     type CommandEncoderId: Debug;
-    type ComputePassId: Debug + ComputePassInner<Self>;
-    type RenderPassId: Debug + RenderPassInner<Self>;
+    type ComputePassId: Debug + ComputePassInner<'a, Self>;
+    type RenderPassId: Debug + RenderPassInner<'a, Self>;
     type CommandBufferId: Debug + Send + Sync;
-    type RenderBundleEncoderId: Debug + RenderInner<Self>;
+    type RenderBundleEncoderId: Debug + RenderInner<'a, Self>;
     type RenderBundleId: Debug + Send + Sync + 'static;
     type SurfaceId: Debug + Send + Sync + 'static;
 
@@ -194,22 +196,22 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> Self::RequestAdapterFuture;
     fn adapter_request_device(
         &self,
-        adapter: &Self::AdapterId,
+        adapter: Self::AdapterId,
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
-    fn instance_poll_all_devices(&self, force_wait: bool);
+    // fn instance_poll_all_devices(&self, force_wait: bool);
     fn adapter_is_surface_supported(
         &self,
         adapter: &Self::AdapterId,
         surface: &Self::SurfaceId,
     ) -> bool;
-    fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
-    fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
-    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities;
-    fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
+    fn adapter_features(/*&self, */adapter: &Self::AdapterId) -> Features;
+    fn adapter_limits(/*&self, */adapter: &Self::AdapterId) -> Limits;
+    fn adapter_downlevel_properties(/*&self, */adapter: &Self::AdapterId) -> DownlevelCapabilities;
+    fn adapter_get_info(/*&self, */adapter: &Self::AdapterId) -> AdapterInfo;
     fn adapter_get_texture_format_features(
-        &self,
+        // &self,
         adapter: &Self::AdapterId,
         format: TextureFormat,
     ) -> TextureFormatFeatures;
@@ -235,9 +237,9 @@ trait Context: Debug + Send + Sized + Sync {
     );
     fn surface_present(&self, texture: &Self::TextureId, detail: &Self::SurfaceOutputDetail);
 
-    fn device_features(&self, device: &Self::DeviceId) -> Features;
-    fn device_limits(&self, device: &Self::DeviceId) -> Limits;
-    fn device_downlevel_properties(&self, device: &Self::DeviceId) -> DownlevelCapabilities;
+    fn device_features(/*&self, */device: &Self::DeviceId) -> Features;
+    fn device_limits(/*&self, */device: &Self::DeviceId) -> Limits;
+    fn device_downlevel_properties(/*&self, */device: &Self::DeviceId) -> DownlevelCapabilities;
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
@@ -251,7 +253,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn device_create_bind_group_layout(
         &self,
         device: &Self::DeviceId,
-        desc: &BindGroupLayoutDescriptor,
+        desc: BindGroupLayoutDescriptor,
     ) -> Self::BindGroupLayoutId;
     fn device_create_bind_group(
         &self,
@@ -266,12 +268,12 @@ trait Context: Debug + Send + Sized + Sync {
     fn device_create_render_pipeline(
         &self,
         device: &Self::DeviceId,
-        desc: &RenderPipelineDescriptor,
+        desc: RenderPipelineDescriptor,
     ) -> Self::RenderPipelineId;
     fn device_create_compute_pipeline(
         &self,
         device: &Self::DeviceId,
-        desc: &ComputePipelineDescriptor,
+        desc: ComputePipelineDescriptor,
     ) -> Self::ComputePipelineId;
     fn device_create_buffer(
         &self,
@@ -300,9 +302,10 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> Self::CommandEncoderId;
     fn device_create_render_bundle_encoder(
         &self,
-        device: &Self::DeviceId,
+        device: &'a Self::DeviceId,
         desc: &RenderBundleEncoderDescriptor,
-    ) -> Self::RenderBundleEncoderId;
+    ) -> /*<Self::IdCon as Hkt<crate::binding_model::BindGroup<wgc::hal::api::Empty>>>*/Self::RenderBundleEncoderId;
+    /// FIXME: Remove this when possible.
     fn device_drop(&self, device: &Self::DeviceId);
     fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain);
     fn device_on_uncaptured_error(
@@ -330,31 +333,31 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> Self::TextureViewId;
 
     fn surface_drop(&self, surface: &Self::SurfaceId);
-    fn adapter_drop(&self, adapter: &Self::AdapterId);
+    // fn adapter_drop(&self, adapter: &Self::AdapterId);
     fn buffer_destroy(&self, buffer: &Self::BufferId);
     fn buffer_drop(&self, buffer: &Self::BufferId);
     fn texture_destroy(&self, buffer: &Self::TextureId);
     fn texture_drop(&self, texture: &Self::TextureId);
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId);
-    fn sampler_drop(&self, sampler: &Self::SamplerId);
-    fn query_set_drop(&self, query_set: &Self::QuerySetId);
-    fn bind_group_drop(&self, bind_group: &Self::BindGroupId);
-    fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId);
-    fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId);
-    fn shader_module_drop(&self, shader_module: &Self::ShaderModuleId);
+    // fn sampler_drop(/*&self, */sampler: /*&*/&mut Self::SamplerId);
+    // fn query_set_drop(/*&self, */query_set: /*&*/&mut Self::QuerySetId);
+    // fn bind_group_drop(/*&self, */bind_group: /*&*/&mut Self::BindGroupId);
+    // fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId);
+    // fn pipeline_layout_drop(/*&self, */pipeline_layout: /*&*/&mut Self::PipelineLayoutId);
+    // fn shader_module_drop(/*&self, */shader_module: /*&*/&mut Self::ShaderModuleId);
     fn command_encoder_drop(&self, command_encoder: &Self::CommandEncoderId);
     fn command_buffer_drop(&self, command_buffer: &Self::CommandBufferId);
-    fn render_bundle_drop(&self, render_bundle: &Self::RenderBundleId);
-    fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId);
-    fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId);
+    // fn render_bundle_drop(&self, render_bundle: &Self::RenderBundleId);
+    // fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId);
+    // fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId);
 
     fn compute_pipeline_get_bind_group_layout(
-        &self,
+        // &self,
         pipeline: &Self::ComputePipelineId,
         index: u32,
     ) -> Self::BindGroupLayoutId;
     fn render_pipeline_get_bind_group_layout(
-        &self,
+        // &self,
         pipeline: &Self::RenderPipelineId,
         index: u32,
     ) -> Self::BindGroupLayoutId;
@@ -400,10 +403,10 @@ trait Context: Debug + Send + Sized + Sync {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::ComputePassId,
     );
-    fn command_encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass<'b>(
         &self,
         encoder: &Self::CommandEncoderId,
-        desc: &RenderPassDescriptor<'a, '_>,
+        desc: &RenderPassDescriptor<'b, '_>,
     ) -> Self::RenderPassId;
     fn command_encoder_end_render_pass(
         &self,
@@ -501,16 +504,16 @@ pub struct Instance {
 #[derive(Debug)]
 pub struct Adapter {
     context: Arc<C>,
-    id: <C as Context>::AdapterId,
+    id: <C as Context<'static>>::AdapterId,
 }
 
-impl Drop for Adapter {
+/* impl Drop for Adapter {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.adapter_drop(&self.id)
         }
     }
-}
+} */
 
 /// Open connection to a graphics and/or compute device.
 ///
@@ -521,7 +524,7 @@ impl Drop for Adapter {
 #[derive(Debug)]
 pub struct Device {
     context: Arc<C>,
-    id: <C as Context>::DeviceId,
+    id: <C as Context<'static>>::DeviceId,
 }
 
 /// Passed to [`Device::poll`] to control if it should block or not. This has no effect on
@@ -600,7 +603,7 @@ impl MapContext {
 #[derive(Debug)]
 pub struct Buffer {
     context: Arc<C>,
-    id: <C as Context>::BufferId,
+    id: <C as Context<'static>>::BufferId,
     map_context: Mutex<MapContext>,
     usage: BufferUsages,
 }
@@ -623,7 +626,7 @@ pub struct BufferSlice<'a> {
 #[derive(Debug)]
 pub struct Texture {
     context: Arc<C>,
-    id: <C as Context>::TextureId,
+    id: <C as Context<'static>>::TextureId,
     owned: bool,
 }
 
@@ -634,7 +637,7 @@ pub struct Texture {
 #[derive(Debug)]
 pub struct TextureView {
     context: Arc<C>,
-    id: <C as Context>::TextureViewId,
+    id: <C as Context<'static>>::TextureViewId,
 }
 
 /// Handle to a sampler.
@@ -644,17 +647,17 @@ pub struct TextureView {
 /// the documentation for [`SamplerDescriptor`] for more information.
 #[derive(Debug)]
 pub struct Sampler {
-    context: Arc<C>,
-    id: <C as Context>::SamplerId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::SamplerId,
 }
 
-impl Drop for Sampler {
+/* impl Drop for Sampler {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.sampler_drop(&self.id);
+            /*self.context.*/C::sampler_drop(&mut self.id);
         }
     }
-}
+} */
 
 /// Handle to a presentable surface.
 ///
@@ -663,7 +666,7 @@ impl Drop for Sampler {
 #[derive(Debug)]
 pub struct Surface {
     context: Arc<C>,
-    id: <C as Context>::SurfaceId,
+    id: <C as Context<'static>>::SurfaceId,
 }
 
 impl Drop for Surface {
@@ -682,17 +685,17 @@ impl Drop for Surface {
 /// create a [`PipelineLayoutDescriptor`], which can be used to create a [`PipelineLayout`].
 #[derive(Debug)]
 pub struct BindGroupLayout {
-    context: Arc<C>,
-    id: <C as Context>::BindGroupLayoutId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::BindGroupLayoutId,
 }
 
-impl Drop for BindGroupLayout {
+/* impl Drop for BindGroupLayout {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.bind_group_layout_drop(&self.id);
         }
     }
-}
+} */
 
 /// Handle to a binding group.
 ///
@@ -702,17 +705,17 @@ impl Drop for BindGroupLayout {
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
 #[derive(Debug)]
 pub struct BindGroup {
-    context: Arc<C>,
-    id: <C as Context>::BindGroupId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::BindGroupId,
 }
 
-impl Drop for BindGroup {
+/* impl Drop for BindGroup {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.bind_group_drop(&self.id);
+            /*self.context.*/C::bind_group_drop(&mut self.id);
         }
     }
-}
+} */
 
 /// Handle to a compiled shader module.
 ///
@@ -721,17 +724,17 @@ impl Drop for BindGroup {
 /// programmable stages of a pipeline.
 #[derive(Debug)]
 pub struct ShaderModule {
-    context: Arc<C>,
-    id: <C as Context>::ShaderModuleId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::ShaderModuleId,
 }
 
-impl Drop for ShaderModule {
+/* impl Drop for ShaderModule {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.shader_module_drop(&self.id);
+            /*self.context.*/C::shader_module_drop(&mut self.id);
         }
     }
-}
+} */
 
 /// Source of a shader module.
 pub enum ShaderSource<'a> {
@@ -769,19 +772,19 @@ pub struct ShaderModuleDescriptorSpirV<'a> {
 /// Handle to a pipeline layout.
 ///
 /// A `PipelineLayout` object describes the available binding groups of a pipeline.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PipelineLayout {
-    context: Arc<C>,
-    id: <C as Context>::PipelineLayoutId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::PipelineLayoutId,
 }
 
-impl Drop for PipelineLayout {
+/* impl Drop for PipelineLayout {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.pipeline_layout_drop(&self.id);
+            /*self.context.*/C::pipeline_layout_drop(&mut self.id);
         }
     }
-}
+} */
 
 /// Handle to a rendering (graphics) pipeline.
 ///
@@ -789,27 +792,27 @@ impl Drop for PipelineLayout {
 /// buffers and targets. A `RenderPipeline` may be created with [`Device::create_render_pipeline`].
 #[derive(Debug)]
 pub struct RenderPipeline {
-    context: Arc<C>,
-    id: <C as Context>::RenderPipelineId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::RenderPipelineId,
 }
 
-impl Drop for RenderPipeline {
+/* impl Drop for RenderPipeline {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.render_pipeline_drop(&self.id);
         }
     }
-}
+} */
 
 impl RenderPipeline {
     /// Get an object representing the bind group layout at a given index.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
-        let context = Arc::clone(&self.context);
+        // let context = Arc::clone(&self.context);
         BindGroupLayout {
-            context,
-            id: self
+            // context,
+            id: /*self
                 .context
-                .render_pipeline_get_bind_group_layout(&self.id, index),
+                .*/C::render_pipeline_get_bind_group_layout(&self.id, index),
         }
     }
 }
@@ -820,27 +823,27 @@ impl RenderPipeline {
 /// A `ComputePipeline` may be created with [`Device::create_compute_pipeline`].
 #[derive(Debug)]
 pub struct ComputePipeline {
-    context: Arc<C>,
-    id: <C as Context>::ComputePipelineId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::ComputePipelineId,
 }
 
-impl Drop for ComputePipeline {
+/* impl Drop for ComputePipeline {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.compute_pipeline_drop(&self.id);
         }
     }
-}
+} */
 
 impl ComputePipeline {
     /// Get an object representing the bind group layout at a given index.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
-        let context = Arc::clone(&self.context);
+        // let context = Arc::clone(&self.context);
         BindGroupLayout {
-            context,
-            id: self
+            // context,
+            id: /*self
                 .context
-                .compute_pipeline_get_bind_group_layout(&self.id, index),
+                .*/C::compute_pipeline_get_bind_group_layout(&self.id, index),
         }
     }
 }
@@ -853,7 +856,7 @@ impl ComputePipeline {
 #[derive(Debug)]
 pub struct CommandBuffer {
     context: Arc<C>,
-    id: Option<<C as Context>::CommandBufferId>,
+    id: Option<<C as Context<'static>>::CommandBufferId>,
 }
 
 impl Drop for CommandBuffer {
@@ -876,7 +879,7 @@ impl Drop for CommandBuffer {
 #[derive(Debug)]
 pub struct CommandEncoder {
     context: Arc<C>,
-    id: Option<<C as Context>::CommandEncoderId>,
+    id: Option<<C as Context<'static>>::CommandEncoderId>,
     /// This type should be !Send !Sync, because it represents an allocation on this thread's
     /// command buffer.
     _p: PhantomData<*const u8>,
@@ -895,14 +898,14 @@ impl Drop for CommandEncoder {
 /// In-progress recording of a render pass.
 #[derive(Debug)]
 pub struct RenderPass<'a> {
-    id: <C as Context>::RenderPassId,
+    id: <C as Context<'a>>::RenderPassId,
     parent: &'a mut CommandEncoder,
 }
 
 /// In-progress recording of a compute pass.
 #[derive(Debug)]
 pub struct ComputePass<'a> {
-    id: <C as Context>::ComputePassId,
+    id: <C as Context<'a>>::ComputePassId,
     parent: &'a mut CommandEncoder,
 }
 
@@ -915,7 +918,8 @@ pub struct ComputePass<'a> {
 #[derive(Debug)]
 pub struct RenderBundleEncoder<'a> {
     context: Arc<C>,
-    id: <C as Context>::RenderBundleEncoderId,
+    // id: <<C as Context<'a>>::IdCon as wgc::id::Hkt<wgc::binding_model::BindGroup<hal::api::Empty>>>::Output,
+    id: <C as Context<'a>>::RenderBundleEncoderId,
     _parent: &'a Device,
     /// This type should be !Send !Sync, because it represents an allocation on this thread's
     /// command buffer.
@@ -930,31 +934,31 @@ pub struct RenderBundleEncoder<'a> {
 /// Executing a [`RenderBundle`] is often more efficient then issuing the underlying commands manually.
 #[derive(Debug)]
 pub struct RenderBundle {
-    context: Arc<C>,
-    id: <C as Context>::RenderBundleId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::RenderBundleId,
 }
 
-impl Drop for RenderBundle {
+/* impl Drop for RenderBundle {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.render_bundle_drop(&self.id);
         }
     }
-}
+} */
 
 /// Handle to a query set.
 pub struct QuerySet {
-    context: Arc<C>,
-    id: <C as Context>::QuerySetId,
+    // context: Arc<C>,
+    id: <C as Context<'static>>::QuerySetId,
 }
 
-impl Drop for QuerySet {
+/* impl Drop for QuerySet {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.query_set_drop(&self.id);
+            /*self.context.*/C::query_set_drop(&mut self.id);
         }
     }
-}
+} */
 
 /// Handle to a command queue on a device.
 ///
@@ -963,7 +967,7 @@ impl Drop for QuerySet {
 #[derive(Debug)]
 pub struct Queue {
     context: Arc<C>,
-    id: <C as Context>::QueueId,
+    id: <C as Context<'static>>::QueueId,
 }
 
 /// Resource that can be bound to a pipeline.
@@ -1263,7 +1267,8 @@ pub struct RenderPipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
-    pub layout: Option<&'a PipelineLayout>,
+
+    pub layout: Option<PipelineLayout>,
     /// The compiled vertex stage, its entry point, and the input buffers layout.
     pub vertex: VertexState<'a>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
@@ -1289,7 +1294,7 @@ pub struct ComputePipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
-    pub layout: Option<&'a PipelineLayout>,
+    pub layout: Option<PipelineLayout>,
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
     /// The name of the entry point in the compiled shader. There must be a function that returns
@@ -1306,13 +1311,16 @@ pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
 
 /// Describes a [`BindGroupLayout`].
-#[derive(Clone, Debug)]
+#[derive(/*Clone, */Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
 
     /// Array of entries in this BindGroupLayout
-    pub entries: &'a [BindGroupLayoutEntry],
+    ///
+    /// NOTE: After a call to [create_bind_group_layout], the entries list will be sorted in
+    /// ascending order by the binding id in each entry.
+    pub entries: &'a mut [BindGroupLayoutEntry],
 }
 
 /// Describes a [`RenderBundleEncoder`].
@@ -1336,7 +1344,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 pub struct SurfaceTexture {
     /// Accessible view of the frame.
     pub texture: Texture,
-    detail: <C as Context>::SurfaceOutputDetail,
+    detail: <C as Context<'static>>::SurfaceOutputDetail,
 }
 
 /// Result of a successful call to [`Surface::get_current_frame`].
@@ -1446,7 +1454,7 @@ impl Instance {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
         let context = Arc::clone(&self.context);
-        let id = context.create_adapter_from_hal(hal_adapter);
+        let id = C::create_adapter_from_hal(hal_adapter);
         Adapter { context, id }
     }
 
@@ -1480,12 +1488,12 @@ impl Instance {
         self.context.create_surface_from_core_animation_layer(layer)
     }*/
 
-    /// Polls all devices.
+    /* /// Polls all devices.
     /// If `force_wait` is true and this is not running on the web,
     /// then this function will block until all in-flight buffers have been mapped.
     pub fn poll_all(&self, force_wait: bool) {
         self.context.instance_poll_all_devices(force_wait);
-    }
+    } */
 
     /// Generates memory report.
     #[cfg(not(target_arch = "wasm32"))]
@@ -1512,12 +1520,12 @@ impl Adapter {
     /// - Limits requested exceed the values provided by the adapter.
     /// - Adapter does not support all features wgpu requires to safely operate.
     pub fn request_device(
-        &self,
+        self,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + Send {
-        let context = Arc::clone(&self.context);
-        let device = Context::adapter_request_device(&*self.context, &self.id, desc, trace_path);
+        let context = self.context;
+        let device = Context::adapter_request_device(&*context, self.id, desc, trace_path);
         async move {
             device.await.map(|(device_id, queue_id)| {
                 (
@@ -1542,14 +1550,14 @@ impl Adapter {
     /// - `desc.features` must be a subset of `hal_device` features.
     #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
-        &self,
+        self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), RequestDeviceError> {
-        let context = Arc::clone(&self.context);
-        self.context
-            .create_device_from_hal(&self.id, hal_device, desc, trace_path)
+        let context = self.context;
+        context
+            .create_device_from_hal(self.id, hal_device, desc, trace_path)
             .map(|(device_id, queue_id)| {
                 (
                     Device {
@@ -1574,7 +1582,7 @@ impl Adapter {
     /// Features must be explicitly requested in [`Adapter::request_device`] in order
     /// to use them.
     pub fn features(&self) -> Features {
-        Context::adapter_features(&*self.context, &self.id)
+        C::adapter_features(/*&*self.context, */&self.id)
     }
 
     /// List the "best" limits that are supported by this adapter.
@@ -1582,17 +1590,17 @@ impl Adapter {
     /// Limits must be explicitly requested in [`Adapter::request_device`] to set
     /// the values that you are allowed to use.
     pub fn limits(&self) -> Limits {
-        Context::adapter_limits(&*self.context, &self.id)
+        C::adapter_limits(/*&*self.context, */&self.id)
     }
 
     /// Get info about the adapter itself.
     pub fn get_info(&self) -> AdapterInfo {
-        Context::adapter_get_info(&*self.context, &self.id)
+        C::adapter_get_info(/*&*self.context, */&self.id)
     }
 
     /// Get info about the adapter itself.
     pub fn get_downlevel_properties(&self) -> DownlevelCapabilities {
-        Context::adapter_downlevel_properties(&*self.context, &self.id)
+        C::adapter_downlevel_properties(/*&*self.context, */&self.id)
     }
 
     /// Returns the features supported for a given texture format by this adapter.
@@ -1600,7 +1608,7 @@ impl Adapter {
     /// Note that the WebGPU spec further restricts the available usages/features.
     /// To disable these restrictions on a device, request the [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] feature.
     pub fn get_texture_format_features(&self, format: TextureFormat) -> TextureFormatFeatures {
-        Context::adapter_get_texture_format_features(&*self.context, &self.id, format)
+        C::adapter_get_texture_format_features(/*&*self.context, */&self.id, format)
     }
 }
 
@@ -1616,20 +1624,20 @@ impl Device {
     ///
     /// Functions may panic if you use unsupported features.
     pub fn features(&self) -> Features {
-        Context::device_features(&*self.context, &self.id)
+        C::device_features(/*&*self.context, */&self.id)
     }
 
     /// List all limits that were requested of this device.
     ///
     /// If any of these limits are exceeded, functions may panic.
     pub fn limits(&self) -> Limits {
-        Context::device_limits(&*self.context, &self.id)
+        C::device_limits(/*&*self.context, */&self.id)
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
     pub fn create_shader_module(&self, desc: &ShaderModuleDescriptor) -> ShaderModule {
         ShaderModule {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_shader_module(&*self.context, &self.id, desc),
         }
     }
@@ -1647,7 +1655,7 @@ impl Device {
         desc: &ShaderModuleDescriptorSpirV,
     ) -> ShaderModule {
         ShaderModule {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_shader_module_spirv(&*self.context, &self.id, desc),
         }
     }
@@ -1666,10 +1674,10 @@ impl Device {
     }
 
     /// Creates an empty [`RenderBundleEncoder`].
-    pub fn create_render_bundle_encoder(
-        &self,
+    pub fn create_render_bundle_encoder<'a>(
+        &'a self,
         desc: &RenderBundleEncoderDescriptor,
-    ) -> RenderBundleEncoder {
+    ) -> RenderBundleEncoder<'a> {
         RenderBundleEncoder {
             context: Arc::clone(&self.context),
             id: Context::device_create_render_bundle_encoder(&*self.context, &self.id, desc),
@@ -1681,15 +1689,15 @@ impl Device {
     /// Creates a new [`BindGroup`].
     pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
         BindGroup {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_bind_group(&*self.context, &self.id, desc),
         }
     }
 
     /// Creates a [`BindGroupLayout`].
-    pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
+    pub fn create_bind_group_layout(&self, desc: BindGroupLayoutDescriptor) -> BindGroupLayout {
         BindGroupLayout {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_bind_group_layout(&*self.context, &self.id, desc),
         }
     }
@@ -1697,23 +1705,23 @@ impl Device {
     /// Creates a [`PipelineLayout`].
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
         PipelineLayout {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_pipeline_layout(&*self.context, &self.id, desc),
         }
     }
 
     /// Creates a [`RenderPipeline`].
-    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
+    pub fn create_render_pipeline(&self, desc: RenderPipelineDescriptor) -> RenderPipeline {
         RenderPipeline {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_render_pipeline(&*self.context, &self.id, desc),
         }
     }
 
     /// Creates a [`ComputePipeline`].
-    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
+    pub fn create_compute_pipeline(&self, desc: ComputePipelineDescriptor) -> ComputePipeline {
         ComputePipeline {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_compute_pipeline(&*self.context, &self.id, desc),
         }
     }
@@ -1724,9 +1732,10 @@ impl Device {
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
         }
+        let id = Context::device_create_buffer(&*self.context, &self.id, desc);
         Buffer {
             context: Arc::clone(&self.context),
-            id: Context::device_create_buffer(&*self.context, &self.id, desc),
+            id,
             map_context: Mutex::new(map_context),
             usage: desc.usage,
         }
@@ -1769,7 +1778,7 @@ impl Device {
     /// `desc` specifies the behavior of the sampler.
     pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
         Sampler {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_sampler(&*self.context, &self.id, desc),
         }
     }
@@ -1777,7 +1786,7 @@ impl Device {
     /// Creates a new [`QuerySet`].
     pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> QuerySet {
         QuerySet {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::device_create_query_set(&*self.context, &self.id, desc),
         }
     }
@@ -2130,9 +2139,9 @@ impl CommandEncoder {
     /// Begins recording of a render pass.
     ///
     /// This function returns a [`RenderPass`] object which records a single render pass.
-    pub fn begin_render_pass<'a>(
+    pub fn begin_render_pass<'a, 'b>(
         &'a mut self,
-        desc: &RenderPassDescriptor<'a, '_>,
+        desc: &RenderPassDescriptor<'b, '_>,
     ) -> RenderPass<'a> {
         let id = self.id.as_ref().unwrap();
         RenderPass {
@@ -2715,7 +2724,7 @@ impl<'a> RenderPass<'a> {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn write_timestamp(&mut self, query_set: &'a QuerySet, query_index: u32) {
         self.id.write_timestamp(&query_set.id, query_index)
     }
 }
@@ -2724,7 +2733,7 @@ impl<'a> RenderPass<'a> {
 impl<'a> RenderPass<'a> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
-    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: &'a QuerySet, query_index: u32) {
         self.id
             .begin_pipeline_statistics_query(&query_set.id, query_index);
     }
@@ -2821,7 +2830,7 @@ impl<'a> ComputePass<'a> {
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
-    pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn write_timestamp(&mut self, query_set: &'a QuerySet, query_index: u32) {
         self.id.write_timestamp(&query_set.id, query_index)
     }
 }
@@ -2830,7 +2839,7 @@ impl<'a> ComputePass<'a> {
 impl<'a> ComputePass<'a> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
-    pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
+    pub fn begin_pipeline_statistics_query(&mut self, query_set: &'a QuerySet, query_index: u32) {
         self.id
             .begin_pipeline_statistics_query(&query_set.id, query_index);
     }
@@ -2857,7 +2866,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// Finishes recording and returns a [`RenderBundle`] that can be executed in other render passes.
     pub fn finish(self, desc: &RenderBundleDescriptor) -> RenderBundle {
         RenderBundle {
-            context: Arc::clone(&self.context),
+            // context: Arc::clone(&self.context),
             id: Context::render_bundle_encoder_finish(&*self.context, self.id, desc),
         }
     }

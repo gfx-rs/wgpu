@@ -15,9 +15,9 @@ fn pulling_common(
 
     let bgl = ctx
         .device
-        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        .create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
             label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
+            entries: &mut [wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -57,9 +57,9 @@ fn pulling_common(
 
     let pipeline = ctx
         .device
-        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        .create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: None,
-            layout: Some(&ppl),
+            layout: Some(ppl),
             vertex: wgpu::VertexState {
                 buffers: &[],
                 entry_point: "vs_main",
@@ -175,4 +175,117 @@ fn draw_instanced_offset() {
             })
         },
     )
+}
+
+#[test]
+fn bind_group_dead() {
+    initialize_test(TestParameters::default().test_features(), |ctx| {
+        let expected = [0, 1, 2];
+
+        let shader = ctx
+            .device
+            .create_shader_module(&wgpu::include_wgsl!("draw.vert.wgsl"));
+        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 4 * expected.len() as u64,
+            usage: wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let dummy = ctx
+            .device
+            .create_texture_with_data(
+                &ctx.queue,
+                &wgpu::TextureDescriptor {
+                    label: Some("dummy"),
+                    size: wgpu::Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
+                },
+                &[0, 0, 0, 1],
+            )
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let bgl_entries = &mut [
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: NonZeroU64::new(4),
+                },
+                visibility: wgpu::ShaderStages::VERTEX,
+                count: None,
+            }
+        ];
+        let bgl1 = ctx.device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: bgl_entries,
+        });
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bgl1,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        drop(bgl1);
+        ctx.device.poll(wgpu::Maintain::Wait); // To clean stuff up.
+        let bgl2 = ctx.device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: bgl_entries,
+        });
+        let pipeline_layout = ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&bgl2],
+            push_constant_ranges: &[],
+        });
+        let pipeline = ctx
+            .device
+            .create_render_pipeline(wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: Some(pipeline_layout),
+                vertex: wgpu::VertexState {
+                    buffers: &[],
+                    entry_point: "vs_main",
+                    module: &shader,
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    entry_point: "fs_main",
+                    module: &shader,
+                    targets: &[wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    }],
+                }),
+            });
+        let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations::default(),
+                resolve_target: None,
+                view: &dummy,
+            }],
+            depth_stencil_attachment: None,
+            label: None,
+        });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind_group, &[]); // should be compatible
+        pass.draw(0..3, 0..1);
+        drop(pass);
+        ctx.queue.submit(Some(encoder.finish()));
+    })
 }

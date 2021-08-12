@@ -15,7 +15,7 @@ use crate::{
     conv,
     device::DeviceError,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
-    id::{DeviceId, SurfaceId, TextureId, Valid},
+    id::{self, SurfaceId, TextureId, Valid},
     resource,
     track::TextureSelector,
     LifeGuard, Stored,
@@ -30,7 +30,7 @@ pub const DESIRED_NUM_FRAMES: u32 = 3;
 
 #[derive(Debug)]
 pub(crate) struct Presentation {
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) device_id: id::DeviceId,
     pub(crate) config: wgt::SurfaceConfiguration,
     pub(crate) num_frames: u32,
     pub(crate) acquired_texture: Option<Stored<TextureId>>,
@@ -38,7 +38,8 @@ pub(crate) struct Presentation {
 
 impl Presentation {
     pub(crate) fn backend(&self) -> wgt::Backend {
-        crate::id::TypedId::unzip(self.device_id.value.0).2
+        // crate::id::TypedId::unzip(self.device_id.value.0).2
+        self.device_id.backend()
     }
 }
 
@@ -100,11 +101,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let surface = surface_guard
             .get_mut(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        // let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (device, config) = match surface.presentation {
             Some(ref present) => {
-                let device = &device_guard[present.device_id.value];
+                // FIXME: consider not requiring the backend ahead of time before this call?
+                let device = id::expect_backend(&/*device_guard[*/present.device_id/*.value]*/);
                 (device, present.config.clone())
             }
             None => return Err(SurfaceError::NotConfigured),
@@ -112,24 +114,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::GetSurfaceTexture {
+            trace./*lock().*/add(Action::GetSurfaceTexture {
                 id: fid.id(),
                 parent_id: surface_id,
             });
         }
-        #[cfg(not(feature = "trace"))]
-        let _ = device;
 
-        let suf = A::get_surface_mut(surface);
+        let suf = A::get_surface_mut(&mut surface.raw);
         let (texture_id, status) = match unsafe { suf.raw.acquire_texture(FRAME_TIMEOUT_MS) } {
             Ok(Some(ast)) => {
+                let device_id = /*id::ValidId2::clone(device)*/device.to_owned();
                 let present = surface.presentation.as_mut().unwrap();
                 let texture = resource::Texture {
                     inner: resource::TextureInner::Surface {
                         raw: ast.texture,
                         parent_id: Valid(surface_id),
                     },
-                    device_id: present.device_id.clone(),
+                    device_id,
                     desc: wgt::TextureDescriptor {
                         label: (),
                         size: wgt::Extent3d {
@@ -209,18 +210,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let surface = surface_guard
             .get_mut(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        // let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
         let present = match surface.presentation {
             Some(ref mut present) => present,
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = &mut device_guard[present.device_id.value];
+        // FIXME: consider not requiring the backend ahead of time before this call?
+        let device = id::expect_backend::<_, A>(/*&mut device_guard[*/&present.device_id/*.value]*/);
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
-            trace.lock().add(Action::Present(surface_id));
+            trace.add(Action::Present(surface_id));
         }
 
         let result = {
@@ -239,8 +241,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     resource::TextureInner::Surface { raw, .. } => raw,
                     resource::TextureInner::Native { .. } => unreachable!(),
                 };
-                let suf = A::get_surface_mut(surface);
-                unsafe { device.queue.present(&mut suf.raw, suf_texture) }
+                let suf = A::get_surface_mut(&mut surface.raw);
+                let (mut queue_inner_guard, _) = token.lock(&device.queue.inner);
+                unsafe { queue_inner_guard.raw.present(&mut suf.raw, suf_texture) }
             } else {
                 Err(hal::SurfaceError::Outdated) //TODO?
             }

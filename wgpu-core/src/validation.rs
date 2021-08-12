@@ -1,6 +1,7 @@
-use crate::{binding_model::BindEntryMap, FastHashMap, FastHashSet};
+use core::fmt;
+use crate::{binding_model::{BindEntryMap, BindGroupLayout}, id, FastHashMap, FastHashSet};
+use hashbrown::hash_map::Entry;
 use naga::valid::GlobalUse;
-use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
@@ -65,7 +66,7 @@ pub struct InterfaceVar {
 }
 
 impl InterfaceVar {
-    pub fn vertex_attribute(format: wgt::VertexFormat) -> Self {
+    pub(super) fn vertex_attribute(format: wgt::VertexFormat) -> Self {
         InterfaceVar {
             ty: NumericType::from_vertex_format(format),
             interpolation: None,
@@ -106,7 +107,7 @@ struct EntryPoint {
 }
 
 #[derive(Debug)]
-pub struct Interface {
+pub(super) struct Interface {
     features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
@@ -115,13 +116,13 @@ pub struct Interface {
 #[derive(Clone, Debug, Error)]
 #[error("buffer usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingBufferUsageError {
-    pub(crate) actual: wgt::BufferUsages,
-    pub(crate) expected: wgt::BufferUsages,
+    pub actual: wgt::BufferUsages,
+    pub expected: wgt::BufferUsages,
 }
 
 /// Checks that the given buffer usage contains the required buffer usage,
 /// returns an error otherwise.
-pub fn check_buffer_usage(
+pub(super) fn check_buffer_usage(
     actual: wgt::BufferUsages,
     expected: wgt::BufferUsages,
 ) -> Result<(), MissingBufferUsageError> {
@@ -135,13 +136,13 @@ pub fn check_buffer_usage(
 #[derive(Clone, Debug, Error)]
 #[error("texture usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingTextureUsageError {
-    pub(crate) actual: wgt::TextureUsages,
-    pub(crate) expected: wgt::TextureUsages,
+    pub actual: wgt::TextureUsages,
+    pub expected: wgt::TextureUsages,
 }
 
 /// Checks that the given texture usage contains the required texture usage,
 /// returns an error otherwise.
-pub fn check_texture_usage(
+pub(super) fn check_texture_usage(
     actual: wgt::TextureUsages,
     expected: wgt::TextureUsages,
 ) -> Result<(), MissingTextureUsageError> {
@@ -743,7 +744,7 @@ impl NumericType {
 }
 
 /// Return true if the fragment `format` is covered by the provided `output`.
-pub fn check_texture_format(
+pub(super) fn check_texture_format(
     format: wgt::TextureFormat,
     output: &NumericType,
 ) -> Result<(), NumericType> {
@@ -755,7 +756,7 @@ pub fn check_texture_format(
     }
 }
 
-pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
+pub(super) type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
 
 impl Interface {
     fn populate(
@@ -818,7 +819,7 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(
+    pub(super) fn new(
         module: &naga::Module,
         info: &naga::valid::ModuleInfo,
         features: wgt::Features,
@@ -902,9 +903,9 @@ impl Interface {
         }
     }
 
-    pub fn check_stage(
+    pub(super) fn check_stage<A: hal::Api>(
         &self,
-        given_layouts: Option<&[&BindEntryMap]>,
+        given_layouts: Option<&[/*&BindEntryMap*/id::ValidId2<BindGroupLayout<A>>]>,
         derived_layouts: &mut [BindEntryMap],
         entry_point_name: &str,
         stage_bit: wgt::ShaderStages,
@@ -930,7 +931,10 @@ impl Interface {
             let result = match given_layouts {
                 Some(layouts) => layouts
                     .get(res.bind.group as usize)
-                    .and_then(|map| map.get(&res.bind.binding))
+                    .and_then(|layout| {
+                        let index = layout.entries.binary_search_by_key(&res.bind.binding, |entry| entry.binding).ok()?;
+                        Some(&layout.entries[index])
+                    })
                     .ok_or(BindingError::Missing)
                     .and_then(|entry| {
                         if entry.visibility.contains(stage_bit) {
@@ -974,8 +978,12 @@ impl Interface {
             for &(texture_handle, sampler_handle) in entry_point.sampling_pairs.iter() {
                 let texture_bind = &self.resources[texture_handle].bind;
                 let sampler_bind = &self.resources[sampler_handle].bind;
-                let texture_layout = &layouts[texture_bind.group as usize][&texture_bind.binding];
-                let sampler_layout = &layouts[sampler_bind.group as usize][&sampler_bind.binding];
+                let texture_layout = &layouts[texture_bind.group as usize].entries;
+                let sampler_layout = &layouts[sampler_bind.group as usize].entries;
+                let texture_index = texture_layout.binary_search_by_key(&texture_bind.binding, |entry| entry.binding).unwrap();
+                let sampler_index = sampler_layout.binary_search_by_key(&sampler_bind.binding, |entry| entry.binding).unwrap();
+                let texture_layout = &texture_layout[texture_index];
+                let sampler_layout = &sampler_layout[sampler_index];
                 assert!(texture_layout.visibility.contains(stage_bit));
                 assert!(sampler_layout.visibility.contains(stage_bit));
 

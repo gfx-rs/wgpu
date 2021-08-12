@@ -45,7 +45,6 @@ pub trait Example: 'static + Sized {
     }
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self;
@@ -71,7 +70,7 @@ struct Setup {
     instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
+    format: wgpu::TextureFormat,
     device: wgpu::Device,
     queue: wgpu::Queue,
 }
@@ -122,6 +121,9 @@ async fn setup<E: Example>(title: &str) -> Setup {
         .await
         .expect("No suitable GPU adapters found on the system!");
 
+    let format = surface.get_preferred_format(&adapter)
+        .expect("No preferred swap chain format found on for this adapter and surface!");
+
     #[cfg(not(target_arch = "wasm32"))]
     {
         let adapter_info = adapter.get_info();
@@ -159,7 +161,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
         instance,
         size,
         surface,
-        adapter,
+        format,
         device,
         queue,
     }
@@ -172,7 +174,7 @@ fn start<E: Example>(
         instance,
         size,
         surface,
-        adapter,
+        format,
         device,
         queue,
     }: Setup,
@@ -180,7 +182,7 @@ fn start<E: Example>(
     let spawner = Spawner::new();
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_preferred_format(&adapter).unwrap(),
+        format,
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Mailbox,
@@ -188,7 +190,7 @@ fn start<E: Example>(
     surface.configure(&device, &config);
 
     log::info!("Initializing the example...");
-    let mut example = E::init(&config, &adapter, &device, &queue);
+    let mut example = E::init(&config, &device, &queue);
 
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
@@ -199,7 +201,7 @@ fn start<E: Example>(
 
     log::info!("Entering render loop...");
     event_loop.run(move |event, _, control_flow| {
-        let _ = (&instance, &adapter); // force ownership by the closure
+        let _ = &instance; // force ownership by the closure
         *control_flow = if cfg!(feature = "metal-auto-capture") {
             ControlFlow::Exit
         } else {
@@ -441,7 +443,6 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     height: params.height,
                     present_mode: wgpu::PresentMode::Fifo,
                 },
-                &ctx.adapter,
                 &ctx.device,
                 &ctx.queue,
             );

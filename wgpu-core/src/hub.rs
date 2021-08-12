@@ -1,20 +1,20 @@
 use crate::{
-    binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
-    command::{CommandBuffer, RenderBundle},
-    device::Device,
-    id,
-    instance::{Adapter, HalSurface, Instance, Surface},
-    pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
-    resource::{Buffer, QuerySet, Sampler, Texture, TextureView},
+    command::CommandBuffer,
+    device::{Device, LifetimeTracker, Trackers, QueueInner as QueueInner_, SuspectedResources},
+    id::{self, AnyBackend, Hkt},
+    instance::{HalSurface, Instance, Surface, SurfaceRaw},
+    resource::{Buffer, Texture, TextureView},
     Epoch, Index,
 };
 
-use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
 #[cfg(debug_assertions)]
 use std::cell::Cell;
 use std::{fmt::Debug, marker::PhantomData, mem, ops};
+
+type QueueInner<A> = mem::ManuallyDrop<QueueInner_<A>>;
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
@@ -182,10 +182,10 @@ impl<T, I: id::TypedId> Storage<T, I> {
         self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
     }
 
-    pub(crate) fn force_replace(&mut self, id: I, value: T) {
+    /* pub(crate) fn force_replace(&mut self, id: I, value: T) {
         let (index, epoch, _) = id.unzip();
         self.map[index as usize] = Element::Occupied(value, epoch);
-    }
+    } */
 
     pub(crate) fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
@@ -214,7 +214,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
         }
     }
 
-    pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
+    /* pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
         self.map
             .iter()
             .enumerate()
@@ -224,7 +224,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
                 }
                 _ => None,
             })
-    }
+    } */
 
     fn generate_report(&self) -> StorageReport {
         let mut report = StorageReport {
@@ -243,7 +243,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
 }
 
 /// Type system for enforcing the lock order on shared HUB structures.
-/// If type A implements `Access<A>`, that means we are allowed to proceed
+/// If type A implements `Access<B>`, that means we are allowed to proceed
 /// with locking resource `B` after we lock `A`.
 ///
 /// The implenentations basically describe the edges in a directed graph
@@ -255,59 +255,32 @@ pub trait Access<A> {}
 
 pub enum Root {}
 //TODO: establish an order instead of declaring all the pairs.
-impl Access<Instance> for Root {}
+impl Access<SuspectedResources> for Root {}
 impl Access<Surface> for Root {}
-impl Access<Surface> for Instance {}
-impl<A: hal::Api> Access<Adapter<A>> for Root {}
-impl<A: hal::Api> Access<Adapter<A>> for Surface {}
-impl<A: hal::Api> Access<Device<A>> for Root {}
-impl<A: hal::Api> Access<Device<A>> for Surface {}
-impl<A: hal::Api> Access<Device<A>> for Adapter<A> {}
-impl<A: hal::Api> Access<PipelineLayout<A>> for Root {}
-impl<A: hal::Api> Access<PipelineLayout<A>> for Device<A> {}
-impl<A: hal::Api> Access<PipelineLayout<A>> for RenderBundle {}
-impl<A: hal::Api> Access<BindGroupLayout<A>> for Root {}
-impl<A: hal::Api> Access<BindGroupLayout<A>> for Device<A> {}
-impl<A: hal::Api> Access<BindGroupLayout<A>> for PipelineLayout<A> {}
-impl<A: hal::Api> Access<BindGroup<A>> for Root {}
-impl<A: hal::Api> Access<BindGroup<A>> for Device<A> {}
-impl<A: hal::Api> Access<BindGroup<A>> for BindGroupLayout<A> {}
-impl<A: hal::Api> Access<BindGroup<A>> for PipelineLayout<A> {}
-impl<A: hal::Api> Access<BindGroup<A>> for CommandBuffer<A> {}
-impl<A: hal::Api> Access<CommandBuffer<A>> for Root {}
-impl<A: hal::Api> Access<CommandBuffer<A>> for Device<A> {}
-impl<A: hal::Api> Access<RenderBundle> for Device<A> {}
-impl<A: hal::Api> Access<RenderBundle> for CommandBuffer<A> {}
-impl<A: hal::Api> Access<ComputePipeline<A>> for Device<A> {}
-impl<A: hal::Api> Access<ComputePipeline<A>> for BindGroup<A> {}
-impl<A: hal::Api> Access<RenderPipeline<A>> for Device<A> {}
-impl<A: hal::Api> Access<RenderPipeline<A>> for BindGroup<A> {}
-impl<A: hal::Api> Access<RenderPipeline<A>> for ComputePipeline<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for Root {}
-impl<A: hal::Api> Access<QuerySet<A>> for Device<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for CommandBuffer<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for RenderPipeline<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for ComputePipeline<A> {}
-impl<A: hal::Api> Access<QuerySet<A>> for Sampler<A> {}
-impl<A: hal::Api> Access<ShaderModule<A>> for Device<A> {}
-impl<A: hal::Api> Access<ShaderModule<A>> for BindGroupLayout<A> {}
 impl<A: hal::Api> Access<Buffer<A>> for Root {}
-impl<A: hal::Api> Access<Buffer<A>> for Device<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for BindGroupLayout<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for BindGroup<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for CommandBuffer<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for ComputePipeline<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for RenderPipeline<A> {}
-impl<A: hal::Api> Access<Buffer<A>> for QuerySet<A> {}
+impl<A: hal::Api> Access<Buffer<A>> for SuspectedResources {}
 impl<A: hal::Api> Access<Texture<A>> for Root {}
-impl<A: hal::Api> Access<Texture<A>> for Device<A> {}
+impl<A: hal::Api> Access<Texture<A>> for Surface {}
 impl<A: hal::Api> Access<Texture<A>> for Buffer<A> {}
-impl<A: hal::Api> Access<TextureView<A>> for Root {}
-impl<A: hal::Api> Access<TextureView<A>> for Device<A> {}
+impl<A: hal::Api> Access<Trackers<A>> for Root {}
+impl<A: hal::Api> Access<Trackers<A>> for Buffer<A> {}
+impl<A: hal::Api> Access<Trackers<A>> for Texture<A> {}
+impl<A: hal::Api> Access<QueueInner<A>> for Root {}
+impl<A: hal::Api> Access<QueueInner<A>> for Surface {}
+impl<A: hal::Api> Access<QueueInner<A>> for Buffer<A> {}
+impl<A: hal::Api> Access<QueueInner<A>> for Texture<A> {}
+impl<A: hal::Api> Access<QueueInner<A>> for Trackers<A> {}
+impl<A: hal::Api> Access<LifetimeTracker<A>> for Root {}
+impl<A: hal::Api> Access<LifetimeTracker<A>> for SuspectedResources {}
+impl<A: hal::Api> Access<LifetimeTracker<A>> for Trackers<A> {}
+impl<A: hal::Api> Access<LifetimeTracker<A>> for QueueInner<A> {}
+impl<A: hal::Api> Access<CommandBuffer<A>> for Root {}
+impl<A: hal::Api> Access<CommandBuffer<A>> for Buffer<A> {}
+impl<A: hal::Api> Access<CommandBuffer<A>> for Texture<A> {}
+impl<A: hal::Api> Access<CommandBuffer<A>> for QueueInner<A> {} //TODO: remove this (only used in `submit()`)
 impl<A: hal::Api> Access<TextureView<A>> for Texture<A> {}
-impl<A: hal::Api> Access<Sampler<A>> for Root {}
-impl<A: hal::Api> Access<Sampler<A>> for Device<A> {}
-impl<A: hal::Api> Access<Sampler<A>> for TextureView<A> {}
+impl<A: hal::Api> Access<TextureView<A>> for LifetimeTracker<A> {}
+impl<A: hal::Api> Access<TextureView<A>> for CommandBuffer<A> {}
 
 #[cfg(debug_assertions)]
 thread_local! {
@@ -324,14 +297,23 @@ pub(crate) struct Token<'a, T: 'a> {
 }
 
 impl<'a, T> Token<'a, T> {
-    fn new() -> Self {
+    pub(crate) fn advance<'b, A>(
+        &'b mut self,
+    ) -> Token<'b, A>  where T: Access<A> {
         #[cfg(debug_assertions)]
         ACTIVE_TOKEN.with(|active| {
             let old = active.get();
             assert_ne!(old, 0, "Root token was dropped");
             active.set(old + 1);
         });
-        Self { level: PhantomData }
+        Token { level: PhantomData }
+    }
+
+    pub(crate) fn lock<'b, A>(
+        &'b mut self,
+        mutex: &'b Mutex<A>,
+    ) -> (MutexGuard<'b, A>, Token<'b, A>) where T: Access<A> {
+        (mutex.lock(), self.advance())
     }
 }
 
@@ -346,9 +328,9 @@ impl Token<'static, Root> {
     }
 }
 
+#[cfg(debug_assertions)]
 impl<'a, T> Drop for Token<'a, T> {
     fn drop(&mut self) {
-        #[cfg(debug_assertions)]
         ACTIVE_TOKEN.with(|active| {
             let old = active.get();
             active.set(old - 1);
@@ -388,21 +370,21 @@ impl<I: id::TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactor
 }
 
 pub trait GlobalIdentityHandlerFactory:
-    IdentityHandlerFactory<id::AdapterId>
-    + IdentityHandlerFactory<id::DeviceId>
+    /* IdentityHandlerFactory<id::Id<Adapter<hal::api::Empty>>>
+    + IdentityHandlerFactory<id::Id<Device<hal::api::Empty>>>
     + IdentityHandlerFactory<id::PipelineLayoutId>
     + IdentityHandlerFactory<id::ShaderModuleId>
     + IdentityHandlerFactory<id::BindGroupLayoutId>
-    + IdentityHandlerFactory<id::BindGroupId>
-    + IdentityHandlerFactory<id::CommandBufferId>
-    + IdentityHandlerFactory<id::RenderBundleId>
-    + IdentityHandlerFactory<id::RenderPipelineId>
-    + IdentityHandlerFactory<id::ComputePipelineId>
-    + IdentityHandlerFactory<id::QuerySetId>
+    + IdentityHandlerFactory<id::Id<BindGroup<hal::api::Empty>>>
+    + */IdentityHandlerFactory<id::CommandBufferId>
+    // + IdentityHandlerFactory<id::RenderBundleId>
+    // + IdentityHandlerFactory<id::RenderPipelineId>
+    // + IdentityHandlerFactory<id::ComputePipelineId>
+    // + IdentityHandlerFactory<id::QuerySetId>
     + IdentityHandlerFactory<id::BufferId>
     + IdentityHandlerFactory<id::TextureId>
     + IdentityHandlerFactory<id::TextureViewId>
-    + IdentityHandlerFactory<id::SamplerId>
+    // + IdentityHandlerFactory<id::SamplerId>
     + IdentityHandlerFactory<id::SurfaceId>
 {
 }
@@ -413,11 +395,63 @@ pub type Input<G, I> = <<G as IdentityHandlerFactory<I>>::Filter as IdentityHand
 
 pub trait Resource {
     const TYPE: &'static str;
+
+    /// Trace all the *direct* references of this resource.  Continues tracing until all direct
+    /// references have been found or the Trace function returns an error.
+    ///
+    /// Fortunately, no ids have an implicit destructible resource as a "grandchild", so for any
+    /// implementation that can track all direct client references for a given device, this can be
+    /// used as the basis for a tracing garbage collection implementation (it is, however, true
+    /// that render pipelines may have implicit pipeline layouts with implicit bind group layouts
+    /// as children, but bind group layouts don't reference textures, buffers, or query sets).
+    ///
+    /// This is convenient for implementing the `destroy` function efficiently, because it allows
+    /// deferring cleanup of destroyed resources until a safepoint.  However, if one chooses to
+    /// trace an implicit render/compute pipeline, one may encounter ids that were never directly
+    /// allocated; this cannot be avoided except by avoiding tracing implicit pipeline layouts or
+    /// differentiating between implicitly and explicitly constructed pipeline layouts at the
+    /// client level.
+    ///
+    /// Does not trace recursively; if this is intended for use in any mark/sweep style collection
+    /// implementation, the marking should currently be done externally using something like a
+    /// HashSet, but this may change long-term.  For optimal performance when implementing
+    /// something like hubs, some internal knowledge can be helpful to reduce tracing work.
+    ///
+    /// For instance, destroyable buffers, textures, and query sets can only be directly referenced
+    /// by command buffers, render bundles, texture views and bind groups, so to avoid duplicate
+    /// marking for implementing the `destroy` function, one can begin by marking texture views
+    /// referring to dropped textures; then bind groups referring to dropped texture views,
+    /// textures, buffers, or query sets; then render bundles referencing any of the above or
+    /// dropped bind groups; and finally, command buffers referencing any of the above and dropped
+    /// render bundles.  This guarantees that any transitive marking succeeds as expected (note
+    /// that none of these can be referenced by anything else, so there's no additional work to be
+    /// done).
+    ///
+    /// NOTE: does *not* trace per-device singletons like Adapter, Device or Queue, which are
+    /// considered ambient and are too common to bother with; the fact that some types do
+    /// actually store references to these internally can be mostly regarded as an implementation
+    /// detail.  Similarly, does not trace some user-inaccessible resources (notably, textures
+    /// accessible from swap chains).  If in the future tracing live references to these
+    /// things becomes important for some clients, this decision can be revisited.
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        _id: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _f: Trace,
+    ) -> Result<(), E>
+        where
+            Self: AnyBackend,
+            Self::Backend: HalApi + 'b,
+            id::IdGuardCon<'b>: Hkt<Self>
+    {
+        // FIXME: Remove default implementation when Surface is merged with SwapChain.
+        Ok(())
+    }
+
     fn life_guard(&self) -> &crate::LifeGuard;
     fn label(&self) -> &str {
-        #[cfg(debug_assertions)]
+        // FIXME: This doesn't work without life guards.
+        /* #[cfg(debug_assertions)]
         return &self.life_guard().label;
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(debug_assertions))] */
         return "";
     }
 }
@@ -467,9 +501,9 @@ impl<I: id::TypedId + Copy, T> FutureId<'_, I, T> {
         self.id
     }
 
-    pub fn into_id(self) -> I {
+    /* pub fn into_id(self) -> I {
         self.id
-    }
+    } */
 
     pub fn assign<'a, A: Access<T>>(self, value: T, _: &'a mut Token<A>) -> id::Valid<I> {
         self.data.write().insert(self.id, value);
@@ -495,16 +529,16 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
 
     pub(crate) fn read<'a, A: Access<T>>(
         &'a self,
-        _token: &'a mut Token<A>,
+        token: &'a mut Token<A>,
     ) -> (RwLockReadGuard<'a, Storage<T, I>>, Token<'a, T>) {
-        (self.data.read(), Token::new())
+        (self.data.read(), token.advance())
     }
 
     pub(crate) fn write<'a, A: Access<T>>(
         &'a self,
-        _token: &'a mut Token<A>,
+        token: &'a mut Token<A>,
     ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
-        (self.data.write(), Token::new())
+        (self.data.write(), token.advance())
     }
 
     pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> Option<T> {
@@ -518,13 +552,13 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
     pub(crate) fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
-        _token: &'a mut Token<A>,
+        token: &'a mut Token<A>,
     ) -> (Option<T>, Token<'a, T>) {
         let value = self.data.write().remove(id);
         //Note: careful about the order here!
         self.identity.free(id);
         //Returning None is legal if it's an error ID
-        (value, Token::new())
+        (value, token.advance())
     }
 
     pub fn label_for_resource(&self, id: I) -> String {
@@ -549,67 +583,96 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
     }
 }
 
+// False positive, cast affects formatting.
+#[allow(trivial_casts)]
+pub(crate) fn label_for_resource<T: Resource>(res: &T) -> String {
+    let type_name = T::TYPE;
+    let label = res.label();
+    if label.is_empty() {
+        format!("<{}-{:?}>", type_name, res as *const _)
+    } else {
+        label.to_string()
+    }
+}
+
 #[derive(Debug)]
 pub struct HubReport {
-    pub adapters: StorageReport,
-    pub devices: StorageReport,
-    pub pipeline_layouts: StorageReport,
-    pub shader_modules: StorageReport,
-    pub bind_group_layouts: StorageReport,
-    pub bind_groups: StorageReport,
+    // pub adapters: StorageReport,
+    // pub devices: StorageReport,
+    // pub pipeline_layouts: StorageReport,
+    // pub shader_modules: StorageReport,
+    // pub bind_group_layouts: StorageReport,
+    // pub bind_groups: StorageReport,
     pub command_buffers: StorageReport,
-    pub render_bundles: StorageReport,
-    pub render_pipelines: StorageReport,
-    pub compute_pipelines: StorageReport,
-    pub query_sets: StorageReport,
+    // pub render_bundles: StorageReport,
+    // pub render_pipelines: StorageReport,
+    // pub compute_pipelines: StorageReport,
+    // pub query_sets: StorageReport,
     pub buffers: StorageReport,
     pub textures: StorageReport,
     pub texture_views: StorageReport,
-    pub samplers: StorageReport,
+    // pub samplers: StorageReport,
 }
 
 impl HubReport {
+    // TODO: Ignore?
     pub fn is_empty(&self) -> bool {
-        self.adapters.is_empty()
+        true
+        /* self./*adapters*/devices.is_empty() */
     }
 }
 
 pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
-    pub adapters: Registry<Adapter<A>, id::AdapterId, F>,
-    pub devices: Registry<Device<A>, id::DeviceId, F>,
-    pub pipeline_layouts: Registry<PipelineLayout<A>, id::PipelineLayoutId, F>,
-    pub shader_modules: Registry<ShaderModule<A>, id::ShaderModuleId, F>,
-    pub bind_group_layouts: Registry<BindGroupLayout<A>, id::BindGroupLayoutId, F>,
-    pub bind_groups: Registry<BindGroup<A>, id::BindGroupId, F>,
+    /// FIXME: Remove this when we've converted completely to Arc.
+    pub(crate) temp_suspected: Mutex<SuspectedResources/*<A>*/>,
+    // #[cfg(feature = "trace")]
+    // pub adapters: <F as IdentityHandlerFactory<id::Id<Adapter<hal::api::Empty>>>>::Filter,
+    // pub adapters: Registry<Adapter<A>, id::AdapterId, F>,
+    // #[cfg(feature = "trace")]
+    // pub devices: <F as IdentityHandlerFactory<id::Id<Device<hal::api::Empty>>>>::Filter,
+    // pub devices: Registry<Device<A>, id::DeviceId, F>,
+    // pub pipeline_layouts: Registry<PipelineLayout<A>, id::PipelineLayoutId, F>,
+    // pub shader_modules: Registry<ShaderModule<A>, id::ShaderModuleId, F>,
+    // pub bind_group_layouts: Registry<BindGroupLayout<A>, id::BindGroupLayoutId, F>,
+    // #[cfg(feature = "trace")]
+    // pub bind_groups: <F as IdentityHandlerFactory<id::Id<BindGroup<hal::api::Empty>>>>::Filter,
+    // pub bind_groups: Registry<BindGroup<A>, id::BindGroupId, F>,
     pub command_buffers: Registry<CommandBuffer<A>, id::CommandBufferId, F>,
-    pub render_bundles: Registry<RenderBundle, id::RenderBundleId, F>,
-    pub render_pipelines: Registry<RenderPipeline<A>, id::RenderPipelineId, F>,
-    pub compute_pipelines: Registry<ComputePipeline<A>, id::ComputePipelineId, F>,
-    pub query_sets: Registry<QuerySet<A>, id::QuerySetId, F>,
+    // pub render_bundles: Registry<RenderBundle<A>, id::RenderBundleId, F>,
+    // pub render_pipelines: Registry<RenderPipeline<A>, id::RenderPipelineId, F>,
+    // pub compute_pipelines: Registry<ComputePipeline<A>, id::ComputePipelineId, F>,
+    // pub query_sets: Registry<QuerySet<A>, id::QuerySetId, F>,
     pub buffers: Registry<Buffer<A>, id::BufferId, F>,
     pub textures: Registry<Texture<A>, id::TextureId, F>,
     pub texture_views: Registry<TextureView<A>, id::TextureViewId, F>,
-    pub samplers: Registry<Sampler<A>, id::SamplerId, F>,
+    // pub samplers: Registry<Sampler<A>, id::SamplerId, F>,
 }
 
 impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     fn new(factory: &F) -> Self {
         Self {
-            adapters: Registry::new(A::VARIANT, factory),
-            devices: Registry::new(A::VARIANT, factory),
-            pipeline_layouts: Registry::new(A::VARIANT, factory),
-            shader_modules: Registry::new(A::VARIANT, factory),
-            bind_group_layouts: Registry::new(A::VARIANT, factory),
-            bind_groups: Registry::new(A::VARIANT, factory),
+            temp_suspected: Mutex::new(SuspectedResources::default()),
+            // #[cfg(feature = "trace")]
+            // adapters: <F as IdentityHandlerFactory<id::Id<Adapter<hal::api::Empty>>>>::spawn(factory, 0),
+            // adapters: Registry::new(A::VARIANT, factory),
+            // #[cfg(feature = "trace")]
+            // devices: <F as IdentityHandlerFactory<id::Id<Device<hal::api::Empty>>>>::spawn(factory, 0),
+            // devices: Registry::new(A::VARIANT, factory),
+            // pipeline_layouts: Registry::new(A::VARIANT, factory),
+            // shader_modules: Registry::new(A::VARIANT, factory),
+            // bind_group_layouts: Registry::new(A::VARIANT, factory),
+            // #[cfg(feature = "trace")]
+            // bind_groups: <F as IdentityHandlerFactory<id::Id<BindGroup<hal::api::Empty>>>>::spawn(factory, 0),
+            // bind_groups: Registry::new(A::VARIANT, factory),
             command_buffers: Registry::new(A::VARIANT, factory),
-            render_bundles: Registry::new(A::VARIANT, factory),
-            render_pipelines: Registry::new(A::VARIANT, factory),
-            compute_pipelines: Registry::new(A::VARIANT, factory),
-            query_sets: Registry::new(A::VARIANT, factory),
+            // render_bundles: Registry::new(A::VARIANT, factory),
+            // render_pipelines: Registry::new(A::VARIANT, factory),
+            // compute_pipelines: Registry::new(A::VARIANT, factory),
+            // query_sets: Registry::new(A::VARIANT, factory),
             buffers: Registry::new(A::VARIANT, factory),
             textures: Registry::new(A::VARIANT, factory),
             texture_views: Registry::new(A::VARIANT, factory),
-            samplers: Registry::new(A::VARIANT, factory),
+            // samplers: Registry::new(A::VARIANT, factory),
         }
     }
 
@@ -620,35 +683,35 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         use crate::resource::TextureInner;
         use hal::{Device as _, Surface as _};
 
-        let mut devices = self.devices.data.write();
+        /* let mut devices = self.devices.data.write();
         for element in devices.map.iter_mut() {
             if let Element::Occupied(ref mut device, _) = *element {
                 device.prepare_to_die();
             }
-        }
+        } */
 
         // destroy command buffers first, since otherwise DX12 isn't happy
         for element in self.command_buffers.data.write().map.drain(..) {
             if let Element::Occupied(command_buffer, _) = element {
-                let device = &devices[command_buffer.device_id.value];
-                device.destroy_command_buffer(command_buffer);
+                // let device = &/*devices[*/command_buffer.device_id/*.value]*/;
+                /*device.*/Device::destroy_command_buffer(command_buffer);
             }
         }
 
-        for element in self.samplers.data.write().map.drain(..) {
+        /* for element in self.samplers.data.write().map.drain(..) {
             if let Element::Occupied(sampler, _) = element {
                 unsafe {
-                    devices[sampler.device_id.value]
+                    /*devices[*/sampler.device_id/*.value]*/
                         .raw
                         .destroy_sampler(sampler.raw);
                 }
             }
-        }
+        } */
         {
             let textures = self.textures.data.read();
             for element in self.texture_views.data.write().map.drain(..) {
                 if let Element::Occupied(texture_view, _) = element {
-                    let device = &devices[textures[texture_view.parent_id.value].device_id.value];
+                    let device = &/*devices[*/textures[texture_view.parent_id.value].device_id/*.value]*/;
                     unsafe {
                         device.raw.destroy_texture_view(texture_view.raw);
                     }
@@ -658,7 +721,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 
         for element in self.textures.data.write().map.drain(..) {
             if let Element::Occupied(texture, _) = element {
-                let device = &devices[texture.device_id.value];
+                let device = &/*devices[*/texture.device_id/*.value]*/;
                 if let TextureInner::Native { raw: Some(raw) } = texture.inner {
                     unsafe {
                         device.raw.destroy_texture(raw);
@@ -669,58 +732,58 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         for element in self.buffers.data.write().map.drain(..) {
             if let Element::Occupied(buffer, _) = element {
                 //TODO: unmap if needed
-                devices[buffer.device_id.value].destroy_buffer(buffer);
+                /*/*devices[*/buffer.device_id/*.value]*/.*/Device::destroy_buffer(buffer);
             }
         }
-        for element in self.bind_groups.data.write().map.drain(..) {
+        /* for element in self.bind_groups.data.write().map.drain(..) {
             if let Element::Occupied(bind_group, _) = element {
                 let device = &devices[bind_group.device_id.value];
                 unsafe {
                     device.raw.destroy_bind_group(bind_group.raw);
                 }
             }
-        }
+        } */
 
-        for element in self.shader_modules.data.write().map.drain(..) {
+        /* for element in self.shader_modules.data.write().map.drain(..) {
             if let Element::Occupied(module, _) = element {
-                let device = &devices[module.device_id.value];
+                let device = &/*devices[*/module.device_id/*.value]*/;
                 unsafe {
                     device.raw.destroy_shader_module(module.raw);
                 }
             }
-        }
-        for element in self.bind_group_layouts.data.write().map.drain(..) {
+        } */
+        /* for element in self.bind_group_layouts.data.write().map.drain(..) {
             if let Element::Occupied(bgl, _) = element {
-                let device = &devices[bgl.device_id.value];
+                let device = &/*devices[*/bgl.device_id/*.value]*/;
                 unsafe {
                     device.raw.destroy_bind_group_layout(bgl.raw);
                 }
             }
-        }
-        for element in self.pipeline_layouts.data.write().map.drain(..) {
+        } */
+        /* for element in self.pipeline_layouts.data.write().map.drain(..) {
             if let Element::Occupied(pipeline_layout, _) = element {
-                let device = &devices[pipeline_layout.device_id.value];
+                let device = &/*devices[*/pipeline_layout.device_id/*.value]*/;
                 unsafe {
                     device.raw.destroy_pipeline_layout(pipeline_layout.raw);
                 }
             }
-        }
-        for element in self.compute_pipelines.data.write().map.drain(..) {
+        } */
+        /* for element in self.compute_pipelines.data.write().map.drain(..) {
             if let Element::Occupied(pipeline, _) = element {
-                let device = &devices[pipeline.device_id.value];
+                let device = &/*devices[*/pipeline.layout_id.device_id/*.value]*/;
                 unsafe {
                     device.raw.destroy_compute_pipeline(pipeline.raw);
                 }
             }
-        }
-        for element in self.render_pipelines.data.write().map.drain(..) {
+        } */
+        /* for element in self.render_pipelines.data.write().map.drain(..) {
             if let Element::Occupied(pipeline, _) = element {
-                let device = &devices[pipeline.device_id.value];
+                let device = &/*devices[*/pipeline.layout_id.device_id/*.value]*/;
                 unsafe {
                     device.raw.destroy_render_pipeline(pipeline.raw);
                 }
             }
-        }
+        } */
 
         for element in surface_guard.map.iter_mut() {
             if let Element::Occupied(ref mut surface, _epoch) = *element {
@@ -733,8 +796,11 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                     continue;
                 }
                 if let Some(present) = surface.presentation.take() {
-                    let device = &devices[present.device_id.value];
-                    let suf = A::get_surface_mut(surface);
+                    let device = &/*devices[*/present.device_id/*.value]*/;
+                    // FIXME: Wherever this code moves to needs to avoid doing this if it can't
+                    // know the backend ahead of time, since the surface can reconfigure it.
+                    let device = id::expect_backend::<_, A>(device);
+                    let suf = A::get_surface_mut(&mut surface.raw);
                     unsafe {
                         suf.raw.unconfigure(&device.raw);
                         //TODO: we could destroy the surface here
@@ -743,44 +809,44 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             }
         }
 
-        for element in self.query_sets.data.write().map.drain(..) {
+        /* for element in self.query_sets.data.write().map.drain(..) {
             if let Element::Occupied(query_set, _) = element {
-                let device = &devices[query_set.device_id.value];
+                let device = &/*devices[*/query_set.device_id/*.value]*/;
                 unsafe {
                     device.raw.destroy_query_set(query_set.raw);
                 }
             }
-        }
+        } */
 
-        for element in devices.map.drain(..) {
+        /* for element in devices.map.drain(..) {
             if let Element::Occupied(device, _) = element {
                 device.dispose();
             }
-        }
+        } */
 
         if with_adapters {
-            drop(devices);
-            self.adapters.data.write().map.clear();
+            // drop(devices);
+            // self.adapters.data.write().map.clear();
         }
     }
 
     pub fn generate_report(&self) -> HubReport {
         HubReport {
-            adapters: self.adapters.data.read().generate_report(),
-            devices: self.devices.data.read().generate_report(),
-            pipeline_layouts: self.pipeline_layouts.data.read().generate_report(),
-            shader_modules: self.shader_modules.data.read().generate_report(),
-            bind_group_layouts: self.bind_group_layouts.data.read().generate_report(),
-            bind_groups: self.bind_groups.data.read().generate_report(),
+            // adapters: self.adapters.data.read().generate_report(),
+            // devices: self.devices.data.read().generate_report(),
+            // pipeline_layouts: self.pipeline_layouts.data.read().generate_report(),
+            // shader_modules: self.shader_modules.data.read().generate_report(),
+            // bind_group_layouts: self.bind_group_layouts.data.read().generate_report(),
+            // bind_groups: self.bind_groups.data.read().generate_report(),
             command_buffers: self.command_buffers.data.read().generate_report(),
-            render_bundles: self.render_bundles.data.read().generate_report(),
-            render_pipelines: self.render_pipelines.data.read().generate_report(),
-            compute_pipelines: self.compute_pipelines.data.read().generate_report(),
-            query_sets: self.query_sets.data.read().generate_report(),
+            // render_bundles: self.render_bundles.data.read().generate_report(),
+            // render_pipelines: self.render_pipelines.data.read().generate_report(),
+            // compute_pipelines: self.compute_pipelines.data.read().generate_report(),
+            // query_sets: self.query_sets.data.read().generate_report(),
             buffers: self.buffers.data.read().generate_report(),
             textures: self.textures.data.read().generate_report(),
             texture_views: self.texture_views.data.read().generate_report(),
-            samplers: self.samplers.data.read().generate_report(),
+            // samplers: self.samplers.data.read().generate_report(),
         }
     }
 }
@@ -943,16 +1009,23 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     }
 }
 
-pub trait HalApi: hal::Api {
+/// Safety: VARIANT must be globally unique per type that implements this trait.
+///
+/// This generally can't be enforced by Rust  (except by using typeid which has too many bits).
+/// For the most part this should mean all implementations of HalApi should live in this crate
+/// and nowhere else (we could enforce this with a sealed supertrait, but the trait should still
+/// be unsafe regardless to better encapsulate the unsafety).
+pub unsafe trait HalApi: hal::Api {
     const VARIANT: Backend;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
-    fn get_surface(surface: &Surface) -> &HalSurface<Self>;
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self>;
+    fn get_surface(surface: &SurfaceRaw) -> &HalSurface<Self>;
+    fn get_surface_mut(surface: &mut SurfaceRaw) -> &mut HalSurface<Self>;
 }
 
 #[cfg(vulkan)]
-impl HalApi for hal::api::Vulkan {
+/// Safety: The VARIANT is only ever set to this value once in this crate.
+unsafe impl HalApi for hal::api::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
         Instance {
@@ -964,16 +1037,17 @@ impl HalApi for hal::api::Vulkan {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.vulkan
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+    fn get_surface(surface: &SurfaceRaw) -> &HalSurface<Self> {
         surface.vulkan.as_ref().unwrap()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
+    fn get_surface_mut(surface: &mut SurfaceRaw) -> &mut HalSurface<Self> {
         surface.vulkan.as_mut().unwrap()
     }
 }
 
 #[cfg(metal)]
-impl HalApi for hal::api::Metal {
+/// Safety: The VARIANT is only ever set to this value once in this crate.
+unsafe impl HalApi for hal::api::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
         Instance {
@@ -984,16 +1058,17 @@ impl HalApi for hal::api::Metal {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+    fn get_surface(surface: &SurfaceRaw) -> &HalSurface<Self> {
         surface.metal.as_ref().unwrap()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
+    fn get_surface_mut(surface: &mut SurfaceRaw) -> &mut HalSurface<Self> {
         surface.metal.as_mut().unwrap()
     }
 }
 
 #[cfg(dx12)]
-impl HalApi for hal::api::Dx12 {
+/// Safety: The VARIANT is only ever set to this value once in this crate.
+unsafe impl HalApi for hal::api::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
         Instance {
@@ -1005,32 +1080,34 @@ impl HalApi for hal::api::Dx12 {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx12
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+    fn get_surface(surface: &SurfaceRaw) -> &HalSurface<Self> {
         surface.dx12.as_ref().unwrap()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
+    fn get_surface_mut(surface: &mut SurfaceRaw) -> &mut HalSurface<Self> {
         surface.dx12.as_mut().unwrap()
     }
 }
 
 /*
 #[cfg(dx11)]
-impl HalApi for hal::api::Dx11 {
+/// Safety: The VARIANT is only ever set to this value once in this crate.
+unsafe impl HalApi for hal::api::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+    fn get_surface(surface: &SurfaceRaw) -> &HalSurface<Self> {
         surface.dx11.as_ref().unwrap()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
+    fn get_surface_mut(surface: &mut SurfaceRaw) -> &mut HalSurface<Self> {
         surface.dx11.as_mut().unwrap()
     }
 }
 */
 
 #[cfg(gl)]
-impl HalApi for hal::api::Gles {
+/// Safety: The VARIANT is only ever set to this value once in this crate.
+unsafe impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
         Instance {
@@ -1042,10 +1119,10 @@ impl HalApi for hal::api::Gles {
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.gl
     }
-    fn get_surface(surface: &Surface) -> &HalSurface<Self> {
+    fn get_surface(surface: &SurfaceRaw) -> &HalSurface<Self> {
         surface.gl.as_ref().unwrap()
     }
-    fn get_surface_mut(surface: &mut Surface) -> &mut HalSurface<Self> {
+    fn get_surface_mut(surface: &mut SurfaceRaw) -> &mut HalSurface<Self> {
         surface.gl.as_mut().unwrap()
     }
 }

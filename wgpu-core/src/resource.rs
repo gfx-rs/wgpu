@@ -1,16 +1,17 @@
 use crate::{
-    device::{DeviceError, HostMap, MissingFeatures},
+    device::{Device, DeviceError, HostMap, MissingFeatures},
     hub::Resource,
-    id::{DeviceId, SurfaceId, TextureId, Valid},
+    id::{self, AnyBackend, Hkt, SurfaceId, TextureId, Valid},
     memory_init_tracker::MemoryInitTracker,
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
 };
 
+use hal::{Device as _};
 use thiserror::Error;
 
-use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
+use std::{borrow::Borrow, mem::ManuallyDrop, num::NonZeroU8, ops::Range, ptr::NonNull};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -117,7 +118,7 @@ pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
 #[derive(Debug)]
 pub struct Buffer<A: hal::Api> {
     pub(crate) raw: Option<A::Buffer>,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) device_id: /*Stored<DeviceId>*/id::ValidId2<Device<A>>,
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: MemoryInitTracker,
@@ -142,6 +143,18 @@ pub enum CreateBufferError {
 
 impl<A: hal::Api> Resource for Buffer<A> {
     const TYPE: &'static str = "Buffer";
+
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        _: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: crate::hub::HalApi + 'b,
+    {
+        // Nothing to trace.
+        Ok(())
+    }
 
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
@@ -183,7 +196,7 @@ impl<A: hal::Api> TextureInner<A> {
 #[derive(Debug)]
 pub struct Texture<A: hal::Api> {
     pub(crate) inner: TextureInner<A>,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) device_id: /*Stored<DeviceId>*/id::ValidId2<Device<A>>,
     pub(crate) desc: wgt::TextureDescriptor<()>,
     pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
@@ -233,6 +246,24 @@ pub enum CreateTextureError {
 impl<A: hal::Api> Resource for Texture<A> {
     const TYPE: &'static str = "Texture";
 
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        id: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _f: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: crate::hub::HalApi + 'b,
+    {
+        if let TextureInner::Surface { parent_id: _, .. } = &id.inner {
+            // FIXME: Perform when we update SurfaceId!
+            // f(Surface::upcast(parent_id))
+            Ok(())
+        } else {
+            // Nothing to trace.
+            Ok(())
+        }
+    }
+
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
     }
@@ -259,6 +290,20 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: Option<wgt::TextureViewDimension>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
+}
+
+impl<'a> TextureViewDescriptor<'a> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, A: hal::Api, F: id::AllResources<A>, E>(
+        &'b self,
+        _f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where id::Cached<A, &'b F>: 'b,
+    {
+        // Nothing to trace.
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -336,6 +381,19 @@ impl<A: hal::Api> Resource for TextureView<A> {
     fn life_guard(&self) -> &LifeGuard {
         &self.life_guard
     }
+
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        _id: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _f: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: crate::hub::HalApi + 'b,
+    {
+        // FIXME: Perform when we update TextureId!
+        // f(Texture::upcast(id))
+        Ok(())
+    }
 }
 
 impl<A: hal::Api> Borrow<()> for TextureView<A> {
@@ -388,11 +446,25 @@ impl Default for SamplerDescriptor<'_> {
     }
 }
 
+impl<'a> SamplerDescriptor<'a> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, A: hal::Api, F: id::AllResources<A>, E>(
+        &'b self,
+        _f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where id::Cached<A, &'b F>: 'b,
+    {
+        // Nothing to trace.
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct Sampler<A: hal::Api> {
-    pub(crate) raw: A::Sampler,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) raw: ManuallyDrop<A::Sampler>,
+    pub(crate) device_id: /*Stored<DeviceId>*/id::ValidId2<Device<A>>,
+    // pub(crate) life_guard: LifeGuard,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
     /// `true` if this is a filtering sampler
@@ -415,16 +487,45 @@ pub enum CreateSamplerError {
 impl<A: hal::Api> Resource for Sampler<A> {
     const TYPE: &'static str = "Sampler";
 
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        _: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: crate::hub::HalApi + 'b,
+    {
+        // Nothing to trace.
+        Ok(())
+    }
+
     fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+        unimplemented!("FIXME: This method needs to go away!")
+        // &self.life_guard
     }
 }
 
-impl<A: hal::Api> Borrow<()> for Sampler<A> {
+impl<A: hal::Api> Drop for Sampler<A> {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            unsafe {
+                // Safety: the sampler is uniquely owned, so it is unused by any CPU resources,
+                // and the rest of the program guarantees that it's not used by any GPU resources
+                // either (absent panics), so calling destroy_sampler is safe.
+                //
+                // We never use self.raw again after calling ManuallyDrop::take, so calling that
+                // is also safe.
+                self.device_id.raw.destroy_sampler(ManuallyDrop::take(&mut self.raw));
+            }
+        }
+    }
+}
+
+/* impl<A: hal::Api> Borrow<()> for Sampler<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
-}
+} */
 #[derive(Clone, Debug, Error)]
 pub enum CreateQuerySetError {
     #[error(transparent)]
@@ -441,25 +542,55 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct QuerySet<A: hal::Api> {
-    pub(crate) raw: A::QuerySet,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) raw: ManuallyDrop<A::QuerySet>,
+    pub(crate) device_id: /*Stored<DeviceId>*/id::ValidId2<Device<A>>,
+    // pub(crate) life_guard: LifeGuard,
     pub(crate) desc: wgt::QuerySetDescriptor<()>,
 }
 
 impl<A: hal::Api> Resource for QuerySet<A> {
     const TYPE: &'static str = "QuerySet";
 
+    #[inline]
+    fn trace_resources<'b, E, Trace: FnMut(id::Cached<<Self as AnyBackend>::Backend, id::IdGuardCon>) -> Result<(), E>>(
+        _: <id::IdGuardCon<'b> as Hkt<Self>>::Output,
+        _: Trace,
+    ) -> Result<(), E>
+        where
+            <Self as AnyBackend>::Backend: crate::hub::HalApi + 'b,
+    {
+        // Nothing to trace.
+        Ok(())
+    }
+
     fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+        unimplemented!("FIXME: This method needs to go away!")
+        // &self.life_guard
     }
 }
 
-impl<A: hal::Api> Borrow<()> for QuerySet<A> {
+impl<A: hal::Api> Drop for QuerySet<A> {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            unsafe {
+                // Safety: the query set is uniquely owned, so it is unused by any CPU resources,
+                // and the rest of the program guarantees that it's not used by any GPU resources
+                // either (absent panics), so calling destroy_query_set is safe.
+                //
+                // We never use self.raw again after calling ManuallyDrop::take, so calling that
+                // is also safe.
+                self.device_id.raw.destroy_query_set(ManuallyDrop::take(&mut self.raw));
+            }
+        }
+    }
+}
+
+
+/* impl<A: hal::Api> Borrow<()> for QuerySet<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
-}
+} */
 
 #[derive(Clone, Debug, Error)]
 pub enum DestroyError {

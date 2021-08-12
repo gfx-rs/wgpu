@@ -1,5 +1,5 @@
 use crate::{
-    binding_model::{BindError, BindGroup, PushConstantUploadError},
+    binding_model::{BindError, PushConstantUploadError},
     command::{
         bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
         CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
@@ -8,10 +8,10 @@ use crate::{
     device::MissingDownlevelFlags,
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
-    id,
+    id::{self, AllResources, Hkt},
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{Buffer, Texture},
-    track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
+    track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError2},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
 };
@@ -22,7 +22,7 @@ use thiserror::Error;
 use std::{fmt, mem, str};
 
 #[doc(hidden)]
-#[derive(Clone, Copy, Debug)]
+#[derive(/* Clone, Copy, */ Debug)]
 #[cfg_attr(
     any(feature = "serial-pass", feature = "trace"),
     derive(serde::Serialize)
@@ -31,13 +31,23 @@ use std::{fmt, mem, str};
     any(feature = "serial-pass", feature = "replay"),
     derive(serde::Deserialize)
 )]
-pub enum ComputeCommand {
+pub enum ComputeCommand<A: hal::Api, F: AllResources<A>> {
     SetBindGroup {
         index: u8,
         num_dynamic_offsets: u8,
-        bind_group_id: id::BindGroupId,
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::binding_model::BindGroup<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::binding_model::BindGroup<A>>>::Output: serde::Deserialize<'de>")))]
+        bind_group_id: <F as Hkt<crate::binding_model::BindGroup<A>>>::Output,
     },
-    SetPipeline(id::ComputePipelineId),
+    SetPipeline(
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::pipeline::ComputePipeline<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::pipeline::ComputePipeline<A>>>::Output: serde::Deserialize<'de>")))]
+        <F as Hkt<crate::pipeline::ComputePipeline<A>>>::Output,
+    ),
     SetPushConstant {
         offset: u32,
         size_bytes: u32,
@@ -58,23 +68,187 @@ pub enum ComputeCommand {
         len: usize,
     },
     WriteTimestamp {
-        query_set_id: id::QuerySetId,
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::resource::QuerySet<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::resource::QuerySet<A>>>::Output: serde::Deserialize<'de>")))]
+        query_set_id: <F as Hkt<crate::resource::QuerySet<A>>>::Output,
         query_index: u32,
     },
     BeginPipelineStatisticsQuery {
-        query_set_id: id::QuerySetId,
+        #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+          serde(bound(serialize = "<F as Hkt<crate::resource::QuerySet<A>>>::Output: serde::Serialize")))]
+        #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+          serde(bound(deserialize = "<F as Hkt<crate::resource::QuerySet<A>>>::Output: serde::Deserialize<'de>")))]
+        query_set_id: <F as Hkt<crate::resource::QuerySet<A>>>::Output,
         query_index: u32,
     },
     EndPipelineStatisticsQuery,
 }
 
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
-pub struct ComputePass {
-    base: BasePass<ComputeCommand>,
+impl<A: hal::Api, F: AllResources<A>> ComputeCommand<A, F> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, E>(
+        &'b self,
+        mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where id::Cached<A, &'b F>: 'b,
+    {
+        use self::ComputeCommand::*;
+        use id::Cached;
+
+        match self {
+            SetBindGroup { bind_group_id, .. } => f(Cached::BindGroup(bind_group_id)),
+            SetPipeline(pipeline_id) => f(Cached::ComputePipeline(pipeline_id)),
+            DispatchIndirect { buffer_id: _, .. } =>
+                // FIXME: Uncomment when Buffer is Arc'd.
+                // f(Cached::Buffer(buffer_id)),
+                Ok(()),
+            WriteTimestamp { query_set_id, .. } => f(Cached::QuerySet(query_set_id)),
+            BeginPipelineStatisticsQuery { query_set_id, .. } => f(Cached::QuerySet(query_set_id)),
+            | SetPushConstant { .. }
+            | Dispatch { .. }
+            | PushDebugGroup { .. } | PopDebugGroup | InsertDebugMarker { .. }
+            | EndPipelineStatisticsQuery => Ok(()),
+        }
+    }
+}
+
+impl<A: hal::Api, F: AllResources<A>> Clone for ComputeCommand<A, F>
+    where
+        <F as Hkt<crate::binding_model::BindGroup<A>>>::Output: Copy,
+        <F as Hkt<crate::resource::QuerySet<A>>>::Output: Copy,
+        <F as Hkt<crate::pipeline::ComputePipeline<A>>>::Output: Copy,
+{
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<A: hal::Api, F: AllResources<A>> Copy for ComputeCommand<A, F>
+    where
+        <F as Hkt<crate::binding_model::BindGroup<A>>>::Output: Copy,
+        <F as Hkt<crate::resource::QuerySet<A>>>::Output: Copy,
+        <F as Hkt<crate::pipeline::ComputePipeline<A>>>::Output: Copy,
+{}
+
+impl<A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    super::FromCommand<ComputeCommand<A, F>> for ComputeCommand<B, G>
+    where
+        <F as Hkt<crate::binding_model::BindGroup<A>>>::Output:
+            Into<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output>,
+        <F as Hkt<crate::resource::QuerySet<A>>>::Output:
+            Into<<G as Hkt<crate::resource::QuerySet<B>>>::Output>,
+        <F as Hkt<crate::pipeline::ComputePipeline<A>>>::Output:
+            Into<<G as Hkt<crate::pipeline::ComputePipeline<B>>>::Output>,
+{
+    fn from(command: ComputeCommand<A, F>) -> Self {
+        use self::ComputeCommand::*;
+
+        match command {
+            SetBindGroup { index, num_dynamic_offsets, bind_group_id } =>
+                SetBindGroup { index, num_dynamic_offsets, bind_group_id: bind_group_id.into() },
+            SetPipeline(pipeline_id) => SetPipeline(pipeline_id.into()),
+            SetPushConstant { offset, size_bytes, values_offset } =>
+                SetPushConstant { offset, size_bytes, values_offset },
+            Dispatch(groups) => Dispatch(groups),
+            DispatchIndirect { buffer_id, offset } =>
+                DispatchIndirect { buffer_id, offset },
+            PushDebugGroup { color, len } => PushDebugGroup { color, len },
+            PopDebugGroup => PopDebugGroup,
+            InsertDebugMarker { color, len } => InsertDebugMarker { color, len },
+            WriteTimestamp { query_set_id, query_index } =>
+                WriteTimestamp { query_set_id: query_set_id.into(), query_index },
+            BeginPipelineStatisticsQuery { query_set_id, query_index } =>
+                BeginPipelineStatisticsQuery { query_set_id: query_set_id.into(), query_index },
+            EndPipelineStatisticsQuery => EndPipelineStatisticsQuery,
+        }
+    }
+}
+
+impl<'a, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    super::FromCommand<&'a ComputeCommand<A, F>> for ComputeCommand<B, G>
+    where
+        &'a <F as Hkt<crate::binding_model::BindGroup<A>>>::Output:
+            Into<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output>,
+        &'a <F as Hkt<crate::resource::QuerySet<A>>>::Output:
+            Into<<G as Hkt<crate::resource::QuerySet<B>>>::Output>,
+        &'a <F as Hkt<crate::pipeline::ComputePipeline<A>>>::Output:
+            Into<<G as Hkt<crate::pipeline::ComputePipeline<B>>>::Output>,
+{
+    fn from(command: &'a ComputeCommand<A, F>) -> Self {
+        use self::ComputeCommand::*;
+
+        match *command {
+            SetBindGroup { index, num_dynamic_offsets, ref bind_group_id } =>
+                SetBindGroup { index, num_dynamic_offsets, bind_group_id: bind_group_id.into() },
+            SetPipeline(ref pipeline_id) => SetPipeline(pipeline_id.into()),
+            SetPushConstant { offset, size_bytes, values_offset } =>
+                SetPushConstant { offset, size_bytes, values_offset },
+            Dispatch(groups) => Dispatch(groups),
+            DispatchIndirect { buffer_id, offset } =>
+                DispatchIndirect { buffer_id, offset },
+            PushDebugGroup { color, len } => PushDebugGroup { color, len },
+            PopDebugGroup => PopDebugGroup,
+            InsertDebugMarker { color, len } => InsertDebugMarker { color, len },
+            WriteTimestamp { ref query_set_id, query_index } =>
+                WriteTimestamp { query_set_id: query_set_id.into(), query_index },
+            BeginPipelineStatisticsQuery { ref query_set_id, query_index } =>
+                BeginPipelineStatisticsQuery { query_set_id: query_set_id.into(), query_index },
+            EndPipelineStatisticsQuery => EndPipelineStatisticsQuery,
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl<'a, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>, E>
+    core::convert::TryFrom<(&'a id::IdCache2, ComputeCommand<A, F>)> for ComputeCommand<B, G>
+    where
+        (&'a id::IdCache2, <F as Hkt<crate::binding_model::BindGroup<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output, Error=E>,
+        (&'a id::IdCache2, <F as Hkt<crate::resource::QuerySet<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<crate::resource::QuerySet<B>>>::Output, Error=E>,
+        (&'a id::IdCache2, <F as Hkt<crate::pipeline::ComputePipeline<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<crate::pipeline::ComputePipeline<B>>>::Output, Error=E>,
+{
+    type Error = E/* <(&'a id::IdCache2,  <F as Hkt<crate::binding_model::BindGroup<A>>>::Output)
+                  as core::convert::TryInto<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output>>::Error */;
+
+    fn try_from((cache, command): (&'a id::IdCache2, ComputeCommand<A, F>)) -> Result<Self, Self::Error> {
+        use core::convert::TryInto;
+        use self::ComputeCommand::*;
+
+        Ok(match command {
+            SetBindGroup { index, num_dynamic_offsets, bind_group_id } =>
+                SetBindGroup { index, num_dynamic_offsets, bind_group_id: (cache, bind_group_id).try_into()? },
+            SetPipeline(pipeline_id) => SetPipeline((cache, pipeline_id).try_into()?),
+            SetPushConstant { offset, size_bytes, values_offset } =>
+                SetPushConstant { offset, size_bytes, values_offset },
+            Dispatch(groups) => Dispatch(groups),
+            DispatchIndirect { buffer_id, offset } =>
+                DispatchIndirect { buffer_id, offset },
+            PushDebugGroup { color, len } => PushDebugGroup { color, len },
+            PopDebugGroup => PopDebugGroup,
+            InsertDebugMarker { color, len } => InsertDebugMarker { color, len },
+            WriteTimestamp { query_set_id, query_index } =>
+                WriteTimestamp { query_set_id: (cache, query_set_id).try_into()?, query_index },
+            BeginPipelineStatisticsQuery { query_set_id, query_index } =>
+                BeginPipelineStatisticsQuery { query_set_id: (cache, query_set_id).try_into()?, query_index },
+            EndPipelineStatisticsQuery => EndPipelineStatisticsQuery,
+        })
+    }
+}
+
+type ComputePassCommand<'a> = ComputeCommand<hal::api::Empty, /*F*//*id::IdGuardCon<'a>*/&'a id::IdCon>;
+
+// #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+pub struct ComputePass<'a> {
+    base: BasePass<ComputePassCommand<'a>>,
     parent_id: id::CommandEncoderId,
 }
 
-impl ComputePass {
+impl<'a> ComputePass<'a> {
     pub fn new(parent_id: id::CommandEncoderId, desc: &ComputePassDescriptor) -> Self {
         Self {
             base: BasePass::new(&desc.label),
@@ -88,11 +262,11 @@ impl ComputePass {
 
     #[cfg(feature = "trace")]
     pub fn into_command(self) -> crate::device::trace::Command {
-        crate::device::trace::Command::RunComputePass { base: self.base }
+        crate::device::trace::Command::RunComputePass { base: BasePass::from_owned(self.base) }
     }
 }
 
-impl fmt::Debug for ComputePass {
+impl<'a> fmt::Debug for ComputePass<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -165,15 +339,15 @@ pub enum ComputePassErrorInner {
 impl PrettyError for ComputePassErrorInner {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        match *self {
+        match self {
             Self::InvalidBindGroup(id) => {
-                fmt.bind_group_label(&id);
+                fmt.bind_group_label(id);
             }
             Self::InvalidPipeline(id) => {
-                fmt.compute_pipeline_label(&id);
+                fmt.compute_pipeline_label(id);
             }
             Self::InvalidIndirectBuffer(id) => {
-                fmt.buffer_label(&id);
+                fmt.buffer_label(id);
             }
             _ => {}
         };
@@ -201,23 +375,23 @@ impl<T, E> MapPassErr<T, ComputePassError> for Result<T, E>
 where
     E: Into<ComputePassErrorInner>,
 {
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, ComputePassError> {
+    fn map_pass_err<F: Fn() -> PassErrorScope>(self, scope: F) -> Result<T, ComputePassError> {
         self.map_err(|inner| ComputePassError {
-            scope,
+            scope: scope(),
             inner: inner.into(),
         })
     }
 }
 
 #[derive(Debug)]
-struct State {
-    binder: Binder,
-    pipeline: StateChange<id::ComputePipelineId>,
+struct State<'a, A: HalApi> {
+    binder: Binder<'a, A>,
+    pipeline: StateChange<&'a id::ComputePipelineId>,
     trackers: StatefulTrackerSubset,
     debug_scope_depth: u32,
 }
 
-impl State {
+impl<'a, A: HalApi> State<'a, A> {
     fn is_ready(&self) -> Result<(), DispatchError> {
         //TODO: vertex buffers
         let bind_mask = self.binder.invalid_mask();
@@ -233,16 +407,16 @@ impl State {
         Ok(())
     }
 
-    fn flush_states<A: HalApi>(
+    fn flush_states(
         &mut self,
         raw_encoder: &mut A::CommandEncoder,
-        base_trackers: &mut TrackerSet,
-        bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
+        base_trackers: &mut TrackerSet<A>,
+        // bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
-            self.trackers.merge_extend(&bind_group_guard[id].used)?;
+            self.trackers.merge_extend(&/*bind_group_guard[id]*/id.used)?;
             //Note: stateless trackers are not merged: the lifetime reference
             // is held to the bind group itself.
         }
@@ -266,36 +440,38 @@ impl State {
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_run_compute_pass<A: HalApi>(
+    pub fn command_encoder_run_compute_pass<'a, A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        pass: &ComputePass,
+        pass: &ComputePass<'a>,
     ) -> Result<(), ComputePassError> {
         self.command_encoder_run_compute_pass_impl::<A>(encoder_id, pass.base.as_ref())
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_compute_pass_impl<A: HalApi>(
+    pub fn command_encoder_run_compute_pass_impl<'a, A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePassRef<ComputeCommand>,
+        base: BasePassRef<ComputePassCommand<'a>>,
     ) -> Result<(), ComputePassError> {
         profiling::scope!("run_compute_pass", "CommandEncoder");
-        let scope = PassErrorScope::Pass(encoder_id);
+        let scope = || PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        // let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
+        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token);
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
         let cmd_buf =
             CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
         // will be reset to true if recording is done without errors
         cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.encoder.open();
 
-        let device = &device_guard[cmd_buf.device_id.value];
+        let device = /*&device_guard[*/&*cmd_buf.device_id/*.value]*/;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -304,13 +480,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let (_, mut token) = hub.render_bundles.read(&mut token);
-        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-        let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-        let (pipeline_guard, mut token) = hub.compute_pipelines.read(&mut token);
-        let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        // let (_, mut token) = hub.render_bundles.read(&mut token);
+        // let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+        // let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+        // let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+        // let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
         let mut state = State {
             binder: Binder::new(),
@@ -335,9 +509,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let scope = PassErrorScope::SetBindGroup(bind_group_id);
+                    let bind_group_id_ = id::expect_backend(bind_group_id);
+                    // FIXME: if bind_group.device() != self.device() {
+                    //   return Err(ComputePassErrorInner::InvalidBindGroup(bind_group_id.to_owned()))
+                    //          .map_pass_err(scope);
+                    // }
+                    let scope = || PassErrorScope::SetBindGroup(bind_group_id.to_owned());
 
-                    let max_bind_groups = cmd_buf.limits.max_bind_groups;
+                    let max_bind_groups = cmd_buf.device_id.limits.max_bind_groups;
                     if (index as u32) >= max_bind_groups {
                         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
                             index,
@@ -356,9 +535,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let bind_group = cmd_buf
                         .trackers
                         .bind_groups
-                        .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                        .map_err(|_| ComputePassErrorInner::InvalidBindGroup(bind_group_id))
-                        .map_pass_err(scope)?;
+                        .use_extend(/*&*bind_group_guard, */bind_group_id_, (), ())
+                        // FIXME: Should not be necessary when never-type (!) stabilizes, since
+                        // it can automatically work out that this branch can't be taken and
+                        // make the Ok() branch irrefutable.
+                        .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                        /* .map_err(|_| ComputePassErrorInner::InvalidBindGroup(bind_group_id))
+                        .map_pass_err(scope)?*/;
                     bind_group
                         .validate_dynamic_bindings(&temp_offsets)
                         .map_pass_err(scope)?;
@@ -382,15 +565,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let pipeline_layout_id = state.binder.pipeline_layout_id;
                     let entries = state.binder.assign_group(
                         index as usize,
-                        id::Valid(bind_group_id),
+                        // id::Valid(bind_group_id),
                         bind_group,
                         &temp_offsets,
                     );
                     if !entries.is_empty() {
                         let pipeline_layout =
-                            &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw;
+                            &/*pipeline_layout_guard[*/pipeline_layout_id.unwrap()/*]*/.raw;
                         for (i, e) in entries.iter().enumerate() {
-                            let raw_bg = &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+                            let raw_bg = &/*bind_group_guard[e.group_id.as_ref().unwrap().value]*/e.group_id.as_ref().unwrap().raw;
                             unsafe {
                                 raw.set_bind_group(
                                     pipeline_layout,
@@ -403,35 +586,44 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::SetPipeline(pipeline_id) => {
-                    let scope = PassErrorScope::SetPipelineCompute(pipeline_id);
+                    // let scope = || PassErrorScope::SetPipelineCompute(pipeline_id.to_owned());
 
                     if state.pipeline.set_and_check_redundant(pipeline_id) {
                         continue;
                     }
 
+                    let pipeline_id_ = id::expect_backend(pipeline_id);
+                    // FIXME: if pipeline_id_.device() != self.device() {
+                    //   return Err(ComputePassErrorInner::InvalidPipeline(pipeline_id.to_owned()))
+                    //          .map_pass_err(scope);
+                    // }
                     let pipeline = cmd_buf
                         .trackers
                         .compute_pipes
-                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .map_err(|_| ComputePassErrorInner::InvalidPipeline(pipeline_id))
-                        .map_pass_err(scope)?;
+                        .use_extend(/*&*pipeline_guard, */pipeline_id_, (), ())
+                        // FIXME: Should not be necessary when never-type (!) stabilizes, since
+                        // it can automatically work out that this branch can't be taken and
+                        // make the Ok() branch irrefutable.
+                        .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                        /*.map_err(|_| ComputePassErrorInner::InvalidPipeline(pipeline_id))
+                        .map_pass_err(scope)?*/;
 
                     unsafe {
                         raw.set_compute_pipeline(&pipeline.raw);
                     }
 
                     // Rebind resources
-                    if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
-                        let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                    if state.binder.pipeline_layout_id != Some(pipeline.layout_id/*.value*/.borrow()) {
+                        let pipeline_layout = &/*pipeline_layout_guard[*/pipeline.layout_id/*.value]*/;
 
                         let (start_index, entries) = state.binder.change_pipeline_layout(
-                            &*pipeline_layout_guard,
-                            pipeline.layout_id.value,
+                            /*&*pipeline_layout_guard,*/
+                            pipeline_id_.as_ref().layout_id/*.value*/.borrow(),
                         );
                         if !entries.is_empty() {
                             for (i, e) in entries.iter().enumerate() {
                                 let raw_bg =
-                                    &bind_group_guard[e.group_id.as_ref().unwrap().value].raw;
+                                    &/*bind_group_guard[e.group_id.as_ref().unwrap().value]*/e.group_id.as_ref().unwrap().raw;
                                 unsafe {
                                     raw.set_bind_group(
                                         &pipeline_layout.raw,
@@ -470,7 +662,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     size_bytes,
                     values_offset,
                 } => {
-                    let scope = PassErrorScope::SetPushConstant;
+                    let scope = || PassErrorScope::SetPushConstant;
 
                     let end_offset_bytes = offset + size_bytes;
                     let values_end_offset =
@@ -486,7 +678,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             DispatchError::MissingPipeline,
                         ))
                         .map_pass_err(scope)?;
-                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
+                    let pipeline_layout = &/*pipeline_layout_guard[*/pipeline_layout_id/*]*/;
 
                     pipeline_layout
                         .validate_push_constant_ranges(
@@ -506,9 +698,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::Dispatch(groups) => {
-                    let scope = PassErrorScope::Dispatch {
+
+                    let last_state = state.pipeline.last_state;
+                    let scope = || PassErrorScope::Dispatch {
                         indirect: false,
-                        pipeline: state.pipeline.last_state,
+                        pipeline: last_state.cloned(),
                     };
 
                     state.is_ready().map_pass_err(scope)?;
@@ -516,7 +710,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .flush_states(
                             raw,
                             &mut cmd_buf.trackers,
-                            &*bind_group_guard,
+                            // &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
                         )
@@ -526,9 +720,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
-                    let scope = PassErrorScope::Dispatch {
+                    let last_state = state.pipeline.last_state;
+                    let scope = || PassErrorScope::Dispatch {
                         indirect: true,
-                        pipeline: state.pipeline.last_state,
+                        pipeline: last_state.cloned(),
                     };
 
                     state.is_ready().map_pass_err(scope)?;
@@ -579,7 +774,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .flush_states(
                             raw,
                             &mut cmd_buf.trackers,
-                            &*bind_group_guard,
+                            // &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
                         )
@@ -599,7 +794,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::PopDebugGroup => {
-                    let scope = PassErrorScope::PopDebugGroup;
+                    let scope = || PassErrorScope::PopDebugGroup;
 
                     if state.debug_scope_depth == 0 {
                         return Err(ComputePassErrorInner::InvalidPopDebugGroup)
@@ -621,46 +816,58 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     query_set_id,
                     query_index,
                 } => {
-                    let scope = PassErrorScope::WriteTimestamp;
+                    let query_set_id_ = id::expect_backend(query_set_id);
+                    // FIXME: if query_set_id_.device() != self.device() {
+                    //   return Err(ComputePassErrorInner::InvalidQuerySet(query_set_id_.to_owned()))
+                    //          .map_pass_err(scope);
+                    // }
+                    let scope = || PassErrorScope::WriteTimestamp;
 
                     let query_set = cmd_buf
                         .trackers
                         .query_sets
-                        .use_extend(&*query_set_guard, query_set_id, (), ())
-                        .map_err(|e| match e {
+                        .use_extend(/*&*query_set_guard, */query_set_id_, (), ())
+                        .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                        /* .map_err(|e| match e {
                             UseExtendError::InvalidResource => {
                                 ComputePassErrorInner::InvalidQuerySet(query_set_id)
                             }
                             _ => unreachable!(),
                         })
-                        .map_pass_err(scope)?;
+                        .map_pass_err(scope)?*/;
 
                     query_set
-                        .validate_and_write_timestamp(raw, query_set_id, query_index, None)
+                        .validate_and_write_timestamp(raw, /*query_set_id, */query_index, None)
                         .map_pass_err(scope)?;
                 }
                 ComputeCommand::BeginPipelineStatisticsQuery {
                     query_set_id,
                     query_index,
                 } => {
-                    let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+                    let query_set_id_ = id::expect_backend(query_set_id);
+                    // FIXME: if query_set_id_.device() != self.device() {
+                    //   return Err(ComputePassErrorInner::InvalidQuerySet(query_set_id_.to_owned()))
+                    //          .map_pass_err(scope);
+                    // }
+                    let scope = || PassErrorScope::BeginPipelineStatisticsQuery;
 
                     let query_set = cmd_buf
                         .trackers
                         .query_sets
-                        .use_extend(&*query_set_guard, query_set_id, (), ())
-                        .map_err(|e| match e {
+                        .use_extend(/*&*query_set_guard, */query_set_id_, (), ())
+                        .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                        /* .map_err(|e| match e {
                             UseExtendError::InvalidResource => {
                                 ComputePassErrorInner::InvalidQuerySet(query_set_id)
                             }
                             _ => unreachable!(),
                         })
-                        .map_pass_err(scope)?;
+                        .map_pass_err(scope)?*/;
 
                     query_set
                         .validate_and_begin_pipeline_statistics_query(
                             raw,
-                            query_set_id,
+                            /*query_set_id,*/
                             query_index,
                             None,
                             &mut active_query,
@@ -668,9 +875,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
                 }
                 ComputeCommand::EndPipelineStatisticsQuery => {
-                    let scope = PassErrorScope::EndPipelineStatisticsQuery;
+                    let scope = || PassErrorScope::EndPipelineStatisticsQuery;
 
-                    end_pipeline_statistics_query(raw, &*query_set_guard, &mut active_query)
+                    end_pipeline_statistics_query(raw, /*&*query_set_guard, */&mut active_query)
                         .map_pass_err(scope)?;
                 }
             }
@@ -687,70 +894,77 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub mod compute_ffi {
     use super::{ComputeCommand, ComputePass};
-    use crate::{id, RawString};
-    use std::{convert::TryInto, ffi, slice};
+    use crate::{id/*, RawString*/};
+    use std::{convert::TryInto/*, ffi, slice*/};
     use wgt::{BufferAddress, DynamicOffset};
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
-        pass: &mut ComputePass,
+    #[no_mangle] */
+    pub /*unsafe extern "C" */fn wgpu_compute_pass_set_bind_group<'a>(
+        pass: &mut ComputePass<'a>,
         index: u32,
-        bind_group_id: id::BindGroupId,
-        offsets: *const DynamicOffset,
-        offset_length: usize,
+        bind_group_id: &'a id::BindGroupId,
+        offsets: &[DynamicOffset]/* *const DynamicOffset,
+        offset_length: usize */,
     ) {
+        let offset_length = offsets.len();
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
-        if offset_length != 0 {
+        // if offset_length != 0 {
             pass.base
                 .dynamic_offsets
-                .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
-        }
+                .extend_from_slice(/*slice::from_raw_parts(offsets, offset_length)*/offsets);
+        // }
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_set_pipeline(
-        pass: &mut ComputePass,
-        pipeline_id: id::ComputePipelineId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_compute_pass_set_pipeline<'a>(
+        pass: &mut ComputePass<'a>,
+        pipeline_id: &'a id::ComputePipelineId,
     ) {
         pass.base
             .commands
             .push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `size_bytes` bytes.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_set_push_constant(
-        pass: &mut ComputePass,
+    #[no_mangle] */
+    pub /*unsafe extern "C"*/ fn wgpu_compute_pass_set_push_constant<'a>(
+        pass: &mut ComputePass<'a>,
         offset: u32,
-        size_bytes: u32,
-        data: *const u8,
+        /* size_bytes: u32,
+        data: *const u8, */
+        data_slice: &[u8],
     ) {
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant offset must be aligned to 4 bytes."
         );
+        let size_bytes = data_slice.len().try_into().expect(
+            "Don't push 4gb of push constants in a single push constant"
+        );
         assert_eq!(
             size_bytes & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
             "Push constant size must be aligned to 4 bytes."
         );
-        let data_slice = slice::from_raw_parts(data, size_bytes as usize);
+        // let data_slice = slice::from_raw_parts(data, size_bytes as usize);
         let value_offset = pass.base.push_constant_data.len().try_into().expect(
             "Ran out of push constant space. Don't set 4gb of push constants per ComputePass.",
         );
 
+        // TODO: Consider using something like bytemuck instead of chunks_exact and map, since
+        // extend is specialized for slices.
         pass.base.push_constant_data.extend(
             data_slice
                 .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
@@ -764,9 +978,9 @@ pub mod compute_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_dispatch(
-        pass: &mut ComputePass,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_compute_pass_dispatch<'a>(
+        pass: &mut ComputePass<'a>,
         groups_x: u32,
         groups_y: u32,
         groups_z: u32,
@@ -776,10 +990,10 @@ pub mod compute_ffi {
             .push(ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_dispatch_indirect(
-        pass: &mut ComputePass,
-        buffer_id: id::BufferId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_compute_pass_dispatch_indirect<'a>(
+        pass: &mut ComputePass<'a>,
+        &buffer_id: &'a id::BufferId,
         offset: BufferAddress,
     ) {
         pass.base
@@ -787,17 +1001,19 @@ pub mod compute_ffi {
             .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
     }
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
     /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_push_debug_group(
-        pass: &mut ComputePass,
-        label: RawString,
+    #[no_mangle] */
+    pub /*unsafe extern "C" */fn wgpu_compute_pass_push_debug_group<'a>(
+        pass: &mut ComputePass<'a>,
+        label: /*RawString*/&str,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        // let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        // TODO: collect slices at end of pass?
+        let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(ComputeCommand::PushDebugGroup {
@@ -806,22 +1022,24 @@ pub mod compute_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_compute_pass_pop_debug_group<'a>(pass: &mut ComputePass<'a>) {
         pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
-    /// # Safety
+    /* /// # Safety
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
     /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_insert_debug_marker(
-        pass: &mut ComputePass,
-        label: RawString,
+    #[no_mangle] */
+    pub /* unsafe extern "C" */fn wgpu_compute_pass_insert_debug_marker<'a>(
+        pass: &mut ComputePass<'a>,
+        label: /*RawString*/&str,
         color: u32,
     ) {
-        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        // let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        // TODO: collect slices at end of pass?
+        let bytes = label.as_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(ComputeCommand::InsertDebugMarker {
@@ -830,10 +1048,10 @@ pub mod compute_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_write_timestamp(
-        pass: &mut ComputePass,
-        query_set_id: id::QuerySetId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_compute_pass_write_timestamp<'a>(
+        pass: &mut ComputePass<'a>,
+        query_set_id: &'a id::QuerySetId,
         query_index: u32,
     ) {
         pass.base.commands.push(ComputeCommand::WriteTimestamp {
@@ -842,10 +1060,10 @@ pub mod compute_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_begin_pipeline_statistics_query(
-        pass: &mut ComputePass,
-        query_set_id: id::QuerySetId,
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_compute_pass_begin_pipeline_statistics_query<'a>(
+        pass: &mut ComputePass<'a>,
+        query_set_id: &'a id::QuerySetId,
         query_index: u32,
     ) {
         pass.base
@@ -856,8 +1074,8 @@ pub mod compute_ffi {
             });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_end_pipeline_statistics_query(pass: &mut ComputePass) {
+    // #[no_mangle]
+    pub /* extern "C" */fn wgpu_compute_pass_end_pipeline_statistics_query<'a>(pass: &mut ComputePass<'a>) {
         pass.base
             .commands
             .push(ComputeCommand::EndPipelineStatisticsQuery);

@@ -84,16 +84,16 @@ fn test_backend_macro() {
     }
 
     #[cfg(any(windows, all(unix, not(target_os = "ios"), not(target_os = "macos")),))]
-    assert!(vec.contains(&(1, 'a')));
+    assert!(vec.contains(&(101, 'a')));
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    assert!(vec.contains(&(2, 'b')));
+    assert!(vec.contains(&(102, 'b')));
 
     #[cfg(dx12)]
-    assert!(vec.contains(&(3, 'c')));
+    assert!(vec.contains(&(103, 'c')));
 
     #[cfg(dx11)]
-    assert!(vec.contains(&(4, 'd')));
+    assert!(vec.contains(&(104, 'd')));
 
     // test complex statement-per-backend
     backends_map! {

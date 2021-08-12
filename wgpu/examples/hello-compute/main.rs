@@ -40,6 +40,7 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await?;
 
+    let info = adapter.get_info();
     // `request_device` instantiates the feature specific connection to the GPU, defining some parameters,
     //  `features` being the available features.
     let (device, queue) = adapter
@@ -54,7 +55,6 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         .await
         .unwrap();
 
-    let info = adapter.get_info();
     // skip this on LavaPipe temporarily
     if info.vendor == 0x10005 {
         return None;
@@ -109,7 +109,7 @@ async fn execute_gpu_inner(
     // A pipeline specifies the operation of a shader
 
     // Instantiates the pipeline.
-    let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+    let compute_pipeline = device.create_compute_pipeline(wgpu::ComputePipelineDescriptor {
         label: None,
         layout: None,
         module: &cs_module,

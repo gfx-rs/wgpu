@@ -74,7 +74,7 @@ use glow::HasContext;
 
 use std::{ops::Range, sync::Arc};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 //Note: we can support more samplers if not every one of them is used at a time,

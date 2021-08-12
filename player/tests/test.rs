@@ -11,7 +11,8 @@
 
 use player::{GlobalPlay, IdentityPassThroughFactory};
 use std::{
-    fs::{read_to_string, File},
+    borrow::Borrow,
+    fs::File,
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     ptr, slice,
@@ -52,6 +53,7 @@ struct Expectation {
 struct Test<'a> {
     features: wgt::Features,
     expectations: Vec<Expectation>,
+    #[serde(borrow)]
     actions: Vec<wgc::device::trace::Action<'a>>,
 }
 
@@ -62,8 +64,8 @@ extern "C" fn map_callback(status: wgc::resource::BufferMapAsyncStatus, _user_da
     }
 }
 
-impl Test<'_> {
-    fn load(path: PathBuf, backend: wgt::Backend) -> Self {
+impl<'a> Test<'a> {
+    fn load(path: PathBuf, backend: wgt::Backend, string: &'a mut String) -> Self {
         let backend_name = match backend {
             wgt::Backend::Vulkan => "Vulkan",
             wgt::Backend::Metal => "Metal",
@@ -72,8 +74,9 @@ impl Test<'_> {
             wgt::Backend::Gl => "Gl",
             _ => unreachable!(),
         };
-        let string = read_to_string(path).unwrap().replace("Empty", backend_name);
-        ron::de::from_str(&string).unwrap()
+        File::open(path).unwrap().read_to_string(string).unwrap();
+        *string = string.replace("Empty", backend_name);
+        ron::de::from_str(&*string).unwrap()
     }
 
     fn run(
@@ -81,33 +84,39 @@ impl Test<'_> {
         dir: &Path,
         global: &wgc::hub::Global<IdentityPassThroughFactory>,
         adapter: wgc::id::AdapterId,
-        test_num: u32,
+        // test_num: u32,
     ) {
         let backend = adapter.backend();
-        let device = wgc::id::TypedId::zip(test_num, 0, backend);
-        let (_, error) = wgc::gfx_select!(adapter => global.adapter_request_device(
-            adapter,
+        // let device = wgc::id::TypedId::zip(test_num, 0, backend);
+        let device = wgc::gfx_select2!(Box adapter => wgc::hub::Global::<IdentityPassThroughFactory>::adapter_request_device(
+            *adapter,
             &wgt::DeviceDescriptor {
                 label: None,
                 features: self.features | wgt::Features::MAPPABLE_PRIMARY_BUFFERS,
                 limits: wgt::Limits::default(),
             },
             None,
-            device
-        ));
-        if let Some(e) = error {
+            // device
+        )).unwrap();
+        /* if let Some(e) = error {
             panic!("{:?}", e);
-        }
+        } */
 
         let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
         println!("\t\t\tRunning...");
-        for action in self.actions {
-            wgc::gfx_select!(device => global.process(device, action, dir, &mut command_buffer_id_manager));
+        let mut trace_cache = wgc::id::IdMap::default();
+        let mut cache = wgc::id::IdCache2::default();
+        let device = device.borrow();
+        let actions = global.init_actions(self.actions);
+        for action in actions.into_iter().rev() {
+            wgc::gfx_select2!(&Arc device =>
+                              global.process(device, action, dir, &mut trace_cache, &mut cache, &mut command_buffer_id_manager));
         }
         println!("\t\t\tMapping...");
         for expect in &self.expectations {
-            let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
-            wgc::gfx_select!(device => global.buffer_map_async(
+            // let buffer = cached.get(expect.buffer.index).unwrap();
+            let buffer: wgc::id::BufferId = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
+            wgc::gfx_select!(buffer => global.buffer_map_async(
                 buffer,
                 expect.offset .. expect.offset+expect.data.len() as wgt::BufferAddress,
                 wgc::resource::BufferMapOperation {
@@ -120,7 +129,7 @@ impl Test<'_> {
         }
 
         println!("\t\t\tWaiting...");
-        wgc::gfx_select!(device => global.device_poll(device, true)).unwrap();
+        wgc::gfx_select2!(&Arc device => global.device_poll(device, true)).unwrap();
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
@@ -178,40 +187,44 @@ impl Corpus {
         let corpus: Corpus = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
 
         let global = wgc::hub::Global::new("test", IdentityPassThroughFactory, corpus.backends);
+        let mut string = String::new();
         for &backend in BACKENDS {
             if !corpus.backends.contains(backend.into()) {
                 continue;
             }
-            let adapter = match global.request_adapter(
-                &wgc::instance::RequestAdapterOptions {
-                    power_preference: wgt::PowerPreference::LowPower,
-                    compatible_surface: None,
-                },
-                wgc::instance::AdapterInputs::IdSet(
-                    &[wgc::id::TypedId::zip(0, 0, backend)],
-                    |id| id.backend(),
-                ),
-            ) {
-                Ok(adapter) => adapter,
-                Err(_) => continue,
-            };
-
-            println!("\tBackend {:?}", backend);
-            let supported_features =
-                wgc::gfx_select!(adapter => global.adapter_features(adapter)).unwrap();
-            let mut test_num = 0;
             for test_path in &corpus.tests {
+                let adapter = match global.request_adapter(
+                    &wgc::instance::RequestAdapterOptions {
+                        power_preference: wgt::PowerPreference::LowPower,
+                        compatible_surface: None,
+                    },
+                    /*wgc::instance::AdapterInputs::IdSet(
+                        &[wgc::id::TypedId::zip(0, 0, backend)],
+                        |id| id.backend(),
+                    )*/backend.into(),
+                ) {
+                    Ok(adapter) => adapter,
+                    Err(_) => continue,
+                };
+
+                println!("\tBackend {:?}", backend);
+                let adapter_ = &adapter;
+                let supported_features =
+                    wgc::gfx_select2!(&Box adapter_ => wgc::hub::Global::<IdentityPassThroughFactory>::adapter_features(&adapter_));
+                // let mut test_num = 0;
                 println!("\t\tTest '{:?}'", test_path);
-                let test = Test::load(dir.join(test_path), adapter.backend());
+                let test = Test::load(dir.join(test_path), adapter.backend(), &mut string);
                 if !supported_features.contains(test.features) {
                     println!(
                         "\t\tSkipped due to missing features {:?}",
                         test.features - supported_features
                     );
+                    string.clear();
                     continue;
                 }
-                test.run(dir, &global, adapter, test_num);
-                test_num += 1;
+                test.run(dir, &global, adapter/*, test_num*/);
+                // test_num += 1;
+                string.clear();
             }
         }
     }

@@ -86,7 +86,6 @@ impl framework::Example for Example {
     }
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -172,9 +171,9 @@ impl framework::Example for Example {
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let bind_group_layout = device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
             label: Some("bind group layout"),
-            entries: &[
+            entries: &mut [
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -230,9 +229,9 @@ impl framework::Example for Example {
 
         let index_format = wgpu::IndexFormat::Uint16;
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
             label: None,
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &vs_module,
                 entry_point: "main",
