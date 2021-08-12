@@ -1,6 +1,6 @@
 //! Bounds-checking for SPIR-V output.
 
-use super::{Block, BlockContext, Error, IdGenerator, Instruction, Word};
+use super::{selection::Selection, Block, BlockContext, Error, IdGenerator, Instruction, Word};
 use crate::{arena::Handle, back::BoundsCheckPolicy};
 
 /// The results of emitting code for a left-hand-side expression.
@@ -306,49 +306,30 @@ impl<'w> BlockContext<'w> {
     where
         F: FnOnce(&mut IdGenerator, &mut Block) -> Word,
     {
-        let header_block = block.label_id;
-        let merge_block = self.gen_id();
-        let in_bounds_block = self.gen_id();
-
-        // Branch based on whether the index was in bounds.
-        //
-        // As it turns out, our out-of-bounds branch block would contain no
-        // instructions: it just produces a constant zero, whose instruction is
-        // in the module's declarations section at the front. In this case,
-        // SPIR-V lets us omit the empty 'else' block, and branch directly to
-        // the merge block. The phi instruction in the merge block can cite the
-        // header block as its CFG predecessor.
-        block.body.push(Instruction::selection_merge(
-            merge_block,
-            spirv::SelectionControl::NONE,
-        ));
-        self.function.consume(
-            std::mem::replace(block, Block::new(in_bounds_block)),
-            Instruction::branch_conditional(condition, in_bounds_block, merge_block),
-        );
-
-        // The in-bounds path. Perform the access and the load.
-        let value_id = emit_load(&mut self.writer.id_gen, block);
-
-        // Finish the in-bounds block and start the merge block. This
-        // is the block we'll leave current on return.
-        self.function.consume(
-            std::mem::replace(block, Block::new(merge_block)),
-            Instruction::branch(merge_block),
-        );
-
-        // For the out-of-bounds case, produce a zero value.
+        // For the out-of-bounds case, we produce a zero value.
         let null_id = self.writer.write_constant_null(result_type);
 
-        // Merge the results from the two paths.
-        let result_id = self.gen_id();
-        block.body.push(Instruction::phi(
-            result_type,
-            result_id,
-            &[(value_id, in_bounds_block), (null_id, header_block)],
-        ));
+        let mut selection = Selection::start(block, result_type);
 
-        result_id
+        // As it turns out, we don't actually need a full 'if-then-else'
+        // structure for this: SPIR-V constants are declared up front, so the
+        // 'else' block would have no instructions. Instead we emit something
+        // like this:
+        //
+        //     result = zero;
+        //     if in_bounds {
+        //         result = do the load;
+        //     }
+        //     use result;
+
+        // Continue only if the index was in bounds. Otherwise, branch to the
+        // merge block.
+        selection.if_true(self, condition, null_id);
+
+        // The in-bounds path. Perform the access and the load.
+        let loaded_value = emit_load(&mut self.writer.id_gen, selection.block());
+
+        selection.finish(self, loaded_value)
     }
 
     /// Emit code for bounds checks, per self.index_bounds_check_policy.

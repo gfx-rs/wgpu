@@ -8,6 +8,7 @@ mod index;
 mod instructions;
 mod layout;
 mod recyclable;
+mod selection;
 mod writer;
 
 pub use spirv::Capability;

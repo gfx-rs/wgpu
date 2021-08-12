@@ -2,8 +2,10 @@
 
 use super::{
     index::{BoundsCheckResult, ExpressionPointer},
-    make_local, Block, BlockContext, Dimension, Error, Instruction, LocalType, LookupType,
-    LoopContext, ResultMember, Writer, WriterFlags,
+    make_local,
+    selection::Selection,
+    Block, BlockContext, Dimension, Error, Instruction, LocalType, LookupType, LoopContext,
+    ResultMember, Writer, WriterFlags,
 };
 use crate::{arena::Handle, proc::TypeResolution};
 use spirv::Word;
@@ -1171,36 +1173,20 @@ impl<'w> BlockContext<'w> {
                             block.body.push(instruction);
                         }
                         ExpressionPointer::Conditional { condition, access } => {
-                            let merge_block = self.gen_id();
-                            let in_bounds_block = self.gen_id();
-
-                            // Emit the conditional branch.
-                            block.body.push(Instruction::selection_merge(
-                                merge_block,
-                                spirv::SelectionControl::NONE,
-                            ));
-                            self.function.consume(
-                                std::mem::replace(&mut block, Block::new(in_bounds_block)),
-                                Instruction::branch_conditional(
-                                    condition,
-                                    in_bounds_block,
-                                    merge_block,
-                                ),
-                            );
+                            let mut selection = Selection::start(&mut block, ());
+                            selection.if_true(self, condition, ());
 
                             // The in-bounds path. Perform the access and the store.
                             let pointer_id = access.result_id.unwrap();
-                            block.body.push(access);
-                            block
+                            selection.block().body.push(access);
+                            selection
+                                .block()
                                 .body
                                 .push(Instruction::store(pointer_id, value_id, None));
 
                             // Finish the in-bounds block and start the merge block. This
                             // is the block we'll leave current on return.
-                            self.function.consume(
-                                std::mem::replace(&mut block, Block::new(merge_block)),
-                                Instruction::branch(merge_block),
-                            );
+                            selection.finish(self, ());
                         }
                     };
                 }
