@@ -11,16 +11,16 @@ struct FragmentOutput {
 };
 
 struct VertexInput_vertex {
-    uint vertex_index1 : SV_VertexID;
-    uint instance_index1 : SV_InstanceID;
     uint color1 : LOC10;
+    uint instance_index1 : SV_InstanceID;
+    uint vertex_index1 : SV_VertexID;
 };
 
 struct FragmentInput_fragment {
-    VertexOutput in2;
     bool front_facing1 : SV_IsFrontFace;
     uint sample_index1 : SV_SampleIndex;
     uint sample_mask1 : SV_Coverage;
+    VertexOutput in2;
 };
 
 struct ComputeInput_compute {

@@ -1,17 +1,17 @@
 
 struct gl_PerVertex {
     float4 gl_Position : SV_Position;
-    float gl_PointSize : PSIZE;
     float gl_ClipDistance[1] : SV_ClipDistance;
     float gl_CullDistance[1] : SV_CullDistance;
+    float gl_PointSize : PSIZE;
 };
 
 struct type10 {
     linear float2 member : LOC0;
     float4 gl_Position : SV_Position;
-    float gl_PointSize : PSIZE;
     float gl_ClipDistance[1] : SV_ClipDistance;
     float gl_CullDistance[1] : SV_CullDistance;
+    float gl_PointSize : PSIZE;
 };
 
 static float2 v_uv = (float2)0;
@@ -20,8 +20,8 @@ static gl_PerVertex perVertexStruct = { float4(0.0, 0.0, 0.0, 1.0), 1.0, float(0
 static float2 a_pos1 = (float2)0;
 
 struct VertexInput_main {
-    float2 a_uv2 : LOC1;
     float2 a_pos2 : LOC0;
+    float2 a_uv2 : LOC1;
 };
 
 void main1()

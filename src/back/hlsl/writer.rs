@@ -29,6 +29,24 @@ struct EpStructMember {
     name: String,
     ty: Handle<crate::Type>,
     binding: Option<crate::Binding>,
+    index: usize,
+}
+
+#[derive(Eq, PartialEq, PartialOrd, Ord)]
+enum InterfaceKey {
+    Location(u32),
+    BuiltIn(crate::BuiltIn),
+    Other,
+}
+
+impl InterfaceKey {
+    fn new(binding: Option<&crate::Binding>) -> Self {
+        match binding {
+            Some(&crate::Binding::Location { location, .. }) => Self::Location(location),
+            Some(&crate::Binding::BuiltIn(bi)) => Self::BuiltIn(bi),
+            None => Self::Other,
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -166,7 +184,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         // Write all entry points wrapped structs
         for ep in module.entry_points.iter() {
-            self.write_ep_input_struct(module, &ep.function, ep.stage, &ep.name)?;
+            let ep_input = self.write_ep_input_struct(module, &ep.function, ep.stage, &ep.name)?;
+            self.ep_inputs.push(ep_input);
         }
 
         // Write all regular functions
@@ -300,8 +319,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         func: &crate::Function,
         stage: ShaderStage,
         entry_point_name: &str,
-    ) -> BackendResult {
-        if !func.arguments.is_empty() {
+    ) -> Result<Option<EntryPointBinding>, Error> {
+        Ok(if !func.arguments.is_empty() {
             let struct_name_prefix = match stage {
                 ShaderStage::Vertex => "VertexInput",
                 ShaderStage::Fragment => "FragmentInput",
@@ -310,48 +329,49 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             let struct_name = format!("{}_{}", struct_name_prefix, entry_point_name);
 
             let mut members = Vec::with_capacity(func.arguments.len());
-
-            write!(self.out, "struct {}", &struct_name)?;
-            writeln!(self.out, " {{")?;
-
-            for arg in func.arguments.iter() {
+            for (index, arg) in func.arguments.iter().enumerate() {
                 let member_name = if let Some(ref name) = arg.name {
                     name
                 } else {
                     "member"
                 };
-                let member = EpStructMember {
+                members.push(EpStructMember {
                     name: self.namer.call_unique(member_name),
                     ty: arg.ty,
                     binding: arg.binding.clone(),
-                };
-
-                write!(self.out, "{}", back::INDENT)?;
-                self.write_type(module, member.ty)?;
-                write!(self.out, " {}", &member.name)?;
-                if let Some(ref binding) = member.binding {
-                    self.write_semantic(binding, Some((stage, Io::Input)))?;
-                }
-                write!(self.out, ";")?;
-                writeln!(self.out)?;
-
-                members.push(member);
+                    index,
+                });
             }
 
+            // Sort the members so that first come the user-defined varyings
+            // in ascending locations, and then built-ins. This allows VS and FS
+            // interfaces to match with regards to order.
+            members.sort_by_key(|m| InterfaceKey::new(m.binding.as_ref()));
+
+            write!(self.out, "struct {}", &struct_name)?;
+            writeln!(self.out, " {{")?;
+            for m in members.iter() {
+                write!(self.out, "{}", back::INDENT)?;
+                self.write_type(module, m.ty)?;
+                write!(self.out, " {}", &m.name)?;
+                if let Some(ref binding) = m.binding {
+                    self.write_semantic(binding, Some((stage, Io::Input)))?;
+                }
+                writeln!(self.out, ";")?;
+            }
             writeln!(self.out, "}};")?;
             writeln!(self.out)?;
 
-            let ep_input = EntryPointBinding {
+            // now bring back the old order
+            members.sort_by_key(|m| m.index);
+
+            Some(EntryPointBinding {
                 name: struct_name,
                 members,
-            };
-
-            self.ep_inputs.push(Some(ep_input));
+            })
         } else {
-            self.ep_inputs.push(None);
-        }
-
-        Ok(())
+            None
+        })
     }
 
     /// Helper method used to write global variables
@@ -536,18 +556,36 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
         handle: Handle<crate::Type>,
         _block: bool,
-        members: &[crate::StructMember],
+        original_members: &[crate::StructMember],
         shader_stage: Option<(ShaderStage, Io)>,
     ) -> BackendResult {
         // Write struct name
         write!(self.out, "struct {}", self.names[&NameKey::Type(handle)])?;
         writeln!(self.out, " {{")?;
 
-        for (index, member) in members.iter().enumerate() {
+        let has_layout = original_members.iter().any(|m| m.offset != 0);
+        let has_binding = original_members.iter().any(|m| m.binding.is_some());
+        //TODO: avoid heap allocation
+        let mut members = original_members
+            .iter()
+            .enumerate()
+            .map(|(index, m)| (index, m.ty, m.binding.clone()))
+            .collect::<Vec<_>>();
+        //Note: this is a bit of a hack. We need to re-order the output fields, but we can only do this
+        // for non-layouted structures. It may be possible for an WGSL program can use the same struct
+        // for both host sharing and the interface. This case isn't supported here.
+        if has_binding && !has_layout {
+            // Sort the members so that first come the user-defined varyings
+            // in ascending locations, and then built-ins. This allows VS and FS
+            // interfaces to match with regards to order.
+            members.sort_by_key(|&(_, _, ref binding)| InterfaceKey::new(binding.as_ref()));
+        }
+
+        for (index, ty, binding) in members {
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
 
-            match module.types[member.ty].inner {
+            match module.types[ty].inner {
                 TypeInner::Array {
                     base,
                     size,
@@ -584,7 +622,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         interpolation,
                         sampling,
                         ..
-                    }) = member.binding
+                    }) = binding
                     {
                         if let Some(interpolation) = interpolation {
                             write!(self.out, "{} ", interpolation.to_hlsl_str())?
@@ -598,7 +636,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
 
                     // Write the member type and name
-                    self.write_type(module, member.ty)?;
+                    self.write_type(module, ty)?;
                     write!(
                         self.out,
                         " {}",
@@ -607,11 +645,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
 
-            if let Some(ref binding) = member.binding {
+            if let Some(ref binding) = binding {
                 self.write_semantic(binding, shader_stage)?;
             };
-            write!(self.out, ";")?;
-            writeln!(self.out)?;
+            writeln!(self.out, ";")?;
         }
 
         writeln!(self.out, "}};")?;
