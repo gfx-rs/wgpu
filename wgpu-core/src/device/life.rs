@@ -2,7 +2,7 @@
 use crate::device::trace;
 use crate::{
     device::{
-        queue::{EncoderInFlight, TempResource},
+        queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError,
     },
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
@@ -10,6 +10,7 @@ use crate::{
     track::TrackerSet,
     RefCount, Stored, SubmissionIndex,
 };
+use smallvec::SmallVec;
 
 use copyless::VecHelper as _;
 use hal::Device as _;
@@ -165,6 +166,7 @@ struct ActiveSubmission<A: hal::Api> {
     last_resources: NonReferencedResources<A>,
     mapped: Vec<id::Valid<id::BufferId>>,
     encoders: Vec<EncoderInFlight<A>>,
+    work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -235,6 +237,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
             last_resources,
             mapped: Vec::new(),
             encoders,
+            work_done_closures: SmallVec::new(),
         });
     }
 
@@ -256,11 +259,12 @@ impl<A: hal::Api> LifetimeTracker<A> {
     }
 
     /// Returns the last submission index that is done.
+    #[must_use]
     pub fn triage_submissions(
         &mut self,
         last_done: SubmissionIndex,
         command_allocator: &Mutex<super::CommandAllocator<A>>,
-    ) {
+    ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
         profiling::scope!("triage_submissions");
 
         //TODO: enable when `is_sorted_by_key` is stable
@@ -271,6 +275,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
             .position(|a| a.index > last_done)
             .unwrap_or_else(|| self.active.len());
 
+        let mut work_done_closures = SmallVec::new();
         for a in self.active.drain(..done_count) {
             log::trace!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
@@ -279,7 +284,9 @@ impl<A: hal::Api> LifetimeTracker<A> {
                 let raw = unsafe { encoder.land() };
                 command_allocator.lock().release_encoder(raw);
             }
+            work_done_closures.extend(a.work_done_closures);
         }
+        work_done_closures
     }
 
     pub fn cleanup(&mut self, device: &A::Device) {
@@ -302,6 +309,18 @@ impl<A: hal::Api> LifetimeTracker<A> {
         match temp_resource {
             TempResource::Buffer(raw) => resources.buffers.push(raw),
             TempResource::Texture(raw) => resources.textures.push(raw),
+        }
+    }
+
+    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) -> bool {
+        match self.active.last_mut() {
+            Some(active) => {
+                active.work_done_closures.push(closure);
+                true
+            }
+            // Note: we can't immediately invoke the closure, since it assumes
+            // nothing is currently locked in the hubs.
+            None => false,
         }
     }
 }
@@ -612,18 +631,19 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
     }
 
+    #[must_use]
     pub(super) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
         &mut self,
         hub: &Hub<A, G>,
         raw: &A::Device,
         trackers: &Mutex<TrackerSet>,
         token: &mut Token<super::Device<A>>,
-    ) -> Vec<super::BufferMapPendingCallback> {
+    ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
         }
         let (mut buffer_guard, _) = hub.buffers.write(token);
-        let mut pending_callbacks: Vec<super::BufferMapPendingCallback> =
+        let mut pending_callbacks: Vec<super::BufferMapPendingClosure> =
             Vec::with_capacity(self.ready_to_map.len());
         let mut trackers = trackers.lock();
         for buffer_id in self.ready_to_map.drain(..) {

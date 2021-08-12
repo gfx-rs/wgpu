@@ -739,6 +739,7 @@ impl crate::Context for Context {
     type RequestDeviceFuture =
         Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
     type MapAsyncFuture = native_gpu_future::GpuFuture<Result<(), crate::BufferAsyncError>>;
+    type OnSubmittedWorkDoneFuture = native_gpu_future::GpuFuture<()>;
 
     fn init(backends: wgt::Backends) -> Self {
         Self(wgc::hub::Global::new(
@@ -2085,6 +2086,31 @@ impl crate::Context for Context {
                 self.handle_error_fatal(cause, "Queue::get_timestamp_period");
             }
         }
+    }
+
+    fn queue_on_submitted_work_done(
+        &self,
+        queue: &Self::QueueId,
+    ) -> Self::OnSubmittedWorkDoneFuture {
+        let (future, completion) = native_gpu_future::new_gpu_future();
+
+        extern "C" fn submitted_work_done_future_wrapper(user_data: *mut u8) {
+            let completion =
+                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
+            completion.complete(())
+        }
+
+        let closure = wgc::device::queue::SubmittedWorkDoneClosure {
+            callback: submitted_work_done_future_wrapper,
+            user_data: completion.into_raw() as _,
+        };
+
+        let global = &self.0;
+        let res = wgc::gfx_select!(queue => global.queue_on_submitted_work_done(*queue, closure));
+        if let Err(cause) = res {
+            self.handle_error_fatal(cause, "Queue::on_submitted_work_done");
+        }
+        future
     }
 
     fn device_start_capture(&self, device: &Self::DeviceId) {

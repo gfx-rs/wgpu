@@ -25,6 +25,17 @@ use thiserror::Error;
 /// without a concrete moment of when it can be cleared.
 const WRITE_COMMAND_BUFFERS_PER_POOL: usize = 64;
 
+pub type OnSubmittedWorkDoneCallback = unsafe extern "C" fn(user_data: *mut u8);
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct SubmittedWorkDoneClosure {
+    pub callback: OnSubmittedWorkDoneCallback,
+    pub user_data: *mut u8,
+}
+
+unsafe impl Send for SubmittedWorkDoneClosure {}
+unsafe impl Sync for SubmittedWorkDoneClosure {}
+
 struct StagingData<A: hal::Api> {
     buffer: A::Buffer,
 }
@@ -507,10 +518,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueueSubmitError> {
         profiling::scope!("submit", "Queue");
 
-        let hub = A::hub(self);
-        let mut token = Token::root();
-
         let callbacks = {
+            let hub = A::hub(self);
+            let mut token = Token::root();
+
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
             let device = device_guard
                 .get_mut(queue_id)
@@ -791,8 +802,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let callbacks = match device.maintain(hub, false, &mut token) {
-                Ok(callbacks) => callbacks,
+            let closures = match device.maintain(hub, false, &mut token) {
+                Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
             };
@@ -801,13 +812,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.temp_suspected.clear();
             device.lock_life(&mut token).post_submit();
 
-            callbacks
+            closures
         };
 
-        // the map callbacks should execute with nothing locked!
-        drop(token);
-        super::fire_map_callbacks(callbacks);
-
+        // the closures should execute with nothing locked!
+        unsafe {
+            callbacks.fire();
+        }
         Ok(())
     }
 
@@ -822,6 +833,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Ok(_device) => Ok(1.0), //TODO?
             Err(_) => Err(InvalidQueue),
         }
+    }
+
+    pub fn queue_on_submitted_work_done<A: HalApi>(
+        &self,
+        queue_id: id::QueueId,
+        closure: SubmittedWorkDoneClosure,
+    ) -> Result<(), InvalidQueue> {
+        //TODO: flush pending writes
+        let added = {
+            let hub = A::hub(self);
+            let mut token = Token::root();
+            let (device_guard, mut token) = hub.devices.read(&mut token);
+            match device_guard.get(queue_id) {
+                Ok(device) => device.lock_life(&mut token).add_work_done_closure(closure),
+                Err(_) => return Err(InvalidQueue),
+            }
+        };
+        if !added {
+            unsafe {
+                (closure.callback)(closure.user_data);
+            }
+        }
+        Ok(())
     }
 }
 

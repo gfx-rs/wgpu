@@ -181,6 +181,7 @@ trait Context: Debug + Send + Sized + Sync {
     type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
         + Send;
     type MapAsyncFuture: Future<Output = Result<(), BufferAsyncError>> + Send;
+    type OnSubmittedWorkDoneFuture: Future<Output = ()> + Send;
 
     fn init(backends: Backends) -> Self;
     fn instance_create_surface(
@@ -471,6 +472,10 @@ trait Context: Debug + Send + Sized + Sync {
         command_buffers: I,
     );
     fn queue_get_timestamp_period(&self, queue: &Self::QueueId) -> f32;
+    fn queue_on_submitted_work_done(
+        &self,
+        queue: &Self::QueueId,
+    ) -> Self::OnSubmittedWorkDoneFuture;
 
     fn device_start_capture(&self, device: &Self::DeviceId);
     fn device_stop_capture(&self, device: &Self::DeviceId);
@@ -3048,6 +3053,12 @@ impl Queue {
     /// Returns zero if timestamp queries are unsupported.
     pub fn get_timestamp_period(&self) -> f32 {
         Context::queue_get_timestamp_period(&*self.context, &self.id)
+    }
+
+    /// Returns a future that resolves once all the work submitted by this point
+    /// is done processing on GPU.
+    pub fn on_submitted_work_done(&self) -> impl Future<Output = ()> + Send {
+        Context::queue_on_submitted_work_done(&*self.context, &self.id)
     }
 }
 

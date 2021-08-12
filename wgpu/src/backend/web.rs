@@ -924,6 +924,8 @@ impl crate::Context for Context {
         wasm_bindgen_futures::JsFuture,
         fn(JsFutureResult) -> Result<(), crate::BufferAsyncError>,
     >;
+    type OnSubmittedWorkDoneFuture =
+        MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> ()>;
 
     fn init(_backends: wgt::Backends) -> Self {
         Context(web_sys::window().unwrap().navigator().gpu())
@@ -2034,6 +2036,13 @@ impl crate::Context for Context {
 
     fn queue_get_timestamp_period(&self, _queue: &Self::QueueId) -> f32 {
         1.0 //TODO
+    }
+
+    fn queue_on_submitted_work_done(
+        &self,
+        _queue: &Self::QueueId,
+    ) -> Self::OnSubmittedWorkDoneFuture {
+        unimplemented!()
     }
 
     fn device_start_capture(&self, _device: &Self::DeviceId) {}
