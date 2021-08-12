@@ -1454,7 +1454,8 @@ impl Instance {
     ///
     /// # Safety
     ///
-    /// - Raw Window Handle must be a valid object to create a surface upon.
+    /// - Raw Window Handle must be a valid object to create a surface upon and
+    ///   must remain valid for the lifetime of the returned surface.
     pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
         &self,
         window: &W,
