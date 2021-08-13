@@ -853,12 +853,15 @@ impl Interface {
                     continue;
                 }
             };
-            let handle = resources.append(Resource {
-                name: var.name.clone(),
-                bind,
-                ty,
-                class: var.class,
-            });
+            let handle = resources.append(
+                Resource {
+                    name: var.name.clone(),
+                    bind,
+                    ty,
+                    class: var.class,
+                },
+                Default::default(),
+            );
             resource_mapping.insert(var_handle, handle);
         }
 
