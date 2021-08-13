@@ -385,7 +385,7 @@
                             bits: 0,
                         ),
                     ),
-                    ref_count: 1,
+                    ref_count: 0,
                     assignable_global: None,
                     ty: Value(Scalar(
                         kind: Float,

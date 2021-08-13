@@ -93,6 +93,8 @@ pub enum ExpressionError {
     InvalidSampleOffset(crate::ImageDimension, Handle<crate::Constant>),
     #[error("Depth reference {0:?} is not a scalar float")]
     InvalidDepthReference(Handle<crate::Expression>),
+    #[error("Depth sample level can only be Auto or Zero")]
+    InvalidDepthSampleLevel,
     #[error("Sample level (exact) type {0:?} is not a scalar float")]
     InvalidSampleLevelExactType(Handle<crate::Expression>),
     #[error("Sample level (bias) type {0:?} is not a scalar float")]
@@ -450,6 +452,10 @@ impl super::Validator {
                             kind: Sk::Float, ..
                         } => {}
                         _ => return Err(ExpressionError::InvalidDepthReference(expr)),
+                    }
+                    match level {
+                        crate::SampleLevel::Auto | crate::SampleLevel::Zero => {}
+                        _ => return Err(ExpressionError::InvalidDepthSampleLevel),
                     }
                 }
 

@@ -449,7 +449,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 spirv::ImageOperands::LOD => {
                     let lod_expr = self.next()?;
                     let lod_handle = self.lookup_expression.lookup(lod_expr)?.handle;
-                    level = crate::SampleLevel::Exact(lod_handle);
+                    level = if options.compare {
+                        log::debug!("Assuming {:?} is zero", lod_handle);
+                        crate::SampleLevel::Zero
+                    } else {
+                        crate::SampleLevel::Exact(lod_handle)
+                    };
                     words_left -= 1;
                 }
                 spirv::ImageOperands::GRAD => {

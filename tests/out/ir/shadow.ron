@@ -1039,7 +1039,7 @@
                     coordinate: 72,
                     array_index: Some(74),
                     offset: None,
-                    level: Exact(25),
+                    level: Zero,
                     depth_ref: Some(69),
                 ),
             ],
