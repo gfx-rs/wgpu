@@ -760,7 +760,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             back::FunctionType::Function(handle) => {
                 for (index, arg) in func.arguments.iter().enumerate() {
                     // Write argument type
-                    self.write_type(module, arg.ty)?;
+                    let arg_ty = match module.types[arg.ty].inner {
+                        // pointers in function arguments are expected and resolve to `inout`
+                        TypeInner::Pointer { base, .. } => {
+                            //TODO: can we narrow this down to just `in` when possible?
+                            write!(self.out, "inout ")?;
+                            base
+                        }
+                        _ => arg.ty,
+                    };
+                    self.write_type(module, arg_ty)?;
 
                     let argument_name =
                         &self.names[&NameKey::FunctionArgument(handle, index as u32)];
