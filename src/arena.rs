@@ -125,16 +125,13 @@ impl<T> Iterator for Range<T> {
 /// The arena can be indexed using the given handle to obtain
 /// a reference to the stored item.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(
-    any(feature = "serialize", feature = "deserialize"),
-    serde(transparent)
-)]
+#[cfg_attr(feature = "serialize", serde(transparent))]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,
     #[cfg(feature = "span")]
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
+    #[cfg_attr(feature = "serialize", serde(skip))]
     span_info: Vec<Span>,
 }
 

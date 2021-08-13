@@ -4,14 +4,11 @@ use std::ops::{Deref, DerefMut, RangeBounds};
 /// A code block is a vector of statements, with maybe a vector of spans.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(
-    any(feature = "serialize", feature = "deserialize"),
-    serde(transparent)
-)]
+#[cfg_attr(feature = "serialize", serde(transparent))]
 pub struct Block {
     body: Vec<Statement>,
     #[cfg(feature = "span")]
-    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(skip))]
+    #[cfg_attr(feature = "serialize", serde(skip))]
     span_info: Vec<Span>,
 }
 
