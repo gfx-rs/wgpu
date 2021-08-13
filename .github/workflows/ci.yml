@@ -101,17 +101,6 @@ jobs:
           sudo apt-get update
           sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
 
-      - name: load cache
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ matrix.name }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.name }}-cargo-
-
       # This is separate for now because webgl isn't hooked up so we can't compile wgpu-core for wasm
       - name: check web
         if: matrix.kind == 'webgl'
