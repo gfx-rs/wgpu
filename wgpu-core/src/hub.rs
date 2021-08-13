@@ -724,6 +724,14 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 
         for element in surface_guard.map.iter_mut() {
             if let Element::Occupied(ref mut surface, _epoch) = *element {
+                if surface
+                    .presentation
+                    .as_ref()
+                    .map_or(wgt::Backend::Empty, |p| p.backend())
+                    != A::VARIANT
+                {
+                    continue;
+                }
                 if let Some(present) = surface.presentation.take() {
                     let device = &devices[present.device_id.value];
                     let suf = A::get_surface_mut(surface);

@@ -36,6 +36,12 @@ pub(crate) struct Presentation {
     pub(crate) acquired_texture: Option<Stored<TextureId>>,
 }
 
+impl Presentation {
+    pub(crate) fn backend(&self) -> wgt::Backend {
+        crate::id::TypedId::unzip(self.device_id.value.0).2
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum SurfaceError {
     #[error("surface is invalid")]
