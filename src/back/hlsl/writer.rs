@@ -32,7 +32,7 @@ struct EpStructMember {
     index: usize,
 }
 
-#[derive(Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Eq, PartialEq, PartialOrd, Ord)]
 enum InterfaceKey {
     Location(u32),
     BuiltIn(crate::BuiltIn),
@@ -47,6 +47,19 @@ impl InterfaceKey {
             None => Self::Other,
         }
     }
+}
+
+// Returns true for structures that need their members permuted,
+// so that first come the user-defined varyings
+// in ascending locations, and then built-ins. This allows VS and FS
+// interfaces to match with regards to order.
+fn needs_permutation(members: &[crate::StructMember]) -> bool {
+    //Note: this is a bit of a hack. We need to re-order the output fields, but we can only do this
+    // for non-layouted structures. It may be possible for an WGSL program can use the same struct
+    // for both host sharing and the interface. This case isn't supported here.
+    let has_layout = members.iter().any(|m| m.offset != 0);
+    let has_binding = members.iter().any(|m| m.binding.is_some());
+    has_binding && !has_layout
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -563,21 +576,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         write!(self.out, "struct {}", self.names[&NameKey::Type(handle)])?;
         writeln!(self.out, " {{")?;
 
-        let has_layout = original_members.iter().any(|m| m.offset != 0);
-        let has_binding = original_members.iter().any(|m| m.binding.is_some());
         //TODO: avoid heap allocation
         let mut members = original_members
             .iter()
             .enumerate()
             .map(|(index, m)| (index, m.ty, m.binding.clone()))
             .collect::<Vec<_>>();
-        //Note: this is a bit of a hack. We need to re-order the output fields, but we can only do this
-        // for non-layouted structures. It may be possible for an WGSL program can use the same struct
-        // for both host sharing and the interface. This case isn't supported here.
-        if has_binding && !has_layout {
-            // Sort the members so that first come the user-defined varyings
-            // in ascending locations, and then built-ins. This allows VS and FS
-            // interfaces to match with regards to order.
+        if needs_permutation(original_members) {
             members.sort_by_key(|&(_, _, ref binding)| InterfaceKey::new(binding.as_ref()));
         }
 
@@ -1240,24 +1245,45 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::Compose { ty, ref components } => {
-                let braces_init = match module.types[ty].inner {
-                    TypeInner::Struct { .. } | TypeInner::Array { .. } => true,
-                    _ => false,
+                let (braces_init, permutation) = match module.types[ty].inner {
+                    TypeInner::Struct { ref members, .. } => {
+                        let permutation = if needs_permutation(members) {
+                            //TODO: avoid heap allocation. We can pre-compute this at the module leve.
+                            let mut permutation = members
+                                .iter()
+                                .enumerate()
+                                .map(|(index, m)| (index, InterfaceKey::new(m.binding.as_ref())))
+                                .collect::<Vec<_>>();
+                            permutation.sort_by_key(|&(_, ref key)| key.clone());
+                            Some(permutation)
+                        } else {
+                            None
+                        };
+                        (true, permutation)
+                    }
+                    TypeInner::Array { .. } => (true, None),
+                    _ => (false, None),
                 };
+
                 if braces_init {
                     write!(self.out, "{{ ")?;
                 } else {
                     self.write_type(module, ty)?;
                     write!(self.out, "(")?;
                 }
-                for (index, component) in components.iter().enumerate() {
-                    self.write_expr(module, *component, func_ctx)?;
-                    // Only write a comma if isn't the last element
-                    if index != components.len().saturating_sub(1) {
+
+                for index in 0..components.len() {
+                    if index != 0 {
                         // The leading space is for readability only
                         write!(self.out, ", ")?;
                     }
+                    let comp_index = match permutation {
+                        Some(ref perm) => perm[index].0,
+                        None => index,
+                    };
+                    self.write_expr(module, components[comp_index], func_ctx)?;
                 }
+
                 if braces_init {
                     write!(self.out, " }}")?
                 } else {

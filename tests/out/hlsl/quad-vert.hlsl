@@ -43,6 +43,6 @@ type10 main(VertexInput_main vertexinput_main)
     float _expr12 = perVertexStruct.gl_PointSize;
     float _expr13[1] = perVertexStruct.gl_ClipDistance;
     float _expr14[1] = perVertexStruct.gl_CullDistance;
-    const type10 type10_ = { _expr10, _expr11, _expr12, _expr13, _expr14 };
+    const type10 type10_ = { _expr10, _expr11, _expr13, _expr14, _expr12 };
     return type10_;
 }
