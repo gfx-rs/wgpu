@@ -1,5 +1,5 @@
 (
-    features: (bits: 0x0000_0004_0000_0000),
+    features: (bits: 0x0000_0008_0000_0000),
     expectations: [
         (
             name: "Quad",
