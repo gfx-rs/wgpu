@@ -127,7 +127,14 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     rows as u8,
                     columns as u8,
                 )?;
-                let row_stride = width as u32 * columns as u32;
+
+                // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
+                let padded_columns = match columns {
+                    crate::VectorSize::Tri => 4,
+                    columns => columns as u32,
+                };
+
+                let row_stride = width as u32 * padded_columns;
                 let iter = (0..rows as u32).map(|i| {
                     let ty_inner = crate::TypeInner::Vector {
                         size: columns,
