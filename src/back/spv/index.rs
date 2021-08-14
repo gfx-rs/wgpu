@@ -25,7 +25,7 @@ pub(super) enum ExpressionPointer {
 /// The results of performing a bounds check.
 ///
 /// On success, `write_bounds_check` returns a value of this type.
-pub enum BoundsCheckResult {
+pub(super) enum BoundsCheckResult {
     /// The index is statically known and in bounds, with the given value.
     KnownInBounds(u32),
 
@@ -38,7 +38,7 @@ pub enum BoundsCheckResult {
 }
 
 /// A value that we either know at translation time, or need to compute at runtime.
-pub enum MaybeKnown<T> {
+pub(super) enum MaybeKnown<T> {
     /// The value is known at shader translation time.
     Known(T),
 

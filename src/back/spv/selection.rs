@@ -55,8 +55,6 @@
 //! pointer for the duration of its lifetime. To obtain the block for generating
 //! code in the selection's body, call the `Selection::block` method.
 
-#![allow(dead_code)] // until texture bounds checks
-
 use super::{Block, BlockContext, Instruction};
 use spirv::Word;
 

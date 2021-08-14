@@ -67,6 +67,7 @@ impl Writer {
             annotations: vec![],
             flags: options.flags,
             index_bounds_check_policy: options.index_bounds_check_policy,
+            image_bounds_check_policy: options.image_bounds_check_policy,
             void_type,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
@@ -103,6 +104,7 @@ impl Writer {
             // Copied from the old Writer:
             flags: self.flags,
             index_bounds_check_policy: self.index_bounds_check_policy,
+            image_bounds_check_policy: self.image_bounds_check_policy,
             capabilities_available: take(&mut self.capabilities_available),
 
             // Initialized afresh:

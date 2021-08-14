@@ -10,11 +10,18 @@ struct Args {
     #[argh(switch)]
     validate: bool,
 
-    /// what policy to use for index bounds checking.
+    /// what policy to use for index bounds checking for arrays, vectors, and
+    /// matrices.
     ///
     /// May be `Restrict`, `ReadZeroSkipWrite`, or `UndefinedBehavior`
     #[argh(option)]
     index_bounds_check_policy: Option<BoundsCheckPolicyArg>,
+
+    /// what policy to use for texture bounds checking.
+    ///
+    /// May be `Restrict`, `ReadZeroSkipWrite`, or `UndefinedBehavior`
+    #[argh(option)]
+    image_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
     /// directory to dump the SPIR-V flow dump to
     #[argh(option)]
@@ -107,6 +114,7 @@ impl FromStr for GlslProfileArg {
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
     index_bounds_check_policy: naga::back::BoundsCheckPolicy,
+    image_bounds_check_policy: naga::back::BoundsCheckPolicy,
     entry_point: Option<String>,
     spv_adjust_coordinate_space: bool,
     spv_flow_dump_prefix: Option<String>,
@@ -185,6 +193,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some(policy) = args.index_bounds_check_policy {
         params.index_bounds_check_policy = policy.0;
+    }
+    if let Some(policy) = args.image_bounds_check_policy {
+        params.image_bounds_check_policy = policy.0;
     }
     params.spv_flow_dump_prefix = args.flow_dir;
     params.entry_point = args.entry_point;
@@ -307,6 +318,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 use naga::back::spv;
 
                 params.spv.index_bounds_check_policy = params.index_bounds_check_policy;
+                params.spv.image_bounds_check_policy = params.image_bounds_check_policy;
 
                 let spv = spv::write_vec(
                     &module,

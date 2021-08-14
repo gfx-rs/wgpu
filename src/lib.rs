@@ -1044,7 +1044,22 @@ pub enum Expression {
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
     },
+
     /// Load a texel from an image.
+    ///
+    /// For most images, this returns a four-element vector of the same
+    /// [`ScalarKind`] as the image. If the format of the image does not have
+    /// four components, default values are provided: the first three components
+    /// (typically R, G, and B) default to zero, and the final component
+    /// (typically alpha) defaults to one.
+    ///
+    /// However, if the image's [`class`] is [`Depth`], then this returns a
+    /// [`Float`] scalar value.
+    ///
+    /// [`ScalarKind`]: ScalarKind
+    /// [`class`]: TypeInner::Image::class
+    /// [`Depth`]: ImageClass::Depth
+    /// [`Float`]: ScalarKind::Float
     ImageLoad {
         /// The image to load a texel from. This must have type [`Image`]. (This
         /// will necessarily be a [`GlobalVariable`] or [`FunctionArgument`]
@@ -1110,6 +1125,7 @@ pub enum Expression {
         /// [`multi`]: ImageClass::Sampled::multi
         index: Option<Handle<Expression>>,
     },
+
     /// Query information from an image.
     ImageQuery {
         image: Handle<Expression>,

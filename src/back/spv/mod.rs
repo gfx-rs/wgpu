@@ -418,6 +418,7 @@ pub struct Writer {
     annotations: Vec<Instruction>,
     flags: WriterFlags,
     index_bounds_check_policy: BoundsCheckPolicy,
+    image_bounds_check_policy: BoundsCheckPolicy,
     void_type: Word,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
@@ -462,6 +463,9 @@ pub struct Options {
     /// How should the generated code handle array, vector, or matrix indices
     /// that are out of range?
     pub index_bounds_check_policy: BoundsCheckPolicy,
+    /// How should the generated code handle image references that are out of
+    /// range?
+    pub image_bounds_check_policy: BoundsCheckPolicy,
 }
 
 impl Default for Options {
@@ -475,6 +479,7 @@ impl Default for Options {
             flags,
             capabilities: None,
             index_bounds_check_policy: super::BoundsCheckPolicy::default(),
+            image_bounds_check_policy: super::BoundsCheckPolicy::default(),
         }
     }
 }

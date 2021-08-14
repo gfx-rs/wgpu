@@ -31,6 +31,10 @@ struct Parameters {
     bounds_check_read_zero_skip_write: bool,
     #[serde(default)]
     bounds_check_restrict: bool,
+    #[serde(default)]
+    image_bounds_check_restrict: bool,
+    #[serde(default)]
+    image_bounds_check_read_zero_skip_write: bool,
 
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_version: (u8, u8),
@@ -172,6 +176,14 @@ fn write_output_spv(
         } else {
             naga::back::BoundsCheckPolicy::UndefinedBehavior
         },
+        image_bounds_check_policy: if params.image_bounds_check_restrict {
+            naga::back::BoundsCheckPolicy::Restrict
+        } else if params.image_bounds_check_read_zero_skip_write {
+            naga::back::BoundsCheckPolicy::ReadZeroSkipWrite
+        } else {
+            naga::back::BoundsCheckPolicy::UndefinedBehavior
+        },
+        ..spv::Options::default()
     };
 
     let spv = spv::write_vec(module, info, &options).unwrap();
@@ -442,6 +454,8 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("bounds-check-zero", Targets::SPIRV),
+        ("bounds-check-image-restrict", Targets::SPIRV),
+        ("bounds-check-image-rzsw", Targets::SPIRV),
         (
             "texture-arg",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,

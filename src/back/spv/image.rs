@@ -1,8 +1,230 @@
 //! Generating SPIR-V for image operations.
 
-use super::{Block, BlockContext, Error, Instruction, LocalType, LookupType};
+use super::{
+    selection::{MergeTuple, Selection},
+    Block, BlockContext, Error, IdGenerator, Instruction, LocalType, LookupType,
+};
 use crate::arena::Handle;
 use spirv::Word;
+
+/// Information about a vector of coordinates.
+///
+/// The coordinate vectors expected by SPIR-V `OpImageRead` and `OpImageFetch`
+/// supply the array index for arrayed images as an additional component at
+/// the end, whereas Naga's `ImageLoad`, `ImageStore`, and `ImageSample` carry
+/// the array index as a separate field.
+///
+/// In the process of generating code to compute the combined vector, we also
+/// produce SPIR-V types and vector lengths that are useful elsewhere. This
+/// struct gathers that information into one place, with standard names.
+struct ImageCoordinates {
+    /// The SPIR-V id of the combined coordinate/index vector value.
+    ///
+    /// Note: when indexing a non-arrayed 1D image, this will be a scalar.
+    value_id: Word,
+
+    /// The SPIR-V id of the type of `value`.
+    type_id: Word,
+
+    /// The number of components in `value`, if it is a vector, or `None` if it
+    /// is a scalar.
+    size: Option<crate::VectorSize>,
+}
+
+/// A trait for image access (load or store) code generators.
+///
+/// When generating code for `ImageLoad` and `ImageStore` expressions, the image
+/// bounds checks policy can affect some operands of the image access
+/// instruction (the coordinates, level of detail, and sample index), but other
+/// aspects are unaffected: the image id, result type (if any), and the specific
+/// SPIR-V instruction used.
+///
+/// This struct holds the latter category of information, saving us from passing
+/// a half-dozen parameters along the various code paths. The parts that are
+/// affected by bounds checks, are passed as parameters to the `generate`
+/// method.
+trait Access {
+    /// The Rust type that represents SPIR-V values and types for this access.
+    ///
+    /// For operations like loads, this is `Word`. For operations like stores,
+    /// this is `()`.
+    ///
+    /// For `ReadZeroSkipWrite`, this will be the type of the selection
+    /// construct that performs the bounds checks, so it must implement
+    /// `MergeTuple`.
+    type Output: MergeTuple + Copy + Clone;
+
+    /// Write an image access to `block`.
+    ///
+    /// Access the texel at `coordinates_id`. The optional `level_id` indicates
+    /// the level of detail, and `sample_id` is the index of the sample to
+    /// access in a multisampled texel.
+    ///
+    /// Ths method assumes that `coordinates_id` has already had the image array
+    /// index, if any, folded in, as done by `write_image_coordinates`.
+    ///
+    /// Return the value id produced by the instruction, if any.
+    ///
+    /// Use `id_gen` to generate SPIR-V ids as necessary.
+    fn generate(
+        &self,
+        id_gen: &mut IdGenerator,
+        coordinates_id: Word,
+        level_id: Option<Word>,
+        sample_id: Option<Word>,
+        block: &mut Block,
+    ) -> Self::Output;
+
+    /// Return the SPIR-V type of the value produced by the code written by
+    /// `generate`. If the access does not produce a value, `Self::Output`
+    /// should be `()`.
+    fn result_type(&self) -> Self::Output;
+
+    /// Construct the SPIR-V 'zero' value to be returned for an out-of-bounds
+    /// access under the `ReadZeroSkipWrite` policy. If the access does not
+    /// produce a value, `Self::Output` should be `()`.
+    fn out_of_bounds_value(&self, ctx: &mut BlockContext<'_>) -> Self::Output;
+}
+
+/// Texel access information for an [`ImageLoad`] expression.
+///
+/// [`ImageLoad`]: crate::Expression::ImageLoad
+struct Load {
+    /// The specific opcode we'll use to perform the fetch. Storage images
+    /// require `OpImageRead`, while sampled images require `OpImageFetch`.
+    opcode: spirv::Op,
+
+    /// The type id produced by the actual image access instruction.
+    type_id: Word,
+
+    /// The id of the image being accessed.
+    image_id: Word,
+}
+
+impl Load {
+    fn from_image_expr(
+        ctx: &mut BlockContext<'_>,
+        image_id: Word,
+        image_class: crate::ImageClass,
+        result_type_id: Word,
+    ) -> Result<Load, Error> {
+        let opcode = match image_class {
+            crate::ImageClass::Storage { .. } => spirv::Op::ImageRead,
+            crate::ImageClass::Depth { .. } | crate::ImageClass::Sampled { .. } => {
+                spirv::Op::ImageFetch
+            }
+        };
+
+        // `OpImageRead` and `OpImageFetch` instructions produce vec4<f32>
+        // values. Most of the time, we can just use `result_type_id` for
+        // this. The exception is that `Expression::ImageLoad` from a depth
+        // image produces a scalar `f32`, so in that case we need to find
+        // the right SPIR-V type for the access instruction here.
+        let type_id = match image_class {
+            crate::ImageClass::Depth { .. } => {
+                ctx.get_type_id(LookupType::Local(LocalType::Value {
+                    vector_size: Some(crate::VectorSize::Quad),
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                    pointer_class: None,
+                }))
+            }
+            _ => result_type_id,
+        };
+
+        Ok(Load {
+            opcode,
+            type_id,
+            image_id,
+        })
+    }
+}
+
+impl Access for Load {
+    type Output = Word;
+
+    /// Write an instruction to access a given texel of this image.
+    fn generate(
+        &self,
+        id_gen: &mut IdGenerator,
+        coordinates_id: Word,
+        level_id: Option<Word>,
+        sample_id: Option<Word>,
+        block: &mut Block,
+    ) -> Word {
+        let texel_id = id_gen.next();
+        let mut instruction = Instruction::image_fetch_or_read(
+            self.opcode,
+            self.type_id,
+            texel_id,
+            self.image_id,
+            coordinates_id,
+        );
+
+        match (level_id, sample_id) {
+            (None, None) => {}
+            (Some(level_id), None) => {
+                instruction.add_operand(spirv::ImageOperands::LOD.bits());
+                instruction.add_operand(level_id);
+            }
+            (None, Some(sample_id)) => {
+                instruction.add_operand(spirv::ImageOperands::SAMPLE.bits());
+                instruction.add_operand(sample_id);
+            }
+            // There's no such thing as a multi-sampled mipmap.
+            (Some(_), Some(_)) => unreachable!(),
+        }
+
+        block.body.push(instruction);
+
+        texel_id
+    }
+
+    fn result_type(&self) -> Word {
+        self.type_id
+    }
+
+    fn out_of_bounds_value(&self, ctx: &mut BlockContext<'_>) -> Word {
+        ctx.writer.write_constant_null(self.type_id)
+    }
+}
+
+/// Texel access information for a [`Store`] statement.
+///
+/// [`Store`]: crate::Statement::Store
+struct Store {
+    /// The id of the image being written to.
+    image_id: Word,
+
+    /// The value we're going to write to the texel.
+    value_id: Word,
+}
+
+impl Access for Store {
+    /// Stores don't generate any value.
+    type Output = ();
+
+    fn generate(
+        &self,
+        _id_gen: &mut IdGenerator,
+        coordinates_id: Word,
+        _level_id: Option<Word>,
+        _sample_id: Option<Word>,
+        block: &mut Block,
+    ) {
+        block.body.push(Instruction::image_write(
+            self.image_id,
+            coordinates_id,
+            self.value_id,
+        ));
+    }
+
+    /// Stores don't generate any value, so this just returns `()`.
+    fn result_type(&self) {}
+
+    /// Stores don't generate any value, so this just returns `()`.
+    fn out_of_bounds_value(&self, _ctx: &mut BlockContext<'_>) {}
+}
 
 impl<'w> BlockContext<'w> {
     /// Extend image coordinates with an array index, if necessary.
@@ -11,20 +233,23 @@ impl<'w> BlockContext<'w> {
     /// index as a separate operand from the coordinates, SPIR-V image access
     /// instructions include the array index in the `coordinates` operand. This
     /// function builds a SPIR-V coordinate vector from a Naga coordinate vector
-    /// and array index.
+    /// and array index, if one is supplied, and returns a `ImageCoordinates`
+    /// struct describing what it built.
     ///
     /// If `array_index` is `Some(expr)`, then this function constructs a new
     /// vector that is `coordinates` with `array_index` concatenated onto the
     /// end: a `vec2` becomes a `vec3`, a scalar becomes a `vec2`, and so on.
     ///
+    /// If `array_index` is `None`, then the return value uses `coordinates`
+    /// unchanged. Note that, when indexing a non-arrayed 1D image, this will be
+    /// a scalar value.
+    ///
+    /// If needed, this function generates code to convert the array index,
+    /// always an integer scalar, to match the component type of `coordinates`.
     /// Naga's `ImageLoad` and SPIR-V's `OpImageRead`, `OpImageFetch`, and
     /// `OpImageWrite` all use integer coordinates, while Naga's `ImageSample`
     /// and SPIR-V's `OpImageSample...` instructions all take floating-point
-    /// coordinate vectors. The array index, always an integer scalar, may need
-    /// to be converted to match the component type of `coordinates`.
-    ///
-    /// If `array_index` is `None`, this function simply returns the id for
-    /// `coordinates`.
+    /// coordinate vectors.
     ///
     /// [`Expression::ImageLoad`]: crate::Expression::ImageLoad
     /// [`ImageSample`]: crate::Expression::ImageSample
@@ -33,36 +258,48 @@ impl<'w> BlockContext<'w> {
         coordinates: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
         block: &mut Block,
-    ) -> Result<Word, Error> {
+    ) -> Result<ImageCoordinates, Error> {
         use crate::TypeInner as Ti;
         use crate::VectorSize as Vs;
 
-        let coordinate_id = self.cached[coordinates];
+        let coordinates_id = self.cached[coordinates];
+        let ty = &self.fun_info[coordinates].ty;
+        let inner_ty = ty.inner_with(&self.ir_module.types);
 
         // If there's no array index, the image coordinates are exactly the
         // `coordinate` field of the `Expression::ImageLoad`. No work is needed.
         let array_index = match array_index {
-            None => return Ok(coordinate_id),
+            None => {
+                let value_id = coordinates_id;
+                let type_id = self.get_expression_type_id(ty);
+                let size = match *inner_ty {
+                    Ti::Scalar { .. } => None,
+                    Ti::Vector { size, .. } => Some(size),
+                    _ => return Err(Error::Validation("coordinate type")),
+                };
+                return Ok(ImageCoordinates {
+                    value_id,
+                    type_id,
+                    size,
+                });
+            }
             Some(ix) => ix,
         };
 
         // Find the component type of `coordinates`, and figure out the size the
         // combined coordinate vector will have.
-        let (component_kind, result_size) = match *self.fun_info[coordinates]
-            .ty
-            .inner_with(&self.ir_module.types)
-        {
-            Ti::Scalar { kind, width: 4 } => (kind, Vs::Bi),
+        let (component_kind, size) = match *inner_ty {
+            Ti::Scalar { kind, width: 4 } => (kind, Some(Vs::Bi)),
             Ti::Vector {
                 kind,
                 width: 4,
                 size: Vs::Bi,
-            } => (kind, Vs::Tri),
+            } => (kind, Some(Vs::Tri)),
             Ti::Vector {
                 kind,
                 width: 4,
                 size: Vs::Tri,
-            } => (kind, Vs::Quad),
+            } => (kind, Some(Vs::Quad)),
             Ti::Vector { size: Vs::Quad, .. } => {
                 return Err(Error::Validation("extending vec4 coordinate"));
             }
@@ -95,21 +332,25 @@ impl<'w> BlockContext<'w> {
         };
 
         // Find the SPIR-V type for the combined coordinates/index vector.
-        let combined_coordinate_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: Some(result_size),
+        let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: size,
             kind: component_kind,
             width: 4,
             pointer_class: None,
         }));
 
         // Schmear the coordinates and index together.
-        let id = self.gen_id();
+        let value_id = self.gen_id();
         block.body.push(Instruction::composite_construct(
-            combined_coordinate_type_id,
-            id,
-            &[coordinate_id, reconciled_array_index_id],
+            type_id,
+            value_id,
+            &[coordinates_id, reconciled_array_index_id],
         ));
-        Ok(id)
+        Ok(ImageCoordinates {
+            value_id,
+            type_id,
+            size,
+        })
     }
 
     fn get_image_id(&mut self, expr_handle: Handle<crate::Expression>) -> Word {
@@ -133,6 +374,334 @@ impl<'w> BlockContext<'w> {
         id
     }
 
+    /// Generate a vector or scalar 'one' for arithmetic on `coordinates`.
+    ///
+    /// If `coordinates` is a scalar, return a scalar one. Otherwise, return
+    /// a vector of ones.
+    fn write_coordinate_one(&mut self, coordinates: &ImageCoordinates) -> Result<Word, Error> {
+        let one = self.get_scope_constant(1);
+        match coordinates.size {
+            None => Ok(one),
+            Some(vector_size) => {
+                let ones = [one; 4];
+                let id = self.gen_id();
+                Instruction::constant_composite(
+                    coordinates.type_id,
+                    id,
+                    &ones[..vector_size as usize],
+                )
+                .to_words(&mut self.writer.logical_layout.declarations);
+                Ok(id)
+            }
+        }
+    }
+
+    /// Generate code to restrict `input` to fall between zero and one less than
+    /// `size_id`.
+    ///
+    /// Both must be 32-bit scalar integer values, whose type is given by
+    /// `type_id`. The computed value is also of type `type_id`.
+    fn restrict_scalar(
+        &mut self,
+        type_id: Word,
+        input_id: Word,
+        size_id: Word,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        let i32_one_id = self.get_scope_constant(1);
+
+        // Subtract one from `size` to get the largest valid value.
+        let limit_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::ISub,
+            type_id,
+            limit_id,
+            size_id,
+            i32_one_id,
+        ));
+
+        // Use an unsigned minimum, to handle both positive out-of-range values
+        // and negative values in a single instruction: negative values of
+        // `input_id` get treated as very large positive values.
+        let restricted_id = self.gen_id();
+        block.body.push(Instruction::ext_inst(
+            self.writer.gl450_ext_inst_id,
+            spirv::GLOp::UMin,
+            type_id,
+            restricted_id,
+            &[input_id, limit_id],
+        ));
+
+        Ok(restricted_id)
+    }
+
+    /// Write instructions to query the size of an image.
+    ///
+    /// This takes care of selecting the right instruction depending on whether
+    /// a level of detail parameter is present.
+    fn write_coordinate_bounds(
+        &mut self,
+        type_id: Word,
+        image_id: Word,
+        level_id: Option<Word>,
+        block: &mut Block,
+    ) -> Word {
+        let coordinate_bounds_id = self.gen_id();
+        match level_id {
+            Some(level_id) => {
+                // A level of detail was provided, so fetch the image size for
+                // that level.
+                let mut inst = Instruction::image_query(
+                    spirv::Op::ImageQuerySizeLod,
+                    type_id,
+                    coordinate_bounds_id,
+                    image_id,
+                );
+                inst.add_operand(level_id);
+                block.body.push(inst);
+            }
+            _ => {
+                // No level of detail was given.
+                block.body.push(Instruction::image_query(
+                    spirv::Op::ImageQuerySize,
+                    type_id,
+                    coordinate_bounds_id,
+                    image_id,
+                ));
+            }
+        }
+
+        coordinate_bounds_id
+    }
+
+    /// Write code to restrict coordinates for an image reference.
+    ///
+    /// First, clamp the level of detail or sample index to fall within bounds.
+    /// Then, obtain the image size, possibly using the clamped level of detail.
+    /// Finally, use an unsigned minimum instruction to force all coordinates
+    /// into range.
+    ///
+    /// Return a triple `(COORDS, LEVEL, SAMPLE)`, where `COORDS` is a coordinate
+    /// vector (including the array index, if any), `LEVEL` is an optional level
+    /// of detail, and `SAMPLE` is an optional sample index, all guaranteed to
+    /// be in-bounds for `image_id`.
+    ///
+    /// The result is usually a vector, but it is a scalar when indexing
+    /// non-arrayed 1D images.
+    fn write_restricted_coordinates(
+        &mut self,
+        image_id: Word,
+        coordinates: ImageCoordinates,
+        level_id: Option<Word>,
+        sample_id: Option<Word>,
+        block: &mut Block,
+    ) -> Result<(Word, Option<Word>, Option<Word>), Error> {
+        self.writer.require_any(
+            "the `Restrict` image bounds check policy",
+            &[spirv::Capability::ImageQuery],
+        )?;
+
+        let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Sint,
+            width: 4,
+            pointer_class: None,
+        }));
+
+        // If `level` is `Some`, clamp it to fall within bounds. This must
+        // happen first, because we'll use it to query the image size for
+        // clamping the actual coordinates.
+        let level_id = level_id
+            .map(|level_id| {
+                // Find the number of mipmap levels in this image.
+                let num_levels_id = self.gen_id();
+                block.body.push(Instruction::image_query(
+                    spirv::Op::ImageQueryLevels,
+                    i32_type_id,
+                    num_levels_id,
+                    image_id,
+                ));
+
+                self.restrict_scalar(i32_type_id, level_id, num_levels_id, block)
+            })
+            .transpose()?;
+
+        // If `sample_id` is `Some`, clamp it to fall within bounds.
+        let sample_id = sample_id
+            .map(|sample_id| {
+                // Find the number of samples per texel.
+                let num_samples_id = self.gen_id();
+                block.body.push(Instruction::image_query(
+                    spirv::Op::ImageQuerySamples,
+                    i32_type_id,
+                    num_samples_id,
+                    image_id,
+                ));
+
+                self.restrict_scalar(i32_type_id, sample_id, num_samples_id, block)
+            })
+            .transpose()?;
+
+        // Obtain the image bounds, including the array element count.
+        let coordinate_bounds_id =
+            self.write_coordinate_bounds(coordinates.type_id, image_id, level_id, block);
+
+        // Compute maximum valid values from the bounds.
+        let ones = self.write_coordinate_one(&coordinates)?;
+        let coordinate_limit_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::ISub,
+            coordinates.type_id,
+            coordinate_limit_id,
+            coordinate_bounds_id,
+            ones,
+        ));
+
+        // Restrict the coordinates to fall within those bounds.
+        //
+        // Use an unsigned minimum, to handle both positive out-of-range values
+        // and negative values in a single instruction: negative values of
+        // `coordinates` get treated as very large positive values.
+        let restricted_coordinates_id = self.gen_id();
+        block.body.push(Instruction::ext_inst(
+            self.writer.gl450_ext_inst_id,
+            spirv::GLOp::UMin,
+            coordinates.type_id,
+            restricted_coordinates_id,
+            &[coordinates.value_id, coordinate_limit_id],
+        ));
+
+        Ok((restricted_coordinates_id, level_id, sample_id))
+    }
+
+    fn write_conditional_image_access<A: Access>(
+        &mut self,
+        image_id: Word,
+        coordinates: ImageCoordinates,
+        level_id: Option<Word>,
+        sample_id: Option<Word>,
+        block: &mut Block,
+        access: &A,
+    ) -> Result<A::Output, Error> {
+        self.writer.require_any(
+            "the `ReadZeroSkipWrite` image bounds check policy",
+            &[spirv::Capability::ImageQuery],
+        )?;
+
+        let bool_type_id = self.writer.get_bool_type_id();
+        let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Sint,
+            width: 4,
+            pointer_class: None,
+        }));
+
+        let null_id = access.out_of_bounds_value(self);
+
+        let mut selection = Selection::start(block, access.result_type());
+
+        // If `level_id` is `Some`, check whether it is within bounds. This must
+        // happen first, because we'll be supplying this as an argument when we
+        // query the image size.
+        if let Some(level_id) = level_id {
+            // Find the number of mipmap levels in this image.
+            let num_levels_id = self.gen_id();
+            selection.block().body.push(Instruction::image_query(
+                spirv::Op::ImageQueryLevels,
+                i32_type_id,
+                num_levels_id,
+                image_id,
+            ));
+
+            let lod_cond_id = self.gen_id();
+            selection.block().body.push(Instruction::binary(
+                spirv::Op::ULessThan,
+                bool_type_id,
+                lod_cond_id,
+                level_id,
+                num_levels_id,
+            ));
+
+            selection.if_true(self, lod_cond_id, null_id);
+        }
+
+        // If `sample_id` is `Some`, check whether it is in bounds.
+        if let Some(sample_id) = sample_id {
+            // Find the number of samples per texel.
+            let num_samples_id = self.gen_id();
+            selection.block().body.push(Instruction::image_query(
+                spirv::Op::ImageQuerySamples,
+                i32_type_id,
+                num_samples_id,
+                image_id,
+            ));
+
+            let samples_cond_id = self.gen_id();
+            selection.block().body.push(Instruction::binary(
+                spirv::Op::ULessThan,
+                bool_type_id,
+                samples_cond_id,
+                sample_id,
+                num_samples_id,
+            ));
+
+            selection.if_true(self, samples_cond_id, null_id);
+        }
+
+        // Obtain the image bounds, including any array element count.
+        let coordinate_bounds_id = self.write_coordinate_bounds(
+            coordinates.type_id,
+            image_id,
+            level_id,
+            selection.block(),
+        );
+
+        // Compare the coordinates against the bounds.
+        let coords_bool_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: coordinates.size,
+            kind: crate::ScalarKind::Bool,
+            width: 1,
+            pointer_class: None,
+        }));
+        let coords_conds_id = self.gen_id();
+        selection.block().body.push(Instruction::binary(
+            spirv::Op::ULessThan,
+            coords_bool_type_id,
+            coords_conds_id,
+            coordinates.value_id,
+            coordinate_bounds_id,
+        ));
+
+        // If the comparison above was a vector comparison, then we need to
+        // check that all components of the comparison are true.
+        let coords_cond_id = if coords_bool_type_id != bool_type_id {
+            let id = self.gen_id();
+            selection.block().body.push(Instruction::relational(
+                spirv::Op::All,
+                bool_type_id,
+                id,
+                coords_conds_id,
+            ));
+            id
+        } else {
+            coords_conds_id
+        };
+
+        selection.if_true(self, coords_cond_id, null_id);
+
+        // All conditions are met. We can carry out the access.
+        let texel_id = access.generate(
+            &mut self.writer.id_gen,
+            coordinates.value_id,
+            level_id,
+            sample_id,
+            selection.block(),
+        );
+
+        // This, then, is the value of the 'true' branch.
+        Ok(selection.finish(self, texel_id))
+    }
+
     /// Generate code for an `ImageLoad` expression.
     ///
     /// The arguments are the components of an `Expression::ImageLoad` variant.
@@ -142,70 +711,83 @@ impl<'w> BlockContext<'w> {
         image: Handle<crate::Expression>,
         coordinate: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
-        index: Option<Handle<crate::Expression>>,
+        level_or_sample: Option<Handle<crate::Expression>>,
         block: &mut Block,
     ) -> Result<Word, Error> {
         let image_id = self.get_image_id(image);
-        let coordinate_id = self.write_image_coordinates(coordinate, array_index, block)?;
-
-        let id = self.gen_id();
-
-        let image_ty = self.fun_info[image].ty.inner_with(&self.ir_module.types);
-        let mut instruction = match *image_ty {
-            crate::TypeInner::Image {
-                class: crate::ImageClass::Storage { .. },
-                ..
-            } => Instruction::image_read(result_type_id, id, image_id, coordinate_id),
-            crate::TypeInner::Image {
-                class: crate::ImageClass::Depth { multi: _ },
-                ..
-            } => {
-                // Vulkan doesn't know about our `Depth` class, and it returns `vec4<f32>`,
-                // so we need to grab the first component out of it.
-                let load_result_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: Some(crate::VectorSize::Quad),
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                    pointer_class: None,
-                }));
-                Instruction::image_fetch(load_result_type_id, id, image_id, coordinate_id)
-            }
-            _ => Instruction::image_fetch(result_type_id, id, image_id, coordinate_id),
+        let image_type = self.fun_info[image].ty.inner_with(&self.ir_module.types);
+        let image_class = match *image_type {
+            crate::TypeInner::Image { class, .. } => class,
+            _ => return Err(Error::Validation("image type")),
         };
 
-        if let Some(index) = index {
-            let index_id = self.cached[index];
-            let image_ops = match *self.fun_info[image].ty.inner_with(&self.ir_module.types) {
-                crate::TypeInner::Image {
-                    class: crate::ImageClass::Sampled { multi: true, .. },
-                    ..
-                }
-                | crate::TypeInner::Image {
-                    class: crate::ImageClass::Depth { multi: true },
-                    ..
-                } => spirv::ImageOperands::SAMPLE,
-                _ => spirv::ImageOperands::LOD,
-            };
-            instruction.add_operand(image_ops.bits());
-            instruction.add_operand(index_id);
-        }
+        let access = Load::from_image_expr(self, image_id, image_class, result_type_id)?;
+        let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
 
-        let inst_type_id = instruction.type_id;
-        block.body.push(instruction);
-        let id = if inst_type_id != Some(result_type_id) {
-            let sub_id = self.gen_id();
+        // Figure out what the `level_or_sample` operand really means.
+        let level_or_sample_id = level_or_sample.map(|i| self.cached[i]);
+        let (level_id, sample_id) = match image_class {
+            crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => {
+                if multi {
+                    (None, level_or_sample_id)
+                } else {
+                    (level_or_sample_id, None)
+                }
+            }
+            crate::ImageClass::Storage { .. } => (None, None),
+        };
+
+        // Perform the access, according to the bounds check policy.
+        let access_id = match self.writer.image_bounds_check_policy {
+            crate::back::BoundsCheckPolicy::Restrict => {
+                let (coords, level_id, sample_id) = self.write_restricted_coordinates(
+                    image_id,
+                    coordinates,
+                    level_id,
+                    sample_id,
+                    block,
+                )?;
+                access.generate(&mut self.writer.id_gen, coords, level_id, sample_id, block)
+            }
+            crate::back::BoundsCheckPolicy::ReadZeroSkipWrite => self
+                .write_conditional_image_access(
+                    image_id,
+                    coordinates,
+                    level_id,
+                    sample_id,
+                    block,
+                    &access,
+                )?,
+            crate::back::BoundsCheckPolicy::UndefinedBehavior => access.generate(
+                &mut self.writer.id_gen,
+                coordinates.value_id,
+                level_id,
+                sample_id,
+                block,
+            ),
+        };
+
+        // For depth images, `ImageLoad` expressions produce a single f32,
+        // whereas the SPIR-V instructions always produce a vec4. So we may have
+        // to pull out the component we need.
+        let result_id = if result_type_id == access.result_type() {
+            // The instruction produced the type we expected. We can use
+            // its result as-is.
+            access_id
+        } else {
+            // For `ImageClass::Depth` images, SPIR-V gave us four components,
+            // but we only want the first one.
+            let component_id = self.gen_id();
             block.body.push(Instruction::composite_extract(
                 result_type_id,
-                sub_id,
-                id,
+                component_id,
+                access_id,
                 &[0],
             ));
-            sub_id
-        } else {
-            id
+            component_id
         };
 
-        Ok(id)
+        Ok(result_id)
     }
 
     /// Generate code for an `ImageSample` expression.
@@ -228,8 +810,8 @@ impl<'w> BlockContext<'w> {
         // image
         let image_id = self.get_image_id(image);
         let image_type = self.fun_info[image].ty.handle().unwrap();
-        // Vulkan doesn't know about our `Depth` class, and it returns `vec4<f32>`,
-        // so we need to grab the first component out of it.
+        // SPIR-V doesn't know about our `Depth` class, and it returns
+        // `vec4<f32>`, so we need to grab the first component out of it.
         let needs_sub_access = match self.ir_module.types[image_type].inner {
             crate::TypeInner::Image {
                 class: crate::ImageClass::Depth { .. },
@@ -254,7 +836,9 @@ impl<'w> BlockContext<'w> {
             self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 
         let sampler_id = self.get_image_id(sampler);
-        let coordinate_id = self.write_image_coordinates(coordinate, array_index, block)?;
+        let coordinates_id = self
+            .write_image_coordinates(coordinate, array_index, block)?
+            .value_id;
 
         let sampled_image_id = self.gen_id();
         block.body.push(Instruction::sampled_image(
@@ -276,7 +860,7 @@ impl<'w> BlockContext<'w> {
                     id,
                     SampleLod::Explicit,
                     sampled_image_id,
-                    coordinate_id,
+                    coordinates_id,
                     depth_id,
                 );
 
@@ -296,7 +880,7 @@ impl<'w> BlockContext<'w> {
                     id,
                     SampleLod::Implicit,
                     sampled_image_id,
-                    coordinate_id,
+                    coordinates_id,
                     depth_id,
                 );
                 if !mask.is_empty() {
@@ -310,7 +894,7 @@ impl<'w> BlockContext<'w> {
                     id,
                     SampleLod::Explicit,
                     sampled_image_id,
-                    coordinate_id,
+                    coordinates_id,
                     depth_id,
                 );
 
@@ -327,7 +911,7 @@ impl<'w> BlockContext<'w> {
                     id,
                     SampleLod::Implicit,
                     sampled_image_id,
-                    coordinate_id,
+                    coordinates_id,
                     depth_id,
                 );
 
@@ -344,7 +928,7 @@ impl<'w> BlockContext<'w> {
                     id,
                     SampleLod::Explicit,
                     sampled_image_id,
-                    coordinate_id,
+                    coordinates_id,
                     depth_id,
                 );
 
@@ -541,12 +1125,37 @@ impl<'w> BlockContext<'w> {
         block: &mut Block,
     ) -> Result<(), Error> {
         let image_id = self.get_image_id(image);
-        let coordinate_id = self.write_image_coordinates(coordinate, array_index, block)?;
+        let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
         let value_id = self.cached[value];
 
-        block
-            .body
-            .push(Instruction::image_write(image_id, coordinate_id, value_id));
+        let write = Store { image_id, value_id };
+
+        match self.writer.image_bounds_check_policy {
+            crate::back::BoundsCheckPolicy::Restrict => {
+                let (coords, _, _) =
+                    self.write_restricted_coordinates(image_id, coordinates, None, None, block)?;
+                write.generate(&mut self.writer.id_gen, coords, None, None, block);
+            }
+            crate::back::BoundsCheckPolicy::ReadZeroSkipWrite => {
+                self.write_conditional_image_access(
+                    image_id,
+                    coordinates,
+                    None,
+                    None,
+                    block,
+                    &write,
+                )?;
+            }
+            crate::back::BoundsCheckPolicy::UndefinedBehavior => {
+                write.generate(
+                    &mut self.writer.id_gen,
+                    coordinates.value_id,
+                    None,
+                    None,
+                    block,
+                );
+            }
+        }
 
         Ok(())
     }
