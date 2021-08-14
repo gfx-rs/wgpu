@@ -9,7 +9,9 @@ struct type2 {
 
 kernel void main1(
   threadgroup type2& wg
+, threadgroup metal::atomic_uint& at
 ) {
     wg.inner[3] = 1.0;
+    metal::atomic_store_explicit(&at, 2u, metal::memory_order_relaxed);
     return;
 }

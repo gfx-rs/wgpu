@@ -682,7 +682,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     /// Adds no trailing or leading whitespace
     pub(super) fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
         match *inner {
-            TypeInner::Scalar { kind, width } => {
+            TypeInner::Scalar { kind, width } | TypeInner::Atomic { kind, width } => {
                 write!(self.out, "{}", kind.to_hlsl_str(width)?)?;
             }
             TypeInner::Vector { size, kind, width } => {

@@ -3284,12 +3284,14 @@ impl Parser {
             }
             "atomicStore" => {
                 let _ = lexer.next();
+                emitter.start(context.expressions);
                 lexer.open_arguments()?;
                 let mut expression_ctx = context.as_expression(block, &mut emitter);
                 let pointer = self.parse_atomic_pointer(lexer, expression_ctx.reborrow())?;
                 lexer.expect(Token::Separator(','))?;
                 let value = self.parse_general_expression(lexer, expression_ctx)?;
                 lexer.close_arguments()?;
+                block.extend(emitter.finish(context.expressions));
                 Some(crate::Statement::Store { pointer, value })
             }
             "textureStore" => {
