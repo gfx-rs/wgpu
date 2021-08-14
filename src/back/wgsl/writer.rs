@@ -804,9 +804,9 @@ impl<W: Write> Writer<W> {
                         if case.fall_through {
                             writeln!(self.out, "{}fallthrough;", INDENT.repeat(indent + 2))?;
                         }
-                    }
 
-                    writeln!(self.out, "{}}}", INDENT.repeat(indent + 1))?;
+                        writeln!(self.out, "{}}}", INDENT.repeat(indent + 1))?;
+                    }
                 }
 
                 if !default.is_empty() {
