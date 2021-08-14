@@ -305,9 +305,15 @@ struct PassState {
     resolves: ArrayVec<PassResolve, { crate::MAX_COLOR_TARGETS }>,
     layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
+    dirty_root_elements: u64,
     vertex_buffers: [d3d12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
     dirty_vertex_buffers: usize,
     kind: PassKind,
+}
+
+#[test]
+fn test_dirty_mask() {
+    assert_eq!(MAX_ROOT_ELEMENTS, std::mem::size_of::<u64>() * 8);
 }
 
 impl PassState {
@@ -321,6 +327,7 @@ impl PassState {
                 special_constants_root_index: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
+            dirty_root_elements: 0,
             vertex_buffers: [unsafe { mem::zeroed() }; crate::MAX_VERTEX_BUFFERS],
             dirty_vertex_buffers: 0,
             kind: PassKind::Transfer,

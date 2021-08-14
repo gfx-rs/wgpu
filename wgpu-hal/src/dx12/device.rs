@@ -810,15 +810,14 @@ impl crate::Device<super::Api> for super::Device {
                     wgt::BindingType::Buffer {
                         has_dynamic_offset: true,
                         ..
-                    }
-                    | wgt::BindingType::Sampler { .. } => continue,
+                    } => continue,
                     ref other => conv::map_binding_type(other),
                 };
                 let bt = match range_ty {
                     native::DescriptorRangeType::CBV => &mut bind_cbv,
                     native::DescriptorRangeType::SRV => &mut bind_srv,
                     native::DescriptorRangeType::UAV => &mut bind_uav,
-                    native::DescriptorRangeType::Sampler => unreachable!(),
+                    native::DescriptorRangeType::Sampler => continue,
                 };
 
                 binding_map.insert(

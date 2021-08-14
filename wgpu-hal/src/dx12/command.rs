@@ -31,6 +31,8 @@ impl super::CommandEncoder {
             list.BeginEvent(0, wide_label.as_ptr() as *const _, size);
             self.pass.has_label = true;
         }
+        self.pass.dirty_root_elements = 0;
+        self.pass.dirty_vertex_buffers = 0;
         list.set_descriptor_heaps(&[self.shared.heap_views.raw, self.shared.heap_samplers.raw]);
     }
 
@@ -63,24 +65,33 @@ impl super::CommandEncoder {
                 _ => true,
             };
             if needs_update {
+                self.pass.dirty_root_elements |= 1 << root_index;
                 self.pass.root_elements[root_index as usize] =
                     super::RootElement::SpecialConstantBuffer {
                         base_vertex,
                         base_instance,
                     };
-                list.set_graphics_root_constant(root_index, base_vertex as u32, 0);
-                list.set_graphics_root_constant(root_index, base_instance, 1);
             }
         }
+        self.update_root_elements();
     }
 
-    fn update_root_elements(&self, range: Range<super::RootIndex>) {
+    fn prepare_dispatch(&mut self) {
+        self.update_root_elements();
+    }
+
+    //Note: we have to call this lazily before draw calls. Otherwise, D3D complains
+    // about the root parameters being incompatible with root signature.
+    fn update_root_elements(&mut self) {
         use super::{BufferViewKind as Bvk, PassKind as Pk};
 
-        let list = self.list.unwrap();
-        for index in range {
+        while self.pass.dirty_root_elements != 0 {
+            let list = self.list.unwrap();
+            let index = self.pass.dirty_root_elements.trailing_zeros();
+            self.pass.dirty_root_elements ^= 1 << index;
+
             match self.pass.root_elements[index as usize] {
-                super::RootElement::Empty => {}
+                super::RootElement::Empty => log::error!("Root index {} is not bound", index),
                 super::RootElement::SpecialConstantBuffer {
                     base_vertex,
                     base_instance,
@@ -133,7 +144,7 @@ impl super::CommandEncoder {
                 };
         }
         self.pass.layout = layout.clone();
-        self.update_root_elements(0..layout.total_root_elements);
+        self.pass.dirty_root_elements = (1 << layout.total_root_elements) - 1;
     }
 }
 
@@ -695,8 +706,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
 
         if self.pass.layout.signature == layout.shared.signature {
-            let update_range = info.base_root_index..root_index as super::RootIndex;
-            self.update_root_elements(update_range);
+            self.pass.dirty_root_elements |= (1 << root_index) - (1 << info.base_root_index);
         } else {
             // D3D12 requires full reset on signature change
             self.reset_signature(&layout.shared);
@@ -924,6 +934,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
+        self.prepare_dispatch();
         self.list.unwrap().dispatch(count);
     }
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
