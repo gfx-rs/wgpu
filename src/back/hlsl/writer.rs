@@ -1735,16 +1735,28 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::Derivative { axis, expr } => {
                 use crate::DerivativeAxis as Da;
 
-                write!(
-                    self.out,
-                    "{}(",
-                    match axis {
-                        Da::X => "ddx",
-                        Da::Y => "ddy",
-                        Da::Width => "fwidth",
-                    }
-                )?;
+                let fun_str = match axis {
+                    Da::X => "ddx",
+                    Da::Y => "ddy",
+                    Da::Width => "fwidth",
+                };
+                write!(self.out, "{}(", fun_str)?;
                 self.write_expr(module, expr, func_ctx)?;
+                write!(self.out, ")")?
+            }
+            Expression::Relational { fun, argument } => {
+                use crate::RelationalFunction as Rf;
+
+                let fun_str = match fun {
+                    Rf::All => "all",
+                    Rf::Any => "any",
+                    Rf::IsNan => "isnan",
+                    Rf::IsInf => "isinf",
+                    Rf::IsFinite => "isfinite",
+                    Rf::IsNormal => "isnormal",
+                };
+                write!(self.out, "{}(", fun_str)?;
+                self.write_expr(module, argument, func_ctx)?;
                 write!(self.out, ")")?
             }
             Expression::Splat { size, value } => {
@@ -1777,7 +1789,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_) | Expression::AtomicResult { .. } => {}
-            _ => return Err(Error::Unimplemented(format!("write_expr {:?}", expression))),
         }
 
         if !closing_bracket.is_empty() {
