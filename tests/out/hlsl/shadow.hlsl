@@ -6,7 +6,7 @@ struct Globals {
 };
 
 struct Light {
-    float4x4 proj;
+    row_major float4x4 proj;
     float4 pos;
     float4 color;
 };
@@ -51,9 +51,9 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
             break;
         }
         uint _expr19 = i;
-        Light light = {transpose(float4x4(asfloat(s_lights.Load4(_expr19*96+0+0+0)), asfloat(s_lights.Load4(_expr19*96+0+0+16)), asfloat(s_lights.Load4(_expr19*96+0+0+32)), asfloat(s_lights.Load4(_expr19*96+0+0+48)))), asfloat(s_lights.Load4(_expr19*96+0+64)), asfloat(s_lights.Load4(_expr19*96+0+80))};
+        Light light = {float4x4(asfloat(s_lights.Load4(_expr19*96+0+0+0)), asfloat(s_lights.Load4(_expr19*96+0+0+16)), asfloat(s_lights.Load4(_expr19*96+0+0+32)), asfloat(s_lights.Load4(_expr19*96+0+0+48))), asfloat(s_lights.Load4(_expr19*96+0+64)), asfloat(s_lights.Load4(_expr19*96+0+80))};
         uint _expr22 = i;
-        const float _e25 = fetch_shadow(_expr22, mul(light.proj, fragmentinput_fs_main.position1));
+        const float _e25 = fetch_shadow(_expr22, mul(fragmentinput_fs_main.position1, light.proj));
         float3 light_dir = normalize((light.pos.xyz - fragmentinput_fs_main.position1.xyz));
         float diffuse = max(0.0, dot(normal, light_dir));
         float3 _expr34 = color;

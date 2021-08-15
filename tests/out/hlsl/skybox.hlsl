@@ -10,8 +10,8 @@ struct VertexOutput {
 };
 
 struct Data {
-    float4x4 proj_inv;
-    float4x4 view;
+    row_major float4x4 proj_inv;
+    row_major float4x4 view;
 };
 
 cbuffer r_data : register(b0) { Data r_data; }
@@ -41,8 +41,8 @@ VertexOutput vs_main(VertexInput_vs_main vertexinput_vs_main)
     float4 _expr35 = r_data.view[2];
     float3x3 inv_model_view = transpose(float3x3(_expr27.xyz, _expr31.xyz, _expr35.xyz));
     float4x4 _expr40 = r_data.proj_inv;
-    float4 unprojected = mul(_expr40, pos);
-    const VertexOutput vertexoutput1 = { pos, mul(inv_model_view, unprojected.xyz) };
+    float4 unprojected = mul(pos, _expr40);
+    const VertexOutput vertexoutput1 = { pos, mul(unprojected.xyz, inv_model_view) };
     return vertexoutput1;
 }
 

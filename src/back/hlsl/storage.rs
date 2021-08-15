@@ -1,7 +1,6 @@
 //! Logic related to `ByteAddressBuffer` operations.
 //!
 //! HLSL backend uses byte address buffers for all storage buffers in IR.
-//! Matrices have to be transposed, because HLSL syntax implies row majority.
 
 use super::{
     super::{FunctionCtx, INDENT},
@@ -122,7 +121,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             } => {
                 write!(
                     self.out,
-                    "transpose({}{}x{}(",
+                    "{}{}x{}(",
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
                     rows as u8,
                     columns as u8,
@@ -144,7 +143,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     (TypeResolution::Value(ty_inner), i * row_stride)
                 });
                 self.write_storage_load_sequence(module, var_handle, iter, func_ctx)?;
-                write!(self.out, "))")?;
+                write!(self.out, ")")?;
             }
             crate::TypeInner::Array {
                 base,
@@ -267,7 +266,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 let depth = indent + 1;
                 write!(
                     self.out,
-                    "{}{}{}x{} {}{} = transpose(",
+                    "{}{}{}x{} {}{} = ",
                     INDENT.repeat(indent + 1),
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
                     rows as u8,
@@ -276,7 +275,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     depth,
                 )?;
                 self.write_store_value(module, &value, func_ctx)?;
-                writeln!(self.out, ");")?;
+                writeln!(self.out, ";")?;
                 // then iterate the stores
                 let row_stride = width as u32 * columns as u32;
                 for i in 0..rows as u32 {

@@ -5,6 +5,17 @@
 //! - 5.1
 //! - 6.0
 //!
+//! All matrix construction/deconstruction is row based in HLSL. This means that when
+//! we construct a matrix from column vectors, our matrix will be implicitly transposed.
+//! The inverse transposition happens when we call `[0]` to get the zeroth column vector.
+//!
+//! Because all of our matrices are implicitly transposed, we flip arguments to `mul`. `mat * vec`
+//! becomes `vec * mat`, etc. This acts as the inverse transpose making the results identical.
+//!
+//! The only time we don't get this implicit transposition is when reading matrices from Uniforms/Push Constants.
+//! To deal with this, we add `row_major` to all declarations of matrices in Uniforms/Push Constants.
+//!
+//! Finally because all of our matrices are transposed, if you use `mat3x4`, it'll become `float4x3` in HLSL.
 
 mod conv;
 mod help;

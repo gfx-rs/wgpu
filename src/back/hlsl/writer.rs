@@ -640,6 +640,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
 
+                    if let TypeInner::Matrix { .. } = module.types[ty].inner {
+                        write!(self.out, "row_major ")?;
+                    }
+
                     // Write the member type and name
                     self.write_type(module, ty)?;
                     write!(
@@ -700,12 +704,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             } => {
                 // The IR supports only float matrix
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-matrix
+
+                // Because of the implicit transpose all matrices have in HLSL, we need to tranpose the size as well.
                 write!(
                     self.out,
                     "{}{}x{}",
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
-                    back::vector_size_str(columns),
                     back::vector_size_str(rows),
+                    back::vector_size_str(columns),
                 )?;
             }
             TypeInner::Image {
@@ -1302,10 +1308,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     .inner_with(&module.types)
                     .is_matrix() =>
             {
+                // We intentionally flip the order of multiplication as our matrices are implicitly transposed.
                 write!(self.out, "mul(")?;
-                self.write_expr(module, left, func_ctx)?;
-                write!(self.out, ", ")?;
                 self.write_expr(module, right, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, left, func_ctx)?;
                 write!(self.out, ")")?;
             }
             Expression::Binary { op, left, right } => {
