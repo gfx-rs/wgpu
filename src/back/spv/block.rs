@@ -53,7 +53,7 @@ impl Writer {
                     kind: crate::ScalarKind::Float,
                     width: 4,
                     pointer_class: Some(spirv::StorageClass::Output),
-                }))?;
+                }));
                 let index_y_id = self.get_index_constant(1)?;
                 body.push(Instruction::access_chain(
                     float_ptr_type_id,
@@ -68,7 +68,7 @@ impl Writer {
                     kind: crate::ScalarKind::Float,
                     width: 4,
                     pointer_class: None,
-                }))?;
+                }));
                 body.push(Instruction::load(float_type_id, load_id, access_id, None));
 
                 let neg_id = self.id_gen.next();
@@ -86,7 +86,7 @@ impl Writer {
 }
 
 impl<'w> BlockContext<'w> {
-    fn get_type_id(&mut self, lookup_type: LookupType) -> Result<Word, Error> {
+    fn get_type_id(&mut self, lookup_type: LookupType) -> Word {
         self.writer.get_type_id(lookup_type)
     }
 
@@ -167,7 +167,7 @@ impl<'w> BlockContext<'w> {
                 kind: component_kind,
                 width: 4,
                 pointer_class: None,
-            }))?;
+            }));
 
             let reconciled_id = self.gen_id();
             block.body.push(Instruction::unary(
@@ -180,13 +180,12 @@ impl<'w> BlockContext<'w> {
         };
 
         // Find the SPIR-V type for the combined coordinates/index vector.
-        let combined_coordinate_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Value {
-                vector_size: Some(result_size),
-                kind: component_kind,
-                width: 4,
-                pointer_class: None,
-            }))?;
+        let combined_coordinate_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: Some(result_size),
+            kind: component_kind,
+            width: 4,
+            pointer_class: None,
+        }));
 
         // Schmear the coordinates and index together.
         let id = self.gen_id();
@@ -227,7 +226,7 @@ impl<'w> BlockContext<'w> {
         expr_handle: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<(), Error> {
-        let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty)?;
+        let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
 
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::Access { base, index: _ } if self.is_intermediate(base) => {
@@ -619,7 +618,7 @@ impl<'w> BlockContext<'w> {
                                         kind,
                                         width,
                                         pointer_class: None,
-                                    }))?;
+                                    }));
                                 self.temp_list.clear();
                                 self.temp_list.resize(size as usize, arg2_id);
 
@@ -826,7 +825,7 @@ impl<'w> BlockContext<'w> {
                                 kind: crate::ScalarKind::Float,
                                 width: 4,
                                 pointer_class: None,
-                            }))?;
+                            }));
                         Instruction::image_fetch(load_result_type_id, id, image_id, coordinate_id)
                     }
                     _ => Instruction::image_fetch(result_type_id, id, image_id, coordinate_id),
@@ -893,15 +892,15 @@ impl<'w> BlockContext<'w> {
                         kind: crate::ScalarKind::Float,
                         width: 4,
                         pointer_class: None,
-                    }))?
+                    }))
                 } else {
                     result_type_id
                 };
 
                 // OpTypeSampledImage
-                let image_type_id = self.get_type_id(LookupType::Handle(image_type))?;
+                let image_type_id = self.get_type_id(LookupType::Handle(image_type));
                 let sampled_image_type_id =
-                    self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }))?;
+                    self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 
                 let sampler_id = self.get_image_id(sampler);
                 let coordinate_id =
@@ -1062,7 +1061,7 @@ impl<'w> BlockContext<'w> {
                             kind: crate::ScalarKind::Bool,
                             width,
                             pointer_class: None,
-                        }))?;
+                        }));
 
                     let id = self.gen_id();
                     block.body.push(Instruction::composite_construct(
@@ -1131,7 +1130,7 @@ impl<'w> BlockContext<'w> {
                                 kind: crate::ScalarKind::Sint,
                                 width: 4,
                                 pointer_class: None,
-                            }))?
+                            }))
                         };
 
                         let (query_op, level_id) = match class {
@@ -1200,7 +1199,7 @@ impl<'w> BlockContext<'w> {
                                 kind: crate::ScalarKind::Sint,
                                 width: 4,
                                 pointer_class: None,
-                            }))?;
+                            }));
                         let id_extended = self.gen_id();
                         let mut inst = Instruction::image_query(
                             spirv::Op::ImageQuerySizeLod,
@@ -1272,7 +1271,7 @@ impl<'w> BlockContext<'w> {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => LookupType::Local(make_local(inner).unwrap()),
         };
-        let result_type_id = self.get_type_id(result_lookup_ty)?;
+        let result_type_id = self.get_type_id(result_lookup_ty);
 
         // The id of the boolean `and` of all dynamic bounds checks up to this point. If
         // `None`, then we haven't done any dynamic bounds checks yet.
@@ -1301,7 +1300,7 @@ impl<'w> BlockContext<'w> {
                                     let combined = self.gen_id();
                                     block.body.push(Instruction::binary(
                                         spirv::Op::LogicalAnd,
-                                        self.writer.get_bool_type_id()?,
+                                        self.writer.get_bool_type_id(),
                                         combined,
                                         prior_checks,
                                         comparison_id,
@@ -1705,7 +1704,7 @@ impl<'w> BlockContext<'w> {
                     let type_id = match result {
                         Some(expr) => {
                             self.cached[expr] = id;
-                            self.get_expression_type_id(&self.fun_info[expr].ty)?
+                            self.get_expression_type_id(&self.fun_info[expr].ty)
                         }
                         None => self.writer.void_type,
                     };
@@ -1724,7 +1723,7 @@ impl<'w> BlockContext<'w> {
                     result,
                 } => {
                     let id = self.gen_id();
-                    let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty)?;
+                    let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
 
                     self.cached[result] = id;
 
@@ -1856,7 +1855,7 @@ impl<'w> BlockContext<'w> {
             // Or it may be the end of the self.function.
             None => match self.ir_function.result {
                 Some(ref result) if self.function.entry_point_context.is_none() => {
-                    let type_id = self.get_type_id(LookupType::Handle(result.ty))?;
+                    let type_id = self.get_type_id(LookupType::Handle(result.ty));
                     let null_id = self.writer.write_constant_null(type_id);
                     Instruction::return_value(null_id)
                 }

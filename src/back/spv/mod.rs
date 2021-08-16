@@ -360,7 +360,7 @@ impl BlockContext<'_> {
         self.writer.id_gen.next()
     }
 
-    fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Result<Word, Error> {
+    fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Word {
         self.writer.get_expression_type_id(tr)
     }
 

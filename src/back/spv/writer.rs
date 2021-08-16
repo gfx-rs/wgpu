@@ -154,9 +154,9 @@ impl Writer {
         Err(Error::MissingCapabilities(capabilities.to_vec()))
     }
 
-    pub(super) fn get_type_id(&mut self, lookup_ty: LookupType) -> Result<Word, Error> {
+    pub(super) fn get_type_id(&mut self, lookup_ty: LookupType) -> Word {
         if let Entry::Occupied(e) = self.lookup_type.entry(lookup_ty) {
-            Ok(*e.get())
+            *e.get()
         } else {
             match lookup_ty {
                 LookupType::Handle(_handle) => unreachable!("Handles are populated at start"),
@@ -165,7 +165,7 @@ impl Writer {
         }
     }
 
-    pub(super) fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Result<Word, Error> {
+    pub(super) fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Word {
         let lookup_ty = match *tr {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => LookupType::Local(make_local(inner).unwrap()),
@@ -179,7 +179,7 @@ impl Writer {
         handle: Handle<crate::Type>,
         class: spirv::StorageClass,
     ) -> Result<Word, Error> {
-        let ty_id = self.get_type_id(LookupType::Handle(handle))?;
+        let ty_id = self.get_type_id(LookupType::Handle(handle));
         if let crate::TypeInner::Pointer { .. } = arena[handle].inner {
             return Ok(ty_id);
         }
@@ -198,7 +198,7 @@ impl Writer {
         })
     }
 
-    pub(super) fn get_uint_type_id(&mut self) -> Result<Word, Error> {
+    pub(super) fn get_uint_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: None,
             kind: crate::ScalarKind::Uint,
@@ -208,7 +208,7 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_bool_type_id(&mut self) -> Result<Word, Error> {
+    pub(super) fn get_bool_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: None,
             kind: crate::ScalarKind::Bool,
@@ -274,7 +274,7 @@ impl Writer {
                     argument.ty,
                     spirv::StorageClass::UniformConstant,
                 )?,
-                false => self.get_type_id(LookupType::Handle(argument.ty))?,
+                false => self.get_type_id(LookupType::Handle(argument.ty)),
             };
             if let Some(ref mut list) = varying_ids {
                 let id = if let Some(ref binding) = argument.binding {
@@ -293,7 +293,7 @@ impl Writer {
                     let struct_id = self.id_gen.next();
                     let mut constituent_ids = Vec::with_capacity(members.len());
                     for member in members {
-                        let type_id = self.get_type_id(LookupType::Handle(member.ty))?;
+                        let type_id = self.get_type_id(LookupType::Handle(member.ty));
                         let name = member.name.as_ref().map(AsRef::as_ref);
                         let binding = member.binding.as_ref().unwrap();
                         let varying_id =
@@ -323,7 +323,7 @@ impl Writer {
                     handle_id: if handle_ty {
                         let id = self.id_gen.next();
                         prelude.body.push(Instruction::load(
-                            self.get_type_id(LookupType::Handle(argument.ty))?,
+                            self.get_type_id(LookupType::Handle(argument.ty)),
                             id,
                             argument_id,
                             None,
@@ -342,7 +342,7 @@ impl Writer {
                 if let Some(ref mut list) = varying_ids {
                     let class = spirv::StorageClass::Output;
                     if let Some(ref binding) = result.binding {
-                        let type_id = self.get_type_id(LookupType::Handle(result.ty))?;
+                        let type_id = self.get_type_id(LookupType::Handle(result.ty));
                         let varying_id =
                             self.write_varying(ir_module, class, None, result.ty, binding)?;
                         list.push(varying_id);
@@ -355,7 +355,7 @@ impl Writer {
                         ir_module.types[result.ty].inner
                     {
                         for member in members {
-                            let type_id = self.get_type_id(LookupType::Handle(member.ty))?;
+                            let type_id = self.get_type_id(LookupType::Handle(member.ty));
                             let name = member.name.as_ref().map(AsRef::as_ref);
                             let binding = member.binding.as_ref().unwrap();
                             let varying_id =
@@ -372,7 +372,7 @@ impl Writer {
                     }
                     self.void_type
                 } else {
-                    self.get_type_id(LookupType::Handle(result.ty))?
+                    self.get_type_id(LookupType::Handle(result.ty))
                 }
             }
             None => self.void_type,
@@ -412,7 +412,7 @@ impl Writer {
                 continue;
             }
             let id = self.id_gen.next();
-            let result_type_id = self.get_type_id(LookupType::Handle(var.ty))?;
+            let result_type_id = self.get_type_id(LookupType::Handle(var.ty));
             let gv = &mut self.global_variables[handle.index()];
             prelude
                 .body
@@ -567,7 +567,7 @@ impl Writer {
         }
     }
 
-    fn write_type_declaration_local(&mut self, local_ty: LocalType) -> Result<Word, Error> {
+    fn write_type_declaration_local(&mut self, local_ty: LocalType) -> Word {
         let id = self.id_gen.next();
         let instruction = match local_ty {
             LocalType::Value {
@@ -587,7 +587,7 @@ impl Writer {
                     kind,
                     width,
                     pointer_class: None,
-                }))?;
+                }));
                 Instruction::type_vector(id, scalar_id, size)
             }
             LocalType::Matrix {
@@ -600,11 +600,11 @@ impl Writer {
                     kind: crate::ScalarKind::Float,
                     width,
                     pointer_class: None,
-                }))?;
+                }));
                 Instruction::type_matrix(id, vector_id, columns)
             }
             LocalType::Pointer { base, class } => {
-                let type_id = self.get_type_id(LookupType::Handle(base))?;
+                let type_id = self.get_type_id(LookupType::Handle(base));
                 Instruction::type_pointer(id, class, type_id)
             }
             LocalType::Value {
@@ -618,7 +618,7 @@ impl Writer {
                     kind,
                     width,
                     pointer_class: None,
-                }))?;
+                }));
                 Instruction::type_pointer(id, class, type_id)
             }
             // all the samplers and image types go through `write_type_declaration_arena`
@@ -630,7 +630,7 @@ impl Writer {
 
         self.lookup_type.insert(LookupType::Local(local_ty), id);
         instruction.to_words(&mut self.logical_layout.declarations);
-        Ok(id)
+        id
     }
 
     fn write_type_declaration_arena(
@@ -678,7 +678,7 @@ impl Writer {
                     kind,
                     width,
                     pointer_class: None,
-                }))?;
+                }));
                 Instruction::type_vector(id, scalar_id, size)
             }
             crate::TypeInner::Matrix {
@@ -691,7 +691,7 @@ impl Writer {
                     kind: crate::ScalarKind::Float,
                     width,
                     pointer_class: None,
-                }))?;
+                }));
                 Instruction::type_matrix(id, vector_id, columns)
             }
             crate::TypeInner::Image {
@@ -720,7 +720,7 @@ impl Writer {
                 };
                 let dim = map_dim(dim);
                 self.check(dim.required_capabilities())?;
-                let type_id = self.get_type_id(LookupType::Local(local_type))?;
+                let type_id = self.get_type_id(LookupType::Local(local_type));
                 Instruction::type_image(id, type_id, dim, arrayed, class)
             }
             crate::TypeInner::Sampler { comparison: _ } => Instruction::type_sampler(id),
@@ -729,7 +729,7 @@ impl Writer {
                     self.decorate(id, Decoration::ArrayStride, &[stride]);
                 }
 
-                let type_id = self.get_type_id(LookupType::Handle(base))?;
+                let type_id = self.get_type_id(LookupType::Handle(base));
                 match size {
                     crate::ArraySize::Constant(const_handle) => {
                         let length_id = self.constant_ids[const_handle.index()];
@@ -795,13 +795,13 @@ impl Writer {
                         ));
                     }
 
-                    let member_id = self.get_type_id(LookupType::Handle(member.ty))?;
+                    let member_id = self.get_type_id(LookupType::Handle(member.ty));
                     member_ids.push(member_id);
                 }
                 Instruction::type_struct(id, member_ids.as_slice())
             }
             crate::TypeInner::Pointer { base, class } => {
-                let type_id = self.get_type_id(LookupType::Handle(base))?;
+                let type_id = self.get_type_id(LookupType::Handle(base));
                 let raw_class = map_storage_class(class);
                 Instruction::type_pointer(id, raw_class, type_id)
             }
@@ -817,7 +817,7 @@ impl Writer {
                     kind,
                     width,
                     pointer_class: None,
-                }))?;
+                }));
                 Instruction::type_pointer(id, raw_class, type_id)
             }
         };
@@ -861,7 +861,7 @@ impl Writer {
             kind: value.scalar_kind(),
             width,
             pointer_class: None,
-        }))?;
+        }));
         let (solo, pair);
         let instruction = match *value {
             crate::ScalarValue::Sint(val) => {
@@ -927,7 +927,7 @@ impl Writer {
             constituent_ids.push(constituent_id);
         }
 
-        let type_id = self.get_type_id(LookupType::Handle(ty))?;
+        let type_id = self.get_type_id(LookupType::Handle(ty));
         Instruction::constant_composite(type_id, id, constituent_ids.as_slice())
             .to_words(&mut self.logical_layout.declarations);
         Ok(())
