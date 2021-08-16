@@ -211,6 +211,19 @@ bitflags::bitflags! {
     }
 }
 
+impl DecorationFlags {
+    fn to_storage_access(self) -> crate::StorageAccess {
+        let mut access = crate::StorageAccess::all();
+        if self.contains(DecorationFlags::NON_READABLE) {
+            access &= !crate::StorageAccess::LOAD;
+        }
+        if self.contains(DecorationFlags::NON_WRITABLE) {
+            access &= !crate::StorageAccess::STORE;
+        }
+        access
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum Majority {
     Column,
@@ -3226,14 +3239,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 .remove(&(id, i))
                 .unwrap_or_default();
 
-            let mut member_access = crate::StorageAccess::all();
-            if decor.flags.contains(DecorationFlags::NON_READABLE) {
-                member_access &= !crate::StorageAccess::LOAD;
-            }
-            if decor.flags.contains(DecorationFlags::NON_WRITABLE) {
-                member_access &= !crate::StorageAccess::STORE;
-            }
-            storage_access |= member_access;
+            storage_access |= decor.flags.to_storage_access();
 
             member_lookups.push(LookupMember {
                 type_id,
@@ -3643,10 +3649,31 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let mut dec = self.future_decor.remove(&id).unwrap_or_default();
 
         let original_ty = self.lookup_type.lookup(type_id)?.handle;
-        let effective_ty = match module.types[original_ty].inner {
-            crate::TypeInner::Pointer { base, class: _ } => base,
-            _ => original_ty,
+        let mut effective_ty = original_ty;
+        if let crate::TypeInner::Pointer { base, class: _ } = module.types[original_ty].inner {
+            effective_ty = base;
         };
+        if let crate::TypeInner::Image {
+            dim,
+            arrayed,
+            class: crate::ImageClass::Storage { format, access: _ },
+        } = module.types[effective_ty].inner
+        {
+            // Storage image types in IR have to contain the access, but not in the SPIR-V.
+            // The same image type in SPIR-V can be used (and has to be used) for multiple images.
+            // So we copy the type out and apply the variable access decorations.
+            let access = dec.flags.to_storage_access();
+            let ty = crate::Type {
+                name: None,
+                inner: crate::TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class: crate::ImageClass::Storage { format, access },
+                },
+            };
+            effective_ty = module.types.append(ty, Default::default());
+        }
+
         let ext_class = match self.lookup_storage_buffer_types.get(&effective_ty) {
             Some(&access) => ExtendedClass::Global(crate::StorageClass::Storage { access }),
             None => map_storage_class(storage_class)?,
@@ -3666,12 +3693,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let (inner, var) = match ext_class {
             ExtendedClass::Global(mut class) => {
                 if let crate::StorageClass::Storage { ref mut access } = class {
-                    if dec.flags.contains(DecorationFlags::NON_READABLE) {
-                        *access &= !crate::StorageAccess::LOAD;
-                    }
-                    if dec.flags.contains(DecorationFlags::NON_WRITABLE) {
-                        *access &= !crate::StorageAccess::STORE;
-                    }
+                    *access &= dec.flags.to_storage_access();
                 }
                 let var = crate::GlobalVariable {
                     binding: dec.resource_binding(),
