@@ -462,9 +462,18 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     let grad_x_handle = self.lookup_expression.lookup(grad_x_expr)?.handle;
                     let grad_y_expr = self.next()?;
                     let grad_y_handle = self.lookup_expression.lookup(grad_y_expr)?.handle;
-                    level = crate::SampleLevel::Gradient {
-                        x: grad_x_handle,
-                        y: grad_y_handle,
+                    level = if options.compare {
+                        log::debug!(
+                            "Assuming gradients {:?} and {:?} are not greater than 1",
+                            grad_x_handle,
+                            grad_y_handle
+                        );
+                        crate::SampleLevel::Zero
+                    } else {
+                        crate::SampleLevel::Gradient {
+                            x: grad_x_handle,
+                            y: grad_y_handle,
+                        }
                     };
                     words_left -= 2;
                 }
