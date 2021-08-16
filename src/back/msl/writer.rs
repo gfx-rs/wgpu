@@ -386,9 +386,10 @@ impl crate::StorageClass {
             crate::StorageClass::Uniform
             | crate::StorageClass::Storage { .. }
             | crate::StorageClass::Private
+            | crate::StorageClass::WorkGroup
             | crate::StorageClass::PushConstant
             | crate::StorageClass::Handle => true,
-            _ => false,
+            crate::StorageClass::Function => false,
         }
     }
 
