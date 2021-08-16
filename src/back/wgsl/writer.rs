@@ -6,11 +6,6 @@ use crate::{
 };
 use std::fmt::Write;
 
-// This is a hack: we need to pass a pointer to an atomic,
-// but generally the backend isn't putting "&" in front of every pointer.
-// Some more general handling of pointers is needed to be implemented here.
-const ATOMIC_REFERENCE: &str = "&";
-
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
 
@@ -537,9 +532,16 @@ impl<W: Write> Writer<W> {
                 )?;
             }
             TypeInner::Pointer { base, class } => {
+                let (storage, maybe_access) = storage_class_str(class);
+                if let Some(class) = storage {
+                    write!(self.out, "ptr<{}, ", class)?;
+                    if let Some(access) = maybe_access {
+                        write!(self.out, ", {}", access)?;
+                    }
+                }
                 self.write_type(module, base)?;
-                if let Some(storage_class) = storage_class_str(class) {
-                    write!(self.out, "<{}>", storage_class)?;
+                if storage.is_some() {
+                    write!(self.out, ">")?;
                 }
             }
             _ => {
@@ -673,15 +675,22 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, "{}", INDENT.repeat(indent))?;
 
-                let is_atomic = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
-                    crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
-                        crate::TypeInner::Atomic { .. } => true,
-                        _ => false,
-                    },
-                    _ => false,
+                let (is_ptr, is_atomic) = match *func_ctx.info[pointer].ty.inner_with(&module.types)
+                {
+                    crate::TypeInner::Pointer { base, .. } => (
+                        func_ctx.expressions[pointer].should_deref(),
+                        match module.types[base].inner {
+                            crate::TypeInner::Atomic { .. } => true,
+                            _ => false,
+                        },
+                    ),
+                    _ => (false, false),
                 };
                 if is_atomic {
-                    write!(self.out, "atomicStore({}", ATOMIC_REFERENCE)?;
+                    write!(self.out, "atomicStore(")?;
+                    if !is_ptr {
+                        write!(self.out, "&")?;
+                    }
                     self.write_expr(module, pointer, func_ctx)?;
                     write!(self.out, ", ")?;
                     self.write_expr(module, value, func_ctx)?;
@@ -727,8 +736,13 @@ impl<W: Write> Writer<W> {
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
+                let is_ptr = func_ctx.expressions[pointer].should_deref();
+
                 let fun_str = fun.to_wgsl();
-                write!(self.out, "atomic{}({}", fun_str, ATOMIC_REFERENCE)?;
+                write!(self.out, "atomic{}(", fun_str)?;
+                if !is_ptr {
+                    write!(self.out, "&")?;
+                }
                 self.write_expr(module, pointer, func_ctx)?;
                 if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
                     write!(self.out, ", ")?;
@@ -973,10 +987,22 @@ impl<W: Write> Writer<W> {
             }
             // TODO: copy-paste from glsl-out
             Expression::AccessIndex { base, index } => {
-                self.write_expr(module, base, func_ctx)?;
-
                 let base_ty_res = &func_ctx.info[base].ty;
                 let mut resolved = base_ty_res.inner_with(&module.types);
+
+                let deref = match *resolved {
+                    TypeInner::Pointer { .. } => func_ctx.expressions[base].should_deref(),
+                    _ => false,
+                };
+
+                if deref {
+                    write!(self.out, "(*")?;
+                }
+                self.write_expr(module, base, func_ctx)?;
+                if deref {
+                    write!(self.out, ")")?;
+                }
+
                 let base_ty_handle = match *resolved {
                     TypeInner::Pointer { base, class: _ } => {
                         resolved = &module.types[base].inner;
@@ -1169,15 +1195,26 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             Expression::Load { pointer } => {
-                let is_atomic = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
-                    crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
-                        crate::TypeInner::Atomic { .. } => true,
-                        _ => false,
-                    },
-                    _ => false,
-                };
+                let (is_pointer, is_atomic) =
+                    match *func_ctx.info[pointer].ty.inner_with(&module.types) {
+                        crate::TypeInner::Pointer { base, .. } => (
+                            func_ctx.expressions[pointer].should_deref(),
+                            match module.types[base].inner {
+                                crate::TypeInner::Atomic { .. } => true,
+                                _ => false,
+                            },
+                        ),
+                        _ => (false, false),
+                    };
                 if is_atomic {
-                    write!(self.out, "atomicLoad({}", ATOMIC_REFERENCE)?;
+                    write!(self.out, "atomicLoad(")?;
+                    if !is_pointer {
+                        // Write an indirection in case the underlying
+                        // expression isn't a pointer but a reference
+                        write!(self.out, "&")?;
+                    }
+                } else if is_pointer {
+                    write!(self.out, "*")?;
                 }
                 self.write_expr(module, pointer, func_ctx)?;
                 if is_atomic {
@@ -1377,8 +1414,13 @@ impl<W: Write> Writer<W> {
 
         // First write global name and storage class if supported
         write!(self.out, "var")?;
-        if let Some(storage_class) = storage_class_str(global.class) {
-            write!(self.out, "<{}>", storage_class)?;
+        let (storage, maybe_access) = storage_class_str(global.class);
+        if let Some(class) = storage {
+            write!(self.out, "<{}", class)?;
+            if let Some(access) = maybe_access {
+                write!(self.out, ", {}", access)?;
+            }
+            write!(self.out, ">")?;
         }
         write!(self.out, " {}: ", name)?;
 
@@ -1525,6 +1567,21 @@ impl<W: Write> Writer<W> {
     }
 }
 
+impl crate::Expression {
+    /// Wether an expression should be dereferenced, this is false when the
+    /// expression returns a reference instead of a pointer
+    fn should_deref(&self) -> bool {
+        match *self {
+            // Variables in the typifier have pointer types but in wgsl they
+            // have reference types and shouldn't be dereferenced
+            crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_)
+            // Access chains might have pointer types but wgsl considers them as references
+            | crate::Expression::AccessIndex {..} | crate::Expression::Access {..} => false,
+            _ => true,
+        }
+    }
+}
+
 fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
     use crate::BuiltIn as Bi;
 
@@ -1629,21 +1686,29 @@ fn sampling_str(sampling: crate::Sampling) -> &'static str {
     }
 }
 
-fn storage_class_str(storage_class: crate::StorageClass) -> Option<&'static str> {
+fn storage_class_str(
+    storage_class: crate::StorageClass,
+) -> (Option<&'static str>, Option<&'static str>) {
     use crate::StorageClass as Sc;
 
-    match storage_class {
-        Sc::Private => Some("private"),
-        Sc::Uniform => Some("uniform"),
-        Sc::Storage { access } => Some(if access.contains(crate::StorageAccess::STORE) {
-            "storage,read_write"
-        } else {
-            "storage"
+    (
+        Some(match storage_class {
+            Sc::Private => "private",
+            Sc::Uniform => "uniform",
+            Sc::Storage { access } => {
+                if access.contains(crate::StorageAccess::STORE) {
+                    return (Some("storage"), Some("read_write"));
+                } else {
+                    "storage"
+                }
+            }
+            Sc::PushConstant => "push_constant",
+            Sc::WorkGroup => "workgroup",
+            Sc::Handle => return (None, None),
+            Sc::Function => "function",
         }),
-        Sc::PushConstant => Some("push_constant"),
-        Sc::WorkGroup => Some("workgroup"),
-        Sc::Function | Sc::Handle => None,
-    }
+        None,
+    )
 }
 
 fn map_binding_to_attribute(

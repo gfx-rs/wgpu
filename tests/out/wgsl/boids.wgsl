@@ -26,7 +26,7 @@ var<uniform> params: SimParams;
 [[group(0), binding(1)]]
 var<storage> particlesSrc: Particles;
 [[group(0), binding(2)]]
-var<storage,read_write> particlesDst: Particles;
+var<storage, read_write> particlesDst: Particles;
 
 [[stage(compute), workgroup_size(64, 1, 1)]]
 fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {

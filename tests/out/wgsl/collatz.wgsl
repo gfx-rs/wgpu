@@ -4,7 +4,7 @@ struct PrimeIndices {
 };
 
 [[group(0), binding(0)]]
-var<storage,read_write> v_indices: PrimeIndices;
+var<storage, read_write> v_indices: PrimeIndices;
 
 fn collatz_iterations(n_base: u32) -> u32 {
     var n: u32;

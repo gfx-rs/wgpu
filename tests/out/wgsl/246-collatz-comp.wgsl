@@ -4,7 +4,7 @@ struct PrimeIndices {
 };
 
 [[group(0), binding(0)]]
-var<storage,read_write> global: PrimeIndices;
+var<storage, read_write> global: PrimeIndices;
 var<private> gl_GlobalInvocationID: vec3<u32>;
 
 fn collatz_iterations(n: u32) -> u32 {

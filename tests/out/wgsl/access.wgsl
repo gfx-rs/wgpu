@@ -7,7 +7,7 @@ struct Bar {
 };
 
 [[group(0), binding(0)]]
-var<storage,read_write> bar: Bar;
+var<storage, read_write> bar: Bar;
 
 [[stage(vertex)]]
 fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
