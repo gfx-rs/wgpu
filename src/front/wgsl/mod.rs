@@ -2108,13 +2108,6 @@ impl Parser {
                 let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
                 (false, handle)
             }
-            Token::Word(word) => {
-                let handle = match self.parse_function_call_inner(lexer, word, ctx.reborrow())? {
-                    Some(handle) => handle,
-                    None => self.parse_primary_expression(lexer, ctx.reborrow())?,
-                };
-                (true, handle)
-            }
             _ => {
                 let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
                 (true, handle)
