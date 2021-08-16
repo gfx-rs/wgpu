@@ -9,6 +9,7 @@ pub fn map_storage_class(word: &str, span: Span) -> Result<crate::StorageClass, 
             access: crate::StorageAccess::default(),
         }),
         "push_constant" => Ok(crate::StorageClass::PushConstant),
+        "function" => Ok(crate::StorageClass::Function),
         _ => Err(Error::UnknownStorageClass(span)),
     }
 }
