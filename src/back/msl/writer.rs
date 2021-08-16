@@ -801,11 +801,14 @@ impl<W: Write> Writer<W> {
                     crate::TypeInner::ValuePointer { .. } | crate::TypeInner::Vector { .. } => {
                         write!(self.out, ".{}", back::COMPONENTS[index as usize])?;
                     }
-                    crate::TypeInner::Matrix { .. } => {
-                        write!(self.out, "[{}]", index)?;
-                    }
-                    crate::TypeInner::Array { .. } => {
+                    crate::TypeInner::Array {
+                        size: crate::ArraySize::Constant(_),
+                        ..
+                    } => {
                         write!(self.out, ".{}[{}]", WRAPPED_ARRAY_FIELD, index)?;
+                    }
+                    crate::TypeInner::Array { .. } | crate::TypeInner::Matrix { .. } => {
+                        write!(self.out, "[{}]", index)?;
                     }
                     _ => {
                         // unexpected indexing, should fail validation
