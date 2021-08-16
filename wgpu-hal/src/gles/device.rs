@@ -35,7 +35,10 @@ impl CompilationContext<'_> {
             let br = var.binding.as_ref().unwrap();
             let slot = self.layout.get_slot(br);
 
-            let name = reflection_info.uniforms[&handle].clone();
+            let name = match reflection_info.uniforms.get(&handle) {
+                Some(name) => name.clone(),
+                None => continue,
+            };
             log::debug!(
                 "Rebind buffer: {:?} -> {}, register={:?}, slot={}",
                 var.name.as_ref(),
