@@ -858,6 +858,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let _row_id = self.next()?;
                     let _col_id = self.next()?;
                 }
+                Op::NoLine => inst.expect(1)?,
                 Op::Undef => {
                     inst.expect(3)?;
                     let (type_id, id, handle) =
