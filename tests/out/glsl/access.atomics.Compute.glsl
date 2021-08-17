@@ -16,20 +16,20 @@ buffer Bar_block_0Cs {
 void main() {
     int tmp = 0;
     int value = _group_0_binding_0.atom;
-    int _expr6 = atomicAdd(_group_0_binding_0.atom, 5);
-    tmp = _expr6;
-    int _expr9 = atomicAnd(_group_0_binding_0.atom, 5);
-    tmp = _expr9;
-    int _expr12 = atomicOr(_group_0_binding_0.atom, 5);
-    tmp = _expr12;
-    int _expr15 = atomicXor(_group_0_binding_0.atom, 5);
-    tmp = _expr15;
-    int _expr18 = atomicMin(_group_0_binding_0.atom, 5);
-    tmp = _expr18;
-    int _expr21 = atomicMax(_group_0_binding_0.atom, 5);
-    tmp = _expr21;
-    int _expr24 = atomicExchange(_group_0_binding_0.atom, 5);
-    tmp = _expr24;
+    int _e6 = atomicAdd(_group_0_binding_0.atom, 5);
+    tmp = _e6;
+    int _e9 = atomicAnd(_group_0_binding_0.atom, 5);
+    tmp = _e9;
+    int _e12 = atomicOr(_group_0_binding_0.atom, 5);
+    tmp = _e12;
+    int _e15 = atomicXor(_group_0_binding_0.atom, 5);
+    tmp = _e15;
+    int _e18 = atomicMin(_group_0_binding_0.atom, 5);
+    tmp = _e18;
+    int _e21 = atomicMax(_group_0_binding_0.atom, 5);
+    tmp = _e21;
+    int _e24 = atomicExchange(_group_0_binding_0.atom, 5);
+    tmp = _e24;
     _group_0_binding_0.atom = value;
     return;
 }

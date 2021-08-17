@@ -29,8 +29,8 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
     }
     vec2 flip_correction = vec2(0.5, -0.5);
     vec2 light_local = (((homogeneous_coords.xy * flip_correction) / vec2(homogeneous_coords.w)) + vec2(0.5, 0.5));
-    float _expr26 = textureGrad(_group_0_binding_2, vec4(light_local, int(light_id), (homogeneous_coords.z / homogeneous_coords.w)), vec2(0,0), vec2(0,0));
-    return _expr26;
+    float _e26 = textureGrad(_group_0_binding_2, vec4(light_local, int(light_id), (homogeneous_coords.z / homogeneous_coords.w)), vec2(0,0), vec2(0,0));
+    return _e26;
 }
 
 void main() {
@@ -42,26 +42,26 @@ void main() {
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-        uint _expr40 = i;
-        i = (_expr40 + 1u);
+        uint _e40 = i;
+        i = (_e40 + 1u);
         }
         loop_init = false;
-        uint _expr12 = i;
-        uvec4 _expr14 = _group_0_binding_0.num_lights;
-        if ((_expr12 >= min(_expr14.x, 10u))) {
+        uint _e12 = i;
+        uvec4 _e14 = _group_0_binding_0.num_lights;
+        if ((_e12 >= min(_e14.x, 10u))) {
             break;
         }
-        uint _expr19 = i;
-        Light light = _group_0_binding_1.data[_expr19];
-        uint _expr22 = i;
-        float _expr25 = fetch_shadow(_expr22, (light.proj * position));
+        uint _e19 = i;
+        Light light = _group_0_binding_1.data[_e19];
+        uint _e22 = i;
+        float _e25 = fetch_shadow(_e22, (light.proj * position));
         vec3 light_dir = normalize((light.pos.xyz - position.xyz));
         float diffuse = max(0.0, dot(normal, light_dir));
-        vec3 _expr34 = color;
-        color = (_expr34 + ((_expr25 * diffuse) * light.color.xyz));
+        vec3 _e34 = color;
+        color = (_e34 + ((_e25 * diffuse) * light.color.xyz));
     }
-    vec3 _expr43 = color;
-    _fs2p_location0 = vec4(_expr43, 1.0);
+    vec3 _e43 = color;
+    _fs2p_location0 = vec4(_e43, 1.0);
     return;
 }
 

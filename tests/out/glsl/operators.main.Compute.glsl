@@ -30,9 +30,9 @@ int unary() {
 }
 
 void main() {
-    vec4 _expr3 = builtins();
-    vec4 _expr4 = splat();
-    int _expr5 = unary();
+    vec4 _e3 = builtins();
+    vec4 _e4 = splat();
+    int _e5 = unary();
     return;
 }
 
