@@ -84,16 +84,16 @@ fn test_backend_macro() {
     }
 
     #[cfg(any(windows, all(unix, not(target_os = "ios"), not(target_os = "macos")),))]
-    assert!(vec.contains(&(1, 'a')));
+    assert!(vec.contains(&(101, 'a')));
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    assert!(vec.contains(&(2, 'b')));
+    assert!(vec.contains(&(102, 'b')));
 
     #[cfg(dx12)]
-    assert!(vec.contains(&(3, 'c')));
+    assert!(vec.contains(&(103, 'c')));
 
     #[cfg(dx11)]
-    assert!(vec.contains(&(4, 'd')));
+    assert!(vec.contains(&(104, 'd')));
 
     // test complex statement-per-backend
     backends_map! {
@@ -104,16 +104,16 @@ fn test_backend_macro() {
         };
 
         #[cfg(vulkan)]
-        map((test_foo.vulkan, |v| v == 1, || println!("vulkan"))),
+        map((test_foo.vulkan, |v| v == 101, || println!("vulkan"))),
 
         #[cfg(metal)]
-        map((test_foo.metal, |v| v == 2, || println!("metal"))),
+        map((test_foo.metal, |v| v == 102, || println!("metal"))),
 
         #[cfg(dx12)]
-        map((test_foo.dx12, |v| v == 3, || println!("dx12"))),
+        map((test_foo.dx12, |v| v == 103, || println!("dx12"))),
 
         #[cfg(dx11)]
-        map((test_foo.dx11, |v| v == 4, || println!("dx11"))),
+        map((test_foo.dx11, |v| v == 104, || println!("dx11"))),
     }
 
     // test struct construction 2
