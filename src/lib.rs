@@ -281,6 +281,7 @@ pub enum BuiltIn {
     LocalInvocationIndex,
     WorkGroupId,
     WorkGroupSize,
+    NumWorkGroups,
 }
 
 /// Number of bytes per scalar.

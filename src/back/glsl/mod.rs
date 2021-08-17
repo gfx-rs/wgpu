@@ -2643,6 +2643,7 @@ fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
         Bi::LocalInvocationIndex => "gl_LocalInvocationIndex",
         Bi::WorkGroupId => "gl_WorkGroupID",
         Bi::WorkGroupSize => "gl_WorkGroupSize",
+        Bi::NumWorkGroups => "gl_NumWorkGroups",
     }
 }
 

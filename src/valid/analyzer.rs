@@ -406,7 +406,8 @@ impl FunctionInfo {
                         crate::BuiltIn::FrontFacing
                         // per-work-group built-ins are uniform
                         | crate::BuiltIn::WorkGroupId
-                        | crate::BuiltIn::WorkGroupSize => true,
+                        | crate::BuiltIn::WorkGroupSize
+                        | crate::BuiltIn::NumWorkGroups => true,
                         _ => false,
                     },
                     // only flat inputs are uniform

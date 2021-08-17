@@ -96,7 +96,13 @@ impl crate::BuiltIn {
             Self::LocalInvocationId => "SV_GroupThreadID",
             Self::LocalInvocationIndex => "SV_GroupIndex",
             Self::WorkGroupId => "SV_GroupID",
-            _ => return Err(Error::Unimplemented(format!("builtin {:?}", self))),
+            // The specific semantic we use here doesn't matter, because references
+            // to this field will get replaced with references to `SPECIAL_CBUF_VAR`
+            // in `Writer::write_expr`.
+            Self::NumWorkGroups => "SV_GroupID",
+            Self::BaseInstance | Self::BaseVertex | Self::WorkGroupSize => {
+                return Err(Error::Unimplemented(format!("builtin {:?}", self)))
+            }
         })
     }
 }

@@ -3,6 +3,7 @@
 ## TBD
   - API:
     - atomic types and functions
+    - `num_workgroups` built-in
     - WGSL `select()` order of true/false is swapped
 
 ## v0.5 (2021-06-18)

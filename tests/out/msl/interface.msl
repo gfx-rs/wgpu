@@ -11,6 +11,9 @@ struct FragmentOutput {
     metal::uint sample_mask;
     float color;
 };
+struct type4 {
+    metal::uint inner[1];
+};
 
 struct vertex1Input {
     metal::uint color [[attribute(10)]];
@@ -61,6 +64,9 @@ kernel void compute1(
 , metal::uint3 local_id [[thread_position_in_threadgroup]]
 , metal::uint local_index [[thread_index_in_threadgroup]]
 , metal::uint3 wg_id [[threadgroup_position_in_grid]]
+, metal::uint3 num_wgs [[threadgroups_per_grid]]
+, threadgroup type4& output
 ) {
+    output.inner[0] = (((global_id.x + local_id.x) + local_index) + wg_id.x) + num_wgs.x;
     return;
 }

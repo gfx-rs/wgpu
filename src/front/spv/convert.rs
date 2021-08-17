@@ -141,6 +141,7 @@ pub(super) fn map_builtin(word: spirv::Word) -> Result<crate::BuiltIn, Error> {
         Some(Bi::LocalInvocationIndex) => crate::BuiltIn::LocalInvocationIndex,
         Some(Bi::WorkgroupId) => crate::BuiltIn::WorkGroupId,
         Some(Bi::WorkgroupSize) => crate::BuiltIn::WorkGroupSize,
+        Some(Bi::NumWorkgroups) => crate::BuiltIn::NumWorkGroups,
         _ => return Err(Error::UnsupportedBuiltIn(word)),
     })
 }

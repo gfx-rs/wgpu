@@ -15,6 +15,7 @@ const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
 const SPECIAL_CBUF_VAR: &str = "_NagaConstants";
 const SPECIAL_BASE_VERTEX: &str = "base_vertex";
 const SPECIAL_BASE_INSTANCE: &str = "base_instance";
+const SPECIAL_OTHER: &str = "other";
 
 /// Structure contains information required for generating
 /// wrapped structure of all entry points arguments
@@ -105,6 +106,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             writeln!(self.out, "struct {} {{", SPECIAL_CBUF_TYPE)?;
             writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_BASE_VERTEX)?;
             writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_BASE_INSTANCE)?;
+            writeln!(self.out, "{}uint {};", back::INDENT, SPECIAL_OTHER)?;
             writeln!(self.out, "}};")?;
             write!(
                 self.out,
@@ -1234,9 +1236,25 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(
                     self.out,
                     "({}.{} + ",
-                    SPECIAL_CBUF_VAR, SPECIAL_BASE_INSTANCE
+                    SPECIAL_CBUF_VAR, SPECIAL_BASE_INSTANCE,
                 )?;
                 ")"
+            }
+            Some(crate::BuiltIn::NumWorkGroups) => {
+                //Note: despite their names (`BASE_VERTEX` and `BASE_INSTANCE`),
+                // in compute shaders the special constants contain the number
+                // of workgroups, which we are using here.
+                write!(
+                    self.out,
+                    "uint3({}.{}, {}.{}, {}.{})",
+                    SPECIAL_CBUF_VAR,
+                    SPECIAL_BASE_VERTEX,
+                    SPECIAL_CBUF_VAR,
+                    SPECIAL_BASE_INSTANCE,
+                    SPECIAL_CBUF_VAR,
+                    SPECIAL_OTHER,
+                )?;
+                return Ok(());
             }
             _ => "",
         };

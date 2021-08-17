@@ -1,3 +1,9 @@
+struct NagaConstants {
+    int base_vertex;
+    int base_instance;
+    uint other;
+};
+ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
 
 struct VertexOutput {
     float4 position : SV_Position;
@@ -9,6 +15,8 @@ struct FragmentOutput {
     uint sample_mask : SV_Coverage;
     float color : SV_Target0;
 };
+
+groupshared uint output[1];
 
 struct VertexInput_vertex {
     uint color1 : LOC10;
@@ -28,11 +36,12 @@ struct ComputeInput_compute {
     uint3 local_id1 : SV_GroupThreadID;
     uint local_index1 : SV_GroupIndex;
     uint3 wg_id1 : SV_GroupID;
+    uint3 num_wgs1 : SV_GroupID;
 };
 
 VertexOutput vertex(VertexInput_vertex vertexinput_vertex)
 {
-    uint tmp = ((vertexinput_vertex.vertex_index1 + vertexinput_vertex.instance_index1) + vertexinput_vertex.color1);
+    uint tmp = (((_NagaConstants.base_vertex + vertexinput_vertex.vertex_index1) + (_NagaConstants.base_instance + vertexinput_vertex.instance_index1)) + vertexinput_vertex.color1);
     const VertexOutput vertexoutput1 = { float4(1.0.xxxx), float(tmp) };
     return vertexoutput1;
 }
@@ -48,5 +57,6 @@ FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
 [numthreads(1, 1, 1)]
 void compute(ComputeInput_compute computeinput_compute)
 {
+    output[0] = ((((computeinput_compute.global_id1.x + computeinput_compute.local_id1.x) + computeinput_compute.local_index1) + computeinput_compute.wg_id1.x) + uint3(_NagaConstants.base_vertex, _NagaConstants.base_instance, _NagaConstants.other).x);
     return;
 }

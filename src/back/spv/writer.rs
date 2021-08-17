@@ -1043,6 +1043,7 @@ impl Writer {
                     Bi::LocalInvocationIndex => BuiltIn::LocalInvocationIndex,
                     Bi::WorkGroupId => BuiltIn::WorkgroupId,
                     Bi::WorkGroupSize => BuiltIn::WorkgroupSize,
+                    Bi::NumWorkGroups => BuiltIn::NumWorkgroups,
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);

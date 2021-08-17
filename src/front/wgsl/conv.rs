@@ -32,6 +32,7 @@ pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>>
         "local_invocation_index" => crate::BuiltIn::LocalInvocationIndex,
         "workgroup_id" => crate::BuiltIn::WorkGroupId,
         "workgroup_size" => crate::BuiltIn::WorkGroupSize,
+        "num_workgroups" => crate::BuiltIn::NumWorkGroups,
         _ => return Err(Error::UnknownBuiltin(span)),
     })
 }

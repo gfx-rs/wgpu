@@ -1,6 +1,7 @@
 struct NagaConstants {
     int base_vertex;
     int base_instance;
+    uint other;
 };
 ConstantBuffer<NagaConstants> _NagaConstants: register(b1);
 

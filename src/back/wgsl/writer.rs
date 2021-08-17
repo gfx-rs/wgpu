@@ -1596,6 +1596,7 @@ fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
         Bi::GlobalInvocationId => Some("global_invocation_id"),
         Bi::WorkGroupId => Some("workgroup_id"),
         Bi::WorkGroupSize => Some("workgroup_size"),
+        Bi::NumWorkGroups => Some("num_workgroups"),
         Bi::SampleIndex => Some("sample_index"),
         Bi::SampleMask => Some("sample_mask"),
         Bi::PrimitiveIndex => Some("primitive_index"),

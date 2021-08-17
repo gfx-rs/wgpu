@@ -216,7 +216,8 @@ impl VaryingContext<'_> {
                     Bi::GlobalInvocationId
                     | Bi::LocalInvocationId
                     | Bi::WorkGroupId
-                    | Bi::WorkGroupSize => (
+                    | Bi::WorkGroupSize
+                    | Bi::NumWorkGroups => (
                         self.stage == St::Compute && !self.output,
                         *ty_inner
                             == Ti::Vector {

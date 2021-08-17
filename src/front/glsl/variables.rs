@@ -156,6 +156,16 @@ impl Parser {
                 false,
                 StorageQualifier::Input,
             ),
+            "gl_NumWorkGroups" => add_builtin(
+                TypeInner::Vector {
+                    size: VectorSize::Tri,
+                    kind: ScalarKind::Uint,
+                    width: 4,
+                },
+                BuiltIn::NumWorkGroups,
+                false,
+                StorageQualifier::Input,
+            ),
             "gl_FrontFacing" => add_builtin(
                 TypeInner::Scalar {
                     kind: ScalarKind::Bool,
