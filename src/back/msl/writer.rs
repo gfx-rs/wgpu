@@ -3,7 +3,7 @@ use crate::{
     arena::Handle,
     back,
     proc::{self, NameKey, TypeResolution},
-    valid, FastHashMap,
+    valid, FastHashMap, FastHashSet,
 };
 use std::{
     fmt::{Display, Error as FmtError, Formatter, Write},
@@ -313,9 +313,10 @@ pub struct Writer<W> {
     namer: proc::Namer,
     runtime_sized_buffers: FastHashMap<Handle<crate::GlobalVariable>, usize>,
     #[cfg(test)]
-    put_expression_stack_pointers: crate::FastHashSet<*const ()>,
+    put_expression_stack_pointers: FastHashSet<*const ()>,
     #[cfg(test)]
-    put_block_stack_pointers: crate::FastHashSet<*const ()>,
+    put_block_stack_pointers: FastHashSet<*const ()>,
+    struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
 }
 
 fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
@@ -476,6 +477,7 @@ impl<W: Write> Writer<W> {
             put_expression_stack_pointers: Default::default(),
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
+            struct_member_pads: FastHashSet::default(),
         }
     }
 
@@ -653,9 +655,13 @@ impl<W: Write> Writer<W> {
             }
             crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
                 write!(self.out, "{} {{", &self.names[&NameKey::Type(ty)])?;
-                for (i, &component) in components.iter().enumerate() {
-                    if i != 0 {
+                for (index, &component) in components.iter().enumerate() {
+                    if index != 0 {
                         write!(self.out, ", ")?;
+                    }
+                    // insert padding initialization, if needed
+                    if self.struct_member_pads.contains(&(ty, index as u32)) {
+                        write!(self.out, "{{}}, ")?;
                     }
                     self.put_expression(component, context, true)?;
                 }
@@ -1694,6 +1700,7 @@ impl<W: Write> Writer<W> {
         self.namer
             .reset(module, super::keywords::RESERVED, &[], &mut self.names);
         self.runtime_sized_buffers.clear();
+        self.struct_member_pads.clear();
 
         writeln!(
             self.out,
@@ -1785,8 +1792,8 @@ impl<W: Write> Writer<W> {
                     for (index, member) in members.iter().enumerate() {
                         // quick and dirty way to figure out if we need this...
                         if member.binding.is_none() && member.offset > last_offset {
+                            self.struct_member_pads.insert((handle, index as u32));
                             let pad = member.offset - last_offset;
-                            //TODO: adjust the struct initializers
                             writeln!(self.out, "{}char _pad{}[{}];", back::INDENT, index, pad)?;
                         }
                         let ty_inner = &module.types[member.ty].inner;
