@@ -139,13 +139,16 @@ impl<'source> ParsingContext<'source> {
             self.parse_external_declaration(parser, &mut ctx, &mut body)?;
         }
 
-        match parser.lookup_function.get("main").and_then(|declarations| {
-            declarations.iter().find_map(|decl| match decl.kind {
-                FunctionKind::Call(handle) if decl.defined && decl.parameters.is_empty() => {
-                    Some(handle)
-                }
-                _ => None,
-            })
+        match parser.lookup_function.get("main").and_then(|declaration| {
+            declaration
+                .overloads
+                .iter()
+                .find_map(|decl| match decl.kind {
+                    FunctionKind::Call(handle) if decl.defined && decl.parameters.is_empty() => {
+                        Some(handle)
+                    }
+                    _ => None,
+                })
         }) {
             Some(handle) => parser.add_entry_point(handle, body, ctx.expressions),
             None => parser.errors.push(Error {

@@ -1,16 +1,17 @@
 use super::{
-    ast::{FunctionDeclaration, FunctionKind, ParameterInfo, ParameterQualifier},
+    ast::{FunctionDeclaration, FunctionKind, Overload, ParameterInfo, ParameterQualifier},
     context::Context,
     Error, ErrorKind, Parser, Result, SourceMetadata,
 };
 use crate::{
     BinaryOperator, Block, Expression, Handle, ImageClass, ImageDimension, ImageQuery,
-    MathFunction, Module, RelationalFunction, SampleLevel, Span, Type, TypeInner, VectorSize,
+    MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind as Sk, Span, Type, TypeInner,
+    VectorSize,
 };
 
 impl Module {
     /// Helper function, to create a function prototype for a builtin
-    fn add_builtin(&mut self, args: Vec<TypeInner>, builtin: MacroCall) -> FunctionDeclaration {
+    fn add_builtin(&mut self, args: Vec<TypeInner>, builtin: MacroCall) -> Overload {
         let mut parameters = Vec::with_capacity(args.len());
         let mut parameters_info = Vec::with_capacity(args.len());
 
@@ -28,7 +29,7 @@ impl Module {
             });
         }
 
-        FunctionDeclaration {
+        Overload {
             parameters,
             parameters_info,
             kind: FunctionKind::Macro(builtin),
@@ -38,1193 +39,1307 @@ impl Module {
     }
 }
 
-impl Parser {
-    /// Injects a builtin into the [`lookup_function`](Self::lookup_function)
-    ///
-    /// This is done to not add a large startup cost and not increase memory
-    /// usage if it isn't needed.
-    pub(crate) fn inject_builtin(&mut self, name: String) {
-        use crate::{ImageDimension as Dim, ScalarKind as Sk};
+/// Inject builtins into
+///
+/// This is done to not add a large startup cost and not increase memory
+/// usage if it isn't needed.
+///
+/// This version does not add builtins with arguments using the double type
+/// [`inject_double_builtin`](inject_double_builtin) for builtins
+/// using the double type
+pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module, name: &str) {
+    use crate::ImageDimension as Dim;
 
-        let declarations = self.lookup_function.entry(name.clone()).or_default();
-
-        match name.as_str() {
-            "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
-            | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => declarations
-                .push(self.module.add_builtin(
-                    vec![
-                        TypeInner::Image {
-                            dim: match name.as_str() {
-                                "sampler1D" | "sampler1DArray" => Dim::D1,
-                                "sampler2D" | "sampler2DArray" | "sampler2DMS"
-                                | "sampler2DMSArray" => Dim::D2,
-                                "sampler3D" => Dim::D3,
-                                _ => Dim::Cube,
-                            },
-                            arrayed: matches!(
-                                name.as_str(),
-                                "sampler1DArray"
-                                    | "sampler2DArray"
-                                    | "sampler2DMSArray"
-                                    | "samplerCubeArray"
-                            ),
-                            class: ImageClass::Sampled {
-                                kind: Sk::Float,
-                                multi: matches!(name.as_str(), "sampler2DMS" | "sampler2DMSArray"),
-                            },
-                        },
-                        TypeInner::Sampler { comparison: false },
-                    ],
-                    MacroCall::Sampler,
-                )),
-            "sampler1DShadow"
-            | "sampler1DArrayShadow"
-            | "sampler2DShadow"
-            | "sampler2DArrayShadow"
-            | "samplerCubeShadow"
-            | "samplerCubeArrayShadow" => {
-                let dim = match name.as_str() {
-                    "sampler1DShadow" | "sampler1DArrayShadow" => Dim::D1,
-                    "sampler2DShadow" | "sampler2DArrayShadow" => Dim::D2,
-                    _ => Dim::Cube,
-                };
-                let arrayed = matches!(
-                    name.as_str(),
-                    "sampler1DArrayShadow" | "sampler2DArrayShadow" | "samplerCubeArrayShadow"
-                );
-
-                for i in 0..2 {
-                    let ty = TypeInner::Image {
-                        dim,
-                        arrayed,
-                        class: match i {
-                            0 => ImageClass::Sampled {
-                                kind: Sk::Float,
-                                multi: false,
-                            },
-                            _ => ImageClass::Depth { multi: false },
-                        },
-                    };
-
-                    declarations.push(self.module.add_builtin(
-                        vec![ty, TypeInner::Sampler { comparison: true }],
-                        MacroCall::SamplerShadow,
-                    ))
-                }
-            }
-            "texture" | "textureLod" => {
-                // bits layout
-                // bits 0 trough 1 - dims
-                // bit 2 - shadow
-                // bit 3 - array
-                // bit 4 - !bias
-                //
-                // 0b11111 is the latest since there are not 3D arrayed shadowed
-                // textures and cube arrayed shadows textures always have a
-                // compare argument
-                for bits in 0..(0b100000) {
-                    let dim = bits & 0b11;
-                    let shadow = bits & 0b100 == 0b100;
-                    let arrayed = bits & 0b1000 == 0b1000;
-                    let bias = bits & 0b10000 == 0b00000;
-                    let builtin = match name.as_str() {
-                        "texture" => MacroCall::Texture,
-                        _ => MacroCall::TextureLod,
-                    };
-
-                    // Shadow, arrayed or both 3D images are not allowed
-                    if (shadow || arrayed) && dim == 0b11
-                        || (builtin == MacroCall::TextureLod
-                            && (dim != 0b00 && shadow && arrayed || dim == 0b10 && shadow || !bias))
-                    {
-                        continue;
-                    }
-
-                    let class = match shadow {
-                        true => ImageClass::Depth { multi: false },
-                        false => ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: false,
-                        },
-                    };
-
-                    let image = TypeInner::Image {
-                        dim: match dim {
-                            0b00 => Dim::D1,
-                            0b01 => Dim::D2,
-                            0b10 => Dim::Cube,
-                            _ => Dim::D3,
-                        },
-                        arrayed,
-                        class,
-                    };
-
-                    let vector = match (dim, shadow) {
-                        (0b00, false) => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                        (0b00, true) | (0b11, _) => TypeInner::Vector {
-                            size: VectorSize::Tri,
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                        (_, _) => {
-                            let size = match dim + arrayed as u32 + shadow as u32 {
-                                1 => VectorSize::Bi,
-                                2 => VectorSize::Tri,
-                                _ => VectorSize::Quad,
-                            };
-
-                            TypeInner::Vector {
-                                size,
-                                kind: Sk::Float,
-                                width: 4,
+    declaration.builtin = true;
+    let width = 4;
+    match name {
+        "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
+        | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
+            declaration.overloads.push(module.add_builtin(
+                vec![
+                    TypeInner::Image {
+                        dim: match name {
+                            "sampler1D" | "sampler1DArray" => Dim::D1,
+                            "sampler2D" | "sampler2DArray" | "sampler2DMS" | "sampler2DMSArray" => {
+                                Dim::D2
                             }
-                        }
-                    };
-
-                    let mut args = vec![image, vector];
-
-                    if bias {
-                        args.push(TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width: 4,
-                        })
-                    }
-
-                    declarations.push(self.module.add_builtin(args, builtin))
-                }
-            }
-            "textureProj" => {
-                // bits layout
-                // bit 0 - shadow
-                // bit 1 - bias
-                // bits 2 trough 3 - dims
-                //
-                // 0b0111 is the latest since there are only 1D and 2D shadow
-                // variants
-                for bits in 0..(0b1000) {
-                    let dim = bits >> 2;
-                    let shadow = bits & 0b1 == 0b1;
-                    let bias = bits & 0b10 == 0b10;
-
-                    let class = match shadow {
-                        true => ImageClass::Depth { multi: false },
-                        false => ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: false,
-                        },
-                    };
-
-                    let image = TypeInner::Image {
-                        dim: match dim {
-                            0b00 => Dim::D1,
-                            0b01 => Dim::D2,
+                            "sampler3D" => Dim::D3,
                             _ => Dim::Cube,
                         },
-                        arrayed: false,
-                        class,
-                    };
-
-                    let vector = TypeInner::Vector {
-                        size: VectorSize::Quad,
-                        kind: Sk::Float,
-                        width: 4,
-                    };
-
-                    let mut args = vec![image, vector];
-
-                    if bias {
-                        args.push(TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width: 4,
-                        })
-                    }
-
-                    declarations.push(self.module.add_builtin(args, MacroCall::TextureProj))
-                }
-            }
-            "textureGrad" => {
-                // bits layout
-                // bits 0 trough 1 - dims
-                // bit 2 - shadow
-                // bit 3 - array
-                //
-                // 0b1010 is the latest since there are no 3D arrayed shadowed
-                // textures and cube arrayed shadows textures are not allowed
-                for bits in 0..(0b1011) {
-                    let dim = bits & 0b11;
-                    let shadow = bits & 0b100 == 0b100;
-                    let arrayed = bits & 0b1000 == 0b1000;
-
-                    // Shadow, arrayed or both 3D images are not allowed
-                    if shadow  && dim == 0b11
-                        // samplerCubeArrayShadow is not allowed
-                        || shadow && arrayed && dim == 0b10
-                    {
-                        continue;
-                    }
-
-                    let class = match shadow {
-                        true => ImageClass::Depth { multi: false },
-                        false => ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: false,
-                        },
-                    };
-
-                    let image = TypeInner::Image {
-                        dim: match dim {
-                            0b00 => Dim::D1,
-                            0b01 => Dim::D2,
-                            0b10 => Dim::Cube,
-                            _ => Dim::D3,
-                        },
-                        arrayed,
-                        class,
-                    };
-
-                    let vector = match (dim, shadow) {
-                        (0b00, false) => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                        (0b00, true) | (0b11, _) => TypeInner::Vector {
-                            size: VectorSize::Tri,
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                        (_, _) => {
-                            let size = match dim + arrayed as u32 + shadow as u32 {
-                                1 => VectorSize::Bi,
-                                2 => VectorSize::Tri,
-                                _ => VectorSize::Quad,
-                            };
-
-                            TypeInner::Vector {
-                                size,
-                                kind: Sk::Float,
-                                width: 4,
-                            }
-                        }
-                    };
-
-                    let size = match dim {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        _ => Some(VectorSize::Tri),
-                    };
-
-                    let ty = || match size {
-                        None => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                    };
-
-                    let args = vec![image, vector, ty(), ty()];
-
-                    declarations.push(self.module.add_builtin(args, MacroCall::TextureGrad))
-                }
-            }
-            "textureSize" => {
-                // bits layout
-                // bits 0 trough 1 - dims
-                // bit 2 - shadow
-                // bit 3 - array
-                for bits in 0..(0b10000) {
-                    let dim = bits & 0b11;
-                    let shadow = bits & 0b100 == 0b100;
-                    let arrayed = bits & 0b1000 == 0b1000;
-
-                    // Shadow, arrayed or both 3D images are not allowed
-                    if (shadow || arrayed) && dim == 0b11 {
-                        continue;
-                    }
-
-                    let class = match shadow {
-                        true => ImageClass::Depth { multi: false },
-                        false => ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: false,
-                        },
-                    };
-
-                    let image = TypeInner::Image {
-                        dim: match dim {
-                            0b00 => Dim::D1,
-                            0b01 => Dim::D2,
-                            0b10 => Dim::Cube,
-                            _ => Dim::D3,
-                        },
-                        arrayed,
-                        class,
-                    };
-
-                    let args = vec![
-                        image,
-                        TypeInner::Scalar {
-                            kind: Sk::Sint,
-                            width: 4,
-                        },
-                    ];
-
-                    declarations.push(self.module.add_builtin(args, MacroCall::TextureSize))
-                }
-            }
-            "texelFetch" => {
-                // bits layout
-                // bit 0 - dim part 1 - 1D/2D
-                // bit 1 - array
-                // bit 2 - dim part 2 - 3D
-                //
-                // 0b100 is the latest since 3D arrayed images aren't allowed
-                for bits in 0..(0b101) {
-                    let dim = bits & 0b1 | (bits & 0b100) >> 1;
-                    let arrayed = bits & 0b1000 == 0b1000;
-
-                    let image = TypeInner::Image {
-                        dim: match dim {
-                            0b00 => Dim::D1,
-                            0b01 => Dim::D2,
-                            _ => Dim::D3,
-                        },
-                        arrayed,
+                        arrayed: matches!(
+                            name,
+                            "sampler1DArray"
+                                | "sampler2DArray"
+                                | "sampler2DMSArray"
+                                | "samplerCubeArray"
+                        ),
                         class: ImageClass::Sampled {
                             kind: Sk::Float,
+                            multi: matches!(name, "sampler2DMS" | "sampler2DMSArray"),
+                        },
+                    },
+                    TypeInner::Sampler { comparison: false },
+                ],
+                MacroCall::Sampler,
+            ))
+        }
+        "sampler1DShadow"
+        | "sampler1DArrayShadow"
+        | "sampler2DShadow"
+        | "sampler2DArrayShadow"
+        | "samplerCubeShadow"
+        | "samplerCubeArrayShadow" => {
+            let dim = match name {
+                "sampler1DShadow" | "sampler1DArrayShadow" => Dim::D1,
+                "sampler2DShadow" | "sampler2DArrayShadow" => Dim::D2,
+                _ => Dim::Cube,
+            };
+            let arrayed = matches!(
+                name,
+                "sampler1DArrayShadow" | "sampler2DArrayShadow" | "samplerCubeArrayShadow"
+            );
+
+            for i in 0..2 {
+                let ty = TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class: match i {
+                        0 => ImageClass::Sampled {
+                            kind: Sk::Float,
                             multi: false,
                         },
-                    };
+                        _ => ImageClass::Depth { multi: false },
+                    },
+                };
 
-                    let vector = match (dim, arrayed) {
-                        (0b00, false) => TypeInner::Scalar {
-                            kind: Sk::Sint,
-                            width: 4,
-                        },
-                        (_, _) => {
-                            let size = match dim + arrayed as u32 {
-                                1 => VectorSize::Bi,
-                                2 => VectorSize::Tri,
-                                _ => VectorSize::Quad,
-                            };
-
-                            TypeInner::Vector {
-                                size,
-                                kind: Sk::Sint,
-                                width: 4,
-                            }
-                        }
-                    };
-
-                    let args = vec![
-                        image,
-                        vector,
-                        TypeInner::Scalar {
-                            kind: Sk::Sint,
-                            width: 4,
-                        },
-                    ];
-
-                    declarations.push(self.module.add_builtin(args, MacroCall::TexelFetch))
-                }
+                declaration.overloads.push(module.add_builtin(
+                    vec![ty, TypeInner::Sampler { comparison: true }],
+                    MacroCall::SamplerShadow,
+                ))
             }
-            "ceil" | "round" | "floor" | "fract" | "trunc" | "sqrt" | "inversesqrt"
-            | "normalize" | "length" | "isinf" | "isnan" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 2 - dims
-                for bits in 0..(0b1000) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let size = match bits >> 1 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
+        }
+        "texture" | "textureLod" => {
+            // bits layout
+            // bits 0 trough 1 - dims
+            // bit 2 - shadow
+            // bit 3 - array
+            // bit 4 - !bias
+            //
+            // 0b11111 is the latest since there are not 3D arrayed shadowed
+            // textures and cube arrayed shadows textures always have a
+            // compare argument
+            for bits in 0..(0b100000) {
+                let dim = bits & 0b11;
+                let shadow = bits & 0b100 == 0b100;
+                let arrayed = bits & 0b1000 == 0b1000;
+                let bias = bits & 0b10000 == 0b00000;
+                let builtin = match name {
+                    "texture" => MacroCall::Texture,
+                    _ => MacroCall::TextureLod,
+                };
 
-                    let args = vec![match size {
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind: Sk::Float,
-                            width,
-                        },
-                        None => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width,
-                        },
-                    }];
-
-                    let fun = match name.as_str() {
-                        "ceil" => MacroCall::MathFunction(MathFunction::Ceil),
-                        "round" => MacroCall::MathFunction(MathFunction::Round),
-                        "floor" => MacroCall::MathFunction(MathFunction::Floor),
-                        "fract" => MacroCall::MathFunction(MathFunction::Fract),
-                        "trunc" => MacroCall::MathFunction(MathFunction::Trunc),
-                        "sqrt" => MacroCall::MathFunction(MathFunction::Sqrt),
-                        "inversesqrt" => MacroCall::MathFunction(MathFunction::InverseSqrt),
-                        "normalize" => MacroCall::MathFunction(MathFunction::Normalize),
-                        "length" => MacroCall::MathFunction(MathFunction::Length),
-                        "isinf" => MacroCall::Relational(RelationalFunction::IsInf),
-                        "isnan" => MacroCall::Relational(RelationalFunction::IsNan),
-                        _ => unreachable!(),
-                    };
-
-                    declarations.push(self.module.add_builtin(args, fun))
+                // Shadow, arrayed or both 3D images are not allowed
+                if (shadow || arrayed) && dim == 0b11
+                    || (builtin == MacroCall::TextureLod
+                        && (dim != 0b00 && shadow && arrayed || dim == 0b10 && shadow || !bias))
+                {
+                    continue;
                 }
-            }
-            "dot" | "reflect" | "distance" | "ldexp" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 2 - dims
-                for bits in 0..(0b1000) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let size = match bits >> 1 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-                    let ty = || match size {
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind: Sk::Float,
-                            width,
-                        },
-                        None => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width,
-                        },
-                    };
 
-                    let fun = match name.as_str() {
-                        "dot" => MacroCall::MathFunction(MathFunction::Dot),
-                        "reflect" => MacroCall::MathFunction(MathFunction::Reflect),
-                        "distance" => MacroCall::MathFunction(MathFunction::Distance),
-                        "ldexp" => MacroCall::MathFunction(MathFunction::Ldexp),
-                        _ => unreachable!(),
-                    };
+                let class = match shadow {
+                    true => ImageClass::Depth { multi: false },
+                    false => ImageClass::Sampled {
+                        kind: Sk::Float,
+                        multi: false,
+                    },
+                };
 
-                    declarations.push(self.module.add_builtin(vec![ty(), ty()], fun))
-                }
-            }
-            "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
-            | "log" | "log2" => {
-                // bits layout
-                // bit 0 trough 1 - dims
-                for bits in 0..(0b100) {
-                    let size = match bits {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
+                let image = TypeInner::Image {
+                    dim: match dim {
+                        0b00 => Dim::D1,
+                        0b01 => Dim::D2,
+                        0b10 => Dim::Cube,
+                        _ => Dim::D3,
+                    },
+                    arrayed,
+                    class,
+                };
 
-                    declarations.push(self.module.add_builtin(
-                        vec![match size {
-                            Some(size) => TypeInner::Vector {
-                                size,
-                                kind: Sk::Float,
-                                width: 4,
-                            },
-                            None => TypeInner::Scalar {
-                                kind: Sk::Float,
-                                width: 4,
-                            },
-                        }],
-                        MacroCall::MathFunction(match name.as_str() {
-                            "sin" => MathFunction::Sin,
-                            "exp" => MathFunction::Exp,
-                            "exp2" => MathFunction::Exp2,
-                            "sinh" => MathFunction::Sinh,
-                            "cos" => MathFunction::Cos,
-                            "cosh" => MathFunction::Cosh,
-                            "tan" => MathFunction::Tan,
-                            "tanh" => MathFunction::Tanh,
-                            "acos" => MathFunction::Acos,
-                            "asin" => MathFunction::Asin,
-                            "log" => MathFunction::Log,
-                            "log2" => MathFunction::Log2,
-                            _ => unreachable!(),
-                        }),
-                    ))
-                }
-            }
-            "pow" => {
-                // bits layout
-                // bit 0 trough 1 - dims
-                for bits in 0..(0b100) {
-                    let size = match bits {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-                    let ty = || match size {
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                        None => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                    };
-
-                    declarations.push(
-                        self.module.add_builtin(
-                            vec![ty(), ty()],
-                            MacroCall::MathFunction(MathFunction::Pow),
-                        ),
-                    )
-                }
-            }
-            "transpose" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 4 - dims
-                for bits in 0..(0b10010) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let (rows, columns) = match bits >> 1 {
-                        0b0000 => (VectorSize::Bi, VectorSize::Bi),
-                        0b0001 => (VectorSize::Bi, VectorSize::Tri),
-                        0b0010 => (VectorSize::Bi, VectorSize::Quad),
-                        0b0011 => (VectorSize::Tri, VectorSize::Bi),
-                        0b0100 => (VectorSize::Tri, VectorSize::Tri),
-                        0b0101 => (VectorSize::Tri, VectorSize::Quad),
-                        0b0110 => (VectorSize::Quad, VectorSize::Bi),
-                        0b0111 => (VectorSize::Quad, VectorSize::Tri),
-                        _ => (VectorSize::Quad, VectorSize::Quad),
-                    };
-
-                    if (bits >> 1) > 0b1000 {
-                        continue;
-                    }
-
-                    declarations.push(self.module.add_builtin(
-                        vec![TypeInner::Matrix {
-                            columns,
-                            rows,
-                            width,
-                        }],
-                        MacroCall::MathFunction(MathFunction::Transpose),
-                    ))
-                }
-            }
-            "inverse" | "determinant" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 2 - dims
-                for bits in 0..(0b110) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let (rows, columns) = match bits >> 1 {
-                        0b00 => (VectorSize::Bi, VectorSize::Bi),
-                        0b01 => (VectorSize::Tri, VectorSize::Tri),
-                        _ => (VectorSize::Quad, VectorSize::Quad),
-                    };
-
-                    let args = vec![TypeInner::Matrix {
-                        columns,
-                        rows,
+                let vector = match (dim, shadow) {
+                    (0b00, false) => TypeInner::Scalar {
+                        kind: Sk::Float,
                         width,
-                    }];
-
-                    declarations.push(self.module.add_builtin(
-                        args,
-                        MacroCall::MathFunction(match name.as_str() {
-                            "inverse" => MathFunction::Inverse,
-                            "determinant" => MathFunction::Determinant,
-                            _ => unreachable!(),
-                        }),
-                    ))
-                }
-            }
-            "abs" | "sign" => {
-                // bits layout
-                // bit 0 trough 1 - dims
-                // bit 2 trough 3 - kind
-                for bits in 0..(0b1100) {
-                    let size = match bits & 0b11 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-                    let (kind, width) = match bits >> 2 {
-                        0b00 => (Sk::Float, 4),
-                        0b01 => (Sk::Sint, 4),
-                        _ => (Sk::Float, 8),
-                    };
-
-                    let args = vec![match size {
-                        Some(size) => TypeInner::Vector { size, kind, width },
-                        None => TypeInner::Scalar { kind, width },
-                    }];
-
-                    declarations.push(self.module.add_builtin(
-                        args,
-                        MacroCall::MathFunction(match name.as_str() {
-                            "abs" => MathFunction::Abs,
-                            "sign" => MathFunction::Sign,
-                            _ => unreachable!(),
-                        }),
-                    ))
-                }
-            }
-            "bitCount" | "bitfieldReverse" => {
-                // bits layout
-                // bit 0 - int/uint
-                // bit 1 trough 2 - dims
-                for bits in 0..(0b1000) {
-                    let kind = match bits & 0b1 {
-                        0b0 => Sk::Sint,
-                        _ => Sk::Uint,
-                    };
-                    let size = match bits >> 1 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-
-                    let args = vec![match size {
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind,
-                            width: 4,
-                        },
-                        None => TypeInner::Scalar { kind, width: 4 },
-                    }];
-
-                    declarations.push(self.module.add_builtin(
-                        args,
-                        MacroCall::MathFunction(match name.as_str() {
-                            "bitCount" => MathFunction::CountOneBits,
-                            "bitfieldReverse" => MathFunction::ReverseBits,
-                            _ => unreachable!(),
-                        }),
-                    ))
-                }
-            }
-            "atan" => {
-                // bits layout
-                // bit 0 - atan/atan2
-                // bit 1 trough 2 - dims
-                for bits in 0..(0b1000) {
-                    let fun = match bits & 0b1 {
-                        0b0 => MathFunction::Atan,
-                        _ => MathFunction::Atan2,
-                    };
-                    let size = match bits >> 1 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-                    let ty = || match size {
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                        None => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                    };
-
-                    let mut args = vec![ty()];
-
-                    if fun == MathFunction::Atan2 {
-                        args.push(ty())
-                    }
-
-                    declarations.push(self.module.add_builtin(args, MacroCall::MathFunction(fun)))
-                }
-            }
-            "all" | "any" => {
-                // bits layout
-                // bit 0 trough 1 - dims
-                for bits in 0..(0b11) {
-                    let size = match bits {
-                        0b00 => VectorSize::Bi,
-                        0b01 => VectorSize::Tri,
-                        _ => VectorSize::Quad,
-                    };
-
-                    let args = vec![TypeInner::Vector {
-                        size,
-                        kind: Sk::Bool,
-                        width: crate::BOOL_WIDTH,
-                    }];
-
-                    let fun = MacroCall::Relational(match name.as_str() {
-                        "all" => RelationalFunction::All,
-                        "any" => RelationalFunction::Any,
-                        _ => unreachable!(),
-                    });
-
-                    declarations.push(self.module.add_builtin(args, fun))
-                }
-            }
-            "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
-            | "notEqual" => {
-                for bits in 0..(0b1001) {
-                    let (size, kind) = match bits {
-                        0b0000 => (VectorSize::Bi, Sk::Float),
-                        0b0001 => (VectorSize::Tri, Sk::Float),
-                        0b0010 => (VectorSize::Quad, Sk::Float),
-                        0b0011 => (VectorSize::Bi, Sk::Sint),
-                        0b0100 => (VectorSize::Tri, Sk::Sint),
-                        0b0101 => (VectorSize::Quad, Sk::Sint),
-                        0b0110 => (VectorSize::Bi, Sk::Uint),
-                        0b0111 => (VectorSize::Tri, Sk::Uint),
-                        _ => (VectorSize::Quad, Sk::Uint),
-                    };
-
-                    let ty = || TypeInner::Vector {
-                        size,
-                        kind,
-                        width: 4,
-                    };
-                    let args = vec![ty(), ty()];
-
-                    let fun = MacroCall::Binary(match name.as_str() {
-                        "lessThan" => BinaryOperator::Less,
-                        "greaterThan" => BinaryOperator::Greater,
-                        "lessThanEqual" => BinaryOperator::LessEqual,
-                        "greaterThanEqual" => BinaryOperator::GreaterEqual,
-                        "equal" => BinaryOperator::Equal,
-                        "notEqual" => BinaryOperator::NotEqual,
-                        _ => unreachable!(),
-                    });
-
-                    declarations.push(self.module.add_builtin(args, fun))
-                }
-            }
-            "mod" | "step" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 3 - dims
-                for bits in 0..(0b1110) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let (size, second_size) = match bits >> 1 {
-                        0b000 => (None, None),
-                        0b001 => (Some(VectorSize::Bi), None),
-                        0b010 => (Some(VectorSize::Tri), None),
-                        0b011 => (Some(VectorSize::Quad), None),
-                        0b100 => (Some(VectorSize::Bi), Some(VectorSize::Bi)),
-                        0b101 => (Some(VectorSize::Tri), Some(VectorSize::Tri)),
-                        _ => (Some(VectorSize::Quad), Some(VectorSize::Quad)),
-                    };
-
-                    let mut args = Vec::with_capacity(2);
-                    let step = name.as_str() == "step";
-
-                    for i in 0..2 {
-                        let maybe_size = match i == step as u32 {
-                            true => size,
-                            false => second_size,
+                    },
+                    (0b00, true) | (0b11, _) => TypeInner::Vector {
+                        size: VectorSize::Tri,
+                        kind: Sk::Float,
+                        width,
+                    },
+                    (_, _) => {
+                        let size = match dim + arrayed as u32 + shadow as u32 {
+                            1 => VectorSize::Bi,
+                            2 => VectorSize::Tri,
+                            _ => VectorSize::Quad,
                         };
 
-                        args.push(match maybe_size {
+                        TypeInner::Vector {
+                            size,
+                            kind: Sk::Float,
+                            width,
+                        }
+                    }
+                };
+
+                let mut args = vec![image, vector];
+
+                if bias {
+                    args.push(TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width,
+                    })
+                }
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, builtin))
+            }
+        }
+        "textureProj" => {
+            // bits layout
+            // bit 0 - shadow
+            // bit 1 - bias
+            // bits 2 trough 3 - dims
+            //
+            // 0b0111 is the latest since there are only 1D and 2D shadow
+            // variants
+            for bits in 0..(0b1000) {
+                let dim = bits >> 2;
+                let shadow = bits & 0b1 == 0b1;
+                let bias = bits & 0b10 == 0b10;
+
+                let class = match shadow {
+                    true => ImageClass::Depth { multi: false },
+                    false => ImageClass::Sampled {
+                        kind: Sk::Float,
+                        multi: false,
+                    },
+                };
+
+                let image = TypeInner::Image {
+                    dim: match dim {
+                        0b00 => Dim::D1,
+                        0b01 => Dim::D2,
+                        _ => Dim::Cube,
+                    },
+                    arrayed: false,
+                    class,
+                };
+
+                let vector = TypeInner::Vector {
+                    size: VectorSize::Quad,
+                    kind: Sk::Float,
+                    width,
+                };
+
+                let mut args = vec![image, vector];
+
+                if bias {
+                    args.push(TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width,
+                    })
+                }
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::TextureProj))
+            }
+        }
+        "textureGrad" => {
+            // bits layout
+            // bits 0 trough 1 - dims
+            // bit 2 - shadow
+            // bit 3 - array
+            //
+            // 0b1010 is the latest since there are no 3D arrayed shadowed
+            // textures and cube arrayed shadows textures are not allowed
+            for bits in 0..(0b1011) {
+                let dim = bits & 0b11;
+                let shadow = bits & 0b100 == 0b100;
+                let arrayed = bits & 0b1000 == 0b1000;
+
+                // Shadow, arrayed or both 3D images are not allowed
+                if shadow  && dim == 0b11
+                        // samplerCubeArrayShadow is not allowed
+                        || shadow && arrayed && dim == 0b10
+                {
+                    continue;
+                }
+
+                let class = match shadow {
+                    true => ImageClass::Depth { multi: false },
+                    false => ImageClass::Sampled {
+                        kind: Sk::Float,
+                        multi: false,
+                    },
+                };
+
+                let image = TypeInner::Image {
+                    dim: match dim {
+                        0b00 => Dim::D1,
+                        0b01 => Dim::D2,
+                        0b10 => Dim::Cube,
+                        _ => Dim::D3,
+                    },
+                    arrayed,
+                    class,
+                };
+
+                let vector = match (dim, shadow) {
+                    (0b00, false) => TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width,
+                    },
+                    (0b00, true) | (0b11, _) => TypeInner::Vector {
+                        size: VectorSize::Tri,
+                        kind: Sk::Float,
+                        width,
+                    },
+                    (_, _) => {
+                        let size = match dim + arrayed as u32 + shadow as u32 {
+                            1 => VectorSize::Bi,
+                            2 => VectorSize::Tri,
+                            _ => VectorSize::Quad,
+                        };
+
+                        TypeInner::Vector {
+                            size,
+                            kind: Sk::Float,
+                            width,
+                        }
+                    }
+                };
+
+                let size = match dim {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    _ => Some(VectorSize::Tri),
+                };
+
+                let ty = || match size {
+                    None => TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width,
+                    },
+                    Some(size) => TypeInner::Vector {
+                        size,
+                        kind: Sk::Float,
+                        width,
+                    },
+                };
+
+                let args = vec![image, vector, ty(), ty()];
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::TextureGrad))
+            }
+        }
+        "textureSize" => {
+            // bits layout
+            // bits 0 trough 1 - dims
+            // bit 2 - shadow
+            // bit 3 - array
+            for bits in 0..(0b10000) {
+                let dim = bits & 0b11;
+                let shadow = bits & 0b100 == 0b100;
+                let arrayed = bits & 0b1000 == 0b1000;
+
+                // Shadow, arrayed or both 3D images are not allowed
+                if (shadow || arrayed) && dim == 0b11 {
+                    continue;
+                }
+
+                let class = match shadow {
+                    true => ImageClass::Depth { multi: false },
+                    false => ImageClass::Sampled {
+                        kind: Sk::Float,
+                        multi: false,
+                    },
+                };
+
+                let image = TypeInner::Image {
+                    dim: match dim {
+                        0b00 => Dim::D1,
+                        0b01 => Dim::D2,
+                        0b10 => Dim::Cube,
+                        _ => Dim::D3,
+                    },
+                    arrayed,
+                    class,
+                };
+
+                let args = vec![
+                    image,
+                    TypeInner::Scalar {
+                        kind: Sk::Sint,
+                        width,
+                    },
+                ];
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::TextureSize))
+            }
+        }
+        "texelFetch" => {
+            // bits layout
+            // bit 0 - dim part 1 - 1D/2D
+            // bit 1 - array
+            // bit 2 - dim part 2 - 3D
+            //
+            // 0b100 is the latest since 3D arrayed images aren't allowed
+            for bits in 0..(0b101) {
+                let dim = bits & 0b1 | (bits & 0b100) >> 1;
+                let arrayed = bits & 0b1000 == 0b1000;
+
+                let image = TypeInner::Image {
+                    dim: match dim {
+                        0b00 => Dim::D1,
+                        0b01 => Dim::D2,
+                        _ => Dim::D3,
+                    },
+                    arrayed,
+                    class: ImageClass::Sampled {
+                        kind: Sk::Float,
+                        multi: false,
+                    },
+                };
+
+                let vector = match (dim, arrayed) {
+                    (0b00, false) => TypeInner::Scalar {
+                        kind: Sk::Sint,
+                        width,
+                    },
+                    (_, _) => {
+                        let size = match dim + arrayed as u32 {
+                            1 => VectorSize::Bi,
+                            2 => VectorSize::Tri,
+                            _ => VectorSize::Quad,
+                        };
+
+                        TypeInner::Vector {
+                            size,
+                            kind: Sk::Sint,
+                            width,
+                        }
+                    }
+                };
+
+                let args = vec![
+                    image,
+                    vector,
+                    TypeInner::Scalar {
+                        kind: Sk::Sint,
+                        width,
+                    },
+                ];
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::TexelFetch))
+            }
+        }
+        "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
+        | "log" | "log2" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+                let kind = Sk::Float;
+
+                declaration.overloads.push(module.add_builtin(
+                    vec![match size {
+                        Some(size) => TypeInner::Vector { size, kind, width },
+                        None => TypeInner::Scalar { kind, width },
+                    }],
+                    MacroCall::MathFunction(match name {
+                        "sin" => MathFunction::Sin,
+                        "exp" => MathFunction::Exp,
+                        "exp2" => MathFunction::Exp2,
+                        "sinh" => MathFunction::Sinh,
+                        "cos" => MathFunction::Cos,
+                        "cosh" => MathFunction::Cosh,
+                        "tan" => MathFunction::Tan,
+                        "tanh" => MathFunction::Tanh,
+                        "acos" => MathFunction::Acos,
+                        "asin" => MathFunction::Asin,
+                        "log" => MathFunction::Log,
+                        "log2" => MathFunction::Log2,
+                        _ => unreachable!(),
+                    }),
+                ))
+            }
+        }
+        "pow" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+                let kind = Sk::Float;
+                let ty = || match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                };
+
+                declaration.overloads.push(
+                    module
+                        .add_builtin(vec![ty(), ty()], MacroCall::MathFunction(MathFunction::Pow)),
+                )
+            }
+        }
+        "abs" | "sign" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            // bit 2 - float/sint
+            for bits in 0..(0b1000) {
+                let size = match bits & 0b11 {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+                let kind = match bits >> 2 {
+                    0b0 => Sk::Float,
+                    _ => Sk::Sint,
+                };
+
+                let args = vec![match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                }];
+
+                declaration.overloads.push(module.add_builtin(
+                    args,
+                    MacroCall::MathFunction(match name {
+                        "abs" => MathFunction::Abs,
+                        "sign" => MathFunction::Sign,
+                        _ => unreachable!(),
+                    }),
+                ))
+            }
+        }
+        "bitCount" | "bitfieldReverse" => {
+            // bits layout
+            // bit 0 - int/uint
+            // bit 1 trough 2 - dims
+            for bits in 0..(0b1000) {
+                let kind = match bits & 0b1 {
+                    0b0 => Sk::Sint,
+                    _ => Sk::Uint,
+                };
+                let size = match bits >> 1 {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+
+                let args = vec![match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                }];
+
+                declaration.overloads.push(module.add_builtin(
+                    args,
+                    MacroCall::MathFunction(match name {
+                        "bitCount" => MathFunction::CountOneBits,
+                        "bitfieldReverse" => MathFunction::ReverseBits,
+                        _ => unreachable!(),
+                    }),
+                ))
+            }
+        }
+        "atan" => {
+            // bits layout
+            // bit 0 - atan/atan2
+            // bit 1 trough 2 - dims
+            for bits in 0..(0b1000) {
+                let fun = match bits & 0b1 {
+                    0b0 => MathFunction::Atan,
+                    _ => MathFunction::Atan2,
+                };
+                let size = match bits >> 1 {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+                let kind = Sk::Float;
+                let ty = || match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                };
+
+                let mut args = vec![ty()];
+
+                if fun == MathFunction::Atan2 {
+                    args.push(ty())
+                }
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::MathFunction(fun)))
+            }
+        }
+        "all" | "any" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b11) {
+                let size = match bits {
+                    0b00 => VectorSize::Bi,
+                    0b01 => VectorSize::Tri,
+                    _ => VectorSize::Quad,
+                };
+
+                let args = vec![TypeInner::Vector {
+                    size,
+                    kind: Sk::Bool,
+                    width: crate::BOOL_WIDTH,
+                }];
+
+                let fun = MacroCall::Relational(match name {
+                    "all" => RelationalFunction::All,
+                    "any" => RelationalFunction::Any,
+                    _ => unreachable!(),
+                });
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
+        "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual" | "equal"
+        | "notEqual" => {
+            for bits in 0..(0b1001) {
+                let (size, kind) = match bits {
+                    0b0000 => (VectorSize::Bi, Sk::Float),
+                    0b0001 => (VectorSize::Tri, Sk::Float),
+                    0b0010 => (VectorSize::Quad, Sk::Float),
+                    0b0011 => (VectorSize::Bi, Sk::Sint),
+                    0b0100 => (VectorSize::Tri, Sk::Sint),
+                    0b0101 => (VectorSize::Quad, Sk::Sint),
+                    0b0110 => (VectorSize::Bi, Sk::Uint),
+                    0b0111 => (VectorSize::Tri, Sk::Uint),
+                    _ => (VectorSize::Quad, Sk::Uint),
+                };
+
+                let ty = || TypeInner::Vector { size, kind, width };
+                let args = vec![ty(), ty()];
+
+                let fun = MacroCall::Binary(match name {
+                    "lessThan" => BinaryOperator::Less,
+                    "greaterThan" => BinaryOperator::Greater,
+                    "lessThanEqual" => BinaryOperator::LessEqual,
+                    "greaterThanEqual" => BinaryOperator::GreaterEqual,
+                    "equal" => BinaryOperator::Equal,
+                    "notEqual" => BinaryOperator::NotEqual,
+                    _ => unreachable!(),
+                });
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
+        "min" | "max" => {
+            // bits layout
+            // bit 0 trough 1 - scalar kind
+            // bit 2 trough 4 - dims
+            for bits in 0..(0b11100) {
+                let kind = match bits & 0b11 {
+                    0b00 => Sk::Float,
+                    0b01 => Sk::Sint,
+                    0b10 => Sk::Uint,
+                    _ => continue,
+                };
+                let (size, second_size) = match bits >> 2 {
+                    0b000 => (None, None),
+                    0b001 => (Some(VectorSize::Bi), None),
+                    0b010 => (Some(VectorSize::Tri), None),
+                    0b011 => (Some(VectorSize::Quad), None),
+                    0b100 => (Some(VectorSize::Bi), Some(VectorSize::Bi)),
+                    0b101 => (Some(VectorSize::Tri), Some(VectorSize::Tri)),
+                    _ => (Some(VectorSize::Quad), Some(VectorSize::Quad)),
+                };
+
+                let args = vec![
+                    match size {
+                        Some(size) => TypeInner::Vector { size, kind, width },
+                        None => TypeInner::Scalar { kind, width },
+                    },
+                    match second_size {
+                        Some(size) => TypeInner::Vector { size, kind, width },
+                        None => TypeInner::Scalar { kind, width },
+                    },
+                ];
+
+                let fun = match name {
+                    "max" => MacroCall::Splatted(MathFunction::Max, size, 1),
+                    "min" => MacroCall::Splatted(MathFunction::Min, size, 1),
+                    _ => unreachable!(),
+                };
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
+        "mix" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            // bit 2 trough 4 - types
+            //
+            // 0b10011 is the last element since splatted single elements
+            // were already added
+            for bits in 0..(0b10011) {
+                let size = match bits & 0b11 {
+                    0b00 => Some(VectorSize::Bi),
+                    0b01 => Some(VectorSize::Tri),
+                    0b10 => Some(VectorSize::Quad),
+                    _ => None,
+                };
+                let (kind, splatted, boolean) = match bits >> 2 {
+                    0b000 => (Sk::Sint, false, true),
+                    0b001 => (Sk::Uint, false, true),
+                    0b010 => (Sk::Float, false, true),
+                    0b011 => (Sk::Float, false, false),
+                    _ => (Sk::Float, true, false),
+                };
+
+                let ty = |kind, width| match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                };
+                let args = vec![
+                    ty(kind, width),
+                    ty(kind, width),
+                    match (boolean, splatted) {
+                        (true, _) => ty(Sk::Bool, crate::BOOL_WIDTH),
+                        (_, false) => TypeInner::Scalar { kind, width },
+                        _ => ty(kind, width),
+                    },
+                ];
+
+                declaration.overloads.push(module.add_builtin(
+                    args,
+                    match boolean {
+                        true => MacroCall::MixBoolean,
+                        false => MacroCall::Splatted(MathFunction::Mix, size, 2),
+                    },
+                ))
+            }
+        }
+        "clamp" => {
+            // bits layout
+            // bit 0 trough 1 - float/int/uint
+            // bit 2 trough 3 - dims
+            // bit 4 - splatted
+            //
+            // 0b11010 is the last element since splatted single elements
+            // were already added
+            for bits in 0..(0b11011) {
+                let kind = match bits & 0b11 {
+                    0b00 => Sk::Float,
+                    0b01 => Sk::Sint,
+                    0b10 => Sk::Uint,
+                    _ => continue,
+                };
+                let size = match (bits >> 2) & 0b11 {
+                    0b00 => Some(VectorSize::Bi),
+                    0b01 => Some(VectorSize::Tri),
+                    0b10 => Some(VectorSize::Quad),
+                    _ => None,
+                };
+                let splatted = bits & 0b10000 == 0b10000;
+
+                let base_ty = || match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                };
+                let limit_ty = || match splatted {
+                    true => TypeInner::Scalar { kind, width },
+                    false => base_ty(),
+                };
+
+                let args = vec![base_ty(), limit_ty(), limit_ty()];
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::Clamp(size)))
+            }
+        }
+        // Add common builtins with floats
+        _ => inject_common_builtin(declaration, module, name, 4),
+    }
+}
+
+/// Double version of [`inject_builtin`](inject_builtin)
+pub fn inject_double_builtin(
+    declaration: &mut FunctionDeclaration,
+    module: &mut Module,
+    name: &str,
+) {
+    declaration.double = true;
+    let width = 8;
+    match name {
+        "abs" | "sign" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+                let kind = Sk::Float;
+
+                let args = vec![match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                }];
+
+                declaration.overloads.push(module.add_builtin(
+                    args,
+                    MacroCall::MathFunction(match name {
+                        "abs" => MathFunction::Abs,
+                        "sign" => MathFunction::Sign,
+                        _ => unreachable!(),
+                    }),
+                ))
+            }
+        }
+        "min" | "max" => {
+            // bits layout
+            // bit 0 trough 2 - dims
+            for bits in 0..(0b111) {
+                let (size, second_size) = match bits {
+                    0b000 => (None, None),
+                    0b001 => (Some(VectorSize::Bi), None),
+                    0b010 => (Some(VectorSize::Tri), None),
+                    0b011 => (Some(VectorSize::Quad), None),
+                    0b100 => (Some(VectorSize::Bi), Some(VectorSize::Bi)),
+                    0b101 => (Some(VectorSize::Tri), Some(VectorSize::Tri)),
+                    _ => (Some(VectorSize::Quad), Some(VectorSize::Quad)),
+                };
+                let kind = Sk::Float;
+
+                let args = vec![
+                    match size {
+                        Some(size) => TypeInner::Vector { size, kind, width },
+                        None => TypeInner::Scalar { kind, width },
+                    },
+                    match second_size {
+                        Some(size) => TypeInner::Vector { size, kind, width },
+                        None => TypeInner::Scalar { kind, width },
+                    },
+                ];
+
+                let fun = match name {
+                    "max" => MacroCall::Splatted(MathFunction::Max, size, 1),
+                    "min" => MacroCall::Splatted(MathFunction::Min, size, 1),
+                    _ => unreachable!(),
+                };
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
+        "mix" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            // bit 2 trough 3 - splatted/boolean
+            //
+            // 0b1010 is the last element since splatted with single elements
+            // is equal to normal single elements
+            for bits in 0..(0b1011) {
+                let size = match bits & 0b11 {
+                    0b00 => Some(VectorSize::Quad),
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => None,
+                };
+                let kind = Sk::Float;
+                let (splatted, boolean) = match bits >> 2 {
+                    0b00 => (false, false),
+                    0b01 => (false, true),
+                    _ => (true, false),
+                };
+
+                let ty = |kind, width| match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                };
+                let args = vec![
+                    ty(kind, width),
+                    ty(kind, width),
+                    match (boolean, splatted) {
+                        (true, _) => ty(Sk::Bool, crate::BOOL_WIDTH),
+                        (_, false) => TypeInner::Scalar { kind, width },
+                        _ => ty(kind, width),
+                    },
+                ];
+
+                declaration.overloads.push(module.add_builtin(
+                    args,
+                    match boolean {
+                        true => MacroCall::MixBoolean,
+                        false => MacroCall::Splatted(MathFunction::Mix, size, 2),
+                    },
+                ))
+            }
+        }
+        "clamp" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            // bit 2 - splatted
+            //
+            // 0b110 is the last element since splatted with single elements
+            // is equal to normal single elements
+            for bits in 0..(0b111) {
+                let kind = Sk::Float;
+                let size = match bits & 0b11 {
+                    0b00 => Some(VectorSize::Bi),
+                    0b01 => Some(VectorSize::Tri),
+                    0b10 => Some(VectorSize::Quad),
+                    _ => None,
+                };
+                let splatted = bits & 0b100 == 0b100;
+
+                let base_ty = || match size {
+                    Some(size) => TypeInner::Vector { size, kind, width },
+                    None => TypeInner::Scalar { kind, width },
+                };
+                let limit_ty = || match splatted {
+                    true => TypeInner::Scalar { kind, width },
+                    false => base_ty(),
+                };
+
+                let args = vec![base_ty(), limit_ty(), limit_ty()];
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::Clamp(size)))
+            }
+        }
+        // Add common builtins with doubles
+        _ => inject_common_builtin(declaration, module, name, 8),
+    }
+}
+
+fn inject_common_builtin(
+    declaration: &mut FunctionDeclaration,
+    module: &mut Module,
+    name: &str,
+    float_width: crate::Bytes,
+) {
+    match name {
+        "ceil" | "round" | "floor" | "fract" | "trunc" | "sqrt" | "inversesqrt" | "normalize"
+        | "length" | "isinf" | "isnan" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+
+                let args = vec![match size {
+                    Some(size) => TypeInner::Vector {
+                        size,
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                    None => TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                }];
+
+                let fun = match name {
+                    "ceil" => MacroCall::MathFunction(MathFunction::Ceil),
+                    "round" => MacroCall::MathFunction(MathFunction::Round),
+                    "floor" => MacroCall::MathFunction(MathFunction::Floor),
+                    "fract" => MacroCall::MathFunction(MathFunction::Fract),
+                    "trunc" => MacroCall::MathFunction(MathFunction::Trunc),
+                    "sqrt" => MacroCall::MathFunction(MathFunction::Sqrt),
+                    "inversesqrt" => MacroCall::MathFunction(MathFunction::InverseSqrt),
+                    "normalize" => MacroCall::MathFunction(MathFunction::Normalize),
+                    "length" => MacroCall::MathFunction(MathFunction::Length),
+                    "isinf" => MacroCall::Relational(RelationalFunction::IsInf),
+                    "isnan" => MacroCall::Relational(RelationalFunction::IsNan),
+                    _ => unreachable!(),
+                };
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
+        "dot" | "reflect" | "distance" | "ldexp" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+                let ty = || match size {
+                    Some(size) => TypeInner::Vector {
+                        size,
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                    None => TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                };
+
+                let fun = match name {
+                    "dot" => MacroCall::MathFunction(MathFunction::Dot),
+                    "reflect" => MacroCall::MathFunction(MathFunction::Reflect),
+                    "distance" => MacroCall::MathFunction(MathFunction::Distance),
+                    "ldexp" => MacroCall::MathFunction(MathFunction::Ldexp),
+                    _ => unreachable!(),
+                };
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(vec![ty(), ty()], fun))
+            }
+        }
+        "transpose" => {
+            // bits layout
+            // bit 0 trough 3 - dims
+            for bits in 0..(0b1001) {
+                let (rows, columns) = match bits {
+                    0b0000 => (VectorSize::Bi, VectorSize::Bi),
+                    0b0001 => (VectorSize::Bi, VectorSize::Tri),
+                    0b0010 => (VectorSize::Bi, VectorSize::Quad),
+                    0b0011 => (VectorSize::Tri, VectorSize::Bi),
+                    0b0100 => (VectorSize::Tri, VectorSize::Tri),
+                    0b0101 => (VectorSize::Tri, VectorSize::Quad),
+                    0b0110 => (VectorSize::Quad, VectorSize::Bi),
+                    0b0111 => (VectorSize::Quad, VectorSize::Tri),
+                    _ => (VectorSize::Quad, VectorSize::Quad),
+                };
+
+                declaration.overloads.push(module.add_builtin(
+                    vec![TypeInner::Matrix {
+                        columns,
+                        rows,
+                        width: float_width,
+                    }],
+                    MacroCall::MathFunction(MathFunction::Transpose),
+                ))
+            }
+        }
+        "inverse" | "determinant" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b11) {
+                let (rows, columns) = match bits {
+                    0b00 => (VectorSize::Bi, VectorSize::Bi),
+                    0b01 => (VectorSize::Tri, VectorSize::Tri),
+                    _ => (VectorSize::Quad, VectorSize::Quad),
+                };
+
+                let args = vec![TypeInner::Matrix {
+                    columns,
+                    rows,
+                    width: float_width,
+                }];
+
+                declaration.overloads.push(module.add_builtin(
+                    args,
+                    MacroCall::MathFunction(match name {
+                        "inverse" => MathFunction::Inverse,
+                        "determinant" => MathFunction::Determinant,
+                        _ => unreachable!(),
+                    }),
+                ))
+            }
+        }
+        "mod" | "step" => {
+            // bits layout
+            // bit 0 trough 2 - dims
+            for bits in 0..(0b111) {
+                let (size, second_size) = match bits {
+                    0b000 => (None, None),
+                    0b001 => (Some(VectorSize::Bi), None),
+                    0b010 => (Some(VectorSize::Tri), None),
+                    0b011 => (Some(VectorSize::Quad), None),
+                    0b100 => (Some(VectorSize::Bi), Some(VectorSize::Bi)),
+                    0b101 => (Some(VectorSize::Tri), Some(VectorSize::Tri)),
+                    _ => (Some(VectorSize::Quad), Some(VectorSize::Quad)),
+                };
+
+                let mut args = Vec::with_capacity(2);
+                let step = name == "step";
+
+                for i in 0..2 {
+                    let maybe_size = match i == step as u32 {
+                        true => size,
+                        false => second_size,
+                    };
+
+                    args.push(match maybe_size {
+                        Some(size) => TypeInner::Vector {
+                            size,
+                            kind: Sk::Float,
+                            width: float_width,
+                        },
+                        None => TypeInner::Scalar {
+                            kind: Sk::Float,
+                            width: float_width,
+                        },
+                    })
+                }
+
+                let fun = match name {
+                    "mod" => MacroCall::Mod(size),
+                    "step" => MacroCall::Splatted(MathFunction::Step, size, 0),
+                    _ => unreachable!(),
+                };
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
+        "modf" | "frexp" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+
+                let ty = module.types.fetch_or_append(
+                    Type {
+                        name: None,
+                        inner: match size {
                             Some(size) => TypeInner::Vector {
                                 size,
                                 kind: Sk::Float,
-                                width,
+                                width: float_width,
                             },
                             None => TypeInner::Scalar {
                                 kind: Sk::Float,
-                                width,
-                            },
-                        })
-                    }
-
-                    let fun = match name.as_str() {
-                        "mod" => MacroCall::Mod(size),
-                        "step" => MacroCall::Splatted(MathFunction::Step, size, 0),
-                        _ => unreachable!(),
-                    };
-
-                    declarations.push(self.module.add_builtin(args, fun))
-                }
-            }
-            "min" | "max" => {
-                // bits layout
-                // bit 0 trough 1 - scalar kind and width
-                // bit 2 trough 4 - dims
-                for bits in 0..(0b11100) {
-                    let (kind, width) = match bits & 0b11 {
-                        0b00 => (Sk::Float, 4),
-                        0b01 => (Sk::Float, 8),
-                        0b10 => (Sk::Sint, 4),
-                        _ => (Sk::Uint, 4),
-                    };
-                    let (size, second_size) = match bits >> 2 {
-                        0b000 => (None, None),
-                        0b001 => (Some(VectorSize::Bi), None),
-                        0b010 => (Some(VectorSize::Tri), None),
-                        0b011 => (Some(VectorSize::Quad), None),
-                        0b100 => (Some(VectorSize::Bi), Some(VectorSize::Bi)),
-                        0b101 => (Some(VectorSize::Tri), Some(VectorSize::Tri)),
-                        _ => (Some(VectorSize::Quad), Some(VectorSize::Quad)),
-                    };
-
-                    let args = vec![
-                        match size {
-                            Some(size) => TypeInner::Vector { size, kind, width },
-                            None => TypeInner::Scalar { kind, width },
-                        },
-                        match second_size {
-                            Some(size) => TypeInner::Vector { size, kind, width },
-                            None => TypeInner::Scalar { kind, width },
-                        },
-                    ];
-
-                    let fun = match name.as_str() {
-                        "max" => MacroCall::Splatted(MathFunction::Max, size, 1),
-                        "min" => MacroCall::Splatted(MathFunction::Min, size, 1),
-                        _ => unreachable!(),
-                    };
-
-                    declarations.push(self.module.add_builtin(args, fun))
-                }
-            }
-            "modf" | "frexp" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 2 - dims
-                for bits in 0..(0b1000) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let size = match bits >> 1 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-
-                    let ty = self.module.types.fetch_or_append(
-                        Type {
-                            name: None,
-                            inner: match size {
-                                Some(size) => TypeInner::Vector {
-                                    size,
-                                    kind: Sk::Float,
-                                    width,
-                                },
-                                None => TypeInner::Scalar {
-                                    kind: Sk::Float,
-                                    width,
-                                },
+                                width: float_width,
                             },
                         },
-                        Span::Unknown,
-                    );
+                    },
+                    Span::Unknown,
+                );
 
-                    let parameters = vec![ty, ty];
+                let parameters = vec![ty, ty];
 
-                    let fun = match name.as_str() {
-                        "modf" => MacroCall::MathFunction(MathFunction::Modf),
-                        "frexp" => MacroCall::MathFunction(MathFunction::Frexp),
-                        _ => unreachable!(),
-                    };
+                let fun = match name {
+                    "modf" => MacroCall::MathFunction(MathFunction::Modf),
+                    "frexp" => MacroCall::MathFunction(MathFunction::Frexp),
+                    _ => unreachable!(),
+                };
 
-                    declarations.push(FunctionDeclaration {
-                        parameters,
-                        parameters_info: vec![
-                            ParameterInfo {
-                                qualifier: ParameterQualifier::In,
-                                depth: false,
-                            },
-                            ParameterInfo {
-                                qualifier: ParameterQualifier::Out,
-                                depth: false,
-                            },
-                        ],
-                        kind: FunctionKind::Macro(fun),
-                        defined: false,
-                        void: false,
-                    })
-                }
+                declaration.overloads.push(Overload {
+                    parameters,
+                    parameters_info: vec![
+                        ParameterInfo {
+                            qualifier: ParameterQualifier::In,
+                            depth: false,
+                        },
+                        ParameterInfo {
+                            qualifier: ParameterQualifier::Out,
+                            depth: false,
+                        },
+                    ],
+                    kind: FunctionKind::Macro(fun),
+                    defined: false,
+                    void: false,
+                })
             }
-            "cross" => {
-                // bits layout
-                // bit 0 - float/double
-                for bits in 0..0b10 {
-                    let width = bits * 4 + 4;
-
-                    let args = vec![
-                        TypeInner::Vector {
-                            size: VectorSize::Tri,
-                            kind: Sk::Float,
-                            width,
-                        },
-                        TypeInner::Vector {
-                            size: VectorSize::Tri,
-                            kind: Sk::Float,
-                            width,
-                        },
-                    ];
-
-                    declarations.push(
-                        self.module
-                            .add_builtin(args, MacroCall::MathFunction(MathFunction::Cross)),
-                    )
-                }
-            }
-            "outerProduct" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 4 - dims
-                for bits in 0..(0b10010) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let (size1, size2) = match bits >> 1 {
-                        0b0000 => (VectorSize::Bi, VectorSize::Bi),
-                        0b0001 => (VectorSize::Bi, VectorSize::Tri),
-                        0b0010 => (VectorSize::Bi, VectorSize::Quad),
-                        0b0011 => (VectorSize::Tri, VectorSize::Bi),
-                        0b0100 => (VectorSize::Tri, VectorSize::Tri),
-                        0b0101 => (VectorSize::Tri, VectorSize::Quad),
-                        0b0110 => (VectorSize::Quad, VectorSize::Bi),
-                        0b0111 => (VectorSize::Quad, VectorSize::Tri),
-                        _ => (VectorSize::Quad, VectorSize::Quad),
-                    };
-
-                    if (bits >> 1) > 0b1000 {
-                        continue;
-                    }
-
-                    let args = vec![
-                        TypeInner::Vector {
-                            size: size1,
-                            kind: Sk::Float,
-                            width,
-                        },
-                        TypeInner::Vector {
-                            size: size2,
-                            kind: Sk::Float,
-                            width,
-                        },
-                    ];
-
-                    declarations.push(
-                        self.module
-                            .add_builtin(args, MacroCall::MathFunction(MathFunction::Outer)),
-                    )
-                }
-            }
-            "mix" => {
-                // bits layout
-                // bit 0 trough 2 - types
-                // bit 3 trough 4 - dims
-                for bits in 0..(0b100000) {
-                    let (kind, width, splatted, boolean) = match bits & 0b111 {
-                        0b000 => (Sk::Sint, 4, false, true),
-                        0b001 => (Sk::Uint, 4, false, true),
-                        0b010 => (Sk::Float, 4, false, true),
-                        0b011 => (Sk::Float, 8, false, true),
-                        0b100 => (Sk::Float, 4, true, false),
-                        0b101 => (Sk::Float, 8, true, false),
-                        0b110 => (Sk::Float, 4, false, false),
-                        _ => (Sk::Float, 8, false, false),
-                    };
-                    let size = match bits >> 3 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-
-                    if splatted && size.is_none() {
-                        continue;
-                    }
-
-                    let ty = |kind, width| match size {
-                        Some(size) => TypeInner::Vector { size, kind, width },
-                        None => TypeInner::Scalar { kind, width },
-                    };
-                    let args = vec![
-                        ty(kind, width),
-                        ty(kind, width),
-                        match (boolean, splatted) {
-                            (true, _) => ty(Sk::Bool, crate::BOOL_WIDTH),
-                            (_, false) => TypeInner::Scalar { kind, width },
-                            _ => ty(kind, width),
-                        },
-                    ];
-
-                    declarations.push(self.module.add_builtin(
-                        args,
-                        match boolean {
-                            true => MacroCall::MixBoolean,
-                            false => MacroCall::Splatted(MathFunction::Mix, size, 2),
-                        },
-                    ))
-                }
-            }
-            "clamp" => {
-                // bits layout
-                // bit 0 trough 1 - float/double/int/uint
-                // bit 2 trough 3 - dims
-                // bit 4 - splatted
-                for bits in 0..(0b100000) {
-                    let (kind, width) = match bits & 0b11 {
-                        0b00 => (Sk::Float, 4),
-                        0b01 => (Sk::Float, 8),
-                        0b10 => (Sk::Sint, 4),
-                        _ => (Sk::Uint, 4),
-                    };
-                    let size = match (bits >> 2) & 0b11 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-                    let splatted = bits & 0b10000 == 0b10000;
-
-                    if splatted && size.is_none() {
-                        continue;
-                    }
-
-                    let base_ty = || match size {
-                        Some(size) => TypeInner::Vector { size, kind, width },
-                        None => TypeInner::Scalar { kind, width },
-                    };
-                    let limit_ty = || match splatted {
-                        true => TypeInner::Scalar { kind, width },
-                        false => base_ty(),
-                    };
-
-                    let args = vec![base_ty(), limit_ty(), limit_ty()];
-
-                    declarations.push(self.module.add_builtin(args, MacroCall::Clamp(size)))
-                }
-            }
-            "faceforward" | "fma" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 2 - dims
-                for bits in 0..(0b1000) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let size = match bits >> 1 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-
-                    let ty = || match size {
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind: Sk::Float,
-                            width,
-                        },
-                        None => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width,
-                        },
-                    };
-                    let args = vec![ty(), ty(), ty()];
-
-                    let fun = match name.as_str() {
-                        "faceforward" => MacroCall::MathFunction(MathFunction::FaceForward),
-                        "fma" => MacroCall::MathFunction(MathFunction::Fma),
-                        _ => unreachable!(),
-                    };
-
-                    declarations.push(self.module.add_builtin(args, fun))
-                }
-            }
-            "refract" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 trough 2 - dims
-                for bits in 0..(0b1000) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let size = match bits >> 1 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-
-                    let ty = || match size {
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind: Sk::Float,
-                            width,
-                        },
-                        None => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width,
-                        },
-                    };
-                    let args = vec![
-                        ty(),
-                        ty(),
-                        TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width: 4,
-                        },
-                    ];
-                    declarations.push(
-                        self.module
-                            .add_builtin(args, MacroCall::MathFunction(MathFunction::Refract)),
-                    )
-                }
-            }
-            "smoothstep" => {
-                // bits layout
-                // bit 0 - float/double
-                // bit 1 - splatted
-                // bit 2 trough 3 - dims
-                for bits in 0..(0b10000) {
-                    let width = (bits & 0b1) * 4 + 4;
-                    let splatted = bits & 0b10 == 0b10;
-                    let size = match bits >> 2 {
-                        0b00 => None,
-                        0b01 => Some(VectorSize::Bi),
-                        0b10 => Some(VectorSize::Tri),
-                        _ => Some(VectorSize::Quad),
-                    };
-
-                    if splatted && size.is_none() {
-                        continue;
-                    }
-
-                    let base_ty = || match size {
-                        Some(size) => TypeInner::Vector {
-                            size,
-                            kind: Sk::Float,
-                            width,
-                        },
-                        None => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width,
-                        },
-                    };
-                    let ty = || match splatted {
-                        true => TypeInner::Scalar {
-                            kind: Sk::Float,
-                            width,
-                        },
-                        false => base_ty(),
-                    };
-                    declarations.push(self.module.add_builtin(
-                        vec![ty(), ty(), base_ty()],
-                        MacroCall::MathFunction(MathFunction::SmoothStep),
-                    ))
-                }
-            }
-            // Not a builtin (or at lest not yet handled)
-            _ => {}
         }
+        "cross" => {
+            let args = vec![
+                TypeInner::Vector {
+                    size: VectorSize::Tri,
+                    kind: Sk::Float,
+                    width: float_width,
+                },
+                TypeInner::Vector {
+                    size: VectorSize::Tri,
+                    kind: Sk::Float,
+                    width: float_width,
+                },
+            ];
+
+            declaration
+                .overloads
+                .push(module.add_builtin(args, MacroCall::MathFunction(MathFunction::Cross)))
+        }
+        "outerProduct" => {
+            // bits layout
+            // bit 0 trough 3 - dims
+            for bits in 0..(0b1001) {
+                let (size1, size2) = match bits {
+                    0b0000 => (VectorSize::Bi, VectorSize::Bi),
+                    0b0001 => (VectorSize::Bi, VectorSize::Tri),
+                    0b0010 => (VectorSize::Bi, VectorSize::Quad),
+                    0b0011 => (VectorSize::Tri, VectorSize::Bi),
+                    0b0100 => (VectorSize::Tri, VectorSize::Tri),
+                    0b0101 => (VectorSize::Tri, VectorSize::Quad),
+                    0b0110 => (VectorSize::Quad, VectorSize::Bi),
+                    0b0111 => (VectorSize::Quad, VectorSize::Tri),
+                    _ => (VectorSize::Quad, VectorSize::Quad),
+                };
+
+                let args = vec![
+                    TypeInner::Vector {
+                        size: size1,
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                    TypeInner::Vector {
+                        size: size2,
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                ];
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::MathFunction(MathFunction::Outer)))
+            }
+        }
+        "faceforward" | "fma" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+
+                let ty = || match size {
+                    Some(size) => TypeInner::Vector {
+                        size,
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                    None => TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                };
+                let args = vec![ty(), ty(), ty()];
+
+                let fun = match name {
+                    "faceforward" => MacroCall::MathFunction(MathFunction::FaceForward),
+                    "fma" => MacroCall::MathFunction(MathFunction::Fma),
+                    _ => unreachable!(),
+                };
+
+                declaration.overloads.push(module.add_builtin(args, fun))
+            }
+        }
+        "refract" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+
+                let ty = || match size {
+                    Some(size) => TypeInner::Vector {
+                        size,
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                    None => TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                };
+                let args = vec![
+                    ty(),
+                    ty(),
+                    TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width: 4,
+                    },
+                ];
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::MathFunction(MathFunction::Refract)))
+            }
+        }
+        "smoothstep" => {
+            // bits layout
+            // bit 0 - splatted
+            // bit 1 trough 2 - dims
+            for bits in 0..(0b1000) {
+                let splatted = bits & 0b1 == 0b1;
+                let size = match bits >> 1 {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+
+                if splatted && size.is_none() {
+                    continue;
+                }
+
+                let base_ty = || match size {
+                    Some(size) => TypeInner::Vector {
+                        size,
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                    None => TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                };
+                let ty = || match splatted {
+                    true => TypeInner::Scalar {
+                        kind: Sk::Float,
+                        width: float_width,
+                    },
+                    false => base_ty(),
+                };
+                declaration.overloads.push(module.add_builtin(
+                    vec![ty(), ty(), base_ty()],
+                    MacroCall::MathFunction(MathFunction::SmoothStep),
+                ))
+            }
+        }
+        // The function isn't a builtin or we don't yet support it
+        _ => declaration.builtin = false,
     }
 }
 

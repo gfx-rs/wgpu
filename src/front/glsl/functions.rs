@@ -1,6 +1,6 @@
 use super::{
     ast::*,
-    builtins::sampled_to_depth,
+    builtins::{inject_builtin, inject_double_builtin, sampled_to_depth},
     context::{Context, StmtContext},
     error::{Error, ErrorKind},
     types::scalar_components,
@@ -356,17 +356,25 @@ impl Parser {
     ) -> Result<Option<Handle<Expression>>> {
         // If the name for the function hasn't yet been initialized check if any
         // builtin can be injected.
-        //
-        // NOTE: A name not being initialized is not the same as no declarations
-        // being existing.
         if self.lookup_function.get(&name).is_none() {
-            self.inject_builtin(name.clone());
+            let declaration = self.lookup_function.entry(name.clone()).or_default();
+            inject_builtin(declaration, &mut self.module, &name);
         }
 
-        let declarations = self.lookup_function.get(&name).ok_or_else(|| Error {
-            kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
-            meta,
-        })?;
+        // Check if any argument uses a double type
+        let has_double = args
+            .iter()
+            .any(|&(expr, meta)| self.resolve_type(ctx, expr, meta).map_or(false, is_double));
+
+        // At this point a declaration is guaranteed
+        let declaration = self.lookup_function.get_mut(&name).unwrap();
+
+        if declaration.builtin && !declaration.double && has_double {
+            inject_double_builtin(declaration, &mut self.module, &name);
+        }
+
+        // Borrow again but without mutability
+        let declaration = self.lookup_function.get(&name).unwrap();
 
         // Helper enum containing the type of conversion need for a call
         #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -389,7 +397,7 @@ impl Parser {
         let mut old_conversions = vec![Conversion::None; args.len()];
         let mut ambiguous = false;
 
-        'outer: for decl in declarations {
+        'outer: for decl in declaration.overloads.iter() {
             if args.len() != decl.parameters.len() {
                 continue;
             }
@@ -660,7 +668,8 @@ impl Parser {
         meta: SourceMetadata,
     ) {
         if self.lookup_function.get(&name).is_none() {
-            self.inject_builtin(name.clone());
+            let declaration = self.lookup_function.entry(name.clone()).or_default();
+            inject_builtin(declaration, &mut self.module, &name);
         }
 
         ensure_block_returns(&mut body);
@@ -673,7 +682,8 @@ impl Parser {
             ..
         } = self;
 
-        let declarations = lookup_function.entry(name.clone()).or_default();
+        let declaration = lookup_function.entry(name.clone()).or_default();
+
         let Context {
             expressions,
             locals,
@@ -682,6 +692,16 @@ impl Parser {
             parameters_info,
             ..
         } = ctx;
+
+        if declaration.builtin
+            && !declaration.double
+            && parameters
+                .iter()
+                .any(|ty| is_double(&module.types[*ty].inner))
+        {
+            inject_double_builtin(declaration, module, &name);
+        }
+
         let function = Function {
             name: Some(name),
             arguments,
@@ -692,7 +712,7 @@ impl Parser {
             body,
         };
 
-        'outer: for decl in declarations.iter_mut() {
+        'outer: for decl in declaration.overloads.iter_mut() {
             if parameters.len() != decl.parameters.len() {
                 continue;
             }
@@ -726,7 +746,7 @@ impl Parser {
         }
 
         let handle = module.functions.append(function, meta.as_span());
-        declarations.push(FunctionDeclaration {
+        declaration.overloads.push(Overload {
             parameters,
             parameters_info,
             kind: FunctionKind::Call(handle),
@@ -743,7 +763,8 @@ impl Parser {
         meta: SourceMetadata,
     ) {
         if self.lookup_function.get(&name).is_none() {
-            self.inject_builtin(name.clone());
+            let declaration = self.lookup_function.entry(name.clone()).or_default();
+            inject_builtin(declaration, &mut self.module, &name);
         }
 
         let void = result.is_none();
@@ -754,7 +775,7 @@ impl Parser {
             ..
         } = self;
 
-        let declarations = lookup_function.entry(name.clone()).or_default();
+        let declaration = lookup_function.entry(name.clone()).or_default();
 
         let Context {
             arguments,
@@ -762,6 +783,16 @@ impl Parser {
             parameters_info,
             ..
         } = ctx;
+
+        if declaration.builtin
+            && !declaration.double
+            && parameters
+                .iter()
+                .any(|ty| is_double(&module.types[*ty].inner))
+        {
+            inject_double_builtin(declaration, module, &name);
+        }
+
         let function = Function {
             name: Some(name),
             arguments,
@@ -769,7 +800,7 @@ impl Parser {
             ..Default::default()
         };
 
-        'outer: for decl in declarations.iter_mut() {
+        'outer: for decl in declaration.overloads.iter() {
             if parameters.len() != decl.parameters.len() {
                 continue;
             }
@@ -790,7 +821,7 @@ impl Parser {
         }
 
         let handle = module.functions.append(function, meta.as_span());
-        declarations.push(FunctionDeclaration {
+        declaration.overloads.push(Overload {
             parameters,
             parameters_info,
             kind: FunctionKind::Call(handle),
@@ -920,5 +951,15 @@ impl Parser {
                 ..Default::default()
             },
         });
+    }
+}
+
+fn is_double(ty: &TypeInner) -> bool {
+    match *ty {
+        TypeInner::ValuePointer { kind, width, .. }
+        | TypeInner::Scalar { kind, width }
+        | TypeInner::Vector { kind, width, .. } => kind == ScalarKind::Float && width == 8,
+        TypeInner::Matrix { width, .. } => width == 8,
+        _ => false,
     }
 }

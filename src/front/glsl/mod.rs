@@ -159,7 +159,7 @@ impl Default for ShaderMetadata {
 pub struct Parser {
     meta: ShaderMetadata,
 
-    lookup_function: FastHashMap<String, Vec<FunctionDeclaration>>,
+    lookup_function: FastHashMap<String, FunctionDeclaration>,
     lookup_type: FastHashMap<String, Handle<Type>>,
 
     global_variables: Vec<(String, GlobalLookup)>,

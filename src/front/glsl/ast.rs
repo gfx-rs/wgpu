@@ -47,7 +47,7 @@ impl fmt::Debug for FunctionKind {
 }
 
 #[derive(Debug)]
-pub struct FunctionDeclaration {
+pub struct Overload {
     /// Normalized function parameters, modifiers are not applied
     pub parameters: Vec<Handle<Type>>,
     pub parameters_info: Vec<ParameterInfo>,
@@ -57,6 +57,16 @@ pub struct FunctionDeclaration {
     pub defined: bool,
     /// Wheter or not this function returns void (nothing)
     pub void: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct FunctionDeclaration {
+    pub overloads: Vec<Overload>,
+    /// Wether or not this function has the name of a builtin
+    pub builtin: bool,
+    /// In case [`builtin`](Self::builtin) is true, this field indicates wether
+    /// this function already has double overloads added or not, otherwise is unused
+    pub double: bool,
 }
 
 #[derive(Debug)]
