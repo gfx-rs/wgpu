@@ -427,6 +427,10 @@ impl<B: GfxBackend> Device<B> {
         profiling::scope!("maintain", "Device");
         let mut life_tracker = self.lock_life(token);
 
+        life_tracker
+            .suspected_resources
+            .extend(&self.temp_suspected);
+
         life_tracker.triage_suspected(
             hub,
             &self.trackers,
@@ -510,6 +514,8 @@ impl<B: GfxBackend> Device<B> {
         self.lock_life(&mut token)
             .suspected_resources
             .extend(&self.temp_suspected);
+
+        self.temp_suspected.clear();
     }
 
     fn create_buffer(
@@ -621,8 +627,8 @@ impl<B: GfxBackend> Device<B> {
     ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
-        let format_desc = desc.format.describe();
-        self.require_features(format_desc.required_features)
+        let format_features = self
+            .describe_format_features(adapter, desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
 
         // Ensure `D24Plus` textures cannot be copied
@@ -641,15 +647,6 @@ impl<B: GfxBackend> Device<B> {
         if desc.usage.is_empty() {
             return Err(resource::CreateTextureError::EmptyUsage);
         }
-
-        let format_features = if self
-            .features
-            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
-        {
-            adapter.get_texture_format_features(desc.format)
-        } else {
-            format_desc.guaranteed_format_features
-        };
 
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
@@ -2106,6 +2103,7 @@ impl<B: GfxBackend> Device<B> {
     fn create_render_pipeline<G: GlobalIdentityHandlerFactory>(
         &self,
         self_id: id::DeviceId,
+        adapter: &crate::instance::Adapter<B>,
         desc: &pipeline::RenderPipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
         hub: &Hub<B, G>,
@@ -2255,11 +2253,64 @@ impl<B: GfxBackend> Device<B> {
             targets: Vec::with_capacity(color_states.len()),
         };
         for (i, cs) in color_states.iter().enumerate() {
-            let bt = conv::map_color_target_state(cs)
-                .map_err(|error| pipeline::CreateRenderPipelineError::ColorState(i as u8, error))?;
-            blender.targets.push(bt);
+            let error = loop {
+                let format_features = self.describe_format_features(adapter, cs.format)?;
+                if !format_features
+                    .allowed_usages
+                    .contains(wgt::TextureUsage::RENDER_ATTACHMENT)
+                {
+                    break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
+                }
+                if cs.blend.is_some() && !format_features.filterable {
+                    break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
+                }
+                let hal_format = conv::map_texture_format(cs.format, self.private_features);
+                if !hal_format
+                    .surface_desc()
+                    .aspects
+                    .contains(hal::format::Aspects::COLOR)
+                {
+                    break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
+                }
+
+                match conv::map_color_target_state(cs) {
+                    Ok(bt) => blender.targets.push(bt),
+                    Err(e) => break Some(e),
+                }
+                break None;
+            };
+            if let Some(e) = error {
+                return Err(pipeline::CreateRenderPipelineError::ColorState(i as u8, e));
+            }
         }
 
+        if let Some(ds) = depth_stencil_state {
+            let error = loop {
+                if !self
+                    .describe_format_features(adapter, ds.format)?
+                    .allowed_usages
+                    .contains(wgt::TextureUsage::RENDER_ATTACHMENT)
+                {
+                    break Some(pipeline::DepthStencilStateError::FormatNotRenderable(
+                        ds.format,
+                    ));
+                }
+                let hal_format = conv::map_texture_format(ds.format, self.private_features);
+                let aspects = hal_format.surface_desc().aspects;
+                if ds.is_depth_enabled() && !aspects.contains(hal::format::Aspects::DEPTH) {
+                    break Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
+                }
+                if ds.stencil.is_enabled() && !aspects.contains(hal::format::Aspects::STENCIL) {
+                    break Some(pipeline::DepthStencilStateError::FormatNotStencil(
+                        ds.format,
+                    ));
+                }
+                break None;
+            };
+            if let Some(e) = error {
+                return Err(pipeline::CreateRenderPipelineError::DepthStencilState(e));
+            }
+        }
         let depth_stencil = depth_stencil_state
             .map(conv::map_depth_stencil_state)
             .unwrap_or_default();
@@ -2580,6 +2631,24 @@ impl<B: GfxBackend> Device<B> {
         Ok(pipeline)
     }
 
+    fn describe_format_features(
+        &self,
+        adapter: &crate::instance::Adapter<B>,
+        format: TextureFormat,
+    ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
+        let format_desc = format.describe();
+        self.require_features(format_desc.required_features)?;
+
+        if self
+            .features
+            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+        {
+            Ok(adapter.get_texture_format_features(format))
+        } else {
+            Ok(format_desc.guaranteed_format_features)
+        }
+    }
+
     fn wait_for_submit(
         &self,
         submission_index: SubmissionIndex,
@@ -2615,7 +2684,7 @@ impl<B: GfxBackend> Device<B> {
             return Err(Error::ZeroCount);
         }
 
-        if desc.count >= wgt::QUERY_SET_MAX_QUERIES {
+        if desc.count > wgt::QUERY_SET_MAX_QUERIES {
             return Err(Error::TooManyQueries {
                 count: desc.count,
                 maximum: wgt::QUERY_SET_MAX_QUERIES,
@@ -4131,12 +4200,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(&hub));
 
+        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            let adapter = &adapter_guard[device.adapter_id.value];
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace.lock().add(trace::Action::CreateRenderPipeline {
@@ -4148,6 +4219,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let pipeline = match device.create_render_pipeline(
                 device_id,
+                adapter,
                 desc,
                 implicit_context,
                 &hub,

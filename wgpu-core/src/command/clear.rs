@@ -169,7 +169,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         command_encoder_id: CommandEncoderId,
         dst: TextureId,
-        subresource_range: ImageSubresourceRange,
+        subresource_range: &ImageSubresourceRange,
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_image");
 

@@ -1,0 +1,81 @@
+(
+    features: (bits: 0x0000_0000_0000_0008), // PIPELINE_STATISTICS_QUERY
+    expectations: [
+        (
+            name: "Queried number of compute invocations is correct",
+            buffer: (index: 0, epoch: 1),
+            offset: 0,
+            data: Raw([0x2A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+        ),
+    ],
+    actions: [
+        CreatePipelineLayout(Id(0, 1, Empty), (
+            label: Some("empty"),
+            bind_group_layouts: [],
+            push_constant_ranges: [],
+        )),
+        CreateShaderModule(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                flags: (bits: 3),
+            ),
+            data: "empty.wgsl",
+        ),
+        CreateComputePipeline(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                layout: Some(Id(0, 1, Empty)),
+                stage: (
+                    module: Id(0, 1, Empty),
+                    entry_point: "main",
+                ),
+            ),
+        ),
+        CreateQuerySet(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: Some("Compute Invocation QuerySet"),
+                count: 2,
+                ty: PipelineStatistics((bits: 0x10)), // COMPUTE_SHADER_INVOCATIONS
+            ),
+        ),
+        CreateBuffer(
+            Id(0, 1, Empty),
+            (
+                label: Some("Compute Invocation Result Buffer"),
+                size: 8,
+                usage: (
+                    bits: 9, // COPY_DST | MAP_READ
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        Submit(1, [
+            RunComputePass(
+                base: (
+                    commands: [
+                        SetPipeline(Id(0, 1, Empty)),
+                        BeginPipelineStatisticsQuery(
+                            query_set_id: Id(0, 1, Empty),
+                            query_index: 0,
+                        ),
+                        Dispatch((2, 3, 7,)),
+                        EndPipelineStatisticsQuery,
+                    ],
+                    dynamic_offsets: [],
+                    string_data: [],
+                    push_constant_data: [],
+                ),
+            ),
+            ResolveQuerySet(
+                query_set_id: Id(0, 1, Empty),
+                start_query: 0,
+                query_count: 1,
+                destination: Id(0, 1, Empty),
+                destination_offset: 0,
+            )
+        ]),
+    ],
+)

@@ -5,6 +5,7 @@
 		"buffer-copy.ron",
 		"clear-buffer-image.ron",
 		"buffer-zero-init.ron",
+		"pipeline-statistics-query.ron",
 		"quad.ron",
 	],
 )

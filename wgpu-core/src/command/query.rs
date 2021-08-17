@@ -11,6 +11,7 @@ use crate::{
     device::all_buffer_stages,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id::{self, Id, TypedId},
+    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     resource::{BufferUse, QuerySet},
     track::UseExtendError,
     Epoch, FastHashMap, Index,
@@ -381,7 +382,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        let stride = query_set.elements * wgt::QUERY_SIZE;
+        let elements_per_query = match query_set.desc.ty {
+            wgt::QueryType::PipelineStatistics(ps) => ps.bits().count_ones(),
+            wgt::QueryType::Timestamp => 1,
+        };
+        let stride = elements_per_query * wgt::QUERY_SIZE;
         let bytes_used = (stride * query_count) as BufferAddress;
 
         let buffer_start_offset = destination_offset;
@@ -398,6 +403,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             .into());
         }
+
+        cmd_buf.buffer_memory_init_actions.extend(
+            dst_buffer
+                .initialization_status
+                .check(buffer_start_offset..buffer_end_offset)
+                .map(|range| MemoryInitTrackerAction {
+                    id: destination,
+                    range,
+                    kind: MemoryInitKind::ImplicitlyInitialized,
+                }),
+        );
 
         unsafe {
             cmd_buf_raw.pipeline_barrier(
