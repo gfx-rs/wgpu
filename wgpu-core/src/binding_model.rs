@@ -2,7 +2,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
     hub::Resource,
-    id::{self, AllResources, AnyBackend, BufferId, Hkt, TextureViewId},
+    id::{self, AllResources, AnyBackend, BufferId, Hkt},
     memory_init_tracker::MemoryInitTrackerAction,
     track::{TrackerSet, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
@@ -67,8 +67,10 @@ pub enum CreateBindGroupError {
     InvalidLayout,
     #[error("buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
-    #[error("texture view {0:?} is invalid")]
-    InvalidTextureView(TextureViewId),
+    #[error("texture view array binding at index {binding} has an invalid entry at index {index}")]
+    InvalidTextureViewArray { binding: u32, index: usize },
+    #[error("texture view binding at index {0:?} is invalid")]
+    InvalidTextureView(/*TextureViewId*/u32),
     #[error("sampler binding at index {0:?} is invalid")]
     InvalidSampler(/*SamplerId*/u32),
     #[error("binding count declared with {expected} items, but {actual} items were provided")]
@@ -178,8 +180,9 @@ impl PrettyError for CreateBindGroupError {
             Self::InvalidBuffer(id) => {
                 fmt.buffer_label(id);
             }
-            Self::InvalidTextureView(id) => {
-                fmt.texture_view_label(id);
+            Self::InvalidTextureView(_id) => {
+                // TODO: Figure out what to do here?
+                // fmt.texture_view_label(id);
             }
             Self::InvalidSampler(_id) => {
                 // TODO: Figure out what to do here?
@@ -384,20 +387,24 @@ impl BindingTypeMaxCountValidator {
 #[derive(/*Clone, */Debug)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BindGroupEntry<'a, A: hal::Api, F: AllResources<A>> {
+pub struct BindGroupEntry<'a, A: hal::Api, F: AllResources<A>>
+    where <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy,
+{
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
     pub binding: u32,
     /// Resource to attach to the binding
     #[cfg_attr(any(feature = "trace"),
-      serde(bound(serialize = "BindingResource<'a, A, F>: serde::Serialize")))]
+      serde(bound(serialize = "BindingResource<'a, A, F>: serde::Serialize,")))]
     #[cfg_attr(any(feature = "replay"),
-      serde(bound(deserialize = "BindingResource<'a, A, F>: serde::Deserialize<'de>")))]
+      serde(bound(deserialize = "BindingResource<'a, A, F>: serde::Deserialize<'de>,")))]
     pub resource: BindingResource<'a, A, F>,
 }
 pub type BindGroupEntryIn<'a, A> = BindGroupEntry<'a, A, id::IdGuardCon<'a>>;
 
-impl<'a, A: hal::Api, F: AllResources<A>> BindGroupEntry<'a, A, F> {
+impl<'a, A: hal::Api, F: AllResources<A>> BindGroupEntry<'a, A, F>
+    where <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy,
+{
     #[inline]
     #[cfg(feature = "replay")]
     pub fn trace_resources<'b, E>(&'b self, f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>) -> Result<(), E> {
@@ -409,6 +416,8 @@ impl<'a, A: hal::Api, F: AllResources<A>> BindGroupEntry<'a, A, F> {
 impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
     FromCommand<BindGroupEntry<'a, A, F>> for BindGroupEntry<'b, B, G>
     where
+        <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy,
+        <G as Hkt<crate::resource::TextureView<B>>>::Output: Copy,
         BindingResource<'b, B, G>:
             FromCommand<BindingResource<'a, A, F>>,
 {
@@ -426,6 +435,8 @@ impl<'a: 'b, 'b, A: hal::Api + 'b, B: hal::Api, F: AllResources<A> + 'b, G: AllR
     where
         /*(&'b id::IdCache2, &'b <F as Hkt<crate::resource::Sampler<A>>>::Output):
             TryInto<<G as Hkt<crate::resource::Sampler<B>>>::Output, Error=E>,*/
+        <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy,
+        <G as Hkt<crate::resource::TextureView<B>>>::Output: Copy,
         (&'b id::IdCache2, &'b BindingResource<'a, A, F>):
             TryInto<BindingResource<'b, B, G>, Error=E>,
 {
@@ -470,6 +481,7 @@ impl<'a, A: hal::Api, F: AllResources<A>, I> BindGroupDescriptor<'a, A, F, I> {
         mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
     ) -> Result<(), E>
         where
+            <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy + 'a,
             id::Cached<A, &'b F>: 'b,
             <&'b F::Owned as Hkt<BindGroupLayout<A>>>::Output:
                 Into<&'b <F as Hkt<BindGroupLayout<A>>>::Output>,
@@ -911,7 +923,9 @@ impl BufferBinding {
 #[derive(Debug/*, Clone*/)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum BindingResource<'a, A: hal::Api, F: AllResources<A>> {
+pub enum BindingResource<'a, A: hal::Api, F: AllResources<A>>
+    where <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy,
+{
     Buffer(BufferBinding),
     BufferArray(Cow<'a, [BufferBinding]>),
     Sampler(
@@ -920,11 +934,21 @@ pub enum BindingResource<'a, A: hal::Api, F: AllResources<A>> {
     #[cfg_attr(any(feature = "replay"),
       serde(bound(deserialize = "<F as Hkt<crate::resource::Sampler<A>>>::Output: serde::Deserialize<'de>")))]
     <F as Hkt<crate::resource::Sampler<A>>>::Output),
-    TextureView(TextureViewId),
-    TextureViewArray(Cow<'a, [TextureViewId]>),
+    #[cfg_attr(any(feature = "trace"),
+      serde(bound(serialize = "<F as Hkt<crate::resource::TextureView<A>>>::Output: serde::Serialize")))]
+    #[cfg_attr(any(feature = "replay"),
+      serde(bound(deserialize = "<F as Hkt<crate::resource::TextureView<A>>>::Output: serde::Deserialize<'de>")))]
+    TextureView(<F as Hkt<crate::resource::TextureView<A>>>::Output),
+    #[cfg_attr(any(feature = "trace"),
+      serde(bound(serialize = "<F as Hkt<crate::resource::TextureView<A>>>::Output: serde::Serialize")))]
+    #[cfg_attr(any(feature = "replay"),
+      serde(bound(deserialize = "<F as Hkt<crate::resource::TextureView<A>>>::Output: serde::Deserialize<'de>")))]
+    TextureViewArray(Cow<'a, [<F as Hkt<crate::resource::TextureView<A>>>::Output]>/*Vec<<F as Hkt<crate::resource::TextureView<A>>>::Output>*/),
 }
 
-impl<'a, A: hal::Api, F: AllResources<A>> BindingResource<'a, A, F> {
+impl<'a, A: hal::Api, F: AllResources<A>> BindingResource<'a, A, F>
+    where <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy,
+{
     #[inline]
     #[cfg(feature = "replay")]
     pub fn trace_resources<'b, E>(&'b self, mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>) -> Result<(), E> {
@@ -934,16 +958,9 @@ impl<'a, A: hal::Api, F: AllResources<A>> BindingResource<'a, A, F> {
             Buffer(bb) => bb.trace_resources(f),
             BufferArray(bindings_array) => bindings_array.iter().try_for_each(|bb| bb.trace_resources(&mut f)),
             Sampler(id) => f(crate::resource::Sampler::upcast(id)),
-            TextureView(_id) => {
-                // FIXME: Perform when we update TextureViewId!
-                // f(crate::resource::TextureView::upcast(id))
-                Ok(())
-            },
-            TextureViewArray(bindings_array) => bindings_array.iter().try_for_each(|_id| {
-                // FIXME: Perform when we update TextureViewId!
-                // f(crate::resource::TextureView::upcast(id))
-                Ok(())
-            }),
+            TextureView(id) => f(crate::resource::TextureView::upcast(id)),
+            TextureViewArray(bindings_array) => bindings_array.iter()
+                .try_for_each(|id| f(crate::resource::TextureView::upcast(id))),
         }
     }
 }
@@ -952,8 +969,12 @@ impl<'a, A: hal::Api, F: AllResources<A>> BindingResource<'a, A, F> {
 impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
     FromCommand<BindingResource<'a, A, F>> for BindingResource<'b, B, G>
     where
+        <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy,
+        <G as Hkt<crate::resource::TextureView<B>>>::Output: Copy,
         <F as Hkt<crate::resource::Sampler<A>>>::Output:
             Into<<G as Hkt<crate::resource::Sampler<B>>>::Output>,
+        <F as Hkt<crate::resource::TextureView<A>>>::Output:
+            Into<<G as Hkt<crate::resource::TextureView<B>>>::Output>,
 {
     fn from(desc: BindingResource<'a, A, F>) -> Self {
         use BindingResource::*;
@@ -962,8 +983,9 @@ impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B
             Buffer(bb) => Buffer(bb),
             BufferArray(bindings_array) => BufferArray(bindings_array),
             Sampler(id) => Sampler(id.into()),
-            TextureView(id) => TextureView(id),
-            TextureViewArray(bindings_array) => TextureViewArray(bindings_array),
+            TextureView(id) => TextureView(id.into()),
+            TextureViewArray(bindings_array) =>
+                TextureViewArray(bindings_array.iter().copied().map(Into::into).collect()),
         }
     }
 }
@@ -972,8 +994,12 @@ impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B
 impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>, E>
     TryFrom<(&'b id::IdCache2, &'b BindingResource<'a, A, F>)> for BindingResource<'b, B, G>
     where
+        <F as Hkt<crate::resource::TextureView<A>>>::Output: Copy,
+        <G as Hkt<crate::resource::TextureView<B>>>::Output: Copy,
         (&'b id::IdCache2, &'b <F as Hkt<crate::resource::Sampler<A>>>::Output):
             TryInto<<G as Hkt<crate::resource::Sampler<B>>>::Output, Error=E>,
+        (&'b id::IdCache2, &'b <F as Hkt<crate::resource::TextureView<A>>>::Output):
+            TryInto<<G as Hkt<crate::resource::TextureView<B>>>::Output, Error=E>,
 {
     type Error = E;
 
@@ -984,8 +1010,11 @@ impl<'a: 'b, 'b, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B
             Buffer(bb) => Buffer(bb.clone()),
             BufferArray(bindings_array) => BufferArray(Cow::Borrowed(&*bindings_array)),
             Sampler(id) => Sampler((cache, id).try_into()?),
-            TextureView(id) => TextureView(*id),
-            TextureViewArray(bindings_array) => TextureViewArray(Cow::Borrowed(&*bindings_array)),
+            TextureView(id) => TextureView((cache, id).try_into()?),
+            TextureViewArray(bindings_array) => TextureViewArray(
+                bindings_array.iter().map(|id| (cache, id).try_into())
+                .collect::<Result<_, Self::Error>>()?
+            ),
         })
     }
 }

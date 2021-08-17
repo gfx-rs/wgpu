@@ -57,12 +57,11 @@ pub enum Action<'a> {
     FreeTexture(id::TextureId),
     DestroyTexture(id::TextureId),
     CreateTextureView {
-        id: id::TextureViewId,
+        id: /*id::TextureViewId*/TraceResourceId,
         parent_id: id::TextureId,
         #[serde(borrow)]
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
-    DestroyTextureView(id::TextureViewId),
     CreateSampler(/*id::SamplerId*/TraceResourceId,
                   #[serde(borrow)]
                   crate::resource::SamplerDescriptor<'a>
@@ -196,8 +195,8 @@ pub enum Command {
     },
     RunRenderPass {
         base: crate::command::BasePass<crate::command::RenderCommand<hal::api::Empty, /*id::IdCon*/id::UsizeCon>>,
-        target_colors: Vec<crate::command::RenderPassColorAttachment>,
-        target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
+        target_colors: Vec<crate::command::RenderPassColorAttachment<hal::api::Empty, id::UsizeCon>>,
+        target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment<hal::api::Empty, id::UsizeCon>>,
     },
 }
 
@@ -257,8 +256,11 @@ impl Command {
             },
             RunComputePass { base } =>
                 base.commands.iter().try_for_each(|command| command.trace_resources(&mut f)),
-            RunRenderPass { base, .. } =>
-                base.commands.iter().try_for_each(|command| command.trace_resources(&mut f)),
+            RunRenderPass { base, target_colors, target_depth_stencil } => {
+                target_colors.iter().try_for_each(|at| at.trace_resources(&mut f))?;
+                target_depth_stencil.as_ref().map(|at| at.trace_resources(&mut f)).transpose()?;
+                base.commands.iter().try_for_each(|command| command.trace_resources(&mut f))
+            },
         }
     }
 }

@@ -3,7 +3,7 @@ use crate::{
     device::{Device, LifetimeTracker, Trackers, QueueInner as QueueInner_, SuspectedResources},
     id::{self, AnyBackend, Hkt},
     instance::{HalSurface, Instance, Surface, SurfaceRaw},
-    resource::{Buffer, Texture, TextureView},
+    resource::{Buffer, Texture},
     Epoch, Index,
 };
 
@@ -278,9 +278,6 @@ impl<A: hal::Api> Access<CommandBuffer<A>> for Root {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for Buffer<A> {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for Texture<A> {}
 impl<A: hal::Api> Access<CommandBuffer<A>> for QueueInner<A> {} //TODO: remove this (only used in `submit()`)
-impl<A: hal::Api> Access<TextureView<A>> for Texture<A> {}
-impl<A: hal::Api> Access<TextureView<A>> for LifetimeTracker<A> {}
-impl<A: hal::Api> Access<TextureView<A>> for CommandBuffer<A> {}
 
 #[cfg(debug_assertions)]
 thread_local! {
@@ -383,7 +380,7 @@ pub trait GlobalIdentityHandlerFactory:
     // + IdentityHandlerFactory<id::QuerySetId>
     + IdentityHandlerFactory<id::BufferId>
     + IdentityHandlerFactory<id::TextureId>
-    + IdentityHandlerFactory<id::TextureViewId>
+    // + IdentityHandlerFactory<id::TextureViewId>
     // + IdentityHandlerFactory<id::SamplerId>
     + IdentityHandlerFactory<id::SurfaceId>
 {
@@ -610,7 +607,7 @@ pub struct HubReport {
     // pub query_sets: StorageReport,
     pub buffers: StorageReport,
     pub textures: StorageReport,
-    pub texture_views: StorageReport,
+    // pub texture_views: StorageReport,
     // pub samplers: StorageReport,
 }
 
@@ -644,7 +641,7 @@ pub struct Hub<A: hal::Api, F: GlobalIdentityHandlerFactory> {
     // pub query_sets: Registry<QuerySet<A>, id::QuerySetId, F>,
     pub buffers: Registry<Buffer<A>, id::BufferId, F>,
     pub textures: Registry<Texture<A>, id::TextureId, F>,
-    pub texture_views: Registry<TextureView<A>, id::TextureViewId, F>,
+    // pub texture_views: Registry<TextureView<A>, id::TextureViewId, F>,
     // pub samplers: Registry<Sampler<A>, id::SamplerId, F>,
 }
 
@@ -671,7 +668,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             // query_sets: Registry::new(A::VARIANT, factory),
             buffers: Registry::new(A::VARIANT, factory),
             textures: Registry::new(A::VARIANT, factory),
-            texture_views: Registry::new(A::VARIANT, factory),
+            // texture_views: Registry::new(A::VARIANT, factory),
             // samplers: Registry::new(A::VARIANT, factory),
         }
     }
@@ -707,7 +704,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                 }
             }
         } */
-        {
+        /* {
             let textures = self.textures.data.read();
             for element in self.texture_views.data.write().map.drain(..) {
                 if let Element::Occupied(texture_view, _) = element {
@@ -717,7 +714,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                     }
                 }
             }
-        }
+        } */
 
         for element in self.textures.data.write().map.drain(..) {
             if let Element::Occupied(texture, _) = element {
@@ -845,7 +842,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             // query_sets: self.query_sets.data.read().generate_report(),
             buffers: self.buffers.data.read().generate_report(),
             textures: self.textures.data.read().generate_report(),
-            texture_views: self.texture_views.data.read().generate_report(),
+            // texture_views: self.texture_views.data.read().generate_report(),
             // samplers: self.samplers.data.read().generate_report(),
         }
     }

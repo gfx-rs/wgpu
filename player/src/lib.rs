@@ -121,7 +121,6 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 // Will go away soon (deletions).
                 | DestroyBuffer(_)
                 | DestroyTexture(_)
-                | DestroyTextureView(_)
                 => {},
                 // Resource creation.
                 //
@@ -148,8 +147,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 CreateSampler(_id, desc) =>
                     desc.trace_resources(find_last_use).unwrap_or_else(|e| match e {}),
                 GetSurfaceTexture { id: _, parent_id: _ } => {
-                    // FIXME: Uncomment when TextureView is Arc'd.
-                    // find_last_use(Cached::TextureView(id)).unwrap_or_else(|e| match e {});
+                    // FIXME: Uncomment when Texture is Arc'd.
+                    // find_last_use(Cached::Texture(id)).unwrap_or_else(|e| match e {});
                     // // FIXME: Uncomment when Surface is Arc'd.
                     // // find_last_use(Cached::Surface(parent_id)).unwrap_or_else(|e| match e {});
                 },
@@ -252,6 +251,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     target_colors,
                     target_depth_stencil,
                 } => {
+                    let target_depth_stencil = target_depth_stencil.map(|id| (cache, id).try_into().unwrap());
+                    let target_colors: Vec<_> = target_colors.iter().map(|&at| (cache, at).try_into().unwrap()).collect();
                     self.command_encoder_run_render_pass_impl::<A>(
                         encoder,
                         base.try_from_owned(cache).unwrap().as_ref(),
@@ -284,7 +285,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
 
         let action = match action {
             PlayAction::Destroy(id) => {
-                cache.destroy(&id);
+                let resource = cache.destroy(&id);
+                log::info!("Destroy: {:?} (resource_id={:?})", resource, id);
                 return;
             },
             PlayAction::Trace(action) => action,
@@ -301,6 +303,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             Action::Assign { trace_id, resource_id } => {
                 let resource = trace_cache.destroy(&trace_id);
+                log::info!("Assign: {:?} (resource_id={:?}, trace_id={:?}), ", resource, resource_id, trace_id);
                 assert_eq!(
                     cache.insert(resource_id, resource),
                     None,
@@ -339,14 +342,16 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 desc,
             } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.texture_create_view::<A>(parent_id, &desc, id);
-                if let Some(e) = error {
-                    panic!("{:?}", e);
-                }
+                let texture_view = self.texture_create_view::<A>(parent_id, &desc).unwrap();
+                assert_eq!(
+                    trace_cache.create::<wgc::resource::TextureView<wgc::api::Empty>>(id, texture_view),
+                    None,
+                    "Id was created twice without being destroyed.",
+                );
             }
-            Action::DestroyTextureView(id) => {
+            /* Action::DestroyTextureView(id) => {
                 self.texture_view_drop::<A>(id, true).unwrap();
-            }
+            } */
             Action::CreateSampler(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 let sampler = Self::device_create_sampler::<A>(device.to_owned(), &desc).unwrap();

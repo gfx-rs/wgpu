@@ -338,7 +338,7 @@ trait Context<'a> : Debug + Send + Sized + Sync {
     fn buffer_drop(&self, buffer: &Self::BufferId);
     fn texture_destroy(&self, buffer: &Self::TextureId);
     fn texture_drop(&self, texture: &Self::TextureId);
-    fn texture_view_drop(&self, texture_view: &Self::TextureViewId);
+    // fn texture_view_drop(&self, texture_view: &Self::TextureViewId);
     // fn sampler_drop(/*&self, */sampler: /*&*/&mut Self::SamplerId);
     // fn query_set_drop(/*&self, */query_set: /*&*/&mut Self::QuerySetId);
     // fn bind_group_drop(/*&self, */bind_group: /*&*/&mut Self::BindGroupId);
@@ -403,10 +403,10 @@ trait Context<'a> : Debug + Send + Sized + Sync {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::ComputePassId,
     );
-    fn command_encoder_begin_render_pass<'b>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
-        desc: &RenderPassDescriptor<'b, '_>,
+        desc: &RenderPassDescriptor<'a, '_>,
     ) -> Self::RenderPassId;
     fn command_encoder_end_render_pass(
         &self,
@@ -2116,13 +2116,13 @@ impl Drop for Texture {
     }
 }
 
-impl Drop for TextureView {
+/* impl Drop for TextureView {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.texture_view_drop(&self.id);
         }
     }
-}
+} */
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
@@ -2139,9 +2139,9 @@ impl CommandEncoder {
     /// Begins recording of a render pass.
     ///
     /// This function returns a [`RenderPass`] object which records a single render pass.
-    pub fn begin_render_pass<'a, 'b>(
+    pub fn begin_render_pass<'a>(
         &'a mut self,
-        desc: &RenderPassDescriptor<'b, '_>,
+        desc: &RenderPassDescriptor<'a, '_>,
     ) -> RenderPass<'a> {
         let id = self.id.as_ref().unwrap();
         RenderPass {

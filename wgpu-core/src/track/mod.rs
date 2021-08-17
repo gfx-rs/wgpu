@@ -894,7 +894,7 @@ pub enum UsageConflict {
 pub(crate) struct TrackerSet<A: hal::Api> {
     pub buffers: ResourceTracker<BufferState>,
     pub textures: ResourceTracker<TextureState>,
-    pub views: ResourceTracker<PhantomData<id::TextureViewId>>,
+    pub views: ResourceTracker2<PhantomData<id::ValidId2<crate::resource::TextureView<A>>>>,
     pub bind_groups: ResourceTracker2<PhantomData<id::ValidId2<crate::binding_model::BindGroup<A>>>>,
     pub samplers: ResourceTracker2<PhantomData<id::ValidId2<crate::resource::Sampler<A>>>>,
     pub compute_pipes: ResourceTracker2<PhantomData<id::ValidId2<crate::pipeline::ComputePipeline<A>>>>,
@@ -909,7 +909,7 @@ impl<A: hal::Api> TrackerSet<A> {
         Self {
             buffers: ResourceTracker::new(backend),
             textures: ResourceTracker::new(backend),
-            views: ResourceTracker::new(backend),
+            views: ResourceTracker2::new(),
             bind_groups: ResourceTracker2::new(),
             samplers: ResourceTracker2::new(),
             compute_pipes: ResourceTracker2::new(),
@@ -967,7 +967,7 @@ impl<A: hal::Api> TrackerSet<A> {
         // FIXME: Uncomment each line as it becomes available.
         // self.buffers.used().try_for_each(|id| f(id::Cached::upcast(id)))?;
         // self.textures.used().try_for_each(|id| f(id::Cached::upcast(id)))?;
-        // self.views.used().try_for_each(|id| f(id::Cached::upcast(id)))?
+        self.views.used().try_for_each(|id| f(crate::resource::TextureView::upcast(id.borrow())))?;
         self.bind_groups.used().try_for_each(|id| f(crate::binding_model::BindGroup::upcast(id.borrow())))?;
         self.samplers.used().try_for_each(|id| f(crate::resource::Sampler::upcast(id.borrow())))?;
         self.compute_pipes.used().try_for_each(|id| f(crate::pipeline::ComputePipeline::upcast(id.borrow())))?;

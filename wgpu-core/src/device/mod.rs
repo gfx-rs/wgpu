@@ -19,7 +19,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
 
-use std::{borrow::Cow, iter, marker::PhantomData, mem::{self, ManuallyDrop}, ops::Range, ptr, sync::atomic::Ordering};
+use std::{borrow::Cow, iter, mem::{self, ManuallyDrop}, ops::Range, ptr, sync::atomic::Ordering};
 
 mod life;
 pub mod queue;
@@ -384,7 +384,7 @@ impl<A: HalApi> Device<A> {
 
         // let (mut trackers, token) = token.lock(&self.trackers);
 
-        let (mut life_tracker, mut token) = token.lock::<LifetimeTracker<A>>(&self.queue.life_tracker);
+        let (mut life_tracker, _) = token.lock::<LifetimeTracker<A>>(&self.queue.life_tracker);
 
         life_tracker
             .suspected_resources
@@ -398,7 +398,7 @@ impl<A: HalApi> Device<A> {
             // bgl_guard,
             buffer_guard,
             texture_guard,
-            &mut token,
+            // &mut token,
         );
         life_tracker.triage_mapped(/*hub, &mut token, */buffer_guard);
 
@@ -441,12 +441,12 @@ impl<A: HalApi> Device<A> {
         // that it references for destruction in the next GC pass.
         {
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-            let (texture_guard, mut token) = hub.textures.read(&mut token);
+            let (texture_guard, _) = hub.textures.read(&mut token);
             // let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             // let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
             // let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
             // let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-            let (texture_view_guard, _) = hub.texture_views.read(&mut token);
+            // let (texture_view_guard, _) = hub.texture_views.read(&mut token);
             // let (sampler_guard, _) = hub.samplers.read(&mut token);
 
             for id in trackers.buffers.used() {
@@ -459,11 +459,11 @@ impl<A: HalApi> Device<A> {
                     temp_suspected.textures.push(id);
                 }
             }
-            for id in trackers.views.used() {
+            /* for id in trackers.views.used() {
                 if texture_view_guard[id].life_guard.ref_count.is_none() {
                     temp_suspected.texture_views.push(id);
                 }
-            }
+            } */
             /* for id in trackers.bind_groups.used() {
                 let bind_group = id.borrow();
                 if let Some(id) = id.get_mut() {
@@ -824,7 +824,8 @@ impl<A: HalApi> Device<A> {
         };
 
         Ok(resource::TextureView {
-            raw,
+            raw: ManuallyDrop::new(raw),
+            device_id: id::ValidId2::clone(&texture.device_id),
             parent_id: Stored {
                 value: id::Valid(texture_id),
                 ref_count: texture.life_guard.add_ref(),
@@ -848,7 +849,7 @@ impl<A: HalApi> Device<A> {
                 hal::TextureUses::RESOURCE
             },
             selector,
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            // life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
     }
 }
@@ -1385,8 +1386,8 @@ impl<A: HalApi> id::ValidId2<Device<A>> {
         // }
 
         let (buffer_guard, mut token) = hub.buffers.read(token);
-        let (texture_guard, mut token) = hub.textures.read(&mut token); //skip token
-        let (texture_view_guard, _) = hub.texture_views.read(&mut token);
+        let (texture_guard, _) = hub.textures.read(&mut token); //skip token
+        // let (texture_view_guard, _) = hub.texture_views.read(&mut token);
         // let (sampler_guard, _) = hub.samplers.read(&mut token);
 
         let mut used_buffer_ranges = Vec::new();
@@ -1451,7 +1452,7 @@ impl<A: HalApi> id::ValidId2<Device<A>> {
                     }
                     res_index
                 }
-                Br::Sampler(ref id) => {
+                Br::Sampler(id) => {
                     match decl.ty {
                         wgt::BindingType::Sampler {
                             filtering,
@@ -1459,7 +1460,7 @@ impl<A: HalApi> id::ValidId2<Device<A>> {
                         } => {
                             let sampler = used
                                 .samplers
-                                .use_extend(/*&*sampler_guard, */ *id, (), ())
+                                .use_extend(/*&*sampler_guard, */ id, (), ())
                                 .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {});
                                 // .map_err(|_| Error::InvalidSampler(id))?;
 
@@ -1496,8 +1497,9 @@ impl<A: HalApi> id::ValidId2<Device<A>> {
                 Br::TextureView(id) => {
                     let view = used
                         .views
-                        .use_extend(&*texture_view_guard, id, (), ())
-                        .map_err(|_| Error::InvalidTextureView(id))?;
+                        .use_extend(/*&*texture_view_guard, */ id, (), ())
+                        .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {});
+                        // .map_err(|_| Error::InvalidTextureView(id))?;
                     let (pub_usage, internal_use) = Device::texture_use_parameters(
                         binding,
                         decl,
@@ -1520,7 +1522,7 @@ impl<A: HalApi> id::ValidId2<Device<A>> {
 
                     let res_index = hal_textures.len();
                     hal_textures.push(hal::TextureBinding {
-                        view: &view.raw,
+                        view: &*view.as_ref().raw,
                         usage: internal_use,
                     });
                     res_index
@@ -1543,8 +1545,9 @@ impl<A: HalApi> id::ValidId2<Device<A>> {
                     for &id in bindings_array.iter() {
                         let view = used
                             .views
-                            .use_extend(&*texture_view_guard, id, (), ())
-                            .map_err(|_| Error::InvalidTextureView(id))?;
+                            .use_extend(/*&*texture_view_guard, */ id, (), ())
+                            .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                            /*.map_err(|_| Error::InvalidTextureView(id))?*/;
                         let (pub_usage, internal_use) = Device::texture_use_parameters(
                             binding, decl, view,
                             "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray"
@@ -1564,7 +1567,7 @@ impl<A: HalApi> id::ValidId2<Device<A>> {
                         check_texture_usage(texture.desc.usage, pub_usage)?;
 
                         hal_textures.push(hal::TextureBinding {
-                            view: &view.raw,
+                            view: &*view.as_ref().raw,
                             usage: internal_use,
                         });
                     }
@@ -1630,7 +1633,7 @@ impl<A: HalApi> Device<A> {
     fn texture_use_parameters(
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        view: &crate::resource::TextureView<A>,
+        view: id::IdGuard<A, crate::resource::TextureView<Dummy>>,
         expected: &'static str,
     ) -> Result<(wgt::TextureUsages, hal::TextureUses), binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
@@ -3353,16 +3356,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         texture_id: id::TextureId,
         desc: &resource::TextureViewDescriptor,
-        id_in: Input<G, id::TextureViewId>,
-    ) -> (id::TextureViewId, Option<resource::CreateTextureViewError>) {
+        // id_in: Input<G, id::TextureViewId>,
+    ) -> /*(id::TextureViewId, Option<resource::CreateTextureViewError>)*/Result<id::TextureViewId, resource::CreateTextureViewError> {
         profiling::scope!("create_view", "Texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
-        let fid = hub.texture_views.prepare(id_in);
+        // let fid = hub.texture_views.prepare(id_in);
 
         // let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (texture_guard, mut token) = hub.textures.read(&mut token);
+        let (texture_guard, _) = hub.textures.read(&mut token);
         let error = loop {
             let texture = match texture_guard.get(texture_id) {
                 Ok(texture) => texture,
@@ -3370,19 +3373,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let device = /*&device_guard[*/&*texture.device_id/*.value]*/;
             #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
+            let trace_id = if let Some(ref trace) = device.trace {
+                let id = trace.create_resource_id();
                 trace.add(trace::Action::CreateTextureView {
-                    id: fid.id(),
+                    id/*: fid.id()*/,
                     parent_id: texture_id,
                     desc: desc.clone(),
                 });
-            }
+                id
+            } else {
+                trace::TraceResourceId::default()
+            };
 
             let view = match device.create_texture_view(texture, texture_id, desc) {
                 Ok(view) => view,
                 Err(e) => break e,
             };
-            let ref_count = view.life_guard.add_ref();
+            let id = id::ValidId2::<resource::TextureView<A>>::new(std::sync::Arc::new(view));
+
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = id.device_id.trace {
+                let resource_id = id::TextureViewId::as_usize::<A>(&id);
+                trace.add(trace::Action::Assign { trace_id, resource_id });
+            }
+            /* let ref_count = view.life_guard.add_ref();
             let id = fid.assign(view, &mut token);
 
             token
@@ -3390,18 +3404,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .views
                 .init(id, ref_count, PhantomData)
                 .unwrap();
-            return (id.0, None);
+            return (id.0, None); */
+            let id = id::Id2::upcast_backend(id);
+            return Ok(id);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
-        (id, Some(error))
+        /* let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error)) */
+        Err(error)
     }
 
-    pub fn texture_view_label<A: HalApi>(&self, id: id::TextureViewId) -> String {
-        A::hub(self).texture_views.label_for_resource(id)
+    pub fn texture_view_label<A: HalApi>(/*&self, */id: id::IdGuard<'_, A, resource::TextureView<Dummy>>) -> String {
+        // A::hub(self).texture_views.label_for_resource(id)
+        crate::hub::label_for_resource(&*id)
     }
 
-    pub fn texture_view_drop<A: HalApi>(
+    /* pub fn texture_view_drop<A: HalApi>(
         &self,
         texture_view_id: id::TextureViewId,
         wait: bool,
@@ -3452,7 +3470,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
         Ok(())
-    }
+    } */
 
     pub fn device_create_sampler<A: HalApi>(
         // &self,
@@ -4833,7 +4851,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
         let (mut texture_guard, mut token) = hub.textures.write(&mut token);
         let (mut trackers_guard, mut token) = token.lock(&device.trackers);
-        let (mut life_tracker, mut token) = token.lock(&device.queue.life_tracker);
+        let (mut life_tracker, _) = token.lock(&device.queue.life_tracker);
         life_tracker.triage_suspected(
             hub,
             &mut *trackers_guard,
@@ -4842,7 +4860,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // &mut *bgl_guard,
             &mut *buffer_guard,
             &mut *texture_guard,
-            &mut token,
+            // &mut token,
         );
         Ok(())
     }

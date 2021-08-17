@@ -295,7 +295,6 @@ impl<A: hal::Api, F: AllResources<A>> RenderCommand<A, F> {
     }
 }
 
-
 impl<A: hal::Api, F: AllResources<A>> Clone for RenderCommand<A, F>
     where
         <F as Hkt<crate::binding_model::BindGroup<A>>>::Output: Copy,
@@ -316,6 +315,7 @@ impl<A: hal::Api, F: AllResources<A>> Copy for RenderCommand<A, F>
         <F as Hkt<crate::command::RenderBundle<A>>>::Output: Copy,
 {}
 
+#[cfg(feature = "trace")]
 impl<A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
     super::FromCommand<RenderCommand<A, F>> for RenderCommand<B, G>
     where
@@ -367,6 +367,7 @@ impl<A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
     }
 }
 
+#[cfg(feature = "trace")]
 impl<'a, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
     super::FromCommand<&'a RenderCommand<A, F>> for RenderCommand<B, G>
     where

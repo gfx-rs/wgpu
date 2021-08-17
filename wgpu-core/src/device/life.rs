@@ -5,7 +5,7 @@ use crate::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError,
     },
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Storage, Token},
+    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Storage},
     id, resource,
     track::TrackerSet,
     RefCount, Stored, SubmissionIndex,
@@ -17,14 +17,14 @@ use hal::Device as _;
 use parking_lot::Mutex;
 use thiserror::Error;
 
-use std::{mem, sync::atomic::Ordering};
+use std::sync::atomic::Ordering;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
 pub(crate) struct SuspectedResources/*<A: hal::Api>*/ {
     pub(super) buffers: Vec<id::Valid<id::BufferId>>,
     pub(super) textures: Vec<id::Valid<id::TextureId>>,
-    pub(super) texture_views: Vec<id::Valid<id::TextureViewId>>,
+    // pub(super) texture_views: Vec<id::Valid<id::TextureViewId>>,
     // pub(super) samplers: Vec<id::Valid<id::SamplerId>>,
     // pub(super) bind_groups: Vec<id::Valid<id::BindGroupId>>,
     // pub(super) bind_groups: Vec<impl IntoIterator<Item=id::ValidId2<super::binding_model::BindGroup<A>>>>,
@@ -42,7 +42,7 @@ impl/*<A: hal::Api>*/ SuspectedResources/*<A>*/ {
     pub(super) fn clear(&mut self) {
         self.buffers.clear();
         self.textures.clear();
-        self.texture_views.clear();
+        // self.texture_views.clear();
         // self.samplers.clear();
         // self.bind_groups.clear();
         // self.compute_pipelines.clear();
@@ -56,7 +56,7 @@ impl/*<A: hal::Api>*/ SuspectedResources/*<A>*/ {
     pub(super) fn extend(&mut self, other: &Self) {
         self.buffers.extend_from_slice(&other.buffers);
         self.textures.extend_from_slice(&other.textures);
-        self.texture_views.extend_from_slice(&other.texture_views);
+        // self.texture_views.extend_from_slice(&other.texture_views);
         // self.samplers.extend_from_slice(&other.samplers);
         // self.bind_groups.extend_from_slice(&other.bind_groups);
         /* self.compute_pipelines
@@ -91,7 +91,7 @@ struct NonReferencedResources<A: hal::Api> {
     textures: Vec<A::Texture>,
     // Note: we keep the associated ID here in order to be able to check
     // at any point what resources are used in a submission.
-    texture_views: Vec<(id::Valid<id::TextureViewId>, A::TextureView)>,
+    // texture_views: Vec<(id::Valid<id::TextureViewId>, A::TextureView)>,
     // samplers: Vec<A::Sampler>,
     // bind_groups: Vec<A::BindGroup>,
     // trackers: TrackerSet<A>,
@@ -107,7 +107,7 @@ impl<A: HalApi> NonReferencedResources<A> {
         Self {
             buffers: Vec::new(),
             textures: Vec::new(),
-            texture_views: Vec::new(),
+            // texture_views: Vec::new(),
             // samplers: Vec::new(),
             // bind_groups: Vec::new(),
             // trackers: TrackerSet::new(A::VARIANT),
@@ -124,7 +124,7 @@ impl<A: hal::Api> NonReferencedResources<A> {
     fn extend(&mut self, other: Self) {
         self.buffers.extend(other.buffers);
         self.textures.extend(other.textures);
-        self.texture_views.extend(other.texture_views);
+        // self.texture_views.extend(other.texture_views);
         // self.samplers.extend(other.samplers);
         // self.bind_groups.extend(other.bind_groups);
 
@@ -146,9 +146,9 @@ impl<A: hal::Api> NonReferencedResources<A> {
         for raw in self.textures.drain(..) {
             device.destroy_texture(raw);
         }
-        for (_, raw) in self.texture_views.drain(..) {
+        /* for (_, raw) in self.texture_views.drain(..) {
             device.destroy_texture_view(raw);
-        }
+        } */
         /* for raw in self.samplers.drain(..) {
             device.destroy_sampler(raw);
         } */
@@ -350,7 +350,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         // bgl_guard: &mut Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
         buffer_guard: &mut Storage<resource::Buffer<A>, id::BufferId>,
         texture_guard: &mut Storage<resource::Texture<A>, id::TextureId>,
-        token: &mut Token<LifetimeTracker<A>>,
+        // token: &mut Token<LifetimeTracker<A>>,
     ) {
         profiling::scope!("triage_suspected");
 
@@ -397,7 +397,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             }
         } */
 
-        if !self.suspected_resources.texture_views.is_empty() {
+        /* if !self.suspected_resources.texture_views.is_empty() {
             let (mut guard, _) = hub.texture_views.write(token);
             // let mut trackers = trackers.lock();
 
@@ -422,7 +422,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
             }
             self.suspected_resources.texture_views = list;
-        }
+        } */
 
         if !self.suspected_resources.textures.is_empty() {
             // let (mut guard, _) = hub.textures.write(token);

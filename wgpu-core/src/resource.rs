@@ -321,9 +321,10 @@ impl HalTextureViewDescriptor {
 
 #[derive(Debug)]
 pub struct TextureView<A: hal::Api> {
-    pub(crate) raw: A::TextureView,
+    pub(crate) raw: ManuallyDrop<A::TextureView>,
     pub(crate) parent_id: Stored<TextureId>,
-    //TODO: store device_id for quick access?
+    //TODO: Consider *not* storing device_id once Texture is Arc'd.
+    pub(crate) device_id: id::ValidId2<Device<A>>,
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) extent: wgt::Extent3d,
@@ -331,7 +332,7 @@ pub struct TextureView<A: hal::Api> {
     /// Internal use of this texture view when used as `BindingType::Texture`.
     pub(crate) sampled_internal_use: hal::TextureUses,
     pub(crate) selector: TextureSelector,
-    pub(crate) life_guard: LifeGuard,
+    // pub(crate) life_guard: LifeGuard,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -372,14 +373,12 @@ pub enum CreateTextureViewError {
     },
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum TextureViewDestroyError {}
-
 impl<A: hal::Api> Resource for TextureView<A> {
     const TYPE: &'static str = "TextureView";
 
     fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+        unimplemented!("FIXME: This method needs to go away!")
+        // &self.life_guard
     }
 
     #[inline]
@@ -396,11 +395,27 @@ impl<A: hal::Api> Resource for TextureView<A> {
     }
 }
 
-impl<A: hal::Api> Borrow<()> for TextureView<A> {
+impl<A: hal::Api> Drop for TextureView<A> {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            unsafe {
+                // Safety: the texture view is uniquely owned, so it is unused by any CPU resources,
+                // and the rest of the program guarantees that it's not used by any GPU resources
+                // either (absent panics), so calling destroy_texture_view is safe.
+                //
+                // We never use self.raw again after calling ManuallyDrop::take, so calling that
+                // is also safe.
+                self.device_id.raw.destroy_texture_view(ManuallyDrop::take(&mut self.raw));
+            }
+        }
+    }
+}
+
+/* impl<A: hal::Api> Borrow<()> for TextureView<A> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
-}
+} */
 
 /// Describes a [`Sampler`]
 #[derive(Clone, Debug, PartialEq)]

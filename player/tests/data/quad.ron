@@ -34,10 +34,11 @@
             ),
         )),
         CreateTextureView(
-            id: Id(0, 1, Empty),
+            id: 0x08,
             parent_id: Id(0, 1, Empty),
             desc: (),
         ),
+        Assign(trace_id: 0x08, resource_id: 0x08),
         CreateBuffer(
             Id(0, 1, Empty),
             (
@@ -99,7 +100,7 @@
                 ),
                 target_colors: [
                     (
-                        view: Id(0, 1, Empty),
+                        view: 0x08,
                         resolve_target: None,
                         channel: (
                             load_op: Clear,

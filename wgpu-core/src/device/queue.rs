@@ -586,7 +586,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut used_surface_textures = track::ResourceTracker::new(A::VARIANT);
 
             {
-                let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
+                let (mut command_buffer_guard, _) = hub.command_buffers.write(&mut token);
 
                 // NOTE: If the iterator lies about its upper bound, the worst thing that can
                 // happen is that no commands are processed; we don't rely on this for memory
@@ -600,7 +600,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
                     // let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
                     // let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-                    let (texture_view_guard, _) = hub.texture_views.read(&mut token);
+                    // let (texture_view_guard, _) = hub.texture_views.read(&mut token);
                     // let (sampler_guard, _) = hub.samplers.read(&mut token);
 
                     //TODO: if multiple command buffers are submitted, we can re-use the last
@@ -701,25 +701,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 temp_suspected.textures.push(id);
                             }
                         }
-                        for id in baked.trackers.views.used() {
+                        /* for id in baked.trackers.views.used() {
                             if !texture_view_guard[id].life_guard.use_at(submit_index) {
                                 temp_suspected.texture_views.push(id);
                             }
-                        }
-                        for bg in baked.trackers.bind_groups.used() {
+                        } */
+                        /* for bg in baked.trackers.bind_groups.used() {
                             /* if !bg.life_guard.use_at(submit_index) {
                                 temp_suspected.bind_groups.push(id);
                             } */
                             // We need to update the submission indices for the contained
                             // state-less (!) resources as well, so that they don't get
                             // deleted too early if the parent bind group goes out of scope.
-                            for sub_id in bg.used.views.used() {
+                            /* for sub_id in bg.used.views.used() {
                                 texture_view_guard[sub_id].life_guard.use_at(submit_index);
-                            }
+                            } */
                             /* for sub_id in bg.used.samplers.used() {
                                 sampler_guard[sub_id].life_guard.use_at(submit_index);
                             } */
-                        }
+                        } */
                         assert!(baked.trackers.samplers.is_empty());
                         /* for id in baked.trackers.compute_pipes.used() {
                             if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
@@ -784,7 +784,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let temp_tracker_set = TrackerSet {
                             buffers: ResourceTracker::new(backend),
                             textures: ResourceTracker::new(backend),
-                            views: ResourceTracker::new(backend),
+                            views: baked.trackers.views,
                             bind_groups: baked.trackers.bind_groups,
                             samplers: baked.trackers.samplers,
                             compute_pipes: baked.trackers.compute_pipes,

@@ -12,7 +12,7 @@ use crate::{
     },
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
-    id,
+    id::{self, AllResources, Hkt},
     memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{Texture, TextureView},
@@ -22,6 +22,8 @@ use crate::{
     },
     Label, Stored,
 };
+#[cfg(feature = "trace")]
+use super::FromCommand;
 
 use arrayvec::ArrayVec;
 use hal::CommandEncoder as _;
@@ -64,7 +66,7 @@ pub enum StoreOp {
 
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct PassChannel<V> {
@@ -97,33 +99,177 @@ impl<V> PassChannel<V> {
 
 /// Describes a color attachment to a render pass.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(/*Clone, */Debug/*, PartialEq*/)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub struct RenderPassColorAttachment {
+pub struct RenderPassColorAttachment<A: hal::Api, F: AllResources<A>> {
     /// The view to use as an attachment.
-    pub view: id::TextureViewId,
+    #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+      serde(bound(serialize = "<F as Hkt<TextureView<A>>>::Output: serde::Serialize")))]
+    #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+      serde(bound(deserialize = "<F as Hkt<TextureView<A>>>::Output: serde::Deserialize<'de>")))]
+    pub view: /*id::TextureViewId*/<F as Hkt<TextureView<A>>>::Output,
     /// The view that will receive the resolved output if multisampling is used.
-    pub resolve_target: Option<id::TextureViewId>,
+    #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+      serde(bound(serialize = "<F as Hkt<TextureView<A>>>::Output: serde::Serialize")))]
+    #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+      serde(bound(deserialize = "<F as Hkt<TextureView<A>>>::Output: serde::Deserialize<'de>")))]
+    pub resolve_target: Option</*id::TextureViewId*/<F as Hkt<TextureView<A>>>::Output>,
     /// What operations will be performed on this color attachment.
     pub channel: PassChannel<Color>,
 }
 
+impl<A: hal::Api, F: AllResources<A>> RenderPassColorAttachment<A, F> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, E>(
+        &'b self,
+        mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where id::Cached<A, &'b F>: 'b,
+    {
+        use id::Cached;
+
+        self.resolve_target.as_ref().map(|rt| f(Cached::TextureView(rt))).transpose()?;
+        f(Cached::TextureView(&self.view))
+    }
+}
+
+impl<A: hal::Api, F: AllResources<A>> Clone for RenderPassColorAttachment<A, F>
+    where
+        <F as Hkt<TextureView<A>>>::Output: Copy,
+{
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<A: hal::Api, F: AllResources<A>> Copy for RenderPassColorAttachment<A, F>
+    where
+        <F as Hkt<TextureView<A>>>::Output: Copy,
+{}
+
+#[cfg(feature = "trace")]
+impl<A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    FromCommand<RenderPassColorAttachment<A, F>> for RenderPassColorAttachment<B, G>
+    where
+        <F as Hkt<TextureView<A>>>::Output:
+            Into<<G as Hkt<TextureView<B>>>::Output>,
+{
+    fn from(command: RenderPassColorAttachment<A, F>) -> Self {
+        RenderPassColorAttachment {
+            view: command.view.into(),
+            resolve_target: command.resolve_target.map(Into::into),
+            channel: command.channel,
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl<'a, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>, E>
+    core::convert::TryFrom<(&'a id::IdCache2, RenderPassColorAttachment<A, F>)> for RenderPassColorAttachment<B, G>
+    where
+        (&'a id::IdCache2, <F as Hkt<TextureView<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<TextureView<B>>>::Output, Error=E>,
+{
+    type Error = /*<(&'a id::IdCache2,  <F as Hkt<crate::binding_model::BindGroup<A>>>::Output)
+                  as core::convert::TryInto<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output>>::Error*/E;
+
+    fn try_from((cache, command): (&'a id::IdCache2, RenderPassColorAttachment<A, F>)) -> Result<Self, Self::Error> {
+        use core::convert::TryInto;
+
+        Ok(RenderPassColorAttachment {
+            view: (cache, command.view).try_into()?,
+            resolve_target: command.resolve_target.map(|rt| (cache, rt).try_into()).transpose()?,
+            channel: command.channel,
+        })
+    }
+}
+
 /// Describes a depth/stencil attachment to a render pass.
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(/*Clone, */Debug/*, PartialEq*/)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub struct RenderPassDepthStencilAttachment {
+pub struct RenderPassDepthStencilAttachment<A: hal::Api, F: AllResources<A>> {
     /// The view to use as an attachment.
-    pub view: id::TextureViewId,
+    #[cfg_attr(any(feature = "serial-pass", feature = "trace"),
+      serde(bound(serialize = "<F as Hkt<TextureView<A>>>::Output: serde::Serialize")))]
+    #[cfg_attr(any(feature = "serial-pass", feature = "replay"),
+      serde(bound(deserialize = "<F as Hkt<TextureView<A>>>::Output: serde::Deserialize<'de>")))]
+    pub view: /*id::TextureViewId*/<F as Hkt<TextureView<A>>>::Output,
     /// What operations will be performed on the depth part of the attachment.
     pub depth: PassChannel<f32>,
     /// What operations will be performed on the stencil part of the attachment.
     pub stencil: PassChannel<u32>,
 }
+impl<A: hal::Api, F: AllResources<A>> RenderPassDepthStencilAttachment<A, F> {
+    #[inline]
+    #[cfg(feature = "replay")]
+    pub fn trace_resources<'b, E>(
+        &'b self,
+        mut f: impl FnMut(id::Cached<A, &'b F>) -> Result<(), E>,
+    ) -> Result<(), E>
+        where id::Cached<A, &'b F>: 'b,
+    {
+        use id::Cached;
 
-impl RenderPassDepthStencilAttachment {
+        f(Cached::TextureView(&self.view))
+    }
+}
+
+impl<A: hal::Api, F: AllResources<A>> Clone for RenderPassDepthStencilAttachment<A, F>
+    where
+        <F as Hkt<TextureView<A>>>::Output: Copy,
+{
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<A: hal::Api, F: AllResources<A>> Copy for RenderPassDepthStencilAttachment<A, F>
+    where
+        <F as Hkt<TextureView<A>>>::Output: Copy,
+{}
+
+#[cfg(feature = "trace")]
+impl<A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>>
+    FromCommand<RenderPassDepthStencilAttachment<A, F>> for RenderPassDepthStencilAttachment<B, G>
+    where
+        <F as Hkt<TextureView<A>>>::Output:
+            Into<<G as Hkt<TextureView<B>>>::Output>,
+{
+    fn from(command: RenderPassDepthStencilAttachment<A, F>) -> Self {
+        RenderPassDepthStencilAttachment {
+            view: command.view.into(),
+            depth: command.depth,
+            stencil: command.stencil,
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl<'a, A: hal::Api, B: hal::Api, F: AllResources<A>, G: AllResources<B>, E>
+    core::convert::TryFrom<(&'a id::IdCache2, RenderPassDepthStencilAttachment<A, F>)> for RenderPassDepthStencilAttachment<B, G>
+    where
+        (&'a id::IdCache2, <F as Hkt<TextureView<A>>>::Output):
+            core::convert::TryInto<<G as Hkt<TextureView<B>>>::Output, Error=E>,
+{
+    type Error = /*<(&'a id::IdCache2,  <F as Hkt<crate::binding_model::BindGroup<A>>>::Output)
+                  as core::convert::TryInto<<G as Hkt<crate::binding_model::BindGroup<B>>>::Output>>::Error*/E;
+
+    fn try_from((cache, command): (&'a id::IdCache2, RenderPassDepthStencilAttachment<A, F>)) -> Result<Self, Self::Error> {
+        use core::convert::TryInto;
+
+        Ok(RenderPassDepthStencilAttachment {
+            view: (cache, command.view).try_into()?,
+            depth: command.depth,
+            stencil: command.stencil,
+        })
+    }
+}
+
+impl<A: hal::Api, F: AllResources<A>> RenderPassDepthStencilAttachment<A, F> {
     fn is_read_only(&self, aspects: hal::FormatAspects) -> Result<bool, RenderPassErrorInner> {
         if aspects.contains(hal::FormatAspects::DEPTH) && !self.depth.read_only {
             return Ok(false);
@@ -142,13 +288,14 @@ impl RenderPassDepthStencilAttachment {
 }
 
 /// Describes the attachments of a render pass.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct RenderPassDescriptor<'a> {
-    pub label: Label<'a>,
+#[derive(/*Clone, */Debug, Default/*, PartialEq*/)]
+pub struct RenderPassDescriptor<'a, 'b> {
+    pub label: Label<'b>,
     /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [RenderPassColorAttachment]>,
+    pub color_attachments: Cow<'b, [RenderPassColorAttachment<hal::api::Empty, &'a id::IdCon>]>,
+    /* pub color_attachments: /*Cow<'a, [*/ArrayVec<RenderPassColorAttachment<hal::api::Empty, &'a id::IdCon>, { hal::MAX_COLOR_TARGETS }>/*]>*/,*/
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
+    pub depth_stencil_attachment: Option<&'b RenderPassDepthStencilAttachment<hal::api::Empty, &'a id::IdCon>>,
 }
 
 type RenderPassCommand<'a> = RenderCommand<hal::api::Empty, /*F*/&'a id::IdCon>;
@@ -157,12 +304,12 @@ type RenderPassCommand<'a> = RenderCommand<hal::api::Empty, /*F*/&'a id::IdCon>;
 pub struct RenderPass<'a/*, F: AllResources<hal::api::Empty>*/> {
     base: BasePass<RenderPassCommand</*F*/'a>>,
     parent_id: id::CommandEncoderId,
-    color_targets: ArrayVec<RenderPassColorAttachment, { hal::MAX_COLOR_TARGETS }>,
-    depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
+    color_targets: ArrayVec<RenderPassColorAttachment<hal::api::Empty, &'a id::IdCon>, { hal::MAX_COLOR_TARGETS }>,
+    depth_stencil_target: Option<RenderPassDepthStencilAttachment<hal::api::Empty, &'a id::IdCon>>,
 }
 
 impl<'a> RenderPass<'a> {
-    pub fn new(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
+    pub fn new<'b>(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor<'a, 'b>) -> Self {
         Self {
             base: BasePass::new(&desc.label),
             parent_id,
@@ -179,8 +326,8 @@ impl<'a> RenderPass<'a> {
     pub fn into_command(self) -> crate::device::trace::Command {
         crate::device::trace::Command::RunRenderPass {
             base: BasePass::from_owned(self.base),
-            target_colors: self.color_targets.into_iter().collect(),
-            target_depth_stencil: self.depth_stencil_target,
+            target_colors: self.color_targets.into_iter().map(FromCommand::from).collect(),
+            target_depth_stencil: self.depth_stencil_target.map(FromCommand::from),
         }
     }
 
@@ -461,8 +608,8 @@ pub enum RenderPassErrorInner {
 impl PrettyError for RenderPassErrorInner {
     fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
         fmt.error(self);
-        if let Self::InvalidAttachment(id) = *self {
-            fmt.texture_view_label_with_key(&id, "attachment");
+        if let Self::InvalidAttachment(id) = self {
+            fmt.texture_view_label_with_key(id, "attachment");
         };
     }
 }
@@ -536,13 +683,13 @@ struct RenderPassInfo<'a, A: hal::Api> {
     _phantom: PhantomData<A>,
 }
 
-impl<'a, A: HalApi> RenderPassInfo<'a, A> {
+impl<'a, A: HalApi + 'a> RenderPassInfo<'a, A> {
     fn start(
         label: Option<&str>,
-        color_attachments: &[RenderPassColorAttachment],
-        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
+        color_attachments: &[RenderPassColorAttachment<hal::api::Empty, &'a id::IdCon>],
+        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment<hal::api::Empty, &'a id::IdCon>>,
         cmd_buf: &mut CommandBuffer<A>,
-        view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
+        // view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
 
@@ -557,7 +704,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut extent = None;
         let mut sample_count = 0;
 
-        let mut add_view = |view: &TextureView<A>, type_name| {
+        let mut add_view = |view: id::IdGuard<A, TextureView<id::Dummy>>, type_name| {
             if let Some(ex) = extent {
                 if ex != view.extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
@@ -580,15 +727,22 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             Ok(())
         };
 
-        let mut colors = ArrayVec::<hal::ColorAttachment<A>, { hal::MAX_COLOR_TARGETS }>::new();
+        let mut hal_colors = ArrayVec::<hal::ColorAttachment<A>, { hal::MAX_COLOR_TARGETS }>::new();
+        let mut hal_depth_stencil = None;
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {
+            let at_view = id::expect_backend(&at.view);
+            // FIXME: if at_view.device() != self.device() {
+            //   return Err(RenderPassErrorInner::InvalidAttachment(id::Id2::upcast(at.view.clone())))
+            //          .map_pass_err(scope);
+            // }
             let view = cmd_buf
                 .trackers
                 .views
-                .use_extend(&*view_guard, at.view, (), ())
-                .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+                .use_extend(/*&*view_guard, at.view*/at_view, (), ())
+                .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                /* .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))? */;
             add_view(view, "depth")?;
 
             let ds_aspects = view.desc.aspects();
@@ -604,11 +758,12 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             } else {
                 hal::TextureUses::DEPTH_STENCIL_WRITE
             };
-            render_attachments.push(view.to_render_attachment(usage));
+            render_attachments.push(view.as_ref().to_render_attachment(usage));
 
-            depth_stencil = Some(hal::DepthStencilAttachment {
+            depth_stencil = Some(at_view);
+            hal_depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
-                    view: &view.raw,
+                    view: &*view.as_ref().raw,
                     usage,
                 },
                 depth_ops: at.depth.hal_ops(),
@@ -617,12 +772,20 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             });
         }
 
+        let mut colors = ArrayVec::new();
+        let mut resolves = ArrayVec::new();
         for at in color_attachments {
+            let at_view = id::expect_backend(&at.view);
+            // FIXME: if at_view.device() != self.device() {
+            //   return Err(RenderPassErrorInner::InvalidAttachment(id::Id2::upcast(at.view.clone())))
+            //          .map_pass_err(scope);
+            // }
             let color_view = cmd_buf
                 .trackers
                 .views
-                .use_extend(&*view_guard, at.view, (), ())
-                .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+                .use_extend(/*&*view_guard, at.view*/at_view, (), ())
+                .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                /* .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))? */;
             add_view(color_view, "color")?;
 
             if !color_view
@@ -636,15 +799,21 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             }
 
             render_attachments
-                .push(color_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
+                .push(color_view.as_ref().to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
             let mut hal_resolve_target = None;
-            if let Some(resolve_target) = at.resolve_target {
+            if let Some(resolve_target) = &at.resolve_target {
+                let resolve_view_ = id::expect_backend(resolve_target);
+                // FIXME: if at.resolve_target.device() != self.device() {
+                //   return Err(RenderPassErrorInner::InvalidAttachment(id::Id2::upcast(at.resolve_target.clone())))
+                //          .map_pass_err(scope);
+                // }
                 let resolve_view = cmd_buf
                     .trackers
                     .views
-                    .use_extend(&*view_guard, resolve_target, (), ())
-                    .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
+                    .use_extend(/*&*view_guard, resolve_target*/resolve_view_, (), ())
+                    .unwrap_or_else(|UseExtendError2::Conflict(err)| match err {})
+                    /*.map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?*/;
                 if color_view.extent != resolve_view.extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
                         previous: (attachment_type_name, extent.unwrap_or_default()),
@@ -659,23 +828,25 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }
 
                 render_attachments
-                    .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
+                    .push(resolve_view.as_ref().to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
-                    view: &resolve_view.raw,
+                    view: &*resolve_view.as_ref().raw,
                     usage: hal::TextureUses::COLOR_TARGET,
                 });
+                resolves.push(resolve_view_);
             }
 
-            colors.push(hal::ColorAttachment {
+            hal_colors.push(hal::ColorAttachment {
                 target: hal::Attachment {
-                    view: &color_view.raw,
+                    view: &color_view.as_ref().raw,
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
                 ops: at.channel.hal_ops(),
                 clear_value: at.channel.clear_value,
             });
+            colors.push(at_view);
         }
 
         if sample_count != 1 && sample_count != 4 {
@@ -683,16 +854,16 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
 
         let view_data = AttachmentData {
-            colors: color_attachments
+            colors/*: color_attachments
                 .iter()
-                .map(|at| view_guard.get(at.view).unwrap())
-                .collect(),
-            resolves: color_attachments
+                .map(|at| /*view_guard.get(*/at.view/*).unwrap()*/)
+                .collect()*/,
+            resolves/*: color_attachments
                 .iter()
                 .filter_map(|at| at.resolve_target)
-                .map(|attachment| view_guard.get(attachment).unwrap())
-                .collect(),
-            depth_stencil: depth_stencil_attachment.map(|at| view_guard.get(at.view).unwrap()),
+                // .map(|attachment| /*view_guard.get(*/attachment/*).unwrap()*/)
+                .collect()*/,
+            depth_stencil/*: depth_stencil_attachment.map(|at| /*view_guard.get(*/at.view/*).unwrap()*/)*/,
         };
         let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
         let context = RenderPassContext {
@@ -704,8 +875,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             label,
             extent,
             sample_count,
-            color_attachments: &colors,
-            depth_stencil_attachment: depth_stencil,
+            color_attachments: &hal_colors,
+            depth_stencil_attachment: hal_depth_stencil,
         };
         unsafe {
             cmd_buf.encoder.raw.begin_render_pass(&hal_desc);
@@ -754,7 +925,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_run_render_pass<'a, A: HalApi>(
+    pub fn command_encoder_run_render_pass<'a, A: HalApi + 'a>(
         &self,
         encoder_id: id::CommandEncoderId,
         pass: &RenderPass<'a>,
@@ -768,12 +939,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     #[doc(hidden)]
-    pub fn command_encoder_run_render_pass_impl<'a, A: HalApi>(
+    pub fn command_encoder_run_render_pass_impl<'a, A: HalApi + 'a>(
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<RenderPassCommand<'a>>,
-        color_attachments: &[RenderPassColorAttachment],
-        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
+        color_attachments: &[RenderPassColorAttachment<hal::api::Empty, &'a id::IdCon>],
+        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment<hal::api::Empty, &'a id::IdCon>>,
     ) -> Result<(), RenderPassError> {
         profiling::scope!("run_render_pass", "CommandEncoder");
         let scope = || PassErrorScope::Pass(encoder_id);
@@ -786,7 +957,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             // read-only lock guard
-            let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
+            let (mut cmb_guard, _) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
                 CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
@@ -799,8 +970,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref mut list) = cmd_buf.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
                     base: BasePass::from_ref(base),
-                    target_colors: color_attachments.to_vec(),
-                    target_depth_stencil: depth_stencil_attachment.cloned(),
+                    target_colors: color_attachments.into_iter().copied().map(FromCommand::from).collect(),
+                    target_depth_stencil: depth_stencil_attachment.copied().map(FromCommand::from),
                 });
             }
 
@@ -814,7 +985,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             // let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
             // let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-            let (view_guard, _) = hub.texture_views.read(&mut token);
+            // let (view_guard, _) = hub.texture_views.read(&mut token);
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -826,7 +997,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 color_attachments,
                 depth_stencil_attachment,
                 cmd_buf,
-                &*view_guard,
+                // &*view_guard,
             )
             .map_pass_err(scope)?;
             let device = /*&device_guard[*/&*cmd_buf.device_id/*.value]*/;

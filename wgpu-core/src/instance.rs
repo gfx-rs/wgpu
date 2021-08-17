@@ -696,7 +696,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 surface_dx11
             }));
             #[cfg(gl)]
-            let adapters_gl = map((&instance.gl, /*&id_gl*/Backend::Gles, {
+            let adapters_gl = map((&instance.gl, /*&id_gl*/Backend::Gl, {
                 fn surface_gl(surf: &SurfaceRaw) -> Option<&HalSurface<hal::api::Gles>> {
                     surf.gl.as_ref()
                 }

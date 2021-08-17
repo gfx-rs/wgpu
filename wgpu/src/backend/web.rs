@@ -1653,9 +1653,9 @@ impl<'a> crate::Context<'a> for Context<'a> {
         texture.0.destroy();
     }
 
-    fn texture_view_drop(&self, _texture_view: &Self::TextureViewId) {
+    /* fn texture_view_drop(&self, _texture_view: &Self::TextureViewId) {
         // Dropped automatically
-    }
+    } */
 
     /* fn sampler_drop(/*&self, */_sampler: &mut Self::SamplerId) {
         // Dropped automatically

@@ -858,7 +858,7 @@ impl<'a> crate::Context<'a> for Context {
     type ShaderModuleId = Option<wgc::id::ShaderModuleId>;
     type BindGroupLayoutId = Option<wgc::id::BindGroupLayoutId>;
     type BindGroupId = Option<wgc::id::BindGroupId>;
-    type TextureViewId = wgc::id::TextureViewId;
+    type TextureViewId = Option<wgc::id::TextureViewId>;
     type SamplerId = Option<wgc::id::SamplerId>;
     type QuerySetId = Option<wgc::id::QuerySetId>;
     type BufferId = Buffer;
@@ -1237,18 +1237,42 @@ impl<'a> crate::Context<'a> for Context {
     ) -> Self::BindGroupId {
         use wgc::binding_model as bm;
         let device_id = device.id.clone();
+        let cause = 'error: loop {
         wgc::gfx_select2!(Arc device_id => {
-        let mut arrayed_texture_views = Vec::new();
+        let error = core::cell::Cell::new(None::<bm::CreateBindGroupError>);
+        // FIXME: Handle overflow.
+        let texture_views_len: usize = desc.entries.iter().map(|entry|
+            if let BindingResource::TextureViewArray(array) = entry.resource { array.len() } else { 0usize }
+        ).sum();
+        // FIXME: Handle overflow.
+        let buffers_len: usize = desc.entries.iter().map(|entry|
+            if let BindingResource::BufferArray(array) = entry.resource { array.len() } else { 0usize }
+        ).sum();
+        let mut arrayed_texture_views = Vec::with_capacity(texture_views_len);
         if device.features.contains(Features::TEXTURE_BINDING_ARRAY) {
             // gather all the array view IDs first
             for entry in desc.entries.iter() {
                 if let BindingResource::TextureViewArray(array) = entry.resource {
-                    arrayed_texture_views.extend(array.iter().map(|view| view.id));
+                    let initial_len = arrayed_texture_views.len();
+                    arrayed_texture_views.extend(
+                        array.iter()
+                        // FIXME: Use map_while here instead: .map_while(|view| view.id.as_ref())
+                        .take_while(|view| view.id.is_some())
+                        .map(|view| view.id.as_ref().unwrap())
+                        .map(wgc::id::expect_backend)
+                    );
+                    let index = arrayed_texture_views.len() - initial_len;
+                    if index != array.len() {
+                        break 'error bm::CreateBindGroupError::InvalidTextureViewArray {
+                            binding: entry.binding,
+                            index,
+                        }
+                    }
                 }
             }
         }
 
-        let mut arrayed_buffer_bindings = Vec::new();
+        let mut arrayed_buffer_bindings = Vec::with_capacity(buffers_len);
         if device.features.contains(Features::BUFFER_BINDING_ARRAY) {
             // gather all the buffers first
             for entry in desc.entries.iter() {
@@ -1264,8 +1288,6 @@ impl<'a> crate::Context<'a> for Context {
 
         // let mut remaining_arrayed_texture_views = &arrayed_texture_views[..];
         // let mut remaining_arrayed_buffer_bindings = &arrayed_buffer_bindings[..];
-
-        let error = core::cell::Cell::new(None::<bm::CreateBindGroupError>);
         let entries = desc
             .entries
             .iter()
@@ -1295,10 +1317,16 @@ impl<'a> crate::Context<'a> for Context {
                                 error.set(Some(bm::CreateBindGroupError::InvalidSampler(entry.binding)));
                                 return None;
                             };
-                            bm::BindingResource::Sampler(wgc::id::expect_backend(&sampler))
+                            bm::BindingResource::Sampler(wgc::id::expect_backend(sampler))
                         },
                         BindingResource::TextureView(texture_view) => {
-                            bm::BindingResource::TextureView(texture_view.id)
+                            let texture_view = if let Some(texture_view) = &texture_view.id {
+                                texture_view
+                            } else {
+                                error.set(Some(bm::CreateBindGroupError::InvalidTextureView(entry.binding)));
+                                return None;
+                            };
+                            bm::BindingResource::TextureView(wgc::id::expect_backend(texture_view))
                         }
                         BindingResource::TextureViewArray(array) => {
                             let slice = &remaining_arrayed_texture_views[..array.len()];
@@ -1328,17 +1356,8 @@ impl<'a> crate::Context<'a> for Context {
             )
         })();
         match (result, error.into_inner()) {
-            (Ok(id), None) => Some(id),
-            (_, Some(cause)) | (Err(cause), None) => {
-                self.handle_error(
-                    &device.error_sink,
-                    cause,
-                    LABEL,
-                    desc.label,
-                    "Device::create_bind_group",
-                );
-                None
-            },
+            (Ok(id), None) => return Some(id),
+            (_, Some(cause)) | (Err(cause), None) => break cause,
         }
         /* if let Some(cause) = error {
             self.handle_error(
@@ -1350,7 +1369,15 @@ impl<'a> crate::Context<'a> for Context {
             );
         }
         id*/
-        })
+        })};
+        self.handle_error(
+            &device.error_sink,
+            cause,
+            LABEL,
+            desc.label,
+            "Device::create_bind_group",
+        );
+        None
     }
 
     fn device_create_pipeline_layout(
@@ -1874,19 +1901,21 @@ impl<'a> crate::Context<'a> for Context {
             },
         };
         let global = &self.global;
-        let (id, error) = wgc::gfx_select!(
-            texture.id => global.texture_create_view(texture.id, &descriptor, PhantomData)
-        );
-        if let Some(cause) = error {
-            self.handle_error(
-                &texture.error_sink,
-                cause,
-                LABEL,
-                desc.label,
-                "Texture::create_view",
-            );
+        /*let (id, error) = */match wgc::gfx_select!(
+            texture.id => global.texture_create_view(texture.id, &descriptor/*, PhantomData*/)
+        ) {
+            Ok(id) => Some(id),
+            /*if let Some(cause) = error*/Err(cause) => {
+                self.handle_error(
+                    &texture.error_sink,
+                    cause,
+                    LABEL,
+                    desc.label,
+                    "Texture::create_view",
+                );
+                None
+            },
         }
-        id
     }
 
     fn surface_drop(&self, _surface: &Self::SurfaceId) {
@@ -1921,13 +1950,13 @@ impl<'a> crate::Context<'a> for Context {
         let global = &self.global;
         wgc::gfx_select!(texture.id => global.texture_drop(texture.id, false))
     }
-    fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
+    /* fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
         let global = &self.global;
         match wgc::gfx_select!(*texture_view => global.texture_view_drop(*texture_view, false)) {
             Ok(()) => (),
             Err(err) => self.handle_error_fatal(err, "TextureView::drop"),
         }
-    }
+    } */
     /* fn sampler_drop(/*&self, */_sampler: &mut Self::SamplerId) {
         // NOTE: Dropping the query set should handle removal itself, so we only use this for
         // tracing.
@@ -2239,27 +2268,39 @@ impl<'a> crate::Context<'a> for Context {
         }
     }
 
-    fn command_encoder_begin_render_pass<'b>(
+    fn command_encoder_begin_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
-        desc: &crate::RenderPassDescriptor<'b, '_>,
+        desc: &crate::RenderPassDescriptor<'a, '_>,
     ) -> Self::RenderPassId {
         let colors = desc
             .color_attachments
             .iter()
-            .map(|ca| wgc::command::RenderPassColorAttachment {
-                view: ca.view.id,
-                resolve_target: ca.resolve_target.map(|rt| rt.id),
-                channel: map_pass_channel(Some(&ca.ops)),
+            // FIXME: Make sure whole encoder becomes an error if the view or resolve target
+            // is an error (.filter_map => .map plus some other stuff).
+            .filter_map(|ca| {
+                let view = ca.view.id.as_ref()?;
+                let resolve_target = if let Some(rt) = &ca.resolve_target {
+                    Some(rt.id.as_ref()?)
+                } else {
+                    None
+                };
+                Some(wgc::command::RenderPassColorAttachment {
+                    view,
+                    resolve_target,
+                    channel: map_pass_channel(Some(&ca.ops)),
+                })
             })
             .collect::<ArrayVec<_, { hal::MAX_COLOR_TARGETS }>>();
 
-        let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
-            wgc::command::RenderPassDepthStencilAttachment {
-                view: dsa.view.id,
+        // FIXME: Make sure whole encoder becomes an error if the depth stencil attachment is an
+        // error (.and_then => .map plus some other stuff).
+        let depth_stencil = desc.depth_stencil_attachment.as_ref().and_then(|dsa| {
+            Some(wgc::command::RenderPassDepthStencilAttachment {
+                view: dsa.view.id.as_ref()?,
                 depth: map_pass_channel(dsa.depth_ops.as_ref()),
                 stencil: map_pass_channel(dsa.stencil_ops.as_ref()),
-            }
+            })
         });
 
         wgc::command::RenderPass::new(

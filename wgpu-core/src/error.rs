@@ -68,8 +68,7 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     pub fn texture_view_label_with_key(&mut self, id: &crate::id::TextureViewId, key: &str) {
-        let global = self.global;
-        let label = gfx_select!(id => global.texture_view_label(*id));
+        let label = gfx_select2!(&Arc id => Global::<IdentityManagerFactory>::texture_view_label(id));
         self.label(key, &label);
     }
 
