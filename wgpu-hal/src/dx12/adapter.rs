@@ -176,7 +176,8 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::NON_FILL_POLYGON_MODE
             | wgt::Features::VERTEX_WRITABLE_STORAGE
-            | wgt::Features::TIMESTAMP_QUERY;
+            | wgt::Features::TIMESTAMP_QUERY
+            | wgt::Features::TEXTURE_COMPRESSION_BC;
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
         // Alternatively, we could allocate a buffer for the query set,
