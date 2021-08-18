@@ -62,9 +62,9 @@ dependencies = [
 
 [[package]]
 name = "ash"
-version = "0.32.1"
+version = "0.33.0+1.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06063a002a77d2734631db74e8f4ce7148b77fe522e6bca46f2ae7774fd48112"
+checksum = "a2142f1fa77cc4d24ffd2f24dc84f88ce5b1e588d524f10fb473a04b93aef14f"
 dependencies = [
  "libloading 0.7.0",
 ]
@@ -458,8 +458,9 @@ dependencies = [
 
 [[package]]
 name = "d3d12"
-version = "0.4.0"
-source = "git+https://github.com/gfx-rs/d3d12-rs?rev=79f29c8#79f29c8809d3dc4f97785815567e5efda20e639a"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2daefd788d1e96e0a9d66dee4b828b883509bc3ea9ce30665f04c3246372690c"
 dependencies = [
  "bitflags",
  "libloading 0.7.0",
@@ -679,8 +680,9 @@ dependencies = [
 
 [[package]]
 name = "glow"
-version = "0.10.0"
-source = "git+https://github.com/grovesNL/glow?rev=0864897a28bbdd43f89f4fd8fdd4ed781b719f8a#0864897a28bbdd43f89f4fd8fdd4ed781b719f8a"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f04649123493bc2483cbef4daddb45d40bbdae5adb221a63a23efdb0cc99520"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -690,9 +692,9 @@ dependencies = [
 
 [[package]]
 name = "gpu-alloc"
-version = "0.4.7"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc1b6ca374e81862526786d9cb42357ce03706ed1b8761730caafd02ab91f3a"
+checksum = "c481459c44304a1dfed23bd650bb3912e12c9f77d7871f86d7ed7c9730a52e79"
 dependencies = [
  "bitflags",
  "gpu-alloc-types",
@@ -709,9 +711,9 @@ dependencies = [
 
 [[package]]
 name = "gpu-descriptor"
-version = "0.1.1"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a70f1e87a3840ed6a3e99e02c2b861e4dbdf26f0d07e38f42ea5aff46cfce2"
+checksum = "d7a237f0419ab10d17006d55c62ac4f689a6bf52c75d3f38b8361d249e8d4b0b"
 dependencies = [
  "bitflags",
  "gpu-descriptor-types",
@@ -907,8 +909,9 @@ dependencies = [
 
 [[package]]
 name = "metal"
-version = "0.22.0"
-source = "git+https://github.com/gfx-rs/metal-rs?rev=08cc15a3be5a57fc07bb27091eff3569dd60cfd3#08cc15a3be5a57fc07bb27091eff3569dd60cfd3"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79d7d769f1c104b8388294d6594d491d2e21240636f5f94d37f8a0f3d7904450"
 dependencies = [
  "bitflags",
  "block",
@@ -963,8 +966,9 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "0.5.0"
-source = "git+https://github.com/gfx-rs/naga?rev=4e181d6#4e181d6af4b758c11482b633b3a54b58bfbd4a59"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c70938c43114c164e8ef86e608b39e68d3e4c8bca25e105bf4a3e788042a804a"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -975,7 +979,7 @@ dependencies = [
  "petgraph",
  "rose_tree",
  "serde",
- "spirv_headers",
+ "spirv",
  "thiserror",
 ]
 
@@ -1506,10 +1510,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "spirv_headers"
-version = "1.5.0"
+name = "spirv"
+version = "0.2.0+1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f5b132530b1ac069df335577e3581765995cba5a13995cdbbdbc8fb057c532c"
+checksum = "246bfa38fe3db3f1dfc8ca5a2cdeb7348c78be2112740cc0ec8ef18b6d94f830"
 dependencies = [
  "bitflags",
  "num-traits 0.2.14",
@@ -1768,7 +1772,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "arrayvec",
  "async-executor",
@@ -1802,7 +1806,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -1824,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "arrayvec",
  "ash",
@@ -1858,7 +1862,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "env_logger",
  "wgpu",
@@ -1866,7 +1870,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "bitflags",
  "serde",

@@ -1,10 +1,6 @@
 use super::conv;
 
-use ash::{
-    extensions::khr,
-    version::{DeviceV1_0, InstanceV1_0},
-    vk,
-};
+use ash::{extensions::khr, vk};
 use parking_lot::Mutex;
 
 use std::{ffi::CStr, mem, ptr, sync::Arc};

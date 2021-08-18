@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU core logic on gfx-hal"
@@ -35,19 +35,20 @@ smallvec = "1"
 thiserror = "1"
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "4e181d6"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "4e181d6"
+version = "0.6"
 features = ["wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.9"
+version = "0.10"
 
 [dependencies.hal]
 path = "../wgpu-hal"
 package = "wgpu-hal"
-version = "0.9"
+version = "0.10"
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", features = ["metal"] }
