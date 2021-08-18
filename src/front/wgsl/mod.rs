@@ -668,6 +668,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             arguments: self.arguments,
             block,
             emitter,
+            rhs: true,
         }
     }
 }
@@ -689,6 +690,9 @@ struct ExpressionContext<'input, 'temp, 'out> {
     functions: &'out Arena<crate::Function>,
     block: &'temp mut crate::Block,
     emitter: &'temp mut super::Emitter,
+    /// Wether or not the current expression is in the right hand side of an
+    /// assignemnt statement or equivalent
+    rhs: bool,
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -705,7 +709,20 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             arguments: self.arguments,
             block: self.block,
             emitter: self.emitter,
+            rhs: self.rhs,
         }
+    }
+
+    fn reborrow_rhs(&mut self) -> ExpressionContext<'a, '_, '_> {
+        let mut reborrow = self.reborrow();
+        reborrow.rhs = true;
+        reborrow
+    }
+
+    fn reborrow_lhs(&mut self) -> ExpressionContext<'a, '_, '_> {
+        let mut reborrow = self.reborrow();
+        reborrow.rhs = false;
+        reborrow
     }
 
     fn resolve_type(
@@ -1055,15 +1072,6 @@ impl std::error::Error for ParseError {
     }
 }
 
-/// The expression position in a assignment statement
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum ExprPosition {
-    /// The expression is in the left hand side of the assignment
-    Lhs,
-    /// The expression is in the right hand side of the assignment
-    Rhs,
-}
-
 pub struct Parser {
     scopes: Vec<(Scope, usize)>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
@@ -1133,9 +1141,8 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
-        let (pointer, pointer_span) = lexer.capture_span(|lexer| {
-            self.parse_singular_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)
-        })?;
+        let (pointer, pointer_span) =
+            lexer.capture_span(|lexer| self.parse_singular_expression(lexer, ctx.reborrow()))?;
         // Check if the pointer expression is to an atomic.
         // The IR uses regular `Expression::Load` and `Statement::Store` for atomic load/stores,
         // and it will not catch the use of a non-atomic variable here.
@@ -1177,7 +1184,7 @@ impl Parser {
             if !arguments.is_empty() {
                 lexer.expect(Token::Separator(','))?;
             }
-            let arg = self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+            let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
             arguments.push(arg);
         }
         lexer.close_arguments()?;
@@ -1191,12 +1198,11 @@ impl Parser {
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         lexer.open_arguments()?;
-        let pointer = self.parse_singular_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+        let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
         lexer.expect(Token::Separator(','))?;
         let ctx_span = ctx.reborrow();
-        let (value, value_span) = lexer.capture_span(|lexer| {
-            self.parse_singular_expression(lexer, ctx_span, ExprPosition::Rhs)
-        })?;
+        let (value, value_span) =
+            lexer.capture_span(|lexer| self.parse_singular_expression(lexer, ctx_span))?;
         lexer.close_arguments()?;
 
         let expression = match *ctx.resolve_type(value)? {
@@ -1233,30 +1239,29 @@ impl Parser {
         let expr = if let Some(fun) = conv::map_relational_fun(name) {
             let _ = lexer.next();
             lexer.open_arguments()?;
-            let argument =
-                self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+            let argument = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.close_arguments()?;
             crate::Expression::Relational { fun, argument }
         } else if let Some(axis) = conv::map_derivative_axis(name) {
             let _ = lexer.next();
             lexer.open_arguments()?;
-            let expr = self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+            let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
             lexer.close_arguments()?;
             crate::Expression::Derivative { axis, expr }
         } else if let Some(fun) = conv::map_standard_fun(name) {
             let _ = lexer.next();
             lexer.open_arguments()?;
             let arg_count = fun.argument_count();
-            let arg = self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+            let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
             let arg1 = if arg_count > 1 {
                 lexer.expect(Token::Separator(','))?;
-                Some(self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?)
+                Some(self.parse_general_expression(lexer, ctx.reborrow())?)
             } else {
                 None
             };
             let arg2 = if arg_count > 2 {
                 lexer.expect(Token::Separator(','))?;
-                Some(self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?)
+                Some(self.parse_general_expression(lexer, ctx.reborrow())?)
             } else {
                 None
             };
@@ -1272,14 +1277,11 @@ impl Parser {
                 "select" => {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
-                    let reject =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let reject = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
-                    let accept =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let accept = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
-                    let condition =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let condition = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.close_arguments()?;
                     crate::Expression::Select {
                         condition,
@@ -1290,8 +1292,7 @@ impl Parser {
                 "arrayLength" => {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
-                    let array =
-                        self.parse_singular_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let array = self.parse_singular_expression(lexer, ctx.reborrow())?;
                     lexer.close_arguments()?;
                     crate::Expression::ArrayLength(array)
                 }
@@ -1363,14 +1364,12 @@ impl Parser {
                 "atomicCompareExchangeWeak" => {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
-                    let pointer =
-                        self.parse_singular_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
-                    let cmp =
-                        self.parse_singular_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let cmp = self.parse_singular_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
                     let (value, value_span) = lexer.capture_span(|lexer| {
-                        self.parse_singular_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)
+                        self.parse_singular_expression(lexer, ctx.reborrow())
                     })?;
                     lexer.close_arguments()?;
 
@@ -1407,16 +1406,11 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
-                    let coordinate =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let sc = ctx.prepare_sampling(image_name, image_span)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
-                        Some(self.parse_general_expression(
-                            lexer,
-                            ctx.reborrow(),
-                            ExprPosition::Rhs,
-                        )?)
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                     } else {
                         None
                     };
@@ -1443,22 +1437,16 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
-                    let coordinate =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let sc = ctx.prepare_sampling(image_name, image_span)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
-                        Some(self.parse_general_expression(
-                            lexer,
-                            ctx.reborrow(),
-                            ExprPosition::Rhs,
-                        )?)
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                     } else {
                         None
                     };
                     lexer.expect(Token::Separator(','))?;
-                    let level =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let level = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
                         Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
@@ -1482,22 +1470,16 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
-                    let coordinate =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let sc = ctx.prepare_sampling(image_name, image_span)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
-                        Some(self.parse_general_expression(
-                            lexer,
-                            ctx.reborrow(),
-                            ExprPosition::Rhs,
-                        )?)
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                     } else {
                         None
                     };
                     lexer.expect(Token::Separator(','))?;
-                    let bias =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let bias = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
                         Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
@@ -1521,25 +1503,18 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
-                    let coordinate =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let sc = ctx.prepare_sampling(image_name, image_span)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
-                        Some(self.parse_general_expression(
-                            lexer,
-                            ctx.reborrow(),
-                            ExprPosition::Rhs,
-                        )?)
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                     } else {
                         None
                     };
                     lexer.expect(Token::Separator(','))?;
-                    let x =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let x = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
-                    let y =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let y = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
                         Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
@@ -1563,22 +1538,16 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
-                    let coordinate =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let sc = ctx.prepare_sampling(image_name, image_span)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
-                        Some(self.parse_general_expression(
-                            lexer,
-                            ctx.reborrow(),
-                            ExprPosition::Rhs,
-                        )?)
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                     } else {
                         None
                     };
                     lexer.expect(Token::Separator(','))?;
-                    let reference =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let reference = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
                         Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
@@ -1602,22 +1571,16 @@ impl Parser {
                     lexer.expect(Token::Separator(','))?;
                     let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
                     lexer.expect(Token::Separator(','))?;
-                    let coordinate =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let sc = ctx.prepare_sampling(image_name, image_span)?;
                     let array_index = if sc.arrayed {
                         lexer.expect(Token::Separator(','))?;
-                        Some(self.parse_general_expression(
-                            lexer,
-                            ctx.reborrow(),
-                            ExprPosition::Rhs,
-                        )?)
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                     } else {
                         None
                     };
                     lexer.expect(Token::Separator(','))?;
-                    let reference =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let reference = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let offset = if lexer.skip(Token::Separator(',')) {
                         Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
                     } else {
@@ -1640,19 +1603,14 @@ impl Parser {
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     let image = ctx.lookup_ident.lookup(image_name, image_span.clone())?;
                     lexer.expect(Token::Separator(','))?;
-                    let coordinate =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let (class, arrayed) = match *ctx.resolve_type(image)? {
                         crate::TypeInner::Image { class, arrayed, .. } => (class, arrayed),
                         _ => return Err(Error::BadTexture(image_span)),
                     };
                     let array_index = if arrayed {
                         lexer.expect(Token::Separator(','))?;
-                        Some(self.parse_general_expression(
-                            lexer,
-                            ctx.reborrow(),
-                            ExprPosition::Rhs,
-                        )?)
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                     } else {
                         None
                     };
@@ -1661,11 +1619,7 @@ impl Parser {
                         // it's the MSAA index for multi-sampled, and LOD for the others
                         crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => {
                             lexer.expect(Token::Separator(','))?;
-                            Some(self.parse_general_expression(
-                                lexer,
-                                ctx.reborrow(),
-                                ExprPosition::Rhs,
-                            )?)
+                            Some(self.parse_general_expression(lexer, ctx.reborrow())?)
                         }
                     };
                     lexer.close_arguments()?;
@@ -1682,11 +1636,7 @@ impl Parser {
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
                     let image = ctx.lookup_ident.lookup(image_name, image_span)?;
                     let level = if lexer.skip(Token::Separator(',')) {
-                        let expr = self.parse_general_expression(
-                            lexer,
-                            ctx.reborrow(),
-                            ExprPosition::Rhs,
-                        )?;
+                        let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
                         Some(expr)
                     } else {
                         None
@@ -1790,13 +1740,11 @@ impl Parser {
         let mut components = Vec::new();
         let (last_component, arguments_span) = lexer.capture_span(|lexer| {
             lexer.open_arguments()?;
-            let mut last_component =
-                self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+            let mut last_component = self.parse_general_expression(lexer, ctx.reborrow())?;
 
             while lexer.next_argument()? {
                 components.push(last_component);
-                last_component =
-                    self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                last_component = self.parse_general_expression(lexer, ctx.reborrow())?;
             }
 
             Ok(last_component)
@@ -1962,14 +1910,13 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
-        pos: ExprPosition,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         // Will be popped inside match, possibly inside parse_function_call_inner or parse_construction
         self.push_scope(Scope::PrimaryExpr, lexer);
         let handle = match lexer.peek() {
             (Token::Paren('('), _) => {
                 let _ = lexer.next();
-                let expr = self.parse_general_expression(lexer, ctx.reborrow(), pos)?;
+                let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
                 lexer.expect(Token::Paren(')'))?;
                 self.pop_scope(lexer);
                 expr
@@ -1992,14 +1939,14 @@ impl Parser {
                     self.pop_scope(lexer);
                     expr
                 } else if let Some(expr) =
-                    self.parse_function_call_inner(lexer, word, ctx.reborrow())?
+                    self.parse_function_call_inner(lexer, word, ctx.reborrow_rhs())?
                 {
                     //TODO: resolve the duplicate call in `parse_singular_expression`
                     self.pop_scope(lexer);
                     expr
                 } else {
                     let _ = lexer.next();
-                    if let Some(expr) = self.parse_construction(lexer, word, ctx.reborrow())? {
+                    if let Some(expr) = self.parse_construction(lexer, word, ctx.reborrow_rhs())? {
                         expr
                     } else {
                         return Err(Error::UnknownIdent(span, word));
@@ -2100,8 +2047,7 @@ impl Parser {
                 }
                 Token::Paren('[') => {
                     let (_, open_brace_span) = lexer.next();
-                    let index =
-                        self.parse_general_expression(lexer, ctx.reborrow(), ExprPosition::Rhs)?;
+                    let index = self.parse_general_expression(lexer, ctx.reborrow_rhs())?;
                     let close_brace_span = lexer.expect_span(Token::Paren(']'))?;
 
                     if let crate::Expression::Constant(constant) = ctx.expressions[index] {
@@ -2152,7 +2098,6 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
-        pos: ExprPosition,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         let start = lexer.current_byte_offset();
         self.push_scope(Scope::SingularExpr, lexer);
@@ -2162,7 +2107,7 @@ impl Parser {
                 let _ = lexer.next();
                 let expr = crate::Expression::Unary {
                     op: crate::UnaryOperator::Negate,
-                    expr: self.parse_singular_expression(lexer, ctx.reborrow(), pos)?,
+                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
                 };
                 let span = self.peek_scope(lexer);
                 (
@@ -2174,7 +2119,7 @@ impl Parser {
                 let _ = lexer.next();
                 let expr = crate::Expression::Unary {
                     op: crate::UnaryOperator::Not,
-                    expr: self.parse_singular_expression(lexer, ctx.reborrow(), pos)?,
+                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
                 };
                 let span = self.peek_scope(lexer);
                 (
@@ -2184,27 +2129,27 @@ impl Parser {
             }
             Token::Operation('*') => {
                 let _ = lexer.next();
-                let pointer = self.parse_singular_expression(lexer, ctx.reborrow(), pos)?;
+                let pointer = self.parse_primary_expression(lexer, ctx.reborrow())?;
                 let span = self.peek_scope(lexer);
                 (
                     false,
-                    match pos {
-                        ExprPosition::Rhs => ctx.expressions.append(
+                    match ctx.rhs {
+                        true => ctx.expressions.append(
                             crate::Expression::Load { pointer },
                             NagaSpan::ByteRange(span),
                         ),
-                        ExprPosition::Lhs => pointer,
+                        false => pointer,
                     },
                 )
             }
             Token::Operation('&') => {
                 let _ = lexer.next();
-                let handle = self.parse_primary_expression(lexer, ctx.reborrow(), pos)?;
+                let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
                 (false, handle)
             }
             _ => {
-                let handle = self.parse_primary_expression(lexer, ctx.reborrow(), pos)?;
-                (ExprPosition::Rhs == pos, handle)
+                let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                (ctx.rhs, handle)
             }
         };
 
@@ -2217,7 +2162,6 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: ExpressionContext<'a, '_, '_>,
-        pos: ExprPosition,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         // equality_expression
         context.parse_binary_op(
@@ -2279,7 +2223,7 @@ impl Parser {
                                                 _ => None,
                                             },
                                             |lexer, context| {
-                                                self.parse_singular_expression(lexer, context, pos)
+                                                self.parse_singular_expression(lexer, context)
                                             },
                                         )
                                     },
@@ -2296,7 +2240,6 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: ExpressionContext<'a, '_, '_>,
-        pos: ExprPosition,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.push_scope(Scope::GeneralExpr, lexer);
         // logical_or_expression
@@ -2343,7 +2286,7 @@ impl Parser {
                                                 _ => None,
                                             },
                                             |lexer, context| {
-                                                self.parse_equality_expression(lexer, context, pos)
+                                                self.parse_equality_expression(lexer, context)
                                             },
                                         )
                                     },
@@ -2906,10 +2849,9 @@ impl Parser {
     ) -> Result<(), Error<'a>> {
         let span_start = lexer.current_byte_offset();
         context.emitter.start(context.expressions);
-        let pointer =
-            self.parse_singular_expression(lexer, context.reborrow(), ExprPosition::Lhs)?;
+        let pointer = self.parse_singular_expression(lexer, context.reborrow_lhs())?;
         lexer.expect(Token::Operation('='))?;
-        let value = self.parse_general_expression(lexer, context.reborrow(), ExprPosition::Rhs)?;
+        let value = self.parse_general_expression(lexer, context.reborrow())?;
         let span_end = lexer.current_byte_offset();
         context
             .block
@@ -3005,7 +2947,6 @@ impl Parser {
                         let expr_id = self.parse_general_expression(
                             lexer,
                             context.as_expression(block, &mut emitter),
-                            ExprPosition::Rhs,
                         )?;
                         lexer.expect(Token::Separator(';'))?;
                         if let Some(ty) = given_ty {
@@ -3057,7 +2998,6 @@ impl Parser {
                             let value = self.parse_general_expression(
                                 lexer,
                                 context.as_expression(block, &mut emitter),
-                                ExprPosition::Rhs,
                             )?;
                             block.extend(emitter.finish(context.expressions));
 
@@ -3152,7 +3092,6 @@ impl Parser {
                             let handle = self.parse_general_expression(
                                 lexer,
                                 context.as_expression(block, &mut emitter),
-                                ExprPosition::Rhs,
                             )?;
                             block.extend(emitter.finish(context.expressions));
                             Some(handle)
@@ -3169,7 +3108,6 @@ impl Parser {
                         let condition = self.parse_general_expression(
                             lexer,
                             context.as_expression(block, &mut emitter),
-                            ExprPosition::Rhs,
                         )?;
                         block.extend(emitter.finish(context.expressions));
                         lexer.expect(Token::Paren(')'))?;
@@ -3185,7 +3123,6 @@ impl Parser {
                             let other_condition = self.parse_general_expression(
                                 lexer,
                                 context.as_expression(block, &mut sub_emitter),
-                                ExprPosition::Rhs,
                             )?;
                             let other_emit = sub_emitter.finish(context.expressions);
                             lexer.expect(Token::Paren(')'))?;
@@ -3232,7 +3169,6 @@ impl Parser {
                         let selector = self.parse_general_expression(
                             lexer,
                             context.as_expression(block, &mut emitter),
-                            ExprPosition::Rhs,
                         )?;
                         lexer.expect(Token::Paren(')'))?;
                         block.extend(emitter.finish(context.expressions));
@@ -3355,7 +3291,6 @@ impl Parser {
                                 let condition = self.parse_general_expression(
                                     lexer,
                                     context.as_expression(&mut body, &mut emitter),
-                                    ExprPosition::Rhs,
                                 )?;
                                 lexer.expect(Token::Separator(';'))?;
                                 body.extend(emitter.finish(context.expressions));
@@ -3432,11 +3367,7 @@ impl Parser {
                         let pointer =
                             self.parse_atomic_pointer(lexer, expression_ctx.reborrow())?;
                         lexer.expect(Token::Separator(','))?;
-                        let value = self.parse_general_expression(
-                            lexer,
-                            expression_ctx,
-                            ExprPosition::Rhs,
-                        )?;
+                        let value = self.parse_general_expression(lexer, expression_ctx)?;
                         lexer.close_arguments()?;
                         block.extend(emitter.finish(context.expressions));
                         Some(crate::Statement::Store { pointer, value })
@@ -3455,14 +3386,12 @@ impl Parser {
                             crate::TypeInner::Image { arrayed, .. } => arrayed,
                             _ => return Err(Error::BadTexture(image_span)),
                         };
-                        let coordinate =
-                            self.parse_general_expression(lexer, expr_context, ExprPosition::Rhs)?;
+                        let coordinate = self.parse_general_expression(lexer, expr_context)?;
                         let array_index = if arrayed {
                             lexer.expect(Token::Separator(','))?;
                             Some(self.parse_general_expression(
                                 lexer,
                                 context.as_expression(block, &mut emitter),
-                                ExprPosition::Rhs,
                             )?)
                         } else {
                             None
@@ -3471,7 +3400,6 @@ impl Parser {
                         let value = self.parse_general_expression(
                             lexer,
                             context.as_expression(block, &mut emitter),
-                            ExprPosition::Rhs,
                         )?;
                         lexer.close_arguments()?;
                         block.extend(emitter.finish(context.expressions));
