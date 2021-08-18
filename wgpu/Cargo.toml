@@ -5,10 +5,20 @@ authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
 homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu/tree/v0.10"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
-exclude = ["etc/**/*", "examples/**/*.png", "tests/**/*", "Cargo.lock", "target/**/*"]
+exclude = [
+    "etc/**/*",
+    "examples/**/*.png",  # Image comparison test
+    "examples/**/*.dds",  # Compressed textures
+    "examples/**/*.ktx2", # Compressed textures
+    "examples/**/*.mtl",  # Material files
+    "examples/**/*.obj",  # Model files
+    "tests/**/*",
+    "Cargo.lock",
+    "target/**/*"
+]
 autotests = false
 
 [package.metadata.docs.rs]
