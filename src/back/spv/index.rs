@@ -141,7 +141,7 @@ impl<'w> BlockContext<'w> {
             }
             MaybeKnown::Computed(length_id) => {
                 // Emit code to compute the max index from the length.
-                let const_one_id = self.get_index_constant(1)?;
+                let const_one_id = self.get_index_constant(1);
                 let max_index_id = self.gen_id();
                 block.body.push(Instruction::binary(
                     spirv::Op::ISub,
@@ -196,7 +196,7 @@ impl<'w> BlockContext<'w> {
                     }
                 }
 
-                self.get_index_constant(known_max_index)?
+                self.get_index_constant(known_max_index)
             }
             MaybeKnown::Computed(max_index_id) => max_index_id,
         };
@@ -271,7 +271,7 @@ impl<'w> BlockContext<'w> {
                     }
                 }
 
-                self.get_index_constant(known_length)?
+                self.get_index_constant(known_length)
             }
             MaybeKnown::Computed(length_id) => length_id,
         };

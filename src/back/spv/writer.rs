@@ -829,7 +829,7 @@ impl Writer {
         Ok(id)
     }
 
-    pub(super) fn get_index_constant(&mut self, index: Word) -> Result<Word, Error> {
+    pub(super) fn get_index_constant(&mut self, index: Word) -> Word {
         self.get_constant_scalar(crate::ScalarValue::Uint(index as _), 4)
     }
 
@@ -837,14 +837,14 @@ impl Writer {
         &mut self,
         value: crate::ScalarValue,
         width: crate::Bytes,
-    ) -> Result<Word, Error> {
+    ) -> Word {
         if let Some(&id) = self.cached_constants.get(&(value, width)) {
-            return Ok(id);
+            return id;
         }
         let id = self.id_gen.next();
-        self.write_constant_scalar(id, &value, width, None)?;
+        self.write_constant_scalar(id, &value, width, None);
         self.cached_constants.insert((value, width), id);
-        Ok(id)
+        id
     }
 
     fn write_constant_scalar(
@@ -853,7 +853,7 @@ impl Writer {
         value: &crate::ScalarValue,
         width: crate::Bytes,
         debug_name: Option<&String>,
-    ) -> Result<(), Error> {
+    ) {
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(name) = debug_name {
                 self.debugs.push(Instruction::name(id, name));
@@ -915,7 +915,6 @@ impl Writer {
         };
 
         instruction.to_words(&mut self.logical_layout.declarations);
-        Ok(())
     }
 
     fn write_constant_composite(
@@ -1168,10 +1167,10 @@ impl Writer {
                     self.constant_ids[handle.index()] = match constant.name {
                         Some(ref name) => {
                             let id = self.id_gen.next();
-                            self.write_constant_scalar(id, value, width, Some(name))?;
+                            self.write_constant_scalar(id, value, width, Some(name));
                             id
                         }
-                        None => self.get_constant_scalar(*value, width)?,
+                        None => self.get_constant_scalar(*value, width),
                     };
                 }
             }

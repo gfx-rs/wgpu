@@ -364,12 +364,12 @@ impl BlockContext<'_> {
         self.writer.get_expression_type_id(tr)
     }
 
-    fn get_index_constant(&mut self, index: Word) -> Result<Word, Error> {
+    fn get_index_constant(&mut self, index: Word) -> Word {
         self.writer
             .get_constant_scalar(crate::ScalarValue::Uint(index as _), 4)
     }
 
-    fn get_scope_constant(&mut self, scope: Word) -> Result<Word, Error> {
+    fn get_scope_constant(&mut self, scope: Word) -> Word {
         self.writer
             .get_constant_scalar(crate::ScalarValue::Sint(scope as _), 4)
     }

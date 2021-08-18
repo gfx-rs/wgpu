@@ -54,7 +54,7 @@ impl Writer {
                     width: 4,
                     pointer_class: Some(spirv::StorageClass::Output),
                 }));
-                let index_y_id = self.get_index_constant(1)?;
+                let index_y_id = self.get_index_constant(1);
                 body.push(Instruction::access_chain(
                     float_ptr_type_id,
                     access_id,
@@ -687,8 +687,8 @@ impl<'w> BlockContext<'w> {
                             };
                         let instruction = if let Some(class) = atomic_class {
                             let (semantics, scope) = class.to_spirv_semantics_and_scope();
-                            let scope_constant_id = self.get_scope_constant(scope as u32)?;
-                            let semantics_id = self.get_index_constant(semantics.bits())?;
+                            let scope_constant_id = self.get_scope_constant(scope as u32);
+                            let semantics_id = self.get_index_constant(semantics.bits());
                             Instruction::atomic_load(
                                 result_type_id,
                                 id,
@@ -764,7 +764,7 @@ impl<'w> BlockContext<'w> {
                             }
                             Sk::Bool => unreachable!(),
                         };
-                        let zero_id = self.writer.get_constant_scalar(value, 4)?;
+                        let zero_id = self.writer.get_constant_scalar(value, 4);
 
                         Instruction::binary(op, result_type_id, id, expr_id, zero_id)
                     }
@@ -932,7 +932,7 @@ impl<'w> BlockContext<'w> {
 
                         let zero_id = self
                             .writer
-                            .get_constant_scalar(crate::ScalarValue::Float(0.0), 4)?;
+                            .get_constant_scalar(crate::ScalarValue::Float(0.0), 4);
 
                         mask |= spirv::ImageOperands::LOD;
                         inst.add_operand(mask.bits());
@@ -1138,7 +1138,7 @@ impl<'w> BlockContext<'w> {
                             _ => {
                                 let level_id = match level {
                                     Some(expr) => self.cached[expr],
-                                    None => self.get_index_constant(0)?,
+                                    None => self.get_index_constant(0),
                                 };
                                 (spirv::Op::ImageQuerySizeLod, Some(level_id))
                             }
@@ -1207,7 +1207,7 @@ impl<'w> BlockContext<'w> {
                             id_extended,
                             image_id,
                         );
-                        inst.add_operand(self.get_index_constant(0)?);
+                        inst.add_operand(self.get_index_constant(0));
                         block.body.push(inst);
                         let id = self.gen_id();
                         block.body.push(Instruction::composite_extract(
@@ -1291,7 +1291,7 @@ impl<'w> BlockContext<'w> {
                             // Even if the index is known, `OpAccessIndex`
                             // requires expression operands, not literals.
                             let scalar = crate::ScalarValue::Uint(known_index as u64);
-                            self.writer.get_constant_scalar(scalar, 4)?
+                            self.writer.get_constant_scalar(scalar, 4)
                         }
                         BoundsCheckResult::Computed(computed_index_id) => computed_index_id,
                         BoundsCheckResult::Conditional(comparison_id) => {
@@ -1322,7 +1322,7 @@ impl<'w> BlockContext<'w> {
                     base
                 }
                 crate::Expression::AccessIndex { base, index } => {
-                    let const_id = self.get_index_constant(index)?;
+                    let const_id = self.get_index_constant(index);
                     self.temp_list.push(const_id);
                     base
                 }
@@ -1601,9 +1601,9 @@ impl<'w> BlockContext<'w> {
                         spirv::MemorySemantics::WORKGROUP_MEMORY,
                         flags.contains(crate::Barrier::WORK_GROUP),
                     );
-                    let exec_scope_id = self.get_index_constant(spirv::Scope::Workgroup as u32)?;
-                    let mem_scope_id = self.get_index_constant(memory_scope as u32)?;
-                    let semantics_id = self.get_index_constant(semantics.bits())?;
+                    let exec_scope_id = self.get_index_constant(spirv::Scope::Workgroup as u32);
+                    let mem_scope_id = self.get_index_constant(memory_scope as u32);
+                    let semantics_id = self.get_index_constant(semantics.bits());
                     block.body.push(Instruction::control_barrier(
                         exec_scope_id,
                         mem_scope_id,
@@ -1628,8 +1628,8 @@ impl<'w> BlockContext<'w> {
                             };
                             let instruction = if let Some(class) = atomic_class {
                                 let (semantics, scope) = class.to_spirv_semantics_and_scope();
-                                let scope_constant_id = self.get_scope_constant(scope as u32)?;
-                                let semantics_id = self.get_index_constant(semantics.bits())?;
+                                let scope_constant_id = self.get_scope_constant(scope as u32);
+                                let semantics_id = self.get_index_constant(semantics.bits());
                                 Instruction::atomic_store(
                                     pointer_id,
                                     scope_constant_id,
@@ -1741,8 +1741,8 @@ impl<'w> BlockContext<'w> {
                         _ => unimplemented!(),
                     };
                     let (semantics, scope) = class.to_spirv_semantics_and_scope();
-                    let scope_constant_id = self.get_scope_constant(scope as u32)?;
-                    let semantics_id = self.get_index_constant(semantics.bits())?;
+                    let scope_constant_id = self.get_scope_constant(scope as u32);
+                    let semantics_id = self.get_index_constant(semantics.bits());
                     let value_id = self.cached[value];
                     let value_inner = self.fun_info[value].ty.inner_with(&self.ir_module.types);
 
