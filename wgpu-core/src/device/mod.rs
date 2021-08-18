@@ -502,12 +502,18 @@ impl<A: HalApi> Device<A> {
             usage |= hal::BufferUses::COPY_DST;
         }
 
+        let actual_size = if desc.size == 0 {
+            wgt::COPY_BUFFER_ALIGNMENT
+        } else {
+            desc.size
+        };
+
         let mut memory_flags = hal::MemoryFlags::empty();
         memory_flags.set(hal::MemoryFlags::TRANSIENT, transient);
 
         let hal_desc = hal::BufferDescriptor {
             label: desc.label.borrow_option(),
-            size: desc.size,
+            size: actual_size,
             usage,
             memory_flags,
         };
