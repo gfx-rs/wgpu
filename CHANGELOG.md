@@ -1,10 +1,16 @@
 # Change Log
 
-## TBD
+## v0.6 (2021-08-18)
+  - development release for wgpu-0.10
   - API:
     - atomic types and functions
-    - `num_workgroups` built-in
-    - WGSL `select()` order of true/false is swapped
+    - storage access is moved from global variables to the storage class and storage texture type
+    - new built-ins: `primitive_index` and `num_workgroups`
+    - support for multi-sampled depth images
+  - WGSL:
+    - `select()` order of true/false is swapped
+  - HLSL backend is vastly improved and now usable
+  - GLSL frontend is heavily reworked
 
 ## v0.5 (2021-06-18)
   - development release for wgpu-0.9

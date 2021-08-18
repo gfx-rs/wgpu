@@ -136,6 +136,9 @@ impl Writer {
         *self = fresh;
     }
 
+    //TODO: revive and rewrite this, see:
+    // https://github.com/gfx-rs/rspirv/issues/198
+    // https://github.com/gfx-rs/rspirv/pull/185#issuecomment-900796025
     pub(super) fn check(&mut self, capabilities: &[spirv::Capability]) -> Result<(), Error> {
         if capabilities.is_empty()
             || capabilities
@@ -468,7 +471,7 @@ impl Writer {
         function_id: Word,
         mode: spirv::ExecutionMode,
     ) -> Result<(), Error> {
-        self.check(mode.required_capabilities())?;
+        //self.check(mode.required_capabilities())?;
         Instruction::execution_mode(function_id, mode, &[])
             .to_words(&mut self.logical_layout.execution_modes);
         Ok(())
@@ -510,7 +513,7 @@ impl Writer {
             }
             crate::ShaderStage::Compute => {
                 let execution_mode = spirv::ExecutionMode::LocalSize;
-                self.check(execution_mode.required_capabilities())?;
+                //self.check(execution_mode.required_capabilities())?;
                 Instruction::execution_mode(
                     function_id,
                     execution_mode,
@@ -520,7 +523,7 @@ impl Writer {
                 spirv::ExecutionModel::GLCompute
             }
         };
-        self.check(exec_model.required_capabilities())?;
+        //self.check(exec_model.required_capabilities())?;
 
         Ok(Instruction::entry_point(
             exec_model,
@@ -719,7 +722,7 @@ impl Writer {
                     pointer_class: None,
                 };
                 let dim = map_dim(dim);
-                self.check(dim.required_capabilities())?;
+                //self.check(dim.required_capabilities())?;
                 let type_id = self.get_type_id(LookupType::Local(local_type));
                 Instruction::type_image(id, type_id, dim, arrayed, class)
             }
@@ -1061,7 +1064,7 @@ impl Writer {
         let id = self.id_gen.next();
 
         let class = map_storage_class(global_variable.class);
-        self.check(class.required_capabilities())?;
+        //self.check(class.required_capabilities())?;
 
         let init_word = global_variable
             .init
@@ -1230,8 +1233,8 @@ impl Writer {
 
         let addressing_model = spirv::AddressingModel::Logical;
         let memory_model = spirv::MemoryModel::GLSL450;
-        self.check(addressing_model.required_capabilities())?;
-        self.check(memory_model.required_capabilities())?;
+        //self.check(addressing_model.required_capabilities())?;
+        //self.check(memory_model.required_capabilities())?;
 
         Instruction::memory_model(addressing_model, memory_model)
             .to_words(&mut self.logical_layout.memory_model);
