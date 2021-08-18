@@ -1,8 +1,9 @@
 # Change Log
 
-## Unreleased
+## v0.10 (2021-08-18)
   - Infrastructure:
-    - `gfx-hal` is replaced by the in-house graphics abstraction `wgpu-hal`. Backends: Vulkan, Metal, OpenGL ES-3.
+    - `gfx-hal` is replaced by the in-house graphics abstraction `wgpu-hal`. Backends: Vulkan, Metal, D3D-12, and OpenGL ES-3.
+    - examples are tested automatically for image snapshots.
   - API:
     - `cross` feature is removed entirely. Only Rust code from now on.
     - processing SPIR-V inputs for later translation now requires `spirv` compile feature enabled
@@ -10,10 +11,23 @@
     - several bitflag names are renamed to plural: `TextureUsage`, `BufferUsage`, `ColorWrite`.
     - the `SwapChain` is merged into `Surface`. Returned frames are `Texture` instead of `TextureView`.
     - renamed `TextureUsage` bits: `SAMPLED` -> `TEXTURE_BINDING`, `STORAGE` -> `STORAGE_BINDING`.
-    - renamed `InputStepMode` to `VertexStepMode`
-    - Implemented `Rgb9e5Ufloat` format.
+    - renamed `InputStepMode` to `VertexStepMode`.
+    - readable storage textures are no longer a part of the base API. Only exposed via format-specific features, non-portably.
+    - implemented `Rgb9e5Ufloat` format.
+    - added limits for binding sizes, vertex data, per-stage bindings, and others.
+    - reworked downlevel flags, added downlevel limits.
+    - `resolver = "2"` is now required in top-level cargo manifests
   - Fixed:
     - `Device::create_query_set` would return an error when creating exactly `QUERY_SET_MAX_QUERIES` (8192) queries. Now it only returns an error when trying to create *more* than `QUERY_SET_MAX_QUERIES` queries.
+
+## wgpu-core-0.9.2
+  - fix `Features::TEXTURE_SPECIFIC_FORMAT_FEATURES` not being supported for rendertargets
+
+## wgpu-core-0.9.1 (2021-07-13)
+  - fix buffer inits delayed by a frame
+  - fix query resolves to initialize buffers
+  - fix pipeline statistics stride
+  - fix the check for maximum query count
 
 ## v0.9 (2021-06-18)
   - Updated:

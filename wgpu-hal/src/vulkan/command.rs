@@ -1,11 +1,7 @@
 use super::conv;
 
 use arrayvec::ArrayVec;
-use ash::{
-    extensions::ext,
-    version::{DeviceV1_0, DeviceV1_2},
-    vk,
-};
+use ash::{extensions::ext, vk};
 use inplace_it::inplace_or_alloc_from_iter;
 
 use std::{mem, ops::Range, slice};
