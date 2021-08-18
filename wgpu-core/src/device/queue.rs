@@ -445,8 +445,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             profiling::scope!("copy");
             if stage_bytes_per_row == bytes_per_row {
-                // Fast path if the data isalready being aligned optimally.
-                ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), stage_size as usize);
+                // Fast path if the data is already being aligned optimally.
+                ptr::copy_nonoverlapping(
+                    data.as_ptr().offset(data_layout.offset as isize),
+                    mapping.ptr.as_ptr(),
+                    stage_size as usize,
+                );
             } else {
                 // Copy row by row into the optimal alignment.
                 let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
@@ -454,8 +458,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let rows_offset = layer * block_rows_per_image;
                     for row in 0..height_blocks {
                         ptr::copy_nonoverlapping(
-                            data.as_ptr()
-                                .offset((rows_offset + row) as isize * bytes_per_row as isize),
+                            data.as_ptr().offset(
+                                data_layout.offset as isize
+                                    + (rows_offset + row) as isize * bytes_per_row as isize,
+                            ),
                             mapping.ptr.as_ptr().offset(
                                 (rows_offset + row) as isize * stage_bytes_per_row as isize,
                             ),
