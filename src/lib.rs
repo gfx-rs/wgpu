@@ -1082,11 +1082,9 @@ pub enum Expression {
         /// -   [`Storage`] images hold exactly one sample per texel, so `index` must
         ///     be `None`.
         ///
-        /// -   [`Depth`] images may have mipmaps, so `index` must be `Some(level)`,
-        ///     where `level` identifies the level of detail.
-        ///
-        /// -   [`Sampled`] images may be multisampled or have mipmaps, but not both.
-        ///     Which one is indicated by the `Sampled` variant's [`multi`] field:
+        /// -   [`Depth`] and [`Sampled`] images may be multisampled or have
+        ///     mipmaps, but not both. Which one is indicated by the variant's
+        ///     [`multi`] field:
         ///
         ///     - If `multi` is `true`, then the image has multiple samples per
         ///       texel, and `index` must be `Some(sample)`, where `sample` is
