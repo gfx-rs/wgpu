@@ -217,7 +217,7 @@ enum TextureInner {
 impl TextureInner {
     fn as_native(&self) -> (glow::Texture, BindTarget) {
         match *self {
-            Self::Renderbuffer { raw, .. } => panic!("Unexpected renderbuffer {}", raw),
+            Self::Renderbuffer { raw, .. } => panic!("Unexpected renderbuffer {:?}", raw),
             Self::Texture { raw, target } => (raw, target),
         }
     }
@@ -323,7 +323,7 @@ struct AttributeDesc {
     format_desc: VertexFormatDesc,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct BufferBinding {
     raw: glow::Buffer,
     offset: wgt::BufferAddress,
@@ -659,7 +659,7 @@ pub struct CommandBuffer {
     label: Option<String>,
     commands: Vec<Command>,
     data_bytes: Vec<u8>,
-    data_words: Vec<u32>,
+    queries: Vec<glow::Query>,
 }
 
 //TODO: we would have something like `Arc<typed_arena::Arena>`

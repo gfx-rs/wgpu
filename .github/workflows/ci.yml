@@ -148,7 +148,7 @@ jobs:
           cargo run --target ${{ matrix.target }} --bin wgpu-info
         
           # run player tests
-          cargo test --target ${{ matrix.target }} --workspace --exclude wpgu --no-fail-fast -- --nocapture
+          cargo test --target ${{ matrix.target }} --workspace --exclude wgpu --no-fail-fast -- --nocapture
 
           # run coretests
           cargo run --target ${{ matrix.target }} --bin wgpu-info -- cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture --test-threads=1 # GLES is currently non-multithreadable

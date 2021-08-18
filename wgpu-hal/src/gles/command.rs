@@ -14,7 +14,8 @@ pub(super) struct State {
     primitive: super::PrimitiveState,
     index_format: wgt::IndexFormat,
     index_offset: wgt::BufferAddress,
-    vertex_buffers: [(super::VertexBufferDesc, super::BufferBinding); crate::MAX_VERTEX_BUFFERS],
+    vertex_buffers:
+        [(super::VertexBufferDesc, Option<super::BufferBinding>); crate::MAX_VERTEX_BUFFERS],
     vertex_attributes: ArrayVec<super::AttributeDesc, { super::MAX_VERTEX_ATTRIBUTES }>,
     color_targets: ArrayVec<super::ColorTargetDesc, { crate::MAX_COLOR_TARGETS }>,
     stencil: super::StencilState,
@@ -34,7 +35,7 @@ impl super::CommandBuffer {
         self.label = None;
         self.commands.clear();
         self.data_bytes.clear();
-        self.data_words.clear();
+        self.queries.clear();
     }
 
     fn add_marker(&mut self, marker: &str) -> Range<u32> {
@@ -78,6 +79,7 @@ impl super::CommandEncoder {
                 if self.state.dirty_vbuf_mask & (1 << index) == 0 {
                     continue;
                 }
+                let vb = vb.as_ref().unwrap();
                 let instance_offset = match vb_desc.step {
                     wgt::VertexStepMode::Vertex => 0,
                     wgt::VertexStepMode::Instance => first_instance * vb_desc.stride,
@@ -100,13 +102,14 @@ impl super::CommandEncoder {
                     self.state.vertex_buffers[attribute.buffer_index as usize].clone();
 
                 let mut attribute_desc = attribute.clone();
-                attribute_desc.offset += buffer.offset as u32;
+                let vb = buffer.unwrap();
+                attribute_desc.offset += vb.offset as u32;
                 if buffer_desc.step == wgt::VertexStepMode::Instance {
                     attribute_desc.offset += buffer_desc.stride * first_instance;
                 }
 
                 self.cmd_buffer.commands.push(C::SetVertexAttribute {
-                    buffer: Some(buffer.raw),
+                    buffer: Some(vb.raw),
                     buffer_desc,
                     attribute_desc,
                 });
@@ -352,11 +355,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         offset: wgt::BufferAddress,
         _stride: wgt::BufferSize,
     ) {
-        let start = self.cmd_buffer.data_words.len();
+        let start = self.cmd_buffer.queries.len();
         self.cmd_buffer
-            .data_words
+            .queries
             .extend_from_slice(&set.queries[range.start as usize..range.end as usize]);
-        let query_range = start as u32..self.cmd_buffer.data_words.len() as u32;
+        let query_range = start as u32..self.cmd_buffer.queries.len() as u32;
         self.cmd_buffer.commands.push(C::CopyQueryResults {
             query_range,
             dst: buffer.raw,
@@ -741,8 +744,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         self.state.dirty_vbuf_mask |= 1 << index;
         let (_, ref mut vb) = self.state.vertex_buffers[index as usize];
-        vb.raw = binding.buffer.raw;
-        vb.offset = binding.offset;
+        *vb = Some(super::BufferBinding {
+            raw: binding.buffer.raw,
+            offset: binding.offset,
+        });
     }
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth: Range<f32>) {
         self.cmd_buffer.commands.push(C::SetViewport {
