@@ -510,6 +510,8 @@ bitflags!(
     pub struct PipelineLayoutFlags: u32 {
         /// Include support for base vertex/instance drawing.
         const BASE_VERTEX_INSTANCE = 1 << 0;
+        /// Include support for num work groups builtin.
+        const NUM_WORK_GROUPS = 1 << 1;
     }
 );
 
