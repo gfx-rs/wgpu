@@ -65,6 +65,22 @@ fn parse_type_cast() {
     ",
     )
     .unwrap();
+    parse_str(
+        "
+        fn main() {
+            let x: vec2<f32> = vec2<f32>(0.0);
+        }
+    ",
+    )
+    .unwrap();
+    assert!(parse_str(
+        "
+        fn main() {
+            let x: vec2<f32> = vec2<f32>(0);
+        }
+    ",
+    )
+    .is_err());
 }
 
 #[test]

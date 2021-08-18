@@ -1746,12 +1746,19 @@ impl Parser {
                 ty_resolution.inner_with(ctx.types),
                 ctx.typifier.get(last_component, ctx.types),
             ) {
-                (&crate::TypeInner::Vector { size, .. }, &crate::TypeInner::Scalar { .. }) => {
-                    crate::Expression::Splat {
-                        size,
-                        value: last_component,
-                    }
-                }
+                (
+                    &crate::TypeInner::Vector {
+                        size, kind, width, ..
+                    },
+                    &crate::TypeInner::Scalar {
+                        kind: arg_kind,
+                        width: arg_width,
+                        ..
+                    },
+                ) if arg_kind == kind && arg_width == width => crate::Expression::Splat {
+                    size,
+                    value: last_component,
+                },
                 (
                     &crate::TypeInner::Scalar { kind, width, .. },
                     &crate::TypeInner::Scalar { .. },
