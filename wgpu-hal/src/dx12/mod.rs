@@ -283,6 +283,7 @@ enum RootElement {
     SpecialConstantBuffer {
         base_vertex: i32,
         base_instance: u32,
+        other: u32,
     },
     /// Descriptor table.
     Table(native::GpuDescriptor),

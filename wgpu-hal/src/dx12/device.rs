@@ -745,15 +745,15 @@ impl crate::Device<super::Api> for super::Device {
         );
         let mut parameters = Vec::new();
 
-        let (special_constants_root_index, special_constants_binding) = if desc
-            .flags
-            .contains(crate::PipelineLayoutFlags::BASE_VERTEX_INSTANCE)
-        {
+        let (special_constants_root_index, special_constants_binding) = if desc.flags.intersects(
+            crate::PipelineLayoutFlags::BASE_VERTEX_INSTANCE
+                | crate::PipelineLayoutFlags::NUM_WORK_GROUPS,
+        ) {
             let parameter_index = parameters.len();
             parameters.push(native::RootParameter::constants(
-                native::ShaderVisibility::VS,
+                native::ShaderVisibility::All, // really needed for VS and CS only
                 native_binding(&bind_cbv),
-                2, // 0 = base vertex, 1 = base instance
+                3, // 0 = base vertex, 1 = base instance, 2 = other
             ));
             let binding = bind_cbv.clone();
             bind_cbv.register += 1;

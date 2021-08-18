@@ -46,8 +46,8 @@ impl super::CommandEncoder {
     }
 
     unsafe fn prepare_draw(&mut self, base_vertex: i32, base_instance: u32) {
-        let list = self.list.unwrap();
         while self.pass.dirty_vertex_buffers != 0 {
+            let list = self.list.unwrap();
             let index = self.pass.dirty_vertex_buffers.trailing_zeros();
             self.pass.dirty_vertex_buffers ^= 1 << index;
             list.IASetVertexBuffers(
@@ -61,6 +61,7 @@ impl super::CommandEncoder {
                 super::RootElement::SpecialConstantBuffer {
                     base_vertex: other_vertex,
                     base_instance: other_instance,
+                    other: _,
                 } => base_vertex != other_vertex || base_instance != other_instance,
                 _ => true,
             };
@@ -70,13 +71,33 @@ impl super::CommandEncoder {
                     super::RootElement::SpecialConstantBuffer {
                         base_vertex,
                         base_instance,
+                        other: 0,
                     };
             }
         }
         self.update_root_elements();
     }
 
-    fn prepare_dispatch(&mut self) {
+    fn prepare_dispatch(&mut self, count: [u32; 3]) {
+        if let Some(root_index) = self.pass.layout.special_constants_root_index {
+            let needs_update = match self.pass.root_elements[root_index as usize] {
+                super::RootElement::SpecialConstantBuffer {
+                    base_vertex,
+                    base_instance,
+                    other,
+                } => [base_vertex as u32, base_instance, other] != count,
+                _ => true,
+            };
+            if needs_update {
+                self.pass.dirty_root_elements |= 1 << root_index;
+                self.pass.root_elements[root_index as usize] =
+                    super::RootElement::SpecialConstantBuffer {
+                        base_vertex: count[0] as i32,
+                        base_instance: count[1],
+                        other: count[2],
+                    };
+            }
+        }
         self.update_root_elements();
     }
 
@@ -95,12 +116,17 @@ impl super::CommandEncoder {
                 super::RootElement::SpecialConstantBuffer {
                     base_vertex,
                     base_instance,
+                    other,
                 } => match self.pass.kind {
                     Pk::Render => {
                         list.set_graphics_root_constant(index, base_vertex as u32, 0);
                         list.set_graphics_root_constant(index, base_instance, 1);
                     }
-                    Pk::Compute => (),
+                    Pk::Compute => {
+                        list.set_compute_root_constant(index, base_vertex as u32, 0);
+                        list.set_compute_root_constant(index, base_instance, 1);
+                        list.set_compute_root_constant(index, other, 2);
+                    }
                     Pk::Transfer => (),
                 },
                 super::RootElement::Table(descriptor) => match self.pass.kind {
@@ -141,6 +167,7 @@ impl super::CommandEncoder {
                 super::RootElement::SpecialConstantBuffer {
                     base_vertex: 0,
                     base_instance: 0,
+                    other: 0,
                 };
         }
         self.pass.layout = layout.clone();
@@ -934,10 +961,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
-        self.prepare_dispatch();
+        self.prepare_dispatch(count);
         self.list.unwrap().dispatch(count);
     }
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+        self.prepare_dispatch([0; 3]);
+        //TODO: update special constants indirectly
         self.list.unwrap().ExecuteIndirect(
             self.shared.cmd_signatures.dispatch.as_mut_ptr(),
             1,
