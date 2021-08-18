@@ -8,7 +8,6 @@ use std::{
 
 use ash::{
     extensions::{ext, khr},
-    version::{DeviceV1_0 as _, EntryV1_0 as _, InstanceV1_0 as _},
     vk,
 };
 

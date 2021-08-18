@@ -106,7 +106,7 @@ impl super::Queue {
         gl: &glow::Context,
         command: &C,
         data_bytes: &[u8],
-        data_words: &[u32],
+        queries: &[glow::Query],
     ) {
         match *command {
             C::Draw {
@@ -515,9 +515,7 @@ impl super::Queue {
                 dst_offset,
             } => {
                 self.temp_query_results.clear();
-                for &query in
-                    data_words[query_range.start as usize..query_range.end as usize].iter()
-                {
+                for &query in queries[query_range.start as usize..query_range.end as usize].iter() {
                     let result = gl.get_query_parameter_u32(query, glow::QUERY_RESULT);
                     self.temp_query_results.push(result as u64);
                 }
@@ -948,7 +946,7 @@ impl crate::Queue<super::Api> for super::Queue {
                 gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label);
             }
             for command in cmd_buf.commands.iter() {
-                self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.data_words);
+                self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.queries);
             }
             if cmd_buf.label.is_some() {
                 gl.pop_debug_group();

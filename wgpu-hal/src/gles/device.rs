@@ -1,7 +1,7 @@
 use super::conv;
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
-use std::{convert::TryInto, iter, ptr, sync::Arc};
+use std::{convert::TryInto, iter, mem, ptr, sync::Arc};
 
 type ShaderStage<'a> = (
     naga::ShaderStage,
@@ -91,7 +91,9 @@ impl super::Device {
 
         let raw = gl.create_shader(target).unwrap();
         if gl.supports_debug() {
-            gl.object_label(glow::SHADER, raw, label);
+            //TODO: remove all transmutes from `object_label`
+            // https://github.com/grovesNL/glow/issues/186
+            gl.object_label(glow::SHADER, mem::transmute(raw), label);
         }
 
         gl.shader_source(raw, shader);
@@ -173,7 +175,7 @@ impl super::Device {
         let program = gl.create_program().unwrap();
         if let Some(label) = label {
             if gl.supports_debug() {
-                gl.object_label(glow::PROGRAM, program, Some(label));
+                gl.object_label(glow::PROGRAM, mem::transmute(program), Some(label));
             }
         }
 
@@ -352,7 +354,7 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(label) = desc.label {
             if gl.supports_debug() {
-                gl.object_label(glow::BUFFER, raw, Some(label));
+                gl.object_label(glow::BUFFER, mem::transmute(raw), Some(label));
             }
         }
 
@@ -452,7 +454,7 @@ impl crate::Device<super::Api> for super::Device {
 
             if let Some(label) = desc.label {
                 if gl.supports_debug() {
-                    gl.object_label(glow::RENDERBUFFER, raw, Some(label));
+                    gl.object_label(glow::RENDERBUFFER, mem::transmute(raw), Some(label));
                 }
             }
 
@@ -530,7 +532,7 @@ impl crate::Device<super::Api> for super::Device {
 
             if let Some(label) = desc.label {
                 if gl.supports_debug() {
-                    gl.object_label(glow::TEXTURE, raw, Some(label));
+                    gl.object_label(glow::TEXTURE, mem::transmute(raw), Some(label));
                 }
             }
 
@@ -664,7 +666,7 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(label) = desc.label {
             if gl.supports_debug() {
-                gl.object_label(glow::SAMPLER, raw, Some(label));
+                gl.object_label(glow::SAMPLER, mem::transmute(raw), Some(label));
             }
         }
 
@@ -966,7 +968,7 @@ impl crate::Device<super::Api> for super::Device {
                 if let Some(label) = desc.label {
                     temp_string.clear();
                     let _ = write!(temp_string, "{}[{}]", label, i);
-                    gl.object_label(glow::QUERY, query, Some(&temp_string));
+                    gl.object_label(glow::QUERY, mem::transmute(query), Some(&temp_string));
                 }
             }
             queries.push(query);

@@ -36,7 +36,6 @@ use std::{borrow::Borrow, ffi::CStr, sync::Arc};
 use arrayvec::ArrayVec;
 use ash::{
     extensions::{ext, khr},
-    version::{DeviceV1_0, DeviceV1_2},
     vk,
 };
 use parking_lot::Mutex;
