@@ -243,24 +243,46 @@ pub enum StageError {
 fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
     use naga::StorageFormat as Sf;
     use wgt::TextureFormat as Tf;
-    // Using the table in https://gpuweb.github.io/gpuweb/#plain-color-formats
+
     Some(match format {
+        Tf::R8Unorm => Sf::R8Unorm,
+        Tf::R8Snorm => Sf::R8Snorm,
+        Tf::R8Uint => Sf::R8Uint,
+        Tf::R8Sint => Sf::R8Sint,
+
+        Tf::R16Uint => Sf::R16Uint,
+        Tf::R16Sint => Sf::R16Sint,
+        Tf::R16Float => Sf::R16Float,
+        Tf::Rg8Unorm => Sf::Rg8Unorm,
+        Tf::Rg8Snorm => Sf::Rg8Snorm,
+        Tf::Rg8Uint => Sf::Rg8Uint,
+        Tf::Rg8Sint => Sf::Rg8Sint,
+
         Tf::R32Uint => Sf::R32Uint,
         Tf::R32Sint => Sf::R32Sint,
         Tf::R32Float => Sf::R32Float,
+        Tf::Rg16Uint => Sf::Rg16Uint,
+        Tf::Rg16Sint => Sf::Rg16Sint,
+        Tf::Rg16Float => Sf::Rg16Float,
         Tf::Rgba8Unorm => Sf::Rgba8Unorm,
         Tf::Rgba8Snorm => Sf::Rgba8Snorm,
         Tf::Rgba8Uint => Sf::Rgba8Uint,
         Tf::Rgba8Sint => Sf::Rgba8Sint,
+
+        Tf::Rgb10a2Unorm => Sf::Rgb10a2Unorm,
+        Tf::Rg11b10Float => Sf::Rg11b10Float,
+
         Tf::Rg32Uint => Sf::Rg32Uint,
         Tf::Rg32Sint => Sf::Rg32Sint,
         Tf::Rg32Float => Sf::Rg32Float,
         Tf::Rgba16Uint => Sf::Rgba16Uint,
         Tf::Rgba16Sint => Sf::Rgba16Sint,
         Tf::Rgba16Float => Sf::Rgba16Float,
+
         Tf::Rgba32Uint => Sf::Rgba32Uint,
         Tf::Rgba32Sint => Sf::Rgba32Sint,
         Tf::Rgba32Float => Sf::Rgba32Float,
+
         _ => return None,
     })
 }
@@ -268,11 +290,13 @@ fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::Storag
 fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureFormat {
     use naga::StorageFormat as Sf;
     use wgt::TextureFormat as Tf;
+
     match format {
         Sf::R8Unorm => Tf::R8Unorm,
         Sf::R8Snorm => Tf::R8Snorm,
         Sf::R8Uint => Tf::R8Uint,
         Sf::R8Sint => Tf::R8Sint,
+
         Sf::R16Uint => Tf::R16Uint,
         Sf::R16Sint => Tf::R16Sint,
         Sf::R16Float => Tf::R16Float,
@@ -280,6 +304,7 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
         Sf::Rg8Snorm => Tf::Rg8Snorm,
         Sf::Rg8Uint => Tf::Rg8Uint,
         Sf::Rg8Sint => Tf::Rg8Sint,
+
         Sf::R32Uint => Tf::R32Uint,
         Sf::R32Sint => Tf::R32Sint,
         Sf::R32Float => Tf::R32Float,
@@ -290,14 +315,17 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
         Sf::Rgba8Snorm => Tf::Rgba8Snorm,
         Sf::Rgba8Uint => Tf::Rgba8Uint,
         Sf::Rgba8Sint => Tf::Rgba8Sint,
+
         Sf::Rgb10a2Unorm => Tf::Rgb10a2Unorm,
         Sf::Rg11b10Float => Tf::Rg11b10Float,
+
         Sf::Rg32Uint => Tf::Rg32Uint,
         Sf::Rg32Sint => Tf::Rg32Sint,
         Sf::Rg32Float => Tf::Rg32Float,
         Sf::Rgba16Uint => Tf::Rgba16Uint,
         Sf::Rgba16Sint => Tf::Rgba16Sint,
         Sf::Rgba16Float => Tf::Rgba16Float,
+
         Sf::Rgba32Uint => Tf::Rgba32Uint,
         Sf::Rgba32Sint => Tf::Rgba32Sint,
         Sf::Rgba32Float => Tf::Rgba32Float,
