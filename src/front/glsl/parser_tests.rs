@@ -778,9 +778,10 @@ fn swizzles() {
 }
 
 #[test]
-fn vector_indexing() {
+fn expressions() {
     let mut parser = Parser::default();
 
+    // Vector indexing
     parser
         .parse(
             &Options::from(ShaderStage::Vertex),
@@ -792,6 +793,22 @@ fn vector_indexing() {
         }
 
         void main() {}
+        "#,
+        )
+        .unwrap();
+
+    // Prefix increment/decrement
+    parser
+        .parse(
+            &Options::from(ShaderStage::Vertex),
+            r#"
+        #  version 450
+        void main() {
+            uint index = 0;
+            
+            --index;
+            ++index;
+        }
         "#,
         )
         .unwrap();

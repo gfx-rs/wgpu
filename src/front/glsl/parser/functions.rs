@@ -495,6 +495,8 @@ impl<'source> ParsingContext<'source> {
             | TokenValue::Bang
             | TokenValue::Tilde
             | TokenValue::LeftParen
+            | TokenValue::Increment
+            | TokenValue::Decrement
             | TokenValue::Identifier(_)
             | TokenValue::TypeName(_)
             | TokenValue::IntConstant(_)
