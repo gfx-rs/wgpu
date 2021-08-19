@@ -2,9 +2,10 @@
 ; Version: 1.1
 ; Generator: rspirv
 ; Bound: 213
+OpCapability ImageQuery
 OpCapability Image1D
 OpCapability Shader
-OpCapability ImageQuery
+OpCapability Sampled1D
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %67 "main" %64

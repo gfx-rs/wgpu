@@ -703,7 +703,12 @@ impl Writer {
                 class,
             } => {
                 let kind = match class {
-                    crate::ImageClass::Sampled { kind, multi: _ } => kind,
+                    crate::ImageClass::Sampled { kind, multi: _ } => {
+                        if dim == crate::ImageDimension::D1 {
+                            self.check(&[spirv::Capability::Sampled1D])?;
+                        }
+                        kind
+                    }
                     crate::ImageClass::Depth { multi: _ } => crate::ScalarKind::Float,
                     crate::ImageClass::Storage { format, .. } => {
                         let required_caps: &[_] = match dim {
