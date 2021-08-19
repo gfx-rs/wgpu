@@ -123,9 +123,10 @@ pub unsafe extern "C" fn wgpu_server_adapter_pack_info(
     let mut data = Vec::new();
     match self_id {
         Some(id) => {
+            let raw_info = gfx_select!(id => global.adapter_get_info(id)).unwrap();
             let info = AdapterInformation {
                 id,
-                //inner: gfx_select!(self_id => global.adapter_get_info(self_id)).unwrap(),
+                ty: raw_info.device_type,
                 limits: gfx_select!(id => global.adapter_limits(id)).unwrap(),
                 features: gfx_select!(id => global.adapter_features(id)).unwrap(),
             };
@@ -461,7 +462,7 @@ impl GlobalExt for Global {
             }
             CommandEncoderAction::ClearImage {
                 dst,
-                subresource_range,
+                ref subresource_range,
             } => {
                 if let Err(err) =
                     self.command_encoder_clear_image::<B>(self_id, dst, subresource_range)

@@ -62,7 +62,7 @@ impl ByteBuf {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AdapterInformation {
     id: id::AdapterId,
-    //inner: wgt::AdapterInfo, //TODO: not C-friendly
+    ty: wgt::DeviceType,
     limits: wgt::Limits,
     features: wgt::Features,
 }

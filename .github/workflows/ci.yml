@@ -34,13 +34,18 @@ jobs:
       - name: Additional core features
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features trace --target ${{ env.TARGET }}
 
-  webgl_build:
+  wasm:
     name: Web Assembly
     runs-on: ubuntu-18.04
+    env:
+      RUSTFLAGS: --cfg=web_sys_unstable_apis
     steps:
-      - uses: actions/checkout@v2
-      - run: rustup target add wasm32-unknown-unknown
-      - run: cargo build --manifest-path wgpu-core/Cargo.toml --target wasm32-unknown-unknown
+    - uses: actions/checkout@v2
+    - run: rustup target add wasm32-unknown-unknown
+    - name: Check WebGPU
+      run: cargo check --all-targets --target=wasm32-unknown-unknown
+    - name: Check WebGL
+      run: cargo check --all-targets --target=wasm32-unknown-unknown --features webgl
 
   build:
     name: ${{ matrix.name }}
@@ -117,6 +122,20 @@ jobs:
       - if: matrix.channel == 'nightly'
         run: cargo test -- --nocapture
 
+  docs:
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+      continue-on-error: true
+    - name: cargo doc
+      run: cargo --version; cargo doc --no-deps
+      continue-on-error: true
+
   lint:
     name: Clippy
     runs-on: ubuntu-latest
@@ -132,3 +151,7 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
