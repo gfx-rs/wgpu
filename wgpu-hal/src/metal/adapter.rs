@@ -861,7 +861,8 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_COMPRESSION_BC
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
-            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::PUSH_CONSTANTS;
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
