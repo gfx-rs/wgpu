@@ -14,6 +14,7 @@ impl Default for super::CommandState {
             raw_wg_size: mtl::MTLSize::new(0, 0, 0),
             stage_infos: Default::default(),
             storage_buffer_length_map: Default::default(),
+            work_group_memory_sizes: Vec::new(),
         }
     }
 }
@@ -45,15 +46,20 @@ impl super::CommandEncoder {
     }
 
     fn begin_pass(&mut self) {
-        self.state.storage_buffer_length_map.clear();
-        self.state.stage_infos.vs.clear();
-        self.state.stage_infos.fs.clear();
-        self.state.stage_infos.cs.clear();
+        self.state.reset();
         self.leave_blit();
     }
 }
 
 impl super::CommandState {
+    fn reset(&mut self) {
+        self.storage_buffer_length_map.clear();
+        self.stage_infos.vs.clear();
+        self.stage_infos.fs.clear();
+        self.stage_infos.cs.clear();
+        self.work_group_memory_sizes.clear();
+    }
+
     fn make_sizes_buffer_update<'a>(
         &self,
         stage: naga::ShaderStage,
@@ -839,6 +845,25 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 (sizes.len() * WORD_SIZE) as u64,
                 sizes.as_ptr() as _,
             );
+        }
+
+        // update the threadgroup memory sizes
+        while self.state.work_group_memory_sizes.len() < pipeline.work_group_memory_sizes.len() {
+            self.state.work_group_memory_sizes.push(0);
+        }
+        for (index, (cur_size, pipeline_size)) in self
+            .state
+            .work_group_memory_sizes
+            .iter_mut()
+            .zip(pipeline.work_group_memory_sizes.iter())
+            .enumerate()
+        {
+            const ALIGN_MASK: u32 = 0xF; // must be a multiple of 16 bytes
+            let size = ((*pipeline_size - 1) | ALIGN_MASK) + 1;
+            if *cur_size != size {
+                *cur_size = size;
+                encoder.set_threadgroup_memory_length(index as _, size as _);
+            }
         }
     }
 
