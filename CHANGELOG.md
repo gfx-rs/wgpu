@@ -1,5 +1,11 @@
 # Change Log
 
+## TBD
+  - All:
+    - expose more formats via adapter-specific feature
+  - Metal:
+    - fix usage of work group memory
+
 ## v0.10 (2021-08-18)
   - Infrastructure:
     - `gfx-hal` is replaced by the in-house graphics abstraction `wgpu-hal`. Backends: Vulkan, Metal, D3D-12, and OpenGL ES-3.

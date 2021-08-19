@@ -626,6 +626,7 @@ pub struct ComputePipeline {
     cs_lib: mtl::Library,
     cs_info: PipelineStageInfo,
     work_group_size: mtl::MTLSize,
+    work_group_memory_sizes: Vec<u32>,
 }
 
 unsafe impl Send for ComputePipeline {}
@@ -689,6 +690,7 @@ struct CommandState {
     raw_wg_size: mtl::MTLSize,
     stage_infos: MultiStageData<PipelineStageInfo>,
     storage_buffer_length_map: fxhash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    work_group_memory_sizes: Vec<u32>,
 }
 
 pub struct CommandEncoder {
