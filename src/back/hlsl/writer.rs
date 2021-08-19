@@ -748,7 +748,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
-    /// Helper method used to write structs
+    /// Helper method used to write functions
     /// # Notes
     /// Ends in a newline
     fn write_function(
@@ -773,8 +773,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             back::FunctionType::Function(handle) => {
                 for (index, arg) in func.arguments.iter().enumerate() {
                     // Write argument type
-                    let ty_inner = &module.types[arg.ty].inner;
-                    let arg_ty = match *ty_inner {
+                    let arg_ty = match module.types[arg.ty].inner {
                         // pointers in function arguments are expected and resolve to `inout`
                         TypeInner::Pointer { base, .. } => {
                             //TODO: can we narrow this down to just `in` when possible?
@@ -790,7 +789,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                     // Write argument name. Space is important.
                     write!(self.out, " {}", argument_name)?;
-                    if let TypeInner::Array { size, .. } = *ty_inner {
+                    if let TypeInner::Array { size, .. } = module.types[arg.ty].inner {
                         self.write_array_size(module, size)?;
                     }
                     if index < func.arguments.len() - 1 {
@@ -1864,7 +1863,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let (open_b, close_b) = match module.types[ty].inner {
             TypeInner::Array { .. } | TypeInner::Struct { .. } => ("{ ", " }"),
             _ => {
-                // We should write type only for non struct constants
+                // We should write type only for non struct/array constants
                 self.write_type(module, ty)?;
                 ("(", ")")
             }
