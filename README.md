@@ -18,6 +18,9 @@ The repository hosts the following parts:
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between `wgpu-core` and `wgpu-rs`
   - `player` - standalone application for replaying the API traces, uses `winit`
 
+
+For an overview of all the components in the gfx-rs ecosystem, see the [gfx-rs big picture](./etc/big-picture.png).
+
 Rust examples can be found at `wgpu/examples`. `wgpu` is a default member, so you can run the examples directly from the root, e.g. `cargo run --example boids`.
 
 If you are looking for the native implementation or bindings to the API in other languages, you need [wgpu-native](https://github.com/gfx-rs/wgpu-native).
