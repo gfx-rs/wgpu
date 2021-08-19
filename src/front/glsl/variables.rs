@@ -6,8 +6,8 @@ use super::{
 };
 use crate::{
     Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
-    LocalVariable, ResourceBinding, ScalarKind, StorageAccess, StorageClass, SwizzleComponent,
-    Type, TypeInner, VectorSize,
+    LocalVariable, ResourceBinding, ScalarKind, ShaderStage, StorageAccess, StorageClass,
+    SwizzleComponent, Type, TypeInner, VectorSize,
 };
 
 macro_rules! qualifier_arm {
@@ -31,12 +31,83 @@ pub struct VarDeclaration<'a> {
     pub meta: SourceMetadata,
 }
 
+/// Information about a builtin used in [`add_builtin`](Parser::add_builtin)
+struct BuiltInData {
+    /// The type of the builtin
+    inner: TypeInner,
+    /// The builtin class associated with
+    builtin: BuiltIn,
+    /// Wether it should be allowed to write to the builtin or not
+    mutable: bool,
+    /// The storage used for the builtin
+    storage: StorageQualifier,
+}
+
 pub enum GlobalOrConstant {
     Global(Handle<GlobalVariable>),
     Constant(Handle<Constant>),
 }
 
 impl Parser {
+    /// Adds a builtin and returns a variable reference to it
+    fn add_builtin(
+        &mut self,
+        ctx: &mut Context,
+        body: &mut Block,
+        name: &str,
+        data: BuiltInData,
+        meta: SourceMetadata,
+    ) -> Option<VariableReference> {
+        let ty = self.module.types.fetch_or_append(
+            Type {
+                name: None,
+                inner: data.inner,
+            },
+            meta.as_span(),
+        );
+
+        let handle = self.module.global_variables.append(
+            GlobalVariable {
+                name: Some(name.into()),
+                class: StorageClass::Private,
+                binding: None,
+                ty,
+                init: None,
+            },
+            meta.as_span(),
+        );
+
+        let idx = self.entry_args.len();
+        self.entry_args.push(EntryArg {
+            name: None,
+            binding: Binding::BuiltIn(data.builtin),
+            handle,
+            storage: data.storage,
+        });
+
+        self.global_variables.push((
+            name.into(),
+            GlobalLookup {
+                kind: GlobalLookupKind::Variable(handle),
+                entry_arg: Some(idx),
+                mutable: data.mutable,
+            },
+        ));
+
+        let expr = ctx.add_expression(Expression::GlobalVariable(handle), meta, body);
+        ctx.lookup_global_var_exps.insert(
+            name.into(),
+            VariableReference {
+                expr,
+                load: true,
+                mutable: data.mutable,
+                entry_arg: Some(idx),
+            },
+        );
+
+        ctx.lookup_global_var(name)
+    }
+
     pub(crate) fn lookup_variable(
         &mut self,
         ctx: &mut Context,
@@ -51,141 +122,122 @@ impl Parser {
             return Some(global_var);
         }
 
-        let mut add_builtin = |inner, builtin, mutable, storage| {
-            let ty = self
-                .module
-                .types
-                .fetch_or_append(Type { name: None, inner }, meta.as_span());
-
-            let handle = self.module.global_variables.append(
-                GlobalVariable {
-                    name: Some(name.into()),
-                    class: StorageClass::Private,
-                    binding: None,
-                    ty,
-                    init: None,
-                },
-                meta.as_span(),
-            );
-
-            let idx = self.entry_args.len();
-            self.entry_args.push(EntryArg {
-                name: None,
-                binding: Binding::BuiltIn(builtin),
-                handle,
-                storage,
-            });
-
-            self.global_variables.push((
-                name.into(),
-                GlobalLookup {
-                    kind: GlobalLookupKind::Variable(handle),
-                    entry_arg: Some(idx),
-                    mutable,
-                },
-            ));
-
-            let expr = ctx.add_expression(Expression::GlobalVariable(handle), meta, body);
-            ctx.lookup_global_var_exps.insert(
-                name.into(),
-                VariableReference {
-                    expr,
-                    load: true,
-                    mutable,
-                    entry_arg: Some(idx),
-                },
-            );
-
-            ctx.lookup_global_var(name)
-        };
-        match name {
-            "gl_Position" => add_builtin(
-                TypeInner::Vector {
+        let data = match name {
+            "gl_Position" => BuiltInData {
+                inner: TypeInner::Vector {
                     size: VectorSize::Quad,
                     kind: ScalarKind::Float,
                     width: 4,
                 },
-                BuiltIn::Position,
-                true,
-                StorageQualifier::Output,
-            ),
-            "gl_FragCoord" => add_builtin(
-                TypeInner::Vector {
+                builtin: BuiltIn::Position,
+                mutable: true,
+                storage: StorageQualifier::Output,
+            },
+            "gl_FragCoord" => BuiltInData {
+                inner: TypeInner::Vector {
                     size: VectorSize::Quad,
                     kind: ScalarKind::Float,
                     width: 4,
                 },
-                BuiltIn::Position,
-                false,
-                StorageQualifier::Input,
-            ),
-            "gl_FragDepth" => add_builtin(
-                TypeInner::Scalar {
-                    kind: ScalarKind::Float,
-                    width: 4,
-                },
-                BuiltIn::FragDepth,
-                true,
-                StorageQualifier::Output,
-            ),
-            "gl_VertexIndex" => add_builtin(
-                TypeInner::Scalar {
-                    kind: ScalarKind::Uint,
-                    width: 4,
-                },
-                BuiltIn::VertexIndex,
-                false,
-                StorageQualifier::Input,
-            ),
-            "gl_InstanceIndex" => add_builtin(
-                TypeInner::Scalar {
-                    kind: ScalarKind::Uint,
-                    width: 4,
-                },
-                BuiltIn::InstanceIndex,
-                false,
-                StorageQualifier::Input,
-            ),
-            "gl_GlobalInvocationID" => add_builtin(
-                TypeInner::Vector {
+                builtin: BuiltIn::Position,
+                mutable: false,
+                storage: StorageQualifier::Input,
+            },
+            "gl_GlobalInvocationID"
+            | "gl_NumWorkGroups"
+            | "gl_WorkGroupSize"
+            | "gl_WorkGroupID"
+            | "gl_LocalInvocationID" => BuiltInData {
+                inner: TypeInner::Vector {
                     size: VectorSize::Tri,
                     kind: ScalarKind::Uint,
                     width: 4,
                 },
-                BuiltIn::GlobalInvocationId,
-                false,
-                StorageQualifier::Input,
-            ),
-            "gl_NumWorkGroups" => add_builtin(
-                TypeInner::Vector {
-                    size: VectorSize::Tri,
-                    kind: ScalarKind::Uint,
-                    width: 4,
+                builtin: match name {
+                    "gl_GlobalInvocationID" => BuiltIn::GlobalInvocationId,
+                    "gl_NumWorkGroups" => BuiltIn::NumWorkGroups,
+                    "gl_WorkGroupSize" => BuiltIn::WorkGroupSize,
+                    "gl_WorkGroupID" => BuiltIn::WorkGroupId,
+                    "gl_LocalInvocationID" => BuiltIn::LocalInvocationId,
+                    _ => unreachable!(),
                 },
-                BuiltIn::NumWorkGroups,
-                false,
-                StorageQualifier::Input,
-            ),
-            "gl_FrontFacing" => add_builtin(
-                TypeInner::Scalar {
+                mutable: false,
+                storage: StorageQualifier::Input,
+            },
+            "gl_FrontFacing" => BuiltInData {
+                inner: TypeInner::Scalar {
                     kind: ScalarKind::Bool,
                     width: crate::BOOL_WIDTH,
                 },
-                BuiltIn::FrontFacing,
-                false,
-                StorageQualifier::Input,
-            ),
-            "gl_PrimitiveID" => add_builtin(
-                TypeInner::Scalar {
-                    kind: ScalarKind::Uint,
+                builtin: BuiltIn::FrontFacing,
+                mutable: false,
+                storage: StorageQualifier::Input,
+            },
+            "gl_PointSize" | "gl_FragDepth" => BuiltInData {
+                inner: TypeInner::Scalar {
+                    kind: ScalarKind::Float,
                     width: 4,
                 },
-                BuiltIn::PrimitiveIndex,
-                false,
-                StorageQualifier::Input,
-            ),
-            _ => None,
-        }
+                builtin: match name {
+                    "gl_PointSize" => BuiltIn::PointSize,
+                    "gl_FragDepth" => BuiltIn::FragDepth,
+                    _ => unreachable!(),
+                },
+                mutable: true,
+                storage: StorageQualifier::Output,
+            },
+            "gl_ClipDistance" | "gl_CullDistance" => {
+                let base = self.module.types.fetch_or_append(
+                    Type {
+                        name: None,
+                        inner: TypeInner::Scalar {
+                            kind: ScalarKind::Float,
+                            width: 4,
+                        },
+                    },
+                    meta.as_span(),
+                );
+
+                BuiltInData {
+                    inner: TypeInner::Array {
+                        base,
+                        size: crate::ArraySize::Dynamic,
+                        stride: 4,
+                    },
+                    builtin: match name {
+                        "gl_ClipDistance" => BuiltIn::PointSize,
+                        "gl_CullDistance" => BuiltIn::FragDepth,
+                        _ => unreachable!(),
+                    },
+                    mutable: self.meta.stage == ShaderStage::Vertex,
+                    storage: StorageQualifier::Output,
+                }
+            }
+            _ => {
+                let builtin = match name {
+                    "gl_BaseVertex" => BuiltIn::BaseVertex,
+                    "gl_BaseInstance" => BuiltIn::BaseInstance,
+                    "gl_PrimitiveID" => BuiltIn::PrimitiveIndex,
+                    "gl_InstanceIndex" => BuiltIn::InstanceIndex,
+                    "gl_VertexIndex" => BuiltIn::VertexIndex,
+                    "gl_SampleID" => BuiltIn::SampleIndex,
+                    "gl_LocalInvocationIndex" => BuiltIn::LocalInvocationIndex,
+                    _ => return None,
+                };
+
+                BuiltInData {
+                    inner: TypeInner::Scalar {
+                        kind: ScalarKind::Uint,
+                        width: 4,
+                    },
+                    builtin,
+                    mutable: false,
+                    storage: StorageQualifier::Input,
+                }
+            }
+        };
+
+        self.add_builtin(ctx, body, name, data, meta)
     }
 
     pub(crate) fn field_selection(
