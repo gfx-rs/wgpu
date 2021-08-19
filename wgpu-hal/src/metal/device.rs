@@ -13,6 +13,7 @@ struct CompiledShader {
     library: mtl::Library,
     function: mtl::Function,
     wg_size: mtl::MTLSize,
+    wg_memory_sizes: Vec<u32>,
     sized_bindings: Vec<naga::ResourceBinding>,
     immutable_buffer_mask: usize,
 }
@@ -104,28 +105,38 @@ impl super::Device {
             crate::PipelineError::EntryPoint(naga_stage)
         })?;
 
-        // collect sizes indices and immutable buffers
+        // collect sizes indices, immutable buffers, and work group memory sizes
         let ep_info = &stage.module.naga.info.get_entry_point(ep_index);
+        let mut wg_memory_sizes = Vec::new();
         let mut sized_bindings = Vec::new();
         let mut immutable_buffer_mask = 0;
         for (var_handle, var) in module.global_variables.iter() {
+            if var.class == naga::StorageClass::WorkGroup {
+                let size = module.types[var.ty].inner.span(&module.constants);
+                wg_memory_sizes.push(size);
+            }
+
             if let naga::TypeInner::Struct { ref members, .. } = module.types[var.ty].inner {
                 let br = match var.binding {
                     Some(ref br) => br.clone(),
                     None => continue,
                 };
-                let storage_access_store = if let naga::StorageClass::Storage { access } = var.class
-                {
-                    access.contains(naga::StorageAccess::STORE)
-                } else {
-                    false
-                };
-                // check for an immutable buffer
-                if !ep_info[var_handle].is_empty() && !storage_access_store {
-                    let psm = &layout.naga_options.per_stage_map[naga_stage];
-                    let slot = psm.resources[&br].buffer.unwrap();
-                    immutable_buffer_mask |= 1 << slot;
+
+                if !ep_info[var_handle].is_empty() {
+                    let storage_access_store = match var.class {
+                        naga::StorageClass::Storage { access } => {
+                            access.contains(naga::StorageAccess::STORE)
+                        }
+                        _ => false,
+                    };
+                    // check for an immutable buffer
+                    if !storage_access_store {
+                        let psm = &layout.naga_options.per_stage_map[naga_stage];
+                        let slot = psm.resources[&br].buffer.unwrap();
+                        immutable_buffer_mask |= 1 << slot;
+                    }
                 }
+
                 // check for the unsized buffer
                 if let Some(member) = members.last() {
                     if let naga::TypeInner::Array {
@@ -144,6 +155,7 @@ impl super::Device {
             library,
             function,
             wg_size,
+            wg_memory_sizes,
             sized_bindings,
             immutable_buffer_mask,
         })
@@ -915,6 +927,7 @@ impl crate::Device<super::Api> for super::Device {
             },
             cs_lib: cs.library,
             work_group_size: cs.wg_size,
+            work_group_memory_sizes: cs.wg_memory_sizes,
         })
     }
     unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
