@@ -16,7 +16,7 @@ struct type10 {
 
 static float2 v_uv = (float2)0;
 static float2 a_uv1 = (float2)0;
-static gl_PerVertex perVertexStruct = { float4(0.0, 0.0, 0.0, 1.0), 1.0, float(0.0), float(0.0) };
+static gl_PerVertex perVertexStruct = { float4(0.0, 0.0, 0.0, 1.0), 1.0, { 0.0 }, { 0.0 } };
 static float2 a_pos1 = (float2)0;
 
 struct VertexInput_main {
