@@ -1,6 +1,6 @@
 use super::{
     ast::{FunctionKind, Profile, TypeQualifier},
-    context::Context,
+    context::{Context, ExprPos},
     error::ExpectedToken,
     error::{Error, ErrorKind},
     lex::{Lexer, LexerResultKind},
@@ -199,7 +199,7 @@ impl<'source> ParsingContext<'source> {
 
         let mut stmt_ctx = ctx.stmt_ctx();
         let expr = self.parse_conditional(parser, &mut ctx, &mut stmt_ctx, &mut block, None)?;
-        let (root, meta) = ctx.lower_expect(stmt_ctx, parser, expr, false, &mut block)?;
+        let (root, meta) = ctx.lower_expect(stmt_ctx, parser, expr, ExprPos::Rhs, &mut block)?;
 
         Ok((parser.solve_constant(&ctx, root, meta)?, meta))
     }

@@ -1,3 +1,4 @@
+use crate::front::glsl::context::ExprPos;
 use crate::front::glsl::SourceMetadata;
 use crate::{
     front::glsl::{
@@ -77,7 +78,8 @@ impl<'source> ParsingContext<'source> {
                         let mut stmt = ctx.stmt_ctx();
                         let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
                         self.expect(parser, TokenValue::Semicolon)?;
-                        let (handle, meta) = ctx.lower_expect(stmt, parser, expr, false, body)?;
+                        let (handle, meta) =
+                            ctx.lower_expect(stmt, parser, expr, ExprPos::Rhs, body)?;
                         (Some(handle), meta)
                     }
                 };
@@ -99,7 +101,8 @@ impl<'source> ParsingContext<'source> {
                 let condition = {
                     let mut stmt = ctx.stmt_ctx();
                     let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
-                    let (handle, more_meta) = ctx.lower_expect(stmt, parser, expr, false, body)?;
+                    let (handle, more_meta) =
+                        ctx.lower_expect(stmt, parser, expr, ExprPos::Rhs, body)?;
                     meta = meta.union(&more_meta);
                     handle
                 };
@@ -139,7 +142,7 @@ impl<'source> ParsingContext<'source> {
                 let selector = {
                     let mut stmt = ctx.stmt_ctx();
                     let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
-                    ctx.lower_expect(stmt, parser, expr, false, body)?.0
+                    ctx.lower_expect(stmt, parser, expr, ExprPos::Rhs, body)?.0
                 };
                 self.expect(parser, TokenValue::RightParen)?;
 
@@ -158,7 +161,7 @@ impl<'source> ParsingContext<'source> {
                                 let mut stmt = ctx.stmt_ctx();
                                 let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
                                 let (root, meta) =
-                                    ctx.lower_expect(stmt, parser, expr, false, body)?;
+                                    ctx.lower_expect(stmt, parser, expr, ExprPos::Rhs, body)?;
                                 let constant = parser.solve_constant(ctx, root, meta)?;
 
                                 match parser.module.constants[constant].inner {
@@ -287,7 +290,7 @@ impl<'source> ParsingContext<'source> {
                 let meta = meta.union(&self.expect(parser, TokenValue::RightParen)?.meta);
 
                 let (expr, expr_meta) =
-                    ctx.lower_expect(stmt, parser, root, false, &mut loop_body)?;
+                    ctx.lower_expect(stmt, parser, root, ExprPos::Rhs, &mut loop_body)?;
                 let condition = ctx.add_expression(
                     Expression::Unary {
                         op: UnaryOperator::Not,
@@ -340,7 +343,7 @@ impl<'source> ParsingContext<'source> {
                 let meta = start_meta.union(&end_meta);
 
                 let (expr, expr_meta) =
-                    ctx.lower_expect(stmt, parser, root, false, &mut loop_body)?;
+                    ctx.lower_expect(stmt, parser, root, ExprPos::Rhs, &mut loop_body)?;
                 let condition = ctx.add_expression(
                     Expression::Unary {
                         op: UnaryOperator::Not,
@@ -383,7 +386,7 @@ impl<'source> ParsingContext<'source> {
                     } else {
                         let mut stmt = ctx.stmt_ctx();
                         let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
-                        ctx.lower(stmt, parser, expr, false, body)?;
+                        ctx.lower(stmt, parser, expr, ExprPos::Rhs, body)?;
                         self.expect(parser, TokenValue::Semicolon)?;
                     }
                 }
@@ -422,7 +425,7 @@ impl<'source> ParsingContext<'source> {
                         } else {
                             let mut stmt = ctx.stmt_ctx();
                             let root = self.parse_expression(parser, ctx, &mut stmt, &mut block)?;
-                            ctx.lower_expect(stmt, parser, root, false, &mut block)?
+                            ctx.lower_expect(stmt, parser, root, ExprPos::Rhs, &mut block)?
                         };
 
                     let condition = ctx.add_expression(
@@ -455,7 +458,7 @@ impl<'source> ParsingContext<'source> {
                         let mut stmt = ctx.stmt_ctx();
                         let rest =
                             self.parse_expression(parser, ctx, &mut stmt, &mut continuing)?;
-                        ctx.lower(stmt, parser, rest, false, &mut continuing)?;
+                        ctx.lower(stmt, parser, rest, ExprPos::Rhs, &mut continuing)?;
                     }
                 }
 
@@ -504,7 +507,7 @@ impl<'source> ParsingContext<'source> {
             | TokenValue::FloatConstant(_) => {
                 let mut stmt = ctx.stmt_ctx();
                 let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
-                ctx.lower(stmt, parser, expr, false, body)?;
+                ctx.lower(stmt, parser, expr, ExprPos::Rhs, body)?;
                 self.expect(parser, TokenValue::Semicolon)?.meta
             }
             TokenValue::Semicolon => self.bump(parser)?.meta,

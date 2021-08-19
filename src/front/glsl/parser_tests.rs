@@ -812,4 +812,19 @@ fn expressions() {
         "#,
         )
         .unwrap();
+
+    // Dynamic indexing of array
+    parser
+        .parse(
+            &Options::from(ShaderStage::Vertex),
+            r#"
+        #  version 450
+        void main() {
+            const vec4 positions[1] = { vec4(0) };
+
+            gl_Position = positions[gl_VertexIndex];
+        }
+        "#,
+        )
+        .unwrap();
 }

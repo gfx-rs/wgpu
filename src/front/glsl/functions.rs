@@ -1,7 +1,7 @@
 use super::{
     ast::*,
     builtins::{inject_builtin, inject_double_builtin, sampled_to_depth},
-    context::{Context, StmtContext},
+    context::{Context, ExprPos, StmtContext},
     error::{Error, ErrorKind},
     types::scalar_components,
     Parser, Result, SourceMetadata,
@@ -48,7 +48,7 @@ impl Parser {
     ) -> Result<Option<Handle<Expression>>> {
         let args: Vec<_> = raw_args
             .iter()
-            .map(|e| ctx.lower_expect_inner(stmt, self, *e, false, body))
+            .map(|e| ctx.lower_expect_inner(stmt, self, *e, ExprPos::Rhs, body))
             .collect::<Result<_>>()?;
 
         match fc {
@@ -565,7 +565,7 @@ impl Parser {
             .zip(raw_args.iter().zip(parameters.iter()))
         {
             let (mut handle, meta) =
-                ctx.lower_expect_inner(stmt, self, *expr, parameter_info.qualifier.is_lhs(), body)?;
+                ctx.lower_expect_inner(stmt, self, *expr, parameter_info.qualifier.as_pos(), body)?;
 
             if let TypeInner::Vector { size, kind, width } =
                 *self.resolve_type(ctx, handle, meta)?
@@ -638,7 +638,9 @@ impl Parser {
                 ctx.emit_start();
                 for (tgt, pointer) in proxy_writes {
                     let value = ctx.add_expression(Expression::Load { pointer }, meta, body);
-                    let target = ctx.lower_expect_inner(stmt, self, tgt, true, body)?.0;
+                    let target = ctx
+                        .lower_expect_inner(stmt, self, tgt, ExprPos::Rhs, body)?
+                        .0;
 
                     ctx.emit_flush(body);
                     body.push(

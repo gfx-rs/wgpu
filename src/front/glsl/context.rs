@@ -15,6 +15,28 @@ use crate::{
 };
 use std::{convert::TryFrom, ops::Index};
 
+/// The position at which an expression is, used while lowering
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ExprPos {
+    /// The expression is in the left hand side of an assignment
+    Lhs,
+    /// The expression is in the right hand side of an assignment
+    Rhs,
+    /// The expression is an array being indexed, needed to allow constant
+    /// arrays to be dinamically indexed
+    ArrayBase,
+}
+
+impl ExprPos {
+    /// Returns an lhs position if the current position is lhs otherwise ArrayBase
+    fn maybe_array_base(&self) -> Self {
+        match *self {
+            ExprPos::Lhs => *self,
+            _ => ExprPos::ArrayBase,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Context {
     pub expressions: Arena<Expression>,
@@ -323,10 +345,10 @@ impl Context {
         mut stmt: StmtContext,
         parser: &mut Parser,
         expr: Handle<HirExpr>,
-        lhs: bool,
+        pos: ExprPos,
         body: &mut Block,
     ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
-        let res = self.lower_inner(&stmt, parser, expr, lhs, body);
+        let res = self.lower_inner(&stmt, parser, expr, pos, body);
 
         stmt.hir_exprs.clear();
         self.stmt_ctx = Some(stmt);
@@ -344,10 +366,10 @@ impl Context {
         mut stmt: StmtContext,
         parser: &mut Parser,
         expr: Handle<HirExpr>,
-        lhs: bool,
+        pos: ExprPos,
         body: &mut Block,
     ) -> Result<(Handle<Expression>, SourceMetadata)> {
-        let res = self.lower_expect_inner(&stmt, parser, expr, lhs, body);
+        let res = self.lower_expect_inner(&stmt, parser, expr, pos, body);
 
         stmt.hir_exprs.clear();
         self.stmt_ctx = Some(stmt);
@@ -365,10 +387,10 @@ impl Context {
         stmt: &StmtContext,
         parser: &mut Parser,
         expr: Handle<HirExpr>,
-        lhs: bool,
+        pos: ExprPos,
         body: &mut Block,
     ) -> Result<(Handle<Expression>, SourceMetadata)> {
-        let (maybe_expr, meta) = self.lower_inner(stmt, parser, expr, lhs, body)?;
+        let (maybe_expr, meta) = self.lower_inner(stmt, parser, expr, pos, body)?;
 
         let expr = match maybe_expr {
             Some(e) => e,
@@ -389,16 +411,18 @@ impl Context {
         stmt: &StmtContext,
         parser: &mut Parser,
         expr: Handle<HirExpr>,
-        lhs: bool,
+        pos: ExprPos,
         body: &mut Block,
     ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
         let HirExpr { ref kind, meta } = stmt.hir_exprs[expr];
 
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
-                let base = self.lower_expect_inner(stmt, parser, base, true, body)?.0;
+                let base = self
+                    .lower_expect_inner(stmt, parser, base, pos.maybe_array_base(), body)?
+                    .0;
                 let (index, index_meta) =
-                    self.lower_expect_inner(stmt, parser, index, false, body)?;
+                    self.lower_expect_inner(stmt, parser, index, ExprPos::Rhs, body)?;
 
                 let pointer = parser
                     .solve_constant(self, index, index_meta)
@@ -427,7 +451,7 @@ impl Context {
                         self.add_expression(Expression::Access { base, index }, meta, body)
                     });
 
-                if !lhs {
+                if ExprPos::Rhs == pos {
                     let resolved = parser.resolve_type(self, pointer, meta)?;
                     if resolved.pointer_class().is_some() {
                         return Ok((
@@ -440,18 +464,18 @@ impl Context {
                 pointer
             }
             HirExprKind::Select { base, ref field } => {
-                let base = self.lower_expect_inner(stmt, parser, base, lhs, body)?.0;
+                let base = self.lower_expect_inner(stmt, parser, base, pos, body)?.0;
 
-                parser.field_selection(self, lhs, body, base, field, meta)?
+                parser.field_selection(self, ExprPos::Lhs == pos, body, base, field, meta)?
             }
-            HirExprKind::Constant(constant) if !lhs => {
+            HirExprKind::Constant(constant) if pos == ExprPos::Rhs => {
                 self.add_expression(Expression::Constant(constant), meta, body)
             }
-            HirExprKind::Binary { left, op, right } if !lhs => {
+            HirExprKind::Binary { left, op, right } if pos == ExprPos::Rhs => {
                 let (mut left, left_meta) =
-                    self.lower_expect_inner(stmt, parser, left, false, body)?;
+                    self.lower_expect_inner(stmt, parser, left, pos, body)?;
                 let (mut right, right_meta) =
-                    self.lower_expect_inner(stmt, parser, right, false, body)?;
+                    self.lower_expect_inner(stmt, parser, right, pos, body)?;
 
                 match op {
                     BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => self
@@ -543,14 +567,14 @@ impl Context {
                     _ => self.add_expression(Expression::Binary { left, op, right }, meta, body),
                 }
             }
-            HirExprKind::Unary { op, expr } if !lhs => {
-                let expr = self.lower_expect_inner(stmt, parser, expr, false, body)?.0;
+            HirExprKind::Unary { op, expr } if pos == ExprPos::Rhs => {
+                let expr = self.lower_expect_inner(stmt, parser, expr, pos, body)?.0;
 
                 self.add_expression(Expression::Unary { op, expr }, meta, body)
             }
             HirExprKind::Variable(ref var) => {
-                if lhs {
-                    if !var.mutable {
+                if pos != ExprPos::Rhs {
+                    if !var.mutable && ExprPos::Lhs == pos {
                         parser.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Variable cannot be used in LHS position".into(),
@@ -566,7 +590,7 @@ impl Context {
                     var.expr
                 }
             }
-            HirExprKind::Call(ref call) if !lhs => {
+            HirExprKind::Call(ref call) if pos != ExprPos::Lhs => {
                 let maybe_expr = parser.function_or_constructor_call(
                     self,
                     stmt,
@@ -581,14 +605,14 @@ impl Context {
                 condition,
                 accept,
                 reject,
-            } if !lhs => {
+            } if ExprPos::Lhs != pos => {
                 let condition = self
-                    .lower_expect_inner(stmt, parser, condition, false, body)?
+                    .lower_expect_inner(stmt, parser, condition, ExprPos::Rhs, body)?
                     .0;
                 let (mut accept, accept_meta) =
-                    self.lower_expect_inner(stmt, parser, accept, false, body)?;
+                    self.lower_expect_inner(stmt, parser, accept, pos, body)?;
                 let (mut reject, reject_meta) =
-                    self.lower_expect_inner(stmt, parser, reject, false, body)?;
+                    self.lower_expect_inner(stmt, parser, reject, pos, body)?;
 
                 self.binary_implicit_conversion(
                     parser,
@@ -608,10 +632,11 @@ impl Context {
                     body,
                 )
             }
-            HirExprKind::Assign { tgt, value } if !lhs => {
-                let (pointer, ptr_meta) = self.lower_expect_inner(stmt, parser, tgt, true, body)?;
+            HirExprKind::Assign { tgt, value } if ExprPos::Lhs != pos => {
+                let (pointer, ptr_meta) =
+                    self.lower_expect_inner(stmt, parser, tgt, ExprPos::Lhs, body)?;
                 let (mut value, value_meta) =
-                    self.lower_expect_inner(stmt, parser, value, false, body)?;
+                    self.lower_expect_inner(stmt, parser, value, ExprPos::Rhs, body)?;
 
                 let scalar_components = self.expr_scalar_components(parser, pointer, ptr_meta)?;
 
@@ -686,7 +711,9 @@ impl Context {
                     false => BinaryOperator::Subtract,
                 };
 
-                let pointer = self.lower_expect_inner(stmt, parser, expr, true, body)?.0;
+                let pointer = self
+                    .lower_expect_inner(stmt, parser, expr, ExprPos::Lhs, body)?
+                    .0;
                 let left = self.add_expression(Expression::Load { pointer }, meta, body);
 
                 let uint = match parser.resolve_type(self, left, meta)?.scalar_kind() {

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{builtins::MacroCall, SourceMetadata};
+use super::{builtins::MacroCall, context::ExprPos, SourceMetadata};
 use crate::{
     BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle, Interpolation,
     Sampling, StorageAccess, StorageClass, Type, UnaryOperator,
@@ -212,6 +212,14 @@ impl ParameterQualifier {
         match *self {
             ParameterQualifier::Out | ParameterQualifier::InOut => true,
             _ => false,
+        }
+    }
+
+    /// Converts from a parameter qualifier into a [`ExprPos`](ExprPos)
+    pub fn as_pos(&self) -> ExprPos {
+        match *self {
+            ParameterQualifier::Out | ParameterQualifier::InOut => ExprPos::Lhs,
+            _ => ExprPos::Rhs,
         }
     }
 }
