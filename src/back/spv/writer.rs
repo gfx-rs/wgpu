@@ -1310,6 +1310,11 @@ impl Writer {
         self.logical_layout.in_words(words);
         Ok(())
     }
+
+    /// Return the set of capabilities the last module written used.
+    pub fn get_capabilities_used(&self) -> &crate::FastHashSet<spirv::Capability> {
+        &self.capabilities_used
+    }
 }
 
 #[test]
