@@ -120,6 +120,7 @@ impl<'source> ParsingContext<'source> {
             | TokenValue::In
             | TokenValue::Out
             | TokenValue::Uniform
+            | TokenValue::Shared
             | TokenValue::Buffer
             | TokenValue::Restrict
             | TokenValue::StorageAccess(_)
@@ -151,6 +152,9 @@ impl<'source> ParsingContext<'source> {
                     TokenValue::Out => TypeQualifier::StorageQualifier(StorageQualifier::Output),
                     TokenValue::Uniform => TypeQualifier::StorageQualifier(
                         StorageQualifier::StorageClass(StorageClass::Uniform),
+                    ),
+                    TokenValue::Shared => TypeQualifier::StorageQualifier(
+                        StorageQualifier::StorageClass(StorageClass::WorkGroup),
                     ),
                     TokenValue::Buffer => TypeQualifier::StorageQualifier(
                         StorageQualifier::StorageClass(StorageClass::Storage {

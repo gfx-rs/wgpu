@@ -106,6 +106,7 @@ pub enum TokenValue {
     Uniform,
     Buffer,
     Const,
+    Shared,
 
     Restrict,
     StorageAccess(crate::StorageAccess),
