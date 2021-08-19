@@ -342,7 +342,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
 
                 declaration
                     .overloads
-                    .push(module.add_builtin(args, MacroCall::TextureGrad))
+                    .push(module.add_builtin(args, MacroCall::TextureGrad(shadow)))
             }
         }
         "textureSize" => {
@@ -1351,7 +1351,7 @@ pub enum MacroCall {
     Texture,
     TextureLod,
     TextureProj,
-    TextureGrad,
+    TextureGrad(bool),
     TextureSize,
     TexelFetch,
     MathFunction(MathFunction),
@@ -1385,7 +1385,7 @@ impl MacroCall {
                 ctx.samplers.insert(args[0], args[1]);
                 Ok(args[0])
             }
-            MacroCall::Texture | MacroCall::TextureLod | MacroCall::TextureGrad => {
+            MacroCall::Texture | MacroCall::TextureLod => {
                 let comps = parser.coordinate_components(ctx, args[0], args[1], meta, body)?;
                 let level = match *self {
                     MacroCall::Texture => args
@@ -1393,11 +1393,25 @@ impl MacroCall {
                         .copied()
                         .map_or(SampleLevel::Auto, SampleLevel::Bias),
                     MacroCall::TextureLod => SampleLevel::Exact(args[2]),
-                    MacroCall::TextureGrad => SampleLevel::Gradient {
+                    _ => unreachable!(),
+                };
+                texture_call(ctx, args[0], level, comps, body, meta)
+            }
+            MacroCall::TextureGrad(shadow) => {
+                let comps = parser.coordinate_components(ctx, args[0], args[1], meta, body)?;
+                let level = match shadow {
+                    true => {
+                        log::debug!(
+                            "Assuming gradients {:?} and {:?} are not greater than 1",
+                            args[2],
+                            args[3]
+                        );
+                        SampleLevel::Zero
+                    }
+                    false => SampleLevel::Gradient {
                         x: args[2],
                         y: args[3],
                     },
-                    _ => unreachable!(),
                 };
                 texture_call(ctx, args[0], level, comps, body, meta)
             }
