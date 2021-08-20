@@ -135,10 +135,8 @@ impl Instruction {
             inst_index += 1;
         }
 
-        let mut op_index = 0;
-        for i in inst_index..wc as usize {
+        for (op_index, i) in (inst_index..wc as usize).enumerate() {
             assert_eq!(words[i], self.operands[op_index]);
-            op_index += 1;
         }
     }
 }
@@ -178,7 +176,7 @@ fn test_logical_layout_in_words() {
         "Function Definitions",
     ];
 
-    for i in 0..layout_vectors {
+    for (i, _) in vector_names.iter().enumerate().take(layout_vectors) {
         let mut dummy_instruction = Instruction::new(Op::Constant);
         dummy_instruction.set_type((i + 1) as u32);
         dummy_instruction.set_result((i + 2) as u32);

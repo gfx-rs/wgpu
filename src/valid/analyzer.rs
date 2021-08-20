@@ -992,7 +992,7 @@ fn uniform_control_flow() {
     let stmt_if_non_uniform = S::If {
         condition: non_uniform_global_expr,
         accept: vec![
-            S::Emit(emit_range_constant_derivative.clone()),
+            S::Emit(emit_range_constant_derivative),
             S::Store {
                 pointer: constant_expr,
                 value: derivative_expr,
