@@ -504,7 +504,7 @@ fn convert_spv_inverse_hyperbolic_trig_functions() {
     convert_spv(
         "inv-hyperbolic-trig-functions",
         true,
-        Targets::HLSL | Targets::WGSL | Targets::IR,
+        Targets::HLSL | Targets::WGSL,
     );
 }
 

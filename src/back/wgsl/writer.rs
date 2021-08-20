@@ -1240,88 +1240,96 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
+                enum Function {
+                    Asincosh { is_sin: bool },
+                    Atanh,
+                    Regular(&'static str),
+                }
+
                 // NOTE: If https://github.com/gpuweb/gpuweb/issues/1622 ever is
                 // accepted, replace this with the builtin functions
-                match fun {
-                    Mf::Asinh | Mf::Acosh => {
+                let function = match fun {
+                    Mf::Abs => Function::Regular("abs"),
+                    Mf::Min => Function::Regular("min"),
+                    Mf::Max => Function::Regular("max"),
+                    Mf::Clamp => Function::Regular("clamp"),
+                    // trigonometry
+                    Mf::Cos => Function::Regular("cos"),
+                    Mf::Cosh => Function::Regular("cosh"),
+                    Mf::Sin => Function::Regular("sin"),
+                    Mf::Sinh => Function::Regular("sinh"),
+                    Mf::Tan => Function::Regular("tan"),
+                    Mf::Tanh => Function::Regular("tanh"),
+                    Mf::Acos => Function::Regular("acos"),
+                    Mf::Asin => Function::Regular("asin"),
+                    Mf::Atan => Function::Regular("atan"),
+                    Mf::Atan2 => Function::Regular("atan2"),
+                    Mf::Asinh => Function::Asincosh { is_sin: true },
+                    Mf::Acosh => Function::Asincosh { is_sin: false },
+                    Mf::Atanh => Function::Atanh,
+                    // decomposition
+                    Mf::Ceil => Function::Regular("ceil"),
+                    Mf::Floor => Function::Regular("floor"),
+                    Mf::Round => Function::Regular("round"),
+                    Mf::Fract => Function::Regular("fract"),
+                    Mf::Trunc => Function::Regular("trunc"),
+                    Mf::Modf => Function::Regular("modf"),
+                    Mf::Frexp => Function::Regular("frexp"),
+                    Mf::Ldexp => Function::Regular("ldexp"),
+                    // exponent
+                    Mf::Exp => Function::Regular("exp"),
+                    Mf::Exp2 => Function::Regular("exp2"),
+                    Mf::Log => Function::Regular("log"),
+                    Mf::Log2 => Function::Regular("log2"),
+                    Mf::Pow => Function::Regular("pow"),
+                    // geometry
+                    Mf::Dot => Function::Regular("dot"),
+                    Mf::Outer => Function::Regular("outerProduct"),
+                    Mf::Cross => Function::Regular("cross"),
+                    Mf::Distance => Function::Regular("distance"),
+                    Mf::Length => Function::Regular("length"),
+                    Mf::Normalize => Function::Regular("normalize"),
+                    Mf::FaceForward => Function::Regular("faceForward"),
+                    Mf::Reflect => Function::Regular("reflect"),
+                    // computational
+                    Mf::Sign => Function::Regular("sign"),
+                    Mf::Fma => Function::Regular("fma"),
+                    Mf::Mix => Function::Regular("mix"),
+                    Mf::Step => Function::Regular("step"),
+                    Mf::SmoothStep => Function::Regular("smoothStep"),
+                    Mf::Sqrt => Function::Regular("sqrt"),
+                    Mf::InverseSqrt => Function::Regular("inverseSqrt"),
+                    Mf::Transpose => Function::Regular("transpose"),
+                    Mf::Determinant => Function::Regular("determinant"),
+                    // bits
+                    Mf::CountOneBits => Function::Regular("countOneBits"),
+                    Mf::ReverseBits => Function::Regular("reverseBits"),
+                    _ => {
+                        return Err(Error::UnsupportedMathFunction(fun));
+                    }
+                };
+
+                match function {
+                    Function::Asincosh { is_sin } => {
                         write!(self.out, "log(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " + sqrt(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " * ")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        if fun == Mf::Asinh {
-                            write!(self.out, " + 1.0))")?
-                        } else {
-                            write!(self.out, " - 1.0))")?
+                        match is_sin {
+                            true => write!(self.out, " + 1.0))")?,
+                            false => write!(self.out, " - 1.0))")?,
                         }
                     }
-                    Mf::Atanh => {
+                    Function::Atanh => {
                         write!(self.out, "0.5 * log((1.0 + ")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, ") / (1.0 - ")?;
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "))")?;
                     }
-                    _ => {
-                        let fun_name = match fun {
-                            Mf::Abs => "abs",
-                            Mf::Min => "min",
-                            Mf::Max => "max",
-                            Mf::Clamp => "clamp",
-                            // trigonometry
-                            Mf::Cos => "cos",
-                            Mf::Cosh => "cosh",
-                            Mf::Sin => "sin",
-                            Mf::Sinh => "sinh",
-                            Mf::Tan => "tan",
-                            Mf::Tanh => "tanh",
-                            Mf::Acos => "acos",
-                            Mf::Asin => "asin",
-                            Mf::Atan => "atan",
-                            Mf::Atan2 => "atan2",
-                            // decomposition
-                            Mf::Ceil => "ceil",
-                            Mf::Floor => "floor",
-                            Mf::Round => "round",
-                            Mf::Fract => "fract",
-                            Mf::Trunc => "trunc",
-                            Mf::Modf => "modf",
-                            Mf::Frexp => "frexp",
-                            Mf::Ldexp => "ldexp",
-                            // exponent
-                            Mf::Exp => "exp",
-                            Mf::Exp2 => "exp2",
-                            Mf::Log => "log",
-                            Mf::Log2 => "log2",
-                            Mf::Pow => "pow",
-                            // geometry
-                            Mf::Dot => "dot",
-                            Mf::Outer => "outerProduct",
-                            Mf::Cross => "cross",
-                            Mf::Distance => "distance",
-                            Mf::Length => "length",
-                            Mf::Normalize => "normalize",
-                            Mf::FaceForward => "faceForward",
-                            Mf::Reflect => "reflect",
-                            // computational
-                            Mf::Sign => "sign",
-                            Mf::Fma => "fma",
-                            Mf::Mix => "mix",
-                            Mf::Step => "step",
-                            Mf::SmoothStep => "smoothStep",
-                            Mf::Sqrt => "sqrt",
-                            Mf::InverseSqrt => "inverseSqrt",
-                            Mf::Transpose => "transpose",
-                            Mf::Determinant => "determinant",
-                            // bits
-                            Mf::CountOneBits => "countOneBits",
-                            Mf::ReverseBits => "reverseBits",
-                            _ => {
-                                return Err(Error::UnsupportedMathFunction(fun));
-                            }
-                        };
-
+                    Function::Regular(fun_name) => {
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(module, arg, func_ctx)?;
                         if let Some(arg) = arg1 {
