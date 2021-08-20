@@ -451,7 +451,8 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
             }
         }
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
-        | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh" => {
+        | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh"
+        | "floatBitsToInt" | "floatBitsToUint" => {
             // bits layout
             // bit 0 trough 1 - dims
             for bits in 0..(0b100) {
@@ -486,8 +487,34 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                         "atanh" => MacroCall::MathFunction(MathFunction::Atanh),
                         "radians" => MacroCall::ConstMultiply(std::f64::consts::PI / 180.0),
                         "degrees" => MacroCall::ConstMultiply(180.0 / std::f64::consts::PI),
+                        "floatBitsToInt" => MacroCall::BitCast(Sk::Sint),
+                        "floatBitsToUint" => MacroCall::BitCast(Sk::Uint),
                         _ => unreachable!(),
                     },
+                ))
+            }
+        }
+        "intBitsToFloat" | "uintBitsToFloat" => {
+            // bits layout
+            // bit 0 trough 1 - dims
+            for bits in 0..(0b100) {
+                let size = match bits {
+                    0b00 => None,
+                    0b01 => Some(VectorSize::Bi),
+                    0b10 => Some(VectorSize::Tri),
+                    _ => Some(VectorSize::Quad),
+                };
+                let kind = match name {
+                    "intBitsToFloat" => Sk::Sint,
+                    _ => Sk::Uint,
+                };
+
+                declaration.overloads.push(module.add_builtin(
+                    vec![match size {
+                        Some(size) => TypeInner::Vector { size, kind, width },
+                        None => TypeInner::Scalar { kind, width },
+                    }],
+                    MacroCall::BitCast(Sk::Float),
                 ))
             }
         }
@@ -979,8 +1006,7 @@ fn inject_common_builtin(
 
                 let fun = match name {
                     "ceil" => MacroCall::MathFunction(MathFunction::Ceil),
-                    "round" => MacroCall::MathFunction(MathFunction::Round),
-                    "roundEven" => MacroCall::MathFunction(MathFunction::Round),
+                    "round" | "roundEven" => MacroCall::MathFunction(MathFunction::Round),
                     "floor" => MacroCall::MathFunction(MathFunction::Floor),
                     "fract" => MacroCall::MathFunction(MathFunction::Fract),
                     "trunc" => MacroCall::MathFunction(MathFunction::Trunc),
@@ -1368,6 +1394,7 @@ pub enum MacroCall {
     MixBoolean,
     Clamp(Option<VectorSize>),
     ConstMultiply(f64),
+    BitCast(Sk),
 }
 
 impl MacroCall {
@@ -1603,6 +1630,15 @@ impl MacroCall {
                     body,
                 ))
             }
+            MacroCall::BitCast(kind) => Ok(ctx.add_expression(
+                Expression::As {
+                    expr: args[0],
+                    kind,
+                    convert: None,
+                },
+                SourceMetadata::none(),
+                body,
+            )),
         }
     }
 }
