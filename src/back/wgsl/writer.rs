@@ -1240,75 +1240,101 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
-                let fun_name = match fun {
-                    Mf::Abs => "abs",
-                    Mf::Min => "min",
-                    Mf::Max => "max",
-                    Mf::Clamp => "clamp",
-                    // trigonometry
-                    Mf::Cos => "cos",
-                    Mf::Cosh => "cosh",
-                    Mf::Sin => "sin",
-                    Mf::Sinh => "sinh",
-                    Mf::Tan => "tan",
-                    Mf::Tanh => "tanh",
-                    Mf::Acos => "acos",
-                    Mf::Asin => "asin",
-                    Mf::Atan => "atan",
-                    Mf::Atan2 => "atan2",
-                    // decomposition
-                    Mf::Ceil => "ceil",
-                    Mf::Floor => "floor",
-                    Mf::Round => "round",
-                    Mf::Fract => "fract",
-                    Mf::Trunc => "trunc",
-                    Mf::Modf => "modf",
-                    Mf::Frexp => "frexp",
-                    Mf::Ldexp => "ldexp",
-                    // exponent
-                    Mf::Exp => "exp",
-                    Mf::Exp2 => "exp2",
-                    Mf::Log => "log",
-                    Mf::Log2 => "log2",
-                    Mf::Pow => "pow",
-                    // geometry
-                    Mf::Dot => "dot",
-                    Mf::Outer => "outerProduct",
-                    Mf::Cross => "cross",
-                    Mf::Distance => "distance",
-                    Mf::Length => "length",
-                    Mf::Normalize => "normalize",
-                    Mf::FaceForward => "faceForward",
-                    Mf::Reflect => "reflect",
-                    // computational
-                    Mf::Sign => "sign",
-                    Mf::Fma => "fma",
-                    Mf::Mix => "mix",
-                    Mf::Step => "step",
-                    Mf::SmoothStep => "smoothStep",
-                    Mf::Sqrt => "sqrt",
-                    Mf::InverseSqrt => "inverseSqrt",
-                    Mf::Transpose => "transpose",
-                    Mf::Determinant => "determinant",
-                    // bits
-                    Mf::CountOneBits => "countOneBits",
-                    Mf::ReverseBits => "reverseBits",
-                    _ => {
-                        return Err(Error::UnsupportedMathFunction(fun));
+                // NOTE: If https://github.com/gpuweb/gpuweb/issues/1622 ever is
+                // accepted, replace this with the builtin functions
+                match fun {
+                    Mf::Asinh | Mf::Acosh => {
+                        write!(self.out, "log(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " + sqrt(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " * ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        if fun == Mf::Asinh {
+                            write!(self.out, " + 1.0))")?
+                        } else {
+                            write!(self.out, " - 1.0))")?
+                        }
                     }
-                };
+                    Mf::Atanh => {
+                        write!(self.out, "0.5 * log((1.0 + ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, ") / (1.0 - ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "))")?;
+                    }
+                    _ => {
+                        let fun_name = match fun {
+                            Mf::Abs => "abs",
+                            Mf::Min => "min",
+                            Mf::Max => "max",
+                            Mf::Clamp => "clamp",
+                            // trigonometry
+                            Mf::Cos => "cos",
+                            Mf::Cosh => "cosh",
+                            Mf::Sin => "sin",
+                            Mf::Sinh => "sinh",
+                            Mf::Tan => "tan",
+                            Mf::Tanh => "tanh",
+                            Mf::Acos => "acos",
+                            Mf::Asin => "asin",
+                            Mf::Atan => "atan",
+                            Mf::Atan2 => "atan2",
+                            // decomposition
+                            Mf::Ceil => "ceil",
+                            Mf::Floor => "floor",
+                            Mf::Round => "round",
+                            Mf::Fract => "fract",
+                            Mf::Trunc => "trunc",
+                            Mf::Modf => "modf",
+                            Mf::Frexp => "frexp",
+                            Mf::Ldexp => "ldexp",
+                            // exponent
+                            Mf::Exp => "exp",
+                            Mf::Exp2 => "exp2",
+                            Mf::Log => "log",
+                            Mf::Log2 => "log2",
+                            Mf::Pow => "pow",
+                            // geometry
+                            Mf::Dot => "dot",
+                            Mf::Outer => "outerProduct",
+                            Mf::Cross => "cross",
+                            Mf::Distance => "distance",
+                            Mf::Length => "length",
+                            Mf::Normalize => "normalize",
+                            Mf::FaceForward => "faceForward",
+                            Mf::Reflect => "reflect",
+                            // computational
+                            Mf::Sign => "sign",
+                            Mf::Fma => "fma",
+                            Mf::Mix => "mix",
+                            Mf::Step => "step",
+                            Mf::SmoothStep => "smoothStep",
+                            Mf::Sqrt => "sqrt",
+                            Mf::InverseSqrt => "inverseSqrt",
+                            Mf::Transpose => "transpose",
+                            Mf::Determinant => "determinant",
+                            // bits
+                            Mf::CountOneBits => "countOneBits",
+                            Mf::ReverseBits => "reverseBits",
+                            _ => {
+                                return Err(Error::UnsupportedMathFunction(fun));
+                            }
+                        };
 
-                write!(self.out, "{}(", fun_name)?;
-                self.write_expr(module, arg, func_ctx)?;
-                if let Some(arg) = arg1 {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, "{}(", fun_name)?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        if let Some(arg) = arg1 {
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                        }
+                        if let Some(arg) = arg2 {
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                        }
+                        write!(self.out, ")")?
+                    }
                 }
-                if let Some(arg) = arg2 {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, arg, func_ctx)?;
-                }
-                write!(self.out, ")")?
             }
             Expression::Swizzle {
                 size,

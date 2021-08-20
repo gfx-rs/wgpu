@@ -1140,6 +1140,9 @@ impl<W: Write> Writer<W> {
                     Mf::Asin => "asin",
                     Mf::Atan => "atan",
                     Mf::Atan2 => "atan2",
+                    Mf::Asinh => "asinh",
+                    Mf::Acosh => "acosh",
+                    Mf::Atanh => "atanh",
                     // decomposition
                     Mf::Ceil => "ceil",
                     Mf::Floor => "floor",

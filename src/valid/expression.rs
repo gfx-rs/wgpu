@@ -931,6 +931,9 @@ impl super::Validator {
                     | Mf::Acos
                     | Mf::Asin
                     | Mf::Atan
+                    | Mf::Asinh
+                    | Mf::Acosh
+                    | Mf::Atanh
                     | Mf::Ceil
                     | Mf::Floor
                     | Mf::Round

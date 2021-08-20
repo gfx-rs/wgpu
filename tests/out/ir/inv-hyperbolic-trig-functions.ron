@@ -1,0 +1,182 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar(
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Function,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                class: Private,
+            ),
+        ),
+    ],
+    constants: [
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(1),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(2),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
+                value: Sint(3),
+            ),
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("a"),
+            class: Private,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+    ],
+    functions: [
+        (
+            name: Some("main"),
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("b"),
+                    ty: 1,
+                    init: None,
+                ),
+                (
+                    name: Some("c"),
+                    ty: 1,
+                    init: None,
+                ),
+                (
+                    name: Some("d"),
+                    ty: 1,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                GlobalVariable(1),
+                Constant(1),
+                Constant(2),
+                Constant(3),
+                Constant(4),
+                LocalVariable(1),
+                LocalVariable(2),
+                LocalVariable(3),
+                Load(
+                    pointer: 1,
+                ),
+                Math(
+                    fun: Asinh,
+                    arg: 9,
+                    arg1: None,
+                    arg2: None,
+                ),
+                Load(
+                    pointer: 1,
+                ),
+                Math(
+                    fun: Acosh,
+                    arg: 11,
+                    arg1: None,
+                    arg2: None,
+                ),
+                Load(
+                    pointer: 1,
+                ),
+                Math(
+                    fun: Atanh,
+                    arg: 13,
+                    arg1: None,
+                    arg2: None,
+                ),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 8,
+                    end: 10,
+                )),
+                Store(
+                    pointer: 6,
+                    value: 10,
+                ),
+                Emit((
+                    start: 10,
+                    end: 12,
+                )),
+                Store(
+                    pointer: 7,
+                    value: 12,
+                ),
+                Emit((
+                    start: 12,
+                    end: 14,
+                )),
+                Store(
+                    pointer: 8,
+                    value: 14,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            name: "main",
+            stage: Vertex,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            function: (
+                name: Some("main_wrap"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 1,
+                        arguments: [],
+                        result: None,
+                    ),
+                ],
+            ),
+        ),
+    ],
+)

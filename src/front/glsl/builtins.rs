@@ -451,7 +451,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
             }
         }
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
-        | "log" | "log2" | "radians" | "degrees" => {
+        | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh" => {
             // bits layout
             // bit 0 trough 1 - dims
             for bits in 0..(0b100) {
@@ -481,6 +481,9 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                         "asin" => MacroCall::MathFunction(MathFunction::Asin),
                         "log" => MacroCall::MathFunction(MathFunction::Log),
                         "log2" => MacroCall::MathFunction(MathFunction::Log2),
+                        "asinh" => MacroCall::MathFunction(MathFunction::Asinh),
+                        "acosh" => MacroCall::MathFunction(MathFunction::Acosh),
+                        "atanh" => MacroCall::MathFunction(MathFunction::Atanh),
                         "radians" => MacroCall::ConstMultiply(std::f64::consts::PI / 180.0),
                         "degrees" => MacroCall::ConstMultiply(180.0 / std::f64::consts::PI),
                         _ => unreachable!(),

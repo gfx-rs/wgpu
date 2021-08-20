@@ -151,6 +151,9 @@ impl super::MathFunction {
             Self::Asin => 1,
             Self::Atan => 1,
             Self::Atan2 => 2,
+            Self::Asinh => 1,
+            Self::Acosh => 1,
+            Self::Atanh => 1,
             // decomposition
             Self::Ceil => 1,
             Self::Floor => 1,

@@ -802,6 +802,9 @@ pub enum MathFunction {
     Asin,
     Atan,
     Atan2,
+    Asinh,
+    Acosh,
+    Atanh,
     // decomposition
     Ceil,
     Floor,

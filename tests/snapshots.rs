@@ -498,6 +498,16 @@ fn convert_spv_shadow() {
     convert_spv("shadow", true, Targets::IR | Targets::ANALYSIS);
 }
 
+#[cfg(feature = "spv-in")]
+#[test]
+fn convert_spv_inverse_hyperbolic_trig_functions() {
+    convert_spv(
+        "inv-hyperbolic-trig-functions",
+        true,
+        Targets::HLSL | Targets::WGSL | Targets::IR,
+    );
+}
+
 #[cfg(all(feature = "spv-in", feature = "spv-out"))]
 #[test]
 fn convert_spv_pointer_access() {

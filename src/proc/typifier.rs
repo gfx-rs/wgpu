@@ -554,6 +554,9 @@ impl<'a> ResolveContext<'a> {
                     Mf::Asin |
                     Mf::Atan |
                     Mf::Atan2 |
+                    Mf::Asinh |
+                    Mf::Acosh |
+                    Mf::Atanh |
                     // decomposition
                     Mf::Ceil |
                     Mf::Floor |

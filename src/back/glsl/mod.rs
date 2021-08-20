@@ -2242,6 +2242,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Acos => "acos",
                     Mf::Asin => "asin",
                     Mf::Atan => "atan",
+                    Mf::Asinh => "asinh",
+                    Mf::Acosh => "acosh",
+                    Mf::Atanh => "atanh",
                     // glsl doesn't have atan2 function
                     // use two-argument variation of the atan function
                     Mf::Atan2 => "atan",
