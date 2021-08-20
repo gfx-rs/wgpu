@@ -162,7 +162,7 @@ pub fn calculate_offset(
                 kind: ErrorKind::SemanticError("Invalid struct member type".into()),
                 meta,
             });
-            (0, 0)
+            (1, 0)
         }
     };
 
