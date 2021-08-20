@@ -12,7 +12,9 @@ vec4 builtins() {
     vec4 s3_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), bvec4(false, false, false, false));
     vec4 m1_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), vec4(0.5, 0.5, 0.5, 0.5));
     vec4 m2_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), 0.1);
-    return (((vec4(ivec4(s1_)) + s2_) + m1_) + m2_);
+    float b1_ = intBitsToFloat(ivec4(1, 1, 1, 1).x);
+    vec4 b2_ = intBitsToFloat(ivec4(1, 1, 1, 1));
+    return (((((vec4(ivec4(s1_)) + s2_) + m1_) + m2_) + vec4(b1_)) + b2_);
 }
 
 vec4 splat() {
@@ -30,9 +32,9 @@ int unary() {
 }
 
 void main() {
-    vec4 _e3 = builtins();
-    vec4 _e4 = splat();
-    int _e5 = unary();
+    vec4 _e4 = builtins();
+    vec4 _e5 = splat();
+    int _e6 = unary();
     return;
 }
 

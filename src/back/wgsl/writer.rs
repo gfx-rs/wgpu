@@ -1145,7 +1145,11 @@ impl<W: Write> Writer<W> {
                 let name = &self.names[&NameKey::GlobalVariable(handle)];
                 write!(self.out, "{}", name)?;
             }
-            Expression::As { expr, kind, .. } => {
+            Expression::As {
+                expr,
+                kind,
+                convert,
+            } => {
                 let inner = func_ctx.info[expr].ty.inner_with(&module.types);
                 match *inner {
                     TypeInner::Matrix { columns, rows, .. } => {
@@ -1164,7 +1168,13 @@ impl<W: Write> Writer<W> {
                             scalar_kind_str(kind)
                         )?;
                     }
-                    TypeInner::Scalar { .. } => write!(self.out, "{}", scalar_kind_str(kind))?,
+                    TypeInner::Scalar { .. } => {
+                        if convert.is_some() {
+                            write!(self.out, "{}", scalar_kind_str(kind))?
+                        } else {
+                            write!(self.out, "bitcast<{}>", scalar_kind_str(kind))?
+                        }
+                    }
                     _ => {
                         return Err(Error::Unimplemented(format!(
                             "write_expr expression::as {:?}",

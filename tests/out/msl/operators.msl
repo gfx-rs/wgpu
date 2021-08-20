@@ -5,6 +5,7 @@
 constant metal::float4 v_f32_one = {1.0, 1.0, 1.0, 1.0};
 constant metal::float4 v_f32_zero = {0.0, 0.0, 0.0, 0.0};
 constant metal::float4 v_f32_half = {0.5, 0.5, 0.5, 0.5};
+constant metal::int4 v_i32_one = {1, 1, 1, 1};
 
 metal::float4 builtins(
 ) {
@@ -13,7 +14,9 @@ metal::float4 builtins(
     metal::float4 s3_ = metal::select(v_f32_one, v_f32_zero, metal::bool4(false, false, false, false));
     metal::float4 m1_ = metal::mix(v_f32_zero, v_f32_one, v_f32_half);
     metal::float4 m2_ = metal::mix(v_f32_zero, v_f32_one, 0.1);
-    return ((static_cast<float4>(metal::int4(s1_)) + s2_) + m1_) + m2_;
+    float b1_ = as_type<float>(v_i32_one.x);
+    metal::float4 b2_ = as_type<float4>(v_i32_one);
+    return ((((static_cast<float4>(metal::int4(s1_)) + s2_) + m1_) + m2_) + metal::float4(b1_)) + b2_;
 }
 
 metal::float4 splat(
@@ -34,8 +37,8 @@ int unary(
 
 kernel void main1(
 ) {
-    metal::float4 _e3 = builtins();
-    metal::float4 _e4 = splat();
-    int _e5 = unary();
+    metal::float4 _e4 = builtins();
+    metal::float4 _e5 = splat();
+    int _e6 = unary();
     return;
 }

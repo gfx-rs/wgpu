@@ -1274,6 +1274,36 @@ impl Parser {
             }
         } else {
             match name {
+                "bitcast" => {
+                    let _ = lexer.next();
+                    lexer.expect_generic_paren('<')?;
+                    let ((ty, _access), type_span) = lexer.capture_span(|lexer| {
+                        self.parse_type_decl(lexer, None, ctx.types, ctx.constants)
+                    })?;
+                    lexer.expect_generic_paren('>')?;
+
+                    lexer.open_arguments()?;
+                    let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    lexer.close_arguments()?;
+
+                    let kind = match ctx.types[ty].inner {
+                        crate::TypeInner::Scalar { kind, .. } => kind,
+                        crate::TypeInner::Vector { kind, .. } => kind,
+                        _ => {
+                            return Err(Error::BadTypeCast {
+                                from_type: format!("{:?}", ctx.resolve_type(expr)?),
+                                span: type_span,
+                                to_type: format!("{:?}", ctx.types[ty].inner),
+                            })
+                        }
+                    };
+
+                    crate::Expression::As {
+                        expr,
+                        kind,
+                        convert: None,
+                    }
+                }
                 "select" => {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
