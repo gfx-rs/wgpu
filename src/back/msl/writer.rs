@@ -1146,7 +1146,7 @@ impl<W: Write> Writer<W> {
                     // decomposition
                     Mf::Ceil => "ceil",
                     Mf::Floor => "floor",
-                    Mf::Round => "round",
+                    Mf::Round => "rint",
                     Mf::Fract => "fract",
                     Mf::Trunc => "trunc",
                     Mf::Modf => "modf",

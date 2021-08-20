@@ -1968,6 +1968,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     } else {
                         let fun = match gl_op {
                             Glo::Round => Mf::Round,
+                            Glo::RoundEven => Mf::Round,
                             Glo::Trunc => Mf::Trunc,
                             Glo::FAbs | Glo::SAbs => Mf::Abs,
                             Glo::FSign | Glo::SSign => Mf::Sign,

@@ -563,7 +563,7 @@ impl<'w> BlockContext<'w> {
                     Mf::Atanh => MathOp::Ext(spirv::GLOp::Atanh),
                     // decomposition
                     Mf::Ceil => MathOp::Ext(spirv::GLOp::Ceil),
-                    Mf::Round => MathOp::Ext(spirv::GLOp::Round),
+                    Mf::Round => MathOp::Ext(spirv::GLOp::RoundEven),
                     Mf::Floor => MathOp::Ext(spirv::GLOp::Floor),
                     Mf::Fract => MathOp::Ext(spirv::GLOp::Fract),
                     Mf::Trunc => MathOp::Ext(spirv::GLOp::Trunc),

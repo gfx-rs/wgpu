@@ -953,8 +953,8 @@ fn inject_common_builtin(
     float_width: crate::Bytes,
 ) {
     match name {
-        "ceil" | "round" | "floor" | "fract" | "trunc" | "sqrt" | "inversesqrt" | "normalize"
-        | "length" | "isinf" | "isnan" => {
+        "ceil" | "round" | "roundEven" | "floor" | "fract" | "trunc" | "sqrt" | "inversesqrt"
+        | "normalize" | "length" | "isinf" | "isnan" => {
             // bits layout
             // bit 0 trough 1 - dims
             for bits in 0..(0b100) {
@@ -980,6 +980,7 @@ fn inject_common_builtin(
                 let fun = match name {
                     "ceil" => MacroCall::MathFunction(MathFunction::Ceil),
                     "round" => MacroCall::MathFunction(MathFunction::Round),
+                    "roundEven" => MacroCall::MathFunction(MathFunction::Round),
                     "floor" => MacroCall::MathFunction(MathFunction::Floor),
                     "fract" => MacroCall::MathFunction(MathFunction::Fract),
                     "trunc" => MacroCall::MathFunction(MathFunction::Trunc),
