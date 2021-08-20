@@ -50,15 +50,8 @@ impl Writer {
         }
         let raw_version = ((major as u32) << 16) | ((minor as u32) << 8);
 
-        let (capabilities, forbidden_caps) = match options.capabilities {
-            Some(ref caps) => (caps.clone(), None),
-            None => {
-                let mut caps = crate::FastHashSet::default();
-                caps.insert(spirv::Capability::Shader);
-                let forbidden: &[_] = &[spirv::Capability::Kernel];
-                (caps, Some(forbidden))
-            }
-        };
+        let mut capabilities_used = crate::FastHashSet::default();
+        capabilities_used.insert(spirv::Capability::Shader);
 
         let mut id_gen = IdGenerator::default();
         let gl450_ext_inst_id = id_gen.next();
@@ -68,8 +61,8 @@ impl Writer {
             physical_layout: PhysicalLayout::new(raw_version),
             logical_layout: LogicalLayout::default(),
             id_gen,
-            capabilities,
-            forbidden_caps,
+            capabilities_available: options.capabilities.clone(),
+            capabilities_used,
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
@@ -110,8 +103,7 @@ impl Writer {
             // Copied from the old Writer:
             flags: self.flags,
             index_bounds_check_policy: self.index_bounds_check_policy,
-            capabilities: take(&mut self.capabilities),
-            forbidden_caps: take(&mut self.forbidden_caps),
+            capabilities_available: take(&mut self.capabilities_available),
 
             // Initialized afresh:
             id_gen,
@@ -119,6 +111,7 @@ impl Writer {
             gl450_ext_inst_id,
 
             // Recycled:
+            capabilities_used: take(&mut self.capabilities_used).recycle(),
             physical_layout: self.physical_layout.clone().recycle(),
             logical_layout: take(&mut self.logical_layout).recycle(),
             debugs: take(&mut self.debugs).recycle(),
@@ -134,27 +127,49 @@ impl Writer {
         };
 
         *self = fresh;
+
+        self.capabilities_used.insert(spirv::Capability::Shader);
     }
 
-    //TODO: revive and rewrite this, see:
-    // https://github.com/gfx-rs/rspirv/issues/198
-    // https://github.com/gfx-rs/rspirv/pull/185#issuecomment-900796025
-    pub(super) fn check(&mut self, capabilities: &[spirv::Capability]) -> Result<(), Error> {
-        if capabilities.is_empty()
-            || capabilities
-                .iter()
-                .any(|cap| self.capabilities.contains(cap))
-        {
-            return Ok(());
-        }
-        if let Some(forbidden) = self.forbidden_caps {
-            // take the first allowed capability, blindly
-            if let Some(&cap) = capabilities.iter().find(|cap| !forbidden.contains(cap)) {
-                self.capabilities.insert(cap);
-                return Ok(());
+    /// Indicate that the code requires any one of the listed capabilities.
+    ///
+    /// If nothing in `capabilities` appears in the available capabilities
+    /// specified in the [`Options`] from which this `Writer` was created,
+    /// return an error. The `what` string is used in the error message to
+    /// explain what provoked the requirement. (If no available capabilites were
+    /// given, assume everything is available.)
+    ///
+    /// The first acceptable capability will be added to this `Writer`'s
+    /// [`capabilities_used`] table, and an `OpCapability` emitted for it in the
+    /// result. For this reason, more specific capabilities should be listed
+    /// before more general.
+    ///
+    /// [`capabilities_used`]: Writer::capabilities_used
+    pub(super) fn require_any(
+        &mut self,
+        what: &'static str,
+        capabilities: &[spirv::Capability],
+    ) -> Result<(), Error> {
+        match *capabilities {
+            [] => Ok(()),
+            [first, ..] => {
+                // Find the first acceptable capability, or return an error if
+                // there is none.
+                let selected = match self.capabilities_available {
+                    None => first,
+                    Some(ref available) => {
+                        match capabilities.iter().find(|cap| available.contains(cap)) {
+                            Some(&cap) => cap,
+                            None => {
+                                return Err(Error::MissingCapabilities(what, capabilities.to_vec()))
+                            }
+                        }
+                    }
+                };
+                self.capabilities_used.insert(selected);
+                Ok(())
             }
         }
-        Err(Error::MissingCapabilities(capabilities.to_vec()))
     }
 
     pub(super) fn get_type_id(&mut self, lookup_ty: LookupType) -> Word {
@@ -556,13 +571,13 @@ impl Writer {
                     _ => None,
                 };
                 if let Some(cap) = cap {
-                    self.capabilities.insert(cap);
+                    self.capabilities_used.insert(cap);
                 }
                 Instruction::type_int(id, bits, signedness)
             }
             Sk::Float => {
                 if bits == 64 {
-                    self.capabilities.insert(spirv::Capability::Float64);
+                    self.capabilities_used.insert(spirv::Capability::Float64);
                 }
                 Instruction::type_float(id, bits)
             }
@@ -705,18 +720,30 @@ impl Writer {
                 let kind = match class {
                     crate::ImageClass::Sampled { kind, multi: _ } => {
                         if dim == crate::ImageDimension::D1 {
-                            self.check(&[spirv::Capability::Sampled1D])?;
+                            self.require_any("1D sampled images", &[spirv::Capability::Sampled1D])?;
                         }
                         kind
                     }
                     crate::ImageClass::Depth { multi: _ } => crate::ScalarKind::Float,
                     crate::ImageClass::Storage { format, .. } => {
-                        let required_caps: &[_] = match dim {
-                            crate::ImageDimension::D1 => &[spirv::Capability::Image1D],
-                            crate::ImageDimension::Cube => &[spirv::Capability::ImageCubeArray],
-                            _ => &[],
+                        match dim {
+                            crate::ImageDimension::D1 => {
+                                self.require_any(
+                                    "1D storage images",
+                                    &[spirv::Capability::Image1D],
+                                )?;
+                            }
+                            crate::ImageDimension::Cube => {
+                                if arrayed {
+                                    self.require_any(
+                                        "arrayed cube images",
+                                        &[spirv::Capability::ImageCubeArray],
+                                    )?;
+                                }
+                            }
+                            _ => {}
                         };
-                        self.check(required_caps)?;
+
                         format.into()
                     }
                 };
@@ -727,7 +754,6 @@ impl Writer {
                     pointer_class: None,
                 };
                 let dim = map_dim(dim);
-                //self.check(dim.required_capabilities())?;
                 let type_id = self.get_type_id(LookupType::Local(local_type));
                 Instruction::type_image(id, type_id, dim, arrayed, class)
             }
@@ -1013,6 +1039,10 @@ impl Writer {
                         self.decorate(id, Decoration::Centroid, &[]);
                     }
                     Some(crate::Sampling::Sample) => {
+                        self.require_any(
+                            "per-sample interpolation",
+                            &[spirv::Capability::SampleRateShading],
+                        )?;
                         self.decorate(id, Decoration::Sample, &[]);
                     }
                 }
@@ -1039,10 +1069,20 @@ impl Writer {
                     Bi::FragDepth => BuiltIn::FragDepth,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
                     Bi::PrimitiveIndex => {
-                        self.capabilities.insert(spirv::Capability::Geometry);
+                        self.require_any(
+                            "`primitive_index` built-in",
+                            &[spirv::Capability::Geometry],
+                        )?;
                         BuiltIn::PrimitiveId
                     }
-                    Bi::SampleIndex => BuiltIn::SampleId,
+                    Bi::SampleIndex => {
+                        self.require_any(
+                            "`sample_index` built-in",
+                            &[spirv::Capability::SampleRateShading],
+                        )?;
+
+                        BuiltIn::SampleId
+                    }
                     Bi::SampleMask => BuiltIn::SampleMask,
                     // compute
                     Bi::GlobalInvocationId => BuiltIn::GlobalInvocationId,
@@ -1226,7 +1266,7 @@ impl Writer {
             ep_instruction.to_words(&mut self.logical_layout.entry_points);
         }
 
-        for capability in self.capabilities.iter() {
+        for capability in self.capabilities_used.iter() {
             Instruction::capability(*capability).to_words(&mut self.logical_layout.capabilities);
         }
         if ir_module.entry_points.is_empty() {

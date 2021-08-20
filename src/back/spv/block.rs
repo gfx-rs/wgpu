@@ -1111,7 +1111,8 @@ impl<'w> BlockContext<'w> {
                     }
                 };
 
-                self.writer.check(&[spirv::Capability::ImageQuery])?;
+                self.writer
+                    .require_any("image queries", &[spirv::Capability::ImageQuery])?;
 
                 match query {
                     Iq::Size { level } => {

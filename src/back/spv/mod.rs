@@ -55,8 +55,8 @@ const BITS_PER_BYTE: crate::Bytes = 8;
 pub enum Error {
     #[error("target SPIRV-{0}.{1} is not supported")]
     UnsupportedVersion(u8, u8),
-    #[error("one of the required capabilities {0:?} is missing")]
-    MissingCapabilities(Vec<Capability>),
+    #[error("using {0} requires at least one of the capabilities {1:?}, but none are available")]
+    MissingCapabilities(&'static str, Vec<Capability>),
     #[error("unimplemented {0}")]
     FeatureNotImplemented(&'static str),
     #[error("module is not validated properly: {0}")]
@@ -385,8 +385,18 @@ pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
     id_gen: IdGenerator,
-    capabilities: crate::FastHashSet<Capability>,
-    forbidden_caps: Option<&'static [Capability]>,
+
+    /// The set of capabilities modules are permitted to use.
+    ///
+    /// This is initialized from `Options::capabilities`.
+    capabilities_available: Option<crate::FastHashSet<Capability>>,
+
+    /// The set of capabilities used by this module.
+    ///
+    /// If `capabilities_available` is `Some`, then this is always a subset of
+    /// that.
+    capabilities_used: crate::FastHashSet<Capability>,
+
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
@@ -422,12 +432,16 @@ bitflags::bitflags! {
 pub struct Options {
     /// (Major, Minor) target version of the SPIR-V.
     pub lang_version: (u8, u8),
+
     /// Configuration flags for the writer.
     pub flags: WriterFlags,
-    /// Set of SPIR-V allowed capabilities, if provided.
-    // Note: there is a major bug currently associated with deriving the capabilities.
-    // We are calling `required_capabilities`, but the semantics of this is broken.
+
+    /// If given, the set of capabilities modules are allowed to use. Code that
+    /// requires capabilities beyond these is rejected with an error.
+    ///
+    /// If this is `None`, all capabilities are permitted.
     pub capabilities: Option<crate::FastHashSet<Capability>>,
+
     /// How should the generated code handle array, vector, or matrix indices
     /// that are out of range?
     pub index_bounds_check_policy: IndexBoundsCheckPolicy,
