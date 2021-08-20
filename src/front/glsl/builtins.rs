@@ -4,9 +4,9 @@ use super::{
     Error, ErrorKind, Parser, Result, SourceMetadata,
 };
 use crate::{
-    BinaryOperator, Block, Expression, Handle, ImageClass, ImageDimension, ImageQuery,
-    MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind as Sk, Span, Type, TypeInner,
-    VectorSize,
+    BinaryOperator, Block, Constant, ConstantInner, Expression, Handle, ImageClass, ImageDimension,
+    ImageQuery, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind as Sk,
+    ScalarValue, Span, Type, TypeInner, VectorSize,
 };
 
 impl Module {
@@ -451,7 +451,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
             }
         }
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
-        | "log" | "log2" => {
+        | "log" | "log2" | "radians" | "degrees" => {
             // bits layout
             // bit 0 trough 1 - dims
             for bits in 0..(0b100) {
@@ -468,21 +468,23 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                         Some(size) => TypeInner::Vector { size, kind, width },
                         None => TypeInner::Scalar { kind, width },
                     }],
-                    MacroCall::MathFunction(match name {
-                        "sin" => MathFunction::Sin,
-                        "exp" => MathFunction::Exp,
-                        "exp2" => MathFunction::Exp2,
-                        "sinh" => MathFunction::Sinh,
-                        "cos" => MathFunction::Cos,
-                        "cosh" => MathFunction::Cosh,
-                        "tan" => MathFunction::Tan,
-                        "tanh" => MathFunction::Tanh,
-                        "acos" => MathFunction::Acos,
-                        "asin" => MathFunction::Asin,
-                        "log" => MathFunction::Log,
-                        "log2" => MathFunction::Log2,
+                    match name {
+                        "sin" => MacroCall::MathFunction(MathFunction::Sin),
+                        "exp" => MacroCall::MathFunction(MathFunction::Exp),
+                        "exp2" => MacroCall::MathFunction(MathFunction::Exp2),
+                        "sinh" => MacroCall::MathFunction(MathFunction::Sinh),
+                        "cos" => MacroCall::MathFunction(MathFunction::Cos),
+                        "cosh" => MacroCall::MathFunction(MathFunction::Cosh),
+                        "tan" => MacroCall::MathFunction(MathFunction::Tan),
+                        "tanh" => MacroCall::MathFunction(MathFunction::Tanh),
+                        "acos" => MacroCall::MathFunction(MathFunction::Acos),
+                        "asin" => MacroCall::MathFunction(MathFunction::Asin),
+                        "log" => MacroCall::MathFunction(MathFunction::Log),
+                        "log2" => MacroCall::MathFunction(MathFunction::Log2),
+                        "radians" => MacroCall::ConstMultiply(std::f64::consts::PI / 180.0),
+                        "degrees" => MacroCall::ConstMultiply(180.0 / std::f64::consts::PI),
                         _ => unreachable!(),
-                    }),
+                    },
                 ))
             }
         }
@@ -1344,7 +1346,7 @@ fn inject_common_builtin(
 }
 
 /// A compiler defined builtin function
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum MacroCall {
     Sampler,
     SamplerShadow,
@@ -1361,6 +1363,7 @@ pub enum MacroCall {
     Splatted(MathFunction, Option<VectorSize>, usize),
     MixBoolean,
     Clamp(Option<VectorSize>),
+    ConstMultiply(f64),
 }
 
 impl MacroCall {
@@ -1564,6 +1567,33 @@ impl MacroCall {
                         arg: args[0],
                         arg1: args.get(1).copied(),
                         arg2: args.get(2).copied(),
+                    },
+                    SourceMetadata::none(),
+                    body,
+                ))
+            }
+            MacroCall::ConstMultiply(value) => {
+                let constant = parser.module.constants.fetch_or_append(
+                    Constant {
+                        name: None,
+                        specialization: None,
+                        inner: ConstantInner::Scalar {
+                            width: 4,
+                            value: ScalarValue::Float(value),
+                        },
+                    },
+                    Span::Unknown,
+                );
+                let right = ctx.add_expression(
+                    Expression::Constant(constant),
+                    SourceMetadata::none(),
+                    body,
+                );
+                Ok(ctx.add_expression(
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: args[0],
+                        right,
                     },
                     SourceMetadata::none(),
                     body,
