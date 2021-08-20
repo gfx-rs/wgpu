@@ -3,6 +3,7 @@
 ## TBD
   - All:
     - expose more formats via adapter-specific feature
+    - fix creation of depth+stencil views
   - Metal:
     - fix usage of work group memory
 

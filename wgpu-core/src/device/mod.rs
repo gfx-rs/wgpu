@@ -1568,7 +1568,9 @@ impl<A: HalApi> Device<A> {
         expected: &'static str,
     ) -> Result<(wgt::TextureUsages, hal::TextureUses), binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
-        if hal::FormatAspects::from(view.desc.format)
+        if view
+            .desc
+            .aspects()
             .contains(hal::FormatAspects::DEPTH | hal::FormatAspects::STENCIL)
         {
             return Err(Error::DepthStencilAspect);
