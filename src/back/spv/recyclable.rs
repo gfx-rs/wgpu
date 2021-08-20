@@ -42,3 +42,10 @@ impl<K, V, S: Clone> Recyclable for std::collections::HashMap<K, V, S> {
         self
     }
 }
+
+impl<K, S: Clone> Recyclable for std::collections::HashSet<K, S> {
+    fn recycle(mut self) -> Self {
+        self.clear();
+        self
+    }
+}
