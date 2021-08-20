@@ -142,6 +142,8 @@ pub fn calculate_offset(
                 span += info.span;
             }
 
+            span = align_up(span, align);
+
             let ty_span = types.get_span(ty).clone();
             ty = types.fetch_or_append(
                 Type {
