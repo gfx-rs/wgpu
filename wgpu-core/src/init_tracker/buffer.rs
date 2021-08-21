@@ -27,7 +27,7 @@ impl BufferInitTracker {
         query_range: Range<wgt::BufferAddress>,
         kind: MemoryInitKind,
     ) -> Option<BufferInitTrackerAction> {
-        self.check(query_range.clone())
-            .map(|range| BufferInitTrackerAction { id, kind, range })
+        self.check(query_range)
+            .map(|range| BufferInitTrackerAction { id, range, kind })
     }
 }
