@@ -6,7 +6,7 @@ use crate::{
     command::CommandBuffer,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     track::TextureSelector,
 };
 
@@ -131,7 +131,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_buffer
                 .initialization_status
                 .check(offset..end)
-                .map(|range| MemoryInitTrackerAction {
+                .map(|range| BufferInitTrackerAction {
                     id: dst,
                     range,
                     kind: MemoryInitKind::ImplicitlyInitialized,

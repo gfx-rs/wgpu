@@ -6,7 +6,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     resource::{Texture, TextureErrorDimension},
     track::TextureSelector,
 };
@@ -466,7 +466,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_buffer
                 .initialization_status
                 .check(destination_offset..(destination_offset + size))
-                .map(|range| MemoryInitTrackerAction {
+                .map(|range| BufferInitTrackerAction {
                     id: destination,
                     range,
                     kind: MemoryInitKind::ImplicitlyInitialized,
@@ -476,7 +476,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             src_buffer
                 .initialization_status
                 .check(source_offset..(source_offset + size))
-                .map(|range| MemoryInitTrackerAction {
+                .map(|range| BufferInitTrackerAction {
                     id: source,
                     range,
                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -586,7 +586,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             src_buffer
                 .initialization_status
                 .check(source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy))
-                .map(|range| MemoryInitTrackerAction {
+                .map(|range| BufferInitTrackerAction {
                     id: source.buffer,
                     range,
                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -719,7 +719,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     destination.layout.offset
                         ..(destination.layout.offset + required_buffer_bytes_in_copy),
                 )
-                .map(|range| MemoryInitTrackerAction {
+                .map(|range| BufferInitTrackerAction {
                     id: destination.buffer,
                     range,
                     kind: MemoryInitKind::ImplicitlyInitialized,

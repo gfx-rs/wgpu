@@ -6,7 +6,7 @@ use crate::{
     command::{CommandBuffer, CommandEncoderError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{self, Id, TypedId},
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     resource::QuerySet,
     track::UseExtendError,
     Epoch, FastHashMap, Index,
@@ -396,7 +396,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_buffer
                 .initialization_status
                 .check(buffer_start_offset..buffer_end_offset)
-                .map(|range| MemoryInitTrackerAction {
+                .map(|range| BufferInitTrackerAction {
                     id: destination,
                     range,
                     kind: MemoryInitKind::ImplicitlyInitialized,

@@ -46,7 +46,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     pipeline::PipelineFlags,
     track::{TrackerSet, UsageConflict},
     validation::check_buffer_usage,
@@ -287,7 +287,7 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
+                    buffer_memory_init_actions.push(BufferInitTrackerAction {
                         id: buffer_id,
                         range: offset..end,
                         kind: MemoryInitKind::NeedsInitializedMemory,
@@ -314,7 +314,7 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    buffer_memory_init_actions.push(MemoryInitTrackerAction {
+                    buffer_memory_init_actions.push(BufferInitTrackerAction {
                         id: buffer_id,
                         range: offset..end,
                         kind: MemoryInitKind::NeedsInitializedMemory,
@@ -441,7 +441,7 @@ impl RenderBundleEncoder {
                             .check(
                                 offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
                             )
-                            .map(|range| MemoryInitTrackerAction {
+                            .map(|range| BufferInitTrackerAction {
                                 id: buffer_id,
                                 range,
                                 kind: MemoryInitKind::NeedsInitializedMemory,
@@ -482,7 +482,7 @@ impl RenderBundleEncoder {
                             .check(
                                 offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
                             )
-                            .map(|range| MemoryInitTrackerAction {
+                            .map(|range| BufferInitTrackerAction {
                                 id: buffer_id,
                                 range,
                                 kind: MemoryInitKind::NeedsInitializedMemory,
@@ -586,7 +586,7 @@ pub struct RenderBundle {
     pub(super) is_ds_read_only: bool,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
-    pub(super) buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
+    pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     pub(super) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }

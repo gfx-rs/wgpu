@@ -1,4 +1,26 @@
-use std::ops::Range;
+// WebGPU specification requires all texture & buffer memory to be zero initialized on first read.
+// To avoid unnecessary inits, we track the initialization status of every resource and perform inits lazily.
+//
+// The granularity is different for buffers and textures:
+// * Buffer: Byte granularity to support usecases with large, partially bound buffers well.
+// * Texture: Mip-level per layer. I.e. a 2D surface is either completely initialized or not, subrects are not tracked.
+//
+// Every use of a buffer/texture generates a InitTrackerAction which are recorded and later resolved at queue submit by merging them with the current state and each other in execution order.
+// It is important to note that from the point of view of the memory init system there are two kind of writes:
+// * Full writes:
+//      Any kind of memcpy operation. These cause a `MemoryInitKind.ImplicitlyInitialized` action.
+// * (Potentially) partial writes:
+//      E.g. write use in a Shader. The system is not able to determine if a resource is fully initialized afterwards but is no longer allowed to perform any clears,
+//      therefore this leads to a `MemoryInitKind.ImplicitlyInitialized` action, exactly like a read would.
+
+use smallvec::SmallVec;
+use std::{iter, ops::Range};
+
+mod buffer;
+//mod texture;
+
+pub(crate) use buffer::{BufferInitTracker, BufferInitTrackerAction};
+//pub(crate) use texture::{TextureInitRange, TextureInitTracker, TextureInitTrackerAction};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum MemoryInitKind {
@@ -6,31 +28,36 @@ pub(crate) enum MemoryInitKind {
     ImplicitlyInitialized,
     // The memory range is going to be read, therefore needs to ensure prior initialization.
     NeedsInitializedMemory,
+    // The memory going to be discarded and regarded therefore regarded uninitialized.
+    // TODO: This is tricky to implement: Discards needs to be resolved within AND between command buffers!
+    //       Being able to do this would be quite nice because then we could mark any resource uninitialized at any point in time.
+    //       Practically speaking however, discard can only ever happen for single rendertarget surfaces.
+    //       Considering this, this could potentially be implemented differently since we don't really need to care about ranges of memory.
+    //DiscardMemory,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct MemoryInitTrackerAction<ResourceId> {
-    pub(crate) id: ResourceId,
-    pub(crate) range: Range<wgt::BufferAddress>,
-    pub(crate) kind: MemoryInitKind,
-}
+// Most of the time a resource is either fully uninitialized (one element) or initialized (zero elements).
+type UninitializedRangeVec<Idx> = SmallVec<[Range<Idx>; 1]>;
 
 /// Tracks initialization status of a linear range from 0..size
-#[derive(Debug)]
-pub(crate) struct MemoryInitTracker {
+#[derive(Debug, Clone)]
+pub(crate) struct InitTracker<Idx: Ord + Copy + Default> {
     // Ordered, non overlapping list of all uninitialized ranges.
-    uninitialized_ranges: Vec<Range<wgt::BufferAddress>>,
+    uninitialized_ranges: UninitializedRangeVec<Idx>,
 }
 
-pub(crate) struct MemoryInitTrackerDrain<'a> {
-    uninitialized_ranges: &'a mut Vec<Range<wgt::BufferAddress>>,
-    drain_range: Range<wgt::BufferAddress>,
+pub(crate) struct InitTrackerDrain<'a, Idx: Ord + Copy> {
+    uninitialized_ranges: &'a mut UninitializedRangeVec<Idx>,
+    drain_range: Range<Idx>,
     first_index: usize,
     next_index: usize,
 }
 
-impl<'a> Iterator for MemoryInitTrackerDrain<'a> {
-    type Item = Range<wgt::BufferAddress>;
+impl<'a, Idx> Iterator for InitTrackerDrain<'a, Idx>
+where
+    Idx: Ord + Copy,
+{
+    type Item = Range<Idx>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(r) = self
@@ -89,15 +116,18 @@ impl<'a> Iterator for MemoryInitTrackerDrain<'a> {
     }
 }
 
-impl MemoryInitTracker {
-    pub(crate) fn new(size: wgt::BufferAddress) -> Self {
+impl<Idx> InitTracker<Idx>
+where
+    Idx: Ord + Copy + Default,
+{
+    pub(crate) fn new(size: Idx) -> Self {
         Self {
-            uninitialized_ranges: vec![0..size],
+            uninitialized_ranges: iter::once(Idx::default()..size).collect(),
         }
     }
 
     // Search smallest range.end which is bigger than bound in O(log n) (with n being number of uninitialized ranges)
-    fn lower_bound(&self, bound: wgt::BufferAddress) -> usize {
+    fn lower_bound(&self, bound: Idx) -> usize {
         // This is equivalent to, except that it may return an out of bounds index instead of
         //self.uninitialized_ranges.iter().position(|r| r.end > bound)
 
@@ -123,10 +153,7 @@ impl MemoryInitTracker {
     // Checks if there's any uninitialized ranges within a query.
     // If there are any, the range returned a the subrange of the query_range that contains all these uninitialized regions.
     // Returned range may be larger than necessary (tradeoff for making this function O(log n))
-    pub(crate) fn check(
-        &self,
-        query_range: Range<wgt::BufferAddress>,
-    ) -> Option<Range<wgt::BufferAddress>> {
+    pub(crate) fn check(&self, query_range: Range<Idx>) -> Option<Range<Idx>> {
         let index = self.lower_bound(query_range.start);
         self.uninitialized_ranges
             .get(index)
@@ -153,12 +180,9 @@ impl MemoryInitTracker {
 
     // Drains uninitialized ranges in a query range.
     #[must_use]
-    pub(crate) fn drain(
-        &mut self,
-        drain_range: Range<wgt::BufferAddress>,
-    ) -> MemoryInitTrackerDrain {
+    pub(crate) fn drain(&mut self, drain_range: Range<Idx>) -> InitTrackerDrain<Idx> {
         let index = self.lower_bound(drain_range.start);
-        MemoryInitTrackerDrain {
+        InitTrackerDrain {
             drain_range,
             uninitialized_ranges: &mut self.uninitialized_ranges,
             first_index: index,
@@ -167,19 +191,20 @@ impl MemoryInitTracker {
     }
 
     // Clears uninitialized ranges in a query range.
-    pub(crate) fn clear(&mut self, range: Range<wgt::BufferAddress>) {
+    pub(crate) fn clear(&mut self, range: Range<Idx>) {
         self.drain(range).for_each(drop);
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::MemoryInitTracker;
     use std::ops::Range;
+
+    type Tracker = super::InitTracker<usize>;
 
     #[test]
     fn check_for_newly_created_tracker() {
-        let tracker = MemoryInitTracker::new(10);
+        let tracker = Tracker::new(10);
         assert_eq!(tracker.check(0..10), Some(0..10));
         assert_eq!(tracker.check(0..3), Some(0..3));
         assert_eq!(tracker.check(3..4), Some(3..4));
@@ -188,7 +213,7 @@ mod test {
 
     #[test]
     fn check_for_cleared_tracker() {
-        let mut tracker = MemoryInitTracker::new(10);
+        let mut tracker = Tracker::new(10);
         tracker.clear(0..10);
         assert_eq!(tracker.check(0..10), None);
         assert_eq!(tracker.check(0..3), None);
@@ -198,7 +223,7 @@ mod test {
 
     #[test]
     fn check_for_partially_filled_tracker() {
-        let mut tracker = MemoryInitTracker::new(25);
+        let mut tracker = Tracker::new(25);
         // Two regions of uninitialized memory
         tracker.clear(0..5);
         tracker.clear(10..15);
@@ -217,7 +242,7 @@ mod test {
 
     #[test]
     fn clear_already_cleared() {
-        let mut tracker = MemoryInitTracker::new(30);
+        let mut tracker = Tracker::new(30);
         tracker.clear(10..20);
 
         // Overlapping with non-cleared
@@ -233,11 +258,11 @@ mod test {
 
     #[test]
     fn drain_never_returns_ranges_twice_for_same_range() {
-        let mut tracker = MemoryInitTracker::new(19);
+        let mut tracker = Tracker::new(19);
         assert_eq!(tracker.drain(0..19).count(), 1);
         assert_eq!(tracker.drain(0..19).count(), 0);
 
-        let mut tracker = MemoryInitTracker::new(17);
+        let mut tracker = Tracker::new(17);
         assert_eq!(tracker.drain(5..8).count(), 1);
         assert_eq!(tracker.drain(5..8).count(), 0);
         assert_eq!(tracker.drain(1..3).count(), 1);
@@ -248,31 +273,23 @@ mod test {
 
     #[test]
     fn drain_splits_ranges_correctly() {
-        let mut tracker = MemoryInitTracker::new(1337);
+        let mut tracker = Tracker::new(1337);
         assert_eq!(
-            tracker
-                .drain(21..42)
-                .collect::<Vec<Range<wgt::BufferAddress>>>(),
+            tracker.drain(21..42).collect::<Vec<Range<usize>>>(),
             vec![21..42]
         );
         assert_eq!(
-            tracker
-                .drain(900..1000)
-                .collect::<Vec<Range<wgt::BufferAddress>>>(),
+            tracker.drain(900..1000).collect::<Vec<Range<usize>>>(),
             vec![900..1000]
         );
 
         // Splitted ranges.
         assert_eq!(
-            tracker
-                .drain(5..1003)
-                .collect::<Vec<Range<wgt::BufferAddress>>>(),
+            tracker.drain(5..1003).collect::<Vec<Range<usize>>>(),
             vec![5..21, 42..900, 1000..1003]
         );
         assert_eq!(
-            tracker
-                .drain(0..1337)
-                .collect::<Vec<Range<wgt::BufferAddress>>>(),
+            tracker.drain(0..1337).collect::<Vec<Range<usize>>>(),
             vec![0..5, 1003..1337]
         );
     }

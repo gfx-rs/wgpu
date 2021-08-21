@@ -9,7 +9,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     resource::{Buffer, Texture},
     track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
     validation::{check_buffer_usage, MissingBufferUsageError},
@@ -369,7 +369,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 Ok(buffer) => buffer
                                     .initialization_status
                                     .check(action.range.clone())
-                                    .map(|range| MemoryInitTrackerAction {
+                                    .map(|range| BufferInitTrackerAction {
                                         id: action.id,
                                         range,
                                         kind: action.kind,
@@ -568,7 +568,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         indirect_buffer
                             .initialization_status
                             .check(offset..(offset + stride))
-                            .map(|range| MemoryInitTrackerAction {
+                            .map(|range| BufferInitTrackerAction {
                                 id: buffer_id,
                                 range,
                                 kind: MemoryInitKind::NeedsInitializedMemory,

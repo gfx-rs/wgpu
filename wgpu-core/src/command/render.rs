@@ -13,7 +13,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     pipeline::PipelineFlags,
     resource::{Texture, TextureView},
     track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
@@ -892,7 +892,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     Ok(buffer) => buffer
                                         .initialization_status
                                         .check(action.range.clone())
-                                        .map(|range| MemoryInitTrackerAction {
+                                        .map(|range| BufferInitTrackerAction {
                                             id: action.id,
                                             range,
                                             kind: action.kind,
@@ -1070,7 +1070,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             buffer
                                 .initialization_status
                                 .check(offset..end)
-                                .map(|range| MemoryInitTrackerAction {
+                                .map(|range| BufferInitTrackerAction {
                                     id: buffer_id,
                                     range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -1125,7 +1125,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             buffer
                                 .initialization_status
                                 .check(offset..(offset + vertex_state.total_size))
-                                .map(|range| MemoryInitTrackerAction {
+                                .map(|range| BufferInitTrackerAction {
                                     id: buffer_id,
                                     range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -1385,7 +1385,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             indirect_buffer
                                 .initialization_status
                                 .check(offset..end_offset)
-                                .map(|range| MemoryInitTrackerAction {
+                                .map(|range| BufferInitTrackerAction {
                                     id: buffer_id,
                                     range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -1475,7 +1475,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             indirect_buffer
                                 .initialization_status
                                 .check(offset..end_offset)
-                                .map(|range| MemoryInitTrackerAction {
+                                .map(|range| BufferInitTrackerAction {
                                     id: buffer_id,
                                     range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -1496,7 +1496,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             count_buffer
                                 .initialization_status
                                 .check(count_buffer_offset..end_count_offset)
-                                .map(|range| MemoryInitTrackerAction {
+                                .map(|range| BufferInitTrackerAction {
                                     id: count_buffer_id,
                                     range,
                                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -1645,7 +1645,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     Ok(buffer) => buffer
                                         .initialization_status
                                         .check(action.range.clone())
-                                        .map(|range| MemoryInitTrackerAction {
+                                        .map(|range| BufferInitTrackerAction {
                                             id: action.id,
                                             range,
                                             kind: action.kind,
