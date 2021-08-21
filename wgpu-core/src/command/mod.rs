@@ -7,6 +7,9 @@ mod query;
 mod render;
 mod transfer;
 
+use std::collections::hash_map::Entry;
+use std::ops::Range;
+
 pub use self::bundle::*;
 pub use self::compute::*;
 pub use self::draw::*;
@@ -15,6 +18,7 @@ pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::error::{ErrorFormatter, PrettyError};
+use crate::FastHashMap;
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
@@ -78,7 +82,9 @@ impl<A: hal::Api> BakedCommands<A> {
         device_tracker: &mut TrackerSet,
         buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
     ) -> Result<(), DestroyedBufferError> {
-        let mut ranges = Vec::new();
+        // Gather init ranges for each buffer so we can collapse them.
+        // It is not possible to do this at an earlier point since previously executed command buffer change the resource init state.
+        let mut uninitialized_ranges_per_buffer = FastHashMap::default();
         for buffer_use in self.buffer_memory_init_actions.drain(..) {
             let buffer = buffer_guard
                 .get_mut(buffer_use.id)
@@ -90,43 +96,55 @@ impl<A: hal::Api> BakedCommands<A> {
                     uninitialized_ranges.for_each(drop);
                 }
                 MemoryInitKind::NeedsInitializedMemory => {
-                    ranges.clear();
-                    ranges.extend(uninitialized_ranges);
-                    // Collapse touching ranges. We can't do this any earlier since we only now gathered ranges from several different command buffers!
-                    ranges.sort_by(|a, b| a.start.cmp(&b.start));
-                    for i in (1..ranges.len()).rev() {
-                        assert!(ranges[i - 1].end <= ranges[i].start); // The memory init tracker made sure of this!
-                        if ranges[i].start == ranges[i - 1].end {
-                            ranges[i - 1].end = ranges[i].end;
-                            ranges.swap_remove(i); // Ordering not important at this point
+                    match uninitialized_ranges_per_buffer.entry(buffer_use.id) {
+                        Entry::Vacant(e) => {
+                            e.insert(
+                                uninitialized_ranges.collect::<Vec<Range<wgt::BufferAddress>>>(),
+                            );
+                        }
+                        Entry::Occupied(mut e) => {
+                            e.get_mut().extend(uninitialized_ranges);
                         }
                     }
+                }
+            }
+        }
 
-                    // Don't do use_replace since the buffer may already no longer have a ref_count.
-                    // However, we *know* that it is currently in use, so the tracker must already know about it.
-                    let transition = device_tracker.buffers.change_replace_tracked(
-                        id::Valid(buffer_use.id),
-                        (),
-                        hal::BufferUses::COPY_DST,
-                    );
-                    let raw_buf = buffer
-                        .raw
-                        .as_ref()
-                        .ok_or(DestroyedBufferError(buffer_use.id))?;
+        for (buffer_id, mut ranges) in uninitialized_ranges_per_buffer {
+            // Collapse touching ranges.
+            ranges.sort_by(|a, b| a.start.cmp(&b.start));
+            for i in (1..ranges.len()).rev() {
+                assert!(ranges[i - 1].end <= ranges[i].start); // The memory init tracker made sure of this!
+                if ranges[i].start == ranges[i - 1].end {
+                    ranges[i - 1].end = ranges[i].end;
+                    ranges.swap_remove(i); // Ordering not important at this point
+                }
+            }
 
-                    unsafe {
-                        self.encoder
-                            .transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
-                    }
+            // Don't do use_replace since the buffer may already no longer have a ref_count.
+            // However, we *know* that it is currently in use, so the tracker must already know about it.
+            let transition = device_tracker.buffers.change_replace_tracked(
+                id::Valid(buffer_id),
+                (),
+                hal::BufferUses::COPY_DST,
+            );
 
-                    for range in ranges.iter() {
-                        assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", raw_buf, range.start);
-                        assert!(range.end % 4 == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
+            let buffer = buffer_guard
+                .get_mut(buffer_id)
+                .map_err(|_| DestroyedBufferError(buffer_id))?;
+            let raw_buf = buffer.raw.as_ref().ok_or(DestroyedBufferError(buffer_id))?;
 
-                        unsafe {
-                            self.encoder.fill_buffer(raw_buf, range.clone(), 0);
-                        }
-                    }
+            unsafe {
+                self.encoder
+                    .transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
+            }
+
+            for range in ranges.iter() {
+                assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", raw_buf, range.start);
+                assert!(range.end % 4 == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
+
+                unsafe {
+                    self.encoder.fill_buffer(raw_buf, range.clone(), 0);
                 }
             }
         }
