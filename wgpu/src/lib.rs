@@ -545,7 +545,7 @@ struct MapContext {
 
 impl MapContext {
     fn new(total_size: BufferAddress) -> Self {
-        MapContext {
+        Self {
             total_size,
             initial_range: 0..0,
             sub_ranges: Vec::new(),
@@ -1383,7 +1383,7 @@ impl Instance {
     /// - `backends` - Controls from which [backends][Backends] wgpu will choose
     ///   during instantiation.
     pub fn new(backends: Backends) -> Self {
-        Instance {
+        Self {
             context: Arc::new(C::init(backends)),
         }
     }
@@ -1399,7 +1399,7 @@ impl Instance {
     /// Refer to the creation of wgpu-hal Instance for every backend.
     #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
-        Instance {
+        Self {
             context: Arc::new(C::from_hal_instance::<A>(hal_instance)),
         }
     }

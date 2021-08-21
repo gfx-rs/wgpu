@@ -170,9 +170,9 @@ pub(crate) enum TextureInner<A: hal::Api> {
 impl<A: hal::Api> TextureInner<A> {
     pub fn as_raw(&self) -> Option<&A::Texture> {
         match *self {
-            TextureInner::Native { raw: Some(ref tex) } => Some(tex),
-            TextureInner::Native { raw: None } => None,
-            TextureInner::Surface {
+            Self::Native { raw: Some(ref tex) } => Some(tex),
+            Self::Native { raw: None } => None,
+            Self::Surface {
                 ref raw,
                 parent_id: _,
             } => Some(std::borrow::Borrow::borrow(raw)),

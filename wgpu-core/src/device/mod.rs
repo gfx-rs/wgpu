@@ -84,7 +84,7 @@ impl RenderPassContext {
     // Assumed the renderpass only contains one subpass
     pub(crate) fn check_compatible(
         &self,
-        other: &RenderPassContext,
+        other: &Self,
     ) -> Result<(), RenderPassCompatibilityError> {
         if self.attachments.colors != other.attachments.colors {
             return Err(RenderPassCompatibilityError::IncompatibleColorAttachment(
@@ -119,7 +119,7 @@ pub struct UserClosures {
 }
 
 impl UserClosures {
-    fn extend(&mut self, other: UserClosures) {
+    fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.submissions.extend(other.submissions);
     }
