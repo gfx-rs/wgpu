@@ -719,35 +719,10 @@ impl Writer {
                 arrayed,
                 class,
             } => {
-                let kind = match class {
-                    crate::ImageClass::Sampled { kind, multi: _ } => {
-                        if dim == crate::ImageDimension::D1 {
-                            self.require_any("1D sampled images", &[spirv::Capability::Sampled1D])?;
-                        }
-                        kind
-                    }
-                    crate::ImageClass::Depth { multi: _ } => crate::ScalarKind::Float,
-                    crate::ImageClass::Storage { format, .. } => {
-                        match dim {
-                            crate::ImageDimension::D1 => {
-                                self.require_any(
-                                    "1D storage images",
-                                    &[spirv::Capability::Image1D],
-                                )?;
-                            }
-                            crate::ImageDimension::Cube => {
-                                if arrayed {
-                                    self.require_any(
-                                        "arrayed cube images",
-                                        &[spirv::Capability::ImageCubeArray],
-                                    )?;
-                                }
-                            }
-                            _ => {}
-                        };
-
-                        format.into()
-                    }
+                let (kind, sampled) = match class {
+                    crate::ImageClass::Sampled { kind, multi: _ } => (kind, true),
+                    crate::ImageClass::Depth { multi: _ } => (crate::ScalarKind::Float, true),
+                    crate::ImageClass::Storage { format, .. } => (format.into(), false),
                 };
                 let local_type = LocalType::Value {
                     vector_size: None,
@@ -756,6 +731,29 @@ impl Writer {
                     pointer_class: None,
                 };
                 let dim = map_dim(dim);
+                match dim {
+                    spirv::Dim::Dim1D => {
+                        if sampled {
+                            self.require_any("sampled 1D images", &[spirv::Capability::Sampled1D])?;
+                        } else {
+                            self.require_any("1D storage images", &[spirv::Capability::Image1D])?;
+                        }
+                    }
+                    spirv::Dim::DimCube if arrayed => {
+                        if sampled {
+                            self.require_any(
+                                "sampled cube array images",
+                                &[spirv::Capability::SampledCubeArray],
+                            )?;
+                        } else {
+                            self.require_any(
+                                "cube array storage images",
+                                &[spirv::Capability::ImageCubeArray],
+                            )?;
+                        }
+                    }
+                    _ => {}
+                }
                 let type_id = self.get_type_id(LookupType::Local(local_type));
                 Instruction::type_image(id, type_id, dim, arrayed, class)
             }
