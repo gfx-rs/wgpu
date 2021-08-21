@@ -398,7 +398,7 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
 impl crate::RenderPassInner<Context> for RenderPass {
     fn set_blend_constant(&mut self, color: wgt::Color) {
         self.0
-            .set_blend_color_with_gpu_color_dict(&map_color(color));
+            .set_blend_constant_with_gpu_color_dict(&map_color(color));
     }
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         self.0.set_scissor_rect(x, y, width, height);
@@ -676,17 +676,17 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> web_sys::GpuBlendFactor {
     match factor {
         BlendFactor::Zero => bf::Zero,
         BlendFactor::One => bf::One,
-        BlendFactor::Src => bf::SrcColor,
-        BlendFactor::OneMinusSrc => bf::OneMinusSrcColor,
+        BlendFactor::Src => bf::Src,
+        BlendFactor::OneMinusSrc => bf::OneMinusSrc,
         BlendFactor::SrcAlpha => bf::SrcAlpha,
         BlendFactor::OneMinusSrcAlpha => bf::OneMinusSrcAlpha,
-        BlendFactor::Dst => bf::DstColor,
-        BlendFactor::OneMinusDst => bf::OneMinusDstColor,
+        BlendFactor::Dst => bf::Dst,
+        BlendFactor::OneMinusDst => bf::OneMinusDst,
         BlendFactor::DstAlpha => bf::DstAlpha,
         BlendFactor::OneMinusDstAlpha => bf::OneMinusDstAlpha,
         BlendFactor::SrcAlphaSaturated => bf::SrcAlphaSaturated,
-        BlendFactor::Constant => bf::BlendColor,
-        BlendFactor::OneMinusConstant => bf::OneMinusBlendColor,
+        BlendFactor::Constant => bf::Constant,
+        BlendFactor::OneMinusConstant => bf::OneMinusConstant,
     }
 }
 
@@ -754,8 +754,8 @@ fn map_vertex_format(format: wgt::VertexFormat) -> web_sys::GpuVertexFormat {
     }
 }
 
-fn map_input_step_mode(mode: wgt::VertexStepMode) -> web_sys::GpuInputStepMode {
-    use web_sys::GpuInputStepMode as sm;
+fn map_vertex_step_mode(mode: wgt::VertexStepMode) -> web_sys::GpuVertexStepMode {
+    use web_sys::GpuVertexStepMode as sm;
     use wgt::VertexStepMode;
     match mode {
         VertexStepMode::Vertex => sm::Vertex,
@@ -851,7 +851,7 @@ fn map_store_op(store: bool) -> web_sys::GpuStoreOp {
     if store {
         web_sys::GpuStoreOp::Store
     } else {
-        web_sys::GpuStoreOp::Clear
+        web_sys::GpuStoreOp::Discard
     }
 }
 
@@ -1019,7 +1019,7 @@ impl crate::Context for Context {
             ),
             (wgt::Features::TIMESTAMP_QUERY, Gfn::TimestampQuery),
         ];
-        let non_guaranteed_features = possible_features
+        let required_features = possible_features
             .iter()
             .copied()
             .flat_map(|(flag, value)| {
@@ -1030,7 +1030,7 @@ impl crate::Context for Context {
                 }
             })
             .collect::<js_sys::Array>();
-        mapped_desc.non_guaranteed_features(&non_guaranteed_features);
+        mapped_desc.required_features(&required_features);
 
         if let Some(label) = desc.label {
             mapped_desc.label(label);
@@ -1067,8 +1067,8 @@ impl crate::Context for Context {
             max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
             max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
             max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
-            max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size(),
-            max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size(),
+            max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
+            max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
             max_vertex_buffers: limits.max_vertex_buffers(),
             max_vertex_attributes: limits.max_vertex_attributes(),
             max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
@@ -1119,7 +1119,7 @@ impl crate::Context for Context {
         config: &wgt::SurfaceConfiguration,
     ) {
         let mut mapped =
-            web_sys::GpuSwapChainDescriptor::new(&device.0, map_texture_format(config.format));
+            web_sys::GpuCanvasConfiguration::new(&device.0, map_texture_format(config.format));
         mapped.usage(config.usage.bits());
         surface.0.configure(&mapped);
     }
@@ -1168,9 +1168,7 @@ impl crate::Context for Context {
             crate::ShaderSource::SpirV(ref spv) => {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
             }
-            crate::ShaderSource::Wgsl(ref code) => {
-                web_sys::GpuShaderModuleDescriptor::new(&js_sys::JsString::from(&**code))
-            }
+            crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
         };
         if let Some(label) = desc.label {
             descriptor.label(label);
@@ -1254,7 +1252,6 @@ impl crate::Context for Context {
                             }
                         };
                         let mut storage_texture = web_sys::GpuStorageTextureBindingLayout::new(
-                            mapped_access,
                             map_texture_format(format),
                         );
                         storage_texture.view_dimension(map_texture_view_dimension(view_dimension));
@@ -1374,7 +1371,7 @@ impl crate::Context for Context {
                     vbuf.array_stride as f64,
                     &mapped_attributes,
                 );
-                mapped_vbuf.step_mode(map_input_step_mode(vbuf.step_mode));
+                mapped_vbuf.step_mode(map_vertex_step_mode(vbuf.step_mode));
                 mapped_vbuf
             })
             .collect::<js_sys::Array>();
@@ -1810,8 +1807,15 @@ impl crate::Context for Context {
                     crate::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
                 };
 
-                let mut mapped_color_attachment =
-                    web_sys::GpuRenderPassColorAttachment::new(&load_value, &ca.view.id.0);
+                let mut mapped_color_attachment = web_sys::GpuRenderPassColorAttachment::new(
+                    &load_value,
+                    if ca.ops.store {
+                        web_sys::GpuStoreOp::Store
+                    } else {
+                        web_sys::GpuStoreOp::Discard
+                    },
+                    &ca.view.id.0,
+                );
 
                 if let Some(rt) = ca.resolve_target {
                     mapped_color_attachment.resolve_target(&rt.id.0);
