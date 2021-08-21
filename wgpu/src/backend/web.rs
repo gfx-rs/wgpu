@@ -1126,14 +1126,14 @@ impl crate::Context for Context {
 
     fn surface_get_current_texture(
         &self,
-        _surface: &Self::SurfaceId,
+        surface: &Self::SurfaceId,
     ) -> (
         Option<Self::TextureId>,
         wgt::SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
         (
-            None, //TODO: surface.0.get_current_texture(),
+            Some(Sendable(surface.0.get_current_texture())),
             wgt::SurfaceStatus::Good,
             (),
         )
