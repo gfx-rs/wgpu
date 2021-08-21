@@ -222,8 +222,8 @@ enum OptionalState {
 
 impl OptionalState {
     fn require(&mut self, require: bool) {
-        if require && *self == OptionalState::Unused {
-            *self = OptionalState::Required;
+        if require && *self == Self::Unused {
+            *self = Self::Required;
         }
     }
 }
@@ -268,7 +268,7 @@ struct VertexBufferState {
 }
 
 impl VertexBufferState {
-    const EMPTY: Self = VertexBufferState {
+    const EMPTY: Self = Self {
         total_size: 0,
         stride: 0,
         rate: VertexStepMode::Vertex,

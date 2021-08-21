@@ -923,7 +923,7 @@ impl Interface {
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
         }
 
-        Interface {
+        Self {
             features,
             resources,
             entry_points,

@@ -20,7 +20,7 @@ mod compat {
     }
     impl<T> Default for Entry<T> {
         fn default() -> Self {
-            Entry {
+            Self {
                 assigned: None,
                 expected: None,
             }
@@ -43,7 +43,7 @@ mod compat {
 
     impl<T: Copy + PartialEq> Manager<T> {
         pub fn new() -> Self {
-            Manager {
+            Self {
                 entries: Default::default(),
             }
         }
@@ -146,7 +146,7 @@ pub(super) struct Binder {
 
 impl Binder {
     pub(super) fn new() -> Self {
-        Binder {
+        Self {
             pipeline_layout_id: None,
             manager: compat::Manager::new(),
             payloads: Default::default(),
