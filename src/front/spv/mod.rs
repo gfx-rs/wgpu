@@ -1617,7 +1617,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::ImageWrite => {
                     let extra = inst.expect_at_least(4)?;
-                    block.extend(emitter.finish(expressions));
                     let stmt = self.parse_image_write(
                         extra,
                         type_arena,
@@ -1625,6 +1624,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         arguments,
                         expressions,
                     )?;
+                    block.extend(emitter.finish(expressions));
                     block.push(stmt, span);
                     emitter.start(expressions);
                 }
