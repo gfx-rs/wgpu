@@ -6,7 +6,7 @@ use crate::{
     command::CommandBuffer,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
+    init_tracker::MemoryInitKind,
     track::TextureSelector,
 };
 
@@ -127,17 +127,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Mark dest as initialized.
-        cmd_buf.buffer_memory_init_actions.extend(
-            dst_buffer
-                .initialization_status
-                .check(offset..end)
-                .map(|range| BufferInitTrackerAction {
-                    id: dst,
-                    range,
-                    kind: MemoryInitKind::ImplicitlyInitialized,
-                }),
-        );
-
+        cmd_buf
+            .buffer_memory_init_actions
+            .extend(dst_buffer.initialization_status.create_action(
+                dst,
+                offset..end,
+                MemoryInitKind::ImplicitlyInitialized,
+            ));
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
         let cmd_buf_raw = cmd_buf.encoder.open();

@@ -1297,11 +1297,11 @@ impl<A: HalApi> Device<A> {
             return Err(Error::BindingZeroSize(bb.buffer_id));
         }
 
-        used_buffer_ranges.push(BufferInitTrackerAction {
-            id: bb.buffer_id,
-            range: bb.offset..(bb.offset + bind_size),
-            kind: MemoryInitKind::NeedsInitializedMemory,
-        });
+        used_buffer_ranges.extend(buffer.initialization_status.create_action(
+            bb.buffer_id,
+            bb.offset..(bb.offset + bind_size),
+            MemoryInitKind::NeedsInitializedMemory,
+        ));
 
         Ok(hal::BufferBinding {
             buffer: raw_buffer,

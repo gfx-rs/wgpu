@@ -287,11 +287,11 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    buffer_memory_init_actions.push(BufferInitTrackerAction {
-                        id: buffer_id,
-                        range: offset..end,
-                        kind: MemoryInitKind::NeedsInitializedMemory,
-                    });
+                    buffer_memory_init_actions.extend(buffer.initialization_status.create_action(
+                        buffer_id,
+                        offset..end,
+                        MemoryInitKind::NeedsInitializedMemory,
+                    ));
                     state.index.set_format(index_format);
                     state.index.set_buffer(buffer_id, offset..end);
                 }
@@ -314,11 +314,11 @@ impl RenderBundleEncoder {
                         Some(s) => offset + s.get(),
                         None => buffer.size,
                     };
-                    buffer_memory_init_actions.push(BufferInitTrackerAction {
-                        id: buffer_id,
-                        range: offset..end,
-                        kind: MemoryInitKind::NeedsInitializedMemory,
-                    });
+                    buffer_memory_init_actions.extend(buffer.initialization_status.create_action(
+                        buffer_id,
+                        offset..end,
+                        MemoryInitKind::NeedsInitializedMemory,
+                    ));
                     state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
                 }
                 RenderCommand::SetPushConstant {
@@ -435,18 +435,11 @@ impl RenderBundleEncoder {
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    buffer_memory_init_actions.extend(
-                        buffer
-                            .initialization_status
-                            .check(
-                                offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
-                            )
-                            .map(|range| BufferInitTrackerAction {
-                                id: buffer_id,
-                                range,
-                                kind: MemoryInitKind::NeedsInitializedMemory,
-                            }),
-                    );
+                    buffer_memory_init_actions.extend(buffer.initialization_status.create_action(
+                        buffer_id,
+                        offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
+                        MemoryInitKind::NeedsInitializedMemory,
+                    ));
 
                     commands.extend(state.flush_vertices());
                     commands.extend(state.flush_binds());
@@ -476,18 +469,11 @@ impl RenderBundleEncoder {
                     check_buffer_usage(buffer.usage, wgt::BufferUsages::INDIRECT)
                         .map_pass_err(scope)?;
 
-                    buffer_memory_init_actions.extend(
-                        buffer
-                            .initialization_status
-                            .check(
-                                offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
-                            )
-                            .map(|range| BufferInitTrackerAction {
-                                id: buffer_id,
-                                range,
-                                kind: MemoryInitKind::NeedsInitializedMemory,
-                            }),
-                    );
+                    buffer_memory_init_actions.extend(buffer.initialization_status.create_action(
+                        buffer_id,
+                        offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
+                        MemoryInitKind::NeedsInitializedMemory,
+                    ));
 
                     commands.extend(state.index.flush());
                     commands.extend(state.flush_vertices());

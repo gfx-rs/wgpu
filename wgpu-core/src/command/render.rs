@@ -13,7 +13,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
+    init_tracker::MemoryInitKind,
     pipeline::PipelineFlags,
     resource::{Texture, TextureView},
     track::{StatefulTrackerSubset, TextureSelector, UsageConflict},
@@ -889,14 +889,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         cmd_buf.buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {
                                 match buffer_guard.get(action.id) {
-                                    Ok(buffer) => buffer
-                                        .initialization_status
-                                        .check(action.range.clone())
-                                        .map(|range| BufferInitTrackerAction {
-                                            id: action.id,
-                                            range,
-                                            kind: action.kind,
-                                        }),
+                                    Ok(buffer) => buffer.initialization_status.check_action(action),
                                     Err(_) => None,
                                 }
                             }),
@@ -1067,14 +1060,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.index.update_limit();
 
                         cmd_buf.buffer_memory_init_actions.extend(
-                            buffer
-                                .initialization_status
-                                .check(offset..end)
-                                .map(|range| BufferInitTrackerAction {
-                                    id: buffer_id,
-                                    range,
-                                    kind: MemoryInitKind::NeedsInitializedMemory,
-                                }),
+                            buffer.initialization_status.create_action(
+                                buffer_id,
+                                offset..end,
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
                         );
 
                         let bb = hal::BufferBinding {
@@ -1122,14 +1112,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         vertex_state.bound = true;
 
                         cmd_buf.buffer_memory_init_actions.extend(
-                            buffer
-                                .initialization_status
-                                .check(offset..(offset + vertex_state.total_size))
-                                .map(|range| BufferInitTrackerAction {
-                                    id: buffer_id,
-                                    range,
-                                    kind: MemoryInitKind::NeedsInitializedMemory,
-                                }),
+                            buffer.initialization_status.create_action(
+                                buffer_id,
+                                offset..(offset + vertex_state.total_size),
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
                         );
 
                         let bb = hal::BufferBinding {
@@ -1382,14 +1369,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         cmd_buf.buffer_memory_init_actions.extend(
-                            indirect_buffer
-                                .initialization_status
-                                .check(offset..end_offset)
-                                .map(|range| BufferInitTrackerAction {
-                                    id: buffer_id,
-                                    range,
-                                    kind: MemoryInitKind::NeedsInitializedMemory,
-                                }),
+                            indirect_buffer.initialization_status.create_action(
+                                buffer_id,
+                                offset..end_offset,
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
                         );
 
                         match indexed {
@@ -1472,14 +1456,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                         }
                         cmd_buf.buffer_memory_init_actions.extend(
-                            indirect_buffer
-                                .initialization_status
-                                .check(offset..end_offset)
-                                .map(|range| BufferInitTrackerAction {
-                                    id: buffer_id,
-                                    range,
-                                    kind: MemoryInitKind::NeedsInitializedMemory,
-                                }),
+                            indirect_buffer.initialization_status.create_action(
+                                buffer_id,
+                                offset..end_offset,
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
                         );
 
                         let begin_count_offset = count_buffer_offset;
@@ -1493,14 +1474,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                         }
                         cmd_buf.buffer_memory_init_actions.extend(
-                            count_buffer
-                                .initialization_status
-                                .check(count_buffer_offset..end_count_offset)
-                                .map(|range| BufferInitTrackerAction {
-                                    id: count_buffer_id,
-                                    range,
-                                    kind: MemoryInitKind::NeedsInitializedMemory,
-                                }),
+                            count_buffer.initialization_status.create_action(
+                                count_buffer_id,
+                                count_buffer_offset..end_count_offset,
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
                         );
 
                         match indexed {
@@ -1642,14 +1620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .buffer_memory_init_actions
                                 .iter()
                                 .filter_map(|action| match buffer_guard.get(action.id) {
-                                    Ok(buffer) => buffer
-                                        .initialization_status
-                                        .check(action.range.clone())
-                                        .map(|range| BufferInitTrackerAction {
-                                            id: action.id,
-                                            range,
-                                            kind: action.kind,
-                                        }),
+                                    Ok(buffer) => buffer.initialization_status.check_action(action),
                                     Err(_) => None,
                                 }),
                         );

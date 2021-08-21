@@ -9,7 +9,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
+    init_tracker::MemoryInitKind,
     resource::{Buffer, Texture},
     track::{StatefulTrackerSubset, TrackerSet, UsageConflict, UseExtendError},
     validation::{check_buffer_usage, MissingBufferUsageError},
@@ -366,19 +366,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     cmd_buf.buffer_memory_init_actions.extend(
                         bind_group.used_buffer_ranges.iter().filter_map(
                             |action| match buffer_guard.get(action.id) {
-                                Ok(buffer) => buffer
-                                    .initialization_status
-                                    .check(action.range.clone())
-                                    .map(|range| BufferInitTrackerAction {
-                                        id: action.id,
-                                        range,
-                                        kind: action.kind,
-                                    }),
+                                Ok(buffer) => buffer.initialization_status.check_action(action),
                                 Err(_) => None,
                             },
                         ),
                     );
-
                     let pipeline_layout_id = state.binder.pipeline_layout_id;
                     let entries = state.binder.assign_group(
                         index as usize,
@@ -565,14 +557,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let stride = 3 * 4; // 3 integers, x/y/z group size
 
                     cmd_buf.buffer_memory_init_actions.extend(
-                        indirect_buffer
-                            .initialization_status
-                            .check(offset..(offset + stride))
-                            .map(|range| BufferInitTrackerAction {
-                                id: buffer_id,
-                                range,
-                                kind: MemoryInitKind::NeedsInitializedMemory,
-                            }),
+                        indirect_buffer.initialization_status.create_action(
+                            buffer_id,
+                            offset..(offset + stride),
+                            MemoryInitKind::NeedsInitializedMemory,
+                        ),
                     );
 
                     state

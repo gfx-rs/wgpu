@@ -6,7 +6,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
+    init_tracker::MemoryInitKind,
     resource::{Texture, TextureErrorDimension},
     track::TextureSelector,
 };
@@ -462,26 +462,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Make sure source is initialized memory and mark dest as initialized.
-        cmd_buf.buffer_memory_init_actions.extend(
-            dst_buffer
-                .initialization_status
-                .check(destination_offset..(destination_offset + size))
-                .map(|range| BufferInitTrackerAction {
-                    id: destination,
-                    range,
-                    kind: MemoryInitKind::ImplicitlyInitialized,
-                }),
-        );
-        cmd_buf.buffer_memory_init_actions.extend(
-            src_buffer
-                .initialization_status
-                .check(source_offset..(source_offset + size))
-                .map(|range| BufferInitTrackerAction {
-                    id: source,
-                    range,
-                    kind: MemoryInitKind::NeedsInitializedMemory,
-                }),
-        );
+        cmd_buf
+            .buffer_memory_init_actions
+            .extend(dst_buffer.initialization_status.create_action(
+                destination,
+                destination_offset..(destination_offset + size),
+                MemoryInitKind::ImplicitlyInitialized,
+            ));
+        cmd_buf
+            .buffer_memory_init_actions
+            .extend(src_buffer.initialization_status.create_action(
+                source,
+                source_offset..(source_offset + size),
+                MemoryInitKind::NeedsInitializedMemory,
+            ));
 
         let region = hal::BufferCopy {
             src_offset: source_offset,
@@ -582,16 +576,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             true,
         )?;
 
-        cmd_buf.buffer_memory_init_actions.extend(
-            src_buffer
-                .initialization_status
-                .check(source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy))
-                .map(|range| BufferInitTrackerAction {
-                    id: source.buffer,
-                    range,
-                    kind: MemoryInitKind::NeedsInitializedMemory,
-                }),
-        );
+        cmd_buf
+            .buffer_memory_init_actions
+            .extend(src_buffer.initialization_status.create_action(
+                source.buffer,
+                source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
+                MemoryInitKind::NeedsInitializedMemory,
+            ));
 
         if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format) {
             return Err(
@@ -712,19 +703,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        cmd_buf.buffer_memory_init_actions.extend(
-            dst_buffer
-                .initialization_status
-                .check(
-                    destination.layout.offset
-                        ..(destination.layout.offset + required_buffer_bytes_in_copy),
-                )
-                .map(|range| BufferInitTrackerAction {
-                    id: destination.buffer,
-                    range,
-                    kind: MemoryInitKind::ImplicitlyInitialized,
-                }),
-        );
+        cmd_buf
+            .buffer_memory_init_actions
+            .extend(dst_buffer.initialization_status.create_action(
+                destination.buffer,
+                destination.layout.offset
+                    ..(destination.layout.offset + required_buffer_bytes_in_copy),
+                MemoryInitKind::ImplicitlyInitialized,
+            ));
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = src_base.clone();
