@@ -1108,8 +1108,7 @@ impl crate::Context for Context {
         surface: &Self::SurfaceId,
         adapter: &Self::AdapterId,
     ) -> Option<wgt::TextureFormat> {
-        let format =
-            map_texture_format_from_web_sys(surface.0.get_swap_chain_preferred_format(&adapter.0));
+        let format = map_texture_format_from_web_sys(surface.0.get_preferred_format(&adapter.0));
         Some(format)
     }
 
@@ -1122,7 +1121,7 @@ impl crate::Context for Context {
         let mut mapped =
             web_sys::GpuSwapChainDescriptor::new(&device.0, map_texture_format(config.format));
         mapped.usage(config.usage.bits());
-        surface.0.configure_swap_chain(&mapped);
+        surface.0.configure(&mapped);
     }
 
     fn surface_get_current_texture(
