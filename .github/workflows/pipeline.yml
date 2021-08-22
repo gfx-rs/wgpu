@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [1.43.0, nightly]
+        rust: ["1.43.0", nightly]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -16,6 +16,12 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
+      - uses: actions-rs/cargo@v1
+        name: Downgrade bitflags to MSRV
+        if: ${{ matrix.rust }} == "1.43.0"
+        with:
+          command: update
+          args: -p bitflags --precise 1.2.1
       - uses: actions-rs/cargo@v1
         name: Default test
         with:
