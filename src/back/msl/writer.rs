@@ -610,7 +610,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::SampleLevel::Gradient { x, y } => {
-                write!(self.out, ", {}::gradient(", NAMESPACE)?;
+                write!(self.out, ", {}::gradient2d(", NAMESPACE)?;
                 self.put_expression(x, context, true)?;
                 write!(self.out, ", ")?;
                 self.put_expression(y, context, true)?;
