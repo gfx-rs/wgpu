@@ -4,9 +4,9 @@ use super::{
     Error, ErrorKind, Parser, Result, SourceMetadata,
 };
 use crate::{
-    BinaryOperator, Block, Constant, ConstantInner, Expression, Handle, ImageClass, ImageDimension,
-    ImageQuery, MathFunction, Module, RelationalFunction, SampleLevel, ScalarKind as Sk,
-    ScalarValue, Span, Type, TypeInner, VectorSize,
+    BinaryOperator, Block, Constant, ConstantInner, DerivativeAxis, Expression, Handle, ImageClass,
+    ImageDimension, ImageQuery, MathFunction, Module, RelationalFunction, SampleLevel,
+    ScalarKind as Sk, ScalarValue, Span, Type, TypeInner, VectorSize,
 };
 
 impl Module {
@@ -452,7 +452,8 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
         }
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
         | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh"
-        | "floatBitsToInt" | "floatBitsToUint" => {
+        | "floatBitsToInt" | "floatBitsToUint" | "dFdx" | "dFdxFine" | "dFdxCoarse" | "dFdy"
+        | "dFdyFine" | "dFdyCoarse" | "fwidth" | "fwidthFine" | "fwidthCoarse" => {
             // bits layout
             // bit 0 trough 1 - dims
             for bits in 0..(0b100) {
@@ -489,6 +490,15 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                         "degrees" => MacroCall::ConstMultiply(180.0 / std::f64::consts::PI),
                         "floatBitsToInt" => MacroCall::BitCast(Sk::Sint),
                         "floatBitsToUint" => MacroCall::BitCast(Sk::Uint),
+                        "dFdx" | "dFdxFine" | "dFdxCoarse" => {
+                            MacroCall::Derivate(DerivativeAxis::X)
+                        }
+                        "dFdy" | "dFdyFine" | "dFdyCoarse" => {
+                            MacroCall::Derivate(DerivativeAxis::Y)
+                        }
+                        "fwidth" | "fwidthFine" | "fwidthCoarse" => {
+                            MacroCall::Derivate(DerivativeAxis::Width)
+                        }
                         _ => unreachable!(),
                     },
                 ))
@@ -1395,6 +1405,7 @@ pub enum MacroCall {
     Clamp(Option<VectorSize>),
     ConstMultiply(f64),
     BitCast(Sk),
+    Derivate(DerivativeAxis),
 }
 
 impl MacroCall {
@@ -1635,6 +1646,14 @@ impl MacroCall {
                     expr: args[0],
                     kind,
                     convert: None,
+                },
+                SourceMetadata::none(),
+                body,
+            )),
+            MacroCall::Derivate(axis) => Ok(ctx.add_expression(
+                Expression::Derivative {
+                    axis,
+                    expr: args[0],
                 },
                 SourceMetadata::none(),
                 body,
