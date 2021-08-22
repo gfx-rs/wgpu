@@ -24,7 +24,7 @@ struct Parameters {
     #[serde(default)]
     god_mode: bool,
 
-    // We can only deserialize `IndexBoundsCheckPolicy` values if `deserialize`
+    // We can only deserialize `BoundsCheckPolicy` values if `deserialize`
     // feature was enabled, but features should not affect snapshot contents, so
     // just take the policy as booleans instead.
     #[serde(default)]
@@ -166,11 +166,11 @@ fn write_output_spv(
             Some(params.spv_capabilities.clone())
         },
         index_bounds_check_policy: if params.bounds_check_restrict {
-            naga::back::IndexBoundsCheckPolicy::Restrict
+            naga::back::BoundsCheckPolicy::Restrict
         } else if params.bounds_check_read_zero_skip_write {
-            naga::back::IndexBoundsCheckPolicy::ReadZeroSkipWrite
+            naga::back::BoundsCheckPolicy::ReadZeroSkipWrite
         } else {
-            naga::back::IndexBoundsCheckPolicy::UndefinedBehavior
+            naga::back::BoundsCheckPolicy::UndefinedBehavior
         },
     };
 

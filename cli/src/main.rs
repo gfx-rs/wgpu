@@ -14,7 +14,7 @@ struct Args {
     ///
     /// May be `Restrict`, `ReadZeroSkipWrite`, or `UndefinedBehavior`
     #[argh(option)]
-    index_bounds_check_policy: Option<IndexBoundsCheckPolicyArg>,
+    index_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
     /// directory to dump the SPIR-V flow dump to
     #[argh(option)]
@@ -43,19 +43,19 @@ struct Args {
     output: Vec<String>,
 }
 
-/// Newtype so we can implement [`FromStr`] for `IndexBoundsCheckPolicy`.
+/// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
 #[derive(Debug, Clone)]
-struct IndexBoundsCheckPolicyArg(naga::back::IndexBoundsCheckPolicy);
+struct BoundsCheckPolicyArg(naga::back::BoundsCheckPolicy);
 
-impl FromStr for IndexBoundsCheckPolicyArg {
+impl FromStr for BoundsCheckPolicyArg {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use naga::back::IndexBoundsCheckPolicy;
+        use naga::back::BoundsCheckPolicy;
         Ok(Self(match s.to_lowercase().as_str() {
-            "restrict" => IndexBoundsCheckPolicy::Restrict,
-            "readzeroskipwrite" => IndexBoundsCheckPolicy::ReadZeroSkipWrite,
-            "undefinedbehavior" => IndexBoundsCheckPolicy::UndefinedBehavior,
+            "restrict" => BoundsCheckPolicy::Restrict,
+            "readzeroskipwrite" => BoundsCheckPolicy::ReadZeroSkipWrite,
+            "undefinedbehavior" => BoundsCheckPolicy::UndefinedBehavior,
             _ => {
                 return Err(format!(
                     "Invalid value for --index-bounds-check-policy: {}",
@@ -106,7 +106,7 @@ impl FromStr for GlslProfileArg {
 #[derive(Default)]
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
-    index_bounds_check_policy: naga::back::IndexBoundsCheckPolicy,
+    index_bounds_check_policy: naga::back::BoundsCheckPolicy,
     entry_point: Option<String>,
     spv_adjust_coordinate_space: bool,
     spv_flow_dump_prefix: Option<String>,

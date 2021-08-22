@@ -11,7 +11,7 @@ mod writer;
 
 pub use spirv::Capability;
 
-use crate::{arena::Handle, back::IndexBoundsCheckPolicy, proc::TypeResolution};
+use crate::{arena::Handle, back::BoundsCheckPolicy, proc::TypeResolution};
 
 use spirv::Word;
 use std::ops;
@@ -400,7 +400,7 @@ pub struct Writer {
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
-    index_bounds_check_policy: IndexBoundsCheckPolicy,
+    index_bounds_check_policy: BoundsCheckPolicy,
     void_type: Word,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
@@ -444,7 +444,7 @@ pub struct Options {
 
     /// How should the generated code handle array, vector, or matrix indices
     /// that are out of range?
-    pub index_bounds_check_policy: IndexBoundsCheckPolicy,
+    pub index_bounds_check_policy: BoundsCheckPolicy,
 }
 
 impl Default for Options {
@@ -457,7 +457,7 @@ impl Default for Options {
             lang_version: (1, 0),
             flags,
             capabilities: None,
-            index_bounds_check_policy: super::IndexBoundsCheckPolicy::default(),
+            index_bounds_check_policy: super::BoundsCheckPolicy::default(),
         }
     }
 }

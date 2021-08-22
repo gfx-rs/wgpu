@@ -123,7 +123,7 @@ impl<'a> FunctionCtx<'_> {
 /// -   Naga's own default is `UndefinedBehavior`, so that shader translations
 ///     are as faithful to the original as possible.
 #[derive(Clone, Copy, Debug)]
-pub enum IndexBoundsCheckPolicy {
+pub enum BoundsCheckPolicy {
     /// Replace out-of-bounds indexes with some arbitrary in-bounds index.
     ///
     /// (This does not necessarily mean clamping. For example, interpreting the
@@ -141,10 +141,10 @@ pub enum IndexBoundsCheckPolicy {
     UndefinedBehavior,
 }
 
-/// The default `IndexBoundsCheckPolicy` is `UndefinedBehavior`.
-impl Default for IndexBoundsCheckPolicy {
+/// The default `BoundsCheckPolicy` is `UndefinedBehavior`.
+impl Default for BoundsCheckPolicy {
     fn default() -> Self {
-        IndexBoundsCheckPolicy::UndefinedBehavior
+        BoundsCheckPolicy::UndefinedBehavior
     }
 }
 

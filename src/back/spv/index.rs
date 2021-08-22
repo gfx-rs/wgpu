@@ -1,7 +1,7 @@
 //! Bounds-checking for SPIR-V output.
 
 use super::{Block, BlockContext, Error, IdGenerator, Instruction, Word};
-use crate::{arena::Handle, back::IndexBoundsCheckPolicy};
+use crate::{arena::Handle, back::BoundsCheckPolicy};
 
 /// The results of emitting code for a left-hand-side expression.
 ///
@@ -157,11 +157,11 @@ impl<'w> BlockContext<'w> {
 
     /// Restrict an index to be in range for a vector, matrix, or array.
     ///
-    /// This is used to implement `IndexBoundsCheckPolicy::Restrict`. An
-    /// in-bounds index is left unchanged. An out-of-bounds index is replaced
-    /// with some arbitrary in-bounds index. Note,this is not necessarily
-    /// clamping; for example, negative indices might be changed to refer to the
-    /// last element of the sequence, not the first, as clamping would do.
+    /// This is used to implement `BoundsCheckPolicy::Restrict`. An in-bounds
+    /// index is left unchanged. An out-of-bounds index is replaced with some
+    /// arbitrary in-bounds index. Note,this is not necessarily clamping; for
+    /// example, negative indices might be changed to refer to the last element
+    /// of the sequence, not the first, as clamping would do.
     ///
     /// Either return the restricted index value, if known, or add instructions
     /// to `block` to compute it, and return the id of the result. See the
@@ -202,7 +202,7 @@ impl<'w> BlockContext<'w> {
         };
 
         // One or the other of the index or length is dynamic, so emit code for
-        // IndexBoundsCheckPolicy::Restrict.
+        // BoundsCheckPolicy::Restrict.
         let restricted_index_id = self.gen_id();
         block.body.push(Instruction::ext_inst(
             self.writer.gl450_ext_inst_id,
@@ -290,7 +290,7 @@ impl<'w> BlockContext<'w> {
         Ok(BoundsCheckResult::Conditional(condition_id))
     }
 
-    /// Emit a conditional load for `IndexBoundsCheckPolicy::ReadZeroSkipWrite`.
+    /// Emit a conditional load for `BoundsCheckPolicy::ReadZeroSkipWrite`.
     ///
     /// Generate code to load a value of `result_type` if `condition` is true,
     /// and generate a null value of that type if it is false. Call `emit_load`
@@ -362,13 +362,11 @@ impl<'w> BlockContext<'w> {
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
         Ok(match self.writer.index_bounds_check_policy {
-            IndexBoundsCheckPolicy::Restrict => self.write_restricted_index(base, index, block)?,
-            IndexBoundsCheckPolicy::ReadZeroSkipWrite => {
+            BoundsCheckPolicy::Restrict => self.write_restricted_index(base, index, block)?,
+            BoundsCheckPolicy::ReadZeroSkipWrite => {
                 self.write_index_comparison(base, index, block)?
             }
-            IndexBoundsCheckPolicy::UndefinedBehavior => {
-                BoundsCheckResult::Computed(self.cached[index])
-            }
+            BoundsCheckPolicy::UndefinedBehavior => BoundsCheckResult::Computed(self.cached[index]),
         })
     }
 
