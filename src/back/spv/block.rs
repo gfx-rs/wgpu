@@ -90,7 +90,7 @@ impl<'w> BlockContext<'w> {
         self.writer.get_type_id(lookup_type)
     }
 
-    /// Extend texture coordinates with an array index, if necessary.
+    /// Extend image coordinates with an array index, if necessary.
     ///
     /// Whereas [`Expression::ImageLoad`] and [`ImageSample`] treat the array
     /// index as a separate operand from the coordinates, SPIR-V image access
@@ -113,7 +113,7 @@ impl<'w> BlockContext<'w> {
     ///
     /// [`Expression::ImageLoad`]: crate::Expression::ImageLoad
     /// [`ImageSample`]: crate::Expression::ImageSample
-    fn write_texture_coordinates(
+    fn write_image_coordinates(
         &mut self,
         coordinates: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
@@ -124,7 +124,7 @@ impl<'w> BlockContext<'w> {
 
         let coordinate_id = self.cached[coordinates];
 
-        // If there's no array index, the texture coordinates are exactly the
+        // If there's no array index, the image coordinates are exactly the
         // `coordinate` field of the `Expression::ImageLoad`. No work is needed.
         let array_index = match array_index {
             None => return Ok(coordinate_id),
@@ -805,8 +805,7 @@ impl<'w> BlockContext<'w> {
                 index,
             } => {
                 let image_id = self.get_image_id(image);
-                let coordinate_id =
-                    self.write_texture_coordinates(coordinate, array_index, block)?;
+                let coordinate_id = self.write_image_coordinates(coordinate, array_index, block)?;
 
                 let id = self.gen_id();
 
@@ -906,8 +905,7 @@ impl<'w> BlockContext<'w> {
                     self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 
                 let sampler_id = self.get_image_id(sampler);
-                let coordinate_id =
-                    self.write_texture_coordinates(coordinate, array_index, block)?;
+                let coordinate_id = self.write_image_coordinates(coordinate, array_index, block)?;
 
                 let sampled_image_id = self.gen_id();
                 block.body.push(Instruction::sampled_image(
@@ -1687,7 +1685,7 @@ impl<'w> BlockContext<'w> {
                 } => {
                     let image_id = self.get_image_id(image);
                     let coordinate_id =
-                        self.write_texture_coordinates(coordinate, array_index, &mut block)?;
+                        self.write_image_coordinates(coordinate, array_index, &mut block)?;
                     let value_id = self.cached[value];
 
                     block
