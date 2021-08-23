@@ -1810,11 +1810,7 @@ impl crate::Context for Context {
 
                 let mut mapped_color_attachment = web_sys::GpuRenderPassColorAttachment::new(
                     &load_value,
-                    if ca.ops.store {
-                        web_sys::GpuStoreOp::Store
-                    } else {
-                        web_sys::GpuStoreOp::Discard
-                    },
+                    map_store_op(ca.ops.store),
                     &ca.view.id.0,
                 );
 
