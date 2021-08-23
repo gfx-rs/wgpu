@@ -10,11 +10,29 @@ struct FragmentInput {
     linear sample float perspective_sample : LOC6;
 };
 
-struct FragmentInput_main {
-    FragmentInput val1;
+struct VertexOutput_main {
+    uint flat : LOC0;
+    float linear1 : LOC1;
+    float2 linear_centroid : LOC2;
+    float3 linear_sample : LOC3;
+    float4 perspective : LOC4;
+    float perspective_centroid : LOC5;
+    float perspective_sample : LOC6;
+    float4 position : SV_Position;
 };
 
-FragmentInput main()
+struct FragmentInput_main {
+    uint flat : LOC0;
+    float linear2 : LOC1;
+    float2 linear_centroid : LOC2;
+    float3 linear_sample : LOC3;
+    float4 perspective : LOC4;
+    float perspective_centroid : LOC5;
+    float perspective_sample : LOC6;
+    float4 position : SV_Position;
+};
+
+VertexOutput_main main()
 {
     FragmentInput out1 = (FragmentInput)0;
 
@@ -27,11 +45,13 @@ FragmentInput main()
     out1.perspective_centroid = 2197.0;
     out1.perspective_sample = 2744.0;
     FragmentInput _expr30 = out1;
-    const FragmentInput fragmentinput1 = _expr30;
+    const FragmentInput fragmentinput = _expr30;
+    const VertexOutput_main fragmentinput1 = { fragmentinput.flat, fragmentinput.linear1, fragmentinput.linear_centroid, fragmentinput.linear_sample, fragmentinput.perspective, fragmentinput.perspective_centroid, fragmentinput.perspective_sample, fragmentinput.position };
     return fragmentinput1;
 }
 
 void main1(FragmentInput_main fragmentinput_main)
 {
+    FragmentInput val = { fragmentinput_main.position, fragmentinput_main.flat, fragmentinput_main.linear2, fragmentinput_main.linear_centroid, fragmentinput_main.linear_sample, fragmentinput_main.perspective, fragmentinput_main.perspective_centroid, fragmentinput_main.perspective_sample };
     return;
 }

@@ -34,10 +34,12 @@ float fetch_shadow(uint light_id, float4 homogeneous_coords)
 
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
+    float3 raw_normal = fragmentinput_fs_main.raw_normal1;
+    float4 position = fragmentinput_fs_main.position1;
     float3 color = float3(0.05, 0.05, 0.05);
     uint i = 0u;
 
-    float3 normal = normalize(fragmentinput_fs_main.raw_normal1);
+    float3 normal = normalize(raw_normal);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -53,8 +55,8 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
         uint _expr19 = i;
         Light light = {float4x4(asfloat(s_lights.Load4(_expr19*96+0+0+0)), asfloat(s_lights.Load4(_expr19*96+0+0+16)), asfloat(s_lights.Load4(_expr19*96+0+0+32)), asfloat(s_lights.Load4(_expr19*96+0+0+48))), asfloat(s_lights.Load4(_expr19*96+0+64)), asfloat(s_lights.Load4(_expr19*96+0+80))};
         uint _expr22 = i;
-        const float _e25 = fetch_shadow(_expr22, mul(fragmentinput_fs_main.position1, light.proj));
-        float3 light_dir = normalize((light.pos.xyz - fragmentinput_fs_main.position1.xyz));
+        const float _e25 = fetch_shadow(_expr22, mul(position, light.proj));
+        float3 light_dir = normalize((light.pos.xyz - position.xyz));
         float diffuse = max(0.0, dot(normal, light_dir));
         float3 _expr34 = color;
         color = (_expr34 + ((_e25 * diffuse) * light.color.xyz));

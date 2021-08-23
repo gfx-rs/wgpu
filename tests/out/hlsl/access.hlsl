@@ -1,10 +1,6 @@
 
 RWByteAddressBuffer bar : register(u0);
 
-struct VertexInput_foo {
-    uint vi1 : SV_VertexID;
-};
-
 uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
 {
     uint ret;
@@ -12,7 +8,7 @@ uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
     return ret;
 }
 
-float4 foo(VertexInput_foo vertexinput_foo) : SV_Position
+float4 foo(uint vi : SV_VertexID) : SV_Position
 {
     float foo1 = 0.0;
     int c[5] = {(int)0,(int)0,(int)0,(int)0,(int)0};
@@ -41,8 +37,8 @@ float4 foo(VertexInput_foo vertexinput_foo) : SV_Position
         int _result[5]={ a, int(b), 3, 4, 5 };
         for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];
     }
-    c[(vertexinput_foo.vi1 + 1u)] = 42;
-    int value = c[vertexinput_foo.vi1];
+    c[(vi + 1u)] = 42;
+    int value = c[vi];
     return mul(float4(int4(value.xxxx)), matrix1);
 }
 
