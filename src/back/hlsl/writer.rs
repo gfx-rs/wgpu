@@ -1204,8 +1204,61 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.temp_access_chain = chain;
                 self.named_expressions.insert(result, res_name);
             }
-            Statement::Switch { .. } => {
-                return Err(Error::Unimplemented(format!("write_stmt {:?}", stmt)))
+            Statement::Switch {
+                selector,
+                ref cases,
+                ref default,
+            } => {
+                // Start the switch
+                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "switch(")?;
+                self.write_expr(module, selector, func_ctx)?;
+                writeln!(self.out, ") {{")?;
+
+                // Write all cases
+                let indent_str_1 = INDENT.repeat(indent + 1);
+                let indent_str_2 = INDENT.repeat(indent + 2);
+
+                for case in cases {
+                    writeln!(self.out, "{}case {}: {{", &indent_str_1, case.value)?;
+
+                    if case.fall_through {
+                        // Generate each fallthrough case statement in a new block. This is done to
+                        // prevent symbol collision of variables declared in these cases statements.
+                        writeln!(self.out, "{}/* fallthrough */", &indent_str_2)?;
+                        writeln!(self.out, "{}{{", &indent_str_2)?;
+                    }
+                    for sta in case.body.iter() {
+                        self.write_stmt(
+                            module,
+                            sta,
+                            func_ctx,
+                            indent + 2 + usize::from(case.fall_through),
+                        )?;
+                    }
+
+                    if case.fall_through {
+                        writeln!(self.out, "{}}}", &indent_str_2)?;
+                    } else {
+                        writeln!(self.out, "{}break;", &indent_str_2)?;
+                    }
+
+                    writeln!(self.out, "{}}}", &indent_str_1)?;
+                }
+
+                // Only write the default block if the block isn't empty
+                // Writing default without a block is valid but it's more readable this way
+                if !default.is_empty() {
+                    writeln!(self.out, "{}default: {{", &indent_str_1)?;
+
+                    for sta in default {
+                        self.write_stmt(module, sta, func_ctx, indent + 2)?;
+                    }
+
+                    writeln!(self.out, "{}}}", &indent_str_1)?;
+                }
+
+                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
             }
         }
 

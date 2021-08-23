@@ -1441,11 +1441,6 @@ impl<'a, W: Write> Writer<'a, W> {
                     for sta in case.body.iter() {
                         self.write_stmt(sta, ctx, indent + 2)?;
                     }
-
-                    // Write `break;` if the block isn't fallthrough
-                    if !case.fall_through {
-                        writeln!(self.out, "{}break;", INDENT.repeat(indent + 2))?;
-                    }
                 }
 
                 // Only write the default block if the block isn't empty
