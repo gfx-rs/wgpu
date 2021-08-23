@@ -455,7 +455,7 @@ fn convert_wgsl() {
             .expect("Couldn't find wgsl file");
         match naga::front::wgsl::parse_str(&file) {
             Ok(module) => check_targets(&module, name, targets),
-            Err(e) => panic!("{}", e),
+            Err(e) => panic!("{}", e.emit_to_string(&file)),
         }
     }
 }
