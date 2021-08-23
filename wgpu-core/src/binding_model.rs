@@ -136,6 +136,8 @@ pub enum CreateBindGroupError {
         layout_format: wgt::TextureFormat,
         view_format: wgt::TextureFormat,
     },
+    #[error("storage texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
+    InvalidStorageTextureMipLevelCount { binding: u32, mip_level_count: u32 },
     #[error("sampler binding {binding} expects comparison = {layout_cmp}, but given a sampler with comparison = {sampler_cmp}")]
     WrongSamplerComparison {
         binding: u32,
