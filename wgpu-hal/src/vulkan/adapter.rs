@@ -774,6 +774,7 @@ impl super::Adapter {
     pub unsafe fn device_from_raw(
         &self,
         raw_device: ash::Device,
+        handle_is_owned: bool,
         enabled_extensions: &[&'static CStr],
         family_index: u32,
         queue_index: u32,
@@ -845,6 +846,7 @@ impl super::Adapter {
 
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
+            handle_is_owned,
             instance: Arc::clone(&self.instance),
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
@@ -944,6 +946,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         self.device_from_raw(
             raw_device,
+            true,
             &enabled_extensions,
             family_info.queue_family_index,
             0,

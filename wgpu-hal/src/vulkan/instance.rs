@@ -187,7 +187,7 @@ impl super::Instance {
         driver_api_version: u32,
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
-        drop_guard: super::DropGuard,
+        drop_guard: Option<super::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
         if driver_api_version == vk::API_VERSION_1_0
             && !extensions.contains(&vk::KhrStorageBufferStorageClassFn::name())
@@ -228,7 +228,7 @@ impl super::Instance {
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
                 raw: raw_instance,
-                _drop_guard: drop_guard,
+                drop_guard,
                 flags,
                 debug_utils,
                 get_physical_device_properties,
@@ -418,7 +418,9 @@ impl Drop for super::InstanceShared {
                 du.extension
                     .destroy_debug_utils_messenger(du.messenger, None);
             }
-            self.raw.destroy_instance(None);
+            if let Some(_drop_guard) = self.drop_guard.take() {
+                self.raw.destroy_instance(None);
+            }
         }
     }
 }
@@ -520,7 +522,7 @@ impl crate::Instance<super::Api> for super::Instance {
             driver_api_version,
             extensions,
             desc.flags,
-            Box::new(()),
+            Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
         )
     }
 
