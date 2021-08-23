@@ -1166,7 +1166,27 @@ impl crate::Context for Context {
         let mut descriptor = match desc.source {
             #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
-                web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&**spv))
+                use naga::{back, front, valid};
+
+                let (pre, aligned_spv, post) = unsafe { spv.align_to::<u8>() };
+                debug_assert!(pre.is_empty());
+                debug_assert!(post.is_empty());
+                let spv_module = front::spv::parse_u8_slice(
+                    &aligned_spv,
+                    &front::spv::Options {
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+
+                let mut validator = valid::Validator::new(
+                    valid::ValidationFlags::all(),
+                    valid::Capabilities::all(),
+                );
+                let spv_module_info = validator.validate(&spv_module).unwrap();
+
+                let wgsl_text = back::wgsl::write_string(&spv_module, &spv_module_info).unwrap();
+                web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
         };
