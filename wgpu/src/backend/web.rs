@@ -1168,16 +1168,13 @@ impl crate::Context for Context {
             crate::ShaderSource::SpirV(ref spv) => {
                 use naga::{back, front, valid};
 
-                let (pre, aligned_spv, post) = unsafe { spv.align_to::<u8>() };
-                debug_assert!(pre.is_empty());
-                debug_assert!(post.is_empty());
-                let spv_module = front::spv::parse_u8_slice(
-                    &aligned_spv,
-                    &front::spv::Options {
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: false,
+                    strict_capabilities: true,
+                    flow_graph_dump_prefix: None,
+                };
+                let spv_parser = front::spv::Parser::new(spv.iter().cloned(), &options);
+                let spv_module = spv_parser.parse().unwrap();
 
                 let mut validator = valid::Validator::new(
                     valid::ValidationFlags::all(),
