@@ -164,8 +164,8 @@ pub struct Writer<'a, W> {
     namer: proc::Namer,
     /// HLSL backend options
     options: &'a Options,
-    /// Information about entry point arguments wrapped into structure
-    ep_inputs: Vec<Option<writer::EntryPointBinding>>,
+    /// Information about entry point arguments and result types.
+    entry_point_io: Vec<writer::EntryPointInterface>,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
     wrapped_array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
