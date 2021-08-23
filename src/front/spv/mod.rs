@@ -296,6 +296,11 @@ struct LookupFunctionType {
     return_type_id: spirv::Word,
 }
 
+struct LookupFunction {
+    handle: Handle<crate::Function>,
+    parameters_sampling: Vec<image::SamplingFlags>,
+}
+
 #[derive(Debug)]
 struct EntryPoint {
     stage: crate::ShaderStage,
@@ -387,10 +392,6 @@ impl Default for Options {
     }
 }
 
-struct FunctionInfo {
-    parameters_sampling: Vec<image::SamplingFlags>,
-}
-
 pub struct Parser<I> {
     data: I,
     data_offset: usize,
@@ -413,7 +414,7 @@ pub struct Parser<I> {
     lookup_load_override: FastHashMap<spirv::Word, LookupLoadOverride>,
     lookup_sampled_image: FastHashMap<spirv::Word, image::LookupSampledImage>,
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
-    lookup_function: FastHashMap<spirv::Word, Handle<crate::Function>>,
+    lookup_function: FastHashMap<spirv::Word, LookupFunction>,
     lookup_entry_point: FastHashMap<spirv::Word, EntryPoint>,
     //Note: each `OpFunctionCall` gets a single entry here, indexed by the
     // dummy `Handle<crate::Function>` of the call site.
@@ -426,7 +427,6 @@ pub struct Parser<I> {
     options: Options,
     index_constants: Vec<Handle<crate::Constant>>,
     index_constant_expressions: Vec<Handle<crate::Expression>>,
-    function_info: Vec<FunctionInfo>,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -459,7 +459,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             options: options.clone(),
             index_constants: Vec::new(),
             index_constant_expressions: Vec::new(),
-            function_info: Vec::new(),
         }
     }
 
@@ -852,7 +851,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         type_arena: &Arena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
         arguments: &[crate::FunctionArgument],
-        function_info: &mut FunctionInfo,
+        parmeter_sampling: &mut [image::SamplingFlags],
     ) -> Result<ControlFlowNode, Error> {
         let mut block = crate::Block::new();
         let mut phis = Vec::new();
@@ -1645,7 +1644,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         global_arena,
                         arguments,
                         expressions,
-                        function_info,
+                        parmeter_sampling,
                     )?;
                 }
                 Op::ImageSampleProjImplicitLod | Op::ImageSampleProjExplicitLod => {
@@ -1661,7 +1660,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         global_arena,
                         arguments,
                         expressions,
-                        function_info,
+                        parmeter_sampling,
                     )?;
                 }
                 Op::ImageSampleDrefImplicitLod | Op::ImageSampleDrefExplicitLod => {
@@ -1677,7 +1676,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         global_arena,
                         arguments,
                         expressions,
-                        function_info,
+                        parmeter_sampling,
                     )?;
                 }
                 Op::ImageSampleProjDrefImplicitLod | Op::ImageSampleProjDrefExplicitLod => {
@@ -1693,7 +1692,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         global_arena,
                         arguments,
                         expressions,
-                        function_info,
+                        parmeter_sampling,
                     )?;
                 }
                 Op::ImageQuerySize => {
@@ -2415,7 +2414,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         &mut self,
         statements: &mut crate::Block,
         expressions: &mut Arena<crate::Expression>,
-        function: Option<Handle<crate::Function>>,
+        fun_parameter_sampling: &mut [image::SamplingFlags],
     ) -> Result<(), Error> {
         use crate::Statement as S;
         let mut i = 0usize;
@@ -2423,7 +2422,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             match statements[i] {
                 S::Emit(_) => {}
                 S::Block(ref mut block) => {
-                    self.patch_statements(block, expressions, function)?;
+                    self.patch_statements(block, expressions, fun_parameter_sampling)?;
                 }
                 S::If {
                     condition: _,
@@ -2435,8 +2434,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let extracted = mem::take(accept);
                         statements.splice(i + 1..i + 1, extracted);
                     } else {
-                        self.patch_statements(reject, expressions, function)?;
-                        self.patch_statements(accept, expressions, function)?;
+                        self.patch_statements(reject, expressions, fun_parameter_sampling)?;
+                        self.patch_statements(accept, expressions, fun_parameter_sampling)?;
                     }
                 }
                 S::Switch {
@@ -2450,17 +2449,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         statements.splice(i + 1..i + 1, extracted);
                     } else {
                         for case in cases.iter_mut() {
-                            self.patch_statements(&mut case.body, expressions, function)?;
+                            self.patch_statements(
+                                &mut case.body,
+                                expressions,
+                                fun_parameter_sampling,
+                            )?;
                         }
-                        self.patch_statements(default, expressions, function)?;
+                        self.patch_statements(default, expressions, fun_parameter_sampling)?;
                     }
                 }
                 S::Loop {
                     ref mut body,
                     ref mut continuing,
                 } => {
-                    self.patch_statements(body, expressions, function)?;
-                    self.patch_statements(continuing, expressions, function)?;
+                    self.patch_statements(body, expressions, fun_parameter_sampling)?;
+                    self.patch_statements(continuing, expressions, fun_parameter_sampling)?;
                 }
                 S::Break
                 | S::Continue
@@ -2476,20 +2479,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ..
                 } => {
                     let fun_id = self.deferred_function_calls[callee.index()];
-                    let handle = *self.lookup_function.lookup(fun_id)?;
+                    let fun_lookup = self.lookup_function.lookup(fun_id)?;
+                    *callee = fun_lookup.handle;
 
                     // Patch sampling flags
-                    for (i, arg) in arguments.iter().enumerate() {
-                        let callee_info = &self.function_info[handle.index()];
-
-                        let flags = match callee_info.parameters_sampling.get(i) {
-                            Some(&flags) => flags,
+                    for (arg_index, arg) in arguments.iter().enumerate() {
+                        let flags = match fun_lookup.parameters_sampling.get(arg_index) {
+                            Some(&flags) if !flags.is_empty() => flags,
                             _ => continue,
                         };
-
-                        if flags.is_empty() {
-                            continue;
-                        }
 
                         match expressions[*arg] {
                             crate::Expression::GlobalVariable(handle) => {
@@ -2498,17 +2496,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 }
                             }
                             crate::Expression::FunctionArgument(i) => {
-                                if let Some(handle) = function {
-                                    let function_info =
-                                        self.function_info.get_mut(handle.index()).unwrap();
-                                    function_info.parameters_sampling[i as usize] |= flags;
-                                }
+                                fun_parameter_sampling[i as usize] |= flags;
                             }
                             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
                         }
                     }
-
-                    *callee = handle;
                 }
             }
             i += 1;
@@ -2521,13 +2513,35 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         handle: Option<Handle<crate::Function>>,
         fun: &mut crate::Function,
     ) -> Result<(), Error> {
+        // Note: this search is a bit unfortunate
+        let (fun_id, mut parameters_sampling) = match handle {
+            Some(h) => {
+                let (&fun_id, lookup) = self
+                    .lookup_function
+                    .iter_mut()
+                    .find(|&(_, ref lookup)| lookup.handle == h)
+                    .unwrap();
+                (fun_id, mem::take(&mut lookup.parameters_sampling))
+            }
+            None => (0, Vec::new()),
+        };
+
         for (_, expr) in fun.expressions.iter_mut() {
             if let crate::Expression::CallResult(ref mut function) = *expr {
                 let fun_id = self.deferred_function_calls[function.index()];
-                *function = *self.lookup_function.lookup(fun_id)?;
+                *function = self.lookup_function.lookup(fun_id)?.handle;
             }
         }
-        self.patch_statements(&mut fun.body, &mut fun.expressions, handle)?;
+
+        self.patch_statements(
+            &mut fun.body,
+            &mut fun.expressions,
+            &mut parameters_sampling,
+        )?;
+
+        if let Some(lookup) = self.lookup_function.get_mut(&fun_id) {
+            lookup.parameters_sampling = parameters_sampling;
+        }
         Ok(())
     }
 
@@ -2633,13 +2647,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // skip all the fake IDs registered for the entry points
                     continue;
                 }
-                let handle = self.lookup_function.get_mut(&fun_id).unwrap();
+                let lookup = self.lookup_function.get_mut(&fun_id).unwrap();
                 // take out the function from the old array
-                let fun = mem::take(&mut functions[*handle]);
+                let fun = mem::take(&mut functions[lookup.handle]);
                 // add it to the newly formed arena, and adjust the lookup
-                *handle = module
+                lookup.handle = module
                     .functions
-                    .append(fun, functions.get_span(*handle).clone());
+                    .append(fun, functions.get_span(lookup.handle).clone());
             }
         }
         // patch all the functions
