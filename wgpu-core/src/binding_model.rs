@@ -25,6 +25,8 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
 pub enum BindGroupLayoutEntryError {
+    #[error("cube dimension is not expected for texture storage")]
+    StorageTextureCube,
     #[error("arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
     #[error(transparent)]
