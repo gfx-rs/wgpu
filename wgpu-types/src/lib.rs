@@ -34,6 +34,8 @@ pub type DynamicOffset = u32;
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
+/// An offset into the query resolve buffer has to be aligned to this.
+pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
 /// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 /// Size to align mappings.
