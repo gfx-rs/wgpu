@@ -425,7 +425,9 @@ fn convert_wgsl() {
         ),
         (
             "control-flow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+            // TODO: SPIRV https://github.com/gfx-rs/naga/issues/1017
+            //Targets::SPIRV |
+            Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
             "standard",

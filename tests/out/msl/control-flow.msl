@@ -8,7 +8,36 @@ struct main1Input {
 kernel void main1(
   metal::uint3 global_id [[thread_position_in_grid]]
 ) {
+    int pos;
     metal::threadgroup_barrier(metal::mem_flags::mem_device);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    return;
+    switch(1) {
+        default: {
+            pos = 1;
+        }
+    }
+    int _e4 = pos;
+    switch(_e4) {
+        case 1: {
+            pos = 0;
+            break;
+            break;
+        }
+        case 2: {
+            pos = 1;
+            return;
+            break;
+        }
+        case 3: {
+            pos = 2;
+        }
+        case 4: {
+            return;
+            break;
+        }
+        default: {
+            pos = 3;
+            return;
+        }
+    }
 }
