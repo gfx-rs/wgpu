@@ -1254,6 +1254,7 @@ impl crate::Context for Context {
                         let mut storage_texture = web_sys::GpuStorageTextureBindingLayout::new(
                             map_texture_format(format),
                         );
+                        storage_texture.access(mapped_access);
                         storage_texture.view_dimension(map_texture_view_dimension(view_dimension));
                         mapped_entry.storage_texture(&storage_texture);
                     }
