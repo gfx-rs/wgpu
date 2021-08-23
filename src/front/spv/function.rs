@@ -1,6 +1,6 @@
 use crate::arena::{Arena, Handle};
 
-use super::{flow::*, Error, FunctionInfo, Instruction, LookupExpression, LookupHelper as _};
+use super::{flow::*, Error, Instruction, LookupExpression, LookupHelper as _};
 use crate::front::Emitter;
 
 pub type BlockId = u32;
@@ -142,10 +142,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         // Read body
         self.function_call_graph.add_node(fun_id);
         let mut flow_graph = FlowGraph::new();
-
-        let mut function_info = FunctionInfo {
-            parameters_sampling: vec![super::image::SamplingFlags::empty(); fun.arguments.len()],
-        };
+        let mut parameters_sampling =
+            vec![super::image::SamplingFlags::empty(); fun.arguments.len()];
 
         // Scan the blocks and add them as nodes
         loop {
@@ -166,7 +164,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         &module.types,
                         &module.global_variables,
                         &fun.arguments,
-                        &mut function_info,
+                        &mut parameters_sampling,
                     )?;
 
                     flow_graph.add_node(node);
@@ -200,8 +198,14 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         // done
         let fun_handle = module.functions.append(fun, self.span_from_with_op(start));
-        self.lookup_function.insert(fun_id, fun_handle);
-        self.function_info.push(function_info);
+        self.lookup_function.insert(
+            fun_id,
+            super::LookupFunction {
+                handle: fun_handle,
+                parameters_sampling,
+            },
+        );
+
         if let Some(ep) = self.lookup_entry_point.remove(&fun_id) {
             // create a wrapping function
             let mut function = crate::Function {
