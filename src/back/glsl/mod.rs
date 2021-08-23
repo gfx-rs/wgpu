@@ -2112,13 +2112,13 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Binary { op, left, right } => {
                 // Holds `Some(function_name)` if the binary operation is
                 // implemented as a function call
-                use crate::BinaryOperator as Bo;
+                use crate::{BinaryOperator as Bo, ScalarKind as Sk, TypeInner as Ti};
 
-                let function = if let (&TypeInner::Vector { .. }, &TypeInner::Vector { .. }) = (
-                    ctx.info[left].ty.inner_with(&self.module.types),
-                    ctx.info[right].ty.inner_with(&self.module.types),
-                ) {
-                    match op {
+                let left_inner = ctx.info[left].ty.inner_with(&self.module.types);
+                let right_inner = ctx.info[right].ty.inner_with(&self.module.types);
+
+                let function = match (left_inner, right_inner) {
+                    (&Ti::Vector { .. }, &Ti::Vector { .. }) => match op {
                         Bo::Less => Some("lessThan"),
                         Bo::LessEqual => Some("lessThanEqual"),
                         Bo::Greater => Some("greaterThan"),
@@ -2126,9 +2126,14 @@ impl<'a, W: Write> Writer<'a, W> {
                         Bo::Equal => Some("equal"),
                         Bo::NotEqual => Some("notEqual"),
                         _ => None,
-                    }
-                } else {
-                    None
+                    },
+                    _ => match (left_inner.scalar_kind(), right_inner.scalar_kind()) {
+                        (Some(Sk::Float), _) | (_, Some(Sk::Float)) => match op {
+                            Bo::Modulo => Some("mod"),
+                            _ => None,
+                        },
+                        _ => None,
+                    },
                 };
 
                 write!(self.out, "{}(", function.unwrap_or(""))?;
