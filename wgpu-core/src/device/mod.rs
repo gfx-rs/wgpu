@@ -1094,25 +1094,40 @@ impl<A: HalApi> Device<A> {
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
                     WritableStorage::No,
                 ),
-                Bt::StorageTexture { access, .. } => (
-                    Some(
-                        wgt::Features::TEXTURE_BINDING_ARRAY
-                            | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
-                    ),
-                    match access {
-                        wgt::StorageTextureAccess::WriteOnly => WritableStorage::Yes,
-                        wgt::StorageTextureAccess::ReadOnly => {
-                            required_features |=
-                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                            WritableStorage::No
+                Bt::StorageTexture {
+                    access,
+                    view_dimension,
+                    format: _,
+                } => {
+                    match view_dimension {
+                        wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
+                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                                binding: entry.binding,
+                                error: binding_model::BindGroupLayoutEntryError::StorageTextureCube,
+                            })
                         }
-                        wgt::StorageTextureAccess::ReadWrite => {
-                            required_features |=
-                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                            WritableStorage::Yes
-                        }
-                    },
-                ),
+                        _ => (),
+                    }
+                    (
+                        Some(
+                            wgt::Features::TEXTURE_BINDING_ARRAY
+                                | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
+                        ),
+                        match access {
+                            wgt::StorageTextureAccess::WriteOnly => WritableStorage::Yes,
+                            wgt::StorageTextureAccess::ReadOnly => {
+                                required_features |=
+                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+                                WritableStorage::No
+                            }
+                            wgt::StorageTextureAccess::ReadWrite => {
+                                required_features |=
+                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+                                WritableStorage::Yes
+                            }
+                        },
+                    )
+                }
             };
 
             // Validate the count parameter
