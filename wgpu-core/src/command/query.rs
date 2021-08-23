@@ -142,6 +142,8 @@ pub enum QueryUseError {
 pub enum ResolveError {
     #[error("Queries can only be resolved to buffers that contain the COPY_DST usage")]
     MissingBufferUsage,
+    #[error("Resolve buffer offset has to be aligned to `QUERY_RESOLVE_BUFFER_ALIGNMENT")]
+    BufferOffsetAlignment,
     #[error("Resolving queries {start_query}..{end_query} would overrun the query set of size {query_set_size}")]
     QueryOverrun {
         start_query: u32,
@@ -337,6 +339,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 destination,
                 destination_offset,
             });
+        }
+
+        if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
+            return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
 
         let query_set = cmd_buf
