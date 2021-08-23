@@ -242,7 +242,9 @@ impl super::DeviceShared {
         for &raw in self.framebuffers.lock().values() {
             self.raw.destroy_framebuffer(raw, None);
         }
-        self.raw.destroy_device(None);
+        if self.handle_is_owned {
+            self.raw.destroy_device(None);
+        }
     }
 }
 
@@ -532,21 +534,19 @@ impl super::Device {
         })
     }
 
-    /// The image handle and its memory are not handled by wgpu-hal
-    ///
     /// # Safety
     ///
-    /// - `vk_image` must be created respecting `desc` and `raw_flags`
-    /// - The application must manually destroy the texture handle. This can be done inside the
-    ///   `Drop` impl of `drop_guard`.
+    /// - `vk_image` must be created respecting `desc`
+    /// - If `drop_guard` is `Some`, the application must manually destroy the image handle. This
+    ///   can be done inside the `Drop` impl of `drop_guard`.
     pub unsafe fn texture_from_raw(
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
-        drop_guard: super::DropGuard,
+        drop_guard: Option<super::DropGuard>,
     ) -> super::Texture {
         super::Texture {
             raw: vk_image,
-            drop_guard: Some(drop_guard),
+            drop_guard,
             block: None,
             usage: desc.usage,
             aspects: crate::FormatAspects::from(desc.format),
