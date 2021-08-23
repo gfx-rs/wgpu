@@ -773,7 +773,7 @@ impl<A: HalApi> Device<A> {
                 }
                 _ => hal::TextureUses::all(),
             };
-            let mask_mip_level = if end_layer != desc.range.base_array_layer + 1 {
+            let mask_mip_level = if selector.levels.end - selector.levels.start != 1 {
                 hal::TextureUses::RESOURCE
             } else {
                 hal::TextureUses::all()
@@ -1657,6 +1657,15 @@ impl<A: HalApi> Device<A> {
                         view_dimension: view.desc.dimension,
                     });
                 }
+
+                let mip_level_count = view.selector.levels.end - view.selector.levels.start;
+                if mip_level_count != 1 {
+                    return Err(Error::InvalidStorageTextureMipLevelCount {
+                        binding,
+                        mip_level_count,
+                    });
+                }
+
                 let internal_use = match access {
                     wgt::StorageTextureAccess::WriteOnly => hal::TextureUses::STORAGE_WRITE,
                     wgt::StorageTextureAccess::ReadOnly => {
