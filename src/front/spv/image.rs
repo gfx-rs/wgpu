@@ -3,7 +3,7 @@ use crate::{
     FunctionArgument,
 };
 
-use super::{Error, FunctionInfo, LookupExpression, LookupHelper as _};
+use super::{Error, LookupExpression, LookupHelper as _};
 
 #[derive(Clone, Debug)]
 pub(super) struct LookupSampledImage {
@@ -415,7 +415,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         global_arena: &Arena<crate::GlobalVariable>,
         arguments: &[FunctionArgument],
         expressions: &mut Arena<crate::Expression>,
-        function_info: &mut FunctionInfo,
+        parameters_sampling: &mut [SamplingFlags],
     ) -> Result<(), Error> {
         let start = self.data_offset;
         let result_type_id = self.next()?;
@@ -513,9 +513,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 global_arena[handle].ty
             }
             crate::Expression::FunctionArgument(i) => {
-                let flags = &mut function_info.parameters_sampling[i as usize];
-                *flags |= sampling_bit;
-
+                parameters_sampling[i as usize] |= sampling_bit;
                 arguments[i as usize].ty
             }
             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
@@ -525,8 +523,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 *self.handle_sampling.get_mut(&handle).unwrap() |= sampling_bit
             }
             crate::Expression::FunctionArgument(i) => {
-                let flags = &mut function_info.parameters_sampling[i as usize];
-                *flags |= sampling_bit;
+                parameters_sampling[i as usize] |= sampling_bit;
             }
             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
         }
