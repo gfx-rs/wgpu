@@ -6,7 +6,7 @@ use crate::{
     command::{CommandBuffer, CommandEncoderError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{self, Id, TypedId},
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    init_tracker::MemoryInitKind,
     resource::QuerySet,
     track::UseExtendError,
     Epoch, FastHashMap, Index,
@@ -392,16 +392,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
-        cmd_buf.buffer_memory_init_actions.extend(
-            dst_buffer
-                .initialization_status
-                .check(buffer_start_offset..buffer_end_offset)
-                .map(|range| MemoryInitTrackerAction {
-                    id: destination,
-                    range,
-                    kind: MemoryInitKind::ImplicitlyInitialized,
-                }),
-        );
+        cmd_buf
+            .buffer_memory_init_actions
+            .extend(dst_buffer.initialization_status.create_action(
+                destination,
+                buffer_start_offset..buffer_end_offset,
+                MemoryInitKind::ImplicitlyInitialized,
+            ));
 
         unsafe {
             raw_encoder.transition_buffers(dst_barrier);

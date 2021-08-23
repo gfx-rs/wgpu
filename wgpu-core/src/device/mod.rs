@@ -2,9 +2,9 @@ use crate::{
     binding_model, command, conv,
     device::life::WaitIdleError,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token},
-    id, instance,
-    memory_init_tracker::{MemoryInitKind, MemoryInitTracker, MemoryInitTrackerAction},
-    pipeline, present, resource,
+    id,
+    init_tracker::{BufferInitTracker, BufferInitTrackerAction, MemoryInitKind},
+    instance, pipeline, present, resource,
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, Stored, SubmissionIndex,
@@ -527,7 +527,7 @@ impl<A: HalApi> Device<A> {
             },
             usage: desc.usage,
             size: desc.size,
-            initialization_status: MemoryInitTracker::new(desc.size),
+            initialization_status: BufferInitTracker::new(desc.size),
             sync_mapped_writes: None,
             map_state: resource::BufferMapState::Idle,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
@@ -1201,7 +1201,7 @@ impl<A: HalApi> Device<A> {
         bb: &binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        used_buffer_ranges: &mut Vec<MemoryInitTrackerAction<id::BufferId>>,
+        used_buffer_ranges: &mut Vec<BufferInitTrackerAction>,
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         used: &mut TrackerSet,
         storage: &'a Storage<resource::Buffer<A>, id::BufferId>,
@@ -1297,11 +1297,11 @@ impl<A: HalApi> Device<A> {
             return Err(Error::BindingZeroSize(bb.buffer_id));
         }
 
-        used_buffer_ranges.push(MemoryInitTrackerAction {
-            id: bb.buffer_id,
-            range: bb.offset..(bb.offset + bind_size),
-            kind: MemoryInitKind::NeedsInitializedMemory,
-        });
+        used_buffer_ranges.extend(buffer.initialization_status.create_action(
+            bb.buffer_id,
+            bb.offset..(bb.offset + bind_size),
+            MemoryInitKind::NeedsInitializedMemory,
+        ));
 
         Ok(hal::BufferBinding {
             buffer: raw_buffer,

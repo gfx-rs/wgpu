@@ -22,7 +22,7 @@ use crate::FastHashMap;
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    memory_init_tracker::{MemoryInitKind, MemoryInitTrackerAction},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     resource::{Buffer, Texture},
     track::{BufferState, ResourceTracker, TextureState, TrackerSet},
     Label, Stored,
@@ -71,7 +71,7 @@ pub struct BakedCommands<A: hal::Api> {
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: TrackerSet,
-    buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
+    buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
@@ -158,7 +158,7 @@ pub struct CommandBuffer<A: hal::Api> {
     status: CommandEncoderStatus,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
-    buffer_memory_init_actions: Vec<MemoryInitTrackerAction<id::BufferId>>,
+    buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     limits: wgt::Limits,
     support_fill_buffer_texture: bool,
     #[cfg(feature = "trace")]
