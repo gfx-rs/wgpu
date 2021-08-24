@@ -1,5 +1,20 @@
 # Change Log
 
+## v0.6.1 (2021-08-24)
+  - HLSL-out fixes:
+    - array arguments
+    - pointers to array arguments
+    - switch statement
+    - rewritten interface matching
+  - SPV-in fixes:
+    - array storage texture stores
+    - tracking sampling across function parameters
+    - updated petgraph dependencies
+  - MSL-out:
+    - gradient sampling
+  - GLSL-out:
+    - modulo operator on floats
+
 ## v0.6 (2021-08-18)
   - development release for wgpu-0.10
   - API:
