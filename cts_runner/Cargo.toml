@@ -1,0 +1,34 @@
+[package]
+name = "cts_runner"
+version = "0.1.0"
+authors = [
+	"Luca Casonato <hello@lcas.dev>",
+]
+edition = "2018"
+description = "CTS runner for wgpu"
+homepage = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+deno_console = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_core = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_timers = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_url = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_web = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_webidl = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_webgpu = { path = "../deno_webgpu" }
+tokio = { version = "1.10.0", features = ["full"] }
+termcolor = "1.1.2"
+
+[build-dependencies]
+deno_console = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_core = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_timers = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_url = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_web = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_webidl = { git = "https://github.com/denoland/deno", rev = "f4a9db350fbf00a6cb13a2c030b925cfd5218ed2" }
+deno_webgpu = { path = "../deno_webgpu" }
+tokio = { version = "1.10.0", features = ["full"] }
