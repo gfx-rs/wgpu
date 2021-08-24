@@ -716,18 +716,20 @@ impl crate::Device<super::Api> for super::Device {
         //
         // Root signature layout:
         // Root Constants: Parameter=0, Space=0
-        // Special constant buffer: Space=0
         //     ...
-        // (bind group [3]) - Space=0
+        // (bind group [0]) - Space=0
         //   View descriptor table, if any
         //   Sampler descriptor table, if any
         //   Root descriptors (for dynamic offset buffers)
-        // (bind group [2]) - Space=0
+        // (bind group [1]) - Space=0
         // ...
-        // (bind group [0]) - Space=0
+        // (bind group [2]) - Space=0
+        // Special constant buffer: Space=0
 
-        //Note: lower bind group indices are put futher down the root signature. See:
+        //TODO: put lower bind group indices futher down the root signature. See:
         // https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#binding-model
+        // Currently impossible because wgpu-core only re-binds the descriptor sets based
+        // on Vulkan-like layout compatibility rules.
 
         fn native_binding(bt: &hlsl::BindTarget) -> native::Binding {
             native::Binding {
@@ -735,6 +737,11 @@ impl crate::Device<super::Api> for super::Device {
                 register: bt.register,
             }
         }
+
+        log::debug!(
+            "Creating Root Signature '{}'",
+            desc.label.unwrap_or_default()
+        );
 
         let mut binding_map = hlsl::BindingMap::default();
         let (mut bind_cbv, mut bind_srv, mut bind_uav, mut bind_sampler) = (
@@ -744,23 +751,6 @@ impl crate::Device<super::Api> for super::Device {
             hlsl::BindTarget::default(),
         );
         let mut parameters = Vec::new();
-
-        let (special_constants_root_index, special_constants_binding) = if desc.flags.intersects(
-            crate::PipelineLayoutFlags::BASE_VERTEX_INSTANCE
-                | crate::PipelineLayoutFlags::NUM_WORK_GROUPS,
-        ) {
-            let parameter_index = parameters.len();
-            parameters.push(native::RootParameter::constants(
-                native::ShaderVisibility::All, // really needed for VS and CS only
-                native_binding(&bind_cbv),
-                3, // 0 = base vertex, 1 = base instance, 2 = other
-            ));
-            let binding = bind_cbv.clone();
-            bind_cbv.register += 1;
-            (Some(parameter_index as u32), Some(binding))
-        } else {
-            (None, None)
-        };
 
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
@@ -782,7 +772,7 @@ impl crate::Device<super::Api> for super::Device {
 
         let mut bind_group_infos =
             arrayvec::ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
-        for (index, bgl) in desc.bind_group_layouts.iter().enumerate().rev() {
+        for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
                 base_root_index: parameters.len() as u32,
@@ -836,6 +826,12 @@ impl crate::Device<super::Api> for super::Device {
                 bt.register += 1;
             }
             if ranges.len() > range_base {
+                log::debug!(
+                    "\tParam[{}] = views (vis = {:?}, count = {})",
+                    parameters.len(),
+                    visibility_view_static,
+                    ranges.len() - range_base,
+                );
                 parameters.push(native::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_view_static),
                     &ranges[range_base..],
@@ -866,6 +862,12 @@ impl crate::Device<super::Api> for super::Device {
                 bind_sampler.register += 1;
             }
             if ranges.len() > range_base {
+                log::debug!(
+                    "\tParam[{}] = samplers (vis = {:?}, count = {})",
+                    parameters.len(),
+                    visibility_sampler,
+                    ranges.len() - range_base,
+                );
                 parameters.push(native::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_sampler),
                     &ranges[range_base..],
@@ -911,6 +913,13 @@ impl crate::Device<super::Api> for super::Device {
                     bt.clone(),
                 );
                 info.dynamic_buffers.push(kind);
+
+                log::debug!(
+                    "\tParam[{}] = dynamic {:?} (vis = {:?})",
+                    parameters.len(),
+                    buffer_ty,
+                    dynamic_buffers_visibility,
+                );
                 parameters.push(native::RootParameter::descriptor(
                     parameter_ty,
                     dynamic_buffers_visibility,
@@ -923,10 +932,29 @@ impl crate::Device<super::Api> for super::Device {
             bind_group_infos.push(info);
         }
 
-        //Note: we populated them in reverse
-        bind_group_infos.reverse();
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
+
+        let (special_constants_root_index, special_constants_binding) = if desc.flags.intersects(
+            crate::PipelineLayoutFlags::BASE_VERTEX_INSTANCE
+                | crate::PipelineLayoutFlags::NUM_WORK_GROUPS,
+        ) {
+            let parameter_index = parameters.len();
+            log::debug!("\tParam[{}] = special", parameter_index);
+            parameters.push(native::RootParameter::constants(
+                native::ShaderVisibility::All, // really needed for VS and CS only
+                native_binding(&bind_cbv),
+                3, // 0 = base vertex, 1 = base instance, 2 = other
+            ));
+            let binding = bind_cbv.clone();
+            bind_cbv.register += 1;
+            (Some(parameter_index as u32), Some(binding))
+        } else {
+            (None, None)
+        };
+
+        log::trace!("{:#?}", parameters);
+        log::trace!("Bindings {:#?}", binding_map);
 
         let (blob, error) = self
             .library
@@ -956,6 +984,8 @@ impl crate::Device<super::Api> for super::Device {
             .create_root_signature(blob, 0)
             .into_device_result("Root signature creation")?;
         blob.destroy();
+
+        log::debug!("\traw = {:?}", raw);
 
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
