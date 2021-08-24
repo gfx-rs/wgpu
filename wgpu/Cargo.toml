@@ -88,16 +88,16 @@ pollster = "0.2"
 env_logger = "0.8"
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "4e181d6"
-version = "0.6"
+git = "https://github.com/gfx-rs/naga"
+rev = "93db57c"
+#version = "0.6"
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "4e181d6"
-version = "0.6"
+git = "https://github.com/gfx-rs/naga"
+rev = "93db57c"
+#version = "0.6"
 features = ["wgsl-in"]
 
 [[example]]
