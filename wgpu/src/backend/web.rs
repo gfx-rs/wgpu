@@ -1164,7 +1164,7 @@ impl crate::Context for Context {
         desc: &crate::ShaderModuleDescriptor,
     ) -> Self::ShaderModuleId {
         let mut descriptor = match desc.source {
-            #[cfg(feature = "spirv")]
+            #[cfg(feature = "spirv-web")]
             crate::ShaderSource::SpirV(ref spv) => {
                 use naga::{back, front, valid};
 
