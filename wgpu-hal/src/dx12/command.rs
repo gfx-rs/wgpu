@@ -162,6 +162,7 @@ impl super::CommandEncoder {
     }
 
     fn reset_signature(&mut self, layout: &super::PipelineLayoutShared) {
+        log::trace!("Reset signature {:?}", layout.signature);
         if let Some(root_index) = layout.special_constants_root_index {
             self.pass.root_elements[root_index as usize] =
                 super::RootElement::SpecialConstantBuffer {
@@ -701,11 +702,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
+        log::trace!("Set group[{}]", index);
         let info = &layout.bind_group_infos[index as usize];
         let mut root_index = info.base_root_index as usize;
 
         // Bind CBV/SRC/UAV descriptor tables
         if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
+            log::trace!("\tBind element[{}] = view", root_index);
             self.pass.root_elements[root_index] =
                 super::RootElement::Table(group.handle_views.unwrap().gpu);
             root_index += 1;
@@ -713,6 +716,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         // Bind Sampler descriptor tables.
         if info.tables.contains(super::TableTypes::SAMPLERS) {
+            log::trace!("\tBind element[{}] = sampler", root_index);
             self.pass.root_elements[root_index] =
                 super::RootElement::Table(group.handle_samplers.unwrap().gpu);
             root_index += 1;
@@ -725,6 +729,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .zip(group.dynamic_buffers.iter())
             .zip(dynamic_offsets)
         {
+            log::trace!("\tBind element[{}] = dynamic", root_index);
             self.pass.root_elements[root_index] = super::RootElement::DynamicOffsetBuffer {
                 kind,
                 address: gpu_base + offset as native::GpuAddress,
