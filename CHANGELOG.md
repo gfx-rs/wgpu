@@ -1,11 +1,15 @@
 # Change Log
 
-## TBD
+## wgpu-core-0.10.1, wgpu-hal-0.10.2 (2021-08-24)
   - All:
     - expose more formats via adapter-specific feature
     - fix creation of depth+stencil views
+    - validate cube textures to not be used as storage
+    - fix mip level count check for storage textures
   - Metal:
     - fix usage of work group memory
+  - DX12:
+    - critical fix of pipeline layout
 
 ## v0.10 (2021-08-18)
   - Infrastructure:
