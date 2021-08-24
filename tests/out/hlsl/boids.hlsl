@@ -118,7 +118,7 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     vVel = (((_expr107 + (_expr108 * _expr110)) + (_expr113 * _expr115)) + (_expr118 * _expr120));
     float2 _expr123 = vVel;
     float2 _expr125 = vVel;
-    vVel = (normalize(_expr123) * clamp(length(_expr125), 0.0, 0.1));
+    vVel = (normalize(_expr123) * clamp(length(_expr125), 0.0, 0.10000000149011612));
     float2 _expr131 = vPos;
     float2 _expr132 = vVel;
     float _expr134 = params.deltaT;

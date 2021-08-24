@@ -126,7 +126,7 @@ void main() {
     vVel = (((_e107 + (_e108 * _e110)) + (_e113 * _e115)) + (_e118 * _e120));
     vec2 _e123 = vVel;
     vec2 _e125 = vVel;
-    vVel = (normalize(_e123) * clamp(length(_e125), 0.0, 0.1));
+    vVel = (normalize(_e123) * clamp(length(_e125), 0.0, 0.10000000149011612));
     vec2 _e131 = vPos;
     vec2 _e132 = vVel;
     float _e134 = _group_0_binding_0.deltaT;

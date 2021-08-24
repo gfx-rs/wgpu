@@ -74,8 +74,8 @@ fn sample() -> [[location(0)]] vec4<f32> {
     let tc: vec2<f32> = vec2<f32>(0.5);
     let s2d: vec4<f32> = textureSample(image_2d, sampler_reg, tc);
     let s2d_offset: vec4<f32> = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
-    let s2d_level: vec4<f32> = textureSampleLevel(image_2d, sampler_reg, tc, 2.3);
-    let s2d_level_offset: vec4<f32> = textureSampleLevel(image_2d, sampler_reg, tc, 2.3, vec2<i32>(3, 1));
+    let s2d_level: vec4<f32> = textureSampleLevel(image_2d, sampler_reg, tc, 2.299999952316284);
+    let s2d_level_offset: vec4<f32> = textureSampleLevel(image_2d, sampler_reg, tc, 2.299999952316284, vec2<i32>(3, 1));
     return (((s2d + s2d_offset) + s2d_level) + s2d_level_offset);
 }
 

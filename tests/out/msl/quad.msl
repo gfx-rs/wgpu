@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constexpr constant float c_scale = 1.2;
+constexpr constant float c_scale = 1.2000000476837158;
 struct VertexOutput {
     metal::float2 uv;
     metal::float4 position;

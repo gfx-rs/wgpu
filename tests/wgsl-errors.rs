@@ -49,29 +49,11 @@ fn invalid_integer() {
 fn invalid_float() {
     check(
         "let scale: f32 = 1.1.;",
-        r###"error: expected floating-point literal, found `1.1.`
-  ┌─ wgsl:1:18
+        r###"error: expected ';', found '.'
+  ┌─ wgsl:1:21
   │
 1 │ let scale: f32 = 1.1.;
-  │                  ^^^^ expected floating-point literal
-  │
-  = note: invalid float literal
-
-"###,
-    );
-}
-
-#[test]
-fn invalid_scalar_width() {
-    check(
-        "let scale: f32 = 1.1f1000;",
-        r###"error: invalid width of `1000` for literal
-  ┌─ wgsl:1:18
-  │
-1 │ let scale: f32 = 1.1f1000;
-  │                  ^^^^^^^^ invalid width
-  │
-  = note: valid widths are 8, 16, 32, 64
+  │                     ^ expected ';'
 
 "###,
     );
@@ -118,11 +100,11 @@ fn negative_index() {
                 return a[-1];
             }
         "#,
-        r#"error: expected non-negative integer constant expression, found `-1`
+        r#"error: expected unsigned integer constant expression, found `-1`
   ┌─ wgsl:4:26
   │
 4 │                 return a[-1];
-  │                          ^^ expected non-negative integer
+  │                          ^^ expected unsigned integer
 
 "#,
     );

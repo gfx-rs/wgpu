@@ -1,4 +1,4 @@
-static const float c_scale = 1.2;
+static const float c_scale = 1.2000000476837158;
 
 struct VertexOutput {
     linear float2 uv : LOC0;

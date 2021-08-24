@@ -1,4 +1,4 @@
-static const float3 c_ambient = float3(0.05, 0.05, 0.05);
+static const float3 c_ambient = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
 static const uint c_max_lights = 10;
 
 struct Globals {
@@ -36,7 +36,7 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
     float3 raw_normal = fragmentinput_fs_main.raw_normal1;
     float4 position = fragmentinput_fs_main.position1;
-    float3 color = float3(0.05, 0.05, 0.05);
+    float3 color = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
     uint i = 0u;
 
     float3 normal = normalize(raw_normal);

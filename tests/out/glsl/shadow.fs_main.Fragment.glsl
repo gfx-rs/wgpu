@@ -36,7 +36,7 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
 void main() {
     vec3 raw_normal = _vs2fs_location0;
     vec4 position = _vs2fs_location1;
-    vec3 color = vec3(0.05, 0.05, 0.05);
+    vec3 color = vec3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
     uint i = 0u;
     vec3 normal = normalize(raw_normal);
     bool loop_init = true;

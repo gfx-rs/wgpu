@@ -14,6 +14,76 @@ fn parse_comment() {
     .unwrap();
 }
 
+// Regexes for the literals are taken from the working draft at
+// https://www.w3.org/TR/2021/WD-WGSL-20210806/#literals
+
+#[test]
+fn parse_decimal_floats() {
+    // /^(-?[0-9]*\.[0-9]+|-?[0-9]+\.[0-9]*)((e|E)(\+|-)?[0-9]+)?$/
+    parse_str("let a : f32 = -1.;").unwrap();
+    parse_str("let a : f32 = -.1;").unwrap();
+    parse_str("let a : f32 = 42.1234;").unwrap();
+    parse_str("let a : f32 = -1.E3;").unwrap();
+    parse_str("let a : f32 = -.1e-5;").unwrap();
+    parse_str("let a : f32 = 2.3e+55;").unwrap();
+
+    assert!(parse_str("let a : f32 = 42.1234f;").is_err());
+    assert!(parse_str("let a : f32 = 42.1234f32;").is_err());
+}
+
+#[test]
+fn parse_hex_floats() {
+    // /^-?0x([0-9a-fA-F]*\.?[0-9a-fA-F]+|[0-9a-fA-F]+\.[0-9a-fA-F]*)(p|P)(\+|-)?[0-9]+$/
+    parse_str("let a : f32 = -0xa.p1;").unwrap();
+    parse_str("let a : f32 = -0x.fp9;").unwrap();
+    parse_str("let a : f32 = 0x2a.4D2P4;").unwrap();
+    parse_str("let a : f32 = -0x.1p-5;").unwrap();
+    parse_str("let a : f32 = 0xC.8p+55;").unwrap();
+    parse_str("let a : f32 = 0x1p1;").unwrap();
+
+    assert!(parse_str("let a : f32 = 0x1p1f;").is_err());
+    assert!(parse_str("let a : f32 = 0x1p1f32;").is_err());
+}
+
+#[test]
+fn parse_decimal_ints() {
+    // i32 /^-?0x[0-9a-fA-F]+|0|-?[1-9][0-9]*$/
+    parse_str("let a : i32 = 0;").unwrap();
+    parse_str("let a : i32 = 1092;").unwrap();
+    parse_str("let a : i32 = -9923;").unwrap();
+
+    assert!(parse_str("let a : i32 = -0;").is_err());
+    assert!(parse_str("let a : i32 = 01;").is_err());
+    assert!(parse_str("let a : i32 = 1.0;").is_err());
+    assert!(parse_str("let a : i32 = 1i;").is_err());
+    assert!(parse_str("let a : i32 = 1i32;").is_err());
+
+    // u32 /^0x[0-9a-fA-F]+u|0u|[1-9][0-9]*u$/
+    parse_str("let a : u32 = 0u;").unwrap();
+    parse_str("let a : u32 = 1092u;").unwrap();
+
+    assert!(parse_str("let a : u32 = -0u;").is_err());
+    assert!(parse_str("let a : u32 = 01u;").is_err());
+    assert!(parse_str("let a : u32 = 1.0u;").is_err());
+    assert!(parse_str("let a : u32 = 1u32;").is_err());
+}
+
+#[test]
+fn parse_hex_ints() {
+    // i32 /^-?0x[0-9a-fA-F]+|0|-?[1-9][0-9]*$/
+    parse_str("let a : i32 = -0x0;").unwrap();
+    parse_str("let a : i32 = 0x2a4D2;").unwrap();
+
+    assert!(parse_str("let a : i32 = 0x2a4D2i;").is_err());
+    assert!(parse_str("let a : i32 = 0x2a4D2i32;").is_err());
+
+    // u32 /^0x[0-9a-fA-F]+u|0u|[1-9][0-9]*u$/
+    parse_str("let a : u32 = 0x0u;").unwrap();
+    parse_str("let a : u32 = 0x2a4D2u;").unwrap();
+
+    assert!(parse_str("let a : u32 = 0x2a4D2u32;").is_err());
+}
+
 #[test]
 fn parse_types() {
     parse_str("let a : i32 = 2;").unwrap();
@@ -32,7 +102,7 @@ fn parse_type_inference() {
         fn foo() {
             let a = 2u;
             let b: u32 = a;
-            var x = 3f32;
+            var x = 3.;
             var y = vec2<f32>(1, 2);
         }",
     )

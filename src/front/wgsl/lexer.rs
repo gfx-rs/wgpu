@@ -1,4 +1,4 @@
-use super::{conv, Error, ExpectedToken, Span, Token, TokenSpan};
+use super::{conv, Error, ExpectedToken, NumberType, Span, Token, TokenSpan};
 
 fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
     if input.starts_with(what) {
@@ -13,48 +13,283 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     input.split_at(pos)
 }
 
+/// Tries to skip a given prefix in the input string.
+/// Returns whether the prefix was present and could therefore be skipped,
+/// the remaining str and the number of *bytes* skipped.
+pub fn try_skip_prefix<'a, 'b>(input: &'a str, prefix: &'b str) -> (bool, &'a str, usize) {
+    if input.starts_with(prefix) {
+        (true, &input[prefix.len()..], prefix.len())
+    } else {
+        (false, input, 0)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NLDigitState {
+    Nothing,
+    LeadingZero,
+    DigitBeforeDot,
+    OnlyDot,
+    DigitsThenDot,
+    DigitAfterDot,
+    Exponent,
+    SignAfterExponent,
+    DigitAfterExponent,
+}
+
+struct NumberLexerState {
+    _minus: bool,
+    hex: bool,
+    leading_zeros: usize,
+    digit_state: NLDigitState,
+    uint_suffix: bool,
+}
+
+impl NumberLexerState {
+    // TODO: add proper error reporting, possibly through try_into_token function returning Result
+
+    pub fn _is_valid_number(&self) -> bool {
+        match *self {
+            Self {
+                _minus: false, // No negative zero for integers.
+                hex,
+                leading_zeros,
+                digit_state: NLDigitState::LeadingZero,
+                ..
+            } => hex || leading_zeros == 1, // No leading zeros allowed in non-hex integers, "0" is always allowed.
+            Self {
+                _minus: minus,
+                hex,
+                leading_zeros,
+                digit_state: NLDigitState::DigitBeforeDot,
+                uint_suffix,
+            } => {
+                (hex || leading_zeros == 0) // No leading zeros allowed in non-hex integers.
+                                              // In this state the number has non-zero digits,
+                                              // i.e. it is not just "0".
+                    && (minus ^ uint_suffix) // Either a negative number, or and unsigned integer, not both.
+            }
+            _ => self.is_float(),
+        }
+    }
+
+    pub fn is_float(&self) -> bool {
+        !self.uint_suffix
+            && (self.digit_state == NLDigitState::DigitsThenDot
+                || self.digit_state == NLDigitState::DigitAfterDot
+                || self.digit_state == NLDigitState::DigitAfterExponent)
+    }
+}
+
 fn consume_number(input: &str) -> (Token, &str) {
-    //Note: I wish this function was simpler and faster...
-    let mut is_first_char = true;
-    let mut right_after_exponent = false;
+    let (minus, working_substr, minus_offset) = try_skip_prefix(input, "-");
+
+    let (hex, working_substr, hex_offset) = try_skip_prefix(working_substr, "0x");
+
+    let mut state = NumberLexerState {
+        _minus: minus,
+        hex,
+        leading_zeros: 0,
+        digit_state: NLDigitState::Nothing,
+        uint_suffix: false,
+    };
 
     let mut what = |c| {
-        if is_first_char {
-            is_first_char = false;
-            c == '-' || ('0'..='9').contains(&c) || c == '.'
-        } else if c == 'e' || c == 'E' {
-            right_after_exponent = true;
-            true
-        } else if right_after_exponent {
-            right_after_exponent = false;
-            ('0'..='9').contains(&c) || c == '-'
-        } else {
-            ('0'..='9').contains(&c) || c == '.'
-        }
-    };
-    let pos = input.find(|c| !what(c)).unwrap_or_else(|| input.len());
-    let (value, rest) = input.split_at(pos);
-
-    let mut rest_iter = rest.chars();
-    let ty = rest_iter.next().unwrap_or(' ');
-    match ty {
-        'u' | 'i' | 'f' => {
-            let width_end = rest_iter
-                .position(|c| !('0'..='9').contains(&c))
-                .unwrap_or_else(|| rest.len() - 1);
-            let (width, rest) = rest[1..].split_at(width_end);
-            (Token::Number { value, ty, width }, rest)
-        }
-        // default to `i32` or `f32`
-        _ => (
-            Token::Number {
-                value,
-                ty: if value.contains('.') { 'f' } else { 'i' },
-                width: "",
+        match state {
+            NumberLexerState {
+                hex,
+                digit_state: NLDigitState::Nothing,
+                uint_suffix: false,
+                ..
+            } => match c {
+                '0' => {
+                    state.digit_state = NLDigitState::LeadingZero;
+                    state.leading_zeros += 1;
+                }
+                '1'..='9' => {
+                    state.digit_state = NLDigitState::DigitBeforeDot;
+                }
+                'a'..='f' | 'A'..='F' if hex => {
+                    state.digit_state = NLDigitState::DigitBeforeDot;
+                }
+                '.' => {
+                    state.digit_state = NLDigitState::OnlyDot;
+                }
+                _ => return false,
             },
-            rest,
-        ),
-    }
+
+            NumberLexerState {
+                hex,
+                digit_state: NLDigitState::LeadingZero,
+                uint_suffix: false,
+                ..
+            } => match c {
+                '0' => {
+                    // We stay in NLDigitState::LeadingZero.
+                    state.leading_zeros += 1;
+                }
+                '1'..='9' => {
+                    state.digit_state = NLDigitState::DigitBeforeDot;
+                }
+                'a'..='f' | 'A'..='F' if hex => {
+                    state.digit_state = NLDigitState::DigitBeforeDot;
+                }
+                '.' => {
+                    state.digit_state = NLDigitState::DigitsThenDot;
+                }
+                'e' | 'E' if !hex => {
+                    state.digit_state = NLDigitState::Exponent;
+                }
+                'p' | 'P' if hex => {
+                    state.digit_state = NLDigitState::Exponent;
+                }
+                'u' => {
+                    // We stay in NLDigitState::LeadingZero.
+                    state.uint_suffix = true;
+                }
+                _ => return false,
+            },
+
+            NumberLexerState {
+                hex,
+                digit_state: NLDigitState::DigitBeforeDot,
+                uint_suffix: false,
+                ..
+            } => match c {
+                '0'..='9' => {
+                    // We stay in NLDigitState::DigitBeforeDot.
+                }
+                'a'..='f' | 'A'..='F' if hex => {
+                    // We stay in NLDigitState::DigitBeforeDot.
+                }
+                '.' => {
+                    state.digit_state = NLDigitState::DigitsThenDot;
+                }
+                'e' | 'E' if !hex => {
+                    state.digit_state = NLDigitState::Exponent;
+                }
+                'p' | 'P' if hex => {
+                    state.digit_state = NLDigitState::Exponent;
+                }
+                'u' => {
+                    // We stay in NLDigitState::DigitBeforeDot.
+                    state.uint_suffix = true;
+                }
+                _ => return false,
+            },
+
+            NumberLexerState {
+                hex,
+                digit_state: NLDigitState::OnlyDot,
+                uint_suffix: false,
+                ..
+            } => match c {
+                '0'..='9' => {
+                    state.digit_state = NLDigitState::DigitAfterDot;
+                }
+                'a'..='f' | 'A'..='F' if hex => {
+                    state.digit_state = NLDigitState::DigitAfterDot;
+                }
+                _ => return false,
+            },
+
+            NumberLexerState {
+                hex,
+                digit_state: NLDigitState::DigitsThenDot,
+                uint_suffix: false,
+                ..
+            }
+            | NumberLexerState {
+                hex,
+                digit_state: NLDigitState::DigitAfterDot,
+                uint_suffix: false,
+                ..
+            } => match c {
+                '0'..='9' => {
+                    state.digit_state = NLDigitState::DigitAfterDot;
+                }
+                'a'..='f' | 'A'..='F' if hex => {
+                    state.digit_state = NLDigitState::DigitAfterDot;
+                }
+                'e' | 'E' if !hex => {
+                    state.digit_state = NLDigitState::Exponent;
+                }
+                'p' | 'P' if hex => {
+                    state.digit_state = NLDigitState::Exponent;
+                }
+                _ => return false,
+            },
+
+            NumberLexerState {
+                digit_state: NLDigitState::Exponent,
+                uint_suffix: false,
+                ..
+            } => match c {
+                '0'..='9' => {
+                    state.digit_state = NLDigitState::DigitAfterExponent;
+                }
+                '-' | '+' => {
+                    state.digit_state = NLDigitState::SignAfterExponent;
+                }
+                _ => return false,
+            },
+
+            NumberLexerState {
+                digit_state: NLDigitState::SignAfterExponent,
+                uint_suffix: false,
+                ..
+            }
+            | NumberLexerState {
+                digit_state: NLDigitState::DigitAfterExponent,
+                uint_suffix: false,
+                ..
+            } => match c {
+                '0'..='9' => {
+                    state.digit_state = NLDigitState::DigitAfterExponent;
+                }
+                _ => return false,
+            },
+
+            NumberLexerState {
+                uint_suffix: true, ..
+            } => return false, // Scanning is done once we've reached a type suffix.
+        }
+
+        // No match branch has rejected this yet, so we are still in a number literal
+        true
+    };
+
+    let pos = working_substr
+        .find(|c| !what(c))
+        .unwrap_or_else(|| working_substr.len());
+    let (value, rest) = input.split_at(pos + minus_offset + hex_offset);
+
+    // NOTE: This code can use string slicing,
+    //       because number literals are exclusively ASCII.
+    //       This means all relevant characters fit into one byte
+    //       and using string slicing (which slices UTF-8 bytes) works for us.
+
+    // TODO: A syntax error can already be recognized here, possibly report it at this stage.
+
+    // Return possibly knowably incorrect (given !state.is_valid_number()) token for now.
+    (
+        Token::Number {
+            value: if state.uint_suffix {
+                &value[..value.len() - 1]
+            } else {
+                value
+            },
+            ty: if state.uint_suffix {
+                NumberType::Uint
+            } else if state.is_float() {
+                NumberType::Float
+            } else {
+                NumberType::Sint
+            },
+            width: None,
+        },
+        rest,
+    )
 }
 
 fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
@@ -291,34 +526,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn _next_float_literal(&mut self) -> Result<f32, Error<'a>> {
-        match self.next() {
-            (Token::Number { value, .. }, span) => {
-                value.parse().map_err(|e| Error::BadFloat(span, e))
-            }
-            other => Err(Error::Unexpected(other, ExpectedToken::Float)),
-        }
-    }
-
-    pub(super) fn next_uint_literal(&mut self) -> Result<u32, Error<'a>> {
-        match self.next() {
-            (Token::Number { value, .. }, span) => {
-                let v = value.parse();
-                v.map_err(|e| Error::BadU32(span, e))
-            }
-            other => Err(Error::Unexpected(other, ExpectedToken::Uint)),
-        }
-    }
-
-    pub(super) fn next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
-        match self.next() {
-            (Token::Number { value, .. }, span) => {
-                value.parse().map_err(|e| Error::BadI32(span, e))
-            }
-            other => Err(Error::Unexpected(other, ExpectedToken::Sint)),
-        }
-    }
-
     /// Parses a generic scalar type, for example `<f32>`.
     pub(super) fn next_scalar_generic(
         &mut self,
@@ -409,8 +616,8 @@ fn test_tokens() {
         &[
             Token::Number {
                 value: "92",
-                ty: 'i',
-                width: "",
+                ty: NumberType::Sint,
+                width: None,
             },
             Token::Word("No"),
         ],
@@ -420,8 +627,13 @@ fn test_tokens() {
         &[
             Token::Number {
                 value: "2",
-                ty: 'u',
-                width: "3",
+                ty: NumberType::Uint,
+                width: None,
+            },
+            Token::Number {
+                value: "3",
+                ty: NumberType::Sint,
+                width: None,
             },
             Token::Word("o"),
         ],
@@ -431,10 +643,10 @@ fn test_tokens() {
         &[
             Token::Number {
                 value: "2.4",
-                ty: 'f',
-                width: "44",
+                ty: NumberType::Float,
+                width: None,
             },
-            Token::Word("po"),
+            Token::Word("f44po"),
         ],
     );
     sub_test(
@@ -456,8 +668,8 @@ fn test_variable_decl() {
             Token::Paren('('),
             Token::Number {
                 value: "0",
-                ty: 'i',
-                width: "",
+                ty: NumberType::Sint,
+                width: None,
             },
             Token::Paren(')'),
             Token::DoubleParen(']'),

@@ -130,7 +130,7 @@ kernel void main1(
     vVel = ((_e107 + (_e108 * _e110)) + (_e113 * _e115)) + (_e118 * _e120);
     metal::float2 _e123 = vVel;
     metal::float2 _e125 = vVel;
-    vVel = metal::normalize(_e123) * metal::clamp(metal::length(_e125), 0.0, 0.1);
+    vVel = metal::normalize(_e123) * metal::clamp(metal::length(_e125), 0.0, 0.10000000149011612);
     metal::float2 _e131 = vPos;
     metal::float2 _e132 = vVel;
     float _e134 = params.deltaT;

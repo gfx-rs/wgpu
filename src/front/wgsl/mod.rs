@@ -4,6 +4,7 @@
 
 mod conv;
 mod lexer;
+mod number_literals;
 #[cfg(test)]
 mod tests;
 
@@ -13,10 +14,16 @@ use crate::{
         ensure_block_returns, Alignment, Layouter, ResolveContext, ResolveError, TypeResolution,
     },
     span::Span as NagaSpan,
-    ConstantInner, FastHashMap, ScalarValue,
+    Bytes, ConstantInner, FastHashMap, ScalarValue,
 };
 
-use self::lexer::Lexer;
+use self::{
+    lexer::Lexer,
+    number_literals::{
+        get_f32_literal, get_i32_literal, get_u32_literal, parse_generic_non_negative_int_literal,
+        parse_non_negative_sint_literal, parse_sint_literal,
+    },
+};
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
     files::{Files, SimpleFile},
@@ -25,6 +32,7 @@ use codespan_reporting::{
         termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor},
     },
 };
+use hexf_parse::ParseHexfError;
 use std::{
     borrow::Cow,
     convert::TryFrom,
@@ -38,6 +46,13 @@ type Span = ops::Range<usize>;
 type TokenSpan<'a> = (Token<'a>, Span);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+pub enum NumberType {
+    Sint,
+    Uint,
+    Float,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
     Separator(char),
     DoubleColon,
@@ -45,8 +60,8 @@ pub enum Token<'a> {
     DoubleParen(char),
     Number {
         value: &'a str,
-        ty: char,
-        width: &'a str,
+        ty: NumberType,
+        width: Option<Bytes>,
     },
     String(&'a str),
     Word(&'a str),
@@ -64,9 +79,10 @@ pub enum Token<'a> {
 pub enum ExpectedToken<'a> {
     Token(Token<'a>),
     Identifier,
-    Float,
-    Uint,
-    Sint,
+    Number {
+        ty: Option<NumberType>,
+        width: Option<Bytes>,
+    },
     Constant,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
@@ -88,14 +104,35 @@ pub enum ExpectedToken<'a> {
     StructAttribute,
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum BadIntError {
+    #[error(transparent)]
+    ParseIntError(#[from] ParseIntError),
+    #[error("non-hex negative zero integer literals are not allowed")]
+    NegativeZero,
+    #[error("leading zeros for non-hex integer literals are not allowed")]
+    LeadingZeros,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum BadFloatError {
+    #[error(transparent)]
+    ParseFloatError(#[from] ParseFloatError),
+    #[error(transparent)]
+    ParseHexfError(#[from] ParseHexfError),
+}
+
 #[derive(Clone, Debug)]
 pub enum Error<'a> {
     Unexpected(TokenSpan<'a>, ExpectedToken<'a>),
-    BadU32(Span, ParseIntError),
-    BadI32(Span, ParseIntError),
-    BadFloat(Span, ParseFloatError),
+    BadU32(Span, BadIntError),
+    BadI32(Span, BadIntError),
+    /// A negative signed integer literal where both signed and unsigned,
+    /// but only non-negative literals are allowed.
+    NegativeInt(Span),
+    BadFloat(Span, BadFloatError),
     BadU32Constant(Span),
-    BadScalarWidth(Span, &'a str),
+    BadScalarWidth(Span, Bytes),
     BadAccessor(Span),
     BadTexture(Span),
     BadTypeCast {
@@ -158,9 +195,26 @@ impl<'a> Error<'a> {
                             }
                         }
                         ExpectedToken::Identifier => "identifier".to_string(),
-                        ExpectedToken::Float => "floating point literal".to_string(),
-                        ExpectedToken::Uint => "non-negative integer literal".to_string(),
-                        ExpectedToken::Sint => "integer literal".to_string(),
+                        ExpectedToken::Number { ty, width } => {
+                            let literal_ty_str = match ty {
+                                Some(NumberType::Float) => "floating-point",
+                                Some(NumberType::Uint) => "unsigned integer",
+                                Some(NumberType::Sint) => "signed integer",
+                                None => "arbitrary number",
+                            };
+                            if let Some(width) = width {
+                                format!(
+                                    "{} literal of {}-bit width",
+                                    literal_ty_str,
+                                    width as u32 * 8,
+                                )
+                            } else {
+                                format!(
+                                    "{} literal of arbitrary width",
+                                    literal_ty_str,
+                                )
+                            }
+                        },
                         ExpectedToken::Constant => "constant".to_string(),
                         ExpectedToken::PrimaryExpression => "expression".to_string(),
                         ExpectedToken::AttributeSeparator => "attribute separator (',') or an end of the attribute list (']]')".to_string(),
@@ -187,10 +241,10 @@ impl<'a> Error<'a> {
             },
             Error::BadU32(ref bad_span, ref err) => ParseError {
                 message: format!(
-                    "expected non-negative integer literal, found `{}`",
+                    "expected unsigned integer literal, found `{}`",
                     &source[bad_span.clone()],
                 ),
-                labels: vec![(bad_span.clone(), "expected positive integer".into())],
+                labels: vec![(bad_span.clone(), "expected unsigned integer".into())],
                 notes: vec![err.to_string()],
             },
             Error::BadI32(ref bad_span, ref err) => ParseError {
@@ -198,8 +252,16 @@ impl<'a> Error<'a> {
                     "expected integer literal, found `{}`",
                     &source[bad_span.clone()],
                 ),
-                labels: vec![(bad_span.clone(), "expected integer".into())],
+                labels: vec![(bad_span.clone(), "expected signed integer".into())],
                 notes: vec![err.to_string()],
+            },
+            Error::NegativeInt(ref bad_span) => ParseError {
+                message: format!(
+                    "expected non-negative integer literal, found `{}`",
+                    &source[bad_span.clone()],
+                ),
+                labels: vec![(bad_span.clone(), "expected non-negative integer".into())],
+                notes: vec![],
             },
             Error::BadFloat(ref bad_span, ref err) => ParseError {
                 message: format!(
@@ -211,17 +273,17 @@ impl<'a> Error<'a> {
             },
             Error::BadU32Constant(ref bad_span) => ParseError {
                 message: format!(
-                    "expected non-negative integer constant expression, found `{}`",
+                    "expected unsigned integer constant expression, found `{}`",
                     &source[bad_span.clone()],
                 ),
-                labels: vec![(bad_span.clone(), "expected non-negative integer".into())],
+                labels: vec![(bad_span.clone(), "expected unsigned integer".into())],
                 notes: vec![],
             },
 
             Error::BadScalarWidth(ref bad_span, width) => ParseError {
-                message: format!("invalid width of `{}` for literal", width,),
+                message: format!("invalid width of `{}` bits for literal", width as u32 * 8,),
                 labels: vec![(bad_span.clone(), "invalid width".into())],
-                notes: vec!["valid widths are 8, 16, 32, 64".to_string()],
+                notes: vec!["the only valid width is 32 for now".to_string()],
             },
             Error::BadAccessor(ref accessor_span) => ParseError {
                 message: format!(
@@ -941,7 +1003,7 @@ impl BindingParser {
         match name {
             "location" => {
                 lexer.expect(Token::Paren('('))?;
-                self.location = Some(lexer.next_uint_literal()?);
+                self.location = Some(parse_non_negative_sint_literal(lexer, 4)?);
                 lexer.expect(Token::Paren(')'))?;
             }
             "builtin" => {
@@ -1103,36 +1165,34 @@ impl Parser {
 
     fn get_constant_inner<'a>(
         word: &'a str,
-        ty: char,
-        width: &'a str,
-        token: TokenSpan<'a>,
+        ty: NumberType,
+        width: Option<Bytes>,
+        token_span: TokenSpan<'a>,
     ) -> Result<ConstantInner, Error<'a>> {
-        let span = token.1;
+        let span = token_span.1;
+
+        if let Some(width) = width {
+            if width != 4 {
+                // Only 32-bit literals supported by the spec and naga for now!
+                return Err(Error::BadScalarWidth(span, width));
+            }
+        }
+
         let value = match ty {
-            'i' => word
-                .parse()
-                .map(crate::ScalarValue::Sint)
-                .map_err(|e| Error::BadI32(span.clone(), e))?,
-            'u' => word
-                .parse()
-                .map(crate::ScalarValue::Uint)
-                .map_err(|e| Error::BadU32(span.clone(), e))?,
-            'f' => word
-                .parse()
-                .map(crate::ScalarValue::Float)
-                .map_err(|e| Error::BadFloat(span.clone(), e))?,
-            _ => unreachable!(),
+            NumberType::Sint => {
+                get_i32_literal(word, span).map(|val| crate::ScalarValue::Sint(val as i64))?
+            }
+            NumberType::Uint => {
+                get_u32_literal(word, span).map(|val| crate::ScalarValue::Uint(val as u64))?
+            }
+            NumberType::Float => {
+                get_f32_literal(word, span).map(|val| crate::ScalarValue::Float(val as f64))?
+            }
         };
+
         Ok(crate::ConstantInner::Scalar {
             value,
-            width: if width.is_empty() {
-                4
-            } else {
-                match width.parse::<crate::Bytes>() {
-                    Ok(bits) if (bits % 8) == 0 => Ok(bits / 8),
-                    _ => Err(Error::BadScalarWidth(span, width)),
-                }?
-            },
+            width: width.unwrap_or(4),
         })
     }
 
@@ -2424,8 +2484,9 @@ impl Parser {
                             match word {
                                 "size" => {
                                     lexer.expect(Token::Paren('('))?;
-                                    let (value, span) =
-                                        lexer.capture_span(Lexer::next_uint_literal)?;
+                                    let (value, span) = lexer.capture_span(|lexer| {
+                                        parse_non_negative_sint_literal(lexer, 4)
+                                    })?;
                                     lexer.expect(Token::Paren(')'))?;
                                     size = Some(
                                         NonZeroU32::new(value)
@@ -2434,8 +2495,9 @@ impl Parser {
                                 }
                                 "align" => {
                                     lexer.expect(Token::Paren('('))?;
-                                    let (value, span) =
-                                        lexer.capture_span(Lexer::next_uint_literal)?;
+                                    let (value, span) = lexer.capture_span(|lexer| {
+                                        parse_non_negative_sint_literal(lexer, 4)
+                                    })?;
                                     lexer.expect(Token::Paren(')'))?;
                                     align = Some(
                                         NonZeroU32::new(value)
@@ -2841,7 +2903,8 @@ impl Parser {
                 match lexer.next() {
                     (Token::Word("stride"), _) => {
                         lexer.expect(Token::Paren('('))?;
-                        let (stride, span) = lexer.capture_span(Lexer::next_uint_literal)?;
+                        let (stride, span) = lexer
+                            .capture_span(|lexer| parse_non_negative_sint_literal(lexer, 4))?;
                         attribute.stride =
                             Some(NonZeroU32::new(stride).ok_or(Error::ZeroStride(span))?);
                         lexer.expect(Token::Paren(')'))?;
@@ -3212,7 +3275,8 @@ impl Parser {
                                 (Token::Word("case"), _) => {
                                     // parse a list of values
                                     let value = loop {
-                                        let value = lexer.next_sint_literal()?;
+                                        // TODO: Switch statements also allow for floats, bools and unsigned integers. See https://www.w3.org/TR/WGSL/#switch-statement
+                                        let value = parse_sint_literal(lexer, 4)?;
                                         if lexer.skip(Token::Separator(',')) {
                                             if lexer.skip(Token::Separator(':')) {
                                                 break value;
@@ -3642,7 +3706,7 @@ impl Parser {
                 match lexer.next_ident_with_span()? {
                     ("binding", _) => {
                         lexer.expect(Token::Paren('('))?;
-                        bind_index = Some(lexer.next_uint_literal()?);
+                        bind_index = Some(parse_non_negative_sint_literal(lexer, 4)?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     ("block", _) => {
@@ -3650,7 +3714,7 @@ impl Parser {
                     }
                     ("group", _) => {
                         lexer.expect(Token::Paren('('))?;
-                        bind_group = Some(lexer.next_uint_literal()?);
+                        bind_group = Some(parse_non_negative_sint_literal(lexer, 4)?);
                         lexer.expect(Token::Paren(')'))?;
                     }
                     ("stage", _) => {
@@ -3662,7 +3726,7 @@ impl Parser {
                     ("workgroup_size", _) => {
                         lexer.expect(Token::Paren('('))?;
                         for (i, size) in workgroup_size.iter_mut().enumerate() {
-                            *size = lexer.next_uint_literal()?;
+                            *size = parse_generic_non_negative_int_literal(lexer, 4)?;
                             match lexer.next() {
                                 (Token::Paren(')'), _) => break,
                                 (Token::Separator(','), _) if i != 2 => (),

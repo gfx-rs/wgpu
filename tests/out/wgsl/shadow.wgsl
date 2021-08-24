@@ -14,7 +14,7 @@ struct Lights {
     data: [[stride(96)]] array<Light>;
 };
 
-let c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
+let c_ambient: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
 let c_max_lights: u32 = 10u;
 
 [[group(0), binding(0)]]
@@ -38,7 +38,7 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
 
 [[stage(fragment)]]
 fn fs_main([[location(0)]] raw_normal: vec3<f32>, [[location(1)]] position: vec4<f32>) -> [[location(0)]] vec4<f32> {
-    var color: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
+    var color: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
     var i: u32 = 0u;
 
     let normal: vec3<f32> = normalize(raw_normal);
