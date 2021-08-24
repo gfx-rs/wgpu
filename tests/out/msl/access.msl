@@ -58,18 +58,20 @@ kernel void atomics(
     int value = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
     int _e6 = metal::atomic_fetch_add_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e6;
-    int _e9 = metal::atomic_fetch_and_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    int _e9 = metal::atomic_fetch_sub_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e9;
-    int _e12 = metal::atomic_fetch_or_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    int _e12 = metal::atomic_fetch_and_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e12;
-    int _e15 = metal::atomic_fetch_xor_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    int _e15 = metal::atomic_fetch_or_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e15;
-    int _e18 = metal::atomic_fetch_min_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    int _e18 = metal::atomic_fetch_xor_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e18;
-    int _e21 = metal::atomic_fetch_max_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    int _e21 = metal::atomic_fetch_min_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e21;
-    int _e24 = metal::atomic_exchange_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    int _e24 = metal::atomic_fetch_max_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e24;
+    int _e27 = metal::atomic_exchange_explicit(&bar.atom, 5, metal::memory_order_relaxed);
+    tmp = _e27;
     metal::atomic_store_explicit(&bar.atom, value, metal::memory_order_relaxed);
     return;
 }

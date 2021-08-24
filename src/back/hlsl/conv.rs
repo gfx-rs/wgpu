@@ -133,7 +133,7 @@ impl crate::AtomicFunction {
     /// Return the HLSL suffix for the `InterlockedXxx` method.
     pub(super) fn to_hlsl_suffix(self) -> &'static str {
         match self {
-            Self::Add => "Add",
+            Self::Add | Self::Subtract => "Add",
             Self::And => "And",
             Self::InclusiveOr => "Or",
             Self::ExclusiveOr => "Xor",

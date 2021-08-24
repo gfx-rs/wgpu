@@ -43,6 +43,7 @@ fn atomics() {
 	var tmp: i32;
 	let value = atomicLoad(&bar.atom);
 	tmp = atomicAdd(&bar.atom, 5);
+	tmp = atomicSub(&bar.atom, 5);
 	tmp = atomicAnd(&bar.atom, 5);
 	tmp = atomicOr(&bar.atom, 5);
 	tmp = atomicXor(&bar.atom, 5);

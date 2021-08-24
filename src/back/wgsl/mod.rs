@@ -31,6 +31,7 @@ impl crate::AtomicFunction {
     fn to_wgsl(self) -> &'static str {
         match self {
             Self::Add => "Add",
+            Self::Subtract => "Sub",
             Self::And => "And",
             Self::InclusiveOr => "Or",
             Self::ExclusiveOr => "Xor",

@@ -50,18 +50,20 @@ void atomics()
     int value = asint(bar.Load(64));
     int _e6; bar.InterlockedAdd(64, 5, _e6);
     tmp = _e6;
-    int _e9; bar.InterlockedAnd(64, 5, _e9);
+    int _e9; bar.InterlockedAdd(64, -5, _e9);
     tmp = _e9;
-    int _e12; bar.InterlockedOr(64, 5, _e12);
+    int _e12; bar.InterlockedAnd(64, 5, _e12);
     tmp = _e12;
-    int _e15; bar.InterlockedXor(64, 5, _e15);
+    int _e15; bar.InterlockedOr(64, 5, _e15);
     tmp = _e15;
-    int _e18; bar.InterlockedMin(64, 5, _e18);
+    int _e18; bar.InterlockedXor(64, 5, _e18);
     tmp = _e18;
-    int _e21; bar.InterlockedMax(64, 5, _e21);
+    int _e21; bar.InterlockedMin(64, 5, _e21);
     tmp = _e21;
-    int _e24; bar.InterlockedExchange(64, 5, _e24);
+    int _e24; bar.InterlockedMax(64, 5, _e24);
     tmp = _e24;
+    int _e27; bar.InterlockedExchange(64, 5, _e27);
+    tmp = _e27;
     bar.Store(64, asuint(value));
     return;
 }

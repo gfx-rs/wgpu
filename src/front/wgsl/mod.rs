@@ -1403,6 +1403,15 @@ impl Parser {
                     )?;
                     return Ok(Some(handle));
                 }
+                "atomicSub" => {
+                    let _ = lexer.next();
+                    let handle = self.parse_atomic_helper(
+                        lexer,
+                        crate::AtomicFunction::Subtract,
+                        ctx.reborrow(),
+                    )?;
+                    return Ok(Some(handle));
+                }
                 "atomicAnd" => {
                     let _ = lexer.next();
                     let handle = self.parse_atomic_helper(

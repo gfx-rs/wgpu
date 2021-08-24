@@ -71,7 +71,7 @@ pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 impl crate::AtomicFunction {
     fn to_glsl(self) -> &'static str {
         match self {
-            Self::Add => "Add",
+            Self::Add | Self::Subtract => "Add",
             Self::And => "And",
             Self::InclusiveOr => "Or",
             Self::ExclusiveOr => "Xor",
@@ -1706,12 +1706,20 @@ impl<'a, W: Write> Writer<'a, W> {
                 let fun_str = fun.to_glsl();
                 write!(self.out, "atomic{}(", fun_str)?;
                 self.write_expr(pointer, ctx)?;
-                if let crate::AtomicFunction::Exchange { compare: Some(_) } = *fun {
-                    return Err(Error::Custom(
-                        "atomic CompareExchange is not implemented".to_string(),
-                    ));
-                }
                 write!(self.out, ", ")?;
+                // handle the special cases
+                match *fun {
+                    crate::AtomicFunction::Subtract => {
+                        // we just wrote `InterlockedAdd`, so negate the argument
+                        write!(self.out, "-")?;
+                    }
+                    crate::AtomicFunction::Exchange { compare: Some(_) } => {
+                        return Err(Error::Custom(
+                            "atomic CompareExchange is not implemented".to_string(),
+                        ));
+                    }
+                    _ => {}
+                }
                 self.write_expr(value, ctx)?;
                 writeln!(self.out, ");")?;
             }

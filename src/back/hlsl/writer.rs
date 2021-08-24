@@ -1374,10 +1374,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     res_name, var_name, fun_str
                 )?;
                 self.write_storage_address(module, &chain, func_ctx)?;
-                if let crate::AtomicFunction::Exchange { compare: Some(_) } = *fun {
-                    return Err(Error::Unimplemented("atomic CompareExchange".to_string()));
-                }
                 write!(self.out, ", ")?;
+                // handle the special cases
+                match *fun {
+                    crate::AtomicFunction::Subtract => {
+                        // we just wrote `InterlockedAdd`, so negate the argument
+                        write!(self.out, "-")?;
+                    }
+                    crate::AtomicFunction::Exchange { compare: Some(_) } => {
+                        return Err(Error::Unimplemented("atomic CompareExchange".to_string()));
+                    }
+                    _ => {}
+                }
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ", {});", res_name)?;
                 self.temp_access_chain = chain;

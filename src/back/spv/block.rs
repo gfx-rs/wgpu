@@ -1262,6 +1262,15 @@ impl<'w> BlockContext<'w> {
                             semantics_id,
                             value_id,
                         ),
+                        crate::AtomicFunction::Subtract => Instruction::atomic_binary(
+                            spirv::Op::AtomicISub,
+                            result_type_id,
+                            id,
+                            pointer_id,
+                            scope_constant_id,
+                            semantics_id,
+                            value_id,
+                        ),
                         crate::AtomicFunction::And => Instruction::atomic_binary(
                             spirv::Op::AtomicAnd,
                             result_type_id,

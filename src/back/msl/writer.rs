@@ -1647,6 +1647,9 @@ impl<W: Write> Writer<W> {
                         crate::AtomicFunction::Add => {
                             self.put_atomic_fetch(pointer, "add", value, &context.expression)?;
                         }
+                        crate::AtomicFunction::Subtract => {
+                            self.put_atomic_fetch(pointer, "sub", value, &context.expression)?;
+                        }
                         crate::AtomicFunction::And => {
                             self.put_atomic_fetch(pointer, "and", value, &context.expression)?;
                         }
@@ -2643,8 +2646,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 17504
-        if !(13000..=19000).contains(&stack_size) {
+        // last observed macOS value: 19152 (CI)
+        if !(13000..=20000).contains(&stack_size) {
             panic!("`put_block` stack size {} has changed!", stack_size);
         }
     }
