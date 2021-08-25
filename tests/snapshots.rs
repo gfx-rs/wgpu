@@ -53,6 +53,9 @@ struct Parameters {
     index_bounds_check_policy: BoundsCheckPolicyArg,
     #[allow(dead_code)]
     #[serde(default)]
+    buffer_bounds_check_policy: BoundsCheckPolicyArg,
+    #[allow(dead_code)]
+    #[serde(default)]
     image_bounds_check_policy: BoundsCheckPolicyArg,
 
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
@@ -187,6 +190,7 @@ fn write_output_spv(
         },
 
         index_bounds_check_policy: params.index_bounds_check_policy.into(),
+        buffer_bounds_check_policy: params.buffer_bounds_check_policy.into(),
         image_bounds_check_policy: params.image_bounds_check_policy.into(),
 
         ..spv::Options::default()
@@ -462,6 +466,7 @@ fn convert_wgsl() {
         ("bounds-check-zero", Targets::SPIRV),
         ("bounds-check-image-restrict", Targets::SPIRV),
         ("bounds-check-image-rzsw", Targets::SPIRV),
+        ("policy-mix", Targets::SPIRV),
         (
             "texture-arg",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,

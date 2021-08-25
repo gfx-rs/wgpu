@@ -17,6 +17,14 @@ struct Args {
     #[argh(option)]
     index_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
+    /// what policy to use for index bounds checking for arrays, vectors, and
+    /// matrices, when they are stored in globals in the `storage` or `uniform`
+    /// storage classes.
+    ///
+    /// May be `Restrict`, `ReadZeroSkipWrite`, or `Unchecked`
+    #[argh(option)]
+    buffer_bounds_check_policy: Option<BoundsCheckPolicyArg>,
+
     /// what policy to use for texture bounds checking.
     ///
     /// May be `Restrict`, `ReadZeroSkipWrite`, or `Unchecked`
@@ -114,6 +122,7 @@ impl FromStr for GlslProfileArg {
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
     index_bounds_check_policy: naga::back::BoundsCheckPolicy,
+    buffer_bounds_check_policy: naga::back::BoundsCheckPolicy,
     image_bounds_check_policy: naga::back::BoundsCheckPolicy,
     entry_point: Option<String>,
     spv_adjust_coordinate_space: bool,
@@ -193,6 +202,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some(policy) = args.index_bounds_check_policy {
         params.index_bounds_check_policy = policy.0;
+    }
+    if let Some(policy) = args.buffer_bounds_check_policy {
+        params.buffer_bounds_check_policy = policy.0;
     }
     if let Some(policy) = args.image_bounds_check_policy {
         params.image_bounds_check_policy = policy.0;
@@ -318,6 +330,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 use naga::back::spv;
 
                 params.spv.index_bounds_check_policy = params.index_bounds_check_policy;
+                params.spv.buffer_bounds_check_policy = params.buffer_bounds_check_policy;
                 params.spv.image_bounds_check_policy = params.image_bounds_check_policy;
 
                 let spv = spv::write_vec(

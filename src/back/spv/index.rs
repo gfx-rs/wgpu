@@ -332,7 +332,11 @@ impl<'w> BlockContext<'w> {
         selection.finish(self, loaded_value)
     }
 
-    /// Emit code for bounds checks, per self.index_bounds_check_policy.
+    /// Emit code for bounds checks for an array, vector, or matrix access.
+    ///
+    /// This implements either `index_bounds_check_policy` or
+    /// `buffer_bounds_check_policy`, depending on the storage class of the
+    /// pointer being accessed.
     ///
     /// Return a `BoundsCheckResult` indicating how the index should be
     /// consumed. See that type's documentation for details.
@@ -342,7 +346,24 @@ impl<'w> BlockContext<'w> {
         index: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
-        Ok(match self.writer.index_bounds_check_policy {
+        // Should this access be covered by `index_bounds_check_policy` or
+        // `buffer_bounds_check_policy`?
+        let is_buffer = match *self.fun_info[base].ty.inner_with(&self.ir_module.types) {
+            crate::TypeInner::Pointer { class, .. }
+            | crate::TypeInner::ValuePointer { class, .. } => match class {
+                crate::StorageClass::Storage { access: _ } | crate::StorageClass::Uniform => true,
+                _ => false,
+            },
+            _ => false,
+        };
+
+        let policy = if is_buffer {
+            self.writer.buffer_bounds_check_policy
+        } else {
+            self.writer.index_bounds_check_policy
+        };
+
+        Ok(match policy {
             BoundsCheckPolicy::Restrict => self.write_restricted_index(base, index, block)?,
             BoundsCheckPolicy::ReadZeroSkipWrite => {
                 self.write_index_comparison(base, index, block)?
