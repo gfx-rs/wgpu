@@ -343,8 +343,13 @@ fn should_pack_struct_member(
     module: &crate::Module,
 ) -> Option<crate::ScalarKind> {
     let member = &members[index];
-    let ty_inner = &module.types[member.ty].inner;
+    //Note: this is imperfect - the same structure can be used for host-shared
+    // things, where packed float would matter.
+    if member.binding.is_some() {
+        return None;
+    }
 
+    let ty_inner = &module.types[member.ty].inner;
     let last_offset = member.offset + ty_inner.span(&module.constants);
     let next_offset = match members.get(index + 1) {
         Some(next) => next.offset,
