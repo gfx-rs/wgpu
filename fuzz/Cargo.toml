@@ -9,11 +9,11 @@ edition = "2018"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.3"
+libfuzzer-sys = "0.4"
 
 [dependencies.naga]
 path = ".."
-features = ["spirv"]
+features = ["spv-in", "wgsl-in"]
 
 # Prevent this from interfering with workspaces
 [workspace]
