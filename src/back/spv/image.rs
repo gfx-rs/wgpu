@@ -758,7 +758,7 @@ impl<'w> BlockContext<'w> {
                     block,
                     &access,
                 )?,
-            crate::back::BoundsCheckPolicy::UndefinedBehavior => access.generate(
+            crate::back::BoundsCheckPolicy::Unchecked => access.generate(
                 &mut self.writer.id_gen,
                 coordinates.value_id,
                 level_id,
@@ -1146,7 +1146,7 @@ impl<'w> BlockContext<'w> {
                     &write,
                 )?;
             }
-            crate::back::BoundsCheckPolicy::UndefinedBehavior => {
+            crate::back::BoundsCheckPolicy::Unchecked => {
                 write.generate(
                     &mut self.writer.id_gen,
                     coordinates.value_id,

@@ -174,14 +174,14 @@ fn write_output_spv(
         } else if params.bounds_check_read_zero_skip_write {
             naga::back::BoundsCheckPolicy::ReadZeroSkipWrite
         } else {
-            naga::back::BoundsCheckPolicy::UndefinedBehavior
+            naga::back::BoundsCheckPolicy::Unchecked
         },
         image_bounds_check_policy: if params.image_bounds_check_restrict {
             naga::back::BoundsCheckPolicy::Restrict
         } else if params.image_bounds_check_read_zero_skip_write {
             naga::back::BoundsCheckPolicy::ReadZeroSkipWrite
         } else {
-            naga::back::BoundsCheckPolicy::UndefinedBehavior
+            naga::back::BoundsCheckPolicy::Unchecked
         },
         ..spv::Options::default()
     };

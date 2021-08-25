@@ -13,13 +13,13 @@ struct Args {
     /// what policy to use for index bounds checking for arrays, vectors, and
     /// matrices.
     ///
-    /// May be `Restrict`, `ReadZeroSkipWrite`, or `UndefinedBehavior`
+    /// May be `Restrict`, `ReadZeroSkipWrite`, or `Unchecked`
     #[argh(option)]
     index_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
     /// what policy to use for texture bounds checking.
     ///
-    /// May be `Restrict`, `ReadZeroSkipWrite`, or `UndefinedBehavior`
+    /// May be `Restrict`, `ReadZeroSkipWrite`, or `Unchecked`
     #[argh(option)]
     image_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
@@ -62,7 +62,7 @@ impl FromStr for BoundsCheckPolicyArg {
         Ok(Self(match s.to_lowercase().as_str() {
             "restrict" => BoundsCheckPolicy::Restrict,
             "readzeroskipwrite" => BoundsCheckPolicy::ReadZeroSkipWrite,
-            "undefinedbehavior" => BoundsCheckPolicy::UndefinedBehavior,
+            "unchecked" => BoundsCheckPolicy::Unchecked,
             _ => {
                 return Err(format!(
                     "Invalid value for --index-bounds-check-policy: {}",

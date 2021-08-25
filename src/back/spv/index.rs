@@ -347,7 +347,7 @@ impl<'w> BlockContext<'w> {
             BoundsCheckPolicy::ReadZeroSkipWrite => {
                 self.write_index_comparison(base, index, block)?
             }
-            BoundsCheckPolicy::UndefinedBehavior => BoundsCheckResult::Computed(self.cached[index]),
+            BoundsCheckPolicy::Unchecked => BoundsCheckResult::Computed(self.cached[index]),
         })
     }
 
