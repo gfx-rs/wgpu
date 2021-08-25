@@ -19,22 +19,41 @@ bitflags::bitflags! {
     }
 }
 
+/// Twin of `naga::back::BoundsCheckPolicy`, always serializable.
+#[derive(Clone, Copy, serde::Deserialize)]
+enum BoundsCheckPolicyArg {
+    Restrict,
+    ReadZeroSkipWrite,
+    Unchecked,
+}
+
+impl Default for BoundsCheckPolicyArg {
+    fn default() -> Self {
+        BoundsCheckPolicyArg::Unchecked
+    }
+}
+
+impl From<BoundsCheckPolicyArg> for naga::back::BoundsCheckPolicy {
+    fn from(arg: BoundsCheckPolicyArg) -> Self {
+        match arg {
+            BoundsCheckPolicyArg::Restrict => Self::Restrict,
+            BoundsCheckPolicyArg::ReadZeroSkipWrite => Self::ReadZeroSkipWrite,
+            BoundsCheckPolicyArg::Unchecked => Self::Unchecked,
+        }
+    }
+}
+
 #[derive(Default, serde::Deserialize)]
 struct Parameters {
     #[serde(default)]
     god_mode: bool,
 
-    // We can only deserialize `BoundsCheckPolicy` values if `deserialize`
-    // feature was enabled, but features should not affect snapshot contents, so
-    // just take the policy as booleans instead.
+    #[allow(dead_code)]
     #[serde(default)]
-    bounds_check_read_zero_skip_write: bool,
+    index_bounds_check_policy: BoundsCheckPolicyArg,
+    #[allow(dead_code)]
     #[serde(default)]
-    bounds_check_restrict: bool,
-    #[serde(default)]
-    image_bounds_check_restrict: bool,
-    #[serde(default)]
-    image_bounds_check_read_zero_skip_write: bool,
+    image_bounds_check_policy: BoundsCheckPolicyArg,
 
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     spv_version: (u8, u8),
@@ -71,12 +90,9 @@ struct Parameters {
 fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     let root = env!("CARGO_MANIFEST_DIR");
     let params = match fs::read_to_string(format!("{}/{}/{}.param.ron", root, BASE_DIR_IN, name)) {
-        Ok(string) => ron::de::from_str(&string).expect("Couldn't find param file"),
+        Ok(string) => ron::de::from_str(&string).expect("Couldn't parse param file"),
         Err(_) => Parameters::default(),
     };
-    if params.bounds_check_restrict && params.bounds_check_read_zero_skip_write {
-        panic!("select only one bounds check policy");
-    }
     let capabilities = if params.god_mode {
         naga::valid::Capabilities::all()
     } else {
@@ -169,20 +185,10 @@ fn write_output_spv(
         } else {
             Some(params.spv_capabilities.clone())
         },
-        index_bounds_check_policy: if params.bounds_check_restrict {
-            naga::back::BoundsCheckPolicy::Restrict
-        } else if params.bounds_check_read_zero_skip_write {
-            naga::back::BoundsCheckPolicy::ReadZeroSkipWrite
-        } else {
-            naga::back::BoundsCheckPolicy::Unchecked
-        },
-        image_bounds_check_policy: if params.image_bounds_check_restrict {
-            naga::back::BoundsCheckPolicy::Restrict
-        } else if params.image_bounds_check_read_zero_skip_write {
-            naga::back::BoundsCheckPolicy::ReadZeroSkipWrite
-        } else {
-            naga::back::BoundsCheckPolicy::Unchecked
-        },
+
+        index_bounds_check_policy: params.index_bounds_check_policy.into(),
+        image_bounds_check_policy: params.image_bounds_check_policy.into(),
+
         ..spv::Options::default()
     };
 

@@ -1,5 +1,5 @@
 (
-	image_bounds_check_restrict: true,
+	image_bounds_check_policy: Restrict,
 	spv_version: (1, 1),
 	spv_debug: true,
 )

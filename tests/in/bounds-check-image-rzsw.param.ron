@@ -1,5 +1,5 @@
 (
-        image_bounds_check_read_zero_skip_write: true,
+        image_bounds_check_policy: ReadZeroSkipWrite,
 	spv_version: (1, 1),
 	spv_debug: true,
 )
