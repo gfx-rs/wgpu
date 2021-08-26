@@ -563,7 +563,7 @@ impl Resource {
                         multisampled: multi,
                     },
                     naga::ImageClass::Storage { format, .. } => BindingType::StorageTexture {
-                        access: if shader_usage == GlobalUse::WRITE || shader_usage.is_empty() {
+                        access: if !shader_usage.contains(GlobalUse::READ) {
                             wgt::StorageTextureAccess::WriteOnly
                         } else if !features
                             .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
@@ -571,10 +571,10 @@ impl Resource {
                             return Err(BindingError::UnsupportedTextureStorageAccess(
                                 shader_usage,
                             ));
-                        } else if shader_usage == GlobalUse::READ {
-                            wgt::StorageTextureAccess::ReadOnly
-                        } else {
+                        } else if shader_usage.contains(GlobalUse::WRITE) {
                             wgt::StorageTextureAccess::ReadWrite
+                        } else {
+                            wgt::StorageTextureAccess::ReadOnly
                         },
                         view_dimension,
                         format: {
