@@ -189,9 +189,11 @@ fn write_output_spv(
             Some(params.spv_capabilities.clone())
         },
 
-        index_bounds_check_policy: params.index_bounds_check_policy.into(),
-        buffer_bounds_check_policy: params.buffer_bounds_check_policy.into(),
-        image_bounds_check_policy: params.image_bounds_check_policy.into(),
+        bounds_check_policies: naga::back::BoundsCheckPolicies {
+            index: params.index_bounds_check_policy.into(),
+            buffer: params.buffer_bounds_check_policy.into(),
+            image: params.image_bounds_check_policy.into(),
+        },
 
         ..spv::Options::default()
     };

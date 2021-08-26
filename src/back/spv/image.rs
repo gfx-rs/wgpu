@@ -738,7 +738,7 @@ impl<'w> BlockContext<'w> {
         };
 
         // Perform the access, according to the bounds check policy.
-        let access_id = match self.writer.image_bounds_check_policy {
+        let access_id = match self.writer.bounds_check_policies.image {
             crate::back::BoundsCheckPolicy::Restrict => {
                 let (coords, level_id, sample_id) = self.write_restricted_coordinates(
                     image_id,
@@ -1130,7 +1130,7 @@ impl<'w> BlockContext<'w> {
 
         let write = Store { image_id, value_id };
 
-        match self.writer.image_bounds_check_policy {
+        match self.writer.bounds_check_policies.image {
             crate::back::BoundsCheckPolicy::Restrict => {
                 let (coords, _, _) =
                     self.write_restricted_coordinates(image_id, coordinates, None, None, block)?;

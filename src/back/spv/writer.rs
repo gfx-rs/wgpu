@@ -66,9 +66,7 @@ impl Writer {
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
-            index_bounds_check_policy: options.index_bounds_check_policy,
-            image_bounds_check_policy: options.image_bounds_check_policy,
-            buffer_bounds_check_policy: options.buffer_bounds_check_policy,
+            bounds_check_policies: options.bounds_check_policies,
             void_type,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
@@ -104,9 +102,7 @@ impl Writer {
         let fresh = Writer {
             // Copied from the old Writer:
             flags: self.flags,
-            index_bounds_check_policy: self.index_bounds_check_policy,
-            image_bounds_check_policy: self.image_bounds_check_policy,
-            buffer_bounds_check_policy: self.buffer_bounds_check_policy,
+            bounds_check_policies: self.bounds_check_policies,
             capabilities_available: take(&mut self.capabilities_available),
 
             // Initialized afresh:

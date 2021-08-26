@@ -358,9 +358,9 @@ impl<'w> BlockContext<'w> {
         };
 
         let policy = if is_buffer {
-            self.writer.buffer_bounds_check_policy
+            self.writer.bounds_check_policies.buffer
         } else {
-            self.writer.index_bounds_check_policy
+            self.writer.bounds_check_policies.index
         };
 
         Ok(match policy {

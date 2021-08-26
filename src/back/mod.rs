@@ -153,6 +153,62 @@ pub enum BoundsCheckPolicy {
     Unchecked,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+/// Policies for injecting bounds checks during code generation.
+///
+/// For SPIR-V generation, see [`spv::Options::bounds_check_policies`].
+pub struct BoundsCheckPolicies {
+    /// How should the generated code handle array, vector, or matrix indices
+    /// that are out of range?
+    pub index: BoundsCheckPolicy,
+
+    /// How should the generated code handle array, vector, or matrix indices
+    /// that are out of range, when those values live in a [`GlobalVariable`] in
+    /// the [`Storage`] or [`Uniform`] storage classes?
+    ///
+    /// Some graphics hardware provides "robust buffer access", a feature that
+    /// ensures that using a pointer cannot access memory outside the 'buffer'
+    /// that it was derived from. In Naga terms, this means that the hardware
+    /// ensures that pointers computed by applying [`Access`] and
+    /// [`AccessIndex`] expressions to a [`GlobalVariable`] whose [`class`] is
+    /// [`Storage`] or [`Uniform`] will never read or write memory outside that
+    /// global variable.
+    ///
+    /// When hardware offers such a feature, it is probably undesirable to have
+    /// Naga inject bounds checking code for such accesses, since the hardware
+    /// can probably provide the same protection more efficiently. However,
+    /// bounds checks are still needed on accesses to indexable values that do
+    /// not live in buffers, like local variables.
+    ///
+    /// So, this option provides a separate policy that applies only to accesses
+    /// to storage and uniform globals. When depending on hardware bounds
+    /// checking, this policy can be `Unchecked` to avoid unnecessary overhead.
+    ///
+    /// When special hardware support is not available, this should probably be
+    /// the same as `index_bounds_check_policy`.
+    ///
+    /// [`GlobalVariable`]: crate::GlobalVariable
+    /// [`class`]: crate::GlobalVariable::class
+    /// [`Restrict`]: crate::back::BoundsCheckPolicy::Restrict
+    /// [`ReadZeroSkipWrite`]: crate::back::BoundsCheckPolicy::ReadZeroSkipWrite
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    /// [`Storage`]: crate::StorageClass::Storage
+    /// [`Uniform`]: crate::StorageClass::Uniform
+    pub buffer: BoundsCheckPolicy,
+
+    /// How should the generated code handle image texel references that are out
+    /// of range?
+    ///
+    /// This controls the behavior of [`ImageLoad`] expressions and
+    /// [`ImageStore`] statements when a coordinate, texture array index, level
+    /// of detail, or multisampled sample number is out of range.
+    ///
+    /// [`ImageLoad`]: crate::Expression::ImageLoad
+    /// [`ImageStore`]: crate::Statement::ImageStore
+    pub image: BoundsCheckPolicy,
+}
+
 /// The default `BoundsCheckPolicy` is `Unchecked`.
 impl Default for BoundsCheckPolicy {
     fn default() -> Self {

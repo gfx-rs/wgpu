@@ -127,9 +127,7 @@ impl FromStr for GlslProfileArg {
 #[derive(Default)]
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
-    index_bounds_check_policy: naga::back::BoundsCheckPolicy,
-    buffer_bounds_check_policy: naga::back::BoundsCheckPolicy,
-    image_bounds_check_policy: naga::back::BoundsCheckPolicy,
+    bounds_check_policies: naga::back::BoundsCheckPolicies,
     entry_point: Option<String>,
     spv_adjust_coordinate_space: bool,
     spv_flow_dump_prefix: Option<String>,
@@ -207,15 +205,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         params.validation_flags = naga::valid::ValidationFlags::all();
     }
     if let Some(policy) = args.index_bounds_check_policy {
-        params.index_bounds_check_policy = policy.0;
+        params.bounds_check_policies.index = policy.0;
     }
-    params.buffer_bounds_check_policy = match args.buffer_bounds_check_policy {
+    params.bounds_check_policies.buffer = match args.buffer_bounds_check_policy {
         Some(arg) => arg.0,
-        None => params.index_bounds_check_policy,
+        None => params.bounds_check_policies.index,
     };
-    params.image_bounds_check_policy = match args.image_bounds_check_policy {
+    params.bounds_check_policies.image = match args.image_bounds_check_policy {
         Some(arg) => arg.0,
-        None => params.index_bounds_check_policy,
+        None => params.bounds_check_policies.index,
     };
     params.spv_flow_dump_prefix = args.flow_dir;
     params.entry_point = args.entry_point;
@@ -337,9 +335,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "spv" => {
                 use naga::back::spv;
 
-                params.spv.index_bounds_check_policy = params.index_bounds_check_policy;
-                params.spv.buffer_bounds_check_policy = params.buffer_bounds_check_policy;
-                params.spv.image_bounds_check_policy = params.image_bounds_check_policy;
+                params.spv.bounds_check_policies = params.bounds_check_policies;
 
                 let spv = spv::write_vec(
                     &module,
