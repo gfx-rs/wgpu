@@ -13,7 +13,11 @@ struct Args {
     /// what policy to use for index bounds checking for arrays, vectors, and
     /// matrices.
     ///
-    /// May be `Restrict`, `ReadZeroSkipWrite`, or `Unchecked`
+    /// May be `Restrict` (force all indices in-bounds), `ReadZeroSkipWrite`
+    /// (out-of-bounds indices read zeros, and don't write at all), or
+    /// `Unchecked` (generate the simplest code, and whatever happens, happens)
+    ///
+    /// `Unchecked` is the default.
     #[argh(option)]
     index_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
@@ -21,13 +25,15 @@ struct Args {
     /// matrices, when they are stored in globals in the `storage` or `uniform`
     /// storage classes.
     ///
-    /// May be `Restrict`, `ReadZeroSkipWrite`, or `Unchecked`
+    /// Possible values are the same as for `index-bounds-check-policy`. If
+    /// omitted, defaults to the index bounds check policy.
     #[argh(option)]
     buffer_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
     /// what policy to use for texture bounds checking.
     ///
-    /// May be `Restrict`, `ReadZeroSkipWrite`, or `Unchecked`
+    /// Possible values are the same as for `index-bounds-check-policy`. If
+    /// omitted, defaults to the index bounds check policy.
     #[argh(option)]
     image_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
@@ -59,7 +65,7 @@ struct Args {
 }
 
 /// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct BoundsCheckPolicyArg(naga::back::BoundsCheckPolicy);
 
 impl FromStr for BoundsCheckPolicyArg {
@@ -203,12 +209,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(policy) = args.index_bounds_check_policy {
         params.index_bounds_check_policy = policy.0;
     }
-    if let Some(policy) = args.buffer_bounds_check_policy {
-        params.buffer_bounds_check_policy = policy.0;
-    }
-    if let Some(policy) = args.image_bounds_check_policy {
-        params.image_bounds_check_policy = policy.0;
-    }
+    params.buffer_bounds_check_policy = match args.buffer_bounds_check_policy {
+        Some(arg) => arg.0,
+        None => params.index_bounds_check_policy,
+    };
+    params.image_bounds_check_policy = match args.image_bounds_check_policy {
+        Some(arg) => arg.0,
+        None => params.index_bounds_check_policy,
+    };
     params.spv_flow_dump_prefix = args.flow_dir;
     params.entry_point = args.entry_point;
     if let Some(version) = args.profile {
