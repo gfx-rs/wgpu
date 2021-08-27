@@ -1,13 +1,15 @@
-use std::{mem, os::raw::c_void, ptr::NonNull, thread};
+use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
 
 use core_graphics_types::{
     base::CGFloat,
     geometry::{CGRect, CGSize},
 };
 use objc::{
-    class, msg_send,
+    class,
+    declare::ClassDecl,
+    msg_send,
     rc::autoreleasepool,
-    runtime::{Object, BOOL, YES},
+    runtime::{Class, Object, Sel, BOOL, YES},
     sel, sel_impl,
 };
 use parking_lot::Mutex;
@@ -17,6 +19,40 @@ use parking_lot::Mutex;
 extern "C" {
     #[allow(non_upper_case_globals)]
     static kCAGravityTopLeft: *mut Object;
+}
+
+extern "C" fn layer_should_inherit_contents_scale_from_window(
+    _: &Class,
+    _: Sel,
+    _layer: *mut Object,
+    _new_scale: CGFloat,
+    _from_window: *mut Object,
+) -> BOOL {
+    YES
+}
+
+const CAML_DELEGATE_CLASS: &str = "HalManagedMetalLayerDelegate";
+static CAML_DELEGATE_REGISTER: Once = Once::new();
+
+#[derive(Debug)]
+pub struct HalManagedMetalLayerDelegate(&'static Class);
+
+impl HalManagedMetalLayerDelegate {
+    pub fn new() -> Self {
+        CAML_DELEGATE_REGISTER.call_once(|| {
+            type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
+            let mut decl = ClassDecl::new(CAML_DELEGATE_CLASS, class!(NSObject)).unwrap();
+            #[allow(trivial_casts)] // false positive
+            unsafe {
+                decl.add_class_method(
+                    sel!(layer:shouldInheritContentsScale:fromWindow:),
+                    layer_should_inherit_contents_scale_from_window as Fun,
+                );
+            }
+            decl.register();
+        });
+        Self(Class::get(CAML_DELEGATE_CLASS).unwrap())
+    }
 }
 
 impl super::Surface {
@@ -74,7 +110,10 @@ impl super::Surface {
 
     #[cfg(target_os = "macos")]
     #[allow(clippy::transmute_ptr_to_ref)]
-    pub unsafe fn from_nsview(nsview: *mut c_void) -> Self {
+    pub unsafe fn from_nsview(
+        nsview: *mut c_void,
+        delegate: &HalManagedMetalLayerDelegate,
+    ) -> Self {
         let view = nsview as *mut Object;
         if view.is_null() {
             panic!("window does not have a valid contentView");
@@ -109,7 +148,7 @@ impl super::Surface {
                 let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
                 let () = msg_send![layer, setContentsScale: scale_factor];
             }
-            //let () = msg_send![layer, setDelegate: self.gfx_managed_metal_layer_delegate.0];
+            let () = msg_send![layer, setDelegate: delegate.0];
             layer
         };
 
