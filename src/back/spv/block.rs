@@ -1013,6 +1013,11 @@ impl<'w> BlockContext<'w> {
                         Instruction::switch(selector_id, default_id, &raw_cases),
                     );
 
+                    let inner_context = LoopContext {
+                        break_id: Some(merge_id),
+                        ..loop_context
+                    };
+
                     for (i, (case, raw_case)) in cases.iter().zip(raw_cases.iter()).enumerate() {
                         let case_finish_id = if case.fall_through {
                             match raw_cases.get(i + 1) {
@@ -1026,11 +1031,11 @@ impl<'w> BlockContext<'w> {
                             raw_case.label_id,
                             &case.body,
                             Some(case_finish_id),
-                            LoopContext::default(),
+                            inner_context,
                         )?;
                     }
 
-                    self.write_block(default_id, default, Some(merge_id), LoopContext::default())?;
+                    self.write_block(default_id, default, Some(merge_id), inner_context)?;
 
                     block = Block::new(merge_id);
                 }
