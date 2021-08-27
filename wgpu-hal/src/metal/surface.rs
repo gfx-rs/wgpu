@@ -107,7 +107,7 @@ impl super::Surface {
             let window: *mut Object = msg_send![view, window];
             if !window.is_null() {
                 let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
-                let () = msg_send![layer, setContentsScale: scale_factor];
+                layer.set_contents_scale(scale_factor);
             }
             //let () = msg_send![layer, setDelegate: self.gfx_managed_metal_layer_delegate.0];
             layer
@@ -184,16 +184,33 @@ impl crate::Surface<super::Api> for super::Surface {
         }
 
         let device_raw = device.shared.device.lock();
-        // On iOS, unless the user supplies a view with a CAMetalLayer, we
-        // create one as a sublayer. However, when the view changes size,
-        // its sublayers are not automatically resized, and we must resize
-        // it here. The drawable size and the layer size don't correlate
-        #[cfg(target_os = "ios")]
-        {
-            if let Some(view) = self.view {
+
+        if let Some(view) = self.view {
+            // On iOS, unless the user supplies a view with a CAMetalLayer, we
+            // create one as a sublayer. However, when the view changes size,
+            // its sublayers are not automatically resized, and we must resize
+            // it here. The drawable size and the layer size don't correlate
+            #[cfg(target_os = "ios")]
+            {
                 let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
                 let bounds: CGRect = msg_send![main_layer, bounds];
                 let () = msg_send![*render_layer, setFrame: bounds];
+            }
+
+            // On macOS, if the window is moved to a screen with higher/lower DPI, the scale factor
+            // may change. We need to propagate that change from the window to the render layer,
+            // else the output will look blurry and zoomed in/out.
+            //
+            // TODO: this causes a smooth, but jarring, animation after the scale factor changes as
+            // the rendered view shrinks/grows to the correct size. This animation should preferably
+            // be removed somehow...
+            #[cfg(target_os = "macos")]
+            {
+                let window: *mut Object = msg_send![view.as_ptr(), window];
+                if !window.is_null() {
+                    let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
+                    render_layer.set_contents_scale(scale_factor);
+                }
             }
         }
         render_layer.set_device(&*device_raw);
@@ -205,6 +222,7 @@ impl crate::Surface<super::Api> for super::Surface {
         let () = msg_send![*render_layer, setMaximumDrawableCount: config.swap_chain_size as u64];
 
         render_layer.set_drawable_size(drawable_size);
+
         if caps.can_set_next_drawable_timeout {
             let () = msg_send![*render_layer, setAllowsNextDrawableTimeout:false];
         }
