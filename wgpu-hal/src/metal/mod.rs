@@ -61,7 +61,9 @@ impl crate::Api for Api {
     type ComputePipeline = ComputePipeline;
 }
 
-pub struct Instance {}
+pub struct Instance {
+    managed_metal_layer_delegate: surface::HalManagedMetalLayerDelegate,
+}
 
 impl Instance {
     pub fn create_surface_from_layer(&self, layer: &mtl::MetalLayerRef) -> Surface {
@@ -72,7 +74,9 @@ impl Instance {
 impl crate::Instance<Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         //TODO: enable `METAL_DEVICE_WRAPPER_TYPE` environment based on the flags?
-        Ok(Instance {})
+        Ok(Instance {
+            managed_metal_layer_delegate: surface::HalManagedMetalLayerDelegate::new(),
+        })
     }
 
     unsafe fn create_surface(
@@ -82,12 +86,14 @@ impl crate::Instance<Api> for Instance {
         match has_handle.raw_window_handle() {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::IOS(handle) => {
+                let _ = &self.managed_metal_layer_delegate;
                 Ok(Surface::from_uiview(handle.ui_view))
             }
             #[cfg(target_os = "macos")]
-            raw_window_handle::RawWindowHandle::MacOS(handle) => {
-                Ok(Surface::from_nsview(handle.ns_view))
-            }
+            raw_window_handle::RawWindowHandle::MacOS(handle) => Ok(Surface::from_nsview(
+                handle.ns_view,
+                &self.managed_metal_layer_delegate,
+            )),
             _ => Err(crate::InstanceError),
         }
     }
