@@ -202,11 +202,12 @@ impl super::Adapter {
             gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) as u32;
         let fragment_shader_storage_blocks =
             gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS) as u32;
-
         let vertex_shader_storage_textures =
             gl.get_parameter_i32(glow::MAX_VERTEX_IMAGE_UNIFORMS) as u32;
         let fragment_shader_storage_textures =
             gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) as u32;
+        let max_storage_block_size =
+            gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) as u32;
 
         // WORKAROUND:
         // In order to work around an issue with GL on RPI4 and similar, we ignore a zero vertex ssbo count if there are vertex sstos. (more info: https://github.com/gfx-rs/wgpu/pull/1607#issuecomment-874938961)
@@ -223,26 +224,11 @@ impl super::Adapter {
         } else {
             vertex_shader_storage_blocks.min(fragment_shader_storage_blocks)
         };
-
         let max_storage_textures_per_shader_stage = if vertex_shader_storage_textures == 0 {
             fragment_shader_storage_textures
         } else {
             vertex_shader_storage_textures.min(fragment_shader_storage_textures)
         };
-
-        let mut features = wgt::Features::empty()
-            | wgt::Features::TEXTURE_COMPRESSION_ETC2
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-        features.set(
-            wgt::Features::DEPTH_CLAMPING,
-            extensions.contains("GL_EXT_depth_clamp"),
-        );
-        features.set(
-            wgt::Features::VERTEX_WRITABLE_STORAGE,
-            ver >= (3, 1)
-                && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero)
-                && vertex_shader_storage_textures != 0,
-        );
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::DEVICE_LOCAL_IMAGE_COPIES
@@ -252,7 +238,7 @@ impl super::Adapter {
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, ver >= (3, 1));
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
-            ver >= (3, 1),
+            ver >= (3, 1) && max_storage_block_size != 0,
         );
         downlevel_flags.set(wgt::DownlevelFlags::INDIRECT_EXECUTION, ver >= (3, 1));
         //TODO: we can actually support positive `base_vertex` in the same way
@@ -264,7 +250,37 @@ impl super::Adapter {
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::VERTEX_STORAGE,
-            ver >= (3, 1) && (vertex_shader_storage_blocks > 0 || vertex_ssbo_false_zero),
+            ver >= (3, 1)
+                && max_storage_block_size != 0
+                && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
+        );
+
+        let mut features = wgt::Features::empty()
+            | wgt::Features::TEXTURE_COMPRESSION_ETC2
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+        features.set(
+            wgt::Features::DEPTH_CLAMPING,
+            extensions.contains("GL_EXT_depth_clamp"),
+        );
+        features.set(
+            wgt::Features::VERTEX_WRITABLE_STORAGE,
+            downlevel_flags.contains(wgt::DownlevelFlags::VERTEX_STORAGE)
+                && vertex_shader_storage_textures != 0,
+        );
+
+        let mut private_caps = super::PrivateCapabilities::empty();
+        private_caps.set(
+            super::PrivateCapabilities::SHADER_BINDING_LAYOUT,
+            ver >= (3, 1),
+        );
+        private_caps.set(
+            super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD,
+            extensions.contains("GL_EXT_texture_shadow_lod"),
+        );
+        private_caps.set(super::PrivateCapabilities::MEMORY_BARRIERS, ver >= (3, 1));
+        private_caps.set(
+            super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT,
+            ver >= (3, 1),
         );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
@@ -301,28 +317,24 @@ impl super::Adapter {
             } else {
                 0
             } as u32,
-            max_vertex_buffers: gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) as u32,
+            max_vertex_buffers: if private_caps
+                .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
+            {
+                gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) as u32
+            } else {
+                16 // should this be different?
+            },
             max_vertex_attributes: (gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) as u32)
                 .min(super::MAX_VERTEX_ATTRIBUTES as u32),
-            max_vertex_buffer_array_stride: gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_STRIDE)
-                as u32,
+            max_vertex_buffer_array_stride: if private_caps
+                .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
+            {
+                gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_STRIDE) as u32
+            } else {
+                !0
+            },
             max_push_constant_size: 0,
         };
-
-        let mut private_caps = super::PrivateCapabilities::empty();
-        private_caps.set(
-            super::PrivateCapabilities::SHADER_BINDING_LAYOUT,
-            ver >= (3, 1),
-        );
-        private_caps.set(
-            super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD,
-            extensions.contains("GL_EXT_texture_shadow_lod"),
-        );
-        private_caps.set(super::PrivateCapabilities::MEMORY_BARRIERS, ver >= (3, 1));
-        private_caps.set(
-            super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT,
-            ver >= (3, 1),
-        );
 
         let mut workarounds = super::Workarounds::empty();
         let r = renderer.to_lowercase();
