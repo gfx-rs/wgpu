@@ -400,7 +400,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         };
                         let index = fake_members.len() as u32;
                         fake_members.push(EpStructMember {
-                            name: self.namer.call_unique(member_name),
+                            name: self.namer.call(member_name),
                             ty: member.ty,
                             binding: member.binding.clone(),
                             index,
@@ -409,13 +409,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 _ => {
                     let member_name = if let Some(ref name) = arg.name {
-                        name
+                        self.namer.call_unique(name)
                     } else {
-                        "member"
+                        self.namer.call("member")
                     };
                     let index = fake_members.len() as u32;
                     fake_members.push(EpStructMember {
-                        name: self.namer.call_unique(member_name),
+                        name: member_name,
                         ty: arg.ty,
                         binding: arg.binding.clone(),
                         index,
@@ -451,13 +451,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         for member in members.iter() {
             let member_name = if let Some(ref name) = member.name {
-                name
+                self.namer.call_unique(name)
             } else {
-                "member"
+                self.namer.call("member")
             };
             let index = fake_members.len() as u32;
             fake_members.push(EpStructMember {
-                name: self.namer.call_unique(member_name),
+                name: member_name,
                 ty: member.ty,
                 binding: member.binding.clone(),
                 index,
