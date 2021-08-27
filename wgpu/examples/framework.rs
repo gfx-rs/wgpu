@@ -233,7 +233,12 @@ fn start<E: Example>(
                 window.request_redraw();
             }
             event::Event::WindowEvent {
-                event: WindowEvent::Resized(size),
+                event:
+                    WindowEvent::Resized(size)
+                    | WindowEvent::ScaleFactorChanged {
+                        new_inner_size: &mut size,
+                        ..
+                    },
                 ..
             } => {
                 log::info!("Resizing to {:?}", size);
