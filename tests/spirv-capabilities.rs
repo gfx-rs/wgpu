@@ -26,19 +26,7 @@ fn capabilities_used(source: &str) -> naga::FastHashSet<Ca> {
 }
 
 fn require(capabilities: &[Ca], source: &str) {
-    let caps_used = capabilities_used(source);
-
-    let missing_caps: Vec<_> = capabilities
-        .iter()
-        .filter(|cap| !caps_used.contains(cap))
-        .cloned()
-        .collect();
-    if !missing_caps.is_empty() {
-        panic!(
-            "shader code should have requested these caps: {:?}",
-            missing_caps
-        );
-    }
+    require_and_forbid(capabilities, &[], source);
 }
 
 fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
@@ -51,8 +39,8 @@ fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
         .collect();
     if !missing_caps.is_empty() {
         panic!(
-            "shader code should have requested these caps: {:?}",
-            missing_caps
+            "shader code should have requested these caps: {:?}\n\n{}",
+            missing_caps, source
         );
     }
 
@@ -63,8 +51,8 @@ fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
         .collect();
     if !forbidden_caps.is_empty() {
         panic!(
-            "shader code should not have requested these caps: {:?}",
-            forbidden_caps
+            "shader code should not have requested these caps: {:?}\n\n{}",
+            forbidden_caps, source
         );
     }
 }
@@ -168,5 +156,25 @@ fn geometry() {
         [[stage(fragment)]]
         fn f([[builtin(primitive_index)]] x: u32) { }
     "#,
+    );
+}
+
+#[test]
+fn storage_image_formats() {
+    require_and_forbid(
+        &[Ca::Shader],
+        &[Ca::StorageImageExtendedFormats],
+        r#"
+            [[group(0), binding(0)]]
+            var image_rg32f: texture_storage_2d<rgba16uint, read>;
+        "#,
+    );
+
+    require(
+        &[Ca::StorageImageExtendedFormats],
+        r#"
+            [[group(0), binding(0)]]
+            var image_rg32f: texture_storage_2d<rg32float, read>;
+        "#,
     );
 }
