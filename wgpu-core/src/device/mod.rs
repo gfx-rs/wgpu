@@ -625,7 +625,15 @@ impl<A: HalApi> Device<A> {
         adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
-        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
+        let mut hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
+
+        // Enforce COPY_DST if this is not a render target, otherwise we wouldn't be able to initialize the texture.
+        if !hal_usage.contains(hal::TextureUses::COLOR_TARGET)
+            && !hal_usage.contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
+        {
+            hal_usage |= hal::TextureUses::COPY_DST;
+        }
+
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.borrow_option(),
             size: desc.size,
