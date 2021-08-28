@@ -2,6 +2,7 @@
 ; Version: 1.1
 ; Generator: rspirv
 ; Bound: 213
+OpCapability SampledCubeArray
 OpCapability ImageQuery
 OpCapability Image1D
 OpCapability Shader
