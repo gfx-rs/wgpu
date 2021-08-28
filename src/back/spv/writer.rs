@@ -717,34 +717,12 @@ impl Writer {
                 arrayed,
                 class,
             } => {
-                let kind = match class {
-                    crate::ImageClass::Sampled { kind, multi: _ } => {
-                        if dim == crate::ImageDimension::D1 {
-                            self.require_any("1D sampled images", &[spirv::Capability::Sampled1D])?;
-                        }
-                        kind
-                    }
-                    crate::ImageClass::Depth { multi: _ } => crate::ScalarKind::Float,
+                let (kind, sampled) = match class {
+                    crate::ImageClass::Sampled { kind, multi: _ } => (kind, true),
+                    crate::ImageClass::Depth { multi: _ } => (crate::ScalarKind::Float, true),
                     crate::ImageClass::Storage { format, .. } => {
-                        match dim {
-                            crate::ImageDimension::D1 => {
-                                self.require_any(
-                                    "1D storage images",
-                                    &[spirv::Capability::Image1D],
-                                )?;
-                            }
-                            crate::ImageDimension::Cube => {
-                                if arrayed {
-                                    self.require_any(
-                                        "arrayed cube images",
-                                        &[spirv::Capability::ImageCubeArray],
-                                    )?;
-                                }
-                            }
-                            _ => {}
-                        };
-
-                        format.into()
+                        self.request_image_format_capabilities(spirv::ImageFormat::from(format))?;
+                        (crate::ScalarKind::from(format), false)
                     }
                 };
                 let local_type = LocalType::Value {
@@ -754,6 +732,29 @@ impl Writer {
                     pointer_class: None,
                 };
                 let dim = map_dim(dim);
+                match dim {
+                    spirv::Dim::Dim1D => {
+                        if sampled {
+                            self.require_any("sampled 1D images", &[spirv::Capability::Sampled1D])?;
+                        } else {
+                            self.require_any("1D storage images", &[spirv::Capability::Image1D])?;
+                        }
+                    }
+                    spirv::Dim::DimCube if arrayed => {
+                        if sampled {
+                            self.require_any(
+                                "sampled cube array images",
+                                &[spirv::Capability::SampledCubeArray],
+                            )?;
+                        } else {
+                            self.require_any(
+                                "cube array storage images",
+                                &[spirv::Capability::ImageCubeArray],
+                            )?;
+                        }
+                    }
+                    _ => {}
+                }
                 let type_id = self.get_type_id(LookupType::Local(local_type));
                 Instruction::type_image(id, type_id, dim, arrayed, class)
             }
@@ -858,6 +859,62 @@ impl Writer {
 
         instruction.to_words(&mut self.logical_layout.declarations);
         Ok(id)
+    }
+
+    fn request_image_format_capabilities(
+        &mut self,
+        format: spirv::ImageFormat,
+    ) -> Result<(), Error> {
+        use spirv::ImageFormat as If;
+        match format {
+            If::Rg32f
+            | If::Rg16f
+            | If::R11fG11fB10f
+            | If::R16f
+            | If::Rgba16
+            | If::Rgb10A2
+            | If::Rg16
+            | If::Rg8
+            | If::R16
+            | If::R8
+            | If::Rgba16Snorm
+            | If::Rg16Snorm
+            | If::Rg8Snorm
+            | If::R16Snorm
+            | If::R8Snorm
+            | If::Rg32i
+            | If::Rg16i
+            | If::Rg8i
+            | If::R16i
+            | If::R8i
+            | If::Rgb10a2ui
+            | If::Rg32ui
+            | If::Rg16ui
+            | If::Rg8ui
+            | If::R16ui
+            | If::R8ui => self.require_any(
+                "storage image format",
+                &[spirv::Capability::StorageImageExtendedFormats],
+            ),
+            If::R64ui | If::R64i => self.require_any(
+                "64-bit integer storage image format",
+                &[spirv::Capability::Int64ImageEXT],
+            ),
+            If::Unknown
+            | If::Rgba32f
+            | If::Rgba16f
+            | If::R32f
+            | If::Rgba8
+            | If::Rgba8Snorm
+            | If::Rgba32i
+            | If::Rgba16i
+            | If::Rgba8i
+            | If::R32i
+            | If::Rgba32ui
+            | If::Rgba16ui
+            | If::Rgba8ui
+            | If::R32ui => Ok(()),
+        }
     }
 
     pub(super) fn get_index_constant(&mut self, index: Word) -> Result<Word, Error> {
@@ -1311,6 +1368,11 @@ impl Writer {
         self.physical_layout.in_words(words);
         self.logical_layout.in_words(words);
         Ok(())
+    }
+
+    /// Return the set of capabilities the last module written used.
+    pub fn get_capabilities_used(&self) -> &crate::FastHashSet<spirv::Capability> {
+        &self.capabilities_used
     }
 }
 
