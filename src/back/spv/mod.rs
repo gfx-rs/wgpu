@@ -161,6 +161,13 @@ impl Function {
 /// so we can't ever create a `Handle<Type>` to refer to them. So for local use
 /// in the SPIR-V writer, we have this home-grown type enum that covers only the
 /// cases we need (for example, it doesn't cover structs).
+///
+/// As explained in §2.8 of the SPIR-V spec, some classes of type instructions
+/// must be unique; for example, you can't have two `OpTypeInt 32 1`
+/// instructions in the same module. `Writer::lookup_type` maps each `LocalType`
+/// value for which we've written instructions to its id, so we can avoid
+/// writing out duplicates. `LocalType` also includes variants like `Pointer`
+/// that do not need to be unique - but it is harmless to avoid the duplication.
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LocalType {
     /// A scalar, vector, or pointer to one of those.
