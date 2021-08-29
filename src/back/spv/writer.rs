@@ -13,15 +13,6 @@ use crate::{
 use spirv::Word;
 use std::collections::hash_map::Entry;
 
-fn map_dim(dim: crate::ImageDimension) -> spirv::Dim {
-    match dim {
-        crate::ImageDimension::D1 => spirv::Dim::Dim1D,
-        crate::ImageDimension::D2 => spirv::Dim::Dim2D,
-        crate::ImageDimension::D3 => spirv::Dim::Dim3D,
-        crate::ImageDimension::Cube => spirv::Dim::DimCube,
-    }
-}
-
 impl Function {
     fn to_words(&self, sink: &mut impl Extend<Word>) {
         self.signature.as_ref().unwrap().to_words(sink);
@@ -688,25 +679,24 @@ impl Writer {
                 }));
                 Instruction::type_pointer(id, class, type_id)
             }
-            LocalType::Image {
-                dim,
-                arrayed,
-                class,
-            } => {
-                let kind = match class {
-                    crate::ImageClass::Sampled { kind, multi: _ } => kind,
-                    crate::ImageClass::Depth { multi: _ } => crate::ScalarKind::Float,
-                    crate::ImageClass::Storage { format, .. } => format.into(),
-                };
+            LocalType::Image(image) => {
                 let local_type = LocalType::Value {
                     vector_size: None,
-                    kind,
+                    kind: image.sampled_type,
                     width: 4,
                     pointer_class: None,
                 };
                 let type_id = self.get_type_id(LookupType::Local(local_type));
-                let dim = map_dim(dim);
-                Instruction::type_image(id, type_id, dim, arrayed, class)
+                Instruction::type_image(
+                    id,
+                    type_id,
+                    image.dim,
+                    image.depth,
+                    image.arrayed,
+                    image.multisampled,
+                    image.sampled,
+                    image.image_format,
+                )
             }
             LocalType::Sampler => Instruction::type_sampler(id),
             LocalType::SampledImage { image_type_id } => {

@@ -153,6 +153,70 @@ impl Function {
     }
 }
 
+fn map_dim(dim: crate::ImageDimension) -> spirv::Dim {
+    match dim {
+        crate::ImageDimension::D1 => spirv::Dim::Dim1D,
+        crate::ImageDimension::D2 => spirv::Dim::Dim2D,
+        crate::ImageDimension::D3 => spirv::Dim::Dim3D,
+        crate::ImageDimension::Cube => spirv::Dim::DimCube,
+    }
+}
+
+/// Characteristics of a SPIR-V `OpTypeImage` type.
+///
+/// SPIR-V requires non-composite types to be unique, including images. Since we
+/// use `LocalType` for this deduplication, it's essential that `LocalImageType`
+/// be equal whenever the corresponding `OpTypeImage`s would be. To reduce the
+/// likelihood of mistakes, we use fields that correspond exactly to the
+/// operands of an `OpTypeImage` instruction, using the actual SPIR-V types
+/// where practical.
+#[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
+struct LocalImageType {
+    sampled_type: crate::ScalarKind,
+    dim: spirv::Dim,
+    depth: bool,
+    arrayed: bool,
+    multisampled: bool,
+    sampled: bool,
+    image_format: spirv::ImageFormat,
+}
+
+impl LocalImageType {
+    /// Construct a `LocalImageType` from the fields of a `TypeInner::Image`.
+    fn from_inner(dim: crate::ImageDimension, arrayed: bool, class: crate::ImageClass) -> Self {
+        let dim = map_dim(dim);
+        match class {
+            crate::ImageClass::Sampled { kind, multi } => LocalImageType {
+                sampled_type: kind,
+                dim,
+                depth: false,
+                arrayed,
+                multisampled: multi,
+                sampled: true,
+                image_format: spirv::ImageFormat::Unknown,
+            },
+            crate::ImageClass::Depth { multi } => LocalImageType {
+                sampled_type: crate::ScalarKind::Float,
+                dim,
+                depth: true,
+                arrayed,
+                multisampled: multi,
+                sampled: true,
+                image_format: spirv::ImageFormat::Unknown,
+            },
+            crate::ImageClass::Storage { format, access: _ } => LocalImageType {
+                sampled_type: crate::ScalarKind::from(format),
+                dim,
+                depth: false,
+                arrayed,
+                multisampled: false,
+                sampled: false,
+                image_format: format.into(),
+            },
+        }
+    }
+}
+
 /// A SPIR-V type constructed during code generation.
 ///
 /// In the process of writing SPIR-V, we need to synthesize various types for
@@ -189,11 +253,7 @@ enum LocalType {
         base: Handle<crate::Type>,
         class: spirv::StorageClass,
     },
-    Image {
-        dim: crate::ImageDimension,
-        arrayed: bool,
-        class: crate::ImageClass,
-    },
+    Image(LocalImageType),
     SampledImage {
         image_type_id: Word,
     },
@@ -262,11 +322,7 @@ fn make_local(inner: &crate::TypeInner) -> Option<LocalType> {
             dim,
             arrayed,
             class,
-        } => LocalType::Image {
-            dim,
-            arrayed,
-            class,
-        },
+        } => LocalType::Image(LocalImageType::from_inner(dim, arrayed, class)),
         crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
         _ => return None,
     })
