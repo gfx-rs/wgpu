@@ -8,6 +8,8 @@ var image_depth_multisampled_src: texture_depth_multisampled_2d;
 var image_storage_src: texture_storage_2d<rgba8uint>;
 [[group(0), binding(5)]]
 var image_array_src: texture_2d_array<u32>;
+[[group(0), binding(6)]]
+var image_dup_src: texture_storage_1d<r32uint,read>; // for #1307
 [[group(0), binding(2)]]
 var image_dst: texture_storage_1d<r32uint,write>;
 
