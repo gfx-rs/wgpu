@@ -10,11 +10,11 @@ OpEntryPoint Vertex %39 "foo" %34 %37
 OpEntryPoint GLCompute %84 "atomics"
 OpExecutionMode %84 LocalSize 1 1 1
 OpSource GLSL 450
-OpName %25 "Bar"
 OpMemberName %25 0 "matrix"
 OpMemberName %25 1 "atom"
 OpMemberName %25 2 "arr"
 OpMemberName %25 3 "data"
+OpName %25 "Bar"
 OpName %27 "bar"
 OpName %29 "foo"
 OpName %31 "c"

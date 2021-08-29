@@ -770,12 +770,6 @@ impl Writer {
                     ref members,
                     span: _,
                 } => {
-                    if self.flags.contains(WriterFlags::DEBUG) {
-                        if let Some(ref name) = ty.name {
-                            self.debugs.push(Instruction::name(id, name));
-                        }
-                    }
-
                     if top_level {
                         self.decorate(id, Decoration::Block, &[]);
                     }
@@ -852,6 +846,12 @@ impl Writer {
 
         // Add this handle as a new alias for that type.
         self.lookup_type.insert(LookupType::Handle(handle), id);
+
+        if self.flags.contains(WriterFlags::DEBUG) {
+            if let Some(ref name) = ty.name {
+                self.debugs.push(Instruction::name(id, name));
+            }
+        }
 
         Ok(id)
     }

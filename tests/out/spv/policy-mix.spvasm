@@ -9,10 +9,10 @@ OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpSource GLSL 450
-OpName %15 "InStorage"
 OpMemberName %15 0 "a"
-OpName %17 "InUniform"
+OpName %15 "InStorage"
 OpMemberName %17 0 "a"
+OpName %17 "InUniform"
 OpName %23 "in_storage"
 OpName %25 "in_uniform"
 OpName %27 "image_2d_array"

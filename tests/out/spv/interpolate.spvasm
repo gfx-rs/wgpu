@@ -10,7 +10,6 @@ OpEntryPoint Vertex %42 "main" %29 %31 %33 %35 %37 %39 %40 %41
 OpEntryPoint Fragment %106 "main" %85 %88 %91 %94 %97 %100 %102 %104
 OpExecutionMode %106 OriginUpperLeft
 OpSource GLSL 450
-OpName %25 "FragmentInput"
 OpMemberName %25 0 "position"
 OpMemberName %25 1 "flat"
 OpMemberName %25 2 "linear"
@@ -19,6 +18,7 @@ OpMemberName %25 4 "linear_sample"
 OpMemberName %25 5 "perspective"
 OpMemberName %25 6 "perspective_centroid"
 OpMemberName %25 7 "perspective_sample"
+OpName %25 "FragmentInput"
 OpName %26 "out"
 OpName %29 "position"
 OpName %31 "flat"

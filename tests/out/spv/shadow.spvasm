@@ -10,14 +10,14 @@ OpEntryPoint Fragment %77 "fs_main" %69 %72 %75
 OpExecutionMode %77 OriginUpperLeft
 OpSource GLSL 450
 OpName %9 "c_max_lights"
-OpName %14 "Globals"
 OpMemberName %14 0 "num_lights"
-OpName %17 "Light"
+OpName %14 "Globals"
 OpMemberName %17 0 "proj"
 OpMemberName %17 1 "pos"
 OpMemberName %17 2 "color"
-OpName %19 "Lights"
+OpName %17 "Light"
 OpMemberName %19 0 "data"
+OpName %19 "Lights"
 OpName %24 "c_ambient"
 OpName %25 "u_globals"
 OpName %27 "s_lights"
