@@ -257,7 +257,8 @@ impl super::Adapter {
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_COMPRESSION_ETC2
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgt::Features::CLEAR_COMMANDS;
         features.set(
             wgt::Features::DEPTH_CLAMPING,
             extensions.contains("GL_EXT_depth_clamp"),
