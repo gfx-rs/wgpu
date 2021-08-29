@@ -219,34 +219,26 @@ impl super::Instruction {
         instruction
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn type_image(
         id: Word,
         sampled_type_id: Word,
         dim: spirv::Dim,
+        depth: bool,
         arrayed: bool,
-        image_class: crate::ImageClass,
+        multisampled: bool,
+        sampled: bool,
+        image_format: spirv::ImageFormat,
     ) -> Self {
         let mut instruction = Self::new(Op::TypeImage);
         instruction.set_result(id);
         instruction.add_operand(sampled_type_id);
         instruction.add_operand(dim as u32);
-
-        let (depth, multi, sampled) = match image_class {
-            crate::ImageClass::Sampled { kind: _, multi } => (false, multi, true),
-            crate::ImageClass::Depth { multi } => (true, multi, true),
-            crate::ImageClass::Storage { .. } => (false, false, false),
-        };
         instruction.add_operand(depth as u32);
         instruction.add_operand(arrayed as u32);
-        instruction.add_operand(multi as u32);
+        instruction.add_operand(multisampled as u32);
         instruction.add_operand(if sampled { 1 } else { 2 });
-
-        let format = match image_class {
-            crate::ImageClass::Storage { format, .. } => format.into(),
-            _ => spirv::ImageFormat::Unknown,
-        };
-
-        instruction.add_operand(format as u32);
+        instruction.add_operand(image_format as u32);
         instruction
     }
 
