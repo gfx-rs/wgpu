@@ -173,12 +173,18 @@ impl Writer {
     }
 
     pub(super) fn get_type_id(&mut self, lookup_ty: LookupType) -> Word {
-        if let Entry::Occupied(e) = self.lookup_type.entry(lookup_ty) {
-            *e.get()
-        } else {
-            match lookup_ty {
-                LookupType::Handle(_handle) => unreachable!("Handles are populated at start"),
-                LookupType::Local(local_ty) => self.write_type_declaration_local(local_ty),
+        match self.lookup_type.entry(lookup_ty) {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let local = match lookup_ty {
+                    LookupType::Handle(_handle) => unreachable!("Handles are populated at start"),
+                    LookupType::Local(local) => local,
+                };
+
+                let id = self.id_gen.next();
+                e.insert(id);
+                self.write_type_declaration_local(id, local);
+                id
             }
         }
     }
@@ -585,8 +591,7 @@ impl Writer {
         }
     }
 
-    fn write_type_declaration_local(&mut self, local_ty: LocalType) -> Word {
-        let id = self.id_gen.next();
+    fn write_type_declaration_local(&mut self, id: Word, local_ty: LocalType) {
         let instruction = match local_ty {
             LocalType::Value {
                 vector_size: None,
@@ -646,9 +651,7 @@ impl Writer {
             }
         };
 
-        self.lookup_type.insert(LookupType::Local(local_ty), id);
         instruction.to_words(&mut self.logical_layout.declarations);
-        id
     }
 
     fn write_type_declaration_arena(
