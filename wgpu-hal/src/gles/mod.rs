@@ -527,11 +527,10 @@ enum Command {
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
     },
-    FillBuffer {
+    ClearBuffer {
         dst: glow::Buffer,
         dst_target: BindTarget,
         range: crate::MemoryRange,
-        value: u8,
     },
     CopyBufferToBuffer {
         src: glow::Buffer,

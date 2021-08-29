@@ -2353,7 +2353,7 @@ bitflags::bitflags! {
         /// operation.
         const COPY_SRC = 1 << 2;
         /// Allow a buffer to be the destination buffer for a [`CommandEncoder::copy_buffer_to_buffer`], [`CommandEncoder::copy_texture_to_buffer`],
-        /// [`CommandEncoder::fill_buffer`] or [`Queue::write_buffer`] operation.
+        /// [`CommandEncoder::clear_buffer`] or [`Queue::write_buffer`] operation.
         const COPY_DST = 1 << 3;
         /// Allow a buffer to be the index buffer in a draw operation.
         const INDEX = 1 << 4;

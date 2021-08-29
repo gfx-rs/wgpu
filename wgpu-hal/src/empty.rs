@@ -245,7 +245,7 @@ impl crate::CommandEncoder<Api> for Encoder {
     {
     }
 
-    unsafe fn fill_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange, value: u8) {}
+    unsafe fn clear_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange) {}
 
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
 

@@ -68,7 +68,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), ClearError> {
-        profiling::scope!("CommandEncoder::fill_buffer");
+        profiling::scope!("CommandEncoder::clear_buffer");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -82,7 +82,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        if !cmd_buf.support_fill_buffer_texture {
+        if !cmd_buf.support_clear_buffer_texture {
             return Err(ClearError::MissingClearCommandsFeature);
         }
 
@@ -122,7 +122,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => dst_buffer.size,
         };
         if offset == end {
-            log::trace!("Ignoring fill_buffer of size 0");
+            log::trace!("Ignoring clear_buffer of size 0");
             return Ok(());
         }
 
@@ -139,7 +139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier);
-            cmd_buf_raw.fill_buffer(dst_raw, offset..end, 0);
+            cmd_buf_raw.clear_buffer(dst_raw, offset..end);
         }
         Ok(())
     }
@@ -168,7 +168,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if !cmd_buf.support_fill_buffer_texture {
+        if !cmd_buf.support_clear_buffer_texture {
             return Err(ClearError::MissingClearCommandsFeature);
         }
 

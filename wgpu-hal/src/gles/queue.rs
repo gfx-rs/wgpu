@@ -194,9 +194,7 @@ impl super::Queue {
                 dst,
                 dst_target,
                 ref range,
-                value,
             } => {
-                assert_eq!(value, 0); // other values require `wgt::Features::CLEAR_COMMANDS`.
                 gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
                 gl.bind_buffer(dst_target, Some(dst));
                 let mut dst_offset = range.start;

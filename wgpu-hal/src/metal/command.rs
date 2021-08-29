@@ -126,9 +126,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
     }
 
-    unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {
+    unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
         let encoder = self.enter_blit();
-        encoder.fill_buffer(&buffer.raw, conv::map_range(&range), value);
+        encoder.fill_buffer(&buffer.raw, conv::map_range(&range), 0);
     }
 
     unsafe fn copy_buffer_to_buffer<T>(

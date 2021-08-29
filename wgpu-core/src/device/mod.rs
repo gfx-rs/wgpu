@@ -162,7 +162,7 @@ fn map_buffer<A: hal::Api>(
 
     // Zero out uninitialized parts of the mapping. (Spec dictates all resources behave as if they were initialized with zero)
     //
-    // If this is a read mapping, ideally we would use a `fill_buffer` command before reading the data from GPU (i.e. `invalidate_range`).
+    // If this is a read mapping, ideally we would use a `clear_buffer` command before reading the data from GPU (i.e. `invalidate_range`).
     // However, this would require us to kick off and wait for a command buffer or piggy back on an existing one (the later is likely the only worthwhile option).
     // As reading uninitialized memory isn't a particular important path to support,
     // we instead just initialize the memory here and make sure it is GPU visible, so this happens at max only once for every buffer region.
@@ -498,7 +498,7 @@ impl<A: HalApi> Device<A> {
             }
         } else {
             // We are required to zero out (initialize) all memory.
-            // This is done on demand using fill_buffer which requires write transfer usage!
+            // This is done on demand using clear_buffer which requires write transfer usage!
             usage |= hal::BufferUses::COPY_DST;
         }
 

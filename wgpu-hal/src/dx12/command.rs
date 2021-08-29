@@ -363,8 +363,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
     }
 
-    unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {
-        assert_eq!(value, 0, "Only zero is supported!");
+    unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
         let list = self.list.unwrap();
         let mut offset = range.start;
         while offset < range.end {
