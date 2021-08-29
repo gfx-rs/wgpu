@@ -12,9 +12,9 @@ OpExecutionMode %45 OriginUpperLeft
 OpExecutionMode %61 OriginUpperLeft
 OpSource GLSL 450
 OpName %3 "c_scale"
-OpName %10 "VertexOutput"
 OpMemberName %10 0 "uv"
 OpMemberName %10 1 "position"
+OpName %10 "VertexOutput"
 OpName %13 "u_texture"
 OpName %15 "u_sampler"
 OpName %18 "pos"
