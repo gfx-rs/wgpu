@@ -118,6 +118,15 @@ impl Context {
         }
     }
 
+    pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+        &self,
+        texture: &Texture,
+        hal_texture_callback: F,
+    ) {
+        self.0
+            .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+    }
+
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
         self.0.generate_report()
     }
