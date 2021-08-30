@@ -403,6 +403,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
+        /// - Metal
         ///
         /// This is a native only feature.
         const NON_FILL_POLYGON_MODE = 1 << 27;
