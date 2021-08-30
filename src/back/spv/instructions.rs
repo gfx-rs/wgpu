@@ -224,20 +224,21 @@ impl super::Instruction {
         id: Word,
         sampled_type_id: Word,
         dim: spirv::Dim,
-        depth: bool,
-        arrayed: bool,
-        multisampled: bool,
-        sampled: bool,
+        flags: super::ImageTypeFlags,
         image_format: spirv::ImageFormat,
     ) -> Self {
         let mut instruction = Self::new(Op::TypeImage);
         instruction.set_result(id);
         instruction.add_operand(sampled_type_id);
         instruction.add_operand(dim as u32);
-        instruction.add_operand(depth as u32);
-        instruction.add_operand(arrayed as u32);
-        instruction.add_operand(multisampled as u32);
-        instruction.add_operand(if sampled { 1 } else { 2 });
+        instruction.add_operand(flags.contains(super::ImageTypeFlags::DEPTH) as u32);
+        instruction.add_operand(flags.contains(super::ImageTypeFlags::ARRAYED) as u32);
+        instruction.add_operand(flags.contains(super::ImageTypeFlags::MULTISAMPLED) as u32);
+        instruction.add_operand(if flags.contains(super::ImageTypeFlags::SAMPLED) {
+            1
+        } else {
+            2
+        });
         instruction.add_operand(image_format as u32);
         instruction
     }

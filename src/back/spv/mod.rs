@@ -174,43 +174,49 @@ fn map_dim(dim: crate::ImageDimension) -> spirv::Dim {
 struct LocalImageType {
     sampled_type: crate::ScalarKind,
     dim: spirv::Dim,
-    depth: bool,
-    arrayed: bool,
-    multisampled: bool,
-    sampled: bool,
+    flags: ImageTypeFlags,
     image_format: spirv::ImageFormat,
+}
+
+bitflags::bitflags! {
+    /// Flags corresponding to the boolean(-ish) parameters to OpTypeImage.
+    pub struct ImageTypeFlags: u8 {
+        const DEPTH = 0x1;
+        const ARRAYED = 0x2;
+        const MULTISAMPLED = 0x4;
+        const SAMPLED = 0x8;
+    }
 }
 
 impl LocalImageType {
     /// Construct a `LocalImageType` from the fields of a `TypeInner::Image`.
     fn from_inner(dim: crate::ImageDimension, arrayed: bool, class: crate::ImageClass) -> Self {
+        let make_flags = |multi: bool, other: ImageTypeFlags| -> ImageTypeFlags {
+            let mut flags = other;
+            flags.set(ImageTypeFlags::ARRAYED, arrayed);
+            flags.set(ImageTypeFlags::MULTISAMPLED, multi);
+            flags
+        };
+
         let dim = map_dim(dim);
+
         match class {
             crate::ImageClass::Sampled { kind, multi } => LocalImageType {
                 sampled_type: kind,
                 dim,
-                depth: false,
-                arrayed,
-                multisampled: multi,
-                sampled: true,
+                flags: make_flags(multi, ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
             crate::ImageClass::Depth { multi } => LocalImageType {
                 sampled_type: crate::ScalarKind::Float,
                 dim,
-                depth: true,
-                arrayed,
-                multisampled: multi,
-                sampled: true,
+                flags: make_flags(multi, ImageTypeFlags::DEPTH | ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
             crate::ImageClass::Storage { format, access: _ } => LocalImageType {
                 sampled_type: crate::ScalarKind::from(format),
                 dim,
-                depth: false,
-                arrayed,
-                multisampled: false,
-                sampled: false,
+                flags: make_flags(false, ImageTypeFlags::empty()),
                 image_format: format.into(),
             },
         }
