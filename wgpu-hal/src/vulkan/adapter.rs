@@ -71,7 +71,8 @@ impl PhysicalDeviceFeatures {
                 )
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLAMPING))
                 .fill_mode_non_solid(
-                    requested_features.contains(wgt::Features::NON_FILL_POLYGON_MODE),
+                    requested_features.contains(wgt::Features::LINE_POLYGON_MODE)
+                        | requested_features.contains(wgt::Features::POINT_POLYGON_MODE),
                 )
                 //.depth_bounds(requested_features.contains(wgt::Features::DEPTH_BOUNDS))
                 //.alpha_to_one(requested_features.contains(wgt::Features::ALPHA_TO_ONE))
@@ -255,7 +256,8 @@ impl PhysicalDeviceFeatures {
         //if self.core.dual_src_blend != 0
         features.set(F::MULTI_DRAW_INDIRECT, self.core.multi_draw_indirect != 0);
         features.set(F::DEPTH_CLAMPING, self.core.depth_clamp != 0);
-        features.set(F::NON_FILL_POLYGON_MODE, self.core.fill_mode_non_solid != 0);
+        features.set(F::LINE_POLYGON_MODE, self.core.fill_mode_non_solid != 0);
+        features.set(F::POINT_POLYGON_MODE, self.core.fill_mode_non_solid != 0);
         //if self.core.depth_bounds != 0 {
         //if self.core.alpha_to_one != 0 {
         //if self.core.multi_viewport != 0 {

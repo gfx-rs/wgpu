@@ -70,7 +70,7 @@ impl framework::Example for Example {
         wgpu::Features::CONSERVATIVE_RASTERIZATION
     }
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::NON_FILL_POLYGON_MODE
+        wgpu::Features::LINE_POLYGON_MODE
     }
     fn init(
         config: &wgpu::SurfaceConfiguration,
@@ -136,7 +136,7 @@ impl framework::Example for Example {
 
         let pipeline_lines = if device
             .features()
-            .contains(wgpu::Features::NON_FILL_POLYGON_MODE)
+            .contains(wgpu::Features::LINE_POLYGON_MODE)
         {
             Some(
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

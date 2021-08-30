@@ -704,19 +704,13 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let descriptor = mtl::RenderPipelineDescriptor::new();
 
-        let (topology, raw_triangle_fill_mode) = match desc.primitive.polygon_mode {
-            wgt::PolygonMode::Fill => (desc.primitive.topology, mtl::MTLTriangleFillMode::Fill),
-            wgt::PolygonMode::Line => (desc.primitive.topology, mtl::MTLTriangleFillMode::Lines),
-            // If rendering points, topology (order of indices/vertices) does not matter.
-            // Therefore, no matter what the input topology is (eg. TriangleStrip, Lines, ...) the
-            // points will be rendered correctly.
-            wgt::PolygonMode::Point => (
-                wgt::PrimitiveTopology::PointList,
-                mtl::MTLTriangleFillMode::Fill,
-            ),
+        let raw_triangle_fill_mode = match desc.primitive.polygon_mode {
+            wgt::PolygonMode::Fill => mtl::MTLTriangleFillMode::Fill,
+            wgt::PolygonMode::Line => mtl::MTLTriangleFillMode::Lines,
+            wgt::PolygonMode::Point => panic!("{:?} is not enabled for this backend", wgt::Features::POINT_POLYGON_MODE),
         };
 
-        let (primitive_class, raw_primitive_type) = conv::map_primitive_topology(topology);
+        let (primitive_class, raw_primitive_type) = conv::map_primitive_topology(desc.primitive.topology);
 
         let vs = self.load_shader(
             &desc.vertex_stage,

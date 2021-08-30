@@ -396,9 +396,9 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 26;
-        /// Allows the user to set a non-fill polygon mode in [`PrimitiveState::polygon_mode`]
+        /// Allows the user to set [`PolygonMode::Line`] in [`PrimitiveState::polygon_mode`]
         ///
-        /// This allows drawing polygons/triangles as lines (wireframe) or points instead of filled
+        /// This allows drawing polygons/triangles as lines (wireframe) instead of filled
         ///
         /// Supported platforms:
         /// - DX12
@@ -406,7 +406,17 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const NON_FILL_POLYGON_MODE = 1 << 27;
+        const LINE_POLYGON_MODE= 1 << 27;
+        /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
+        ///
+        /// This allows only drawing the vertices of polygons/triangles instead of filled
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const POINT_POLYGON_MODE = 1 << 28;
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
         ///
@@ -421,7 +431,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ETC2 = 1 << 28;
+        const TEXTURE_COMPRESSION_ETC2 = 1 << 29;
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
         /// Blocks are always 16 bytes.
         ///
@@ -436,7 +446,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ASTC_LDR = 1 << 29;
+        const TEXTURE_COMPRESSION_ASTC_LDR = 1 << 30;
         /// Enables device specific texture format features.
         ///
         /// See `TextureFormatFeatures` for a listing of the features in question.
@@ -448,7 +458,7 @@ bitflags::bitflags! {
         /// This extension does not enable additional formats.
         ///
         /// This is a native-only feature.
-        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 30;
+        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 31;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -458,7 +468,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const SHADER_FLOAT64 = 1 << 31;
+        const SHADER_FLOAT64 = 1 << 32;
         /// Enables using 64-bit types for vertex attributes.
         ///
         /// Requires SHADER_FLOAT64.
@@ -466,7 +476,7 @@ bitflags::bitflags! {
         /// Supported Platforms: N/A
         ///
         /// This is a native-only feature.
-        const VERTEX_ATTRIBUTE_64BIT = 1 << 32;
+        const VERTEX_ATTRIBUTE_64BIT = 1 << 33;
         /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
         ///
         /// Processing of degenerate triangles/lines is hardware specific.
@@ -476,7 +486,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const CONSERVATIVE_RASTERIZATION = 1 << 33;
+        const CONSERVATIVE_RASTERIZATION = 1 << 34;
         /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
         ///
         /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
@@ -485,14 +495,14 @@ bitflags::bitflags! {
         /// - All
         ///
         /// This is a native-only feature.
-        const VERTEX_WRITABLE_STORAGE = 1 << 34;
+        const VERTEX_WRITABLE_STORAGE = 1 << 35;
         /// Enables clear to zero for buffers & images.
         ///
         /// Supported platforms:
         /// - All
         ///
         /// This is a native only feature.
-        const CLEAR_COMMANDS = 1 << 35;
+        const CLEAR_COMMANDS = 1 << 36;
         /// Enables creating shader modules from SPIR-V binary data (unsafe).
         ///
         /// SPIR-V data is not parsed or interpreted in any way; you can use
@@ -504,7 +514,7 @@ bitflags::bitflags! {
         /// Vulkan implementation.
         ///
         /// This is a native only feature.
-        const SPIRV_SHADER_PASSTHROUGH = 1 << 36;
+        const SPIRV_SHADER_PASSTHROUGH = 1 << 37;
         /// Enables `builtin(primitive_index)` in fragment shaders.
         ///
         /// Note: enables geometry processing for pipelines using the builtin.
@@ -515,7 +525,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SHADER_PRIMITIVE_INDEX = 1 << 37;
+        const SHADER_PRIMITIVE_INDEX = 1 << 38;
     }
 }
 
@@ -1230,7 +1240,9 @@ pub struct PrimitiveState {
     pub clamp_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
-    /// Setting this to something other than `Fill` requires `Features::NON_FILL_POLYGON_MODE` to be enabled.
+    /// Setting this to `Line` requires `Features::LINE_POLYGON_MODE` to be enabled.
+    ///
+    /// Setting this to `Point` requires `Features::POINT_POLYGON_MODE` to be enabled.
     #[cfg_attr(feature = "serde", serde(default))]
     pub polygon_mode: PolygonMode,
     /// If set to true, the primitives are rendered with conservative overestimation. I.e. any rastered pixel touched by it is filled.
