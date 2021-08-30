@@ -587,6 +587,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         encoder.set_render_pipeline_state(&pipeline.raw);
         encoder.set_front_facing_winding(pipeline.raw_front_winding);
         encoder.set_cull_mode(pipeline.raw_cull_mode);
+        encoder.set_triangle_fill_mode(pipeline.raw_triangle_fill_mode);
         if let Some(depth_clip) = pipeline.raw_depth_clip_mode {
             encoder.set_depth_clip_mode(depth_clip);
         }
