@@ -153,15 +153,6 @@ impl Function {
     }
 }
 
-fn map_dim(dim: crate::ImageDimension) -> spirv::Dim {
-    match dim {
-        crate::ImageDimension::D1 => spirv::Dim::Dim1D,
-        crate::ImageDimension::D2 => spirv::Dim::Dim2D,
-        crate::ImageDimension::D3 => spirv::Dim::Dim3D,
-        crate::ImageDimension::Cube => spirv::Dim::DimCube,
-    }
-}
-
 /// Characteristics of a SPIR-V `OpTypeImage` type.
 ///
 /// SPIR-V requires non-composite types to be unique, including images. Since we
@@ -198,7 +189,7 @@ impl LocalImageType {
             flags
         };
 
-        let dim = map_dim(dim);
+        let dim = spirv::Dim::from(dim);
 
         match class {
             crate::ImageClass::Sampled { kind, multi } => LocalImageType {
