@@ -687,16 +687,7 @@ impl Writer {
                     pointer_class: None,
                 };
                 let type_id = self.get_type_id(LookupType::Local(local_type));
-                Instruction::type_image(
-                    id,
-                    type_id,
-                    image.dim,
-                    image.depth,
-                    image.arrayed,
-                    image.multisampled,
-                    image.sampled,
-                    image.image_format,
-                )
+                Instruction::type_image(id, type_id, image.dim, image.flags, image.image_format)
             }
             LocalType::Sampler => Instruction::type_sampler(id),
             LocalType::SampledImage { image_type_id } => {
