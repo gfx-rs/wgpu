@@ -108,7 +108,7 @@ impl Example {
 
 impl framework::Example for Example {
     fn optional_features() -> wgt::Features {
-        wgt::Features::LINE_POLYGON_MODE
+        wgt::Features::POLYGON_MODE_LINE
     }
 
     fn init(
@@ -262,7 +262,7 @@ impl framework::Example for Example {
             multisample: wgpu::MultisampleState::default(),
         });
 
-        let pipeline_wire = if device.features().contains(wgt::Features::LINE_POLYGON_MODE) {
+        let pipeline_wire = if device.features().contains(wgt::Features::POLYGON_MODE_LINE) {
             let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
@@ -396,7 +396,7 @@ fn cube_lines() {
         image_path: "/examples/cube/screenshot-lines.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::LINE_POLYGON_MODE,
+        optional_features: wgpu::Features::POLYGON_MODE_LINE,
         base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 2,
         max_outliers: 600, // Bounded by rpi4 on GL

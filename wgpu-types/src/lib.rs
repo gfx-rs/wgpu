@@ -406,7 +406,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const LINE_POLYGON_MODE= 1 << 27;
+        const POLYGON_MODE_LINE= 1 << 27;
         /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
         ///
         /// This allows only drawing the vertices of polygons/triangles instead of filled
@@ -416,7 +416,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const POINT_POLYGON_MODE = 1 << 28;
+        const POLYGON_MODE_POINT = 1 << 28;
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
         ///
@@ -1240,9 +1240,9 @@ pub struct PrimitiveState {
     pub clamp_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
-    /// Setting this to `Line` requires `Features::LINE_POLYGON_MODE` to be enabled.
+    /// Setting this to `Line` requires `Features::POLYGON_MODE_LINE` to be enabled.
     ///
-    /// Setting this to `Point` requires `Features::POINT_POLYGON_MODE` to be enabled.
+    /// Setting this to `Point` requires `Features::POLYGON_MODE_POINT` to be enabled.
     #[cfg_attr(feature = "serde", serde(default))]
     pub polygon_mode: PolygonMode,
     /// If set to true, the primitives are rendered with conservative overestimation. I.e. any rastered pixel touched by it is filled.

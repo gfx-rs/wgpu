@@ -174,8 +174,8 @@ impl super::Adapter {
             | wgt::Features::MULTI_DRAW_INDIRECT
             | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
-            | wgt::Features::LINE_POLYGON_MODE
-            | wgt::Features::POINT_POLYGON_MODE
+            | wgt::Features::POLYGON_MODE_LINE
+            | wgt::Features::POLYGON_MODE_POINT
             | wgt::Features::VERTEX_WRITABLE_STORAGE
             | wgt::Features::TIMESTAMP_QUERY;
         //TODO: in order to expose this, we need to run a compute shader

@@ -709,7 +709,7 @@ impl crate::Device<super::Api> for super::Device {
             wgt::PolygonMode::Line => mtl::MTLTriangleFillMode::Lines,
             wgt::PolygonMode::Point => panic!(
                 "{:?} is not enabled for this backend",
-                wgt::Features::POINT_POLYGON_MODE
+                wgt::Features::POLYGON_MODE_POINT
             ),
         };
 

@@ -232,8 +232,8 @@ pub fn map_primitive_topology(topology: wgt::PrimitiveTopology) -> u32 {
 }
 
 pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::PrimitiveState {
-    //Note: state.polygon_mode is not supported, see `Features::LINE_POLYGON_MODE` and
-    //`Features::POINT_POLYGON_MODE`
+    //Note: state.polygon_mode is not supported, see `Features::POLYGON_MODE_LINE` and
+    //`Features::POLYGON_MODE_POINT`
     super::PrimitiveState {
         //Note: we are flipping the front face, so that
         // the Y-flip in the generated GLSL keeps the same visibility.

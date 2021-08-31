@@ -2098,10 +2098,10 @@ impl<A: HalApi> Device<A> {
         }
 
         if desc.primitive.polygon_mode == wgt::PolygonMode::Line {
-            self.require_features(wgt::Features::LINE_POLYGON_MODE)?;
+            self.require_features(wgt::Features::POLYGON_MODE_LINE)?;
         }
         if desc.primitive.polygon_mode == wgt::PolygonMode::Point {
-            self.require_features(wgt::Features::POINT_POLYGON_MODE)?;
+            self.require_features(wgt::Features::POLYGON_MODE_POINT)?;
         }
 
         if desc.primitive.conservative {

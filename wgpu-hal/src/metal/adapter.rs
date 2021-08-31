@@ -862,7 +862,7 @@ impl super::PrivateCapabilities {
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::LINE_POLYGON_MODE;
+            | F::POLYGON_MODE_LINE;
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
