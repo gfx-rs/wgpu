@@ -19,7 +19,15 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
 
-use std::{borrow::Cow, iter, marker::PhantomData, mem, ops::Range, ptr, sync::atomic::Ordering};
+use std::{
+    borrow::Cow,
+    iter,
+    marker::PhantomData,
+    mem,
+    ops::Range,
+    ptr,
+    sync::{atomic::Ordering, Arc},
+};
 
 mod life;
 pub mod queue;
@@ -261,9 +269,12 @@ pub struct Device<A: hal::Api> {
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: queue::PendingWrites<A>,
+    buffer_map_notifier: Option<BufferMapNotifier>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
 }
+
+pub type BufferMapNotifier = Arc<dyn Fn() + Send + Sync>;
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateDeviceError {
@@ -300,6 +311,7 @@ impl<A: HalApi> Device<A> {
         alignments: hal::Alignments,
         downlevel: wgt::DownlevelCapabilities,
         desc: &DeviceDescriptor,
+        buffer_map_notifier: Option<BufferMapNotifier>,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Self, CreateDeviceError> {
         #[cfg(not(feature = "trace"))]
@@ -347,6 +359,7 @@ impl<A: HalApi> Device<A> {
             features: desc.features,
             downlevel,
             pending_writes,
+            buffer_map_notifier,
         })
     }
 
@@ -405,6 +418,12 @@ impl<A: HalApi> Device<A> {
             mappings: mapping_closures,
             submissions: submission_closures,
         })
+    }
+
+    fn notify_buffer_map(&self) {
+        if let Some(notifier) = &self.buffer_map_notifier {
+            notifier();
+        }
     }
 
     fn untrack<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
@@ -4655,6 +4674,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device
             .lock_life(&mut token)
             .map(id::Valid(buffer_id), ref_count);
+        device.notify_buffer_map();
 
         Ok(())
     }

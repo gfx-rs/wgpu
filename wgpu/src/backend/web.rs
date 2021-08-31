@@ -5,6 +5,7 @@ use std::{
     future::Future,
     ops::Range,
     pin::Pin,
+    sync::Arc,
     task::{self, Poll},
 };
 use wasm_bindgen::prelude::*;
@@ -991,9 +992,10 @@ impl crate::Context for Context {
     }
 
     fn adapter_request_device(
-        &self,
+        self: &Arc<Self>,
         adapter: &Self::AdapterId,
         desc: &crate::DeviceDescriptor,
+        _auto_poll: bool,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
         use web_sys::GpuFeatureName as Gfn;

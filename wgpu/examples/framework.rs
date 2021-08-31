@@ -149,6 +149,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
                 limits: needed_limits,
             },
             trace_dir.ok().as_ref().map(std::path::Path::new),
+            true,
         )
         .await
         .expect("Unable to find a suitable GPU adapter!");
