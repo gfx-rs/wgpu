@@ -40,6 +40,7 @@ impl<'source> ParsingContext<'source> {
         parser: &mut Parser,
         ctx: &mut Context,
         body: &mut Block,
+        terminator: &mut Option<usize>,
     ) -> Result<Option<SourceMetadata>> {
         // TODO: This prevents snippets like the following from working
         // ```glsl
@@ -62,11 +63,15 @@ impl<'source> ParsingContext<'source> {
 
         let meta_rest = match *value {
             TokenValue::Continue => {
-                body.push(Statement::Continue, self.bump(parser)?.meta.as_span());
+                let meta = self.bump(parser)?.meta;
+                body.push(Statement::Continue, meta.as_span());
+                terminator.get_or_insert(body.len());
                 self.expect(parser, TokenValue::Semicolon)?.meta
             }
             TokenValue::Break => {
-                body.push(Statement::Break, self.bump(parser)?.meta.as_span());
+                let meta = self.bump(parser)?.meta;
+                body.push(Statement::Break, meta.as_span());
+                terminator.get_or_insert(body.len());
                 self.expect(parser, TokenValue::Semicolon)?.meta
             }
             TokenValue::Return => {
@@ -88,10 +93,15 @@ impl<'source> ParsingContext<'source> {
                 ctx.emit_start();
 
                 body.push(Statement::Return { value }, meta.as_span());
+                terminator.get_or_insert(body.len());
+
                 meta
             }
             TokenValue::Discard => {
-                body.push(Statement::Kill, self.bump(parser)?.meta.as_span());
+                let meta = self.bump(parser)?.meta;
+                body.push(Statement::Kill, meta.as_span());
+                terminator.get_or_insert(body.len());
+
                 self.expect(parser, TokenValue::Semicolon)?.meta
             }
             TokenValue::If => {
@@ -112,13 +122,17 @@ impl<'source> ParsingContext<'source> {
                 ctx.emit_start();
 
                 let mut accept = Block::new();
-                if let Some(more_meta) = self.parse_statement(parser, ctx, &mut accept)? {
+                if let Some(more_meta) =
+                    self.parse_statement(parser, ctx, &mut accept, &mut None)?
+                {
                     meta = meta.union(&more_meta)
                 }
 
                 let mut reject = Block::new();
                 if self.bump_if(parser, TokenValue::Else).is_some() {
-                    if let Some(more_meta) = self.parse_statement(parser, ctx, &mut reject)? {
+                    if let Some(more_meta) =
+                        self.parse_statement(parser, ctx, &mut reject, &mut None)?
+                    {
                         meta = meta.union(&more_meta);
                     }
                 }
@@ -131,6 +145,7 @@ impl<'source> ParsingContext<'source> {
                     },
                     meta.as_span(),
                 );
+
                 meta
             }
             TokenValue::Switch => {
@@ -190,25 +205,32 @@ impl<'source> ParsingContext<'source> {
 
                             let mut body = Block::new();
 
+                            let mut case_terminator = None;
                             loop {
                                 match self.expect_peek(parser)?.value {
                                     TokenValue::Case
                                     | TokenValue::Default
                                     | TokenValue::RightBrace => break,
                                     _ => {
-                                        self.parse_statement(parser, ctx, &mut body)?;
+                                        self.parse_statement(
+                                            parser,
+                                            ctx,
+                                            &mut body,
+                                            &mut case_terminator,
+                                        )?;
                                     }
                                 }
                             }
 
                             let mut fall_through = true;
 
-                            for (i, stmt) in body.iter().enumerate() {
-                                if let Statement::Break = *stmt {
+                            if let Some(mut idx) = case_terminator {
+                                if let Statement::Break = body[idx - 1] {
                                     fall_through = false;
-                                    body.cull(i..);
-                                    break;
+                                    idx -= 1;
                                 }
+
+                                body.cull(idx..)
                             }
 
                             cases.push(SwitchCase {
@@ -231,19 +253,18 @@ impl<'source> ParsingContext<'source> {
                                 });
                             }
 
+                            let mut default_terminator = None;
                             loop {
                                 match self.expect_peek(parser)?.value {
                                     TokenValue::Case | TokenValue::RightBrace => break,
                                     _ => {
-                                        self.parse_statement(parser, ctx, &mut default)?;
+                                        self.parse_statement(
+                                            parser,
+                                            ctx,
+                                            &mut default,
+                                            &mut default_terminator,
+                                        )?;
                                     }
-                                }
-                            }
-
-                            for (i, stmt) in default.iter().enumerate() {
-                                if let Statement::Break = *stmt {
-                                    default.cull(i..);
-                                    break;
                                 }
                             }
                         }
@@ -269,6 +290,7 @@ impl<'source> ParsingContext<'source> {
                 }
 
                 let meta = start_meta.union(&end_meta);
+
                 body.push(
                     Statement::Switch {
                         selector,
@@ -277,6 +299,7 @@ impl<'source> ParsingContext<'source> {
                     },
                     meta.as_span(),
                 );
+
                 meta
             }
             TokenValue::While => {
@@ -314,7 +337,9 @@ impl<'source> ParsingContext<'source> {
 
                 let mut meta = meta.union(&expr_meta);
 
-                if let Some(body_meta) = self.parse_statement(parser, ctx, &mut loop_body)? {
+                if let Some(body_meta) =
+                    self.parse_statement(parser, ctx, &mut loop_body, &mut None)?
+                {
                     meta = meta.union(&body_meta);
                 }
 
@@ -325,13 +350,15 @@ impl<'source> ParsingContext<'source> {
                     },
                     meta.as_span(),
                 );
+
                 meta
             }
             TokenValue::Do => {
                 let start_meta = self.bump(parser)?.meta;
 
                 let mut loop_body = Block::new();
-                self.parse_statement(parser, ctx, &mut loop_body)?;
+
+                self.parse_statement(parser, ctx, &mut loop_body, &mut None)?;
 
                 let mut stmt = ctx.stmt_ctx();
 
@@ -372,6 +399,7 @@ impl<'source> ParsingContext<'source> {
                     },
                     meta.as_span(),
                 );
+
                 meta
             }
             TokenValue::For => {
@@ -464,7 +492,7 @@ impl<'source> ParsingContext<'source> {
 
                 let mut meta = meta.union(&self.expect(parser, TokenValue::RightParen)?.meta);
 
-                if let Some(stmt_meta) = self.parse_statement(parser, ctx, &mut block)? {
+                if let Some(stmt_meta) = self.parse_statement(parser, ctx, &mut block, &mut None)? {
                     meta = meta.union(&stmt_meta);
                 }
 
@@ -489,6 +517,7 @@ impl<'source> ParsingContext<'source> {
                 let meta = self.parse_compound_statement(meta, parser, ctx, &mut block)?;
 
                 ctx.remove_current_scope();
+
                 body.push(Statement::Block(block), meta.as_span());
 
                 meta
@@ -515,6 +544,7 @@ impl<'source> ParsingContext<'source> {
         ctx: &mut Context,
         body: &mut Block,
     ) -> Result<SourceMetadata> {
+        let mut terminator = None;
         loop {
             if let Some(Token {
                 meta: brace_meta, ..
@@ -524,9 +554,15 @@ impl<'source> ParsingContext<'source> {
                 break;
             }
 
-            if let Some(stmt_meta) = self.parse_statement(parser, ctx, body)? {
+            let stmt = self.parse_statement(parser, ctx, body, &mut terminator)?;
+
+            if let Some(stmt_meta) = stmt {
                 meta = meta.union(&stmt_meta);
             }
+        }
+
+        if let Some(idx) = terminator {
+            body.cull(idx..)
         }
 
         Ok(meta)

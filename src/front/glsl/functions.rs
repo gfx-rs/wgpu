@@ -643,6 +643,8 @@ impl Parser {
                         .0;
 
                     ctx.emit_flush(body);
+                    ctx.emit_start();
+
                     body.push(
                         Statement::Store {
                             pointer: target,
@@ -650,7 +652,6 @@ impl Parser {
                         },
                         meta.as_span(),
                     );
-                    ctx.emit_start();
                 }
 
                 Ok(result)
