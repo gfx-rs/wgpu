@@ -53,6 +53,30 @@ void main(uint3 global_id : SV_DispatchThreadID)
         }
         case 2: {
             pos = 1;
+            break;
+        }
+        case 3: {
+            /* fallthrough */
+            {
+                pos = 2;
+            }
+        }
+        case 4: {
+            break;
+        }
+        default: {
+            pos = 3;
+        }
+    }
+    int _expr9 = pos;
+    switch(_expr9) {
+        case 1: {
+            pos = 0;
+            break;
+            break;
+        }
+        case 2: {
+            pos = 1;
             return;
             break;
         }

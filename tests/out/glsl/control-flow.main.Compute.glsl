@@ -47,9 +47,26 @@ void main() {
             break;
         case 2:
             pos = 1;
+            break;
+        case 3:
+            pos = 2;
+            /* fallthrough */
+        case 4:
+            break;
+        default:
+            pos = 3;
+    }
+    int _e9 = pos;
+    switch(_e9) {
+        case 1:
+            pos = 0;
+            break;
+        case 2:
+            pos = 1;
             return;
         case 3:
             pos = 2;
+            /* fallthrough */
         case 4:
             return;
         default:
