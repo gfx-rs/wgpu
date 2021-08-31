@@ -183,9 +183,6 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER) {
         return_features.push("address-mode-clamp-to-border");
     }
-    if features.contains(wgpu_types::Features::NON_FILL_POLYGON_MODE) {
-        return_features.push("non-fill-polygon-mode");
-    }
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2) {
         return_features.push("texture-compression-etc2");
     }
@@ -221,25 +218,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum GpuPowerPreference {
-    LowPower,
-    HighPerformance,
-}
-
-impl From<GpuPowerPreference> for wgpu_types::PowerPreference {
-    fn from(value: GpuPowerPreference) -> wgpu_types::PowerPreference {
-        match value {
-            GpuPowerPreference::LowPower => wgpu_types::PowerPreference::LowPower,
-            GpuPowerPreference::HighPerformance => wgpu_types::PowerPreference::HighPerformance,
-        }
-    }
-}
-
-#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestAdapterArgs {
-    power_preference: Option<GpuPowerPreference>,
+    power_preference: Option<wgpu_types::PowerPreference>,
 }
 
 #[derive(Serialize)]
@@ -318,110 +299,11 @@ pub async fn op_webgpu_request_adapter(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GpuLimits {
-    max_texture_dimension_1d: Option<u32>,
-    max_texture_dimension_2d: Option<u32>,
-    max_texture_dimension_3d: Option<u32>,
-    max_texture_array_layers: Option<u32>,
-    max_bind_groups: Option<u32>,
-    max_dynamic_uniform_buffers_per_pipeline_layout: Option<u32>,
-    max_dynamic_storage_buffers_per_pipeline_layout: Option<u32>,
-    max_sampled_textures_per_shader_stage: Option<u32>,
-    max_samplers_per_shader_stage: Option<u32>,
-    max_storage_buffers_per_shader_stage: Option<u32>,
-    max_storage_textures_per_shader_stage: Option<u32>,
-    max_uniform_buffers_per_shader_stage: Option<u32>,
-    max_uniform_buffer_binding_size: Option<u32>, // TODO(@crowlkats): u64
-    max_storage_buffer_binding_size: Option<u32>, // TODO(@crowlkats): u64
-    // min_uniform_buffer_offset_alignment: Option<u32>,
-    // min_storage_buffer_offset_alignment: Option<u32>,
-    max_vertex_buffers: Option<u32>,
-    max_vertex_attributes: Option<u32>,
-    max_vertex_buffer_array_stride: Option<u32>,
-    // max_inter_stage_shader_components: Option<u32>,
-    // max_compute_workgroup_storage_size: Option<u32>,
-    // max_compute_invocations_per_workgroup: Option<u32>,
-    // max_compute_workgroup_size_x: Option<u32>,
-    // max_compute_workgroup_size_y: Option<u32>,
-    // max_compute_workgroup_size_z: Option<u32>,
-    // max_compute_workgroups_per_dimension: Option<u32>,
-}
-
-impl From<GpuLimits> for wgpu_types::Limits {
-    fn from(limits: GpuLimits) -> wgpu_types::Limits {
-        wgpu_types::Limits {
-            max_texture_dimension_1d: limits.max_texture_dimension_1d.unwrap_or(8192),
-            max_texture_dimension_2d: limits.max_texture_dimension_2d.unwrap_or(8192),
-            max_texture_dimension_3d: limits.max_texture_dimension_3d.unwrap_or(2048),
-            max_texture_array_layers: limits.max_texture_array_layers.unwrap_or(2048),
-            max_bind_groups: limits.max_bind_groups.unwrap_or(4),
-            max_dynamic_uniform_buffers_per_pipeline_layout: limits
-                .max_dynamic_uniform_buffers_per_pipeline_layout
-                .unwrap_or(8),
-            max_dynamic_storage_buffers_per_pipeline_layout: limits
-                .max_dynamic_storage_buffers_per_pipeline_layout
-                .unwrap_or(4),
-            max_sampled_textures_per_shader_stage: limits
-                .max_sampled_textures_per_shader_stage
-                .unwrap_or(16),
-            max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage.unwrap_or(16),
-            max_storage_buffers_per_shader_stage: limits
-                .max_storage_buffers_per_shader_stage
-                .unwrap_or(4),
-            max_storage_textures_per_shader_stage: limits
-                .max_storage_textures_per_shader_stage
-                .unwrap_or(4),
-            max_uniform_buffers_per_shader_stage: limits
-                .max_uniform_buffers_per_shader_stage
-                .unwrap_or(12),
-            max_uniform_buffer_binding_size: limits
-                .max_uniform_buffer_binding_size
-                .unwrap_or(16384),
-            max_storage_buffer_binding_size: limits
-                .max_storage_buffer_binding_size
-                .unwrap_or(134217728),
-            // min_uniform_buffer_offset_alignment: limits
-            //   .min_uniform_buffer_offset_alignment
-            //   .unwrap_or(default),
-            // min_storage_buffer_offset_alignment: limits
-            //   .min_storage_buffer_offset_alignment
-            //   .unwrap_or(default),
-            max_vertex_buffers: limits.max_vertex_buffers.unwrap_or(8),
-            max_vertex_attributes: limits.max_vertex_attributes.unwrap_or(16),
-            max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride.unwrap_or(2048),
-            // max_inter_stage_shader_components: limits
-            //   .max_inter_stage_shader_components
-            //   .unwrap_or(default),
-            // max_compute_workgroup_storage_size: limits
-            //   .max_compute_workgroup_storage_size
-            //   .unwrap_or(default),
-            // max_compute_invocations_per_workgroup: limits
-            //    .max_compute_invocations_per_workgroup
-            //    .unwrap_or(default),
-            // max_compute_workgroup_size_x: limits
-            //    .max_compute_workgroup_size_x
-            //    .unwrap_or(default),
-            // max_compute_workgroup_size_y: limits
-            //    .max_compute_workgroup_size_y
-            //    .unwrap_or(default),
-            // max_compute_workgroup_size_z: limits
-            //    .max_compute_workgroup_size_z
-            //    .unwrap_or(default),
-            // max_compute_workgroups_per_dimension: limits
-            //    .max_compute_workgroups_per_dimension
-            //    .unwrap_or(default),
-            max_push_constant_size: 0,
-        }
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RequestDeviceArgs {
     adapter_rid: ResourceId,
     label: Option<String>,
     required_features: Option<GpuRequiredFeatures>,
-    required_limits: Option<GpuLimits>,
+    required_limits: Option<wgpu_types::Limits>,
 }
 
 #[derive(Deserialize)]
@@ -492,9 +374,6 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         }
         if required_features.0.contains("address-mode-clamp-to-border") {
             features.set(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
-        }
-        if required_features.0.contains("non-fill-polygon-mode") {
-            features.set(wgpu_types::Features::NON_FILL_POLYGON_MODE, true);
         }
         if required_features.0.contains("texture-compression-etc2") {
             features.set(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2, true);

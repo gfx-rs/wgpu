@@ -9,8 +9,6 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
 
-use crate::pipeline::GpuIndexFormat;
-
 use super::error::WebGpuResult;
 
 pub(crate) struct WebGpuRenderPass(pub(crate) RefCell<wgpu_core::command::RenderPass>);
@@ -86,18 +84,9 @@ pub fn op_webgpu_render_pass_set_scissor_rect(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GpuColor {
-    pub r: f64,
-    pub g: f64,
-    pub b: f64,
-    pub a: f64,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RenderPassSetBlendConstantArgs {
     render_pass_rid: ResourceId,
-    color: GpuColor,
+    color: wgpu_types::Color,
 }
 
 pub fn op_webgpu_render_pass_set_blend_constant(
@@ -111,12 +100,7 @@ pub fn op_webgpu_render_pass_set_blend_constant(
 
     wgpu_core::command::render_ffi::wgpu_render_pass_set_blend_constant(
         &mut render_pass_resource.0.borrow_mut(),
-        &wgpu_types::Color {
-            r: args.color.r,
-            g: args.color.g,
-            b: args.color.b,
-            a: args.color.a,
-        },
+        &args.color,
     );
 
     Ok(WebGpuResult::empty())
@@ -460,7 +444,7 @@ pub fn op_webgpu_render_pass_set_pipeline(
 pub struct RenderPassSetIndexBufferArgs {
     render_pass_rid: ResourceId,
     buffer: u32,
-    index_format: GpuIndexFormat,
+    index_format: wgpu_types::IndexFormat,
     offset: u64,
     size: Option<u64>,
 }
@@ -488,7 +472,7 @@ pub fn op_webgpu_render_pass_set_index_buffer(
 
     render_pass_resource.0.borrow_mut().set_index_buffer(
         buffer_resource.0,
-        args.index_format.into(),
+        args.index_format,
         args.offset,
         size,
     );

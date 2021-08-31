@@ -148,6 +148,7 @@ impl<A: hal::Api> Resource for ComputePipeline<A> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
     pub array_stride: wgt::BufferAddress,

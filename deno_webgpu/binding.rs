@@ -7,8 +7,6 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 
-use crate::texture::{GpuTextureFormat, GpuTextureViewDimension};
-
 use super::error::WebGpuResult;
 
 pub(crate) struct WebGpuBindGroupLayout(pub(crate) wgpu_core::id::BindGroupLayoutId);
@@ -92,7 +90,7 @@ impl From<GpuSamplerBindingType> for wgpu_types::BindingType {
 #[serde(rename_all = "camelCase")]
 struct GpuTextureBindingLayout {
     sample_type: GpuTextureSampleType,
-    view_dimension: GpuTextureViewDimension,
+    view_dimension: wgpu_types::TextureViewDimension,
     multisampled: bool,
 }
 
@@ -126,8 +124,8 @@ impl From<GpuTextureSampleType> for wgpu_types::TextureSampleType {
 #[serde(rename_all = "camelCase")]
 struct GpuStorageTextureBindingLayout {
     access: GpuStorageTextureAccess,
-    format: GpuTextureFormat,
-    view_dimension: GpuTextureViewDimension,
+    format: wgpu_types::TextureFormat,
+    view_dimension: wgpu_types::TextureViewDimension,
 }
 
 #[derive(Deserialize)]
@@ -175,14 +173,14 @@ impl TryFrom<GpuBindingType> for wgpu_types::BindingType {
             GpuBindingType::Sampler(sampler) => sampler.r#type.into(),
             GpuBindingType::Texture(texture) => wgpu_types::BindingType::Texture {
                 sample_type: texture.sample_type.into(),
-                view_dimension: texture.view_dimension.into(),
+                view_dimension: texture.view_dimension,
                 multisampled: texture.multisampled,
             },
             GpuBindingType::StorageTexture(storage_texture) => {
                 wgpu_types::BindingType::StorageTexture {
                     access: storage_texture.access.into(),
-                    format: storage_texture.format.try_into()?,
-                    view_dimension: storage_texture.view_dimension.into(),
+                    format: storage_texture.format,
+                    view_dimension: storage_texture.view_dimension,
                 }
             }
         };
