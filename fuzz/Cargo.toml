@@ -9,11 +9,12 @@ edition = "2018"
 cargo-fuzz = true
 
 [dependencies]
+arbitrary = { version = "1.0.2", features = ["derive"] }
 libfuzzer-sys = "0.4"
 
 [dependencies.naga]
 path = ".."
-features = ["spv-in", "wgsl-in"]
+features = ["spv-in", "wgsl-in", "glsl-in"]
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -28,5 +29,11 @@ doc = false
 [[bin]]
 name = "wgsl_parser"
 path = "fuzz_targets/wgsl_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "glsl_parser"
+path = "fuzz_targets/glsl_parser.rs"
 test = false
 doc = false
