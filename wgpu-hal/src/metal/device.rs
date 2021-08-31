@@ -703,6 +703,16 @@ impl crate::Device<super::Api> for super::Device {
         desc: &crate::RenderPipelineDescriptor<super::Api>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let descriptor = mtl::RenderPipelineDescriptor::new();
+
+        let raw_triangle_fill_mode = match desc.primitive.polygon_mode {
+            wgt::PolygonMode::Fill => mtl::MTLTriangleFillMode::Fill,
+            wgt::PolygonMode::Line => mtl::MTLTriangleFillMode::Lines,
+            wgt::PolygonMode::Point => panic!(
+                "{:?} is not enabled for this backend",
+                wgt::Features::POLYGON_MODE_POINT
+            ),
+        };
+
         let (primitive_class, raw_primitive_type) =
             conv::map_primitive_topology(desc.primitive.topology);
 
@@ -868,6 +878,7 @@ impl crate::Device<super::Api> for super::Device {
                 sized_bindings: fs_sized_bindings,
             },
             raw_primitive_type,
+            raw_triangle_fill_mode,
             raw_front_winding: conv::map_winding(desc.primitive.front_face),
             raw_cull_mode: conv::map_cull_mode(desc.primitive.cull_mode),
             raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLAMPING) {

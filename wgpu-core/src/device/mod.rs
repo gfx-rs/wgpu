@@ -2096,8 +2096,12 @@ impl<A: HalApi> Device<A> {
         if desc.primitive.clamp_depth {
             self.require_features(wgt::Features::DEPTH_CLAMPING)?;
         }
-        if desc.primitive.polygon_mode != wgt::PolygonMode::Fill {
-            self.require_features(wgt::Features::NON_FILL_POLYGON_MODE)?;
+
+        if desc.primitive.polygon_mode == wgt::PolygonMode::Line {
+            self.require_features(wgt::Features::POLYGON_MODE_LINE)?;
+        }
+        if desc.primitive.polygon_mode == wgt::PolygonMode::Point {
+            self.require_features(wgt::Features::POLYGON_MODE_POINT)?;
         }
 
         if desc.primitive.conservative {

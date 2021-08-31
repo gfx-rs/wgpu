@@ -1,6 +1,6 @@
 use crate::{
     device::{DeviceError, HostMap, MissingFeatures},
-    hub::Resource,
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::BufferInitTracker,
     track::{TextureSelector, DUMMY_SELECTOR},
@@ -189,6 +189,27 @@ pub struct Texture<A: hal::Api> {
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
+}
+
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    /// # Safety
+    ///
+    /// - The raw texture handle must not be manually destroyed
+    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>)>(
+        &self,
+        id: TextureId,
+        hal_texture_callback: F,
+    ) {
+        profiling::scope!("as_hal", "Texture");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (guard, _) = hub.textures.read(&mut token);
+        let texture = guard.get(id).ok();
+        let hal_texture = texture.map(|tex| tex.inner.as_raw().unwrap());
+
+        hal_texture_callback(hal_texture);
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -2075,6 +2075,21 @@ impl Drop for Buffer {
 }
 
 impl Texture {
+    /// Returns the inner hal Texture using a callback. The hal texture will be `None` if the
+    /// backend type argument does not match with this wgpu Texture
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Texture must not be manually destroyed
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn as_hal<A: wgc::hub::HalApi>(
+        &self,
+        hal_texture_callback: impl FnOnce(Option<&A::Texture>),
+    ) {
+        self.context
+            .texture_as_hal::<A, _>(&self.id, hal_texture_callback)
+    }
+
     /// Creates a view of this texture.
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {

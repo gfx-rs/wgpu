@@ -859,7 +859,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
-        profiling::scope!("request_device", "Adapter");
+        profiling::scope!("create_device_from_hal", "Adapter");
 
         let hub = A::hub(self);
         let mut token = Token::root();

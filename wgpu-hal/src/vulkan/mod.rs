@@ -268,6 +268,15 @@ pub struct Texture {
     raw_flags: vk::ImageCreateFlags,
 }
 
+impl Texture {
+    /// # Safety
+    ///
+    /// - The image handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::Image {
+        self.raw
+    }
+}
+
 #[derive(Debug)]
 pub struct TextureView {
     raw: vk::ImageView,

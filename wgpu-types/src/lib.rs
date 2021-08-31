@@ -76,6 +76,7 @@ pub enum Backend {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PowerPreference {
     /// Adapter that uses the least possible power. This is often an integrated GPU.
     LowPower = 0,
@@ -395,16 +396,27 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 26;
-        /// Allows the user to set a non-fill polygon mode in [`PrimitiveState::polygon_mode`]
+        /// Allows the user to set [`PolygonMode::Line`] in [`PrimitiveState::polygon_mode`]
         ///
-        /// This allows drawing polygons/triangles as lines (wireframe) or points instead of filled
+        /// This allows drawing polygons/triangles as lines (wireframe) instead of filled
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const POLYGON_MODE_LINE= 1 << 27;
+        /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
+        ///
+        /// This allows only drawing the vertices of polygons/triangles instead of filled
         ///
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const NON_FILL_POLYGON_MODE = 1 << 27;
+        const POLYGON_MODE_POINT = 1 << 28;
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
         ///
@@ -419,7 +431,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ETC2 = 1 << 28;
+        const TEXTURE_COMPRESSION_ETC2 = 1 << 29;
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
         /// Blocks are always 16 bytes.
         ///
@@ -434,7 +446,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a native-only feature.
-        const TEXTURE_COMPRESSION_ASTC_LDR = 1 << 29;
+        const TEXTURE_COMPRESSION_ASTC_LDR = 1 << 30;
         /// Enables device specific texture format features.
         ///
         /// See `TextureFormatFeatures` for a listing of the features in question.
@@ -446,7 +458,7 @@ bitflags::bitflags! {
         /// This extension does not enable additional formats.
         ///
         /// This is a native-only feature.
-        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 30;
+        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 31;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -456,7 +468,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const SHADER_FLOAT64 = 1 << 31;
+        const SHADER_FLOAT64 = 1 << 32;
         /// Enables using 64-bit types for vertex attributes.
         ///
         /// Requires SHADER_FLOAT64.
@@ -464,7 +476,7 @@ bitflags::bitflags! {
         /// Supported Platforms: N/A
         ///
         /// This is a native-only feature.
-        const VERTEX_ATTRIBUTE_64BIT = 1 << 32;
+        const VERTEX_ATTRIBUTE_64BIT = 1 << 33;
         /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
         ///
         /// Processing of degenerate triangles/lines is hardware specific.
@@ -474,7 +486,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const CONSERVATIVE_RASTERIZATION = 1 << 33;
+        const CONSERVATIVE_RASTERIZATION = 1 << 34;
         /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
         ///
         /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
@@ -483,14 +495,14 @@ bitflags::bitflags! {
         /// - All
         ///
         /// This is a native-only feature.
-        const VERTEX_WRITABLE_STORAGE = 1 << 34;
+        const VERTEX_WRITABLE_STORAGE = 1 << 35;
         /// Enables clear to zero for buffers & images.
         ///
         /// Supported platforms:
         /// - All
         ///
         /// This is a native only feature.
-        const CLEAR_COMMANDS = 1 << 35;
+        const CLEAR_COMMANDS = 1 << 36;
         /// Enables creating shader modules from SPIR-V binary data (unsafe).
         ///
         /// SPIR-V data is not parsed or interpreted in any way; you can use
@@ -502,7 +514,7 @@ bitflags::bitflags! {
         /// Vulkan implementation.
         ///
         /// This is a native only feature.
-        const SPIRV_SHADER_PASSTHROUGH = 1 << 36;
+        const SPIRV_SHADER_PASSTHROUGH = 1 << 37;
         /// Enables `builtin(primitive_index)` in fragment shaders.
         ///
         /// Note: enables geometry processing for pipelines using the builtin.
@@ -513,7 +525,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SHADER_PRIMITIVE_INDEX = 1 << 37;
+        const SHADER_PRIMITIVE_INDEX = 1 << 38;
     }
 }
 
@@ -559,6 +571,7 @@ impl Features {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Limits {
     /// Maximum allowed value for the `size.width` of a texture created with `TextureDimension::D1`.
     /// Defaults to 8192. Higher is "better".
@@ -884,16 +897,22 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureViewDimension {
     /// A one dimensional texture. `texture1D` in glsl shaders.
+    #[cfg_attr(feature = "serde", serde(rename = "1d"))]
     D1,
     /// A two dimensional texture. `texture2D` in glsl shaders.
+    #[cfg_attr(feature = "serde", serde(rename = "2d"))]
     D2,
     /// A two dimensional array texture. `texture2DArray` in glsl shaders.
+    #[cfg_attr(feature = "serde", serde(rename = "2d-array"))]
     D2Array,
     /// A cubemap texture. `textureCube` in glsl shaders.
+    #[cfg_attr(feature = "serde", serde(rename = "cube"))]
     Cube,
     /// A cubemap array texture. `textureCubeArray` in glsl shaders.
+    #[cfg_attr(feature = "serde", serde(rename = "cube-array"))]
     CubeArray,
     /// A three dimensional texture. `texture3D` in glsl shaders.
+    #[cfg_attr(feature = "serde", serde(rename = "3d"))]
     D3,
 }
 
@@ -921,6 +940,7 @@ impl TextureViewDimension {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum BlendFactor {
     /// 0.0
     Zero = 0,
@@ -957,6 +977,7 @@ pub enum BlendFactor {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum BlendOperation {
     /// Src + Dst
     Add = 0,
@@ -981,6 +1002,7 @@ impl Default for BlendOperation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct BlendComponent {
     /// Multiplier for the source, which is produced by the fragment shader.
     pub src_factor: BlendFactor,
@@ -1032,6 +1054,7 @@ impl Default for BlendComponent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct BlendState {
     /// Color equation.
     pub color: BlendComponent,
@@ -1068,15 +1091,16 @@ impl BlendState {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ColorTargetState {
     /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the the format
     /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`].
     pub format: TextureFormat,
     /// The blending that is used for this pipeline.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub blend: Option<BlendState>,
     /// Mask which enables/disables writes to different color/alpha channel.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub write_mask: ColorWrites,
 }
 
@@ -1095,6 +1119,7 @@ impl From<TextureFormat> for ColorTargetState {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PrimitiveTopology {
     /// Vertex data is a list of points. Each vertex is a new point.
     PointList = 0,
@@ -1137,6 +1162,7 @@ impl PrimitiveTopology {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum FrontFace {
     /// Triangles with vertices in counter clockwise order are considered the front face.
     ///
@@ -1159,6 +1185,7 @@ impl Default for FrontFace {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum Face {
     /// Front face
     Front = 0,
@@ -1171,6 +1198,7 @@ pub enum Face {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PolygonMode {
     /// Polygons are filled
     Fill = 0,
@@ -1191,28 +1219,31 @@ impl Default for PolygonMode {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct PrimitiveState {
     /// The primitive topology used to interpret vertices.
     pub topology: PrimitiveTopology,
     /// When drawing strip topologies with indices, this is the required format for the index buffer.
     /// This has no effect on non-indexed or non-strip draws.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub strip_index_format: Option<IndexFormat>,
     /// The face to consider the front for the purpose of culling and stencil operations.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub front_face: FrontFace,
     /// The face culling mode.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub cull_mode: Option<Face>,
     /// If set to true, the polygon depth is clamped to 0-1 range instead of being clipped.
     ///
     /// Enabling this requires `Features::DEPTH_CLAMPING` to be enabled.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub clamp_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
-    /// Setting this to something other than `Fill` requires `Features::NON_FILL_POLYGON_MODE` to be enabled.
-    #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
+    /// Setting this to `Line` requires `Features::POLYGON_MODE_LINE` to be enabled.
+    ///
+    /// Setting this to `Point` requires `Features::POLYGON_MODE_POINT` to be enabled.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub polygon_mode: PolygonMode,
     /// If set to true, the primitives are rendered with conservative overestimation. I.e. any rastered pixel touched by it is filled.
     /// Only valid for PolygonMode::Fill!
@@ -1226,6 +1257,7 @@ pub struct PrimitiveState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct MultisampleState {
     /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
     /// this should be `1`
@@ -1308,96 +1340,135 @@ pub struct TextureFormatInfo {
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r8unorm"))]
     R8Unorm,
     /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r8snorm"))]
     R8Snorm,
     /// Red channel only. 8 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r8uint"))]
     R8Uint,
     /// Red channel only. 8 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r8sint"))]
     R8Sint,
 
     // Normal 16 bit formats
     /// Red channel only. 16 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r16uint"))]
     R16Uint,
     /// Red channel only. 16 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r16sint"))]
     R16Sint,
     /// Red channel only. 16 bit float per channel. Float in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r16float"))]
     R16Float,
     /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg8unorm"))]
     Rg8Unorm,
     /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg8snorm"))]
     Rg8Snorm,
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg8uint"))]
     Rg8Uint,
     /// Red and green channel s. 8 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg8sint"))]
     Rg8Sint,
 
     // Normal 32 bit formats
     /// Red channel only. 32 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r32uint"))]
     R32Uint,
     /// Red channel only. 32 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r32sint"))]
     R32Sint,
     /// Red channel only. 32 bit float per channel. Float in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "r32float"))]
     R32Float,
     /// Red and green channels. 16 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg16uint"))]
     Rg16Uint,
     /// Red and green channels. 16 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg16sint"))]
     Rg16Sint,
     /// Red and green channels. 16 bit float per channel. Float in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg16float"))]
     Rg16Float,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba8unorm"))]
     Rgba8Unorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba8unorm-srgb"))]
     Rgba8UnormSrgb,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba8snorm"))]
     Rgba8Snorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba8uint"))]
     Rgba8Uint,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba8sint"))]
     Rgba8Sint,
     /// Blue, green, red, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "bgra8unorm"))]
     Bgra8Unorm,
     /// Blue, green, red, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "bgra8unorm-srgb"))]
     Bgra8UnormSrgb,
 
     // Packed 32 bit formats
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgb10a2unorm"))]
     Rgb10a2Unorm,
     /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg11b10ufloat"))]
     Rg11b10Float,
 
     // Normal 64 bit formats
     /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg32uint"))]
     Rg32Uint,
     /// Red and green channels. 32 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg32sint"))]
     Rg32Sint,
     /// Red and green channels. 32 bit float per channel. Float in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rg32float"))]
     Rg32Float,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba16uint"))]
     Rgba16Uint,
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba16sint"))]
     Rgba16Sint,
     /// Red, green, blue, and alpha channels. 16 bit float per channel. Float in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba16float"))]
     Rgba16Float,
 
     // Normal 128 bit formats
     /// Red, green, blue, and alpha channels. 32 bit integer per channel. Unsigned in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba32uint"))]
     Rgba32Uint,
     /// Red, green, blue, and alpha channels. 32 bit integer per channel. Signed in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba32sint"))]
     Rgba32Sint,
     /// Red, green, blue, and alpha channels. 32 bit float per channel. Float in shader.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba32float"))]
     Rgba32Float,
 
     // Depth and stencil formats
     /// Special depth format with 32 bit floating point depth.
+    #[cfg_attr(feature = "serde", serde(rename = "depth32float"))]
     Depth32Float,
     /// Special depth format with at least 24 bit integer depth.
+    #[cfg_attr(feature = "serde", serde(rename = "depth24plus"))]
     Depth24Plus,
     /// Special depth/stencil format with at least 24 bit integer depth and 8 bits integer stencil.
+    #[cfg_attr(feature = "serde", serde(rename = "depth24plus-stencil8"))]
     Depth24PlusStencil8,
 
     // Packed uncompressed texture formats
     /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
+    #[cfg_attr(feature = "serde", serde(rename = "rgb9e5ufloat"))]
     Rgb9e5Ufloat,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
@@ -1407,13 +1478,15 @@ pub enum TextureFormat {
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc1-rgba-unorm"))]
     Bc1RgbaUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
-    /// Srgb-color [0, 63] ([0, 15] for alpha) converted to/from linear-color float [0, 1] in shader.
+    /// Srgb-color [0, 63] ([0, 1] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as DXT1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc1-rgba-unorm-srgb"))]
     Bc1RgbaUnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
     /// [0, 63] ([0, 15] for alpha) converted to/from float [0, 1] in shader.
@@ -1421,6 +1494,7 @@ pub enum TextureFormat {
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc2-rgba-unorm"))]
     Bc2RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
     /// Srgb-color [0, 63] ([0, 255] for alpha) converted to/from linear-color float [0, 1] in shader.
@@ -1428,6 +1502,7 @@ pub enum TextureFormat {
     /// Also known as DXT3.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc2-rgba-unorm-srgb"))]
     Bc2RgbaUnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
     /// [0, 63] ([0, 255] for alpha) converted to/from float [0, 1] in shader.
@@ -1435,6 +1510,7 @@ pub enum TextureFormat {
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc3-rgba-unorm"))]
     Bc3RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
     /// Srgb-color [0, 63] ([0, 255] for alpha) converted to/from linear-color float [0, 1] in shader.
@@ -1442,6 +1518,7 @@ pub enum TextureFormat {
     /// Also known as DXT5.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc3-rgba-unorm-srgb"))]
     Bc3RgbaUnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -1449,6 +1526,7 @@ pub enum TextureFormat {
     /// Also known as RGTC1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc4-r-unorm"))]
     Bc4RUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
@@ -1456,6 +1534,7 @@ pub enum TextureFormat {
     /// Also known as RGTC1.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc4-r-snorm"))]
     Bc4RSnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -1463,6 +1542,7 @@ pub enum TextureFormat {
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc5-rg-unorm"))]
     Bc5RgUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
@@ -1470,18 +1550,21 @@ pub enum TextureFormat {
     /// Also known as RGTC2.
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc5-rg-snorm"))]
     Bc5RgSnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 16 bit unsigned float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc6h-rgb-ufloat"))]
     Bc6hRgbUfloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 16 bit signed float RGB. Float in shader.
     ///
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc6h-rgb-float"))]
     Bc6hRgbSfloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -1489,6 +1572,7 @@ pub enum TextureFormat {
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc7-rgba-unorm"))]
     Bc7RgbaUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
@@ -1496,6 +1580,7 @@ pub enum TextureFormat {
     /// Also known as BPTC (unorm).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "bc7-rgba-unorm-srgb"))]
     Bc7RgbaUnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB.
     /// [0, 255] converted to/from float [0, 1] in shader.
@@ -1964,6 +2049,7 @@ impl DepthStencilState {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum IndexFormat {
     /// Indices are 16 bit unsigned integers.
     Uint16 = 0,
@@ -1982,6 +2068,7 @@ impl Default for IndexFormat {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StencilOperation {
     /// Keep stencil value unchanged.
     Keep = 0,
@@ -2014,6 +2101,7 @@ impl Default for StencilOperation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct StencilFaceState {
     /// Comparison function that determines if the fail_op or pass_op is used on the stencil buffer.
     pub compare: CompareFunction,
@@ -2054,6 +2142,7 @@ impl Default for StencilFaceState {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum CompareFunction {
     /// Function never passes
     Never = 1,
@@ -2088,6 +2177,7 @@ impl CompareFunction {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum VertexStepMode {
     /// Vertex data is advanced every vertex.
     Vertex = 0,
@@ -2108,6 +2198,7 @@ impl Default for VertexStepMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct VertexAttribute {
     /// Format of the input
     pub format: VertexFormat,
@@ -2122,6 +2213,7 @@ pub struct VertexAttribute {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum VertexFormat {
     /// Two unsigned bytes (u8). `uvec2` in shaders.
     Uint8x2 = 0,
@@ -2356,7 +2448,7 @@ bitflags::bitflags! {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
         const COPY_SRC = 1 << 0;
-        /// Allows a texture to be the destination in a  [`CommandEncoder::copy_texture_to_buffer`],
+        /// Allows a texture to be the destination in a  [`CommandEncoder::copy_buffer_to_texture`],
         /// [`CommandEncoder::copy_texture_to_texture`], or [`Queue::write_texture`] operation.
         const COPY_DST = 1 << 1;
         /// Allows a texture to be a [`BindingType::Texture`] in a bind group.
@@ -2411,6 +2503,7 @@ pub enum SurfaceStatus {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Color {
     ///
     pub r: f64,
@@ -2469,10 +2562,13 @@ impl Color {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureDimension {
     /// 1D texture
+    #[cfg_attr(feature = "serde", serde(rename = "1d"))]
     D1,
     /// 2D texture
+    #[cfg_attr(feature = "serde", serde(rename = "2d"))]
     D2,
     /// 3D texture
+    #[cfg_attr(feature = "serde", serde(rename = "3d"))]
     D3,
 }
 
@@ -2481,6 +2577,7 @@ pub enum TextureDimension {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin3d {
     ///
     pub x: u32,
@@ -2506,6 +2603,7 @@ impl Default for Origin3d {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Extent3d {
     ///
     pub width: u32,
@@ -2678,6 +2776,7 @@ impl<L> TextureDescriptor<L> {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum TextureAspect {
     /// Depth, Stencil, and Color.
     All,
@@ -2698,6 +2797,7 @@ impl Default for TextureAspect {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum AddressMode {
     /// Clamp the value to the edge of the texture
     ///
@@ -2733,6 +2833,7 @@ impl Default for AddressMode {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum FilterMode {
     /// Nearest neighbor sampling.
     ///
@@ -2967,6 +3068,7 @@ impl Default for TextureSampleType {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StorageTextureAccess {
     /// The texture can only be written in the shader and it must be annotated with `writeonly`.
     ///
