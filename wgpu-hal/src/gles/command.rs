@@ -251,6 +251,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         });
     }
 
+    unsafe fn clear_texture(
+        &mut self,
+        texture: &super::Texture,
+        subresource_range: &wgt::ImageSubresourceRange,
+    ) {
+        unimplemented!();
+    }
+
     unsafe fn copy_buffer_to_buffer<T>(
         &mut self,
         src: &super::Buffer,

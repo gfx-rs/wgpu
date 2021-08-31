@@ -247,6 +247,13 @@ impl crate::CommandEncoder<Api> for Encoder {
 
     unsafe fn clear_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange) {}
 
+    unsafe fn clear_texture(
+        &mut self,
+        texture: &Resource,
+        subresource_range: &wgt::ImageSubresourceRange,
+    ) {
+    }
+
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
 
     unsafe fn copy_texture_to_texture<T>(

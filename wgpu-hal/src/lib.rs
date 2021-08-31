@@ -345,6 +345,12 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
 
     unsafe fn clear_buffer(&mut self, buffer: &A::Buffer, range: MemoryRange);
 
+    unsafe fn clear_texture(
+        &mut self,
+        texture: &A::Texture,
+        subresource_range: &wgt::ImageSubresourceRange,
+    );
+
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &A::Buffer, dst: &A::Buffer, regions: T)
     where
         T: Iterator<Item = BufferCopy>;

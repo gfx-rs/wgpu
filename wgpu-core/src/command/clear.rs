@@ -228,7 +228,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::TextureUses::COPY_DST,
             )
             .map_err(ClearError::InvalidTexture)?;
-        let _dst_raw = dst_texture
+        let dst_raw = dst_texture
             .inner
             .as_raw()
             .ok_or(ClearError::InvalidTexture(dst))?;
@@ -241,23 +241,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(dst_barrier);
-            /*TODO: image clears
-            cmd_buf_raw.clear_texture(
-                dst_raw,
-                hal::image::Layout::TransferDstOptimal,
-                hal::command::ClearValue {
-                    color: hal::command::ClearColor {
-                        float32: conv::map_color_f32(&wgt::Color::TRANSPARENT),
-                    },
-                },
-                std::iter::once(hal::image::SubresourceRange {
-                    aspects,
-                    level_start: subresource_range.base_mip_level as u8,
-                    level_count: subresource_range.mip_level_count.map(|c| c.get() as u8),
-                    layer_start: subresource_range.base_array_layer as u16,
-                    layer_count: subresource_range.array_layer_count.map(|c| c.get() as u16),
-                }),
-            );*/
+            cmd_buf_raw.clear_texture(dst_raw, subresource_range);
         }
         Ok(())
     }
