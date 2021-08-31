@@ -617,6 +617,7 @@ pub struct RenderPipeline {
     vs_info: PipelineStageInfo,
     fs_info: PipelineStageInfo,
     raw_primitive_type: mtl::MTLPrimitiveType,
+    raw_triangle_fill_mode: mtl::MTLTriangleFillMode,
     raw_front_winding: mtl::MTLWinding,
     raw_cull_mode: mtl::MTLCullMode,
     raw_depth_clip_mode: Option<mtl::MTLDepthClipMode>,
