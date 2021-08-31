@@ -103,8 +103,20 @@ await stagingBuffer.mapAsync(1);
 
 const data = stagingBuffer.getMappedRange();
 
-console.log("got", new Uint32Array(data));
-console.log("expected", new Uint32Array([0, 2, 7, 55]));
+function isTypedArrayEqual(a, b) {
+  if (a.byteLength !== b.byteLength) return false;
+  return a.every((val, i) => val === b[i]);
+}
+
+const actual = new Uint32Array(data);
+const expected = new Uint32Array([0, 2, 7, 55]);
+
+console.error("actual", actual);
+console.error("expected", expected);
+
+if (!isTypedArrayEqual(actual, expected)) {
+  throw new TypeError("Actual does not equal expected!");
+}
 
 stagingBuffer.unmap();
 
