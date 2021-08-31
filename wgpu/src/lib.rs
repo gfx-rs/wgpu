@@ -412,7 +412,7 @@ trait Context: Debug + Send + Sized + Sync {
     );
     fn command_encoder_finish(&self, encoder: Self::CommandEncoderId) -> Self::CommandBufferId;
 
-    fn command_encoder_clear_image(
+    fn command_encoder_clear_texture(
         &self,
         encoder: &Self::CommandEncoderId,
         texture: &Texture,
@@ -2266,7 +2266,7 @@ impl CommandEncoder {
     /// - Texture does not have `COPY_DST` usage.
     /// - Range it out of bounds
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
-        Context::command_encoder_clear_image(
+        Context::command_encoder_clear_texture(
             &*self.context,
             self.id.as_ref().unwrap(),
             texture,

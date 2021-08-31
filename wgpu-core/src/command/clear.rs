@@ -144,13 +144,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn command_encoder_clear_image<A: HalApi>(
+    pub fn command_encoder_clear_texture<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: TextureId,
         subresource_range: &ImageSubresourceRange,
     ) -> Result<(), ClearError> {
-        profiling::scope!("CommandEncoder::clear_image");
+        profiling::scope!("CommandEncoder::clear_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -162,7 +162,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
-            list.push(TraceCommand::ClearImage {
+            list.push(TraceCommand::ClearTexture {
                 dst,
                 subresource_range: subresource_range.clone(),
             });
@@ -242,7 +242,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             cmd_buf_raw.transition_textures(dst_barrier);
             /*TODO: image clears
-            cmd_buf_raw.clear_image(
+            cmd_buf_raw.clear_texture(
                 dst_raw,
                 hal::image::Layout::TransferDstOptimal,
                 hal::command::ClearValue {

@@ -5,7 +5,7 @@
             name: "Quad",
             buffer: (index: 0, epoch: 1),
             offset: 0,
-            data: File("clear-image.bin", 16384),
+            data: File("clear-texture.bin", 16384),
         ),
         (
             name: "buffer clear",
@@ -88,7 +88,7 @@
             queued: true,
         ),
         Submit(1, [
-            ClearImage(
+            ClearTexture(
                 dst: Id(0, 1, Empty),
                 subresource_range: ImageSubresourceRange(
                     aspect: All,

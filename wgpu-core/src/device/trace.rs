@@ -151,7 +151,7 @@ pub enum Command {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     },
-    ClearImage {
+    ClearTexture {
         dst: id::TextureId,
         subresource_range: wgt::ImageSubresourceRange,
     },
