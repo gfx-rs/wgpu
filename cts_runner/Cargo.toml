@@ -6,9 +6,6 @@ authors = [
 ]
 edition = "2018"
 description = "CTS runner for wgpu"
-homepage = "https://github.com/gfx-rs/wgpu"
-repository = "https://github.com/gfx-rs/wgpu"
-keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 publish = false
 
