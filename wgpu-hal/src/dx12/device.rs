@@ -244,16 +244,19 @@ impl super::Device {
         let (result, log_level) = match hr.into_result() {
             Ok(()) => (Ok(shader_data), log::Level::Info),
             Err(e) => {
-                let message = unsafe {
-                    let slice = slice::from_raw_parts(
-                        error.GetBufferPointer() as *const u8,
-                        error.GetBufferSize(),
-                    );
-                    String::from_utf8_lossy(slice)
-                };
-                let full_msg = format!("D3DCompile error ({}): {}", e, message);
-                unsafe {
-                    error.destroy();
+                let mut full_msg = format!("D3DCompile error ({})", e);
+                if !error.is_null() {
+                    use std::fmt::Write as _;
+                    let message = unsafe {
+                        slice::from_raw_parts(
+                            error.GetBufferPointer() as *const u8,
+                            error.GetBufferSize(),
+                        )
+                    };
+                    write!(full_msg, ": {}", String::from_utf8_lossy(message));
+                    unsafe {
+                        error.destroy();
+                    }
                 }
                 (
                     Err(crate::PipelineError::Linkage(stage_bit, full_msg)),

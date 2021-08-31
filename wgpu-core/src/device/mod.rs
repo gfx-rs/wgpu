@@ -504,6 +504,9 @@ impl<A: HalApi> Device<A> {
 
         let actual_size = if desc.size == 0 {
             wgt::COPY_BUFFER_ALIGNMENT
+        } else if desc.usage.contains(wgt::BufferUsages::VERTEX) {
+            // Bumping the size by 1 so that we can bind an empty range at the end of the buffer.
+            desc.size + 1
         } else {
             desc.size
         };
