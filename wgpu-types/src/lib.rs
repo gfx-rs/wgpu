@@ -1407,7 +1407,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
     Bc1RgbaUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
-    /// Srgb-color [0, 63] ([0, 15] for alpha) converted to/from linear-color float [0, 1] in shader.
+    /// Srgb-color [0, 63] ([0, 1] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// Also known as DXT1.
     ///
@@ -2354,7 +2354,7 @@ bitflags::bitflags! {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
         const COPY_SRC = 1 << 0;
-        /// Allows a texture to be the destination in a  [`CommandEncoder::copy_texture_to_buffer`],
+        /// Allows a texture to be the destination in a  [`CommandEncoder::copy_buffer_to_texture`],
         /// [`CommandEncoder::copy_texture_to_texture`], or [`Queue::write_texture`] operation.
         const COPY_DST = 1 << 1;
         /// Allows a texture to be a [`BindingType::Texture`] in a bind group.
