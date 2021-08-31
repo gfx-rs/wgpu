@@ -1441,6 +1441,21 @@ impl<'a, W: Write> Writer<'a, W> {
                     for sta in case.body.iter() {
                         self.write_stmt(sta, ctx, indent + 2)?;
                     }
+
+                    // Write fallthrough comment if the case is fallthrough,
+                    // otherwise write a break, if the case is not already
+                    // broken out of at the end of its body.
+                    if case.fall_through {
+                        writeln!(self.out, "{}/* fallthrough */", INDENT.repeat(indent + 2))?;
+                    } else if !matches!(
+                        case.body.last(),
+                        Some(&Statement::Break)
+                            | Some(&Statement::Continue)
+                            | Some(&Statement::Return { .. })
+                            | Some(&Statement::Kill)
+                    ) {
+                        writeln!(self.out, "{}break;", INDENT.repeat(indent + 2))?;
+                    }
                 }
 
                 // Only write the default block if the block isn't empty
