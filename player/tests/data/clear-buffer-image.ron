@@ -12,10 +12,10 @@
             buffer: (index: 1, epoch: 1),
             offset: 0,
             data: Raw([
+                0x00, 0x00, 0x80, 0xBF,
                 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x80, 0x3F,
             ]),
         )
     ],
@@ -35,6 +35,25 @@
                 bits: 27,
             ),
         )),
+        // First fill the texture to ensure it wasn't just zero initialized or "happened" to be zero.
+        WriteTexture(
+            to: (
+                texture: Id(0, 1, Empty),
+                mip_level: 0,
+                array_layer: 0,
+            ),
+            data: "quad.bin",
+            layout: (
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: None,
+            ),
+            size: (
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 1,
+            ),
+        ),
         CreateBuffer(
             Id(0, 1, Empty),
             (
@@ -46,6 +65,7 @@
                 mapped_at_creation: false,
             ),
         ),
+
         CreateBuffer(
             Id(1, 1, Empty),
             (
@@ -56,6 +76,16 @@
                 ),
                 mapped_at_creation: false,
             ),
+        ),
+        // Make sure there is something in the buffer, otherwise it might be just zero init!
+        WriteBuffer(
+            id: Id(1, 1, Empty),
+            data: "data1.bin",
+            range: (
+                start: 0,
+                end: 16,
+            ),
+            queued: true,
         ),
         Submit(1, [
             ClearImage(
@@ -88,6 +118,7 @@
                     depth_or_array_layers: 1,
                 ),
             ),
+            // Partial clear to proove 
             ClearBuffer(
                 dst: Id(1, 1, Empty),
                 offset: 4,
