@@ -411,6 +411,8 @@ pub enum RenderPassErrorInner {
     InvalidResolveSourceSampleCount,
     #[error("resolve target must have a sample count of 1")]
     InvalidResolveTargetSampleCount,
+    #[error("surface texture is dropped before the render pass is finished")]
+    SurfaceTextureDropped,
     #[error("not enough memory left")]
     OutOfMemory,
     #[error("unable to clear non-present/read-only depth")]
@@ -730,6 +732,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
 
         for ra in self.render_attachments {
+            if !texture_guard.contains(ra.texture_id.value.0) {
+                return Err(RenderPassErrorInner::SurfaceTextureDropped);
+            }
             let texture = &texture_guard[ra.texture_id.value];
             check_texture_usage(texture.desc.usage, TextureUsages::RENDER_ATTACHMENT)?;
 

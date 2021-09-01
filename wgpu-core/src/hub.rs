@@ -110,7 +110,7 @@ impl<T, I: id::TypedId> ops::IndexMut<id::Valid<I>> for Storage<T, I> {
 }
 
 impl<T, I: id::TypedId> Storage<T, I> {
-    pub(crate) fn _contains(&self, id: I) -> bool {
+    pub(crate) fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
         match self.map[index as usize] {
             Element::Vacant => false,
@@ -648,9 +648,14 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             let textures = self.textures.data.read();
             for element in self.texture_views.data.write().map.drain(..) {
                 if let Element::Occupied(texture_view, _) = element {
-                    let device = &devices[textures[texture_view.parent_id.value].device_id.value];
-                    unsafe {
-                        device.raw.destroy_texture_view(texture_view.raw);
+                    // the texture should generally be present, unless it's a surface
+                    // texture, and we are in emergency shutdown.
+                    if textures.contains(texture_view.parent_id.value.0) {
+                        let texture = &textures[texture_view.parent_id.value];
+                        let device = &devices[texture.device_id.value];
+                        unsafe {
+                            device.raw.destroy_texture_view(texture_view.raw);
+                        }
                     }
                 }
             }

@@ -550,7 +550,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
                     let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
                     let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
-                    let (texture_guard, mut token) = hub.textures.write(&mut token);
+                    // This could be made immutable. It's only mutated for the `has_work` flag.
+                    let (mut texture_guard, mut token) = hub.textures.write(&mut token);
                     let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
                     let (sampler_guard, mut token) = hub.samplers.read(&mut token);
                     let (query_set_guard, _) = hub.query_sets.read(&mut token);
@@ -610,14 +611,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
                         for id in cmdbuf.trackers.textures.used() {
-                            let texture = &texture_guard[id];
+                            let texture = &mut texture_guard[id];
                             match texture.inner {
                                 TextureInner::Native { raw: None } => {
                                     return Err(QueueSubmitError::DestroyedTexture(id.0));
                                 }
                                 TextureInner::Native { raw: Some(_) } => {}
-                                TextureInner::Surface { .. } => {
+                                TextureInner::Surface {
+                                    ref mut has_work, ..
+                                } => {
                                     use track::ResourceState as _;
+
+                                    *has_work = true;
                                     let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
                                     //TODO: better error handling here?
                                     {

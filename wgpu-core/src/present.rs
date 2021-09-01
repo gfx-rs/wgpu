@@ -128,6 +128,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     inner: resource::TextureInner::Surface {
                         raw: ast.texture,
                         parent_id: Valid(surface_id),
+                        has_work: false,
                     },
                     device_id: present.device_id.clone(),
                     desc: wgt::TextureDescriptor {
@@ -235,12 +236,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);
             if let Some(texture) = texture {
-                let suf_texture = match texture.inner {
-                    resource::TextureInner::Surface { raw, .. } => raw,
-                    resource::TextureInner::Native { .. } => unreachable!(),
-                };
                 let suf = A::get_surface_mut(surface);
-                unsafe { device.queue.present(&mut suf.raw, suf_texture) }
+                match texture.inner {
+                    resource::TextureInner::Surface {
+                        raw,
+                        parent_id,
+                        has_work,
+                    } => {
+                        if surface_id != parent_id.0 {
+                            log::error!("Presented frame is from a different surface");
+                            Err(hal::SurfaceError::Lost)
+                        } else if !has_work {
+                            log::error!("No work has been submitted for this frame");
+                            unsafe { suf.raw.discard_texture(raw) };
+                            Err(hal::SurfaceError::Outdated)
+                        } else {
+                            unsafe { device.queue.present(&mut suf.raw, raw) }
+                        }
+                    }
+                    resource::TextureInner::Native { .. } => unreachable!(),
+                }
             } else {
                 Err(hal::SurfaceError::Outdated) //TODO?
             }
