@@ -827,6 +827,10 @@ impl super::Adapter {
                 spv::Capability::Image1D,
                 spv::Capability::ImageQuery,
                 spv::Capability::DerivativeControl,
+                //Note: this is requested always, no matter what the actual
+                // adapter supports. It's not the responsibility of SPV-out
+                // translation to handle the storage support for formats.
+                spv::Capability::StorageImageExtendedFormats,
                 //TODO: fill out the rest
             ];
             let mut flags = spv::WriterFlags::empty();
