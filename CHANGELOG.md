@@ -1,5 +1,17 @@
 # Change Log
 
+## wgpu-core-0.10.2, wgpu-hal-0.10.3 (2021-09-01)
+  - All:
+    - fix querying the size of storage textures
+  - Vulkan:
+    - use render pass labels
+  - Metal:
+    - fix moving the surface between displays
+  - DX12:
+    - enable BC compressed textures
+  - GL:
+    - fix vertex-buffer and storage related limits
+
 ## wgpu-core-0.10.1, wgpu-hal-0.10.2 (2021-08-24)
   - All:
     - expose more formats via adapter-specific feature
