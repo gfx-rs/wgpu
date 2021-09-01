@@ -1,5 +1,19 @@
 # Change Log
 
+## v0.6.2 (2021-09-01)
+  - SPV-out fixes:
+    - requested capabilities for 1D and cube images, storage formats
+    - handling `break` and `continue` in a `switch` statement
+    - avoid generating duplicate `OpTypeImage` types
+  - HLSL-out fixes:
+    - fix output struct member names
+  - MSL-out fixes:
+    - fix packing of fields in interface structs
+  - GLSL-out fixes:
+    - fix non-fallthrough `switch` cases
+  - GLSL-in fixes:
+    - avoid infinite loop on invalid statements
+
 ## v0.6.1 (2021-08-24)
   - HLSL-out fixes:
     - array arguments
