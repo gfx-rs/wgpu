@@ -222,6 +222,9 @@ impl crate::Expression {
     ///
     /// Note: we have to cache any expressions that depend on the control flow,
     /// or otherwise they may be moved into a non-uniform contol flow, accidentally.
+    /// See the [module-level documentation][emit] for details.
+    ///
+    /// [emit]: index.html#expression-evaluation-time
     #[allow(dead_code)]
     fn bake_ref_count(&self) -> usize {
         match *self {

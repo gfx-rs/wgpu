@@ -53,7 +53,7 @@ returns a value, a call statement designates a particular [`Expression::CallResu
 expression to represent its return value, for use by subsequent statements and
 expressions.
 
-## `Expression` evaluation time and scope
+## `Expression` evaluation time
 
 It is essential to know when an [`Expression`] should be evaluated, because its
 value may depend on previous [`Statement`]s' effects. But whereas the order of
@@ -96,6 +96,38 @@ Naga's rules for when `Expression`s are evaluated are as follows:
     method returns `true` if the given expression is one of those variants that
     does *not* need to be covered by an `Emit` statement.
 
+Now, strictly speaking, not all `Expression` variants actually care when they're
+evaluated. For example, you can evaluate a [`BinaryOperator::Add`] expression
+any time you like, as long as you give it the right operands. It's really only a
+very small set of expressions that are affected by timing:
+
+-   [`Load`], [`ImageSample`], and [`ImageLoad`] expressions are influenced by
+    stores to the variables or images they access, and must execute at the
+    proper time relative to them.
+
+-   [`Derivative`] expressions are sensitive to control flow uniformity: they
+    must not be moved out of an area of uniform control flow into a non-uniform
+    area.
+
+-   More generally, any expression that's used by more than one other expression
+    or statement should probably be evaluated only once, and then stored in a
+    variable to be cited at each point of use.
+
+Naga tries to help back ends handle all these cases correctly in a somewhat
+circuitous way. The [`ModuleInfo`] structure returned by [`Validator::validate`]
+provides a reference count for each expression in each function in the module.
+Naturally, any expression with a reference count of two or more deserves to be
+evaluated and stored in a temporary variable at the point that the `Emit`
+statement covering it is executed. But if we selectively lower the reference
+count threshold to _one_ for the sensitive expression types listed above, so
+that we _always_ generate a temporary variable and save their value, then the
+same code that manages multiply referenced expressions will take care of
+introducing temporaries for time-sensitive expressions as well. The
+`Expression::bake_ref_count` method (private to the back ends) is meant to help
+with this.
+
+## `Expression` scope
+
 Each `Expression` has a *scope*, which is the region of the function within
 which it can be used by `Statement`s and other `Expression`s. It is a validation
 error to use an `Expression` outside its scope.
@@ -119,14 +151,21 @@ nested `Block` is not available in the `Block`'s parents. Such a value would
 need to be stored in a local variable to be carried upwards in the statement
 tree.
 
-[`Call`]: Statement::Call
 [`Constant`]: Expression::Constant
-[`Emit`]: Statement::Emit
+[`Derivative`]: Expression::Derivative
 [`FunctionArgument`]: Expression::FunctionArgument
 [`GlobalVariable`]: Expression::GlobalVariable
+[`ImageLoad`]: Expression::ImageLoad
+[`ImageSample`]: Expression::ImageSample
 [`Load`]: Expression::Load
 [`LocalVariable`]: Expression::LocalVariable
+
+[`Call`]: Statement::Call
+[`Emit`]: Statement::Emit
 [`Store`]: Statement::Store
+
+[`Validator::validate`]: valid::Validator::validate
+[`ModuleInfo`]: valid::ModuleInfo
 
 !*/
 
@@ -1225,7 +1264,7 @@ pub enum Statement {
     ///
     /// See the [module-level documentation][emit] for details.
     ///
-    /// [emit]: index.html#expression-evaluation-time-and-scope
+    /// [emit]: index.html#expression-evaluation-time
     Emit(Range<Expression>),
     /// A block containing more statements, to be executed sequentially.
     Block(Block),
