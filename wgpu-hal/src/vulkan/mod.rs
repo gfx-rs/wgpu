@@ -345,6 +345,9 @@ pub struct CommandEncoder {
     temp: Temp,
     free: Vec<vk::CommandBuffer>,
     discarded: Vec<vk::CommandBuffer>,
+    /// If this is true, the active renderpass enabled a debug span,
+    /// and needs to be disabled on renderpass close.
+    rpass_debug_marker_active: bool,
 }
 
 pub struct CommandBuffer {

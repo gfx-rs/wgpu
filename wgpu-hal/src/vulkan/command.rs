@@ -62,6 +62,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             label.unwrap_or_default(),
         );
 
+        // Reset this in case the last renderpass was never ended.
+        self.rpass_debug_marker_active = false;
+
         let vk_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
             .build();
@@ -427,6 +430,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             vk_info = vk_info.push_next(&mut vk_attachment_info);
         }
 
+        if let Some(label) = desc.label {
+            self.begin_debug_marker(label);
+            self.rpass_debug_marker_active = true;
+        }
+
         self.device
             .raw
             .cmd_set_viewport(self.active, 0, &vk_viewports);
@@ -441,6 +449,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
     unsafe fn end_render_pass(&mut self) {
         self.device.raw.cmd_end_render_pass(self.active);
+        if self.rpass_debug_marker_active {
+            self.end_debug_marker();
+            self.rpass_debug_marker_active = false;
+        }
     }
 
     unsafe fn set_bind_group(
@@ -703,10 +715,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
         self.bind_point = vk::PipelineBindPoint::COMPUTE;
-        self.begin_debug_marker(desc.label.unwrap_or_default());
+        if let Some(label) = desc.label {
+            self.begin_debug_marker(label);
+            self.rpass_debug_marker_active = true;
+        }
     }
     unsafe fn end_compute_pass(&mut self) {
-        self.end_debug_marker();
+        if self.rpass_debug_marker_active {
+            self.end_debug_marker();
+            self.rpass_debug_marker_active = false
+        }
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
