@@ -164,6 +164,7 @@ pub(crate) enum TextureInner<A: hal::Api> {
     Surface {
         raw: A::SurfaceTexture,
         parent_id: Valid<SurfaceId>,
+        has_work: bool,
     },
 }
 
@@ -172,10 +173,7 @@ impl<A: hal::Api> TextureInner<A> {
         match *self {
             Self::Native { raw: Some(ref tex) } => Some(tex),
             Self::Native { raw: None } => None,
-            Self::Surface {
-                ref raw,
-                parent_id: _,
-            } => Some(std::borrow::Borrow::borrow(raw)),
+            Self::Surface { ref raw, .. } => Some(raw.borrow()),
         }
     }
 }
