@@ -323,12 +323,11 @@ pub fn map_buffer_usage_to_state(usage: crate::BufferUses) -> d3d12::D3D12_RESOU
     if usage.intersects(Bu::VERTEX | Bu::UNIFORM) {
         state |= d3d12::D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
-    if usage.intersects(Bu::STORAGE_READ) {
-        state |= d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-            | d3d12::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    }
     if usage.intersects(Bu::STORAGE_WRITE) {
         state |= d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    } else if usage.intersects(Bu::STORAGE_READ) {
+        state |= d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            | d3d12::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
     if usage.intersects(Bu::INDIRECT) {
         state |= d3d12::D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
