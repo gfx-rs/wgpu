@@ -123,7 +123,7 @@ async fn create_png(
     buffer_dimensions: &BufferDimensions,
 ) {
     let buffer_slice = output_buffer.slice(..);
-    if let Err(_) = buffer_slice.map_async(wgpu::MapMode::Read).await {
+    if buffer_slice.map_async(wgpu::MapMode::Read).await.is_err() {
         return;
     }
 

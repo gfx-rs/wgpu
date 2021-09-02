@@ -2016,8 +2016,7 @@ impl<'a> BufferSlice<'a> {
     /// For the future to complete, the device has to be polled. This is done automatically
     /// in a background thread if
     ///
-    /// - the `auto_poll` parameter on [`Adapter::request_device`] or
-    ///    [`Adapter::create_device_from_hal`] was set to `true`, or
+    /// - the `auto_poll` parameter on [`Adapter::request_device`] was set to `true`, or
     /// - the web backend of wgpu is used.
     ///
     /// Otherwise, [`Device::poll`] must be called manually, for example in an event loop,

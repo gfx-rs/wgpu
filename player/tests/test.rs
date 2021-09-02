@@ -93,6 +93,7 @@ impl Test<'_> {
                 limits: wgt::Limits::default(),
             },
             None,
+            None,
             device
         ));
         if let Some(e) = error {

@@ -421,7 +421,7 @@ impl<A: HalApi> Device<A> {
     }
 
     fn notify_buffer_map(&self) {
-        if let Some(notifier) = &self.buffer_map_notifier {
+        if let Some(notifier) = self.buffer_map_notifier.as_ref() {
             notifier();
         }
     }
