@@ -7,6 +7,9 @@ pub mod db {
         pub const DEVICE_KABY_LAKE_MASK: u32 = 0x5900;
         pub const DEVICE_SKY_LAKE_MASK: u32 = 0x1900;
     }
+    pub mod nvidia {
+        pub const VENDOR: u32 = 0x10DE;
+    }
 }
 
 pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {
