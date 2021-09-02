@@ -734,6 +734,7 @@ impl Drop for ShaderModule {
 }
 
 /// Source of a shader module.
+#[derive(Clone)]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
     ///
