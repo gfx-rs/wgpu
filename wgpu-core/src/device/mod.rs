@@ -1249,7 +1249,7 @@ impl<A: HalApi> Device<A> {
                 if read_only {
                     hal::BufferUses::STORAGE_READ
                 } else {
-                    hal::BufferUses::STORAGE_WRITE
+                    hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_WRITE
                 },
                 limits.max_storage_buffer_binding_size,
             ),

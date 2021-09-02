@@ -609,6 +609,7 @@ bitflags::bitflags! {
             Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
             Self::STORAGE_READ.bits | Self::INDIRECT.bits;
         /// The combination of exclusive usages (write-only and read-write).
+        /// These usages may still show up with others, but can't automatically be combined.
         const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_WRITE.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
@@ -631,6 +632,7 @@ bitflags::bitflags! {
         /// The combination of usages that can be used together (read-only).
         const INCLUSIVE = Self::COPY_SRC.bits | Self::RESOURCE.bits | Self::DEPTH_STENCIL_READ.bits;
         /// The combination of exclusive usages (write-only and read-write).
+        /// These usages may still show up with others, but can't automatically be combined.
         const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_WRITE.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
