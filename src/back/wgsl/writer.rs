@@ -292,71 +292,88 @@ impl<W: Write> Writer<W> {
     /// # Notes
     /// Adds an extra space if required
     fn write_attributes(&mut self, attributes: &[Attribute], extra_space: bool) -> BackendResult {
-        let mut attributes_str = String::new();
-        for (index, attribute) in attributes.iter().enumerate() {
-            let attribute_str = match *attribute {
-                Attribute::Block => String::from("block"),
-                Attribute::Location(id) => format!("location({})", id),
+        write!(self.out, "[[")?;
+
+        let mut need_last_comma = true;
+        if let Some(last_attrib) = attributes.last() {
+            // We duplicate the logic a little, but this will help to avoid extra heap allocation
+            match *last_attrib {
                 Attribute::BuiltIn(builtin_attrib) => {
-                    let builtin_str = builtin_str(builtin_attrib);
-                    if let Some(builtin) = builtin_str {
-                        format!("builtin({})", builtin)
+                    need_last_comma = builtin_str(builtin_attrib).is_some();
+                }
+                Attribute::Interpolate(interpolation, sampling) => {
+                    need_last_comma = (sampling.is_some()
+                        && sampling != Some(crate::Sampling::Center))
+                        || (interpolation.is_some()
+                            && interpolation != Some(crate::Interpolation::Perspective))
+                }
+                _ => {}
+            }
+        }
+
+        for (index, attribute) in attributes.iter().enumerate() {
+            match *attribute {
+                Attribute::Block => write!(self.out, "block")?,
+                Attribute::Location(id) => write!(self.out, "location({})", id)?,
+                Attribute::BuiltIn(builtin_attrib) => {
+                    if let Some(builtin) = builtin_str(builtin_attrib) {
+                        write!(self.out, "builtin({})", builtin)?;
                     } else {
                         log::warn!("Unsupported builtin attribute: {:?}", builtin_attrib);
-                        String::from("")
                     }
                 }
-                Attribute::Stage(shader_stage) => match shader_stage {
-                    ShaderStage::Vertex => String::from("stage(vertex)"),
-                    ShaderStage::Fragment => String::from("stage(fragment)"),
-                    ShaderStage::Compute => String::from("stage(compute)"),
-                },
-                Attribute::Stride(stride) => format!("stride({})", stride),
-                Attribute::WorkGroupSize(size) => {
-                    format!("workgroup_size({}, {}, {})", size[0], size[1], size[2])
+                Attribute::Stage(shader_stage) => {
+                    let stage_str = match shader_stage {
+                        ShaderStage::Vertex => "stage(vertex)",
+                        ShaderStage::Fragment => "stage(fragment)",
+                        ShaderStage::Compute => "stage(compute)",
+                    };
+                    write!(self.out, "{}", stage_str)?;
                 }
-                Attribute::Binding(id) => format!("binding({})", id),
-                Attribute::Group(id) => format!("group({})", id),
+                Attribute::Stride(stride) => write!(self.out, "stride({})", stride)?,
+                Attribute::WorkGroupSize(size) => {
+                    write!(
+                        self.out,
+                        "workgroup_size({}, {}, {})",
+                        size[0], size[1], size[2]
+                    )?;
+                }
+                Attribute::Binding(id) => write!(self.out, "binding({})", id)?,
+                Attribute::Group(id) => write!(self.out, "group({})", id)?,
                 Attribute::Interpolate(interpolation, sampling) => {
                     if sampling.is_some() && sampling != Some(crate::Sampling::Center) {
-                        format!(
+                        write!(
+                            self.out,
                             "interpolate({}, {})",
                             interpolation_str(
                                 interpolation.unwrap_or(crate::Interpolation::Perspective)
                             ),
                             sampling_str(sampling.unwrap_or(crate::Sampling::Center))
-                        )
+                        )?;
                     } else if interpolation.is_some()
                         && interpolation != Some(crate::Interpolation::Perspective)
                     {
-                        format!(
+                        write!(
+                            self.out,
                             "interpolate({})",
                             interpolation_str(
                                 interpolation.unwrap_or(crate::Interpolation::Perspective)
                             )
-                        )
-                    } else {
-                        String::from("")
+                        )?;
                     }
                 }
             };
-            if !attribute_str.is_empty() {
-                // Add a separator between args
-                let separator = if index < attributes.len() - 1 {
-                    ", "
-                } else {
-                    ""
-                };
-                attributes_str = format!("{}{}{}", attributes_str, attribute_str, separator);
+
+            // Only write a comma if isn't the last element
+            if index + 1 != attributes.len() && need_last_comma {
+                // The leading space is for readability only
+                write!(self.out, ", ")?;
             }
         }
-        if !attributes_str.is_empty() {
-            //TODO: looks ugly
-            if attributes_str.ends_with(", ") {
-                attributes_str = attributes_str[0..attributes_str.len() - 2].to_string();
-            }
-            let extra_space_str = if extra_space { " " } else { "" };
-            write!(self.out, "[[{}]]{}", attributes_str, extra_space_str)?;
+
+        write!(self.out, "]]")?;
+        if extra_space {
+            write!(self.out, " ")?;
         }
 
         Ok(())
@@ -445,12 +462,9 @@ impl<W: Write> Writer<W> {
         match *inner {
             TypeInner::Vector { size, kind, .. } => write!(
                 self.out,
-                "{}",
-                format!(
-                    "vec{}<{}>",
-                    back::vector_size_str(size),
-                    scalar_kind_str(kind),
-                )
+                "vec{}<{}>",
+                back::vector_size_str(size),
+                scalar_kind_str(kind),
             )?,
             TypeInner::Sampler { comparison: false } => {
                 write!(self.out, "sampler")?;
@@ -468,32 +482,36 @@ impl<W: Write> Writer<W> {
 
                 let dim_str = image_dimension_str(dim);
                 let arrayed_str = if arrayed { "_array" } else { "" };
-                let (class_str, multisampled_str, scalar_str) = match class {
+                let (class_str, multisampled_str, format_str, storage_str) = match class {
                     Ic::Sampled { kind, multi } => (
                         "",
                         if multi { "multisampled_" } else { "" },
-                        format!("<{}>", scalar_kind_str(kind)),
+                        scalar_kind_str(kind),
+                        "",
                     ),
-                    Ic::Depth { multi } => (
-                        "depth_",
-                        if multi { "multisampled_" } else { "" },
-                        String::from(""),
-                    ),
+                    Ic::Depth { multi } => {
+                        ("depth_", if multi { "multisampled_" } else { "" }, "", "")
+                    }
                     Ic::Storage { format, access } => (
                         "storage_",
                         "",
+                        storage_format_str(format),
                         if access.contains(crate::StorageAccess::STORE) {
-                            format!("<{},write>", storage_format_str(format))
+                            ",write"
                         } else {
-                            format!("<{}>", storage_format_str(format))
+                            ""
                         },
                     ),
                 };
-                let ty_str = format!(
-                    "texture_{}{}{}{}{}",
-                    class_str, multisampled_str, dim_str, arrayed_str, scalar_str
-                );
-                write!(self.out, "{}", ty_str)?;
+                write!(
+                    self.out,
+                    "texture_{}{}{}{}",
+                    class_str, multisampled_str, dim_str, arrayed_str
+                )?;
+
+                if !format_str.is_empty() {
+                    write!(self.out, "<{}{}>", format_str, storage_str)?;
+                }
             }
             TypeInner::Scalar { kind, .. } => {
                 write!(self.out, "{}", scalar_kind_str(kind))?;
