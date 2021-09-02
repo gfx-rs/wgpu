@@ -1,6 +1,6 @@
 use wgt::{Backends, PowerPreference, RequestAdapterOptions};
 
-use crate::{Adapter, Instance};
+use crate::{Adapter, Instance, Surface};
 
 /// Get a set of backend bits from the environment variable WGPU_BACKEND.
 pub fn backend_bits_from_env() -> Option<Backends> {
@@ -72,6 +72,7 @@ pub fn initialize_adapter_from_env(
 pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
     backend_bits: wgt::Backends,
+    compatible_surface: Option<&Surface>,
 ) -> Option<Adapter> {
     match initialize_adapter_from_env(instance, backend_bits) {
         Some(a) => Some(a),
@@ -80,7 +81,7 @@ pub async fn initialize_adapter_from_env_or_default(
                 .request_adapter(&RequestAdapterOptions {
                     power_preference: power_preference_from_env()
                         .unwrap_or_else(PowerPreference::default),
-                    compatible_surface: None,
+                    compatible_surface,
                 })
                 .await
         }

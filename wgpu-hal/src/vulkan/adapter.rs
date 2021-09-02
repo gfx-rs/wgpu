@@ -698,6 +698,7 @@ impl super::Instance {
                     .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
             },
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
+            can_present: true,
         };
 
         let capabilities = crate::Capabilities {
@@ -1023,6 +1024,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
+        if !self.private_caps.can_present {
+            return None;
+        }
+
         let queue_family_index = 0; //TODO
         match surface.functor.get_physical_device_surface_support(
             self.raw,
