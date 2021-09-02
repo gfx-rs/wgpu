@@ -600,10 +600,33 @@ impl crate::Instance<super::Api> for super::Instance {
             }
         };
 
-        raw_devices
+        let mut exposed_adapters = raw_devices
             .into_iter()
             .flat_map(|device| self.expose_adapter(device))
-            .collect()
+            .collect::<Vec<_>>();
+
+        // detect if it's an Intel + NVidia configuration
+        if cfg!(target_os = "linux") {
+            use crate::auxil::db;
+            let has_nvidia_dgpu = exposed_adapters.iter().any(|exposed| {
+                exposed.info.device_type == wgt::DeviceType::DiscreteGpu
+                    && exposed.info.vendor == db::nvidia::VENDOR as usize
+            });
+            if has_nvidia_dgpu {
+                for exposed in exposed_adapters.iter_mut() {
+                    if exposed.info.device_type == wgt::DeviceType::IntegratedGpu
+                        && exposed.info.vendor == db::intel::VENDOR as usize
+                    {
+                        // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
+                        log::warn!("Disabling presentation on '{}' (id {:?}) because of an Nvidia dGPU (on Linux)",
+                            exposed.info.name, exposed.adapter.raw);
+                        exposed.adapter.private_caps.can_present = false;
+                    }
+                }
+            }
+        }
+
+        exposed_adapters
     }
 }
 

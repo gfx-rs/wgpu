@@ -118,9 +118,10 @@ async fn setup<E: Example>(title: &str) -> Setup {
         let surface = instance.create_surface(&window);
         (size, surface)
     };
-    let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, backend)
-        .await
-        .expect("No suitable GPU adapters found on the system!");
+    let adapter =
+        wgpu::util::initialize_adapter_from_env_or_default(&instance, backend, Some(&surface))
+            .await
+            .expect("No suitable GPU adapters found on the system!");
 
     #[cfg(not(target_arch = "wasm32"))]
     {

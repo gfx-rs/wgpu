@@ -824,6 +824,8 @@ pub enum DeviceType {
     Cpu,
 }
 
+//TODO: convert `vendor` and `device` to `u32`
+
 /// Information about an adapter.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
