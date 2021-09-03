@@ -87,9 +87,13 @@ Naga's rules for when `Expression`s are evaluated are as follows:
         a pointer. Such global variables hold opaque types like shaders or
         images, and cannot be assigned to.
 
--   A [`Call`](Expression::CallResult) expression that is the `result` of a
-    [`Statement::Call`], representing the call's return value, is evaluated when
-    the `Call` statement is executed.
+-   A [`CallResult`] expression that is the `result` of a [`Statement::Call`],
+    representing the call's return value, is evaluated when the `Call` statement
+    is executed.
+
+-   Similarly, an [`AtomicResult`] expression that is the `result` of an
+    [`Atomic`] statement, representing the result of the atomic operation, is
+    evaluated when the `Atomic` statement is executed.
 
 -   All other expressions are evaluated when the (unique) [`Statement::Emit`]
     statement that covers them is executed. The [`Expression::needs_pre_emit`]
@@ -142,15 +146,17 @@ An expression's scope is defined as follows:
     subsequent expressions in that `Emit`, the subsequent statements in the `Block`
     to which that `Emit` belongs (if any) and their sub-statements (if any).
 
--   If a [`Call`] statement has a `result` expression, then that expression's
-    scope covers the subsequent statements in the `Block` to which that `Call`
-    belongs (if any) and their sub-statements (if any).
+-   The `result` expression of a [`Call`] or [`Atomic`] statement has a scope
+    covering the subsequent statements in the `Block` in which the statement
+    occurs (if any) and their sub-statements (if any).
 
 For example, this implies that an expression evaluated by some statement in a
 nested `Block` is not available in the `Block`'s parents. Such a value would
 need to be stored in a local variable to be carried upwards in the statement
 tree.
 
+[`AtomicResult`]: Expression::AtomicResult
+[`CallResult`]: Expression::CallResult
 [`Constant`]: Expression::Constant
 [`Derivative`]: Expression::Derivative
 [`FunctionArgument`]: Expression::FunctionArgument
@@ -160,6 +166,7 @@ tree.
 [`Load`]: Expression::Load
 [`LocalVariable`]: Expression::LocalVariable
 
+[`Atomic`]: Statement::Atomic
 [`Call`]: Statement::Call
 [`Emit`]: Statement::Emit
 [`Store`]: Statement::Store
@@ -1388,7 +1395,9 @@ pub enum Statement {
         fun: AtomicFunction,
         /// Value to use in the function.
         value: Handle<Expression>,
-        /// Emitted expression as a result.
+        /// [`AtomicResult`] expression representing this function's result.
+        ///
+        /// [`AtomicResult`]: crate::Expression::AtomicResult
         result: Handle<Expression>,
     },
     /// Calls a function.
