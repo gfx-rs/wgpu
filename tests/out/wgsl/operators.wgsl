@@ -1,3 +1,8 @@
+struct Foo {
+    a: vec4<f32>;
+    b: i32;
+};
+
 let v_f32_one: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 let v_f32_zero: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 let v_f32_half: vec4<f32> = vec4<f32>(0.5, 0.5, 0.5, 0.5);
@@ -24,10 +29,19 @@ fn unary() -> i32 {
     }
 }
 
+fn constructors() -> f32 {
+    var foo: Foo;
+
+    foo = Foo(vec4<f32>(1.0), 1);
+    let _e9: vec4<f32> = foo.a;
+    return _e9.x;
+}
+
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn main() {
     let _e3: vec4<f32> = builtins();
     let _e4: vec4<f32> = splat();
     let _e5: i32 = unary();
+    let _e6: f32 = constructors();
     return;
 }

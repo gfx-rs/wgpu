@@ -2,6 +2,11 @@ static const float4 v_f32_one = float4(1.0, 1.0, 1.0, 1.0);
 static const float4 v_f32_zero = float4(0.0, 0.0, 0.0, 0.0);
 static const float4 v_f32_half = float4(0.5, 0.5, 0.5, 0.5);
 
+struct Foo {
+    float4 a;
+    int b;
+};
+
 float4 builtins()
 {
     int s1_ = (true ? 1 : 0);
@@ -28,11 +33,28 @@ int unary()
     }
 }
 
+Foo ConstructFoo(float4 arg0, int arg1) {
+    Foo ret;
+    ret.a = arg0;
+    ret.b = arg1;
+    return ret;
+}
+
+float constructors()
+{
+    Foo foo = (Foo)0;
+
+    foo = ConstructFoo(float4(1.0.xxxx), 1);
+    float4 _expr9 = foo.a;
+    return _expr9.x;
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
     const float4 _e3 = builtins();
     const float4 _e4 = splat();
     const int _e5 = unary();
+    const float _e6 = constructors();
     return;
 }

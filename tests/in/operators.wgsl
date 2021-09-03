@@ -27,9 +27,21 @@ fn unary() -> i32 {
     if (!true) { return a; } else { return ~a; };
 }
 
+struct Foo {
+    a: vec4<f32>;
+    b: i32;
+};
+
+fn constructors() -> f32 {
+    var foo: Foo;
+    foo = Foo(vec4<f32>(1.0), 1);
+    return foo.a.x;
+}
+
 [[stage(compute), workgroup_size(1)]]
 fn main() {
     let a = builtins();
     let b = splat();
     let c = unary();
+    let d = constructors();
 }

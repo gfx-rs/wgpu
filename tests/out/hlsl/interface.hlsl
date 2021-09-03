@@ -31,12 +31,27 @@ struct FragmentInput_fragment {
     uint sample_mask1 : SV_Coverage;
 };
 
+VertexOutput ConstructVertexOutput(float4 arg0, float arg1) {
+    VertexOutput ret;
+    ret.position = arg0;
+    ret.varying = arg1;
+    return ret;
+}
+
 VertexOutput_vertex vertex(uint vertex_index : SV_VertexID, uint instance_index : SV_InstanceID, uint color : LOC10)
 {
     uint tmp = (((_NagaConstants.base_vertex + vertex_index) + (_NagaConstants.base_instance + instance_index)) + color);
-    const VertexOutput vertexoutput = { float4(1.0.xxxx), float(tmp) };
+    const VertexOutput vertexoutput = ConstructVertexOutput(float4(1.0.xxxx), float(tmp));
     const VertexOutput_vertex vertexoutput1 = { vertexoutput.varying, vertexoutput.position };
     return vertexoutput1;
+}
+
+FragmentOutput ConstructFragmentOutput(float arg0, uint arg1, float arg2) {
+    FragmentOutput ret;
+    ret.depth = arg0;
+    ret.sample_mask = arg1;
+    ret.color = arg2;
+    return ret;
 }
 
 FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
@@ -47,7 +62,7 @@ FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
     uint sample_mask = fragmentinput_fragment.sample_mask1;
     uint mask = (sample_mask & (1u << sample_index));
     float color1 = (front_facing ? 1.0 : 0.0);
-    const FragmentOutput fragmentoutput = { in1.varying, mask, color1 };
+    const FragmentOutput fragmentoutput = ConstructFragmentOutput(in1.varying, mask, color1);
     return fragmentoutput;
 }
 
