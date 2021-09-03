@@ -12,6 +12,7 @@ delete Object.prototype.__proto__;
     ObjectDefineProperty,
     ObjectDefineProperties,
     Symbol,
+    StringPrototypeReplace,
   } = window.__bootstrap.primordials;
   const webidl = window.__bootstrap.webidl;
   const eventTarget = window.__bootstrap.eventTarget;
@@ -149,9 +150,40 @@ delete Object.prototype.__proto__;
     self: util.readOnly(globalThis),
   };
 
+  // Taken from deno/runtime/js/06_util.js
+  function pathFromURL(pathOrUrl) {
+    if (pathOrUrl instanceof URL) {
+      if (pathOrUrl.protocol != "file:") {
+        throw new TypeError("Must be a file URL.");
+      }
+      if (pathOrUrl.hostname !== "") {
+        throw new TypeError("Host must be empty.");
+      }
+      return decodeURIComponent(
+        StringPrototypeReplace(
+          pathOrUrl.pathname,
+          /%(?![0-9A-Fa-f]{2})/g,
+          "%25",
+        ),
+      );
+    }
+    return pathOrUrl;
+  }
+
   const denoNs = {
     exit(code) {
       core.opSync("op_exit", code);
+    },
+    readFileSync(path) {
+      return core.opSync("op_read_file_sync", pathFromURL(path));
+    },
+    readTextFileSync(path) {
+      const buf = core.opSync("op_read_file_sync", pathFromURL(path));
+      const decoder = new TextDecoder();
+      return decoder.decode(buf);
+    },
+    writeFileSync(path, buf) {
+      return core.opSync("op_write_file_sync", pathFromURL(path), buf);
     },
   };
 
@@ -166,7 +198,7 @@ delete Object.prototype.__proto__;
 
   let hasBootstrapped = false;
 
-  function bootstrapRuntime() {
+  function bootstrapRuntime(args) {
     if (hasBootstrapped) {
       throw new Error("Runtime has already been bootstrapped.");
     }
@@ -180,7 +212,8 @@ delete Object.prototype.__proto__;
     Object.defineProperties(globalThis, mainRuntimeGlobalProperties);
     Object.setPrototypeOf(globalThis, Window.prototype);
     eventTarget.setEventTargetData(globalThis);
-
+    
+    denoNs.args = args;
     util.immutableDefine(globalThis, "Deno", denoNs);
     Object.freeze(globalThis.Deno);
 
