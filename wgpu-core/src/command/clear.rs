@@ -44,6 +44,10 @@ pub enum ClearError {
         texture_format: wgt::TextureFormat,
         subresource_range_aspects: TextureAspect,
     },
+    #[error("Depth/Stencil formats are not supported for clearing")]
+    DepthStencilFormatNotSupported,
+    #[error("Multisampled textures are not supported for clearing")]
+    MultisampledTextureUnsupported,
     #[error("image subresource level range is outside of the texture's level range. texture range is {texture_level_range:?},  \
 whereas subesource range specified start {subresource_base_mip_level} and count {subresource_mip_level_count:?}")]
     InvalidTextureLevelRange {
@@ -185,6 +189,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 subresource_range_aspects: subresource_range.aspect,
             });
         };
+
+        // Check if texture is supported for clearing
+        if dst_texture.desc.format.describe().sample_type == wgt::TextureSampleType::Depth {
+            return Err(ClearError::DepthStencilFormatNotSupported);
+        }
+        if dst_texture.desc.sample_count > 1 {
+            return Err(ClearError::MultisampledTextureUnsupported);
+        }
+
         // Check if subresource level range is valid
         let subresource_level_end = match subresource_range.mip_level_count {
             Some(count) => subresource_range.base_mip_level + count.get(),

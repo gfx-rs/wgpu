@@ -345,6 +345,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
 
     unsafe fn clear_buffer(&mut self, buffer: &A::Buffer, range: MemoryRange);
 
+    // Does not support depth/stencil or multisampled textures
     unsafe fn clear_texture(
         &mut self,
         texture: &A::Texture,
