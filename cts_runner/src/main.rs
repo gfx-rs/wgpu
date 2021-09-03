@@ -1,7 +1,8 @@
-use std::fmt;
-use std::io::Read;
-use std::io::Write;
-use std::rc::Rc;
+use std::{
+    env, fmt,
+    io::{Read, Write},
+    rc::Rc,
+};
 
 use deno_core::error::anyhow;
 use deno_core::error::AnyError;
@@ -25,11 +26,12 @@ async fn main() {
 }
 
 async fn run() -> Result<(), AnyError> {
-    let args = std::env::args().collect::<Vec<_>>();
-    let url = args
-        .get(1)
+    let mut args_iter = env::args();
+    let _ = args_iter.next();
+    let url = args_iter
+        .next()
         .ok_or_else(|| anyhow!("missing specifier in first command line argument"))?;
-    let specifier = resolve_url_or_path(url)?;
+    let specifier = resolve_url_or_path(&url)?;
 
     let options = RuntimeOptions {
         module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
@@ -46,8 +48,8 @@ async fn run() -> Result<(), AnyError> {
         ..Default::default()
     };
     let mut isolate = JsRuntime::new(options);
-    let args: Vec<String> = std::env::args().skip(2).collect();
-    let cfg = json!({"args": args, "cwd": std::env::current_dir().unwrap().to_string_lossy() });
+    let args = args_iter.collect::<Vec<String>>();
+    let cfg = json!({"args": args, "cwd": env::current_dir().unwrap().to_string_lossy() });
     let bootstrap_script = format!("globalThis.bootstrap({})", serde_json::to_string(&cfg)?);
     isolate.execute_script(&located_script_name!(), &bootstrap_script)?;
 

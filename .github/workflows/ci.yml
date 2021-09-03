@@ -66,7 +66,7 @@ jobs:
             target: wasm32-unknown-unknown
             kind: webgl
 
-    name: ${{ matrix.name }}
+    name: Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     env:
@@ -138,7 +138,7 @@ jobs:
         if: matrix.kind == 'test'
         run: |
           cargo build --target ${{ matrix.target }} --bin wgpu-info 
-          cargo build --target ${{ matrix.target }} --tests --workspace --exclude wgpu
+          cargo build --target ${{ matrix.target }} --tests -p wgpu-types -p wgpu-hal -p wgpu-core
           cargo build --target ${{ matrix.target }} --examples --tests -p wgpu
 
       - name: tests
@@ -146,12 +146,48 @@ jobs:
         run: |
           # run wgpu-info
           cargo run --target ${{ matrix.target }} --bin wgpu-info
-        
           # run player tests
-          cargo test --target ${{ matrix.target }} --workspace --exclude wgpu --no-fail-fast -- --nocapture
-
+          cargo test --target ${{ matrix.target }} -p wgpu-types -p wgpu-hal -p wgpu-core --no-fail-fast -- --nocapture
           # run coretests
-          cargo run --target ${{ matrix.target }} --bin wgpu-info -- cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture --test-threads=1 # GLES is currently non-multithreadable
+          cargo run --target ${{ matrix.target }} --bin wgpu-info -- cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v2
+        with:
+          path: wgpu
+      - name: checkout cts
+        uses: actions/checkout@v2
+        with:
+          repository: gpuweb/cts
+          ref: 8dbacc65e37f2c0d1a5c4adbb2f6ca363fe2f459 # from "gh-pages" branch
+          path: cts
+
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          profile: minimal
+
+      - name: build CTS runner
+        run: cd wgpu && cargo build -p cts_runner
+
+      - name: run CTS
+        run: cd cts && ../wgpu/target/debug/cts_runner.exe ./tools/run_deno --verbose 'unittests:*'
 
   fmt:
     name: Format
