@@ -121,7 +121,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(Backends);
 
 impl From<Backend> for Backends {
@@ -528,7 +528,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(Features);
 
 impl Features {
@@ -786,7 +786,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(DownlevelFlags);
 
 impl DownlevelFlags {
@@ -894,7 +894,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(ShaderStages);
 
 /// Dimensions of a particular texture view.
@@ -1304,7 +1304,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(TextureFormatFeatureFlags);
 
 /// Features supported by a given texture format
@@ -1960,7 +1960,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(ColorWrites);
 
 impl Default for ColorWrites {
@@ -2366,7 +2366,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(BufferUsages);
 
 /// Describes a [`Buffer`].
@@ -2468,7 +2468,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(TextureUsages);
 
 /// Configures a [`Surface`] for presentation.
@@ -3368,7 +3368,7 @@ bitflags::bitflags! {
     }
 }
 
-#[feature("bitflags_serde_shim")]
+#[cfg(feature = "bitflags_serde_shim")]
 bitflags_serde_shim::impl_serde_for_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
