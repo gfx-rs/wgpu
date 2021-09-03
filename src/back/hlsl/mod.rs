@@ -158,6 +158,21 @@ pub enum Error {
     Custom(String),
 }
 
+#[derive(Default)]
+struct Wrapped {
+    array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
+    image_queries: crate::FastHashSet<help::WrappedImageQuery>,
+    constructors: crate::FastHashSet<help::WrappedConstructor>,
+}
+
+impl Wrapped {
+    fn clear(&mut self) {
+        self.array_lengths.clear();
+        self.image_queries.clear();
+        self.constructors.clear();
+    }
+}
+
 pub struct Writer<'a, W> {
     out: W,
     names: crate::FastHashMap<proc::NameKey, String>,
@@ -168,7 +183,6 @@ pub struct Writer<'a, W> {
     entry_point_io: Vec<writer::EntryPointInterface>,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
-    wrapped_array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
-    wrapped_image_queries: crate::FastHashSet<help::WrappedImageQuery>,
+    wrapped: Wrapped,
     temp_access_chain: Vec<storage::SubAccess>,
 }

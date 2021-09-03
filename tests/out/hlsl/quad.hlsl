@@ -17,9 +17,16 @@ struct FragmentInput_main {
     float2 uv3 : LOC0;
 };
 
+VertexOutput ConstructVertexOutput(float2 arg0, float4 arg1) {
+    VertexOutput ret;
+    ret.uv = arg0;
+    ret.position = arg1;
+    return ret;
+}
+
 VertexOutput_main main(float2 pos : LOC0, float2 uv : LOC1)
 {
-    const VertexOutput vertexoutput = { uv, float4((c_scale * pos), 0.0, 1.0) };
+    const VertexOutput vertexoutput = ConstructVertexOutput(uv, float4((c_scale * pos), 0.0, 1.0));
     const VertexOutput_main vertexoutput1 = { vertexoutput.uv, vertexoutput.position };
     return vertexoutput1;
 }

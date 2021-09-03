@@ -2,6 +2,10 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+struct Foo {
+    metal::float4 a;
+    int b;
+};
 constant metal::float4 v_f32_one = {1.0, 1.0, 1.0, 1.0};
 constant metal::float4 v_f32_zero = {0.0, 0.0, 0.0, 0.0};
 constant metal::float4 v_f32_half = {0.5, 0.5, 0.5, 0.5};
@@ -35,10 +39,19 @@ int unary(
     }
 }
 
+float constructors(
+) {
+    Foo foo;
+    foo = Foo {metal::float4(1.0), 1};
+    metal::float4 _e10 = foo.a;
+    return _e10.x;
+}
+
 kernel void main1(
 ) {
     metal::float4 _e4 = builtins();
     metal::float4 _e5 = splat();
     int _e6 = unary();
+    float _e7 = constructors();
     return;
 }

@@ -29,6 +29,13 @@ struct FragmentInput_fs_main {
     float4 position : SV_Position;
 };
 
+VertexOutput ConstructVertexOutput(float4 arg0, float3 arg1) {
+    VertexOutput ret;
+    ret.position = arg0;
+    ret.uv = arg1;
+    return ret;
+}
+
 VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
 {
     int tmp1_ = (int)0;
@@ -45,7 +52,7 @@ VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
     float3x3 inv_model_view = transpose(float3x3(_expr27.xyz, _expr31.xyz, _expr35.xyz));
     float4x4 _expr40 = r_data.proj_inv;
     float4 unprojected = mul(pos, _expr40);
-    const VertexOutput vertexoutput = { pos, mul(unprojected.xyz, inv_model_view) };
+    const VertexOutput vertexoutput = ConstructVertexOutput(pos, mul(unprojected.xyz, inv_model_view));
     const VertexOutput_vs_main vertexoutput1 = { vertexoutput.uv, vertexoutput.position };
     return vertexoutput1;
 }

@@ -5,6 +5,11 @@ precision highp int;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
+struct Foo {
+    vec4 a;
+    int b;
+};
+
 
 vec4 builtins() {
     int s1_ = (true ? 1 : 0);
@@ -31,10 +36,18 @@ int unary() {
     }
 }
 
+float constructors() {
+    Foo foo;
+    foo = Foo(vec4(1.0), 1);
+    vec4 _e10 = foo.a;
+    return _e10.x;
+}
+
 void main() {
     vec4 _e4 = builtins();
     vec4 _e5 = splat();
     int _e6 = unary();
+    float _e7 = constructors();
     return;
 }
 

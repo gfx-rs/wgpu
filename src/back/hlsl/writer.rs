@@ -1,5 +1,5 @@
 use super::{
-    help::{MipLevelCoordinate, WrappedArrayLength, WrappedImageQuery},
+    help::{MipLevelCoordinate, WrappedArrayLength, WrappedConstructor, WrappedImageQuery},
     storage::StoreValue,
     BackendResult, Error, Options,
 };
@@ -81,8 +81,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             options,
             entry_point_io: Vec::new(),
             named_expressions: crate::NamedExpressions::default(),
-            wrapped_array_lengths: crate::FastHashSet::default(),
-            wrapped_image_queries: crate::FastHashSet::default(),
+            wrapped: super::Wrapped::default(),
             temp_access_chain: Vec::new(),
         }
     }
@@ -93,8 +92,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             .reset(module, super::keywords::RESERVED, &[], &mut self.names);
         self.entry_point_io.clear();
         self.named_expressions.clear();
-        self.wrapped_array_lengths.clear();
-        self.wrapped_image_queries.clear();
+        self.wrapped.clear();
     }
 
     pub fn write(
@@ -807,7 +805,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ///
     /// # Notes
     /// Adds no trailing or leading whitespace
-    fn write_type(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
+    pub(super) fn write_type(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
         let inner = &module.types[ty].inner;
         match *inner {
             TypeInner::Struct { .. } => write!(self.out, "{}", self.names[&NameKey::Type(ty)])?,
@@ -1184,7 +1182,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             Statement::Store { pointer, value } => {
-                let array_info = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
+                let ty_inner = func_ctx.info[pointer].ty.inner_with(&module.types);
+                let array_info = match *ty_inner {
                     TypeInner::Pointer { base, .. } => match module.types[base].inner {
                         crate::TypeInner::Array {
                             size: crate::ArraySize::Constant(ch),
@@ -1195,11 +1194,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     _ => None,
                 };
 
-                if let Some(crate::StorageClass::Storage { .. }) = func_ctx.info[pointer]
-                    .ty
-                    .inner_with(&module.types)
-                    .pointer_class()
-                {
+                if let Some(crate::StorageClass::Storage { .. }) = ty_inner.pointer_class() {
                     let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
                     self.write_storage_store(
                         module,
@@ -1512,17 +1507,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::Compose { ty, ref components } => {
-                let braces_init = match module.types[ty].inner {
-                    TypeInner::Struct { .. } | TypeInner::Array { .. } => true,
-                    _ => false,
+                let (brace_open, brace_close) = match module.types[ty].inner {
+                    TypeInner::Struct { .. } => {
+                        self.write_wrapped_constructor_function_name(WrappedConstructor { ty })?;
+                        ("(", ")")
+                    }
+                    TypeInner::Array { .. } => ("{ ", " }"),
+                    _ => {
+                        self.write_type(module, ty)?;
+                        ("(", ")")
+                    }
                 };
 
-                if braces_init {
-                    write!(self.out, "{{ ")?;
-                } else {
-                    self.write_type(module, ty)?;
-                    write!(self.out, "(")?;
-                }
+                write!(self.out, "{}", brace_open)?;
 
                 for (index, &component) in components.iter().enumerate() {
                     if index != 0 {
@@ -1532,11 +1529,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_expr(module, component, func_ctx)?;
                 }
 
-                if braces_init {
-                    write!(self.out, " }}")?
-                } else {
-                    write!(self.out, ")")?
-                }
+                write!(self.out, "{}", brace_close)?;
             }
             // All of the multiplication can be expressed as `mul`,
             // except vector * vector, which needs to use the "*" operator.
