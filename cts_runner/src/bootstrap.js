@@ -198,7 +198,8 @@ delete Object.prototype.__proto__;
 
   let hasBootstrapped = false;
 
-  function bootstrapRuntime(args) {
+  function bootstrapRuntime({ args, cwd }) {
+    core.setMacrotaskCallback(timers.handleTimerMacrotask);
     if (hasBootstrapped) {
       throw new Error("Runtime has already been bootstrapped.");
     }
@@ -212,8 +213,9 @@ delete Object.prototype.__proto__;
     Object.defineProperties(globalThis, mainRuntimeGlobalProperties);
     Object.setPrototypeOf(globalThis, Window.prototype);
     eventTarget.setEventTargetData(globalThis);
-    
+
     denoNs.args = args;
+    denoNs.cwd = () => cwd;
     util.immutableDefine(globalThis, "Deno", denoNs);
     Object.freeze(globalThis.Deno);
 

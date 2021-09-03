@@ -8,18 +8,16 @@ use deno_core::error::AnyError;
 use deno_core::located_script_name;
 use deno_core::resolve_url_or_path;
 use deno_core::serde_json;
+use deno_core::serde_json::json;
 use deno_core::JsRuntime;
 use deno_core::OpState;
 use deno_core::RuntimeOptions;
-use deno_core::Snapshot;
 use deno_core::ZeroCopyBuf;
 use deno_web::BlobStore;
 use termcolor::Ansi;
 use termcolor::Color::Red;
 use termcolor::ColorSpec;
 use termcolor::WriteColor;
-
-static CTSR_SNAPSHOT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/CTSR_SNAPSHOT.bin"));
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -34,15 +32,14 @@ async fn run() -> Result<(), AnyError> {
     let specifier = resolve_url_or_path(url)?;
 
     let options = RuntimeOptions {
-        startup_snapshot: Some(Snapshot::Static(CTSR_SNAPSHOT)),
         module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
         get_error_class_fn: Some(&get_error_class_name),
         extensions: vec![
             deno_webidl::init(),
             deno_console::init(),
-            deno_timers::init::<deno_timers::NoTimersPermission>(),
             deno_url::init(),
             deno_web::init(BlobStore::default(), None),
+            deno_timers::init::<deno_timers::NoTimersPermission>(),
             deno_webgpu::init(true),
             extension(),
         ],
@@ -50,7 +47,8 @@ async fn run() -> Result<(), AnyError> {
     };
     let mut isolate = JsRuntime::new(options);
     let args: Vec<String> = std::env::args().skip(2).collect();
-    let bootstrap_script = format!("globalThis.bootstrap({})", serde_json::to_string(&args)?);
+    let cfg = json!({"args": args, "cwd": std::env::current_dir().unwrap().to_string_lossy() });
+    let bootstrap_script = format!("globalThis.bootstrap({})", serde_json::to_string(&cfg)?);
     isolate.execute_script(&located_script_name!(), &bootstrap_script)?;
 
     isolate
@@ -59,12 +57,12 @@ async fn run() -> Result<(), AnyError> {
         .put(deno_timers::NoTimersPermission);
 
     let mod_id = isolate.load_module(&specifier, None).await?;
-    let rx = isolate.mod_evaluate(mod_id);
+    let mod_rx = isolate.mod_evaluate(mod_id);
 
     let rx = tokio::spawn(async move {
-        match rx.await {
-            Ok(err @ Err(_)) => return err,
-            _ => return Ok(()),
+        match mod_rx.await {
+            Ok(err @ Err(_)) => err,
+            _ => Ok(()),
         }
     });
 
@@ -81,6 +79,10 @@ fn extension() -> deno_core::Extension {
             ("op_read_file_sync", deno_core::op_sync(op_read_file_sync)),
             ("op_write_file_sync", deno_core::op_sync(op_write_file_sync)),
         ])
+        .js(deno_core::include_js_files!(
+          prefix "deno:cts_runner",
+          "src/bootstrap.js",
+        ))
         .build()
 }
 
