@@ -55,6 +55,7 @@ pub enum LoadOp {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum StoreOp {
     /// Discards the content of the render target. If you don't care about the contents of the target, this can be faster.
     Discard = 0,
