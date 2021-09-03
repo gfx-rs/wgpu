@@ -109,7 +109,7 @@ impl Resource for WebGpuQuerySet {
 pub fn init(unstable: bool) -> Extension {
     Extension::builder()
         .js(include_js_files!(
-          prefix "deno:ext/webgpu",
+          prefix "deno:deno_webgpu",
           "01_webgpu.js",
           "02_idl_types.js",
         ))

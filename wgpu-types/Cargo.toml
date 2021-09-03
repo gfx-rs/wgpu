@@ -12,9 +12,10 @@ license = "MIT OR Apache-2.0"
 [lib]
 
 [features]
-trace = ["serde"]
-replay = ["serde"]
+trace = ["serde", "bitflags_serde_shim"]
+replay = ["serde", "bitflags_serde_shim"]
 
 [dependencies]
 bitflags = "1.0"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
+bitflags_serde_shim = { version = "0.2", optional = true }
