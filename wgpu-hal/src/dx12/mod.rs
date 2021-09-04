@@ -406,13 +406,8 @@ impl Texture {
         }
     }
 
-    // TODO: Duplicated from wgt::TextureDescriptor, should be shared
-    fn mip_level_size(&self, level: u32) -> Option<wgt::Extent3d> {
-        if level >= self.mip_level_count {
-            return None;
-        }
-
-        Some(wgt::Extent3d {
+    fn mip_level_size(&self, level: u32) -> wgt::Extent3d {
+        wgt::Extent3d {
             width: u32::max(1, self.size.width >> level),
             height: u32::max(1, self.size.height >> level),
             depth_or_array_layers: match self.dimension {
@@ -421,7 +416,7 @@ impl Texture {
                 }
                 wgt::TextureDimension::D3 => u32::max(1, self.size.depth_or_array_layers >> level),
             },
-        })
+        }
     }
 
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {

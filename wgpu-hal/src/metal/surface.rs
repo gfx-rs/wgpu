@@ -60,6 +60,7 @@ impl super::Surface {
         Self {
             view,
             render_layer: Mutex::new(layer),
+            swapchain_format: wgt::TextureFormat::Bgra8UnormSrgb, // no value invalid, pick something not too far-fetched
             raw_swapchain_format: mtl::MTLPixelFormat::Invalid,
             main_thread_id: thread::current().id(),
             present_with_transaction: false,
@@ -209,6 +210,7 @@ impl crate::Surface<super::Api> for super::Surface {
         log::info!("build swapchain {:?}", config);
 
         let caps = &device.shared.private_caps;
+        self.swapchain_format = config.format;
         self.raw_swapchain_format = caps.map_format(config.format);
 
         let render_layer = self.render_layer.lock();
@@ -271,10 +273,12 @@ impl crate::Surface<super::Api> for super::Surface {
         let suf_texture = super::SurfaceTexture {
             texture: super::Texture {
                 raw: texture,
+                format: self.swapchain_format,
                 raw_format: self.raw_swapchain_format,
                 raw_type: mtl::MTLTextureType::D2,
                 array_layers: 1,
                 mip_levels: 1,
+                size: self.dimensions(),
             },
             drawable,
             present_with_transaction: self.present_with_transaction,

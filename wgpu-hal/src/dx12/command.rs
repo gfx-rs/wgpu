@@ -420,7 +420,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     .map_or(texture.array_layer_count(), |c| c.get()));
 
         for mip_level in mip_range {
-            let bytes_per_row = texture.mip_level_size(mip_level).unwrap().width
+            let bytes_per_row = texture.mip_level_size(mip_level).width
                 / format_desc.block_dimensions.0 as u32
                 * format_desc.block_size as u32;
             // round up to a multiple of d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
@@ -438,13 +438,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 // We excluded depth/stencil, so plane should be always zero
                 *dst_location.u.SubresourceIndex_mut() =
                     texture.calc_subresource(mip_level, array_layer, 0);
-
-                // May need multiple copies for each subresource!
-                // We assume that we never need to split a row. Back of the envelope calculation tells us a 512kb byte buffer is enough for this for most extreme known cases.
-                // max_texture_width * max_pixel_size = 32768 * 16 = 512kb
-
                 // 3D textures are quickly massive in memory size, so we don't bother trying to do more than one layer at once.
                 for z in 0..depth {
+                    // May need multiple copies for each subresource!
+                    // We assume that we never need to split a row. Back of the envelope calculation tells us a 512kb byte buffer is enough for this for most extreme known cases.
+                    // max_texture_width * max_pixel_size = 32768 * 16 = 512kb
                     let mut num_rows_left = texture.size.height;
                     while num_rows_left > 0 {
                         let num_rows = num_rows_left.min(max_rows_per_copy);
