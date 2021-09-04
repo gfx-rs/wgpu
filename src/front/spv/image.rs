@@ -528,24 +528,54 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
         }
 
-        let (coordinate, array_index) = match type_arena[image_ty].inner {
+        let ((coordinate, array_index), depth_ref) = match type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
                 class: _,
-            } => extract_image_coordinates(
-                dim,
-                if options.project {
-                    ExtraCoordinate::Projection
-                } else if arrayed {
-                    ExtraCoordinate::ArrayLayer
-                } else {
-                    ExtraCoordinate::Garbage
+            } => (
+                extract_image_coordinates(
+                    dim,
+                    if options.project {
+                        ExtraCoordinate::Projection
+                    } else if arrayed {
+                        ExtraCoordinate::ArrayLayer
+                    } else {
+                        ExtraCoordinate::Garbage
+                    },
+                    coord_lexp.handle,
+                    coord_type_handle,
+                    type_arena,
+                    expressions,
+                ),
+                {
+                    match dref_id {
+                        Some(id) => {
+                            let mut expr = self.lookup_expression.lookup(id)?.handle;
+
+                            if options.project {
+                                let required_size = dim.required_coordinate_size();
+                                let right = expressions.append(
+                                    crate::Expression::AccessIndex {
+                                        base: coord_lexp.handle,
+                                        index: required_size.map_or(1, |size| size as u32),
+                                    },
+                                    crate::Span::Unknown,
+                                );
+                                expr = expressions.append(
+                                    crate::Expression::Binary {
+                                        op: crate::BinaryOperator::Divide,
+                                        left: expr,
+                                        right,
+                                    },
+                                    crate::Span::Unknown,
+                                )
+                            };
+                            Some(expr)
+                        }
+                        None => None,
+                    }
                 },
-                coord_lexp.handle,
-                coord_type_handle,
-                type_arena,
-                expressions,
             ),
             _ => return Err(Error::InvalidImage(image_ty)),
         };
@@ -557,10 +587,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             array_index,
             offset,
             level,
-            depth_ref: match dref_id {
-                Some(id) => Some(self.lookup_expression.lookup(id)?.handle),
-                None => None,
-            },
+            depth_ref,
         };
         self.lookup_expression.insert(
             result_id,
