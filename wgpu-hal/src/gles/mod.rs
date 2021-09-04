@@ -188,7 +188,7 @@ pub struct Queue {
     shader_clear_program: glow::Program,
     /// The uniform location of the color uniform in the shader clear program
     shader_clear_program_color_uniform_location: glow::UniformLocation,
-    /// Keep a reasonably large buffer filled with zeroes, so that we can implement `FillBuffer` of
+    /// Keep a reasonably large buffer filled with zeroes, so that we can implement `ClearBuffer` of
     /// zeroes by copying from it.
     zero_buffer: glow::Buffer,
     temp_query_results: Vec<u64>,
@@ -531,6 +531,11 @@ enum Command {
         dst: glow::Buffer,
         dst_target: BindTarget,
         range: crate::MemoryRange,
+    },
+    ClearTexture {
+        dst: glow::Texture,
+        dst_target: BindTarget,
+        subresource_range: wgt::ImageSubresourceRange,
     },
     CopyBufferToBuffer {
         src: glow::Buffer,
