@@ -863,7 +863,7 @@ impl super::PrivateCapabilities {
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::POLYGON_MODE_LINE
-	    | wgt::Features::CLEAR_COMMANDS;
+            | wgt::Features::CLEAR_COMMANDS;
 
         features.set(
             F::TEXTURE_BINDING_ARRAY

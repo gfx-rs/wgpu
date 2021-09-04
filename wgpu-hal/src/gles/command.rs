@@ -254,7 +254,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.cmd_buffer.commands.push(C::ClearTexture {
             dst,
             dst_target,
-            subresource_range: *subresource_range,
+            subresource_range: subresource_range.clone(),
         });
     }
 

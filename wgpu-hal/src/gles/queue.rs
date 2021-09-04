@@ -211,9 +211,9 @@ impl super::Queue {
                 }
             }
             C::ClearTexture {
-                dst,
-                dst_target,
-                ref subresource_range,
+                dst: _,
+                dst_target: _,
+                subresource_range: _,
             } => {
                 // Should EXT_clear_texture when possible.
                 // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clear_texture.txt
