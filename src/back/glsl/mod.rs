@@ -2188,10 +2188,12 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // TODO: Boolean mix on desktop required GL_EXT_shader_integer_mix
                 if vec_select {
+                    // Glsl defines that for mix when the condition is a boolean the first element
+                    // is picked if condition is false and the second if condition is true
                     write!(self.out, "mix(")?;
-                    self.write_expr(accept, ctx)?;
-                    write!(self.out, ", ")?;
                     self.write_expr(reject, ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(accept, ctx)?;
                     write!(self.out, ", ")?;
                     self.write_expr(condition, ctx)?;
                 } else {
