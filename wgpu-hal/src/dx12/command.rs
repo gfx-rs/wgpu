@@ -384,7 +384,96 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         texture: &super::Texture,
         subresource_range: &wgt::ImageSubresourceRange,
     ) {
-        unimplemented!();
+        // Note that CopyTextureRegion for depth/stencil or multisample resources would require full subresource copies.
+        // Meaning we'd need a much larger pre-zeroed buffer
+        // (but instead we just define clear_texture to not support these)
+
+        let list = self.list.unwrap();
+        let mut src_location = d3d12::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: self.shared.zero_buffer.as_mut_ptr(),
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            u: mem::zeroed(),
+        };
+        let mut dst_location = d3d12::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: texture.resource.as_mut_ptr(),
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            u: mem::zeroed(),
+        };
+        let raw_format = conv::map_texture_format(texture.format);
+        let format_desc = texture.format.describe();
+
+        let depth = if texture.dimension == wgt::TextureDimension::D3 {
+            texture.size.depth_or_array_layers
+        } else {
+            1
+        };
+
+        let mip_range = subresource_range.base_mip_level
+            ..(subresource_range.base_mip_level
+                + subresource_range
+                    .mip_level_count
+                    .map_or(texture.mip_level_count, |c| c.get()));
+        let array_range = subresource_range.base_array_layer
+            ..(subresource_range.base_array_layer
+                + subresource_range
+                    .array_layer_count
+                    .map_or(texture.array_layer_count(), |c| c.get()));
+
+        for mip_level in mip_range {
+            let bytes_per_row = texture.mip_level_size(mip_level).unwrap().width
+                / format_desc.block_dimensions.0 as u32
+                * format_desc.block_size as u32;
+            // round up to a multiple of d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
+            let bytes_per_row = (bytes_per_row + d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1)
+                / d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
+                * d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+
+            let max_rows_per_copy = super::ZERO_BUFFER_SIZE as u32 / bytes_per_row;
+            // round down to a multiple of rows needed by the texture format
+            let max_rows_per_copy = max_rows_per_copy / format_desc.block_dimensions.1 as u32
+                * format_desc.block_dimensions.1 as u32;
+            assert!(max_rows_per_copy > 0, "Zero buffer size is too small to fill a single row of a texture with dimension {:?}, size {:?} and format {:?}", texture.dimension, texture.size, texture.format);
+
+            for array_layer in array_range.clone() {
+                // We excluded depth/stencil, so plane should be always zero
+                *dst_location.u.SubresourceIndex_mut() =
+                    texture.calc_subresource(mip_level, array_layer, 0);
+
+                // May need multiple copies for each subresource!
+                // We assume that we never need to split a row. Back of the envelope calculation tells us a 512kb byte buffer is enough for this for most extreme known cases.
+                // max_texture_width * max_pixel_size = 32768 * 16 = 512kb
+
+                // 3D textures are quickly massive in memory size, so we don't bother trying to do more than one layer at once.
+                for z in 0..depth {
+                    let mut num_rows_left = texture.size.height;
+                    while num_rows_left > 0 {
+                        let num_rows = num_rows_left.min(max_rows_per_copy);
+
+                        *src_location.u.PlacedFootprint_mut() =
+                            d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                                Offset: 0,
+                                Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
+                                    Format: raw_format,
+                                    Width: texture.size.width,
+                                    Height: num_rows,
+                                    Depth: 1,
+                                    RowPitch: bytes_per_row,
+                                },
+                            };
+
+                        list.CopyTextureRegion(
+                            &dst_location,
+                            0,
+                            texture.size.height - num_rows_left,
+                            z,
+                            &src_location,
+                            std::ptr::null(),
+                        );
+                        num_rows_left -= num_rows;
+                    }
+                }
+            }
+        }
     }
 
     unsafe fn copy_buffer_to_buffer<T>(

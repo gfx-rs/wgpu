@@ -2260,6 +2260,8 @@ impl CommandEncoder {
 
     /// Clears texture to zero.
     ///
+    /// Where possible it may be significantly more efficient to perform clears via render targets!
+    ///
     /// # Panics
     ///
     /// - `CLEAR_COMMANDS` extension not enabled

@@ -120,7 +120,7 @@ impl<T> HResult<T> for (T, i32) {
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
 const MAX_ROOT_ELEMENTS: usize = 64;
-const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
+const ZERO_BUFFER_SIZE: wgt::BufferAddress = 512 << 10;
 
 pub struct Instance {
     factory: native::Factory4,
@@ -404,6 +404,24 @@ impl Texture {
             }
             wgt::TextureDimension::D3 => 1,
         }
+    }
+
+    // TODO: Duplicated from wgt::TextureDescriptor, should be shared
+    fn mip_level_size(&self, level: u32) -> Option<wgt::Extent3d> {
+        if level >= self.mip_level_count {
+            return None;
+        }
+
+        Some(wgt::Extent3d {
+            width: u32::max(1, self.size.width >> level),
+            height: u32::max(1, self.size.height >> level),
+            depth_or_array_layers: match self.dimension {
+                wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+                    self.size.depth_or_array_layers
+                }
+                wgt::TextureDimension::D3 => u32::max(1, self.size.depth_or_array_layers >> level),
+            },
+        })
     }
 
     fn calc_subresource(&self, mip_level: u32, array_layer: u32, plane: u32) -> u32 {
