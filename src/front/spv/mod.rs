@@ -40,7 +40,7 @@ use function::*;
 
 use crate::{
     arena::{Arena, Handle},
-    proc::{Alignment, Layouter},
+    proc::Layouter,
     FastHashMap,
 };
 
@@ -3245,10 +3245,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             .update(&module.types, &module.constants)
             .unwrap();
 
-        let mut struct_alignment = Alignment::new(1).unwrap();
         let mut members = Vec::<crate::StructMember>::with_capacity(inst.wc as usize - 2);
         let mut member_lookups = Vec::with_capacity(members.capacity());
         let mut storage_access = crate::StorageAccess::empty();
+        let mut span = 0;
+        let mut alignment = 1;
         for i in 0..u32::from(inst.wc) - 2 {
             let type_id = self.next()?;
             let ty = self.lookup_type.lookup(type_id)?.handle;
@@ -3264,9 +3265,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 row_major: decor.matrix_major == Some(Majority::Row),
             });
 
+            span = crate::front::align_up(span, self.layouter[ty].alignment.get());
+            alignment = self.layouter[ty].alignment.get().max(alignment);
+
             let binding = decor.io_binding().ok();
-            // I/O structs don't have to have offsets, others do
-            let offset = decor.offset.unwrap_or(0);
+            if let Some(offset) = decor.offset {
+                span = offset;
+            }
+            let offset = span;
+
+            span += self.layouter[ty].size;
 
             if let crate::TypeInner::Matrix {
                 columns,
@@ -3292,8 +3300,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
             }
 
-            struct_alignment = struct_alignment.max(self.layouter[ty].alignment);
-
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
@@ -3302,16 +3308,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             });
         }
 
+        span = crate::front::align_up(span, alignment);
+
         let inner = crate::TypeInner::Struct {
             top_level: block_decor.is_some(),
-            span: members
-                .iter()
-                .map(|member| {
-                    let end = member.offset + module.types[member.ty].inner.span(&module.constants);
-                    ((end - 1) | (struct_alignment.get() - 1)) + 1
-                })
-                .max()
-                .unwrap_or(4), //do we support this?
+            span,
             members,
         };
 

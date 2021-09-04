@@ -13,7 +13,7 @@ use super::{
     error::{Error, ErrorKind},
     SourceMetadata,
 };
-use crate::{Arena, Constant, Handle, Type, TypeInner};
+use crate::{front::align_up, Arena, Constant, Handle, Type, TypeInner};
 
 /// Struct with information needed for defining a struct member.
 ///
@@ -169,21 +169,4 @@ pub fn calculate_offset(
     };
 
     TypeAlignSpan { ty, align, span }
-}
-
-/// Helper function used for aligning `value` to the next multiple of `align`
-///
-/// # Notes:
-/// - `align` must be a power of two.
-/// - The returned value will be greater or equal to `value`.
-/// # Examples:
-/// ```ignore
-/// assert_eq!(0, align_up(0, 16));
-/// assert_eq!(16, align_up(1, 16));
-/// assert_eq!(16, align_up(16, 16));
-/// assert_eq!(334, align_up(333, 2));
-/// assert_eq!(384, align_up(257, 128));
-/// ```
-pub fn align_up(value: u32, align: u32) -> u32 {
-    ((value.wrapping_sub(1)) & !(align - 1)).wrapping_add(align)
 }
