@@ -597,7 +597,7 @@ impl<'source> ParsingContext<'source> {
                 &mut parser.errors,
             );
 
-            span = offset::align_up(span, info.align);
+            span = crate::front::align_up(span, info.align);
             align = align.max(info.align);
 
             members.push(StructMember {
@@ -614,7 +614,7 @@ impl<'source> ParsingContext<'source> {
             }
         }
 
-        span = offset::align_up(span, align);
+        span = crate::front::align_up(span, align);
 
         Ok(span)
     }
