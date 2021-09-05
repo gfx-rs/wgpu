@@ -2692,6 +2692,18 @@ impl Extent3d {
         let max_dim = self.width.max(self.height.max(self.depth_or_array_layers));
         32 - max_dim.leading_zeros()
     }
+
+    /// Calculates the extent at a given mip level.
+    pub fn mip_level_size(&self, level: u32, is_3d_texture: bool) -> Extent3d {
+        Extent3d {
+            width: u32::max(1, self.width >> level),
+            height: u32::max(1, self.height >> level),
+            depth_or_array_layers: match is_3d_texture {
+                false => self.depth_or_array_layers,
+                true => u32::max(1, self.depth_or_array_layers >> level),
+            },
+        }
+    }
 }
 
 /// Describes a [`Texture`].
@@ -2765,14 +2777,10 @@ impl<L> TextureDescriptor<L> {
             return None;
         }
 
-        Some(Extent3d {
-            width: u32::max(1, self.size.width >> level),
-            height: u32::max(1, self.size.height >> level),
-            depth_or_array_layers: match self.dimension {
-                TextureDimension::D1 | TextureDimension::D2 => self.size.depth_or_array_layers,
-                TextureDimension::D3 => u32::max(1, self.size.depth_or_array_layers >> level),
-            },
-        })
+        Some(
+            self.size
+                .mip_level_size(level, self.dimension == TextureDimension::D3),
+        )
     }
 
     /// Returns the number of array layers.

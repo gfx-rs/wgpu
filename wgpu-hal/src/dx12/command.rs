@@ -402,26 +402,25 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let raw_format = conv::map_texture_format(texture.format);
         let format_desc = texture.format.describe();
 
-        let depth = if texture.dimension == wgt::TextureDimension::D3 {
-            texture.size.depth_or_array_layers
-        } else {
-            1
+        let mip_range = subresource_range.base_mip_level..match subresource_range.mip_level_count {
+            Some(c) => subresource_range.base_mip_level + c.get(),
+            None => texture.mip_level_count,
         };
-
-        let mip_range = subresource_range.base_mip_level
-            ..(subresource_range.base_mip_level
-                + subresource_range
-                    .mip_level_count
-                    .map_or(texture.mip_level_count, |c| c.get()));
         let array_range = subresource_range.base_array_layer
-            ..(subresource_range.base_array_layer
-                + subresource_range
-                    .array_layer_count
-                    .map_or(texture.array_layer_count(), |c| c.get()));
-
+            ..match subresource_range.array_layer_count {
+                Some(c) => subresource_range.base_array_layer + c.get(),
+                None => texture.array_layer_count(),
+            };
         for mip_level in mip_range {
-            let bytes_per_row = texture.mip_level_size(mip_level).width
-                / format_desc.block_dimensions.0 as u32
+            let mip_size = texture
+                .size
+                .mip_level_size(mip_level, texture.dimension == wgt::TextureDimension::D3);
+            let depth = if texture.dimension == wgt::TextureDimension::D3 {
+                mip_size.depth_or_array_layers
+            } else {
+                1
+            };
+            let bytes_per_row = mip_size.width / format_desc.block_dimensions.0 as u32
                 * format_desc.block_size as u32;
             // round up to a multiple of d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
             let bytes_per_row = (bytes_per_row + d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1)
@@ -443,7 +442,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     // May need multiple copies for each subresource!
                     // We assume that we never need to split a row. Back of the envelope calculation tells us a 512kb byte buffer is enough for this for most extreme known cases.
                     // max_texture_width * max_pixel_size = 32768 * 16 = 512kb
-                    let mut num_rows_left = texture.size.height;
+                    let mut num_rows_left = mip_size.height;
                     while num_rows_left > 0 {
                         let num_rows = num_rows_left.min(max_rows_per_copy);
 
@@ -452,7 +451,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                                 Offset: 0,
                                 Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
                                     Format: raw_format,
-                                    Width: texture.size.width,
+                                    Width: mip_size.width,
                                     Height: num_rows,
                                     Depth: 1,
                                     RowPitch: bytes_per_row,
@@ -462,7 +461,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         list.CopyTextureRegion(
                             &dst_location,
                             0,
-                            texture.size.height - num_rows_left,
+                            mip_size.height - num_rows_left,
                             z,
                             &src_location,
                             std::ptr::null(),

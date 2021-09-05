@@ -426,19 +426,6 @@ pub struct Texture {
 unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
-impl Texture {
-    fn mip_level_size(&self, level: u32) -> wgt::Extent3d {
-        wgt::Extent3d {
-            width: u32::max(1, self.size.width >> level),
-            height: u32::max(1, self.size.height >> level),
-            depth_or_array_layers: match self.raw_type {
-                mtl::MTLTextureType::D3 => u32::max(1, self.size.depth_or_array_layers >> level),
-                _ => self.size.depth_or_array_layers,
-            },
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct TextureView {
     raw: mtl::Texture,

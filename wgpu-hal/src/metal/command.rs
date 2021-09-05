@@ -140,27 +140,28 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.enter_blit();
 
         let format_desc = texture.format.describe();
-        let depth = if texture.raw_type == mtl::MTLTextureType::D3 {
-            texture.size.depth_or_array_layers as u64
-        } else {
-            1
-        };
 
-        let mip_range = subresource_range.base_mip_level
-            ..(subresource_range.base_mip_level
-                + subresource_range
-                    .mip_level_count
-                    .map_or(texture.mip_levels, |c| c.get()));
+        let mip_range = subresource_range.base_mip_level..match subresource_range.mip_level_count {
+            Some(c) => subresource_range.base_mip_level + c.get(),
+            None => texture.mip_levels,
+        };
         let array_range = subresource_range.base_array_layer
-            ..(subresource_range.base_array_layer
-                + subresource_range
-                    .array_layer_count
-                    .map_or(texture.array_layers, |c| c.get()));
+            ..match subresource_range.array_layer_count {
+                Some(c) => subresource_range.base_array_layer + c.get(),
+                None => texture.array_layers,
+            };
 
         for mip_level in mip_range {
             // Note that Metal requires this only to be a multiple of the pixel size, not some other constant like in other APIs.
-            let bytes_per_row = texture.mip_level_size(mip_level).width as u64
-                / format_desc.block_dimensions.0 as u64
+            let mip_size = texture
+                .size
+                .mip_level_size(mip_level, texture.raw_type == mtl::MTLTextureType::D3);
+            let depth = if texture.raw_type == mtl::MTLTextureType::D3 {
+                mip_size.depth_or_array_layers as u64
+            } else {
+                1
+            };
+            let bytes_per_row = mip_size.width as u64 / format_desc.block_dimensions.0 as u64
                 * format_desc.block_size as u64;
             let max_rows_per_copy = super::ZERO_BUFFER_SIZE / bytes_per_row;
             // round down to a multiple of rows needed by the texture format
@@ -173,17 +174,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 // 3D textures are quickly massive in memory size, so we don't bother trying to do more than one layer at once.
                 for z in 0..depth {
                     // May need multiple copies for each subresource! We assume that we never need to split a row.
-                    let mut num_rows_left = texture.size.height as u64;
+                    let mut num_rows_left = mip_size.height as u64;
                     while num_rows_left > 0 {
                         let num_rows = num_rows_left.min(max_rows_per_copy);
                         let source_size = mtl::MTLSize {
-                            width: texture.size.width as u64,
+                            width: mip_size.width as u64,
                             height: num_rows,
                             depth: 1,
                         };
                         let destination_origion = mtl::MTLOrigin {
                             x: 0,
-                            y: texture.size.height as u64 - num_rows_left,
+                            y: mip_size.height as u64 - num_rows_left,
                             z,
                         };
                         encoder.copy_from_buffer_to_texture(
