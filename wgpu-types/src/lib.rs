@@ -495,7 +495,7 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_WRITABLE_STORAGE = 1 << 35;
-        /// Enables clear to zero for buffers & images.
+        /// Enables clear to zero for buffers & textures.
         ///
         /// Supported platforms:
         /// - All

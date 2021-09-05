@@ -2260,7 +2260,7 @@ impl CommandEncoder {
 
     /// Clears texture to zero.
     ///
-    /// Where possible it may be significantly more efficient to perform clears via render targets!
+    /// Where possible it may be significantly more efficient to perform clears via render passes!
     ///
     /// # Panics
     ///
