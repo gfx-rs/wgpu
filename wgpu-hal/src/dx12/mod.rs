@@ -746,4 +746,10 @@ impl crate::Queue<Api> for Queue {
 
         Ok(())
     }
+
+    unsafe fn get_timestamp_period(&self) -> f32 {
+        let mut frequency = 0u64;
+        self.raw.GetTimestampFrequency(&mut frequency);
+        (1_000_000_000.0 / frequency as f64) as f32
+    }
 }

@@ -103,6 +103,10 @@ impl crate::Queue<Api> for Context {
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
+
+    unsafe fn get_timestamp_period(&self) -> f32 {
+        1.0
+    }
 }
 
 impl crate::Device<Api> for Context {
