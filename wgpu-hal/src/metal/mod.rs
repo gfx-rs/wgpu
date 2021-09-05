@@ -378,6 +378,11 @@ impl crate::Queue<Api> for Queue {
         });
         Ok(())
     }
+
+    unsafe fn get_timestamp_period(&self) -> f32 {
+        // TODO: This is hard, see https://github.com/gpuweb/gpuweb/issues/1325
+        1.0
+    }
 }
 
 #[derive(Debug)]

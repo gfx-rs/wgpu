@@ -841,7 +841,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         match device_guard.get(queue_id) {
-            Ok(_device) => Ok(1.0), //TODO?
+            Ok(device) => Ok(unsafe { device.queue.get_timestamp_period() }),
             Err(_) => Err(InvalidQueue),
         }
     }
