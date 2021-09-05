@@ -972,4 +972,8 @@ impl crate::Queue<super::Api> for super::Queue {
         let gl = &self.shared.context.get_without_egl_lock();
         surface.present(texture, gl)
     }
+
+    unsafe fn get_timestamp_period(&self) -> f32 {
+        1.0
+    }
 }
