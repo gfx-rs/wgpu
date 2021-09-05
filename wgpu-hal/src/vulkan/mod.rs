@@ -222,7 +222,7 @@ struct DeviceShared {
     instance: Arc<InstanceShared>,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
-    _timestamp_period: f32,
+    timestamp_period: f32,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     render_passes: Mutex<fxhash::FxHashMap<RenderPassKey, vk::RenderPass>>,
@@ -549,6 +549,10 @@ impl crate::Queue<Api> for Queue {
             log::warn!("Suboptimal present of frame {}", texture.index);
         }
         Ok(())
+    }
+
+    unsafe fn get_timestamp_period(&self) -> f32 {
+        self.device.timestamp_period
     }
 }
 

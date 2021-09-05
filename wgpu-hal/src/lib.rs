@@ -314,6 +314,7 @@ pub trait Queue<A: Api>: Send + Sync {
         surface: &mut A::Surface,
         texture: A::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
+    unsafe fn get_timestamp_period(&self) -> f32;
 }
 
 /// Encoder for commands in command buffers.
