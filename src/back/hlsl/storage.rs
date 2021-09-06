@@ -2,10 +2,7 @@
 //!
 //! HLSL backend uses byte address buffers for all storage buffers in IR.
 
-use super::{
-    super::{FunctionCtx, INDENT},
-    BackendResult, Error,
-};
+use super::{super::FunctionCtx, BackendResult, Error};
 use crate::{
     proc::{NameKey, TypeResolution},
     Handle,
@@ -202,7 +199,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         var_handle: Handle<crate::GlobalVariable>,
         value: StoreValue,
         func_ctx: &FunctionCtx,
-        indent: usize,
+        level: crate::back::Level,
     ) -> BackendResult {
         let temp_resolution;
         let ty_resolution = match value {
@@ -232,7 +229,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                write!(self.out, "{}{}.Store(", INDENT.repeat(indent), var_name)?;
+                write!(self.out, "{}{}.Store(", level, var_name)?;
                 self.write_storage_address(module, &chain, func_ctx)?;
                 write!(self.out, ", asuint(")?;
                 self.write_store_value(module, &value, func_ctx)?;
@@ -243,13 +240,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 // working around the borrow checker in `self.write_expr`
                 let chain = mem::take(&mut self.temp_access_chain);
                 let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                write!(
-                    self.out,
-                    "{}{}.Store{}(",
-                    INDENT.repeat(indent),
-                    var_name,
-                    size as u8
-                )?;
+                write!(self.out, "{}{}.Store{}(", level, var_name, size as u8)?;
                 self.write_storage_address(module, &chain, func_ctx)?;
                 write!(self.out, ", asuint(")?;
                 self.write_store_value(module, &value, func_ctx)?;
@@ -262,12 +253,12 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 width,
             } => {
                 // first, assign the value to a temporary
-                writeln!(self.out, "{}{{", INDENT.repeat(indent))?;
-                let depth = indent + 1;
+                writeln!(self.out, "{}{{", level)?;
+                let depth = level.0 + 1;
                 write!(
                     self.out,
                     "{}{}{}x{} {}{} = ",
-                    INDENT.repeat(indent + 1),
+                    level.next(),
                     crate::ScalarKind::Float.to_hlsl_str(width)?,
                     rows as u8,
                     columns as u8,
@@ -291,11 +282,11 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                         index: i,
                         ty: TypeResolution::Value(ty_inner),
                     };
-                    self.write_storage_store(module, var_handle, sv, func_ctx, indent + 1)?;
+                    self.write_storage_store(module, var_handle, sv, func_ctx, level.next())?;
                     self.temp_access_chain.pop();
                 }
                 // done
-                writeln!(self.out, "{}}}", INDENT.repeat(indent))?;
+                writeln!(self.out, "{}}}", level)?;
             }
             crate::TypeInner::Array {
                 base,
@@ -303,10 +294,10 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 ..
             } => {
                 // first, assign the value to a temporary
-                writeln!(self.out, "{}{{", INDENT.repeat(indent))?;
-                write!(self.out, "{}", INDENT.repeat(indent + 1))?;
+                writeln!(self.out, "{}{{", level)?;
+                write!(self.out, "{}", level.next())?;
                 self.write_value_type(module, &module.types[base].inner)?;
-                let depth = indent + 1;
+                let depth = level.next().0;
                 write!(self.out, " {}{}", STORE_TEMP_NAME, depth)?;
                 self.write_array_size(module, crate::ArraySize::Constant(const_handle))?;
                 write!(self.out, " = ")?;
@@ -322,22 +313,22 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                         index: i,
                         ty: TypeResolution::Handle(base),
                     };
-                    self.write_storage_store(module, var_handle, sv, func_ctx, indent + 1)?;
+                    self.write_storage_store(module, var_handle, sv, func_ctx, level.next())?;
                     self.temp_access_chain.pop();
                 }
                 // done
-                writeln!(self.out, "{}}}", INDENT.repeat(indent))?;
+                writeln!(self.out, "{}}}", level)?;
             }
             crate::TypeInner::Struct { ref members, .. } => {
                 // first, assign the value to a temporary
-                writeln!(self.out, "{}{{", INDENT.repeat(indent))?;
-                let depth = indent + 1;
+                writeln!(self.out, "{}{{", level)?;
+                let depth = level.next().0;
                 let struct_ty = ty_resolution.handle().unwrap();
                 let struct_name = &self.names[&NameKey::Type(struct_ty)];
                 write!(
                     self.out,
                     "{}{} {}{} = ",
-                    INDENT.repeat(indent + 1),
+                    level.next(),
                     struct_name,
                     STORE_TEMP_NAME,
                     depth
@@ -353,11 +344,11 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                         base: struct_ty,
                         member_index: i as u32,
                     };
-                    self.write_storage_store(module, var_handle, sv, func_ctx, indent + 1)?;
+                    self.write_storage_store(module, var_handle, sv, func_ctx, level.next())?;
                     self.temp_access_chain.pop();
                 }
                 // done
-                writeln!(self.out, "{}}}", INDENT.repeat(indent))?;
+                writeln!(self.out, "{}}}", level)?;
             }
             _ => unreachable!(),
         }
