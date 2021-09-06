@@ -352,9 +352,9 @@ impl Temp {
 }
 
 pub struct CommandEncoder {
-    raw: vk::CommandPool,
+    pub raw: vk::CommandPool,
     device: Arc<DeviceShared>,
-    active: vk::CommandBuffer,
+    pub active: vk::CommandBuffer,
     bind_point: vk::PipelineBindPoint,
     temp: Temp,
     free: Vec<vk::CommandBuffer>,

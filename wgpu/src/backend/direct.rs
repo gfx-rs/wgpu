@@ -1950,6 +1950,25 @@ impl crate::Context for Context {
         id
     }
 
+    unsafe fn command_encoder_run_raw_commands<A, F>(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        runner: F,
+    ) where
+        A: wgc::hub::HalApi,
+        F: FnOnce(&mut <A as hal::Api>::CommandEncoder),
+    {
+        let global = &self.0;
+        match global.command_encoder_run_raw_commands::<A, F>(encoder.id, runner) {
+            Err(cause) => self.handle_error_nolabel(
+                &encoder.error_sink,
+                cause,
+                "CommandEncoder::run_raw_commands",
+            ),
+            Ok(()) => {}
+        }
+    }
+
     fn command_encoder_clear_texture(
         &self,
         encoder: &Self::CommandEncoderId,

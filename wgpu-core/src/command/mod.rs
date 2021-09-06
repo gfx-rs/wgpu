@@ -337,6 +337,27 @@ pub enum CommandEncoderError {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    pub unsafe fn command_encoder_run_raw_commands<A, F>(
+        &self,
+        command_encoder_id: id::CommandEncoderId,
+        runner: F,
+    ) -> Result<(), CommandEncoderError>
+    where
+        A: HalApi,
+        F: FnOnce(&mut <A as hal::Api>::CommandEncoder),
+    {
+        profiling::scope!("run_raw_command", "CommandEncoder");
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
+
+        let cmd_buf_raw = cmd_buf.encoder.open();
+        runner(cmd_buf_raw);
+        Ok(())
+    }
+
     pub fn command_encoder_finish<A: HalApi>(
         &self,
         encoder_id: id::CommandEncoderId,

@@ -359,6 +359,14 @@ trait Context: Debug + Send + Sized + Sync {
         index: u32,
     ) -> Self::BindGroupLayoutId;
 
+    unsafe fn command_encoder_run_raw_commands<A, F>(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        runner: F,
+    ) where
+        A: wgc::hub::HalApi,
+        F: FnOnce(&mut <A as hal::Api>::CommandEncoder);
+
     fn command_encoder_copy_buffer_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
@@ -2348,6 +2356,16 @@ impl CommandEncoder {
     pub fn pop_debug_group(&mut self) {
         let id = self.id.as_ref().unwrap();
         Context::command_encoder_pop_debug_group(&*self.context, id);
+    }
+
+    /// Running raw commands on the underlying APIs
+    pub unsafe fn run_raw_command<A, F>(&mut self, runner: F)
+    where
+        A: wgc::hub::HalApi,
+        F: FnOnce(&mut <A as hal::Api>::CommandEncoder),
+    {
+        let id = self.id.as_ref().unwrap();
+        Context::command_encoder_run_raw_commands::<A, F>(&*self.context, id, runner);
     }
 }
 
