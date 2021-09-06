@@ -20,19 +20,6 @@ const WRAPPED_ARRAY_FIELD: &str = "inner";
 // Some more general handling of pointers is needed to be implemented here.
 const ATOMIC_REFERENCE: &str = "&";
 
-#[derive(Clone)]
-struct Level(usize);
-impl Level {
-    fn next(&self) -> Self {
-        Level(self.0 + 1)
-    }
-}
-impl Display for Level {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
-        (0..self.0).try_for_each(|_| formatter.write_str(back::INDENT))
-    }
-}
-
 struct TypeContext<'a> {
     handle: Handle<crate::Type>,
     arena: &'a crate::Arena<crate::Type>,
@@ -1239,7 +1226,7 @@ impl<W: Write> Writer<W> {
 
     fn put_return_value(
         &mut self,
-        level: Level,
+        level: back::Level,
         expr_handle: Handle<crate::Expression>,
         result_struct: Option<&str>,
         context: &ExpressionContext,
@@ -1368,7 +1355,7 @@ impl<W: Write> Writer<W> {
 
     fn put_block(
         &mut self,
-        level: Level,
+        level: back::Level,
         statements: &[crate::Statement],
         context: &StatementContext,
     ) -> BackendResult {
@@ -1483,7 +1470,7 @@ impl<W: Write> Writer<W> {
                     value: Some(expr_handle),
                 } => {
                     self.put_return_value(
-                        level.clone(),
+                        level,
                         expr_handle,
                         context.result_struct,
                         &context.expression,
@@ -1940,7 +1927,7 @@ impl<W: Write> Writer<W> {
 
     fn put_inline_sampler_properties(
         &mut self,
-        level: Level,
+        level: back::Level,
         sampler: &sm::InlineSampler,
     ) -> BackendResult {
         for (&letter, address) in ['s', 't', 'r'].iter().zip(sampler.address.iter()) {
@@ -2139,7 +2126,7 @@ impl<W: Write> Writer<W> {
                 result_struct: None,
             };
             self.named_expressions.clear();
-            self.put_block(Level(1), &fun.body, &context)?;
+            self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
         }
 
@@ -2477,7 +2464,7 @@ impl<W: Write> Writer<W> {
                             NAMESPACE,
                             name
                         )?;
-                        self.put_inline_sampler_properties(Level(2), sampler)?;
+                        self.put_inline_sampler_properties(back::Level(2), sampler)?;
                         writeln!(self.out, "{});", back::INDENT)?;
                     }
                 }
@@ -2561,7 +2548,7 @@ impl<W: Write> Writer<W> {
                 result_struct: Some(&stage_out_name),
             };
             self.named_expressions.clear();
-            self.put_block(Level(1), &fun.body, &context)?;
+            self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
             if ep_index + 1 != module.entry_points.len() {
                 writeln!(self.out)?;

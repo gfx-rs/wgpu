@@ -20,6 +20,24 @@ const INDENT: &str = "    ";
 #[allow(dead_code)]
 const BAKE_PREFIX: &str = "_e";
 
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+struct Level(usize);
+
+#[allow(dead_code)]
+impl Level {
+    fn next(&self) -> Self {
+        Level(self.0 + 1)
+    }
+}
+
+#[allow(dead_code)]
+impl std::fmt::Display for Level {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        (0..self.0).try_for_each(|_| formatter.write_str(INDENT))
+    }
+}
+
 /// Stores the current function type (either a regular function or an entry point)
 ///
 /// Also stores data needed to identify it (handle for a regular function or index for an entry point)
