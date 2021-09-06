@@ -1146,7 +1146,7 @@ impl<'a, W: Write> Writer<'a, W> {
         for sta in func.body.iter() {
             // Write a statement, the indentation should always be 1 when writing the function body
             // `write_stmt` adds a newline
-            self.write_stmt(sta, &ctx, 1)?;
+            self.write_stmt(sta, &ctx, back::Level(1))?;
         }
 
         // Close braces and add a newline
@@ -1324,10 +1324,9 @@ impl<'a, W: Write> Writer<'a, W> {
         &mut self,
         sta: &crate::Statement,
         ctx: &back::FunctionCtx,
-        indent: usize,
+        level: back::Level,
     ) -> BackendResult {
         use crate::Statement;
-        use back::INDENT;
 
         match *sta {
             // This is where we can generate intermediate constants for some expression types.
@@ -1349,7 +1348,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     };
 
                     if let Some(name) = expr_name {
-                        write!(self.out, "{}", INDENT.repeat(indent))?;
+                        write!(self.out, "{}", level)?;
                         self.write_named_expr(handle, name, ctx)?;
                     }
                 }
@@ -1358,13 +1357,13 @@ impl<'a, W: Write> Writer<'a, W> {
             // We could also just print the statements but this is more readable and maps more
             // closely to the IR
             Statement::Block(ref block) => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 writeln!(self.out, "{{")?;
                 for sta in block.iter() {
                     // Increase the indentation to help with readability
-                    self.write_stmt(sta, ctx, indent + 1)?
+                    self.write_stmt(sta, ctx, level.next())?
                 }
-                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
+                writeln!(self.out, "{}}}", level)?
             }
             // Ifs are written as in C:
             // ```
@@ -1379,28 +1378,28 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref accept,
                 ref reject,
             } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 write!(self.out, "if (")?;
                 self.write_expr(condition, ctx)?;
                 writeln!(self.out, ") {{")?;
 
                 for sta in accept {
                     // Increase indentation to help with readability
-                    self.write_stmt(sta, ctx, indent + 1)?;
+                    self.write_stmt(sta, ctx, level.next())?;
                 }
 
                 // If there are no statements in the reject block we skip writing it
                 // This is only for readability
                 if !reject.is_empty() {
-                    writeln!(self.out, "{}}} else {{", INDENT.repeat(indent))?;
+                    writeln!(self.out, "{}}} else {{", level)?;
 
                     for sta in reject {
                         // Increase indentation to help with readability
-                        self.write_stmt(sta, ctx, indent + 1)?;
+                        self.write_stmt(sta, ctx, level.next())?;
                     }
                 }
 
-                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
+                writeln!(self.out, "{}}}", level)?
             }
             // Switch are written as in C:
             // ```
@@ -1424,29 +1423,25 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref default,
             } => {
                 // Start the switch
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 write!(self.out, "switch(")?;
                 self.write_expr(selector, ctx)?;
                 writeln!(self.out, ") {{")?;
 
                 // Write all cases
+                let l2 = level.next();
                 for case in cases {
-                    writeln!(
-                        self.out,
-                        "{}case {}:",
-                        INDENT.repeat(indent + 1),
-                        case.value
-                    )?;
+                    writeln!(self.out, "{}case {}:", l2, case.value)?;
 
                     for sta in case.body.iter() {
-                        self.write_stmt(sta, ctx, indent + 2)?;
+                        self.write_stmt(sta, ctx, l2.next())?;
                     }
 
                     // Write fallthrough comment if the case is fallthrough,
                     // otherwise write a break, if the case is not already
                     // broken out of at the end of its body.
                     if case.fall_through {
-                        writeln!(self.out, "{}/* fallthrough */", INDENT.repeat(indent + 2))?;
+                        writeln!(self.out, "{}/* fallthrough */", l2.next())?;
                     } else if !matches!(
                         case.body.last(),
                         Some(&Statement::Break)
@@ -1454,21 +1449,21 @@ impl<'a, W: Write> Writer<'a, W> {
                             | Some(&Statement::Return { .. })
                             | Some(&Statement::Kill)
                     ) {
-                        writeln!(self.out, "{}break;", INDENT.repeat(indent + 2))?;
+                        writeln!(self.out, "{}break;", l2.next())?;
                     }
                 }
 
                 // Only write the default block if the block isn't empty
                 // Writing default without a block is valid but it's more readable this way
                 if !default.is_empty() {
-                    writeln!(self.out, "{}default:", INDENT.repeat(indent + 1))?;
+                    writeln!(self.out, "{}default:", level.next())?;
 
                     for sta in default {
-                        self.write_stmt(sta, ctx, indent + 2)?;
+                        self.write_stmt(sta, ctx, l2.next())?;
                     }
                 }
 
-                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
+                writeln!(self.out, "{}}}", level)?
             }
             // Loops in naga IR are based on wgsl loops, glsl can emulate the behaviour by using a
             // while true loop and appending the continuing block to the body resulting on:
@@ -1486,51 +1481,36 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 if !continuing.is_empty() {
                     let gate_name = self.namer.call("loop_init");
-                    writeln!(
-                        self.out,
-                        "{}bool {} = true;",
-                        INDENT.repeat(indent),
-                        gate_name
-                    )?;
-                    writeln!(self.out, "{}while(true) {{", INDENT.repeat(indent))?;
-                    writeln!(
-                        self.out,
-                        "{}if (!{}) {{",
-                        INDENT.repeat(indent + 1),
-                        gate_name
-                    )?;
+                    writeln!(self.out, "{}bool {} = true;", level, gate_name)?;
+                    writeln!(self.out, "{}while(true) {{", level)?;
+                    writeln!(self.out, "{}if (!{}) {{", level.next(), gate_name)?;
                     for sta in continuing {
-                        self.write_stmt(sta, ctx, indent + 1)?;
+                        self.write_stmt(sta, ctx, level.next())?;
                     }
-                    writeln!(self.out, "{}}}", INDENT.repeat(indent + 1))?;
-                    writeln!(
-                        self.out,
-                        "{}{} = false;",
-                        INDENT.repeat(indent + 1),
-                        gate_name
-                    )?;
+                    writeln!(self.out, "{}}}", level.next())?;
+                    writeln!(self.out, "{}{} = false;", level.next(), gate_name)?;
                 } else {
-                    writeln!(self.out, "{}while(true) {{", INDENT.repeat(indent))?;
+                    writeln!(self.out, "{}while(true) {{", level)?;
                 }
                 for sta in body {
-                    self.write_stmt(sta, ctx, indent + 1)?;
+                    self.write_stmt(sta, ctx, level.next())?;
                 }
-                writeln!(self.out, "{}}}", INDENT.repeat(indent))?
+                writeln!(self.out, "{}}}", level)?
             }
             // Break, continue and return as written as in C
             // `break;`
             Statement::Break => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 writeln!(self.out, "break;")?
             }
             // `continue;`
             Statement::Continue => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 writeln!(self.out, "continue;")?
             }
             // `return expr;`, `expr` is optional
             Statement::Return { value } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 match ctx.ty {
                     back::FunctionType::Function(_) => {
                         write!(self.out, "return")?;
@@ -1558,7 +1538,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                             )?;
                                             self.write_expr(value, ctx)?;
                                             writeln!(self.out, ";")?;
-                                            write!(self.out, "{}", INDENT.repeat(indent))?;
+                                            write!(self.out, "{}", level)?;
                                             Some(return_struct)
                                         }
                                         _ => None,
@@ -1598,7 +1578,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                         }
 
                                         writeln!(self.out, ".{};", field_name)?;
-                                        write!(self.out, "{}", INDENT.repeat(indent))?;
+                                        write!(self.out, "{}", level)?;
                                     }
                                 }
                                 _ => {
@@ -1610,7 +1590,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                     write!(self.out, "{} = ", name)?;
                                     self.write_expr(value, ctx)?;
                                     writeln!(self.out, ";")?;
-                                    write!(self.out, "{}", INDENT.repeat(indent))?;
+                                    write!(self.out, "{}", level)?;
                                 }
                             }
                         }
@@ -1627,7 +1607,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                     self.out,
                                     "gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);",
                                 )?;
-                                write!(self.out, "{}", INDENT.repeat(indent))?;
+                                write!(self.out, "{}", level)?;
                             }
                         }
                         writeln!(self.out, "return;")?;
@@ -1637,18 +1617,18 @@ impl<'a, W: Write> Writer<'a, W> {
             // This is one of the places were glsl adds to the syntax of C in this case the discard
             // keyword which ceases all further processing in a fragment shader, it's called OpKill
             // in spir-v that's why it's called `Statement::Kill`
-            Statement::Kill => writeln!(self.out, "{}discard;", INDENT.repeat(indent))?,
+            Statement::Kill => writeln!(self.out, "{}discard;", level)?,
             // Issue an execution or a memory barrier.
             Statement::Barrier(flags) => {
                 if flags.is_empty() {
-                    writeln!(self.out, "{}barrier();", INDENT.repeat(indent))?;
+                    writeln!(self.out, "{}barrier();", level)?;
                 } else {
-                    writeln!(self.out, "{}groupMemoryBarrier();", INDENT.repeat(indent))?;
+                    writeln!(self.out, "{}groupMemoryBarrier();", level)?;
                 }
             }
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 self.write_expr(pointer, ctx)?;
                 write!(self.out, " = ")?;
                 self.write_expr(value, ctx)?;
@@ -1661,7 +1641,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 array_index,
                 value,
             } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 // This will only panic if the module is invalid
                 let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
                     TypeInner::Image { dim, .. } => dim,
@@ -1682,7 +1662,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 ref arguments,
                 result,
             } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 if let Some(expr) = result {
                     let name = format!("{}{}", super::BAKE_PREFIX, expr.index());
                     let result = self.module.functions[function].result.as_ref().unwrap();
@@ -1711,7 +1691,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 value,
                 result,
             } => {
-                write!(self.out, "{}", INDENT.repeat(indent))?;
+                write!(self.out, "{}", level)?;
                 let res_name = format!("{}{}", super::BAKE_PREFIX, result.index());
                 let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
                 self.write_value_type(res_ty)?;
