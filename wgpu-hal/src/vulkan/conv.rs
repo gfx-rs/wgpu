@@ -512,6 +512,20 @@ pub fn map_copy_extent(extent: &crate::CopyExtent) -> vk::Extent3D {
     }
 }
 
+pub fn map_extent_to_copy_size(
+    extent: &wgt::Extent3d,
+    dim: wgt::TextureDimension,
+) -> crate::CopyExtent {
+    crate::CopyExtent {
+        width: extent.width,
+        height: extent.height,
+        depth: match dim {
+            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => 1,
+            wgt::TextureDimension::D3 => extent.depth_or_array_layers,
+        },
+    }
+}
+
 pub fn map_subresource_range(
     range: &wgt::ImageSubresourceRange,
     texture_aspect: crate::FormatAspects,

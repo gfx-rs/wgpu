@@ -429,6 +429,12 @@ impl crate::Device<super::Api> for super::Device {
             | crate::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
+        let mut copy_size = crate::CopyExtent {
+            width: desc.size.width,
+            height: desc.size.height,
+            depth: 1,
+        };
+
         let inner = if render_usage.contains(desc.usage)
             && desc.dimension == wgt::TextureDimension::D2
             && desc.size.depth_or_array_layers == 1
@@ -516,6 +522,7 @@ impl crate::Device<super::Api> for super::Device {
                     }
                 }
                 wgt::TextureDimension::D3 => {
+                    copy_size.depth = desc.size.depth_or_array_layers;
                     let target = glow::TEXTURE_3D;
                     gl.bind_texture(target, Some(raw));
                     gl.tex_storage_3d(
@@ -562,6 +569,7 @@ impl crate::Device<super::Api> for super::Device {
             },
             format: desc.format,
             format_desc,
+            copy_size,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {

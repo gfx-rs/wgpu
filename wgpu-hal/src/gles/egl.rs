@@ -984,6 +984,11 @@ impl crate::Surface<super::Api> for Surface {
             mip_level_count: 1,
             format: sc.format,
             format_desc: sc.format_desc.clone(),
+            copy_size: crate::CopyExtent {
+                width: sc.extent.width,
+                height: sc.extent.height,
+                depth: 1,
+            },
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,

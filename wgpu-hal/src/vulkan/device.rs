@@ -552,6 +552,7 @@ impl super::Device {
             aspects: crate::FormatAspects::from(desc.format),
             format_info: desc.format.describe(),
             raw_flags: vk::ImageCreateFlags::empty(),
+            copy_size: conv::map_extent_to_copy_size(&desc.size, desc.dimension),
         }
     }
 }
@@ -676,10 +677,11 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        let (depth, array_layer_count) = match desc.dimension {
-            wgt::TextureDimension::D3 => (desc.size.depth_or_array_layers, 1),
-            _ => (1, desc.size.depth_or_array_layers),
+        let array_layer_count = match desc.dimension {
+            wgt::TextureDimension::D3 => 1,
+            _ => desc.size.depth_or_array_layers,
         };
+        let copy_size = conv::map_extent_to_copy_size(&desc.size, desc.dimension);
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
         if desc.dimension == wgt::TextureDimension::D2 && desc.size.depth_or_array_layers % 6 == 0 {
@@ -691,9 +693,9 @@ impl crate::Device<super::Api> for super::Device {
             .image_type(conv::map_texture_dimension(desc.dimension))
             .format(self.shared.private_caps.map_texture_format(desc.format))
             .extent(vk::Extent3D {
-                width: desc.size.width,
-                height: desc.size.height,
-                depth,
+                width: copy_size.width,
+                height: copy_size.height,
+                depth: copy_size.depth,
             })
             .mip_levels(desc.mip_level_count)
             .array_layers(array_layer_count)
@@ -733,6 +735,7 @@ impl crate::Device<super::Api> for super::Device {
             aspects: crate::FormatAspects::from(desc.format),
             format_info: desc.format.describe(),
             raw_flags,
+            copy_size,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {

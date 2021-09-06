@@ -16,7 +16,9 @@ impl super::Texture {
     {
         let aspects = self.aspects;
         let fi = self.format_info;
+        let copy_size = self.copy_size;
         regions.map(move |r| {
+            let extent = r.texture_base.max_copy_size(&copy_size).min(&r.size);
             let (image_subresource, image_offset) =
                 conv::map_subresource_layers(&r.texture_base, aspects);
             vk::BufferImageCopy {
@@ -30,7 +32,7 @@ impl super::Texture {
                     .map_or(0, |rpi| rpi.get() * fi.block_dimensions.1 as u32),
                 image_subresource,
                 image_offset,
-                image_extent: conv::map_copy_extent(&r.size),
+                image_extent: conv::map_copy_extent(&extent),
             }
         })
     }
@@ -261,12 +263,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 conv::map_subresource_layers(&r.src_base, src.aspects);
             let (dst_subresource, dst_offset) =
                 conv::map_subresource_layers(&r.dst_base, dst.aspects);
+            let extent = r
+                .size
+                .min(&r.src_base.max_copy_size(&src.copy_size))
+                .min(&r.dst_base.max_copy_size(&dst.copy_size));
             vk::ImageCopy {
                 src_subresource,
                 src_offset,
                 dst_subresource,
                 dst_offset,
-                extent: conv::map_copy_extent(&r.size),
+                extent: conv::map_copy_extent(&extent),
             }
         });
 

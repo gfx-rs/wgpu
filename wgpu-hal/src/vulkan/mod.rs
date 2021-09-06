@@ -268,6 +268,7 @@ pub struct Texture {
     aspects: crate::FormatAspects,
     format_info: wgt::TextureFormatInfo,
     raw_flags: vk::ImageCreateFlags,
+    copy_size: crate::CopyExtent,
 }
 
 impl Texture {
