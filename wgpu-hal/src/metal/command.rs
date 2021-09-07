@@ -164,6 +164,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for copy in regions {
             let src_origin = conv::map_origin(&copy.src_base.origin);
             let dst_origin = conv::map_origin(&copy.dst_base.origin);
+            // no clamping is done: Metal expects physical sizes here
             let extent = conv::map_copy_extent(&copy.size);
             encoder.copy_from_texture(
                 &src.raw,
@@ -190,7 +191,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.enter_blit();
         for copy in regions {
             let dst_origin = conv::map_origin(&copy.texture_base.origin);
-            let extent = conv::map_copy_extent(&copy.size);
+            // Metal expects buffer-texture copies in virtual sizes
+            let extent = copy
+                .texture_base
+                .max_copy_size(&dst.copy_size)
+                .min(&copy.size);
             let bytes_per_row = copy
                 .buffer_layout
                 .bytes_per_row
@@ -204,7 +209,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 copy.buffer_layout.offset,
                 bytes_per_row,
                 bytes_per_image,
-                extent,
+                conv::map_copy_extent(&extent),
                 &dst.raw,
                 copy.texture_base.array_layer as u64,
                 copy.texture_base.mip_level as u64,
@@ -226,7 +231,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.texture_base.origin);
-            let extent = conv::map_copy_extent(&copy.size);
+            // Metal expects texture-buffer copies in virtual sizes
+            let extent = copy
+                .texture_base
+                .max_copy_size(&src.copy_size)
+                .min(&copy.size);
             let bytes_per_row = copy
                 .buffer_layout
                 .bytes_per_row
@@ -240,7 +249,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 copy.texture_base.array_layer as u64,
                 copy.texture_base.mip_level as u64,
                 src_origin,
-                extent,
+                conv::map_copy_extent(&extent),
                 &dst.raw,
                 copy.buffer_layout.offset,
                 bytes_per_row,

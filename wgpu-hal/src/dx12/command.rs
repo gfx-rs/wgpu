@@ -13,18 +13,6 @@ fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> d3d12::D3D12_BO
     }
 }
 
-fn upround_extent(size: crate::CopyExtent, block_size: u32) -> crate::CopyExtent {
-    debug_assert!(block_size.is_power_of_two());
-
-    let block_mask = block_size - 1;
-
-    crate::CopyExtent {
-        width: (size.width + block_mask) & !(block_mask),
-        height: (size.height + block_mask) & !(block_mask),
-        depth: size.depth,
-    }
-}
-
 impl super::Temp {
     fn prepare_marker(&mut self, marker: &str) -> (&[u16], u32) {
         self.marker.clear();
@@ -421,11 +409,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             u: mem::zeroed(),
         };
 
-        let block_size = src.format.describe().block_dimensions.0 as u32;
         for r in regions {
-            let uprounded_size = upround_extent(r.size, block_size);
-
-            let src_box = make_box(&r.src_base.origin, &uprounded_size);
+            let src_box = make_box(&r.src_base.origin, &r.size);
             *src_location.u.SubresourceIndex_mut() = src.calc_subresource_for_copy(&r.src_base);
             *dst_location.u.SubresourceIndex_mut() = dst.calc_subresource_for_copy(&r.dst_base);
 
@@ -463,19 +448,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         let block_size = dst.format.describe().block_dimensions.0 as u32;
         for r in regions {
-            let uprounded_size = upround_extent(r.size, block_size);
-
-            let src_box = make_box(&wgt::Origin3d::ZERO, &uprounded_size);
+            let src_box = make_box(&wgt::Origin3d::ZERO, &r.size);
             *src_location.u.PlacedFootprint_mut() = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                 Offset: r.buffer_layout.offset,
                 Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
                     Format: raw_format,
-                    Width: uprounded_size.width,
+                    Width: r.size.width,
                     Height: r
                         .buffer_layout
                         .rows_per_image
-                        .map_or(uprounded_size.height, |count| count.get() * block_size),
-                    Depth: uprounded_size.depth,
+                        .map_or(r.size.height, |count| count.get() * block_size),
+                    Depth: r.size.depth,
                     RowPitch: r.buffer_layout.bytes_per_row.map_or(0, |count| {
                         count.get().max(d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
                     }),
@@ -518,20 +501,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         let block_size = src.format.describe().block_dimensions.0 as u32;
         for r in regions {
-            let uprounded_size = upround_extent(r.size, block_size);
-
-            let src_box = make_box(&r.texture_base.origin, &uprounded_size);
+            let src_box = make_box(&r.texture_base.origin, &r.size);
             *src_location.u.SubresourceIndex_mut() = src.calc_subresource_for_copy(&r.texture_base);
             *dst_location.u.PlacedFootprint_mut() = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                 Offset: r.buffer_layout.offset,
                 Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
                     Format: raw_format,
-                    Width: uprounded_size.width,
+                    Width: r.size.width,
                     Height: r
                         .buffer_layout
                         .rows_per_image
-                        .map_or(uprounded_size.height, |count| count.get() * block_size),
-                    Depth: uprounded_size.depth,
+                        .map_or(r.size.height, |count| count.get() * block_size),
+                    Depth: r.size.depth,
                     RowPitch: r.buffer_layout.bytes_per_row.map_or(0, |count| count.get()),
                 },
             };

@@ -355,6 +355,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     /// Copy from one texture to another.
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
+    /// Note: the copy extent is in physical size (rounded to the block size)
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &A::Texture,
@@ -367,12 +368,14 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
     /// Copy from buffer to texture.
     /// Works with a single array layer.
     /// Note: `dst` current usage has to be `TextureUses::COPY_DST`.
+    /// Note: the copy extent is in physical size (rounded to the block size)
     unsafe fn copy_buffer_to_texture<T>(&mut self, src: &A::Buffer, dst: &A::Texture, regions: T)
     where
         T: Iterator<Item = BufferTextureCopy>;
 
     /// Copy from texture to buffer.
     /// Works with a single array layer.
+    /// Note: the copy extent is in physical size (rounded to the block size)
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &A::Texture,

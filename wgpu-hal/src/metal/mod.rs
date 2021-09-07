@@ -281,6 +281,7 @@ pub struct Surface {
     view: Option<NonNull<objc::runtime::Object>>,
     render_layer: Mutex<mtl::MetalLayer>,
     raw_swapchain_format: mtl::MTLPixelFormat,
+    extent: wgt::Extent3d,
     main_thread_id: thread::ThreadId,
     // Useful for UI-intensive applications that are sensitive to
     // window resizing.
@@ -408,6 +409,7 @@ pub struct Texture {
     raw_type: mtl::MTLTextureType,
     array_layers: u32,
     mip_levels: u32,
+    copy_size: crate::CopyExtent,
 }
 
 unsafe impl Send for Texture {}

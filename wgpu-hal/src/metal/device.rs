@@ -236,6 +236,11 @@ impl crate::Device<super::Api> for super::Device {
 
         let descriptor = mtl::TextureDescriptor::new();
         let mut array_layers = desc.size.depth_or_array_layers;
+        let mut copy_size = crate::CopyExtent {
+            width: desc.size.width,
+            height: desc.size.height,
+            depth: 1,
+        };
         let mtl_type = match desc.dimension {
             wgt::TextureDimension::D1 => {
                 if desc.size.depth_or_array_layers > 1 {
@@ -259,6 +264,7 @@ impl crate::Device<super::Api> for super::Device {
             wgt::TextureDimension::D3 => {
                 descriptor.set_depth(desc.size.depth_or_array_layers as u64);
                 array_layers = 1;
+                copy_size.depth = desc.size.depth_or_array_layers;
                 mtl::MTLTextureType::D3
             }
         };
@@ -282,6 +288,7 @@ impl crate::Device<super::Api> for super::Device {
             raw_type: mtl_type,
             mip_levels: desc.mip_level_count,
             array_layers,
+            copy_size,
         })
     }
 
