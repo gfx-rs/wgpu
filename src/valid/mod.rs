@@ -47,9 +47,9 @@ impl Default for ValidationFlags {
     }
 }
 
-#[must_use]
 bitflags::bitflags! {
     /// Allowed IR capabilities.
+    #[must_use]
     #[derive(Default)]
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
