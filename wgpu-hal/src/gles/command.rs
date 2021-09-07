@@ -278,7 +278,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
         let (src_raw, src_target) = src.inner.as_native();
         let (dst_raw, dst_target) = dst.inner.as_native();
-        for copy in regions {
+        for mut copy in regions {
+            copy.clamp_size_to_virtual(&src.copy_size, &dst.copy_size);
             self.cmd_buffer.commands.push(C::CopyTextureToTexture {
                 src: src_raw,
                 src_target,
@@ -298,7 +299,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
         let (dst_raw, dst_target) = dst.inner.as_native();
-        for copy in regions {
+        for mut copy in regions {
+            copy.clamp_size_to_virtual(&dst.copy_size);
             self.cmd_buffer.commands.push(C::CopyBufferToTexture {
                 src: src.raw,
                 src_target: src.target,
@@ -320,7 +322,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
         let (src_raw, src_target) = src.inner.as_native();
-        for copy in regions {
+        for mut copy in regions {
+            copy.clamp_size_to_virtual(&src.copy_size);
             self.cmd_buffer.commands.push(C::CopyTextureToBuffer {
                 src: src_raw,
                 src_target,

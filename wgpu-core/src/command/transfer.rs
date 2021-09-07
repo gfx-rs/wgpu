@@ -339,21 +339,12 @@ pub(crate) fn validate_texture_copy_range(
         wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
             (1, copy_size.depth_or_array_layers)
         }
-        wgt::TextureDimension::D3 => (
-            copy_size
-                .depth_or_array_layers
-                .min(extent_virtual.depth_or_array_layers),
-            1,
-        ),
+        wgt::TextureDimension::D3 => (copy_size.depth_or_array_layers, 1),
     };
 
-    // WebGPU uses the physical size of the texture for copies whereas vulkan uses
-    // the virtual size. We have passed validation, so it's safe to use the
-    // image extent data directly. We want the provided copy size to be no larger than
-    // the virtual size.
     let copy_extent = hal::CopyExtent {
-        width: copy_size.width.min(extent_virtual.width),
-        height: copy_size.height.min(extent_virtual.height),
+        width: copy_size.width,
+        height: copy_size.height,
         depth,
     };
     Ok((copy_extent, array_layer_count))

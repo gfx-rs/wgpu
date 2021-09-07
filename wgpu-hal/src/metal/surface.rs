@@ -61,6 +61,7 @@ impl super::Surface {
             view,
             render_layer: Mutex::new(layer),
             raw_swapchain_format: mtl::MTLPixelFormat::Invalid,
+            extent: wgt::Extent3d::default(),
             main_thread_id: thread::current().id(),
             present_with_transaction: false,
         }
@@ -210,6 +211,7 @@ impl crate::Surface<super::Api> for super::Surface {
 
         let caps = &device.shared.private_caps;
         self.raw_swapchain_format = caps.map_format(config.format);
+        self.extent = config.extent;
 
         let render_layer = self.render_layer.lock();
         let framebuffer_only = config.usage == crate::TextureUses::COLOR_TARGET;
@@ -275,6 +277,11 @@ impl crate::Surface<super::Api> for super::Surface {
                 raw_type: mtl::MTLTextureType::D2,
                 array_layers: 1,
                 mip_levels: 1,
+                copy_size: crate::CopyExtent {
+                    width: self.extent.width,
+                    height: self.extent.height,
+                    depth: 1,
+                },
             },
             drawable,
             present_with_transaction: self.present_with_transaction,
