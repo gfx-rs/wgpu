@@ -1,5 +1,5 @@
 # Lazy jobs running on master post merges.
-name: lazy
+name: Lazy
 on:
   push:
     branches: [master]
