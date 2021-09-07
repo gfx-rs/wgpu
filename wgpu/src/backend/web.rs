@@ -1911,7 +1911,7 @@ impl crate::Context for Context {
         })
     }
 
-    fn command_encoder_clear_image(
+    fn command_encoder_clear_texture(
         &self,
         _encoder: &Self::CommandEncoderId,
         _texture: &crate::Texture,

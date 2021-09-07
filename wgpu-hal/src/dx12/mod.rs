@@ -120,7 +120,7 @@ impl<T> HResult<T> for (T, i32) {
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
 const MAX_ROOT_ELEMENTS: usize = 64;
-const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
+const ZERO_BUFFER_SIZE: wgt::BufferAddress = 512 << 10;
 
 pub struct Instance {
     factory: native::Factory4,

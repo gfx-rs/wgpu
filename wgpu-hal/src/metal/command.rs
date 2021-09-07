@@ -126,9 +126,84 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     {
     }
 
-    unsafe fn fill_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange, value: u8) {
+    unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
         let encoder = self.enter_blit();
-        encoder.fill_buffer(&buffer.raw, conv::map_range(&range), value);
+        encoder.fill_buffer(&buffer.raw, conv::map_range(&range), 0);
+    }
+
+    unsafe fn clear_texture(
+        &mut self,
+        texture: &super::Texture,
+        subresource_range: &wgt::ImageSubresourceRange,
+    ) {
+        let shared = self.shared.clone();
+        let encoder = self.enter_blit();
+
+        let format_desc = texture.format.describe();
+
+        let mip_range = subresource_range.base_mip_level..match subresource_range.mip_level_count {
+            Some(c) => subresource_range.base_mip_level + c.get(),
+            None => texture.mip_levels,
+        };
+        let array_range = subresource_range.base_array_layer
+            ..match subresource_range.array_layer_count {
+                Some(c) => subresource_range.base_array_layer + c.get(),
+                None => texture.array_layers,
+            };
+
+        for mip_level in mip_range {
+            // Note that Metal requires this only to be a multiple of the pixel size, not some other constant like in other APIs.
+            let mip_size = texture
+                .size
+                .mip_level_size(mip_level, texture.raw_type == mtl::MTLTextureType::D3);
+            let depth = if texture.raw_type == mtl::MTLTextureType::D3 {
+                mip_size.depth_or_array_layers as u64
+            } else {
+                1
+            };
+            let bytes_per_row = mip_size.width as u64 / format_desc.block_dimensions.0 as u64
+                * format_desc.block_size as u64;
+            let max_rows_per_copy = super::ZERO_BUFFER_SIZE / bytes_per_row;
+            // round down to a multiple of rows needed by the texture format
+            let max_rows_per_copy = max_rows_per_copy / format_desc.block_dimensions.1 as u64
+                * format_desc.block_dimensions.1 as u64;
+            assert!(max_rows_per_copy > 0, "Zero buffer size is too small to fill a single row of a texture of type {:?}, size {:?} and format {:?}",
+                        texture.raw_type, texture.size, texture.format);
+
+            for array_layer in array_range.clone() {
+                // 3D textures are quickly massive in memory size, so we don't bother trying to do more than one layer at once.
+                for z in 0..depth {
+                    // May need multiple copies for each subresource! We assume that we never need to split a row.
+                    let mut num_rows_left = mip_size.height as u64;
+                    while num_rows_left > 0 {
+                        let num_rows = num_rows_left.min(max_rows_per_copy);
+                        let source_size = mtl::MTLSize {
+                            width: mip_size.width as u64,
+                            height: num_rows,
+                            depth: 1,
+                        };
+                        let destination_origion = mtl::MTLOrigin {
+                            x: 0,
+                            y: mip_size.height as u64 - num_rows_left,
+                            z,
+                        };
+                        encoder.copy_from_buffer_to_texture(
+                            &shared.zero_buffer,
+                            0,
+                            bytes_per_row,
+                            bytes_per_row * num_rows,
+                            source_size,
+                            &texture.raw,
+                            array_layer as u64,
+                            mip_level as u64,
+                            destination_origion,
+                            mtl::MTLBlitOption::empty(),
+                        );
+                        num_rows_left -= num_rows;
+                    }
+                }
+            }
+        }
     }
 
     unsafe fn copy_buffer_to_buffer<T>(

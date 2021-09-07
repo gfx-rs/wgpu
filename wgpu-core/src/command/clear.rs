@@ -44,6 +44,10 @@ pub enum ClearError {
         texture_format: wgt::TextureFormat,
         subresource_range_aspects: TextureAspect,
     },
+    #[error("Depth/Stencil formats are not supported for clearing")]
+    DepthStencilFormatNotSupported,
+    #[error("Multisampled textures are not supported for clearing")]
+    MultisampledTextureUnsupported,
     #[error("image subresource level range is outside of the texture's level range. texture range is {texture_level_range:?},  \
 whereas subesource range specified start {subresource_base_mip_level} and count {subresource_mip_level_count:?}")]
     InvalidTextureLevelRange {
@@ -68,7 +72,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), ClearError> {
-        profiling::scope!("CommandEncoder::fill_buffer");
+        profiling::scope!("CommandEncoder::clear_buffer");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -82,7 +86,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        if !cmd_buf.support_fill_buffer_texture {
+        if !cmd_buf.support_clear_buffer_texture {
             return Err(ClearError::MissingClearCommandsFeature);
         }
 
@@ -122,7 +126,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => dst_buffer.size,
         };
         if offset == end {
-            log::trace!("Ignoring fill_buffer of size 0");
+            log::trace!("Ignoring clear_buffer of size 0");
             return Ok(());
         }
 
@@ -139,18 +143,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier);
-            cmd_buf_raw.fill_buffer(dst_raw, offset..end, 0);
+            cmd_buf_raw.clear_buffer(dst_raw, offset..end);
         }
         Ok(())
     }
 
-    pub fn command_encoder_clear_image<A: HalApi>(
+    pub fn command_encoder_clear_texture<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: TextureId,
         subresource_range: &ImageSubresourceRange,
     ) -> Result<(), ClearError> {
-        profiling::scope!("CommandEncoder::clear_image");
+        profiling::scope!("CommandEncoder::clear_texture");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -162,13 +166,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
-            list.push(TraceCommand::ClearImage {
+            list.push(TraceCommand::ClearTexture {
                 dst,
                 subresource_range: subresource_range.clone(),
             });
         }
 
-        if !cmd_buf.support_fill_buffer_texture {
+        if !cmd_buf.support_clear_buffer_texture {
             return Err(ClearError::MissingClearCommandsFeature);
         }
 
@@ -185,6 +189,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 subresource_range_aspects: subresource_range.aspect,
             });
         };
+
+        // Check if texture is supported for clearing
+        if dst_texture.desc.format.describe().sample_type == wgt::TextureSampleType::Depth {
+            return Err(ClearError::DepthStencilFormatNotSupported);
+        }
+        if dst_texture.desc.sample_count > 1 {
+            return Err(ClearError::MultisampledTextureUnsupported);
+        }
+
         // Check if subresource level range is valid
         let subresource_level_end = match subresource_range.mip_level_count {
             Some(count) => subresource_range.base_mip_level + count.get(),
@@ -228,7 +241,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::TextureUses::COPY_DST,
             )
             .map_err(ClearError::InvalidTexture)?;
-        let _dst_raw = dst_texture
+        let dst_raw = dst_texture
             .inner
             .as_raw()
             .ok_or(ClearError::InvalidTexture(dst))?;
@@ -241,23 +254,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(dst_barrier);
-            /*TODO: image clears
-            cmd_buf_raw.clear_image(
-                dst_raw,
-                hal::image::Layout::TransferDstOptimal,
-                hal::command::ClearValue {
-                    color: hal::command::ClearColor {
-                        float32: conv::map_color_f32(&wgt::Color::TRANSPARENT),
-                    },
-                },
-                std::iter::once(hal::image::SubresourceRange {
-                    aspects,
-                    level_start: subresource_range.base_mip_level as u8,
-                    level_count: subresource_range.mip_level_count.map(|c| c.get() as u8),
-                    layer_start: subresource_range.base_array_layer as u16,
-                    layer_count: subresource_range.array_layer_count.map(|c| c.get() as u16),
-                }),
-            );*/
+            cmd_buf_raw.clear_texture(dst_raw, subresource_range);
         }
         Ok(())
     }

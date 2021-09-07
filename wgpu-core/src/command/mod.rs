@@ -144,7 +144,7 @@ impl<A: hal::Api> BakedCommands<A> {
                 assert!(range.end % 4 == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
 
                 unsafe {
-                    self.encoder.fill_buffer(raw_buf, range.clone(), 0);
+                    self.encoder.clear_buffer(raw_buf, range.clone());
                 }
             }
         }
@@ -160,7 +160,7 @@ pub struct CommandBuffer<A: hal::Api> {
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     limits: wgt::Limits,
-    support_fill_buffer_texture: bool,
+    support_clear_buffer_texture: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
 }
@@ -187,7 +187,7 @@ impl<A: HalApi> CommandBuffer<A> {
             trackers: TrackerSet::new(A::VARIANT),
             buffer_memory_init_actions: Default::default(),
             limits,
-            support_fill_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
+            support_clear_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
             #[cfg(feature = "trace")]
             commands: if enable_tracing {
                 Some(Vec::new())

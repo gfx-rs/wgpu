@@ -1948,19 +1948,19 @@ impl crate::Context for Context {
         id
     }
 
-    fn command_encoder_clear_image(
+    fn command_encoder_clear_texture(
         &self,
         encoder: &Self::CommandEncoderId,
         texture: &crate::Texture,
         subresource_range: &wgt::ImageSubresourceRange,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_clear_image(
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_clear_texture(
             encoder.id,
             texture.id.id,
             subresource_range
         )) {
-            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::clear_image");
+            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::clear_texture");
         }
     }
 

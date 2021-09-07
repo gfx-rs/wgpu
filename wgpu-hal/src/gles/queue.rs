@@ -190,13 +190,11 @@ impl super::Queue {
                 gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf));
                 gl.dispatch_compute_indirect(indirect_offset as i32);
             }
-            C::FillBuffer {
+            C::ClearBuffer {
                 dst,
                 dst_target,
                 ref range,
-                value,
             } => {
-                assert_eq!(value, 0); // other values require `wgt::Features::CLEAR_COMMANDS`.
                 gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
                 gl.bind_buffer(dst_target, Some(dst));
                 let mut dst_offset = range.start;
@@ -211,6 +209,20 @@ impl super::Queue {
                     );
                     dst_offset += size;
                 }
+            }
+            C::ClearTexture {
+                dst: _,
+                dst_target: _,
+                subresource_range: _,
+            } => {
+                // Should EXT_clear_texture when possible.
+                // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clear_texture.txt
+                // But support is not very widespread. Need to fallback to do zero_buffer copies
+
+                // TODO: Need to invoke calls into CopyBufferToTexture using zero_buffer.
+                // To do that determine how many rows zero_buffer can fill and then chunk the texture up
+                // (do *not* repeat the exact logic of CopyBufferToTexture, it's way too much!)
+                //unimplemented!("texture clearing for GLES is not implemented yet");
             }
             C::CopyBufferToBuffer {
                 src,

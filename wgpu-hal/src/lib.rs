@@ -344,9 +344,14 @@ pub trait CommandEncoder<A: Api>: Send + Sync {
 
     // copy operations
 
-    /// This is valid to call with `value == 0`.
-    /// Otherwise `wgt::Features::CLEAR_COMMANDS` is required.
-    unsafe fn fill_buffer(&mut self, buffer: &A::Buffer, range: MemoryRange, value: u8);
+    unsafe fn clear_buffer(&mut self, buffer: &A::Buffer, range: MemoryRange);
+
+    // Does not support depth/stencil or multisampled textures
+    unsafe fn clear_texture(
+        &mut self,
+        texture: &A::Texture,
+        subresource_range: &wgt::ImageSubresourceRange,
+    );
 
     unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &A::Buffer, dst: &A::Buffer, regions: T)
     where
