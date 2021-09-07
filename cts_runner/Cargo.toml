@@ -8,6 +8,7 @@ edition = "2018"
 description = "CTS runner for wgpu"
 license = "MIT OR Apache-2.0"
 publish = false
+resolver = "2"
 
 [dependencies]
 deno_console = { git = "https://github.com/denoland/deno", rev = "ca75752e5a9499a0a997809f02b18c2ba1ecd58d" }
