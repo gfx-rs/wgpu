@@ -297,6 +297,7 @@ pub struct Surface {
     render_layer: Mutex<mtl::MetalLayer>,
     swapchain_format: wgt::TextureFormat,
     raw_swapchain_format: mtl::MTLPixelFormat,
+    extent: wgt::Extent3d,
     main_thread_id: thread::ThreadId,
     // Useful for UI-intensive applications that are sensitive to
     // window resizing.
@@ -425,7 +426,7 @@ pub struct Texture {
     raw_type: mtl::MTLTextureType,
     array_layers: u32,
     mip_levels: u32,
-    size: wgt::Extent3d,
+    copy_size: crate::CopyExtent,
 }
 
 unsafe impl Send for Texture {}

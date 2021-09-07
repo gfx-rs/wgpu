@@ -153,14 +153,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         for mip_level in mip_range {
             // Note that Metal requires this only to be a multiple of the pixel size, not some other constant like in other APIs.
-            let mip_size = texture
-                .size
-                .mip_level_size(mip_level, texture.raw_type == mtl::MTLTextureType::D3);
-            let depth = if texture.raw_type == mtl::MTLTextureType::D3 {
-                mip_size.depth_or_array_layers as u64
-            } else {
-                1
-            };
+            let mip_size = texture.copy_size.at_mip_level(mip_level);
             let bytes_per_row = mip_size.width as u64 / format_desc.block_dimensions.0 as u64
                 * format_desc.block_size as u64;
             let max_rows_per_copy = super::ZERO_BUFFER_SIZE / bytes_per_row;
@@ -168,11 +161,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             let max_rows_per_copy = max_rows_per_copy / format_desc.block_dimensions.1 as u64
                 * format_desc.block_dimensions.1 as u64;
             assert!(max_rows_per_copy > 0, "Zero buffer size is too small to fill a single row of a texture of type {:?}, size {:?} and format {:?}",
-                        texture.raw_type, texture.size, texture.format);
+                        texture.raw_type, texture.copy_size, texture.format);
 
             for array_layer in array_range.clone() {
                 // 3D textures are quickly massive in memory size, so we don't bother trying to do more than one layer at once.
-                for z in 0..depth {
+                for z in 0..mip_size.depth as u64 {
                     // May need multiple copies for each subresource! We assume that we never need to split a row.
                     let mut num_rows_left = mip_size.height as u64;
                     while num_rows_left > 0 {
@@ -239,6 +232,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for copy in regions {
             let src_origin = conv::map_origin(&copy.src_base.origin);
             let dst_origin = conv::map_origin(&copy.dst_base.origin);
+            // no clamping is done: Metal expects physical sizes here
             let extent = conv::map_copy_extent(&copy.size);
             encoder.copy_from_texture(
                 &src.raw,
@@ -265,7 +259,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.enter_blit();
         for copy in regions {
             let dst_origin = conv::map_origin(&copy.texture_base.origin);
-            let extent = conv::map_copy_extent(&copy.size);
+            // Metal expects buffer-texture copies in virtual sizes
+            let extent = copy
+                .texture_base
+                .max_copy_size(&dst.copy_size)
+                .min(&copy.size);
             let bytes_per_row = copy
                 .buffer_layout
                 .bytes_per_row
@@ -279,7 +277,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 copy.buffer_layout.offset,
                 bytes_per_row,
                 bytes_per_image,
-                extent,
+                conv::map_copy_extent(&extent),
                 &dst.raw,
                 copy.texture_base.array_layer as u64,
                 copy.texture_base.mip_level as u64,
@@ -301,7 +299,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.enter_blit();
         for copy in regions {
             let src_origin = conv::map_origin(&copy.texture_base.origin);
-            let extent = conv::map_copy_extent(&copy.size);
+            // Metal expects texture-buffer copies in virtual sizes
+            let extent = copy
+                .texture_base
+                .max_copy_size(&src.copy_size)
+                .min(&copy.size);
             let bytes_per_row = copy
                 .buffer_layout
                 .bytes_per_row
@@ -315,7 +317,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 copy.texture_base.array_layer as u64,
                 copy.texture_base.mip_level as u64,
                 src_origin,
-                extent,
+                conv::map_copy_extent(&extent),
                 &dst.raw,
                 copy.buffer_layout.offset,
                 bytes_per_row,

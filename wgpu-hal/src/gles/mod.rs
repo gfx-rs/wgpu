@@ -230,6 +230,7 @@ pub struct Texture {
     array_layer_count: u32,
     format: wgt::TextureFormat,
     format_desc: TextureFormatDesc,
+    copy_size: crate::CopyExtent,
 }
 
 #[derive(Clone, Debug)]
