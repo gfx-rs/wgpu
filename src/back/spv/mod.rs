@@ -55,6 +55,8 @@ const BITS_PER_BYTE: crate::Bytes = 8;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
+    #[error("The requested entry point couldn't be found")]
+    EntryPointNotFound,
     #[error("target SPIRV-{0}.{1} is not supported")]
     UnsupportedVersion(u8, u8),
     #[error("using {0} requires at least one of the capabilities {1:?}, but none are available")]
@@ -387,8 +389,15 @@ struct GlobalVariable {
 }
 
 impl GlobalVariable {
-    fn new(id: Word) -> GlobalVariable {
-        GlobalVariable { id, handle_id: 0 }
+    fn dummy() -> Self {
+        Self {
+            id: 0,
+            handle_id: 0,
+        }
+    }
+
+    fn new(id: Word) -> Self {
+        Self { id, handle_id: 0 }
     }
 
     /// Prepare `self` for use within a single function.
@@ -539,13 +548,28 @@ impl Default for Options {
     }
 }
 
+// A subset of options that are meant to be changed per pipeline.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct PipelineOptions {
+    /// The stage of the entry point
+    pub shader_stage: crate::ShaderStage,
+    /// The name of the entry point
+    ///
+    /// If no entry point that matches is found a error will be thrown while creating a new instance
+    /// of [`Writer`](struct.Writer.html)
+    pub entry_point: String,
+}
+
 pub fn write_vec(
     module: &crate::Module,
     info: &crate::valid::ModuleInfo,
     options: &Options,
+    pipeline_options: Option<&PipelineOptions>,
 ) -> Result<Vec<u32>, Error> {
     let mut words = Vec::new();
     let mut w = Writer::new(options)?;
-    w.write(module, info, &mut words)?;
+    w.write(module, info, pipeline_options, &mut words)?;
     Ok(words)
 }

@@ -21,7 +21,7 @@ fn capabilities_used(source: &str) -> naga::FastHashSet<Ca> {
 
     let mut words = vec![];
     let mut writer = spv::Writer::new(&spv::Options::default()).unwrap();
-    writer.write(&module, &info, &mut words).unwrap();
+    writer.write(&module, &info, None, &mut words).unwrap();
     writer.get_capabilities_used().clone()
 }
 

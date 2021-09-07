@@ -69,6 +69,9 @@ struct Parameters {
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     #[serde(default)]
     spv_adjust_coordinate_space: bool,
+    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    #[serde(default)]
+    spv_separate_entry_points: bool,
     #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     #[serde(default)]
     msl: naga::back::msl::Options,
@@ -198,13 +201,26 @@ fn write_output_spv(
         ..spv::Options::default()
     };
 
-    let spv = spv::write_vec(module, info, &options).unwrap();
-
-    let dis = rspirv::dr::load_words(spv)
-        .expect("Produced invalid SPIR-V")
-        .disassemble();
-
-    fs::write(destination.join(format!("spv/{}.spvasm", file_name)), dis).unwrap();
+    if params.spv_separate_entry_points {
+        for ep in module.entry_points.iter() {
+            let pipeline_options = spv::PipelineOptions {
+                entry_point: ep.name.clone(),
+                shader_stage: ep.stage,
+            };
+            let spv = spv::write_vec(module, info, &options, Some(&pipeline_options)).unwrap();
+            let dis = rspirv::dr::load_words(spv)
+                .expect("Produced invalid SPIR-V")
+                .disassemble();
+            let path = format!("spv/{}.{}.spvasm", file_name, ep.name);
+            fs::write(destination.join(path), dis).unwrap();
+        }
+    } else {
+        let spv = spv::write_vec(module, info, &options, None).unwrap();
+        let dis = rspirv::dr::load_words(spv)
+            .expect("Produced invalid SPIR-V")
+            .disassemble();
+        fs::write(destination.join(format!("spv/{}.spvasm", file_name)), dis).unwrap();
+    }
 }
 
 #[cfg(feature = "msl-out")]

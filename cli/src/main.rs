@@ -335,6 +335,23 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "spv" => {
                 use naga::back::spv;
 
+                let pipeline_options_owned;
+                let pipeline_options = match params.entry_point {
+                    Some(ref name) => {
+                        let ep_index = module
+                            .entry_points
+                            .iter()
+                            .position(|ep| ep.name == *name)
+                            .expect("Unable to find the entry point");
+                        pipeline_options_owned = spv::PipelineOptions {
+                            entry_point: name.clone(),
+                            shader_stage: module.entry_points[ep_index].stage,
+                        };
+                        Some(&pipeline_options_owned)
+                    }
+                    None => None,
+                };
+
                 params.spv.bounds_check_policies = params.bounds_check_policies;
 
                 let spv = spv::write_vec(
@@ -344,6 +361,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         succeed, and it failed in a previous step",
                     ))?,
                     &params.spv,
+                    pipeline_options,
                 )
                 .unwrap_pretty();
                 let bytes = spv

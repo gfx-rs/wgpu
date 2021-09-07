@@ -3,7 +3,7 @@ use super::{
     make_local, Block, BlockContext, CachedExpressions, EntryPointContext, Error, Function,
     FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
     LogicalLayout, LookupFunctionType, LookupType, LoopContext, Options, PhysicalLayout,
-    ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
+    PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
     arena::{Arena, Handle},
@@ -1213,6 +1213,7 @@ impl Writer {
         &mut self,
         ir_module: &crate::Module,
         mod_info: &ModuleInfo,
+        ep_index: Option<usize>,
     ) -> Result<(), Error> {
         let has_storage_buffers =
             ir_module
@@ -1278,22 +1279,46 @@ impl Writer {
         debug_assert_eq!(self.constant_ids.iter().position(|&id| id == 0), None);
 
         // now write all globals
-        for (_, var) in ir_module.global_variables.iter() {
-            let (instruction, id) = self.write_global_variable(ir_module, var)?;
-            instruction.to_words(&mut self.logical_layout.declarations);
-            self.global_variables.push(GlobalVariable::new(id));
+        for (handle, var) in ir_module.global_variables.iter() {
+            // If a single entry point was specified, only write `OpVariable` instructions
+            // for the globals it actually uses. Emit dummies for the others,
+            // to preserve the indices in `global_variables`.
+            let gvar = match ep_index {
+                Some(index) if mod_info.get_entry_point(index)[handle].is_empty() => {
+                    GlobalVariable::dummy()
+                }
+                _ => {
+                    let (instruction, id) = self.write_global_variable(ir_module, var)?;
+                    instruction.to_words(&mut self.logical_layout.declarations);
+                    GlobalVariable::new(id)
+                }
+            };
+            self.global_variables.push(gvar);
         }
 
         // all functions
         for (handle, ir_function) in ir_module.functions.iter() {
             let info = &mod_info[handle];
+            if let Some(index) = ep_index {
+                let ep_info = mod_info.get_entry_point(index);
+                // If this function uses globals that we omitted from the SPIR-V
+                // because the entry point and its callees didn't use them,
+                // then we must skip it.
+                if !ep_info.dominates_global_use(info) {
+                    log::info!("Skip function {:?}", ir_function.name);
+                    continue;
+                }
+            }
             let id = self.write_function(ir_function, info, ir_module, None)?;
             self.lookup_function.insert(handle, id);
         }
 
         // and entry points
-        for (ep_index, ir_ep) in ir_module.entry_points.iter().enumerate() {
-            let info = mod_info.get_entry_point(ep_index);
+        for (index, ir_ep) in ir_module.entry_points.iter().enumerate() {
+            if ep_index.is_some() && ep_index != Some(index) {
+                continue;
+            }
+            let info = mod_info.get_entry_point(index);
             let ep_instruction = self.write_entry_point(ir_ep, info, ir_module)?;
             ep_instruction.to_words(&mut self.logical_layout.entry_points);
         }
@@ -1332,11 +1357,25 @@ impl Writer {
         &mut self,
         ir_module: &crate::Module,
         info: &ModuleInfo,
+        pipeline_options: Option<&PipelineOptions>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
         self.reset();
 
-        self.write_logical_layout(ir_module, info)?;
+        // Try to find the entry point and corresponding index
+        let ep_index = match pipeline_options {
+            Some(po) => {
+                let index = ir_module
+                    .entry_points
+                    .iter()
+                    .position(|ep| po.shader_stage == ep.stage && po.entry_point == ep.name)
+                    .ok_or(Error::EntryPointNotFound)?;
+                Some(index)
+            }
+            None => None,
+        };
+
+        self.write_logical_layout(ir_module, info, ep_index)?;
         self.write_physical_layout();
 
         self.physical_layout.in_words(words);
