@@ -829,6 +829,7 @@ impl super::Adapter {
                 spv::Capability::Image1D,
                 spv::Capability::ImageQuery,
                 spv::Capability::DerivativeControl,
+                spv::Capability::SampledCubeArray,
                 //Note: this is requested always, no matter what the actual
                 // adapter supports. It's not the responsibility of SPV-out
                 // translation to handle the storage support for formats.
