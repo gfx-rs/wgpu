@@ -460,6 +460,12 @@ impl
     }
 }
 
+struct CompiledStage {
+    create_info: vk::PipelineShaderStageCreateInfo,
+    _entry_point: CString,
+    temp_raw_module: Option<vk::ShaderModule>,
+}
+
 impl super::Device {
     pub(super) unsafe fn create_swapchain(
         &self,
@@ -554,6 +560,59 @@ impl super::Device {
             raw_flags: vk::ImageCreateFlags::empty(),
             copy_size: conv::map_extent_to_copy_size(&desc.size, desc.dimension),
         }
+    }
+
+    fn create_shader_module_impl(
+        &self,
+        spv: &[u32],
+    ) -> Result<vk::ShaderModule, crate::DeviceError> {
+        let vk_info = vk::ShaderModuleCreateInfo::builder()
+            .flags(vk::ShaderModuleCreateFlags::empty())
+            .code(spv);
+
+        let raw = unsafe { self.shared.raw.create_shader_module(&vk_info, None)? };
+        Ok(raw)
+    }
+
+    fn compile_stage(
+        &self,
+        stage: &crate::ProgrammableStage<super::Api>,
+        naga_stage: naga::ShaderStage,
+    ) -> Result<CompiledStage, crate::PipelineError> {
+        let stage_flags = crate::auxil::map_naga_stage(naga_stage);
+        let vk_module = match *stage.module {
+            super::ShaderModule::Raw(raw) => raw,
+            super::ShaderModule::Intermediate(ref naga_shader) => {
+                let pipeline_options = naga::back::spv::PipelineOptions {
+                    entry_point: stage.entry_point.to_string(),
+                    shader_stage: naga_stage,
+                };
+                let spv = naga::back::spv::write_vec(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    &self.naga_options,
+                    Some(&pipeline_options),
+                )
+                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{}", e)))?;
+                self.create_shader_module_impl(&spv)?
+            }
+        };
+
+        let entry_point = CString::new(stage.entry_point).unwrap();
+        let create_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(conv::map_shader_stage(stage_flags))
+            .module(vk_module)
+            .name(&entry_point)
+            .build();
+
+        Ok(CompiledStage {
+            create_info,
+            _entry_point: entry_point,
+            temp_raw_module: match *stage.module {
+                super::ShaderModule::Raw(_) => None,
+                super::ShaderModule::Intermediate(_) => Some(vk_module),
+            },
+        })
     }
 }
 
@@ -1114,36 +1173,43 @@ impl crate::Device<super::Api> for super::Device {
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         let spv = match shader {
-            crate::ShaderInput::Naga(naga_shader) => Cow::Owned(
-                naga::back::spv::write_vec(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    &self.naga_options,
+            crate::ShaderInput::Naga(naga_shader) => {
+                if self
+                    .shared
+                    .workarounds
+                    .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
+                {
+                    return Ok(super::ShaderModule::Intermediate(naga_shader));
+                }
+                Cow::Owned(
+                    naga::back::spv::write_vec(
+                        &naga_shader.module,
+                        &naga_shader.info,
+                        &self.naga_options,
+                        None,
+                    )
+                    .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?,
                 )
-                .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?,
-            ),
+            }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
         };
 
-        let vk_info = vk::ShaderModuleCreateInfo::builder()
-            .flags(vk::ShaderModuleCreateFlags::empty())
-            .code(&spv);
-
-        let raw = self
-            .shared
-            .raw
-            .create_shader_module(&vk_info, None)
-            .map_err(crate::DeviceError::from)?;
+        let raw = self.create_shader_module_impl(&*spv)?;
 
         if let Some(label) = desc.label {
             self.shared
                 .set_object_name(vk::ObjectType::SHADER_MODULE, raw, label);
         }
 
-        Ok(super::ShaderModule { raw })
+        Ok(super::ShaderModule::Raw(raw))
     }
     unsafe fn destroy_shader_module(&self, module: super::ShaderModule) {
-        let _ = self.shared.raw.destroy_shader_module(module.raw, None);
+        match module {
+            super::ShaderModule::Raw(raw) => {
+                let _ = self.shared.raw.destroy_shader_module(raw, None);
+            }
+            super::ShaderModule::Intermediate(_) => {}
+        }
     }
 
     unsafe fn create_render_pipeline(
@@ -1193,29 +1259,16 @@ impl crate::Device<super::Api> for super::Device {
             .primitive_restart_enable(desc.primitive.strip_index_format.is_some())
             .build();
 
-        let vs_entry_point;
-        {
-            let stage = &desc.vertex_stage;
-            vs_entry_point = CString::new(stage.entry_point).unwrap();
-            stages.push(
-                vk::PipelineShaderStageCreateInfo::builder()
-                    .stage(vk::ShaderStageFlags::VERTEX)
-                    .module(stage.module.raw)
-                    .name(&vs_entry_point)
-                    .build(),
-            );
-        }
-        let fs_entry_point;
-        if let Some(ref stage) = desc.fragment_stage {
-            fs_entry_point = CString::new(stage.entry_point).unwrap();
-            stages.push(
-                vk::PipelineShaderStageCreateInfo::builder()
-                    .stage(vk::ShaderStageFlags::FRAGMENT)
-                    .module(stage.module.raw)
-                    .name(&fs_entry_point)
-                    .build(),
-            );
-        }
+        let compiled_vs = self.compile_stage(&desc.vertex_stage, naga::ShaderStage::Vertex)?;
+        stages.push(compiled_vs.create_info);
+        let compiled_fs = match desc.fragment_stage {
+            Some(ref stage) => {
+                let compiled = self.compile_stage(stage, naga::ShaderStage::Fragment)?;
+                stages.push(compiled.create_info);
+                Some(compiled)
+            }
+            None => None,
+        };
 
         let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(desc.primitive.clamp_depth)
@@ -1355,6 +1408,17 @@ impl crate::Device<super::Api> for super::Device {
                 .set_object_name(vk::ObjectType::PIPELINE, raw, label);
         }
 
+        if let Some(raw_module) = compiled_vs.temp_raw_module {
+            self.shared.raw.destroy_shader_module(raw_module, None);
+        }
+        if let Some(CompiledStage {
+            temp_raw_module: Some(raw_module),
+            ..
+        }) = compiled_fs
+        {
+            self.shared.raw.destroy_shader_module(raw_module, None);
+        }
+
         Ok(super::RenderPipeline { raw })
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
@@ -1365,17 +1429,12 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::ComputePipelineDescriptor<super::Api>,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
-        let cs_entry_point = CString::new(desc.stage.entry_point).unwrap();
-        let vk_stage = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(vk::ShaderStageFlags::COMPUTE)
-            .module(desc.stage.module.raw)
-            .name(&cs_entry_point)
-            .build();
+        let compiled = self.compile_stage(&desc.stage, naga::ShaderStage::Compute)?;
 
         let vk_infos = [{
             vk::ComputePipelineCreateInfo::builder()
                 .layout(desc.layout.raw)
-                .stage(vk_stage)
+                .stage(compiled.create_info)
                 .build()
         }];
 
@@ -1389,6 +1448,10 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(label) = desc.label {
             self.shared
                 .set_object_name(vk::ObjectType::PIPELINE, raw, label);
+        }
+
+        if let Some(raw_module) = compiled.temp_raw_module {
+            self.shared.raw.destroy_shader_module(raw_module, None);
         }
 
         Ok(super::ComputePipeline { raw })

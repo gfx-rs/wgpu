@@ -53,13 +53,11 @@ impl PhysicalDeviceFeatures {
         downlevel_flags: wgt::DownlevelFlags,
         private_caps: &super::PrivateCapabilities,
     ) -> Self {
-        //TODO: make configurable
-        let rba = !(cfg!(target_os = "macos") || cfg!(target_os = "ios"));
         Self {
             // vk::PhysicalDeviceFeatures is a struct composed of Bool32's while
             // Features is a bitfield so we need to map everything manually
             core: vk::PhysicalDeviceFeatures::builder()
-                .robust_buffer_access(rba)
+                .robust_buffer_access(private_caps.robust_buffer_access)
                 .independent_blend(true)
                 .sample_rate_shading(true)
                 .image_cube_array(
@@ -631,6 +629,7 @@ impl super::Instance {
         };
 
         let (available_features, downlevel_flags) = phd_features.to_wgpu(&phd_capabilities);
+        let mut workarounds = super::Workarounds::empty();
         {
             use crate::auxil::db;
             // see https://github.com/gfx-rs/gfx/issues/1930
@@ -640,6 +639,8 @@ impl super::Instance {
                     == db::intel::DEVICE_KABY_LAKE_MASK
                     || phd_capabilities.properties.device_id & db::intel::DEVICE_SKY_LAKE_MASK
                         == db::intel::DEVICE_SKY_LAKE_MASK);
+            // TODO: only enable for particular devices
+            workarounds |= super::Workarounds::SEPARATE_ENTRY_POINTS;
         };
 
         if phd_features.core.sample_rate_shading == 0 {
@@ -700,6 +701,8 @@ impl super::Instance {
             },
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
+            //TODO: make configurable
+            robust_buffer_access: phd_features.core.robust_buffer_access != 0,
         };
 
         let capabilities = crate::Capabilities {
@@ -725,6 +728,7 @@ impl super::Instance {
             //phd_features,
             downlevel_flags,
             private_caps,
+            workarounds,
         };
 
         Some(crate::ExposedAdapter {
@@ -845,8 +849,15 @@ impl super::Adapter {
                 lang_version: (1, 0),
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
-                index_bounds_check_policy: naga::back::BoundsCheckPolicy::Restrict,
-                image_bounds_check_policy: naga::back::BoundsCheckPolicy::Restrict,
+                bounds_check_policies: naga::back::BoundsCheckPolicies {
+                    index: naga::back::BoundsCheckPolicy::Restrict,
+                    image: naga::back::BoundsCheckPolicy::Restrict,
+                    buffer: if self.private_caps.robust_buffer_access {
+                        naga::back::BoundsCheckPolicy::Unchecked
+                    } else {
+                        naga::back::BoundsCheckPolicy::Restrict
+                    },
+                },
             }
         };
 
@@ -864,6 +875,7 @@ impl super::Adapter {
             vendor_id: self.phd_capabilities.properties.vendor_id,
             downlevel_flags: self.downlevel_flags,
             private_caps: self.private_caps.clone(),
+            workarounds: self.workarounds,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
