@@ -1,5 +1,18 @@
 # Change Log
 
+## v0.6.3 (2021-09-08)
+  - Reduced heap allocations when generating WGSL, HLSL, and GLSL
+  - WGSL-in:
+    - support module-scope `let` type inference
+  - SPV-in:
+    - fix depth sampling with projection
+  - HLSL-out:
+    - fix local struct construction
+  - GLSL-out:
+    - fix `select()` order
+  - SPV-out:
+    - allow working around Adreno issue with `OpName`
+
 ## v0.6.2 (2021-09-01)
   - SPV-out fixes:
     - requested capabilities for 1D and cube images, storage formats
