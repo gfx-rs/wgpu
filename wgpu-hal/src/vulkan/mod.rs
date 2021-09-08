@@ -130,6 +130,7 @@ pub struct Adapter {
     //phd_features: adapter::PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
+    workarounds: Workarounds,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
@@ -161,7 +162,16 @@ struct PrivateCapabilities {
     /// Ability to present contents to any screen. Only needed to work around broken platform configurations.
     can_present: bool,
     non_coherent_map_mask: wgt::BufferAddress,
+    robust_buffer_access: bool,
 }
+
+bitflags::bitflags!(
+    /// Workaround flags.
+    pub struct Workarounds: u32 {
+        /// Only generate SPIR-V for one entry point at a time.
+        const SEPARATE_ENTRY_POINTS = 0x1;
+    }
+);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct AttachmentKey {
@@ -225,6 +235,7 @@ struct DeviceShared {
     timestamp_period: f32,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
+    workarounds: Workarounds,
     render_passes: Mutex<fxhash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<fxhash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
 }
@@ -358,8 +369,9 @@ pub struct CommandBuffer {
 }
 
 #[derive(Debug)]
-pub struct ShaderModule {
-    raw: vk::ShaderModule,
+pub enum ShaderModule {
+    Raw(vk::ShaderModule),
+    Intermediate(crate::NagaShader),
 }
 
 #[derive(Debug)]
