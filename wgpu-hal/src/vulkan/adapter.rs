@@ -503,6 +503,8 @@ impl PhysicalDeviceCapabilities {
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
             max_push_constant_size: limits.max_push_constants_size,
+            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
+            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
         }
     }
 
@@ -512,10 +514,6 @@ impl PhysicalDeviceCapabilities {
             buffer_copy_offset: wgt::BufferSize::new(limits.optimal_buffer_copy_offset_alignment)
                 .unwrap(),
             buffer_copy_pitch: wgt::BufferSize::new(limits.optimal_buffer_copy_row_pitch_alignment)
-                .unwrap(),
-            storage_buffer_offset: wgt::BufferSize::new(limits.min_storage_buffer_offset_alignment)
-                .unwrap(),
-            uniform_buffer_offset: wgt::BufferSize::new(limits.min_uniform_buffer_offset_alignment)
                 .unwrap(),
         }
     }

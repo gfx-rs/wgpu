@@ -286,11 +286,13 @@ impl framework::Example for Example {
 
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let num_entities = 1 + cube_descs.len() as wgpu::BufferAddress;
-        assert!(entity_uniform_size <= wgpu::BIND_BUFFER_ALIGNMENT);
-        //Note: dynamic offsets also have to be aligned to `BIND_BUFFER_ALIGNMENT`.
+        let uniform_alignment =
+            device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
+        assert!(entity_uniform_size <= uniform_alignment);
+        // Note: dynamic uniform offsets also have to be aligned to `Limits::min_uniform_buffer_offset_alignment`.
         let entity_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: num_entities * wgpu::BIND_BUFFER_ALIGNMENT,
+            size: num_entities * uniform_alignment,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -327,7 +329,7 @@ impl framework::Example for Example {
                 index_buf: Rc::clone(&cube_index_buf),
                 index_format,
                 index_count: cube_index_data.len(),
-                uniform_offset: ((i + 1) * wgpu::BIND_BUFFER_ALIGNMENT as usize) as _,
+                uniform_offset: ((i + 1) * uniform_alignment as usize) as _,
             });
         }
 

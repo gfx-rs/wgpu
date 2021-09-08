@@ -60,6 +60,8 @@ pub fn lowest_reasonable_limits() -> Limits {
         max_vertex_attributes: 4,
         max_vertex_buffer_array_stride: 32,
         max_push_constant_size: 0,
+        min_uniform_buffer_offset_alignment: 256,
+        min_storage_buffer_offset_alignment: 256,
     }
 }
 

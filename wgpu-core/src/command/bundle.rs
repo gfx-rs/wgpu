@@ -34,6 +34,7 @@
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
+    binding_model::buffer_binding_type_alignment,
     command::{
         BasePass, DrawError, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError,
         StateChange,
@@ -196,15 +197,6 @@ impl RenderBundleEncoder {
 
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
-                    // Check for misaligned offsets.
-                    if let Some(offset) = offsets
-                        .iter()
-                        .map(|offset| *offset as wgt::BufferAddress)
-                        .find(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
-                    {
-                        return Err(RenderCommandError::UnalignedBufferOffset(offset))
-                            .map_pass_err(scope);
-                    }
 
                     let bind_group = state
                         .trackers
@@ -218,6 +210,22 @@ impl RenderBundleEncoder {
                             expected: bind_group.dynamic_binding_info.len(),
                         })
                         .map_pass_err(scope);
+                    }
+
+                    // Check for misaligned offsets.
+                    for (offset, info) in offsets
+                        .iter()
+                        .map(|offset| *offset as wgt::BufferAddress)
+                        .zip(bind_group.dynamic_binding_info.iter())
+                    {
+                        let (alignment, limit_name) =
+                            buffer_binding_type_alignment(&device.limits, info.binding_type);
+                        if offset % alignment as u64 != 0 {
+                            return Err(RenderCommandError::UnalignedBufferOffset(
+                                offset, limit_name, alignment,
+                            ))
+                            .map_pass_err(scope);
+                        }
                     }
 
                     buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);

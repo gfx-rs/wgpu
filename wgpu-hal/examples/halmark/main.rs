@@ -66,6 +66,7 @@ struct Example<A: hal::Api> {
     pipeline: A::RenderPipeline,
     bunnies: Vec<Locals>,
     local_buffer: A::Buffer,
+    local_alignment: wgt::BufferAddress,
     global_buffer: A::Buffer,
     sampler: A::Sampler,
     texture: A::Texture,
@@ -89,7 +90,7 @@ impl<A: hal::Api> Example<A> {
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe { instance.create_surface(window).unwrap() };
 
-        let adapter = unsafe {
+        let (adapter, capabilities) = unsafe {
             let mut adapters = instance.enumerate_adapters();
             if adapters.is_empty() {
                 return Err(hal::InstanceError);
@@ -99,7 +100,7 @@ impl<A: hal::Api> Example<A> {
                 "Surface caps: {:?}",
                 exposed.adapter.surface_capabilities(&surface)
             );
-            exposed.adapter
+            (exposed.adapter, exposed.capabilities)
         };
         let hal::OpenDevice { device, mut queue } =
             unsafe { adapter.open(wgt::Features::empty()).unwrap() };
@@ -366,9 +367,22 @@ impl<A: hal::Api> Example<A> {
             buffer
         };
 
+        fn align_to(
+            value: wgt::BufferAddress,
+            alignment: wgt::BufferAddress,
+        ) -> wgt::BufferAddress {
+            match value % alignment {
+                0 => value,
+                other => value - other + alignment,
+            }
+        }
+        let local_alignment = align_to(
+            mem::size_of::<Locals>() as _,
+            capabilities.limits.min_uniform_buffer_offset_alignment as _,
+        );
         let local_buffer_desc = hal::BufferDescriptor {
             label: Some("local"),
-            size: (MAX_BUNNIES as wgt::BufferAddress) * wgt::BIND_BUFFER_ALIGNMENT,
+            size: (MAX_BUNNIES as wgt::BufferAddress) * local_alignment,
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
@@ -466,6 +480,7 @@ impl<A: hal::Api> Example<A> {
             local_group_layout,
             bunnies: Vec::new(),
             local_buffer,
+            local_alignment,
             global_buffer,
             sampler,
             texture,
@@ -575,7 +590,7 @@ impl<A: hal::Api> Example<A> {
         }
 
         if !self.bunnies.is_empty() {
-            let size = self.bunnies.len() * wgt::BIND_BUFFER_ALIGNMENT as usize;
+            let size = self.bunnies.len() * self.local_alignment as usize;
             unsafe {
                 let mapping = self
                     .device
@@ -649,8 +664,7 @@ impl<A: hal::Api> Example<A> {
         }
 
         for i in 0..self.bunnies.len() {
-            let offset =
-                (i as wgt::DynamicOffset) * (wgt::BIND_BUFFER_ALIGNMENT as wgt::DynamicOffset);
+            let offset = (i as wgt::DynamicOffset) * (self.local_alignment as wgt::DynamicOffset);
             unsafe {
                 ctx.encoder
                     .set_bind_group(&self.pipeline_layout, 1, &self.local_group, &[offset]);

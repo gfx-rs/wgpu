@@ -1258,8 +1258,14 @@ impl<A: HalApi> Device<A> {
             ),
         };
 
-        if bb.offset % wgt::BIND_BUFFER_ALIGNMENT != 0 {
-            return Err(Error::UnalignedBufferOffset(bb.offset));
+        let (align, align_limit_name) =
+            binding_model::buffer_binding_type_alignment(limits, binding_ty);
+        if bb.offset % align as u64 != 0 {
+            return Err(Error::UnalignedBufferOffset(
+                bb.offset,
+                align_limit_name,
+                align,
+            ));
         }
 
         let buffer = used
@@ -1299,6 +1305,7 @@ impl<A: HalApi> Device<A> {
         if dynamic {
             dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
                 maximum_dynamic_offset: buffer.size - bind_end,
+                binding_type: binding_ty,
             });
         }
 

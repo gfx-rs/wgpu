@@ -93,8 +93,8 @@ pub enum CreateBindGroupError {
     MissingTextureUsage(#[from] MissingTextureUsageError),
     #[error("binding declared as a single item, but bind group is using it as an array")]
     SingleBindingExpected,
-    #[error("buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
-    UnalignedBufferOffset(wgt::BufferAddress),
+    #[error("buffer offset {0} does not respect device's requested `{1}` limit {2}")]
+    UnalignedBufferOffset(wgt::BufferAddress, &'static str, u32),
     #[error(
         "buffer binding {binding} range {given} exceeds `max_*_buffer_binding_size` limit {limit}"
     )]
@@ -655,9 +655,14 @@ pub enum BindError {
     #[error("number of dynamic offsets ({actual}) doesn't match the number of dynamic bindings in the bind group layout ({expected})")]
     MismatchedDynamicOffsetCount { actual: usize, expected: usize },
     #[error(
-        "dynamic binding at index {idx}: offset {offset} does not respect `BIND_BUFFER_ALIGNMENT`"
+        "dynamic binding at index {idx}: offset {offset} does not respect device's requested `{limit_name}` limit {alignment}"
     )]
-    UnalignedDynamicBinding { idx: usize, offset: u32 },
+    UnalignedDynamicBinding {
+        idx: usize,
+        offset: u32,
+        alignment: u32,
+        limit_name: &'static str,
+    },
     #[error("dynamic binding at index {idx} with offset {offset} would overrun the buffer (limit: {max})")]
     DynamicBindingOutOfBounds { idx: usize, offset: u32, max: u64 },
 }
@@ -666,6 +671,24 @@ pub enum BindError {
 pub struct BindGroupDynamicBindingData {
     /// The maximum value the dynamic offset can have before running off the end of the buffer.
     pub(crate) maximum_dynamic_offset: wgt::BufferAddress,
+    /// The binding type.
+    pub(crate) binding_type: wgt::BufferBindingType,
+}
+
+pub(crate) fn buffer_binding_type_alignment(
+    limits: &wgt::Limits,
+    binding_type: wgt::BufferBindingType,
+) -> (u32, &'static str) {
+    match binding_type {
+        wgt::BufferBindingType::Uniform => (
+            limits.min_uniform_buffer_offset_alignment,
+            "min_uniform_buffer_offset_alignment",
+        ),
+        wgt::BufferBindingType::Storage { .. } => (
+            limits.min_storage_buffer_offset_alignment,
+            "min_storage_buffer_offset_alignment",
+        ),
+    }
 }
 
 #[derive(Debug)]
@@ -683,6 +706,7 @@ impl<A: hal::Api> BindGroup<A> {
     pub(crate) fn validate_dynamic_bindings(
         &self,
         offsets: &[wgt::DynamicOffset],
+        limits: &wgt::Limits,
     ) -> Result<(), BindError> {
         if self.dynamic_binding_info.len() != offsets.len() {
             return Err(BindError::MismatchedDynamicOffsetCount {
@@ -697,8 +721,14 @@ impl<A: hal::Api> BindGroup<A> {
             .zip(offsets.iter())
             .enumerate()
         {
-            if offset as wgt::BufferAddress % wgt::BIND_BUFFER_ALIGNMENT != 0 {
-                return Err(BindError::UnalignedDynamicBinding { idx, offset });
+            let (alignment, limit_name) = buffer_binding_type_alignment(limits, info.binding_type);
+            if offset as wgt::BufferAddress % alignment as u64 != 0 {
+                return Err(BindError::UnalignedDynamicBinding {
+                    idx,
+                    offset,
+                    alignment,
+                    limit_name,
+                });
             }
 
             if offset as wgt::BufferAddress > info.maximum_dynamic_offset {

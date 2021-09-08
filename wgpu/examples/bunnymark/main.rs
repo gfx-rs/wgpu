@@ -194,9 +194,11 @@ impl framework::Example for Example {
             contents: bytemuck::bytes_of(&globals),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
         });
+        let uniform_alignment =
+            device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
         let local_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("local"),
-            size: (MAX_BUNNIES as wgpu::BufferAddress) * wgpu::BIND_BUFFER_ALIGNMENT,
+            size: (MAX_BUNNIES as wgpu::BufferAddress) * uniform_alignment,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
             mapped_at_creation: false,
         });
@@ -305,10 +307,11 @@ impl framework::Example for Example {
             }
         }
 
+        let uniform_alignment = device.limits().min_uniform_buffer_offset_alignment;
         queue.write_buffer(&self.local_buffer, 0, unsafe {
             std::slice::from_raw_parts(
                 self.bunnies.as_ptr() as *const u8,
-                self.bunnies.len() * wgpu::BIND_BUFFER_ALIGNMENT as usize,
+                self.bunnies.len() * uniform_alignment as usize,
             )
         });
 
@@ -335,8 +338,8 @@ impl framework::Example for Example {
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.global_group, &[]);
             for i in 0..self.bunnies.len() {
-                let offset = (i as wgpu::DynamicOffset)
-                    * (wgpu::BIND_BUFFER_ALIGNMENT as wgpu::DynamicOffset);
+                let offset =
+                    (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
                 rpass.set_bind_group(1, &self.local_group, &[offset]);
                 rpass.draw(0..4, 0..1);
             }
