@@ -1071,7 +1071,7 @@ impl crate::Device<super::Api> for super::Device {
                                 u: mem::zeroed(),
                             };
                             *raw_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
-                                FirstElement: data.offset,
+                                FirstElement: data.offset / 4,
                                 NumElements: size / 4,
                                 StructureByteStride: 0,
                                 Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
@@ -1089,7 +1089,7 @@ impl crate::Device<super::Api> for super::Device {
                                 u: mem::zeroed(),
                             };
                             *raw_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
-                                FirstElement: data.offset,
+                                FirstElement: data.offset / 4,
                                 NumElements: size / 4,
                                 StructureByteStride: 0,
                                 CounterOffsetInBytes: 0,
