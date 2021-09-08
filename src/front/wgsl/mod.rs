@@ -3667,11 +3667,19 @@ impl Parser {
                 lexer.expect(Token::Separator(';'))?;
             }
             (Token::Word("let"), _) => {
-                let (name, name_span, explicit_ty, _access) = self.parse_variable_ident_decl(
-                    lexer,
-                    &mut module.types,
-                    &mut module.constants,
-                )?;
+                let (name, name_span) = lexer.next_ident_with_span()?;
+                let given_ty = if lexer.skip(Token::Separator(':')) {
+                    let (ty, _access) = self.parse_type_decl(
+                        lexer,
+                        None,
+                        &mut module.types,
+                        &mut module.constants,
+                    )?;
+                    Some(ty)
+                } else {
+                    None
+                };
+
                 lexer.expect(Token::Operation('='))?;
                 let first_token_span = lexer.next();
                 let const_handle = self.parse_const_expression_impl(
@@ -3681,21 +3689,24 @@ impl Parser {
                     &mut module.types,
                     &mut module.constants,
                 )?;
-                let con = &module.constants[const_handle];
-                let type_match = match con.inner {
-                    crate::ConstantInner::Scalar { width, value } => {
-                        module.types[explicit_ty].inner
-                            == crate::TypeInner::Scalar {
-                                kind: value.scalar_kind(),
-                                width,
-                            }
+
+                if let Some(explicit_ty) = given_ty {
+                    let con = &module.constants[const_handle];
+                    let type_match = match con.inner {
+                        crate::ConstantInner::Scalar { width, value } => {
+                            module.types[explicit_ty].inner
+                                == crate::TypeInner::Scalar {
+                                    kind: value.scalar_kind(),
+                                    width,
+                                }
+                        }
+                        crate::ConstantInner::Composite { ty, components: _ } => ty == explicit_ty,
+                    };
+                    if !type_match {
+                        return Err(Error::InitializationTypeMismatch(name_span, explicit_ty));
                     }
-                    crate::ConstantInner::Composite { ty, components: _ } => ty == explicit_ty,
-                };
-                if !type_match {
-                    return Err(Error::InitializationTypeMismatch(name_span, explicit_ty));
                 }
-                //TODO: check `ty` against `const_handle`.
+
                 lexer.expect(Token::Separator(';'))?;
                 lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));
             }
