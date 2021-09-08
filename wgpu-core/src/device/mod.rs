@@ -1241,13 +1241,11 @@ impl<A: HalApi> Device<A> {
                 })
             }
         };
-        let (pub_usage, internal_use, range_limit, align, align_limit_name) = match binding_ty {
+        let (pub_usage, internal_use, range_limit) = match binding_ty {
             wgt::BufferBindingType::Uniform => (
                 wgt::BufferUsages::UNIFORM,
                 hal::BufferUses::UNIFORM,
                 limits.max_uniform_buffer_binding_size,
-                limits.min_uniform_buffer_offset_alignment,
-                "min_uniform_buffer_offset_alignment",
             ),
             wgt::BufferBindingType::Storage { read_only } => (
                 wgt::BufferUsages::STORAGE,
@@ -1257,11 +1255,11 @@ impl<A: HalApi> Device<A> {
                     hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_WRITE
                 },
                 limits.max_storage_buffer_binding_size,
-                limits.min_storage_buffer_offset_alignment,
-                "min_storage_buffer_offset_alignment",
             ),
         };
 
+        let (align, align_limit_name) =
+            binding_model::buffer_binding_type_alignment(limits, binding_ty);
         if bb.offset % align as u64 != 0 {
             return Err(Error::UnalignedBufferOffset(
                 bb.offset,

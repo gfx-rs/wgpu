@@ -675,6 +675,22 @@ pub struct BindGroupDynamicBindingData {
     pub(crate) binding_type: wgt::BufferBindingType,
 }
 
+pub(crate) fn buffer_binding_type_alignment(
+    limits: &wgt::Limits,
+    binding_type: wgt::BufferBindingType,
+) -> (u32, &'static str) {
+    match binding_type {
+        wgt::BufferBindingType::Uniform => (
+            limits.min_uniform_buffer_offset_alignment,
+            "min_uniform_buffer_offset_alignment",
+        ),
+        wgt::BufferBindingType::Storage { .. } => (
+            limits.min_storage_buffer_offset_alignment,
+            "min_storage_buffer_offset_alignment",
+        ),
+    }
+}
+
 #[derive(Debug)]
 pub struct BindGroup<A: hal::Api> {
     pub(crate) raw: A::BindGroup,
@@ -705,16 +721,7 @@ impl<A: hal::Api> BindGroup<A> {
             .zip(offsets.iter())
             .enumerate()
         {
-            let (alignment, limit_name) = match info.binding_type {
-                wgt::BufferBindingType::Uniform => (
-                    limits.min_uniform_buffer_offset_alignment,
-                    "min_uniform_buffer_offset_alignment",
-                ),
-                wgt::BufferBindingType::Storage { .. } => (
-                    limits.min_storage_buffer_offset_alignment,
-                    "min_storage_buffer_offset_alignment",
-                ),
-            };
+            let (alignment, limit_name) = buffer_binding_type_alignment(limits, info.binding_type);
             if offset as wgt::BufferAddress % alignment as u64 != 0 {
                 return Err(BindError::UnalignedDynamicBinding {
                     idx,

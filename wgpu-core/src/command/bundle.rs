@@ -34,6 +34,7 @@
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
+    binding_model::buffer_binding_type_alignment,
     command::{
         BasePass, DrawError, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError,
         StateChange,
@@ -217,16 +218,8 @@ impl RenderBundleEncoder {
                         .map(|offset| *offset as wgt::BufferAddress)
                         .zip(bind_group.dynamic_binding_info.iter())
                     {
-                        let (alignment, limit_name) = match info.binding_type {
-                            wgt::BufferBindingType::Uniform => (
-                                device.limits.min_uniform_buffer_offset_alignment,
-                                "min_uniform_buffer_offset_alignment",
-                            ),
-                            wgt::BufferBindingType::Storage { .. } => (
-                                device.limits.min_storage_buffer_offset_alignment,
-                                "min_storage_buffer_offset_alignment",
-                            ),
-                        };
+                        let (alignment, limit_name) =
+                            buffer_binding_type_alignment(&device.limits, info.binding_type);
                         if offset % alignment as u64 != 0 {
                             return Err(RenderCommandError::UnalignedBufferOffset(
                                 offset, limit_name, alignment,
