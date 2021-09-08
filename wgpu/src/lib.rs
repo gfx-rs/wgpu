@@ -1008,7 +1008,8 @@ pub struct BufferBinding<'a> {
     /// Base offset of the buffer. For bindings with `dynamic == true`, this offset
     /// will be added to the dynamic offset provided in [`RenderPass::set_bind_group`].
     ///
-    /// The offset has to be aligned to [`BIND_BUFFER_ALIGNMENT`].
+    /// The offset has to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
+    /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
     pub offset: BufferAddress,
     /// Size of the binding, or `None` for using the rest of the buffer.
     pub size: Option<BufferSize>,
@@ -2365,7 +2366,8 @@ impl<'a> RenderPass<'a> {
     /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in order of their declaration.
-    /// These offsets have to be aligned to [`BIND_BUFFER_ALIGNMENT`].
+    /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
+    /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
     pub fn set_bind_group(
         &mut self,
         index: u32,
@@ -2769,7 +2771,8 @@ impl<'a> ComputePass<'a> {
     /// in the active pipeline when the `dispatch()` function is called must match the layout of this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in order of their declaration.
-    /// These offsets have to be aligned to [`BIND_BUFFER_ALIGNMENT`].
+    /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
+    /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
     pub fn set_bind_group(
         &mut self,
         index: u32,
