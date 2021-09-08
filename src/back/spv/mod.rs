@@ -485,6 +485,9 @@ bitflags::bitflags! {
         const DEBUG = 0x1;
         /// Flip Y coordinate of `BuiltIn::Position` output.
         const ADJUST_COORDINATE_SPACE = 0x2;
+        /// Emit `OpLabel` for input/output locations.
+        /// Some drivers treat it as semantic, not allowing any conflicts.
+        const LABEL_VARYINGS = 0x4;
     }
 }
 
@@ -509,7 +512,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        let mut flags = WriterFlags::ADJUST_COORDINATE_SPACE;
+        let mut flags = WriterFlags::ADJUST_COORDINATE_SPACE | WriterFlags::LABEL_VARYINGS;
         if cfg!(debug_assertions) {
             flags |= WriterFlags::DEBUG;
         }

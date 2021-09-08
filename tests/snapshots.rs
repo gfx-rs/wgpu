@@ -150,13 +150,12 @@ fn write_output_spv(
     use naga::back::spv;
     use rspirv::binary::Disassemble;
 
-    let mut flags = spv::WriterFlags::empty();
-    if params.spv_debug {
-        flags |= spv::WriterFlags::DEBUG;
-    }
-    if params.spv_adjust_coordinate_space {
-        flags |= spv::WriterFlags::ADJUST_COORDINATE_SPACE;
-    }
+    let mut flags = spv::WriterFlags::LABEL_VARYINGS;
+    flags.set(spv::WriterFlags::DEBUG, params.spv_debug);
+    flags.set(
+        spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+        params.spv_adjust_coordinate_space,
+    );
     let options = spv::Options {
         lang_version: params.spv_version,
         flags,
