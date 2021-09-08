@@ -704,6 +704,17 @@ impl Limits {
             ..self
         }
     }
+
+    /// Modify the current limits to use the buffer alignment limits of the adapter.
+    ///
+    /// This is useful for when you'd like to dynamically use the "best" supported buffer alignments.
+    pub fn using_alignment(self, other: Self) -> Self {
+        Self {
+            min_uniform_buffer_offset_alignment: other.min_uniform_buffer_offset_alignment,
+            min_storage_buffer_offset_alignment: other.min_storage_buffer_offset_alignment,
+            ..self
+        }
+    }
 }
 
 /// Represents the sets of additional limits on an adapter,
