@@ -29,25 +29,27 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
         }
     }
     println!("\tLimits:");
-    let wgpu::Limits { 
-        max_texture_dimension_1d, 
-        max_texture_dimension_2d, 
-        max_texture_dimension_3d, 
-        max_texture_array_layers, 
-        max_bind_groups, 
-        max_dynamic_uniform_buffers_per_pipeline_layout, 
-        max_dynamic_storage_buffers_per_pipeline_layout, 
-        max_sampled_textures_per_shader_stage, 
-        max_samplers_per_shader_stage, 
-        max_storage_buffers_per_shader_stage, 
-        max_storage_textures_per_shader_stage, 
-        max_uniform_buffers_per_shader_stage, 
-        max_uniform_buffer_binding_size, 
-        max_storage_buffer_binding_size, 
-        max_vertex_buffers, 
-        max_vertex_attributes, 
-        max_vertex_buffer_array_stride, 
-        max_push_constant_size, 
+    let wgpu::Limits {
+        max_texture_dimension_1d,
+        max_texture_dimension_2d,
+        max_texture_dimension_3d,
+        max_texture_array_layers,
+        max_bind_groups,
+        max_dynamic_uniform_buffers_per_pipeline_layout,
+        max_dynamic_storage_buffers_per_pipeline_layout,
+        max_sampled_textures_per_shader_stage,
+        max_samplers_per_shader_stage,
+        max_storage_buffers_per_shader_stage,
+        max_storage_textures_per_shader_stage,
+        max_uniform_buffers_per_shader_stage,
+        max_uniform_buffer_binding_size,
+        max_storage_buffer_binding_size,
+        max_vertex_buffers,
+        max_vertex_attributes,
+        max_vertex_buffer_array_stride,
+        max_push_constant_size,
+        min_uniform_buffer_offset_alignment,
+        min_storage_buffer_offset_alignment,
     } = limits;
     println!("\t\tMax Texture Dimension 1d:                        {}", max_texture_dimension_1d);
     println!("\t\tMax Texture Dimension 2d:                        {}", max_texture_dimension_2d);
@@ -67,6 +69,8 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     println!("\t\tMax Vertex Attributes:                           {}", max_vertex_attributes);
     println!("\t\tMax Vertex Buffer Array Stride:                  {}", max_vertex_buffer_array_stride);
     println!("\t\tMax Push Constant Size:                          {}", max_push_constant_size);
+    println!("\t\tMin Uniform Buffer Offset Alignment:             {}", min_uniform_buffer_offset_alignment);
+    println!("\t\tMin Storage Buffer Offset Alignment:             {}", min_storage_buffer_offset_alignment);
     println!("\tDownlevel Properties:");
     let wgpu::DownlevelCapabilities {
         shader_model,

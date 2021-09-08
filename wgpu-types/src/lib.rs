@@ -32,8 +32,6 @@ pub type DynamicOffset = u32;
 ///
 /// [`bytes_per_row`]: ImageDataLayout::bytes_per_row
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
-/// Bound uniform/storage buffer offsets must be aligned to this number.
-pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
 /// An offset into the query resolve buffer has to be aligned to this.
 pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
 /// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
@@ -629,6 +627,14 @@ pub struct Limits {
     /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.
     pub max_push_constant_size: u32,
+    /// Required `BufferBindingType::Uniform` alignment for `BufferBinding::offset`
+    /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
+    /// Defaults to 256. Lower is "better".
+    pub min_uniform_buffer_offset_alignment: u32,
+    /// Required `BufferBindingType::Storage` alignment for `BufferBinding::offset`
+    /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
+    /// Defaults to 256. Lower is "better".
+    pub min_storage_buffer_offset_alignment: u32,
 }
 
 impl Default for Limits {
@@ -652,6 +658,8 @@ impl Default for Limits {
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
             max_push_constant_size: 0,
+            min_uniform_buffer_offset_alignment: 256,
+            min_storage_buffer_offset_alignment: 256,
         }
     }
 }
@@ -678,6 +686,8 @@ impl Limits {
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
             max_push_constant_size: 0,
+            min_uniform_buffer_offset_alignment: 256,
+            min_storage_buffer_offset_alignment: 256,
         }
     }
 

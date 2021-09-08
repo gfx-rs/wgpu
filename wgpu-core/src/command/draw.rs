@@ -65,8 +65,8 @@ pub enum RenderCommandError {
     InvalidRenderBundle(id::RenderBundleId),
     #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u8, max: u32 },
-    #[error("dynamic buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
-    UnalignedBufferOffset(u64),
+    #[error("dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
+    UnalignedBufferOffset(u64, &'static str, u32),
     #[error("number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
     InvalidDynamicOffsetCount { actual: usize, expected: usize },
     #[error("render pipeline {0:?} is invalid")]

@@ -196,15 +196,6 @@ impl RenderBundleEncoder {
 
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
-                    // Check for misaligned offsets.
-                    if let Some(offset) = offsets
-                        .iter()
-                        .map(|offset| *offset as wgt::BufferAddress)
-                        .find(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
-                    {
-                        return Err(RenderCommandError::UnalignedBufferOffset(offset))
-                            .map_pass_err(scope);
-                    }
 
                     let bind_group = state
                         .trackers
@@ -218,6 +209,30 @@ impl RenderBundleEncoder {
                             expected: bind_group.dynamic_binding_info.len(),
                         })
                         .map_pass_err(scope);
+                    }
+
+                    // Check for misaligned offsets.
+                    for (offset, info) in offsets
+                        .iter()
+                        .map(|offset| *offset as wgt::BufferAddress)
+                        .zip(bind_group.dynamic_binding_info.iter())
+                    {
+                        let (alignment, limit_name) = match info.binding_type {
+                            wgt::BufferBindingType::Uniform => (
+                                device.limits.min_uniform_buffer_offset_alignment,
+                                "min_uniform_buffer_offset_alignment",
+                            ),
+                            wgt::BufferBindingType::Storage { .. } => (
+                                device.limits.min_storage_buffer_offset_alignment,
+                                "min_storage_buffer_offset_alignment",
+                            ),
+                        };
+                        if offset % alignment as u64 != 0 {
+                            return Err(RenderCommandError::UnalignedBufferOffset(
+                                offset, limit_name, alignment,
+                            ))
+                            .map_pass_err(scope);
+                        }
                     }
 
                     buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);

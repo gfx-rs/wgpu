@@ -889,7 +889,6 @@ impl super::PrivateCapabilities {
     }
 
     pub fn capabilities(&self) -> crate::Capabilities {
-        let buffer_alignment = wgt::BufferSize::new(self.buffer_alignment).unwrap();
         let mut downlevel = wgt::DownlevelCapabilities::default();
         downlevel.flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
@@ -927,12 +926,12 @@ impl super::PrivateCapabilities {
                 max_vertex_attributes: base.max_vertex_attributes,
                 max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
                 max_push_constant_size: 0x1000,
+                min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
+                min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
             },
             alignments: crate::Alignments {
-                buffer_copy_offset: buffer_alignment,
+                buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),
                 buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),
-                uniform_buffer_offset: buffer_alignment,
-                storage_buffer_offset: buffer_alignment,
             },
             downlevel,
         }

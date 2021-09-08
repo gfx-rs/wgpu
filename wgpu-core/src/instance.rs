@@ -6,7 +6,7 @@ use crate::{
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, Backends, PowerPreference, BIND_BUFFER_ALIGNMENT};
+use wgt::{Backend, Backends, PowerPreference};
 
 use hal::{Adapter as _, Instance as _};
 use thiserror::Error;
@@ -62,6 +62,8 @@ fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLim
     compare!(max_vertex_attributes, Less);
     compare!(max_vertex_buffer_array_stride, Less);
     compare!(max_push_constant_size, Less);
+    compare!(min_uniform_buffer_offset_alignment, Greater);
+    compare!(min_storage_buffer_offset_alignment, Greater);
     failed
 }
 
@@ -308,16 +310,6 @@ impl<A: HalApi> Adapter<A> {
             //TODO
         }
 
-        assert_eq!(
-            0,
-            BIND_BUFFER_ALIGNMENT % caps.alignments.storage_buffer_offset,
-            "Adapter storage buffer offset alignment not compatible with WGPU"
-        );
-        assert_eq!(
-            0,
-            BIND_BUFFER_ALIGNMENT % caps.alignments.uniform_buffer_offset,
-            "Adapter uniform buffer offset alignment not compatible with WGPU"
-        );
         if let Some(failed) = check_limits(&desc.limits, &caps.limits).pop() {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
