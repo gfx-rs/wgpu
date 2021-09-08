@@ -1,5 +1,16 @@
 # Change Log
 
+## wgpu-core-0.10.3, wgpu-hal-0.10.4 (2021-09-08)
+  - Vulkan:
+    - fix read access barriers for writable storage buffers
+    - fix shaders using cube array textures
+    - work around Linux Intel+Nvidia driver conflicts
+    - work around Adreno bug with `OpName`
+  - DX12:
+    - fix storage binding offsets
+  - Metal:
+    - fix compressed texture copies
+
 ## wgpu-core-0.10.2, wgpu-hal-0.10.3 (2021-09-01)
   - All:
     - fix querying the size of storage textures
