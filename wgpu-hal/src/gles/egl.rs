@@ -596,7 +596,7 @@ impl crate::Instance<super::Api> for Instance {
                     return Err(crate::InstanceError);
                 }
             }
-            #[cfg(not(any(target_os = "android", target_os = "macos")))]
+            #[cfg(not(any(target_os = "android", target_os = "macos", target_os = "solaris")))]
             Rwh::Wayland(handle) => {
                 /* Wayland displays are not sharable between surfaces so if the
                  * surface we receive from this handle is from a different
@@ -844,7 +844,11 @@ impl crate::Surface<super::Api> for Surface {
                     }
                     #[cfg(target_os = "android")]
                     Rwh::Android(handle) => handle.a_native_window,
-                    #[cfg(not(any(target_os = "android", target_os = "macos")))]
+                    #[cfg(not(any(
+                        target_os = "android",
+                        target_os = "macos",
+                        target_os = "solaris"
+                    )))]
                     Rwh::Wayland(handle) => {
                         let library = self.wsi_library.as_ref().expect("unsupported window");
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
