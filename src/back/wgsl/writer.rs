@@ -22,6 +22,85 @@ enum Attribute {
     WorkGroupSize([u32; 3]),
 }
 
+/// The WGSL form that `write_expr_with_indirection` should use to render a Naga
+/// expression.
+///
+/// Sometimes a Naga `Expression` alone doesn't provide enough information to
+/// choose the right rendering for it in WGSL. For example, one natural WGSL
+/// rendering of a Naga `LocalVariable(x)` expression might be `&x`, since
+/// `LocalVariable` produces a pointer to the local variable's storage. But when
+/// rendering a `Store` statement, the `pointer` operand must be the left hand
+/// side of a WGSL assignment, so the proper rendering is `x`.
+///
+/// The caller of `write_expr_with_indirection` must provide an `Expected` value
+/// to indicate how ambiguous expressions should be rendered.
+#[derive(Clone, Copy, Debug)]
+enum Indirection {
+    /// Render pointer-construction expressions as WGSL `ptr`-typed expressions.
+    ///
+    /// This is the right choice for most cases. Whenever a Naga pointer
+    /// expression is not the `pointer` operand of a `Load` or `Store`, it
+    /// must be a WGSL pointer expression.
+    Ordinary,
+
+    /// Render pointer-construction expressions as WGSL reference-typed
+    /// expressions.
+    ///
+    /// For example, this is the right choice for the `pointer` operand when
+    /// rendering a `Store` statement as a WGSL assignment.
+    Reference,
+}
+
+/// Return the sort of indirection that `expr`'s plain form evaluates to.
+///
+/// An expression's 'plain form' is the most general rendition of that
+/// expression into WGSL, lacking `&` or `*` operators:
+///
+/// - The plain form of `LocalVariable(x)` is simply `x`, which is a reference
+///   to the local variable's storage.
+///
+/// - The plain form of `GlobalVariable(g)` is simply `g`, which is usually a
+///   reference to the global variable's storage. However, globals in the
+///   `Handle` storage class are immutable, and `GlobalVariable` expressions for
+///   those produce the value directly, not a pointer to it. Such
+///   `GlobalVariable` expressions are `Ordinary`.
+///
+/// - `Access` and `AccessIndex` are `Reference` when their `base` operand is a
+///   pointer. If they are applied directly to a composite value, they are
+///   `Ordinary`.
+///
+/// Note that `FunctionArgument` expressions are never `Reference`, even when
+/// the argument's type is `Pointer`. `FunctionArgument` always evaluates to the
+/// argument's value directly, so any pointer it produces is merely the value
+/// passed by the caller.
+fn plain_form_indirection(
+    expr: Handle<crate::Expression>,
+    module: &Module,
+    func_ctx: &back::FunctionCtx<'_>,
+) -> Indirection {
+    use crate::Expression as Ex;
+    match func_ctx.expressions[expr] {
+        Ex::LocalVariable(_) => Indirection::Reference,
+        Ex::GlobalVariable(handle) => {
+            let global = &module.global_variables[handle];
+            match global.class {
+                crate::StorageClass::Handle => Indirection::Ordinary,
+                _ => Indirection::Reference,
+            }
+        }
+        Ex::Access { base, .. } | Ex::AccessIndex { base, .. } => {
+            let base_ty = func_ctx.info[base].ty.inner_with(&module.types);
+            match *base_ty {
+                crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                    Indirection::Reference
+                }
+                _ => Indirection::Ordinary,
+            }
+        }
+        _ => Indirection::Ordinary,
+    }
+}
+
 pub struct Writer<W> {
     out: W,
     names: crate::FastHashMap<NameKey, String>,
@@ -693,28 +772,26 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, "{}", level)?;
 
-                let (is_ptr, is_atomic) = match *func_ctx.info[pointer].ty.inner_with(&module.types)
-                {
-                    crate::TypeInner::Pointer { base, .. } => (
-                        func_ctx.expressions[pointer].should_deref(),
-                        match module.types[base].inner {
-                            crate::TypeInner::Atomic { .. } => true,
-                            _ => false,
-                        },
-                    ),
-                    _ => (false, false),
+                let is_atomic = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
+                    crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
+                        crate::TypeInner::Atomic { .. } => true,
+                        _ => false,
+                    },
+                    _ => false,
                 };
                 if is_atomic {
                     write!(self.out, "atomicStore(")?;
-                    if !is_ptr {
-                        write!(self.out, "&")?;
-                    }
                     self.write_expr(module, pointer, func_ctx)?;
                     write!(self.out, ", ")?;
                     self.write_expr(module, value, func_ctx)?;
                     write!(self.out, ")")?;
                 } else {
-                    self.write_expr(module, pointer, func_ctx)?;
+                    self.write_expr_with_indirection(
+                        module,
+                        pointer,
+                        func_ctx,
+                        Indirection::Reference,
+                    )?;
                     write!(self.out, " = ")?;
                     self.write_expr(module, value, func_ctx)?;
                 }
@@ -754,13 +831,8 @@ impl<W: Write> Writer<W> {
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
-                let is_ptr = func_ctx.expressions[pointer].should_deref();
-
                 let fun_str = fun.to_wgsl();
                 write!(self.out, "atomic{}(", fun_str)?;
-                if !is_ptr {
-                    write!(self.out, "&")?;
-                }
                 self.write_expr(module, pointer, func_ctx)?;
                 if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
                     write!(self.out, ", ")?;
@@ -921,15 +993,36 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Helper method to write expressions
+    /// Write the ordinary WGSL form of `expr`.
     ///
-    /// # Notes
-    /// Doesn't add any newlines or leading/trailing spaces
+    /// See `write_expr_with_indirection` for details.
     fn write_expr(
         &mut self,
         module: &Module,
         expr: Handle<crate::Expression>,
         func_ctx: &back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        self.write_expr_with_indirection(module, expr, func_ctx, Indirection::Ordinary)
+    }
+
+    /// Write `expr` as a WGSL expression with the requested indirection.
+    ///
+    /// In terms of the WGSL grammar, the resulting expression is a
+    /// `singular_expression`. It may be parenthesized. This makes it suitable
+    /// for use as the operand of a unary or binary operator without worrying
+    /// about precedence.
+    ///
+    /// This does not produce newlines or indentation.
+    ///
+    /// The `requested` argument indicates (roughly) whether Naga
+    /// `Pointer`-valued expressions represent WGSL references or pointers. See
+    /// `Indirection` for details.
+    fn write_expr_with_indirection(
+        &mut self,
+        module: &Module,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx<'_>,
+        requested: Indirection,
     ) -> BackendResult {
         use crate::Expression;
 
@@ -938,8 +1031,25 @@ impl<W: Write> Writer<W> {
             return Ok(());
         }
 
+        // If the plain form of the expression is not what we need, emit the
+        // operator necessary to correct that.
+        let plain = plain_form_indirection(expr, module, func_ctx);
+        match (requested, plain) {
+            (Indirection::Ordinary, Indirection::Reference) => write!(self.out, "&")?,
+            (Indirection::Reference, Indirection::Ordinary) => write!(self.out, "*")?,
+            (_, _) => {}
+        }
+
         let expression = &func_ctx.expressions[expr];
 
+        // Write the plain WGSL form of a Naga expression.
+        //
+        // The plain form of `LocalVariable` and `GlobalVariable` expressions is
+        // simply the variable name; `*` and `&` operators are never emitted.
+        //
+        // The plain form of `Access` and `AccessIndex` expressions are WGSL
+        // `postfix_expression` forms for member/component access and
+        // subscripting.
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::Compose { ty, ref components } => {
@@ -1001,7 +1111,7 @@ impl<W: Write> Writer<W> {
             }
             // TODO: copy-paste from glsl-out
             Expression::Access { base, index } => {
-                self.write_expr(module, base, func_ctx)?;
+                self.write_expr_with_indirection(module, base, func_ctx, plain)?;
                 write!(self.out, "[")?;
                 self.write_expr(module, index, func_ctx)?;
                 write!(self.out, "]")?
@@ -1011,18 +1121,7 @@ impl<W: Write> Writer<W> {
                 let base_ty_res = &func_ctx.info[base].ty;
                 let mut resolved = base_ty_res.inner_with(&module.types);
 
-                let deref = match *resolved {
-                    TypeInner::Pointer { .. } => func_ctx.expressions[base].should_deref(),
-                    _ => false,
-                };
-
-                if deref {
-                    write!(self.out, "(*")?;
-                }
-                self.write_expr(module, base, func_ctx)?;
-                if deref {
-                    write!(self.out, ")")?;
-                }
+                self.write_expr_with_indirection(module, base, func_ctx, plain)?;
 
                 let base_ty_handle = match *resolved {
                     TypeInner::Pointer { base, class: _ } => {
@@ -1226,30 +1325,25 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             Expression::Load { pointer } => {
-                let (is_pointer, is_atomic) =
-                    match *func_ctx.info[pointer].ty.inner_with(&module.types) {
-                        crate::TypeInner::Pointer { base, .. } => (
-                            func_ctx.expressions[pointer].should_deref(),
-                            match module.types[base].inner {
-                                crate::TypeInner::Atomic { .. } => true,
-                                _ => false,
-                            },
-                        ),
-                        _ => (false, false),
-                    };
+                let is_atomic = match *func_ctx.info[pointer].ty.inner_with(&module.types) {
+                    crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
+                        crate::TypeInner::Atomic { .. } => true,
+                        _ => false,
+                    },
+                    _ => false,
+                };
+
                 if is_atomic {
                     write!(self.out, "atomicLoad(")?;
-                    if !is_pointer {
-                        // Write an indirection in case the underlying
-                        // expression isn't a pointer but a reference
-                        write!(self.out, "&")?;
-                    }
-                } else if is_pointer {
-                    write!(self.out, "*")?;
-                }
-                self.write_expr(module, pointer, func_ctx)?;
-                if is_atomic {
+                    self.write_expr(module, pointer, func_ctx)?;
                     write!(self.out, ")")?;
+                } else {
+                    self.write_expr_with_indirection(
+                        module,
+                        pointer,
+                        func_ctx,
+                        Indirection::Reference,
+                    )?;
                 }
             }
             Expression::LocalVariable(handle) => {
@@ -1257,9 +1351,6 @@ impl<W: Write> Writer<W> {
             }
             Expression::ArrayLength(expr) => {
                 write!(self.out, "arrayLength(")?;
-                if is_deref_required(expr, module, func_ctx.info) {
-                    write!(self.out, "&")?;
-                };
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?;
             }
@@ -1632,21 +1723,6 @@ impl<W: Write> Writer<W> {
     }
 }
 
-impl crate::Expression {
-    /// Wether an expression should be dereferenced, this is false when the
-    /// expression returns a reference instead of a pointer
-    fn should_deref(&self) -> bool {
-        match *self {
-            // Variables in the typifier have pointer types but in wgsl they
-            // have reference types and shouldn't be dereferenced
-            crate::Expression::LocalVariable(_) | crate::Expression::GlobalVariable(_)
-            // Access chains might have pointer types but wgsl considers them as references
-            | crate::Expression::AccessIndex {..} | crate::Expression::Access {..} => false,
-            _ => true,
-        }
-    }
-}
-
 fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
     use crate::BuiltIn as Bi;
 
@@ -1794,23 +1870,6 @@ fn map_binding_to_attribute(
             ],
             _ => vec![Attribute::Location(location)],
         },
-    }
-}
-
-fn is_deref_required(
-    expr: Handle<crate::Expression>,
-    module: &Module,
-    info: &valid::FunctionInfo,
-) -> bool {
-    let base_ty_res = &info[expr].ty;
-    let resolved = base_ty_res.inner_with(&module.types);
-    match *resolved {
-        TypeInner::Pointer { base, class: _ } => match module.types[base].inner {
-            TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Array { .. } => true,
-            _ => false,
-        },
-        TypeInner::ValuePointer { .. } => true,
-        _ => false,
     }
 }
 
