@@ -10,6 +10,9 @@ pub mod db {
     pub mod nvidia {
         pub const VENDOR: u32 = 0x10DE;
     }
+    pub mod qualcomm {
+        pub const VENDOR: u32 = 0x5143;
+    }
 }
 
 pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {

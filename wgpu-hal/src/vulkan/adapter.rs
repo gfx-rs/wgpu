@@ -838,6 +838,10 @@ impl super::Adapter {
                 spv::WriterFlags::DEBUG,
                 self.instance.flags.contains(crate::InstanceFlags::DEBUG),
             );
+            flags.set(
+                spv::WriterFlags::LABEL_VARYINGS,
+                self.phd_capabilities.properties.vendor_id != crate::auxil::db::qualcomm::VENDOR,
+            );
             spv::Options {
                 lang_version: (1, 0),
                 flags,
