@@ -1038,7 +1038,10 @@ impl Writer {
         Instruction::variable(pointer_type_id, id, class, None)
             .to_words(&mut self.logical_layout.declarations);
 
-        if self.flags.contains(WriterFlags::DEBUG) {
+        if self
+            .flags
+            .contains(WriterFlags::DEBUG | WriterFlags::LABEL_VARYINGS)
+        {
             if let Some(name) = debug_name {
                 self.debugs.push(Instruction::name(id, name));
             }
