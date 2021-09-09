@@ -17,10 +17,10 @@ SamplerState sampler_reg : register(s0, space1);
 SamplerComparisonState sampler_cmp : register(s1, space1);
 Texture2D<float> image_2d_depth : register(t2, space1);
 
-int2 NagaRWDimensions2D(RWTexture2D<uint4> texture)
+int2 NagaRWDimensions2D(RWTexture2D<uint4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(ret.x, ret.y);
+    tex.GetDimensions(ret.x, ret.y);
     return ret.xy;
 }
 
@@ -38,136 +38,136 @@ void main(uint3 local_id : SV_GroupThreadID)
     return;
 }
 
-int NagaDimensions1D(Texture1D<float4> texture)
+int NagaDimensions1D(Texture1D<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y);
+    tex.GetDimensions(0, ret.x, ret.y);
     return ret.x;
 }
 
-int2 NagaDimensions2D(Texture2D<float4> texture)
+int2 NagaDimensions2D(Texture2D<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z);
     return ret.xy;
 }
 
-int NagaNumLevels2D(Texture2D<float4> texture)
+int NagaNumLevels2D(Texture2D<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z);
     return ret.z;
 }
 
-int2 NagaMipDimensions2D(Texture2D<float4> texture, uint mip_level)
+int2 NagaMipDimensions2D(Texture2D<float4> tex, uint mip_level)
 {
     uint4 ret;
-    texture.GetDimensions(mip_level, ret.x, ret.y, ret.z);
+    tex.GetDimensions(mip_level, ret.x, ret.y, ret.z);
     return ret.xy;
 }
 
-int2 NagaDimensions2DArray(Texture2DArray<float4> texture)
+int2 NagaDimensions2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.xy;
 }
 
-int NagaNumLevels2DArray(Texture2DArray<float4> texture)
+int NagaNumLevels2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.w;
 }
 
-int2 NagaMipDimensions2DArray(Texture2DArray<float4> texture, uint mip_level)
+int2 NagaMipDimensions2DArray(Texture2DArray<float4> tex, uint mip_level)
 {
     uint4 ret;
-    texture.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
     return ret.xy;
 }
 
-int NagaNumLayers2DArray(Texture2DArray<float4> texture)
+int NagaNumLayers2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.w;
 }
 
-int2 NagaDimensionsCube(TextureCube<float4> texture)
+int2 NagaDimensionsCube(TextureCube<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z);
     return ret.xy;
 }
 
-int NagaNumLevelsCube(TextureCube<float4> texture)
+int NagaNumLevelsCube(TextureCube<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z);
     return ret.z;
 }
 
-int2 NagaMipDimensionsCube(TextureCube<float4> texture, uint mip_level)
+int2 NagaMipDimensionsCube(TextureCube<float4> tex, uint mip_level)
 {
     uint4 ret;
-    texture.GetDimensions(mip_level, ret.x, ret.y, ret.z);
+    tex.GetDimensions(mip_level, ret.x, ret.y, ret.z);
     return ret.xy;
 }
 
-int2 NagaDimensionsCubeArray(TextureCubeArray<float4> texture)
+int2 NagaDimensionsCubeArray(TextureCubeArray<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.xy;
 }
 
-int NagaNumLevelsCubeArray(TextureCubeArray<float4> texture)
+int NagaNumLevelsCubeArray(TextureCubeArray<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.w;
 }
 
-int2 NagaMipDimensionsCubeArray(TextureCubeArray<float4> texture, uint mip_level)
+int2 NagaMipDimensionsCubeArray(TextureCubeArray<float4> tex, uint mip_level)
 {
     uint4 ret;
-    texture.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
     return ret.xy;
 }
 
-int NagaNumLayersCubeArray(TextureCubeArray<float4> texture)
+int NagaNumLayersCubeArray(TextureCubeArray<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.w;
 }
 
-int3 NagaDimensions3D(Texture3D<float4> texture)
+int3 NagaDimensions3D(Texture3D<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.xyz;
 }
 
-int NagaNumLevels3D(Texture3D<float4> texture)
+int NagaNumLevels3D(Texture3D<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.w;
 }
 
-int3 NagaMipDimensions3D(Texture3D<float4> texture, uint mip_level)
+int3 NagaMipDimensions3D(Texture3D<float4> tex, uint mip_level)
 {
     uint4 ret;
-    texture.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
+    tex.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
     return ret.xyz;
 }
 
-int NagaMSNumSamples2D(Texture2DMS<float4> texture)
+int NagaMSNumSamples2D(Texture2DMS<float4> tex)
 {
     uint4 ret;
-    texture.GetDimensions(ret.x, ret.y, ret.z);
+    tex.GetDimensions(ret.x, ret.y, ret.z);
     return ret.z;
 }
 
