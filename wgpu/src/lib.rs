@@ -1480,6 +1480,40 @@ impl Instance {
         self.context.create_surface_from_core_animation_layer(layer)
     }
 
+    /// Creates a surface from a `web_sys::HtmlCanvasElement`.
+    ///
+    /// # Safety
+    ///
+    /// - canvas must be a valid <canvas> element to create a surface upon.
+    #[cfg(target_arch = "wasm32")]
+    pub unsafe fn create_surface_from_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+    ) -> Surface {
+        Surface {
+            context: Arc::clone(&self.context),
+            id: self.context.instance_create_surface_from_canvas(canvas),
+        }
+    }
+
+    /// Creates a surface from a `web_sys::OffscreenCanvas`.
+    ///
+    /// # Safety
+    ///
+    /// - canvas must be a valid OffscreenCanvas to create a surface upon.
+    #[cfg(target_arch = "wasm32")]
+    pub unsafe fn create_surface_from_offscreen_canvas(
+        &self,
+        canvas: &web_sys::OffscreenCanvas,
+    ) -> Surface {
+        Surface {
+            context: Arc::clone(&self.context),
+            id: self
+                .context
+                .instance_create_surface_from_offscreen_canvas(canvas),
+        }
+    }
+
     /// Polls all devices.
     /// If `force_wait` is true and this is not running on the web,
     /// then this function will block until all in-flight buffers have been mapped.
