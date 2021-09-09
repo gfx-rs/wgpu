@@ -1466,7 +1466,6 @@ impl Instance {
         }
     }
 
-    /*TODO: raw CAL surface
     /// Creates a surface from `CoreAnimationLayer`.
     ///
     /// # Safety
@@ -1478,7 +1477,7 @@ impl Instance {
         layer: *mut std::ffi::c_void,
     ) -> Surface {
         self.context.create_surface_from_core_animation_layer(layer)
-    }*/
+    }
 
     /// Polls all devices.
     /// If `force_wait` is true and this is not running on the web,
