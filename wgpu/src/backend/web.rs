@@ -887,6 +887,30 @@ fn future_map_async(result: JsFutureResult) -> Result<(), crate::BufferAsyncErro
     result.map(|_| ()).map_err(|_| crate::BufferAsyncError)
 }
 
+impl Context {
+    pub fn instance_create_surface_from_canvas(
+        &self,
+        canvas: &web_sys::HtmlCanvasElement,
+    ) -> <Self as crate::Context>::SurfaceId {
+        let context: wasm_bindgen::JsValue = match canvas.get_context("webgpu") {
+            Ok(Some(ctx)) => ctx.into(),
+            _ => panic!("expected to get context from canvas"),
+        };
+        Sendable(context.into())
+    }
+
+    pub fn instance_create_surface_from_offscreen_canvas(
+        &self,
+        canvas: &web_sys::OffscreenCanvas,
+    ) -> <Self as crate::Context>::SurfaceId {
+        let context: wasm_bindgen::JsValue = match canvas.get_context("webgpu") {
+            Ok(Some(ctx)) => ctx.into(),
+            _ => panic!("expected to get context from canvas"),
+        };
+        Sendable(context.into())
+    }
+}
+
 impl crate::Context for Context {
     type AdapterId = Sendable<web_sys::GpuAdapter>;
     type DeviceId = Sendable<web_sys::GpuDevice>;
@@ -949,11 +973,7 @@ impl crate::Context for Context {
             .expect("expected to find single canvas")
             .into();
         let canvas_element: web_sys::HtmlCanvasElement = canvas_node.into();
-        let context: wasm_bindgen::JsValue = match canvas_element.get_context("webgpu") {
-            Ok(Some(ctx)) => ctx.into(),
-            _ => panic!("expected to get context from canvas"),
-        };
-        Sendable(context.into())
+        self.instance_create_surface_from_canvas(&canvas_element)
     }
 
     fn adapter_is_surface_supported(
