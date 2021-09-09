@@ -131,7 +131,6 @@ impl Context {
         self.0.generate_report()
     }
 
-    /*TODO: raw surface
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub unsafe fn create_surface_from_core_animation_layer(
         self: &Arc<Self>,
@@ -140,9 +139,12 @@ impl Context {
         let id = self.0.instance_create_surface_metal(layer, PhantomData);
         crate::Surface {
             context: Arc::clone(self),
-            id,
+            id: Surface {
+                id,
+                configured_device: Mutex::default(),
+            },
         }
-    }*/
+    }
 
     fn handle_error(
         &self,
