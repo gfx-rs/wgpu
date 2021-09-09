@@ -220,7 +220,7 @@ pub enum InputError {
 pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
-    #[error("unable to find entry point '{0:?}'")]
+    #[error("unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("shader global {0:?} is not available in the layout pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),

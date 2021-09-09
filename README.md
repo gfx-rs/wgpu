@@ -19,7 +19,7 @@ The repository hosts the following parts:
   - `player` - standalone application for replaying the API traces, uses `winit`
 
 
-For an overview of all the components in the gfx-rs ecosystem, see the [gfx-rs big picture](./etc/big-picture.png).
+For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
 
 Rust examples can be found at `wgpu/examples`. `wgpu` is a default member, so you can run the examples directly from the root, e.g. `cargo run --example boids`.
 
