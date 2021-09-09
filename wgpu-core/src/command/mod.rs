@@ -330,16 +330,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
 
-        let error = match CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id) {
-            Ok(cmd_buf) => {
-                cmd_buf.encoder.close();
-                cmd_buf.status = CommandEncoderStatus::Finished;
-                //Note: if we want to stop tracking the swapchain texture view,
-                // this is the place to do it.
-                log::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
-                None
-            }
-            Err(e) => Some(e),
+        let error = match cmd_buf_guard.get_mut(encoder_id) {
+            Ok(cmd_buf) => match cmd_buf.status {
+                CommandEncoderStatus::Recording => {
+                    cmd_buf.encoder.close();
+                    cmd_buf.status = CommandEncoderStatus::Finished;
+                    //Note: if we want to stop tracking the swapchain texture view,
+                    // this is the place to do it.
+                    log::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
+                    None
+                }
+                CommandEncoderStatus::Finished => Some(CommandEncoderError::NotRecording),
+                CommandEncoderStatus::Error => {
+                    cmd_buf.encoder.close();
+                    Some(CommandEncoderError::Invalid)
+                }
+            },
+            Err(_) => Some(CommandEncoderError::Invalid),
         };
 
         (encoder_id, error)
