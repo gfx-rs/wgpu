@@ -1468,6 +1468,7 @@
                             pointer: 47,
                             value: 118,
                         ),
+                        Continue,
                     ],
                     continuing: [
                         Emit((

@@ -1,6 +1,9 @@
-use crate::arena::{Arena, Handle};
+use crate::{
+    arena::{Arena, Handle},
+    front::spv::{BlockContext, BodyIndex},
+};
 
-use super::{flow::*, Error, Instruction, LookupExpression, LookupHelper as _};
+use super::{Error, Instruction, LookupExpression, LookupHelper as _};
 use crate::front::Emitter;
 
 pub type BlockId = u32;
@@ -9,44 +12,6 @@ pub type BlockId = u32;
 pub struct MergeInstruction {
     pub merge_block_id: BlockId,
     pub continue_block_id: Option<BlockId>,
-}
-/// Terminator instruction of a SPIR-V's block.
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub enum Terminator {
-    ///
-    Return {
-        value: Option<Handle<crate::Expression>>,
-    },
-    ///
-    Branch { target_id: BlockId },
-    ///
-    BranchConditional {
-        condition: Handle<crate::Expression>,
-        true_id: BlockId,
-        false_id: BlockId,
-    },
-    ///
-    /// switch(SELECTOR) {
-    ///  case TARGET_LITERAL#: {
-    ///    TARGET_BLOCK#
-    ///  }
-    ///  default: {
-    ///    DEFAULT
-    ///  }
-    /// }
-    Switch {
-        ///
-        selector: Handle<crate::Expression>,
-        /// Default block of the switch case.
-        default_id: BlockId,
-        /// Tuples of (literal, target block)
-        targets: Vec<(i32, BlockId)>,
-    },
-    /// Fragment shader discard
-    Kill,
-    ///
-    Unreachable,
 }
 
 impl<I: Iterator<Item = u32>> super::Parser<I> {
@@ -115,8 +80,17 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         crate::Expression::FunctionArgument(i as u32),
                         self.span_from(start),
                     );
-                    self.lookup_expression
-                        .insert(id, LookupExpression { handle, type_id });
+                    self.lookup_expression.insert(
+                        id,
+                        LookupExpression {
+                            handle,
+                            type_id,
+                            // Setting this to an invalid id will cause get_expr_handle
+                            // to default to the main body making sure no load/stores
+                            // are added.
+                            block_id: 0,
+                        },
+                    );
                     //Note: we redo the lookup in order to work around `self` borrowing
 
                     if type_id
@@ -141,9 +115,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         // Read body
         self.function_call_graph.add_node(fun_id);
-        let mut flow_graph = FlowGraph::new();
         let mut parameters_sampling =
             vec![super::image::SamplingFlags::empty(); fun.arguments.len()];
+
+        let mut block_ctx = BlockContext::default();
+        // Insert the main body whose parent is also himself
+        block_ctx.bodies.push(super::Body::with_parent(0));
 
         // Scan the blocks and add them as nodes
         loop {
@@ -155,7 +132,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     fun_inst.expect(2)?;
                     let block_id = self.next()?;
 
-                    let node = self.next_block(
+                    self.next_block(
                         block_id,
                         fun_id,
                         &mut fun.expressions,
@@ -165,9 +142,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         &module.global_variables,
                         &fun.arguments,
                         &mut parameters_sampling,
+                        &mut block_ctx,
                     )?;
-
-                    flow_graph.add_node(node);
                 }
                 spirv::Op::FunctionEnd => {
                     fun_inst.expect(1)?;
@@ -179,22 +155,121 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             }
         }
 
-        flow_graph.classify();
-        flow_graph.remove_phi_instructions(&self.lookup_expression);
-
-        if let Some(ref prefix) = self.options.flow_graph_dump_prefix {
-            let dump = flow_graph.to_graphviz().unwrap_or_default();
+        if let Some(ref prefix) = self.options.block_ctx_dump_prefix {
             let dump_suffix = match self.lookup_entry_point.get(&fun_id) {
-                Some(ep) => format!("flow.{:?}-{}.dot", ep.stage, ep.name),
-                None => format!("flow.Fun-{}.dot", module.functions.len()),
+                Some(ep) => format!("block_ctx.{:?}-{}.txt", ep.stage, ep.name),
+                None => format!("block_ctx.Fun-{}.txt", module.functions.len()),
             };
             let dest = prefix.join(dump_suffix);
+            let dump = format!("{:#?}", block_ctx);
             if let Err(e) = std::fs::write(&dest, dump) {
-                log::error!("Unable to dump the flow graph into {:?}: {}", dest, e);
+                log::error!("Unable to dump the block context into {:?}: {}", dest, e);
             }
         }
 
-        fun.body = flow_graph.convert_to_naga()?;
+        // Emit `Store` statements to properly initialize all the local variables we
+        // created for `phi` expressions.
+        //
+        // Note that get_expr_handle also contributes slightly odd entries to this table,
+        // to get the spill.
+        for phi in block_ctx.phis.iter() {
+            // Get a pointer to the local variable for the phi's value.
+            let phi_pointer = fun.expressions.append(
+                crate::Expression::LocalVariable(phi.local),
+                crate::Span::Unknown,
+            );
+
+            // At the end of each of `phi`'s predecessor blocks, store the corresponding
+            // source value in the phi's local variable.
+            for &(source, predecessor) in phi.expressions.iter() {
+                let source_lexp = &self.lookup_expression[&source];
+                let predecessor_body_idx = block_ctx.body_for_label[&predecessor];
+                // If the expression is a global/argument it will have a 0 block
+                // id so we must use a default value instead of panicking
+                let source_body_idx = block_ctx
+                    .body_for_label
+                    .get(&source_lexp.block_id)
+                    .copied()
+                    .unwrap_or(0);
+
+                // If the Naga `Expression` generated for `source` is in scope, then we
+                // can simply store that in the phi's local variable.
+                //
+                // Otherwise, spill the source value to a local variable in the block that
+                // defines it. (We know this store dominates the predecessor; otherwise,
+                // the phi wouldn't have been able to refer to that source expression in
+                // the first place.) Then, the predecessor block can count on finding the
+                // source's value in that local variable.
+                let value = if super::is_parent(predecessor_body_idx, source_body_idx, &block_ctx) {
+                    source_lexp.handle
+                } else {
+                    // The source SPIR-V expression is not defined in the phi's
+                    // predecessor block, nor is it a globally available expression. So it
+                    // must be defined off in some other block that merely dominates the
+                    // predecessor. This means that the corresponding Naga `Expression`
+                    // may not be in scope in the predecessor block.
+                    //
+                    // In the block that defines `source`, spill it to a fresh local
+                    // variable, to ensure we can still use it at the end of the
+                    // predecessor.
+                    let ty = self.lookup_type[&source_lexp.type_id].handle;
+                    let local = fun.local_variables.append(
+                        crate::LocalVariable {
+                            name: None,
+                            ty,
+                            init: None,
+                        },
+                        crate::Span::Unknown,
+                    );
+
+                    let pointer = fun.expressions.append(
+                        crate::Expression::LocalVariable(local),
+                        crate::Span::Unknown,
+                    );
+
+                    // Get the spilled value of the source expression.
+                    let start = fun.expressions.len();
+                    let expr = fun
+                        .expressions
+                        .append(crate::Expression::Load { pointer }, crate::Span::Unknown);
+                    let range = fun.expressions.range_from(start);
+
+                    block_ctx
+                        .blocks
+                        .get_mut(&predecessor)
+                        .unwrap()
+                        .push(crate::Statement::Emit(range), crate::Span::Unknown);
+
+                    // At the end of the block that defines it, spill the source
+                    // expression's value.
+                    block_ctx
+                        .blocks
+                        .get_mut(&source_lexp.block_id)
+                        .unwrap()
+                        .push(
+                            crate::Statement::Store {
+                                pointer,
+                                value: source_lexp.handle,
+                            },
+                            crate::Span::Unknown,
+                        );
+
+                    expr
+                };
+
+                // At the end of the phi predecessor block, store the source
+                // value in the phi's value.
+                block_ctx.blocks.get_mut(&predecessor).unwrap().push(
+                    crate::Statement::Store {
+                        pointer: phi_pointer,
+                        value,
+                    },
+                    crate::Span::Unknown,
+                )
+            }
+        }
+
+        fun.body = block_ctx.lower();
 
         // done
         let fun_handle = module.functions.append(fun, self.span_from_with_op(start));
@@ -436,5 +511,88 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         module.apply_common_default_interpolation();
 
         Ok(())
+    }
+}
+
+impl BlockContext {
+    /// Consumes the `BlockContext` producing a Ir [`Block`](crate::Block)
+    fn lower(mut self) -> crate::Block {
+        fn lower_impl(
+            blocks: &mut crate::FastHashMap<spirv::Word, crate::Block>,
+            bodies: &[super::Body],
+            body_idx: BodyIndex,
+        ) -> crate::Block {
+            let mut block = crate::Block::new();
+
+            for item in bodies[body_idx].data.iter() {
+                match *item {
+                    super::BodyFragment::BlockId(id) => block.append(blocks.get_mut(&id).unwrap()),
+                    super::BodyFragment::If {
+                        condition,
+                        accept,
+                        reject,
+                    } => {
+                        let accept = lower_impl(blocks, bodies, accept);
+                        let reject = lower_impl(blocks, bodies, reject);
+
+                        block.push(
+                            crate::Statement::If {
+                                condition,
+                                accept,
+                                reject,
+                            },
+                            crate::Span::Unknown,
+                        )
+                    }
+                    super::BodyFragment::Loop { body, continuing } => {
+                        let body = lower_impl(blocks, bodies, body);
+                        let continuing = lower_impl(blocks, bodies, continuing);
+
+                        block.push(
+                            crate::Statement::Loop { body, continuing },
+                            crate::Span::Unknown,
+                        )
+                    }
+                    super::BodyFragment::Switch {
+                        selector,
+                        ref cases,
+                        default,
+                    } => {
+                        let default = lower_impl(blocks, bodies, default);
+
+                        block.push(
+                            crate::Statement::Switch {
+                                selector,
+                                cases: cases
+                                    .iter()
+                                    .map(|&(value, body_idx)| {
+                                        let body = lower_impl(blocks, bodies, body_idx);
+
+                                        crate::SwitchCase {
+                                            value,
+                                            body,
+                                            // TODO
+                                            fall_through: true,
+                                        }
+                                    })
+                                    .collect(),
+                                default,
+                            },
+                            crate::Span::Unknown,
+                        )
+                    }
+                    super::BodyFragment::Break => {
+                        block.push(crate::Statement::Break, crate::Span::Unknown)
+                    }
+                    super::BodyFragment::Continue => {
+                        block.push(crate::Statement::Continue, crate::Span::Unknown)
+                    }
+                }
+            }
+
+            block
+        }
+
+        lower_impl(&mut self.blocks, &self.bodies, 0)
     }
 }

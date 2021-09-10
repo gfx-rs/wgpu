@@ -26,7 +26,6 @@ spirv = { version = "0.2", optional = true }
 thiserror = "1.0.21"
 serde = { version = "1.0", features = ["derive"], optional = true }
 petgraph = { version ="0.6", optional = true }
-rose_tree = { version ="0.3", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 
@@ -39,7 +38,7 @@ glsl-out = ["petgraph"]
 msl-out = []
 serialize = ["serde"]
 deserialize = ["serde"]
-spv-in = ["petgraph", "spirv", "rose_tree"]
+spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
 wgsl-in = ["codespan-reporting", "hexf-parse"]
 wgsl-out = []

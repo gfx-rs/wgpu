@@ -6,9 +6,9 @@ use std::{error::Error, fmt, path::Path, str::FromStr};
 /// Translate shaders to different formats
 #[derive(argh::FromArgs, Debug, Clone)]
 struct Args {
-    /// validate the shader during translation
-    #[argh(switch)]
-    validate: bool,
+    /// bitmask of the ValidationFlags to be used, use 0 to disable validation
+    #[argh(option)]
+    validate: Option<u8>,
 
     /// what policy to use for index bounds checking for arrays, vectors, and
     /// matrices.
@@ -37,9 +37,9 @@ struct Args {
     #[argh(option)]
     image_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
-    /// directory to dump the SPIR-V flow dump to
+    /// directory to dump the SPIR-V block context dump to
     #[argh(option)]
-    flow_dir: Option<String>,
+    block_ctx_dir: Option<String>,
 
     /// the shader entrypoint to use when compiling to GLSL
     #[argh(option)]
@@ -130,7 +130,7 @@ struct Parameters {
     bounds_check_policies: naga::back::BoundsCheckPolicies,
     entry_point: Option<String>,
     spv_adjust_coordinate_space: bool,
-    spv_flow_dump_prefix: Option<String>,
+    spv_block_ctx_dump_prefix: Option<String>,
     spv: naga::back::spv::Options,
     msl: naga::back::msl::Options,
     glsl: naga::back::glsl::Options,
@@ -201,8 +201,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let output_paths = args.output;
 
     // Update parameters from commandline arguments
-    if args.validate {
-        params.validation_flags = naga::valid::ValidationFlags::all();
+    if let Some(bits) = args.validate {
+        params.validation_flags = naga::valid::ValidationFlags::from_bits(bits)
+            .ok_or(CliError("Invalid validation flags"))?;
     }
     if let Some(policy) = args.index_bounds_check_policy {
         params.bounds_check_policies.index = policy.0;
@@ -215,7 +216,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };
-    params.spv_flow_dump_prefix = args.flow_dir;
+    params.spv_block_ctx_dump_prefix = args.block_ctx_dir;
     params.entry_point = args.entry_point;
     if let Some(version) = args.profile {
         params.glsl.version = version.0;
@@ -234,7 +235,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let options = naga::front::spv::Options {
                 adjust_coordinate_space: params.spv_adjust_coordinate_space,
                 strict_capabilities: false,
-                flow_graph_dump_prefix: params.spv_flow_dump_prefix.map(std::path::PathBuf::from),
+                block_ctx_dump_prefix: params
+                    .spv_block_ctx_dump_prefix
+                    .map(std::path::PathBuf::from),
             };
             let input = fs::read(input_path)?;
             naga::front::spv::parse_u8_slice(&input, &options)?

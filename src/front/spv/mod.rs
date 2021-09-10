@@ -24,18 +24,14 @@ and we generate a parallel expression that loads the value, but transposed.
 This value then gets used instead of `OpLoad` result later on.
 
 !*/
-#![allow(dead_code)]
-
 mod convert;
 mod error;
-mod flow;
 mod function;
 mod image;
 mod null;
 
 use convert::*;
 pub use error::Error;
-use flow::*;
 use function::*;
 
 use crate::{
@@ -121,17 +117,6 @@ impl crate::TypeInner {
     }
 }
 
-/// OpPhi instruction.
-#[derive(Debug)]
-struct PhiInstruction {
-    /// SPIR-V's ID.
-    id: u32,
-
-    pointer: Handle<crate::Expression>,
-
-    /// Tuples of (variable, parent).
-    variables: Vec<(u32, u32)>,
-}
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub enum ModuleState {
     Empty,
@@ -158,30 +143,6 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     type Target = T;
     fn lookup(&self, key: spirv::Word) -> Result<&T, Error> {
         self.get(&key).ok_or(Error::InvalidId(key))
-    }
-}
-
-fn check_sample_coordinates(
-    ty: &crate::Type,
-    expect_kind: crate::ScalarKind,
-    dim: crate::ImageDimension,
-    is_array: bool,
-) -> bool {
-    let base_count = match dim {
-        crate::ImageDimension::D1 => 1,
-        crate::ImageDimension::D2 => 2,
-        crate::ImageDimension::D3 | crate::ImageDimension::Cube => 3,
-    };
-    let extra_count = if is_array { 1 } else { 0 };
-    let count = base_count + extra_count;
-    match ty.inner {
-        crate::TypeInner::Scalar { kind, width: _ } => count == 1 && kind == expect_kind,
-        crate::TypeInner::Vector {
-            size,
-            kind,
-            width: _,
-        } => size as u8 == count && kind == expect_kind,
-        _ => false,
     }
 }
 
@@ -337,10 +298,24 @@ struct LookupVariable {
     type_id: spirv::Word,
 }
 
+/// Information about SPIR-V result ids, stored in `Parser::lookup_expression`.
 #[derive(Clone, Debug)]
 struct LookupExpression {
+    /// The `Expression` constructed for this result.
+    ///
+    /// Note that, while a SPIR-V result id can be used in any block dominated
+    /// by its definition, a Naga `Expression` is only in scope for the rest of
+    /// its subtree. `Parser::get_expr_handle` takes care of
     handle: Handle<crate::Expression>,
+
+    /// The SPIR-V type of this result.
     type_id: spirv::Word,
+
+    /// The label id of the block that defines this expression.
+    ///
+    /// This is zero for globals, constants, and function parameters, since they
+    /// originate outside any function's block.
+    block_id: spirv::Word,
 }
 
 #[derive(Debug)]
@@ -379,7 +354,7 @@ pub struct Options {
     pub adjust_coordinate_space: bool,
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
-    pub flow_graph_dump_prefix: Option<PathBuf>,
+    pub block_ctx_dump_prefix: Option<PathBuf>,
 }
 
 impl Default for Options {
@@ -387,9 +362,135 @@ impl Default for Options {
         Options {
             adjust_coordinate_space: true,
             strict_capabilities: false,
-            flow_graph_dump_prefix: None,
+            block_ctx_dump_prefix: None,
         }
     }
+}
+
+/// An index into the `BlockContext::bodies` table.
+type BodyIndex = usize;
+
+/// An intermediate representation of a Naga [`Statement`].
+///
+/// `Body` and `BodyFragment` values form a tree: the `BodyIndex` fields of the
+/// variants are indices of the child `Body` values in [`BlockContext::bodies`].
+/// The `lower` function assembles the final `Statement` tree from this `Body`
+/// tree. See [`BlockContext`] for details.
+///
+/// [`Statement`]: crate::Statement
+#[derive(Debug)]
+enum BodyFragment {
+    BlockId(spirv::Word),
+    If {
+        condition: Handle<crate::Expression>,
+        accept: BodyIndex,
+        reject: BodyIndex,
+    },
+    Loop {
+        body: BodyIndex,
+        continuing: BodyIndex,
+    },
+    Switch {
+        selector: Handle<crate::Expression>,
+        cases: Vec<(i32, BodyIndex)>,
+        default: BodyIndex,
+    },
+    Break,
+    Continue,
+}
+
+/// An intermediate representation of a Naga [`Block`].
+///
+/// This will be assembled into a `Block` once we've added spills for phi nodes
+/// and out-of-scope expressions. See [`BlockContext`] for details.
+///
+/// [`Block`]: crate::Block
+#[derive(Debug)]
+struct Body {
+    /// The index of the direct parent of this body
+    parent: usize,
+    data: Vec<BodyFragment>,
+}
+
+impl Body {
+    /// Creates a new empty `Body` with the specified `parent`
+    pub fn with_parent(parent: usize) -> Self {
+        Body {
+            parent,
+            data: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PhiExpression {
+    /// The local variable used for the phi node
+    local: Handle<crate::LocalVariable>,
+    /// List of (expression, block)
+    expressions: Vec<(spirv::Word, spirv::Word)>,
+}
+
+#[derive(Debug)]
+enum MergeBlockInformation {
+    LoopMerge,
+    LoopContinue,
+    SelectionMerge,
+    SwitchMerge,
+}
+
+/// Fragments of Naga IR, to be assembled into `Statements` once data flow is
+/// resolved.
+///
+/// We can't build a Naga `Statement` tree directly from SPIR-V blocks for two
+/// main reasons:
+///
+/// - A SPIR-V expression can be used in any SPIR-V block dominated by its
+///   definition, whereas Naga expressions are scoped to the rest of their
+///   subtree. This means that discovering an expression use later in the
+///   function retroactively requires us to have spilled that expression into a
+///   local variable back before we left its scope.
+///
+/// - We translate SPIR-V OpPhi expressions as Naga local variables in which we
+///   store the appropriate value before jumping to the OpPhi's block.
+///
+/// Both cases require us to go back and amend previously generated Naga IR
+/// based on things we discover later. But modifying old blocks in arbitrary
+/// spots in a `Statement` tree is awkward.
+///
+/// Instead, as we iterate through the function's body, we accumulate
+/// control-flow-free fragments of Naga IR in the [`blocks`] table, while
+/// building a skeleton of the Naga `Statement` tree in [`bodies`]. We note any
+/// spills and temporaries we must introduce in [`phis`].
+///
+/// Finally, once we've processed the entire function, we add temporaries and
+/// spills to the fragmentary `Blocks` as directed by `phis`, and assemble them
+/// into the final Naga `Statement` tree as directed by `bodies`.
+///
+/// [`blocks`]: BlockContext::blocks
+/// [`bodies`]: BlockContext::bodies
+/// [`phis`]: BlockContext::phis
+/// [`lower`]: function::lower
+#[derive(Default, Debug)]
+struct BlockContext {
+    /// Phi nodes encountered when parsing the function, used to generate spills
+    /// to local variables.
+    phis: Vec<PhiExpression>,
+
+    /// Fragments of control-flow-free Naga IR.
+    ///
+    /// These will be stitched together into a proper `Statement` tree according
+    /// to `bodies`, once parsing is complete.
+    blocks: FastHashMap<spirv::Word, crate::Block>,
+
+    /// Map from block label ids to the index of the corresponding `Body` in
+    /// `bodies`.
+    body_for_label: FastHashMap<spirv::Word, BodyIndex>,
+
+    /// SPIR-V metadata about merge/continue blocks.
+    mergers: FastHashMap<spirv::Word, MergeBlockInformation>,
+
+    /// A table of `Body` values, each representing a block in the final IR.
+    bodies: Vec<Body>,
 }
 
 pub struct Parser<I> {
@@ -590,9 +691,96 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    /// Return the Naga `Expression` for a given SPIR-V result `id`.
+    ///
+    /// `lookup` must be the `LookupExpression` for `id`.
+    ///
+    /// SPIR-V result ids can be used by any block dominated by the id's
+    /// definition, but Naga `Expressions` are only in scope for the remainder
+    /// of their `Statement` subtree. This means that the `Expression` generated
+    /// for `id` may no longer be in scope. In such cases, this function takes
+    /// care of spilling the value of `id` to a `LocalVariable` which can then
+    /// be used anywhere. The SPIR-V domination rule ensures that the
+    /// `LocalVariable` has been initialized before it is used.
+    ///
+    /// The `body_idx` argument should be the index of the `Body` that hopes to
+    /// use `id`'s `Expression`.
+    #[allow(clippy::too_many_arguments)]
+    fn get_expr_handle(
+        &self,
+        id: spirv::Word,
+        lookup: &LookupExpression,
+        block_ctx: &mut BlockContext,
+        emitter: &mut super::Emitter,
+        block: &mut crate::Block,
+        expressions: &mut Arena<crate::Expression>,
+        local_arena: &mut Arena<crate::LocalVariable>,
+        body_idx: BodyIndex,
+    ) -> Handle<crate::Expression> {
+        // What `Body` was `id` defined in?
+        let expr_body_idx = block_ctx
+            .body_for_label
+            .get(&lookup.block_id)
+            .copied()
+            .unwrap_or(0);
+
+        // Don't need to do a load/store if the expression is in the main body
+        // or if the expression is in the same body as where the query was
+        // requested. The body_idx might actually not be the final one if a loop
+        // or conditional occurs but in those cases we know that the new body
+        // will be a subscope of the body that was passed so we can still reuse
+        // the handle and not issue a load/store.
+        if is_parent(body_idx, expr_body_idx, block_ctx) {
+            lookup.handle
+        } else {
+            // Add a temporary variable of the same type which will be used to
+            // store the original expression and used in the current block
+            let ty = self.lookup_type[&lookup.type_id].handle;
+            let local = local_arena.append(
+                crate::LocalVariable {
+                    name: None,
+                    ty,
+                    init: None,
+                },
+                crate::Span::Unknown,
+            );
+
+            block.extend(emitter.finish(expressions));
+            let pointer = expressions.append(
+                crate::Expression::LocalVariable(local),
+                crate::Span::Unknown,
+            );
+            emitter.start(expressions);
+            let expr =
+                expressions.append(crate::Expression::Load { pointer }, crate::Span::Unknown);
+
+            // Add a slightly odd entry to the phi table, so that while `id`'s
+            // `Expression` is still in scope, the usual phi processing will
+            // spill its value to `local`, where we can find it later.
+            //
+            // This pretends that the block in which `id` is defined is the
+            // predecessor of some other block with a phi in it that cites id as
+            // one of its sources, and uses `local` as its variable. There is no
+            // such phi, but nobody needs to know that.
+            block_ctx.phis.push(PhiExpression {
+                local,
+                expressions: vec![(id, lookup.block_id)],
+            });
+
+            expr
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_unary_op(
         &mut self,
+        block_ctx: &mut BlockContext,
+        emitter: &mut super::Emitter,
+        block: &mut crate::Block,
         expressions: &mut Arena<crate::Expression>,
+        local_arena: &mut Arena<crate::LocalVariable>,
+        block_id: spirv::Word,
+        body_idx: usize,
         op: crate::UnaryOperator,
     ) -> Result<(), Error> {
         let start = self.data_offset;
@@ -601,24 +789,39 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let p_id = self.next()?;
 
         let p_lexp = self.lookup_expression.lookup(p_id)?;
+        let handle = self.get_expr_handle(
+            p_id,
+            p_lexp,
+            block_ctx,
+            emitter,
+            block,
+            expressions,
+            local_arena,
+            body_idx,
+        );
 
-        let expr = crate::Expression::Unary {
-            op,
-            expr: p_lexp.handle,
-        };
+        let expr = crate::Expression::Unary { op, expr: handle };
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
                 handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
+                block_id,
             },
         );
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_binary_op(
         &mut self,
+        block_ctx: &mut BlockContext,
+        emitter: &mut super::Emitter,
+        block: &mut crate::Block,
         expressions: &mut Arena<crate::Expression>,
+        local_arena: &mut Arena<crate::LocalVariable>,
+        block_id: spirv::Word,
+        body_idx: usize,
         op: crate::BinaryOperator,
     ) -> Result<(), Error> {
         let start = self.data_offset;
@@ -628,18 +831,35 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let p2_id = self.next()?;
 
         let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+        let left = self.get_expr_handle(
+            p1_id,
+            p1_lexp,
+            block_ctx,
+            emitter,
+            block,
+            expressions,
+            local_arena,
+            body_idx,
+        );
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+        let right = self.get_expr_handle(
+            p2_id,
+            p2_lexp,
+            block_ctx,
+            emitter,
+            block,
+            expressions,
+            local_arena,
+            body_idx,
+        );
 
-        let expr = crate::Expression::Binary {
-            op,
-            left: p1_lexp.handle,
-            right: p2_lexp.handle,
-        };
+        let expr = crate::Expression::Binary { op, left, right };
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
                 handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
+                block_id,
             },
         );
         Ok(())
@@ -648,9 +868,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     /// A more complicated version of the binary op,
     /// where we force the operand to have the same type as the result.
     /// This is mostly needed for "i++" and "i--" coming from GLSL.
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_binary_op_sign_adjusted(
         &mut self,
+        block_ctx: &mut BlockContext,
+        emitter: &mut super::Emitter,
+        block: &mut crate::Block,
         expressions: &mut Arena<crate::Expression>,
+        local_arena: &mut Arena<crate::LocalVariable>,
+        block_id: spirv::Word,
+        body_idx: usize,
         op: crate::BinaryOperator,
         types: &Arena<crate::Type>,
     ) -> Result<(), Error> {
@@ -662,18 +889,38 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let span = self.span_from_with_op(start);
 
         let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+        let left = self.get_expr_handle(
+            p1_id,
+            p1_lexp,
+            block_ctx,
+            emitter,
+            block,
+            expressions,
+            local_arena,
+            body_idx,
+        );
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+        let right = self.get_expr_handle(
+            p2_id,
+            p2_lexp,
+            block_ctx,
+            emitter,
+            block,
+            expressions,
+            local_arena,
+            body_idx,
+        );
         let result_lookup_ty = self.lookup_type.lookup(result_type_id)?;
         let kind = types[result_lookup_ty.handle].inner.scalar_kind().unwrap();
 
         let expr = crate::Expression::Binary {
             op,
             left: if p1_lexp.type_id == result_type_id {
-                p1_lexp.handle
+                left
             } else {
                 expressions.append(
                     crate::Expression::As {
-                        expr: p1_lexp.handle,
+                        expr: left,
                         kind,
                         convert: None,
                     },
@@ -681,11 +928,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 )
             },
             right: if p2_lexp.type_id == result_type_id {
-                p2_lexp.handle
+                right
             } else {
                 expressions.append(
                     crate::Expression::As {
-                        expr: p2_lexp.handle,
+                        expr: right,
                         kind,
                         convert: None,
                     },
@@ -699,14 +946,22 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             LookupExpression {
                 handle: expressions.append(expr, span),
                 type_id: result_type_id,
+                block_id,
             },
         );
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_shift_op(
         &mut self,
+        block_ctx: &mut BlockContext,
+        emitter: &mut super::Emitter,
+        block: &mut crate::Block,
         expressions: &mut Arena<crate::Expression>,
+        local_arena: &mut Arena<crate::LocalVariable>,
+        block_id: spirv::Word,
+        body_idx: usize,
         op: crate::BinaryOperator,
     ) -> Result<(), Error> {
         let start = self.data_offset;
@@ -718,35 +973,59 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let span = self.span_from_with_op(start);
 
         let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+        let left = self.get_expr_handle(
+            p1_id,
+            p1_lexp,
+            block_ctx,
+            emitter,
+            block,
+            expressions,
+            local_arena,
+            body_idx,
+        );
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+        let p2_handle = self.get_expr_handle(
+            p2_id,
+            p2_lexp,
+            block_ctx,
+            emitter,
+            block,
+            expressions,
+            local_arena,
+            body_idx,
+        );
         // convert the shift to Uint
-        let p2_handle = expressions.append(
+        let right = expressions.append(
             crate::Expression::As {
-                expr: p2_lexp.handle,
+                expr: p2_handle,
                 kind: crate::ScalarKind::Uint,
                 convert: None,
             },
             span.clone(),
         );
 
-        let expr = crate::Expression::Binary {
-            op,
-            left: p1_lexp.handle,
-            right: p2_handle,
-        };
+        let expr = crate::Expression::Binary { op, left, right };
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
                 handle: expressions.append(expr, span),
                 type_id: result_type_id,
+                block_id,
             },
         );
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_derivative(
         &mut self,
+        block_ctx: &mut BlockContext,
+        emitter: &mut super::Emitter,
+        block: &mut crate::Block,
         expressions: &mut Arena<crate::Expression>,
+        local_arena: &mut Arena<crate::LocalVariable>,
+        block_id: spirv::Word,
+        body_idx: usize,
         axis: crate::DerivativeAxis,
     ) -> Result<(), Error> {
         let start = self.data_offset;
@@ -755,16 +1034,27 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let arg_id = self.next()?;
 
         let arg_lexp = self.lookup_expression.lookup(arg_id)?;
+        let arg_handle = self.get_expr_handle(
+            arg_id,
+            arg_lexp,
+            block_ctx,
+            emitter,
+            block,
+            expressions,
+            local_arena,
+            body_idx,
+        );
 
         let expr = crate::Expression::Derivative {
             axis,
-            expr: arg_lexp.handle,
+            expr: arg_handle,
         };
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
                 handle: expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
+                block_id,
             },
         );
         Ok(())
@@ -840,6 +1130,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         ))
     }
 
+    /// Add the next SPIR-V block's contents to `block_ctx`.
+    ///
+    /// Except for the function's entry block, `block_id` should be the label of
+    /// a block we've seen mentioned before, with an entry in
+    /// `block_ctx.body_for_label` to tell us which `Body` it contributes to.
     #[allow(clippy::too_many_arguments)]
     fn next_block(
         &mut self,
@@ -852,12 +1147,115 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         global_arena: &Arena<crate::GlobalVariable>,
         arguments: &[crate::FunctionArgument],
         parmeter_sampling: &mut [image::SamplingFlags],
-    ) -> Result<ControlFlowNode, Error> {
-        let mut block = crate::Block::new();
-        let mut phis = Vec::new();
+        block_ctx: &mut BlockContext,
+    ) -> Result<(), Error> {
+        // Extend `body` with the correct form for a branch to `target`.
+        fn merger(body: &mut Body, target: &MergeBlockInformation) {
+            body.data.push(match *target {
+                MergeBlockInformation::LoopContinue => BodyFragment::Continue,
+                MergeBlockInformation::LoopMerge | MergeBlockInformation::SwitchMerge => {
+                    BodyFragment::Break
+                }
+
+                // Finishing a selection merge means just falling off the end of
+                // the `accept` or `reject` block of the `If` statement.
+                MergeBlockInformation::SelectionMerge => return,
+            })
+        }
+
         let mut emitter = super::Emitter::default();
         emitter.start(expressions);
-        let mut merge = None;
+
+        // Find the `Body` that this block belongs to. Index zero is the
+        // function's root `Body`, corresponding to `Function::body`.
+        let mut body_idx = *block_ctx.body_for_label.entry(block_id).or_default();
+        let mut block = crate::Block::new();
+        // Stores the merge block as defined by a `OpSelectionMerge` otherwise is `None`
+        //
+        // This is used in `OpSwitch` to promote the `MergeBlockInformation` from
+        // `SelectionMerge` to `SwitchMerge` to allow `Break`s this isn't desirable for
+        // `LoopMerge`s because otherwise `Continue`s wouldn't be allowed
+        let mut selection_merge_block = None;
+
+        macro_rules! get_expr_handle {
+            ($id:expr, $lexp:expr) => {
+                self.get_expr_handle(
+                    $id,
+                    $lexp,
+                    block_ctx,
+                    &mut emitter,
+                    &mut block,
+                    expressions,
+                    local_arena,
+                    body_idx,
+                )
+            };
+        }
+        macro_rules! parse_expr_op {
+            ($op:expr, BINARY) => {
+                self.parse_expr_binary_op(
+                    block_ctx,
+                    &mut emitter,
+                    &mut block,
+                    expressions,
+                    local_arena,
+                    block_id,
+                    body_idx,
+                    $op,
+                )
+            };
+
+            ($op:expr, BINARY_SIGN_ADJUSTED) => {
+                self.parse_expr_binary_op_sign_adjusted(
+                    block_ctx,
+                    &mut emitter,
+                    &mut block,
+                    expressions,
+                    local_arena,
+                    block_id,
+                    body_idx,
+                    $op,
+                    type_arena,
+                )
+            };
+            ($op:expr, SHIFT) => {
+                self.parse_expr_shift_op(
+                    block_ctx,
+                    &mut emitter,
+                    &mut block,
+                    expressions,
+                    local_arena,
+                    block_id,
+                    body_idx,
+                    $op,
+                )
+            };
+            ($op:expr, UNARY) => {
+                self.parse_expr_unary_op(
+                    block_ctx,
+                    &mut emitter,
+                    &mut block,
+                    expressions,
+                    local_arena,
+                    block_id,
+                    body_idx,
+                    $op,
+                )
+            };
+            ($axis:expr, DERIVATIVE) => {
+                self.parse_expr_derivative(
+                    block_ctx,
+                    &mut emitter,
+                    &mut block,
+                    expressions,
+                    local_arena,
+                    block_id,
+                    body_idx,
+                    $axis,
+                )
+            };
+        }
+
         let terminator = loop {
             use spirv::Op;
             let start = self.data_offset;
@@ -882,6 +1280,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: expressions.append(crate::Expression::Constant(handle), span),
                             type_id,
+                            block_id,
                         },
                     );
                 }
@@ -927,6 +1326,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             handle: expressions
                                 .append(crate::Expression::LocalVariable(var_handle), span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                     emitter.start(expressions);
@@ -939,7 +1339,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_id = self.next()?;
 
                     let name = format!("phi_{}", result_id);
-                    let var_handle = local_arena.append(
+                    let local = local_arena.append(
                         crate::LocalVariable {
                             name: Some(name),
                             ty: self.lookup_type.lookup(result_type_id)?.handle,
@@ -947,22 +1347,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                         self.span_from(start),
                     );
-                    let pointer = expressions
-                        .append(crate::Expression::LocalVariable(var_handle), span.clone());
+                    let pointer =
+                        expressions.append(crate::Expression::LocalVariable(local), span.clone());
 
                     let in_count = (inst.wc - 3) / 2;
-                    let mut phi = PhiInstruction {
-                        id: result_id,
-                        pointer,
-                        variables: Vec::with_capacity(in_count as usize),
+                    let mut phi = PhiExpression {
+                        local,
+                        expressions: Vec::with_capacity(in_count as usize),
                     };
                     for _ in 0..in_count {
-                        let source_id = self.next()?;
-                        let value = self.next()?;
-                        phi.variables.push((source_id, value));
+                        let expr = self.next()?;
+                        let block = self.next()?;
+                        phi.expressions.push((expr, block));
                     }
 
-                    phis.push(phi);
+                    block_ctx.phis.push(phi);
                     emitter.start(expressions);
 
                     // Associate the lookup with an actual value, which is emitted
@@ -972,6 +1371,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: expressions.append(crate::Expression::Load { pointer }, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -994,7 +1394,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let lexp = self.lookup_expression.lookup(base_id)?;
                         let lty = self.lookup_type.lookup(lexp.type_id)?;
                         AccessExpression {
-                            base_handle: lexp.handle,
+                            base_handle: get_expr_handle!(base_id, lexp),
                             type_id: lty.base_id.ok_or(Error::InvalidAccessType(lexp.type_id))?,
                             load_override: self.lookup_load_override.get(&base_id).cloned(),
                         }
@@ -1003,6 +1403,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let access_id = self.next()?;
                         log::trace!("\t\t\tlooking up index expr {:?}", access_id);
                         let index_expr = self.lookup_expression.lookup(access_id)?.clone();
+                        let index_expr_handle = get_expr_handle!(access_id, &index_expr);
                         let index_expr_data = &expressions[index_expr.handle];
                         let index_maybe = match *index_expr_data {
                             crate::Expression::Constant(const_handle) => {
@@ -1090,7 +1491,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     },
                                     None => crate::Expression::Access {
                                         base: acex.base_handle,
-                                        index: index_expr.handle,
+                                        index: index_expr_handle,
                                     },
                                 };
                                 AccessExpression {
@@ -1106,7 +1507,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 let base_handle = expressions.append(
                                     crate::Expression::Access {
                                         base: acex.base_handle,
-                                        index: index_expr.handle,
+                                        index: index_expr_handle,
                                     },
                                     span.clone(),
                                 );
@@ -1139,7 +1540,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                 .append(
                                                     crate::Expression::Access {
                                                         base: load_expr,
-                                                        index: index_expr.handle,
+                                                        index: index_expr_handle,
                                                     },
                                                     span.clone(),
                                                 ),
@@ -1165,6 +1566,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let lookup_expression = LookupExpression {
                         handle: acex.base_handle,
                         type_id: result_type_id,
+                        block_id,
                     };
                     self.lookup_expression.insert(result_id, lookup_expression);
                 }
@@ -1177,8 +1579,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let index_id = self.next()?;
 
                     let root_lexp = self.lookup_expression.lookup(composite_id)?;
+                    let root_handle = get_expr_handle!(composite_id, root_lexp);
                     let root_type_lookup = self.lookup_type.lookup(root_lexp.type_id)?;
                     let index_lexp = self.lookup_expression.lookup(index_id)?;
+                    let index_handle = get_expr_handle!(index_id, index_lexp);
 
                     let num_components = match type_arena[root_type_lookup.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as usize,
@@ -1187,7 +1591,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let mut handle = expressions.append(
                         crate::Expression::Access {
-                            base: root_lexp.handle,
+                            base: root_handle,
                             index: self.index_constant_expressions[0],
                         },
                         span.clone(),
@@ -1195,7 +1599,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     for &index_expr in self.index_constant_expressions[1..num_components].iter() {
                         let access_expr = expressions.append(
                             crate::Expression::Access {
-                                base: root_lexp.handle,
+                                base: root_handle,
                                 index: index_expr,
                             },
                             span.clone(),
@@ -1204,7 +1608,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             crate::Expression::Binary {
                                 op: crate::BinaryOperator::Equal,
                                 left: index_expr,
-                                right: index_lexp.handle,
+                                right: index_handle,
                             },
                             span.clone(),
                         );
@@ -1223,6 +1627,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle,
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1236,9 +1641,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let index_id = self.next()?;
 
                     let object_lexp = self.lookup_expression.lookup(object_id)?;
+                    let object_handle = get_expr_handle!(object_id, object_lexp);
                     let root_lexp = self.lookup_expression.lookup(composite_id)?;
+                    let root_handle = get_expr_handle!(composite_id, root_lexp);
                     let root_type_lookup = self.lookup_type.lookup(root_lexp.type_id)?;
                     let index_lexp = self.lookup_expression.lookup(index_id)?;
+                    let index_handle = get_expr_handle!(index_id, index_lexp);
 
                     let num_components = match type_arena[root_type_lookup.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as usize,
@@ -1248,7 +1656,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     for &index_expr in self.index_constant_expressions[..num_components].iter() {
                         let access_expr = expressions.append(
                             crate::Expression::Access {
-                                base: root_lexp.handle,
+                                base: root_handle,
                                 index: index_expr,
                             },
                             span.clone(),
@@ -1257,14 +1665,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             crate::Expression::Binary {
                                 op: crate::BinaryOperator::Equal,
                                 left: index_expr,
-                                right: index_lexp.handle,
+                                right: index_handle,
                             },
                             span.clone(),
                         );
                         let handle = expressions.append(
                             crate::Expression::Select {
                                 condition: cond,
-                                accept: object_lexp.handle,
+                                accept: object_handle,
                                 reject: access_expr,
                             },
                             span.clone(),
@@ -1284,6 +1692,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle,
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1295,6 +1704,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let base_id = self.next()?;
                     log::trace!("\t\t\tlooking up expr {:?}", base_id);
                     let mut lexp = self.lookup_expression.lookup(base_id)?.clone();
+                    lexp.handle = get_expr_handle!(base_id, &lexp);
                     for _ in 4..inst.wc {
                         let index = self.next()?;
                         log::trace!("\t\t\tlooking up type {:?}", lexp.type_id);
@@ -1325,6 +1735,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 span.clone(),
                             ),
                             type_id,
+                            block_id,
                         };
                     }
 
@@ -1333,6 +1744,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: lexp.handle,
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1349,11 +1761,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
 
                     let object_lexp = self.lookup_expression.lookup(object_id)?.clone();
+                    let object_handle = get_expr_handle!(object_id, &object_lexp);
                     let root_lexp = self.lookup_expression.lookup(composite_id)?.clone();
+                    let root_handle = get_expr_handle!(composite_id, &root_lexp);
                     let handle = self.insert_composite(
-                        root_lexp.handle,
+                        root_handle,
                         result_type_id,
-                        object_lexp.handle,
+                        object_handle,
                         &selections,
                         type_arena,
                         expressions,
@@ -1365,6 +1779,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle,
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1378,7 +1793,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let comp_id = self.next()?;
                         log::trace!("\t\t\tlooking up expr {:?}", comp_id);
                         let lexp = self.lookup_expression.lookup(comp_id)?;
-                        components.push(lexp.handle);
+                        let handle = get_expr_handle!(comp_id, lexp);
+                        components.push(handle);
                     }
                     let ty = self.lookup_type.lookup(result_type_id)?.handle;
                     let first = components[0];
@@ -1397,6 +1813,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: expressions.append(expr, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1412,17 +1829,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
 
                     let base_lexp = self.lookup_expression.lookup(pointer_id)?;
+                    let base_handle = get_expr_handle!(pointer_id, base_lexp);
                     let type_lookup = self.lookup_type.lookup(base_lexp.type_id)?;
                     let handle = match type_arena[type_lookup.handle].inner {
                         crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
-                            base_lexp.handle
+                            base_handle
                         }
                         _ => match self.lookup_load_override.get(&pointer_id) {
                             Some(&LookupLoadOverride::Loaded(handle)) => handle,
                             //Note: we aren't handling `LookupLoadOverride::Pending` properly here
                             _ => expressions.append(
                                 crate::Expression::Load {
-                                    pointer: base_lexp.handle,
+                                    pointer: base_handle,
                                 },
                                 span,
                             ),
@@ -1434,12 +1852,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle,
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
                 Op::Store => {
                     inst.expect_at_least(3)?;
-                    block.extend(emitter.finish(expressions));
 
                     let pointer_id = self.next()?;
                     let value_id = self.next()?;
@@ -1448,11 +1866,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let _memory_access = self.next()?;
                     }
                     let base_expr = self.lookup_expression.lookup(pointer_id)?;
+                    let base_handle = get_expr_handle!(pointer_id, base_expr);
                     let value_expr = self.lookup_expression.lookup(value_id)?;
+                    let value_handle = get_expr_handle!(value_id, value_expr);
+
+                    block.extend(emitter.finish(expressions));
                     block.push(
                         crate::Statement::Store {
-                            pointer: base_expr.handle,
-                            value: value_expr.handle,
+                            pointer: base_handle,
+                            value: value_handle,
                         },
                         span,
                     );
@@ -1461,43 +1883,35 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 // Arithmetic Instructions +, -, *, /, %
                 Op::SNegate | Op::FNegate => {
                     inst.expect(4)?;
-                    self.parse_expr_unary_op(expressions, crate::UnaryOperator::Negate)?;
+                    parse_expr_op!(crate::UnaryOperator::Negate, UNARY)?;
                 }
                 Op::IAdd => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op_sign_adjusted(
-                        expressions,
-                        crate::BinaryOperator::Add,
-                        type_arena,
-                    )?;
+                    parse_expr_op!(crate::BinaryOperator::Add, BINARY_SIGN_ADJUSTED)?;
                 }
                 Op::FAdd => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Add)?;
+                    parse_expr_op!(crate::BinaryOperator::Add, BINARY)?;
                 }
                 Op::ISub => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op_sign_adjusted(
-                        expressions,
-                        crate::BinaryOperator::Subtract,
-                        type_arena,
-                    )?;
+                    parse_expr_op!(crate::BinaryOperator::Subtract, BINARY_SIGN_ADJUSTED)?;
                 }
                 Op::FSub => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Subtract)?;
+                    parse_expr_op!(crate::BinaryOperator::Subtract, BINARY)?;
                 }
                 Op::IMul | Op::FMul => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Multiply)?;
+                    parse_expr_op!(crate::BinaryOperator::Multiply, BINARY)?;
                 }
                 Op::SDiv | Op::UDiv | Op::FDiv => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Divide)?;
+                    parse_expr_op!(crate::BinaryOperator::Divide, BINARY)?;
                 }
                 Op::SMod | Op::UMod | Op::FMod | Op::SRem | Op::FRem => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Modulo)?;
+                    parse_expr_op!(crate::BinaryOperator::Modulo, BINARY)?;
                 }
                 Op::VectorTimesScalar
                 | Op::VectorTimesMatrix
@@ -1505,7 +1919,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::MatrixTimesVector
                 | Op::MatrixTimesMatrix => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Multiply)?;
+                    parse_expr_op!(crate::BinaryOperator::Multiply, BINARY)?;
                 }
                 Op::Transpose => {
                     inst.expect(4)?;
@@ -1514,9 +1928,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_id = self.next()?;
                     let matrix_id = self.next()?;
                     let matrix_lexp = self.lookup_expression.lookup(matrix_id)?;
+                    let matrix_handle = get_expr_handle!(matrix_id, matrix_lexp);
                     let expr = crate::Expression::Math {
                         fun: crate::MathFunction::Transpose,
-                        arg: matrix_lexp.handle,
+                        arg: matrix_handle,
                         arg1: None,
                         arg2: None,
                     };
@@ -1525,6 +1940,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: expressions.append(expr, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1536,11 +1952,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let left_id = self.next()?;
                     let right_id = self.next()?;
                     let left_lexp = self.lookup_expression.lookup(left_id)?;
+                    let left_handle = get_expr_handle!(left_id, left_lexp);
                     let right_lexp = self.lookup_expression.lookup(right_id)?;
+                    let right_handle = get_expr_handle!(right_id, right_lexp);
                     let expr = crate::Expression::Math {
                         fun: crate::MathFunction::Dot,
-                        arg: left_lexp.handle,
-                        arg1: Some(right_lexp.handle),
+                        arg: left_handle,
+                        arg1: Some(right_handle),
                         arg2: None,
                     };
                     self.lookup_expression.insert(
@@ -1548,6 +1966,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: expressions.append(expr, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1559,11 +1978,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let left_id = self.next()?;
                     let right_id = self.next()?;
                     let left_lexp = self.lookup_expression.lookup(left_id)?;
+                    let left_handle = get_expr_handle!(left_id, left_lexp);
                     let right_lexp = self.lookup_expression.lookup(right_id)?;
+                    let right_handle = get_expr_handle!(right_id, right_lexp);
                     let expr = crate::Expression::Math {
                         fun: crate::MathFunction::Outer,
-                        arg: left_lexp.handle,
-                        arg1: Some(right_lexp.handle),
+                        arg: left_handle,
+                        arg1: Some(right_handle),
                         arg2: None,
                     };
                     self.lookup_expression.insert(
@@ -1571,44 +1992,45 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: expressions.append(expr, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
                 // Bitwise instructions
                 Op::Not => {
                     inst.expect(4)?;
-                    self.parse_expr_unary_op(expressions, crate::UnaryOperator::Not)?;
+                    parse_expr_op!(crate::UnaryOperator::Not, UNARY)?;
                 }
                 Op::BitwiseOr => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::InclusiveOr)?;
+                    parse_expr_op!(crate::BinaryOperator::InclusiveOr, BINARY)?;
                 }
                 Op::BitwiseXor => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::ExclusiveOr)?;
+                    parse_expr_op!(crate::BinaryOperator::ExclusiveOr, BINARY)?;
                 }
                 Op::BitwiseAnd => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::And)?;
+                    parse_expr_op!(crate::BinaryOperator::And, BINARY)?;
                 }
                 Op::ShiftRightLogical => {
                     inst.expect(5)?;
                     //TODO: convert input and result to usigned
-                    self.parse_expr_shift_op(expressions, crate::BinaryOperator::ShiftRight)?;
+                    parse_expr_op!(crate::BinaryOperator::ShiftRight, SHIFT)?;
                 }
                 Op::ShiftRightArithmetic => {
                     inst.expect(5)?;
                     //TODO: convert input and result to signed
-                    self.parse_expr_shift_op(expressions, crate::BinaryOperator::ShiftRight)?;
+                    parse_expr_op!(crate::BinaryOperator::ShiftRight, SHIFT)?;
                 }
                 Op::ShiftLeftLogical => {
                     inst.expect(5)?;
-                    self.parse_expr_shift_op(expressions, crate::BinaryOperator::ShiftLeft)?;
+                    parse_expr_op!(crate::BinaryOperator::ShiftLeft, SHIFT)?;
                 }
                 // Sampling
                 Op::Image => {
                     inst.expect(4)?;
-                    self.parse_image_uncouple()?;
+                    self.parse_image_uncouple(block_id)?;
                 }
                 Op::SampledImage => {
                     inst.expect(5)?;
@@ -1629,7 +2051,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::ImageFetch | Op::ImageRead => {
                     let extra = inst.expect_at_least(5)?;
-                    self.parse_image_load(extra, type_arena, global_arena, arguments, expressions)?;
+                    self.parse_image_load(
+                        extra,
+                        type_arena,
+                        global_arena,
+                        arguments,
+                        block_ctx,
+                        &mut emitter,
+                        &mut block,
+                        expressions,
+                        local_arena,
+                        block_id,
+                        body_idx,
+                    )?;
                 }
                 Op::ImageSampleImplicitLod | Op::ImageSampleExplicitLod => {
                     let extra = inst.expect_at_least(5)?;
@@ -1643,8 +2077,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         type_arena,
                         global_arena,
                         arguments,
-                        expressions,
                         parmeter_sampling,
+                        block_ctx,
+                        &mut emitter,
+                        &mut block,
+                        expressions,
+                        local_arena,
+                        block_id,
+                        body_idx,
                     )?;
                 }
                 Op::ImageSampleProjImplicitLod | Op::ImageSampleProjExplicitLod => {
@@ -1659,8 +2099,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         type_arena,
                         global_arena,
                         arguments,
-                        expressions,
                         parmeter_sampling,
+                        block_ctx,
+                        &mut emitter,
+                        &mut block,
+                        expressions,
+                        local_arena,
+                        block_id,
+                        body_idx,
                     )?;
                 }
                 Op::ImageSampleDrefImplicitLod | Op::ImageSampleDrefExplicitLod => {
@@ -1675,8 +2121,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         type_arena,
                         global_arena,
                         arguments,
-                        expressions,
                         parmeter_sampling,
+                        block_ctx,
+                        &mut emitter,
+                        &mut block,
+                        expressions,
+                        local_arena,
+                        block_id,
+                        body_idx,
                     )?;
                 }
                 Op::ImageSampleProjDrefImplicitLod | Op::ImageSampleProjDrefExplicitLod => {
@@ -1691,25 +2143,57 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         type_arena,
                         global_arena,
                         arguments,
-                        expressions,
                         parmeter_sampling,
+                        block_ctx,
+                        &mut emitter,
+                        &mut block,
+                        expressions,
+                        local_arena,
+                        block_id,
+                        body_idx,
                     )?;
                 }
                 Op::ImageQuerySize => {
                     inst.expect(4)?;
-                    self.parse_image_query_size(false, expressions)?;
+                    self.parse_image_query_size(
+                        false,
+                        block_ctx,
+                        &mut emitter,
+                        &mut block,
+                        expressions,
+                        local_arena,
+                        block_id,
+                        body_idx,
+                    )?;
                 }
                 Op::ImageQuerySizeLod => {
                     inst.expect(5)?;
-                    self.parse_image_query_size(true, expressions)?;
+                    self.parse_image_query_size(
+                        true,
+                        block_ctx,
+                        &mut emitter,
+                        &mut block,
+                        expressions,
+                        local_arena,
+                        block_id,
+                        body_idx,
+                    )?;
                 }
                 Op::ImageQueryLevels => {
                     inst.expect(4)?;
-                    self.parse_image_query_other(crate::ImageQuery::NumLevels, expressions)?;
+                    self.parse_image_query_other(
+                        crate::ImageQuery::NumLevels,
+                        expressions,
+                        block_id,
+                    )?;
                 }
                 Op::ImageQuerySamples => {
                     inst.expect(4)?;
-                    self.parse_image_query_other(crate::ImageQuery::NumSamples, expressions)?;
+                    self.parse_image_query_other(
+                        crate::ImageQuery::NumSamples,
+                        expressions,
+                        block_id,
+                    )?;
                 }
                 // other ops
                 Op::Select => {
@@ -1721,19 +2205,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let o2_id = self.next()?;
 
                     let cond_lexp = self.lookup_expression.lookup(condition)?;
+                    let cond_handle = get_expr_handle!(condition, cond_lexp);
                     let o1_lexp = self.lookup_expression.lookup(o1_id)?;
+                    let o1_handle = get_expr_handle!(o1_id, o1_lexp);
                     let o2_lexp = self.lookup_expression.lookup(o2_id)?;
+                    let o2_handle = get_expr_handle!(o2_id, o2_lexp);
 
                     let expr = crate::Expression::Select {
-                        condition: cond_lexp.handle,
-                        accept: o1_lexp.handle,
-                        reject: o2_lexp.handle,
+                        condition: cond_handle,
+                        accept: o1_handle,
+                        reject: o2_handle,
                     };
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
                             handle: expressions.append(expr, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1746,14 +2234,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     let v1_lexp = self.lookup_expression.lookup(v1_id)?;
                     let v1_lty = self.lookup_type.lookup(v1_lexp.type_id)?;
-                    let v1_handle = v1_lexp.handle;
+                    let v1_handle = get_expr_handle!(v1_id, v1_lexp);
                     let n1 = match type_arena[v1_lty.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidInnerType(v1_lexp.type_id)),
                     };
                     let v2_lexp = self.lookup_expression.lookup(v2_id)?;
                     let v2_lty = self.lookup_type.lookup(v2_lexp.type_id)?;
-                    let v2_handle = v2_lexp.handle;
+                    let v2_handle = get_expr_handle!(v2_id, v2_lexp);
                     let n2 = match type_arena[v2_lty.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidInnerType(v2_lexp.type_id)),
@@ -1823,6 +2311,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: expressions.append(expr, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1849,7 +2338,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     };
 
                     let expr = crate::Expression::As {
-                        expr: value_lexp.handle,
+                        expr: get_expr_handle!(value_id, value_lexp),
                         kind,
                         convert: if inst.op == Op::Bitcast {
                             None
@@ -1862,6 +2351,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: expressions.append(expr, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -1876,7 +2366,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let mut arguments = Vec::with_capacity(inst.wc as usize - 4);
                     for _ in 0..arguments.capacity() {
                         let arg_id = self.next()?;
-                        arguments.push(self.lookup_expression.lookup(arg_id)?.handle);
+                        let lexp = self.lookup_expression.lookup(arg_id)?;
+                        arguments.push(get_expr_handle!(arg_id, lexp));
                     }
 
                     // We just need an unique handle here, nothing more.
@@ -1892,6 +2383,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             LookupExpression {
                                 handle: expr_handle,
                                 type_id: result_type_id,
+                                block_id,
                             },
                         );
                         Some(expr_handle)
@@ -1926,7 +2418,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         inst.expect(base_wc + 1)?;
                         let arg = {
                             let arg_id = self.next()?;
-                            self.lookup_expression.lookup(arg_id)?.handle
+                            let lexp = self.lookup_expression.lookup(arg_id)?;
+                            get_expr_handle!(arg_id, lexp)
                         };
 
                         let constant_handle = const_arena.fetch_or_append(
@@ -1962,6 +2455,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     span,
                                 ),
                                 type_id: result_type_id,
+                                block_id,
                             },
                         );
                     } else {
@@ -2020,17 +2514,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         inst.expect(base_wc + arg_count as u16)?;
                         let arg = {
                             let arg_id = self.next()?;
-                            self.lookup_expression.lookup(arg_id)?.handle
+                            let lexp = self.lookup_expression.lookup(arg_id)?;
+                            get_expr_handle!(arg_id, lexp)
                         };
                         let arg1 = if arg_count > 1 {
                             let arg_id = self.next()?;
-                            Some(self.lookup_expression.lookup(arg_id)?.handle)
+                            let lexp = self.lookup_expression.lookup(arg_id)?;
+                            Some(get_expr_handle!(arg_id, lexp))
                         } else {
                             None
                         };
                         let arg2 = if arg_count > 2 {
                             let arg_id = self.next()?;
-                            Some(self.lookup_expression.lookup(arg_id)?.handle)
+                            let lexp = self.lookup_expression.lookup(arg_id)?;
+                            Some(get_expr_handle!(arg_id, lexp))
                         } else {
                             None
                         };
@@ -2046,6 +2543,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             LookupExpression {
                                 handle: expressions.append(expr, span),
                                 type_id: result_type_id,
+                                block_id,
                             },
                         );
                     }
@@ -2053,15 +2551,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 // Relational and Logical Instructions
                 Op::LogicalNot => {
                     inst.expect(4)?;
-                    self.parse_expr_unary_op(expressions, crate::UnaryOperator::Not)?;
+                    parse_expr_op!(crate::UnaryOperator::Not, UNARY)?;
                 }
                 Op::LogicalOr => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::LogicalOr)?;
+                    parse_expr_op!(crate::BinaryOperator::LogicalOr, BINARY)?;
                 }
                 Op::LogicalAnd => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::LogicalAnd)?;
+                    parse_expr_op!(crate::BinaryOperator::LogicalAnd, BINARY)?;
                 }
                 Op::IEqual
                 | Op::INotEqual
@@ -2089,7 +2587,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 | Op::LogicalNotEqual => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
-                    self.parse_expr_binary_op(expressions, operator)?;
+                    parse_expr_op!(operator, BINARY)?;
                 }
                 Op::Any | Op::All | Op::IsNan | Op::IsInf | Op::IsFinite | Op::IsNormal => {
                     inst.expect(4)?;
@@ -2098,66 +2596,152 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let arg_id = self.next()?;
 
                     let arg_lexp = self.lookup_expression.lookup(arg_id)?;
+                    let arg_handle = get_expr_handle!(arg_id, arg_lexp);
 
                     let expr = crate::Expression::Relational {
                         fun: map_relational_fun(inst.op)?,
-                        argument: arg_lexp.handle,
+                        argument: arg_handle,
                     };
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
                             handle: expressions.append(expr, span),
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
                 Op::Kill => {
                     inst.expect(1)?;
-                    break Terminator::Kill;
+                    break Some(crate::Statement::Kill);
                 }
                 Op::Unreachable => {
                     inst.expect(1)?;
-                    break Terminator::Unreachable;
+                    break None;
                 }
                 Op::Return => {
                     inst.expect(1)?;
-                    break Terminator::Return { value: None };
+                    break Some(crate::Statement::Return { value: None });
                 }
                 Op::ReturnValue => {
                     inst.expect(2)?;
                     let value_id = self.next()?;
                     let value_lexp = self.lookup_expression.lookup(value_id)?;
-                    break Terminator::Return {
-                        value: Some(value_lexp.handle),
-                    };
+                    let value_handle = get_expr_handle!(value_id, value_lexp);
+                    break Some(crate::Statement::Return {
+                        value: Some(value_handle),
+                    });
                 }
                 Op::Branch => {
                     inst.expect(2)?;
                     let target_id = self.next()?;
-                    break Terminator::Branch { target_id };
+
+                    // If this is a branch to a merge or continue block,
+                    // then that ends the current body.
+                    if let Some(info) = block_ctx.mergers.get(&target_id) {
+                        block.extend(emitter.finish(expressions));
+                        block_ctx.blocks.insert(block_id, block);
+                        let body = &mut block_ctx.bodies[body_idx];
+                        body.data.push(BodyFragment::BlockId(block_id));
+
+                        merger(body, info);
+
+                        return Ok(());
+                    }
+
+                    // Since the target of the branch has no merge information,
+                    // this must be the only branch to that block. This means
+                    // we can treat it as an extension of the current `Body`.
+                    //
+                    // NOTE: it's possible that another branch was already made to this block
+                    // setting the body index in which case it SHOULD NOT be overriden.
+                    // For example a switch with falltrough, the OpSwitch will set the body to
+                    // the respective case and the case may branch to another case in which case
+                    // the body index shouldn't be changed
+                    block_ctx
+                        .body_for_label
+                        .entry(target_id)
+                        .or_insert(body_idx);
+
+                    break None;
                 }
                 Op::BranchConditional => {
                     inst.expect_at_least(4)?;
 
-                    let condition_id = self.next()?;
-                    let condition = self.lookup_expression.lookup(condition_id)?.handle;
+                    let condition = {
+                        let condition_id = self.next()?;
+                        let lexp = self.lookup_expression.lookup(condition_id)?;
+                        get_expr_handle!(condition_id, lexp)
+                    };
 
                     let true_id = self.next()?;
                     let false_id = self.next()?;
 
-                    break Terminator::BranchConditional {
+                    // Start a body block for the `accept` branch.
+                    let accept = block_ctx.bodies.len();
+                    let mut accept_block = Body::with_parent(body_idx);
+
+                    // If the `OpBranchConditional`target is somebody else's
+                    // merge or continue block, then put a `Break` or `Continue`
+                    // statement in this new body block.
+                    if let Some(info) = block_ctx.mergers.get(&true_id) {
+                        merger(&mut accept_block, info)
+                    } else {
+                        // Note the body index for the block we're branching to.
+                        debug_assert!(block_ctx.body_for_label.insert(true_id, accept).is_none());
+                    }
+
+                    block_ctx.bodies.push(accept_block);
+
+                    // Handle the `reject` branch just like the `accept` block.
+                    let reject = block_ctx.bodies.len();
+                    let mut reject_block = Body::with_parent(body_idx);
+
+                    if let Some(info) = block_ctx.mergers.get(&false_id) {
+                        merger(&mut reject_block, info)
+                    } else {
+                        debug_assert!(block_ctx.body_for_label.insert(false_id, reject).is_none());
+                    }
+
+                    block_ctx.bodies.push(reject_block);
+
+                    block.extend(emitter.finish(expressions));
+                    block_ctx.blocks.insert(block_id, block);
+                    let body = &mut block_ctx.bodies[body_idx];
+                    // Make sure the vector has space for at least two more allocations
+                    body.data.reserve(2);
+                    body.data.push(BodyFragment::BlockId(block_id));
+                    body.data.push(BodyFragment::If {
                         condition,
-                        true_id,
-                        false_id,
-                    };
+                        accept,
+                        reject,
+                    });
+
+                    return Ok(());
                 }
                 Op::Switch => {
                     inst.expect_at_least(3)?;
                     let selector = self.next()?;
                     let default_id = self.next()?;
 
+                    // If the previous instruction was a `OpSelectionMerge` then we must
+                    // promote the `MergeBlockInformation` to a `SwitchMerge`
+                    if let Some(merge) = selection_merge_block {
+                        block_ctx
+                            .mergers
+                            .insert(merge, MergeBlockInformation::SwitchMerge);
+                    }
+
+                    let default = block_ctx.bodies.len();
+                    block_ctx.bodies.push(Body::with_parent(body_idx));
+                    block_ctx
+                        .body_for_label
+                        .entry(default_id)
+                        .or_insert(default);
+
                     let selector_lexp = &self.lookup_expression[&selector];
                     let selector_lty = self.lookup_type.lookup(selector_lexp.type_id)?;
+                    let selector_handle = get_expr_handle!(selector, selector_lexp);
                     let selector = match type_arena[selector_lty.handle].inner {
                         crate::TypeInner::Scalar {
                             kind: crate::ScalarKind::Uint,
@@ -2167,7 +2751,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             expressions.append(
                                 crate::Expression::As {
                                     kind: crate::ScalarKind::Sint,
-                                    expr: selector_lexp.handle,
+                                    expr: selector_handle,
                                     convert: None,
                                 },
                                 span,
@@ -2176,57 +2760,123 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::TypeInner::Scalar {
                             kind: crate::ScalarKind::Sint,
                             width: _,
-                        } => selector_lexp.handle,
+                        } => selector_handle,
                         ref other => unimplemented!("Unexpected selector {:?}", other),
                     };
 
-                    let mut targets = Vec::new();
+                    let mut cases = Vec::new();
                     for _ in 0..(inst.wc - 3) / 2 {
                         let literal = self.next()?;
                         let target = self.next()?;
-                        targets.push((literal as i32, target));
+
+                        let case_body_idx = block_ctx.bodies.len();
+                        let mut body = Body::with_parent(body_idx);
+
+                        if let Some(info) = block_ctx.mergers.get(&target) {
+                            merger(&mut body, info);
+                        }
+
+                        block_ctx.bodies.push(body);
+                        block_ctx
+                            .body_for_label
+                            .entry(target)
+                            .or_insert(case_body_idx);
+
+                        cases.push((literal as i32, case_body_idx));
                     }
 
-                    break Terminator::Switch {
+                    block.extend(emitter.finish(expressions));
+
+                    let body = &mut block_ctx.bodies[body_idx];
+                    block_ctx.blocks.insert(block_id, block);
+                    // Make sure the vector has space for at least two more allocations
+                    body.data.reserve(2);
+                    body.data.push(BodyFragment::BlockId(block_id));
+                    body.data.push(BodyFragment::Switch {
                         selector,
-                        default_id,
-                        targets,
-                    };
+                        cases,
+                        default,
+                    });
+
+                    return Ok(());
                 }
                 Op::SelectionMerge => {
                     inst.expect(3)?;
                     let merge_block_id = self.next()?;
                     // TODO: Selection Control Mask
                     let _selection_control = self.next()?;
-                    let continue_block_id = None;
-                    merge = Some(MergeInstruction {
-                        merge_block_id,
-                        continue_block_id,
-                    });
+
+                    // Indicate that the merge block is a continuation of the
+                    // current `Body`.
+                    block_ctx
+                        .body_for_label
+                        .entry(merge_block_id)
+                        .or_insert(body_idx);
+
+                    // Let subsequent branches to the merge block know that
+                    // they've reached the end of the selection construct.
+                    block_ctx
+                        .mergers
+                        .insert(merge_block_id, MergeBlockInformation::SelectionMerge);
+
+                    selection_merge_block = Some(merge_block_id);
                 }
                 Op::LoopMerge => {
                     inst.expect_at_least(4)?;
                     let merge_block_id = self.next()?;
-                    let continue_block_id = Some(self.next()?);
+                    let continuing = self.next()?;
 
                     // TODO: Loop Control Parameters
                     for _ in 0..inst.wc - 3 {
                         self.next()?;
                     }
 
-                    merge = Some(MergeInstruction {
-                        merge_block_id,
-                        continue_block_id,
+                    // Indicate that the merge block is a continuation of the
+                    // current `Body`.
+                    block_ctx
+                        .body_for_label
+                        .entry(merge_block_id)
+                        .or_insert(body_idx);
+                    // Let subsequent branches to the merge block know that
+                    // they're `Break` statements.
+                    block_ctx
+                        .mergers
+                        .insert(merge_block_id, MergeBlockInformation::LoopMerge);
+
+                    let loop_body_idx = block_ctx.bodies.len();
+                    block_ctx.bodies.push(Body::with_parent(body_idx));
+
+                    let continue_idx = block_ctx.bodies.len();
+                    // The continue block inherits the scope of the loop body
+                    block_ctx.bodies.push(Body::with_parent(loop_body_idx));
+                    block_ctx
+                        .body_for_label
+                        .entry(continuing)
+                        .or_insert(continue_idx);
+                    // Let subsequent branches to the continue block know that
+                    // they're `Continue` statements.
+                    block_ctx
+                        .mergers
+                        .insert(continuing, MergeBlockInformation::LoopContinue);
+
+                    // The loop header always belongs to the loop body
+                    block_ctx.body_for_label.insert(block_id, loop_body_idx);
+
+                    let parent_body = &mut block_ctx.bodies[body_idx];
+                    parent_body.data.push(BodyFragment::Loop {
+                        body: loop_body_idx,
+                        continuing: continue_idx,
                     });
+                    body_idx = loop_body_idx;
                 }
                 Op::DPdx | Op::DPdxFine | Op::DPdxCoarse => {
-                    self.parse_expr_derivative(expressions, crate::DerivativeAxis::X)?;
+                    parse_expr_op!(crate::DerivativeAxis::X, DERIVATIVE)?;
                 }
                 Op::DPdy | Op::DPdyFine | Op::DPdyCoarse => {
-                    self.parse_expr_derivative(expressions, crate::DerivativeAxis::Y)?;
+                    parse_expr_op!(crate::DerivativeAxis::Y, DERIVATIVE)?;
                 }
                 Op::Fwidth | Op::FwidthFine | Op::FwidthCoarse => {
-                    self.parse_expr_derivative(expressions, crate::DerivativeAxis::Width)?;
+                    parse_expr_op!(crate::DerivativeAxis::Width, DERIVATIVE)?;
                 }
                 Op::ArrayLength => {
                     inst.expect(5)?;
@@ -2239,10 +2889,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // wrong types or parameters are supplied here.
 
                     let structure_ptr = self.lookup_expression.lookup(structure_id)?;
+                    let structure_handle = get_expr_handle!(structure_id, structure_ptr);
 
                     let member_ptr = expressions.append(
                         crate::Expression::AccessIndex {
-                            base: structure_ptr.handle,
+                            base: structure_handle,
                             index: member_index,
                         },
                         span.clone(),
@@ -2256,6 +2907,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         LookupExpression {
                             handle: length,
                             type_id: result_type_id,
+                            block_id,
                         },
                     );
                 }
@@ -2273,12 +2925,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     // TODO: check if the source and target types are the same?
                     let target = self.lookup_expression.lookup(target_id)?;
+                    let target_handle = get_expr_handle!(target_id, target);
                     let source = self.lookup_expression.lookup(source_id)?;
+                    let source_handle = get_expr_handle!(source_id, source);
 
                     // This operation is practically the same as loading and then storing, I think.
                     let value_expr = expressions.append(
                         crate::Expression::Load {
-                            pointer: source.handle,
+                            pointer: source_handle,
                         },
                         span.clone(),
                     );
@@ -2286,7 +2940,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     block.extend(emitter.finish(expressions));
                     block.push(
                         crate::Statement::Store {
-                            pointer: target.handle,
+                            pointer: target_handle,
                             value: value_expr,
                         },
                         span,
@@ -2339,17 +2993,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         };
 
         block.extend(emitter.finish(expressions));
-        Ok(ControlFlowNode {
-            id: block_id,
-            ty: None,
-            phis,
-            block,
-            terminator,
-            merge,
-            construct: petgraph::graph::node_index(0),
-            position: 0,
-            visited: false,
-        })
+        if let Some(stmt) = terminator {
+            block.push(stmt, crate::Span::Unknown);
+        }
+
+        // Save this block fragment in `block_ctx.blocks`, and mark it to be
+        // incorporated into the current body at `Statement` assembly time.
+        block_ctx.blocks.insert(block_id, block);
+        let body = &mut block_ctx.bodies[body_idx];
+        body.data.push(BodyFragment::BlockId(block_id));
+        Ok(())
     }
 
     fn make_expression_storage(
@@ -2371,6 +3024,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 LookupExpression {
                     type_id: var.type_id,
                     handle,
+                    // Setting this to an invalid id will cause get_expr_handle
+                    // to default to the main body making sure no load/stores
+                    // are added.
+                    block_id: 0,
                 },
             );
         }
@@ -2390,6 +3047,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 LookupExpression {
                     type_id: con.type_id,
                     handle,
+                    // Setting this to an invalid id will cause get_expr_handle
+                    // to default to the main body making sure no load/stores
+                    // are added.
+                    block_id: 0,
                 },
             );
         }
@@ -2408,8 +3069,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
     /// Walk the statement tree and patch it in the following cases:
     /// 1. Function call targets are replaced by `deferred_function_calls` map
-    /// 2. Lift the contents of "If" that only breaks on rejection, onto the parent after it.
-    /// 3. Lift the contents of "Switch" that only has a default, onto the parent after it.
     fn patch_statements(
         &mut self,
         statements: &mut crate::Block,
@@ -2429,34 +3088,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ref mut accept,
                     ref mut reject,
                 } => {
-                    if let [S::Break] = reject[..] {
-                        // uplift "accept" into the parent
-                        let extracted = mem::take(accept);
-                        statements.splice(i + 1..i + 1, extracted);
-                    } else {
-                        self.patch_statements(reject, expressions, fun_parameter_sampling)?;
-                        self.patch_statements(accept, expressions, fun_parameter_sampling)?;
-                    }
+                    self.patch_statements(reject, expressions, fun_parameter_sampling)?;
+                    self.patch_statements(accept, expressions, fun_parameter_sampling)?;
                 }
                 S::Switch {
                     selector: _,
                     ref mut cases,
                     ref mut default,
                 } => {
-                    if cases.is_empty() {
-                        // uplift "default" into the parent
-                        let extracted = mem::take(default);
-                        statements.splice(i + 1..i + 1, extracted);
-                    } else {
-                        for case in cases.iter_mut() {
-                            self.patch_statements(
-                                &mut case.body,
-                                expressions,
-                                fun_parameter_sampling,
-                            )?;
-                        }
-                        self.patch_statements(default, expressions, fun_parameter_sampling)?;
+                    for case in cases.iter_mut() {
+                        self.patch_statements(&mut case.body, expressions, fun_parameter_sampling)?;
                     }
+                    self.patch_statements(default, expressions, fun_parameter_sampling)?;
                 }
                 S::Loop {
                     ref mut body,
@@ -3892,5 +4535,20 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
+    }
+}
+
+/// Helper function to check if `child` is in the scope of `parent`
+fn is_parent(mut child: usize, parent: usize, block_ctx: &BlockContext) -> bool {
+    loop {
+        if child == parent {
+            // The child is in the scope parent
+            break true;
+        } else if child == 0 {
+            // Searched finished at the root the child isn't in the parent's body
+            break false;
+        }
+
+        child = block_ctx.bodies[child].parent;
     }
 }

@@ -511,7 +511,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         &naga::front::spv::Options {
             adjust_coordinate_space,
             strict_capabilities: false,
-            flow_graph_dump_prefix: None,
+            block_ctx_dump_prefix: None,
         },
     )
     .unwrap();

@@ -58,6 +58,12 @@ impl Block {
         self.body.extend(other.body);
     }
 
+    pub fn append(&mut self, other: &mut Self) {
+        #[cfg(feature = "span")]
+        self.span_info.append(&mut other.span_info);
+        self.body.append(&mut other.body);
+    }
+
     pub fn cull<R: RangeBounds<usize> + Clone>(&mut self, range: R) {
         #[cfg(feature = "span")]
         self.span_info.drain(range.clone());
