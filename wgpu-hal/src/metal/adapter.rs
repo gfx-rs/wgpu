@@ -850,6 +850,9 @@ impl super::PrivateCapabilities {
             } else {
                 Self::version_at_least(major, minor, 11, 0)
             },
+            //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
+            supports_depth_clamping: device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
+                || os_is_mac,
         }
     }
 
@@ -857,11 +860,12 @@ impl super::PrivateCapabilities {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::DEPTH_CLAMPING
             | F::TEXTURE_COMPRESSION_BC
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+
+        features.set(F::DEPTH_CLAMPING, self.supports_depth_clamping);
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
