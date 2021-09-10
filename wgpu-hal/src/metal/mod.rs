@@ -109,7 +109,6 @@ impl crate::Instance<Api> for Instance {
             .map(|dev| {
                 let name = dev.name().into();
                 let shared = AdapterShared::new(dev);
-                let features = shared.private_caps.features(&shared.device.lock());
                 crate::ExposedAdapter {
                     info: wgt::AdapterInfo {
                         name,
@@ -122,7 +121,7 @@ impl crate::Instance<Api> for Instance {
                         },
                         backend: wgt::Backend::Metal,
                     },
-                    features,
+                    features: shared.private_caps.features(),
                     capabilities: shared.private_caps.capabilities(),
                     adapter: Adapter::new(Arc::new(shared)),
                 }
@@ -223,6 +222,7 @@ struct PrivateCapabilities {
     supports_arrays_of_textures: bool,
     supports_arrays_of_textures_write: bool,
     supports_mutability: bool,
+    supports_depth_clamping: bool,
 }
 
 #[derive(Clone, Debug)]
