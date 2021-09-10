@@ -867,9 +867,7 @@ impl super::PrivateCapabilities {
             | F::POLYGON_MODE_LINE
             | F::CLEAR_COMMANDS;
         
-        if self.supports_depth_clamping {
-            features |= F::DEPTH_CLAMPING;
-        }
+        features.set(F::DEPTH_CLAMPING, self.supports_depth_clamping);
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
