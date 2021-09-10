@@ -16,7 +16,7 @@ kernel void main1(
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
     metal::int2 dim = int2(image_storage_src.get_width(), image_storage_src.get_height());
-    metal::int2 itc = (dim * static_cast<int2>(local_id.xy)) % metal::int2(10, 20);
+    metal::int2 itc = (dim * static_cast<metal::int2>(local_id.xy)) % metal::int2(10, 20);
     metal::uint4 value1_ = image_mipmapped_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     float value3_ = image_depth_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));

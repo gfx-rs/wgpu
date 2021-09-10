@@ -19,15 +19,16 @@ metal::float4 builtins(
     metal::float4 m1_ = metal::mix(v_f32_zero, v_f32_one, v_f32_half);
     metal::float4 m2_ = metal::mix(v_f32_zero, v_f32_one, 0.10000000149011612);
     float b1_ = as_type<float>(v_i32_one.x);
-    metal::float4 b2_ = as_type<float4>(v_i32_one);
-    return ((((static_cast<float4>(metal::int4(s1_)) + s2_) + m1_) + m2_) + metal::float4(b1_)) + b2_;
+    metal::float4 b2_ = as_type<metal::float4>(v_i32_one);
+    metal::int4 v_i32_zero = static_cast<metal::int4>(v_f32_zero);
+    return ((((static_cast<metal::float4>(metal::int4(s1_) + v_i32_zero) + s2_) + m1_) + m2_) + metal::float4(b1_)) + b2_;
 }
 
 metal::float4 splat(
 ) {
     metal::float2 a = ((metal::float2(1.0) + metal::float2(2.0)) - metal::float2(3.0)) / metal::float2(4.0);
     metal::int4 b = metal::int4(5) % metal::int4(2);
-    return a.xyxy + static_cast<float4>(b);
+    return a.xyxy + static_cast<metal::float4>(b);
 }
 
 int unary(

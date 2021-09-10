@@ -16,8 +16,10 @@ fn builtins() -> vec4<f32> {
     // bitcast()
     let b1 = bitcast<f32>(v_i32_one.x);
     let b2 = bitcast<vec4<f32>>(v_i32_one);
+    // convert
+    let v_i32_zero = vec4<i32>(v_f32_zero);
     // done
-    return vec4<f32>(vec4<i32>(s1)) + s2 + m1 + m2 + b1 + b2;
+    return vec4<f32>(vec4<i32>(s1) + v_i32_zero) + s2 + m1 + m2 + b1 + b2;
 }
 
 fn splat() -> vec4<f32> {

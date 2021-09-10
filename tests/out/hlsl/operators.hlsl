@@ -17,7 +17,8 @@ float4 builtins()
     float4 m2_ = lerp(float4(0.0, 0.0, 0.0, 0.0), float4(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
     float b1_ = float(int4(1, 1, 1, 1).x);
     float4 b2_ = float4(int4(1, 1, 1, 1));
-    return (((((float4(int4(s1_.xxxx)) + s2_) + m1_) + m2_) + float4(b1_.xxxx)) + b2_);
+    int4 v_i32_zero = int4(float4(0.0, 0.0, 0.0, 0.0));
+    return (((((float4((int4(s1_.xxxx) + v_i32_zero)) + s2_) + m1_) + m2_) + float4(b1_.xxxx)) + b2_);
 }
 
 float4 splat()

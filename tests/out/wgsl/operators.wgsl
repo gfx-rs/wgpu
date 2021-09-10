@@ -15,7 +15,8 @@ fn builtins() -> vec4<f32> {
     let m2_: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
     let b1_: f32 = bitcast<f32>(vec4<i32>(1, 1, 1, 1).x);
     let b2_: vec4<f32> = vec4<f32>(vec4<i32>(1, 1, 1, 1));
-    return (((((vec4<f32>(vec4<i32>(s1_)) + s2_) + m1_) + m2_) + vec4<f32>(b1_)) + b2_);
+    let v_i32_zero: vec4<i32> = vec4<i32>(vec4<f32>(0.0, 0.0, 0.0, 0.0));
+    return (((((vec4<f32>((vec4<i32>(s1_) + v_i32_zero)) + s2_) + m1_) + m2_) + vec4<f32>(b1_)) + b2_);
 }
 
 fn splat() -> vec4<f32> {

@@ -46,7 +46,7 @@ vertex fooOutput foo(
     for(int _i=0; _i<5; ++_i) c.inner[_i] = type9 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
     c.inner[vi + 1u] = 42;
     int value = c.inner[vi];
-    return fooOutput { matrix * static_cast<float4>(metal::int4(value)) };
+    return fooOutput { matrix * static_cast<metal::float4>(metal::int4(value)) };
 }
 
 

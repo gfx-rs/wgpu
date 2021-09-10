@@ -19,7 +19,8 @@ vec4 builtins() {
     vec4 m2_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
     float b1_ = intBitsToFloat(ivec4(1, 1, 1, 1).x);
     vec4 b2_ = intBitsToFloat(ivec4(1, 1, 1, 1));
-    return (((((vec4(ivec4(s1_)) + s2_) + m1_) + m2_) + vec4(b1_)) + b2_);
+    ivec4 v_i32_zero = ivec4(vec4(0.0, 0.0, 0.0, 0.0));
+    return (((((vec4((ivec4(s1_) + v_i32_zero)) + s2_) + m1_) + m2_) + vec4(b1_)) + b2_);
 }
 
 vec4 splat() {

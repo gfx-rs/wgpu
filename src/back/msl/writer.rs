@@ -1194,11 +1194,9 @@ impl<W: Write> Writer<W> {
                 convert,
             } => {
                 let scalar = scalar_kind_string(kind);
-                let (size, width) = match *context.resolve_type(expr) {
-                    crate::TypeInner::Scalar { width, .. } => ("", width),
-                    crate::TypeInner::Vector { size, width, .. } => {
-                        (back::vector_size_str(size), width)
-                    }
+                let width = match *context.resolve_type(expr) {
+                    crate::TypeInner::Scalar { width, .. }
+                    | crate::TypeInner::Vector { width, .. } => width,
                     _ => return Err(Error::Validation),
                 };
                 let op = match convert {
@@ -1209,7 +1207,22 @@ impl<W: Write> Writer<W> {
                     Some(_) => return Err(Error::Validation),
                     None => "as_type",
                 };
-                write!(self.out, "{}<{}{}>(", op, scalar, size)?;
+                write!(self.out, "{}<", op)?;
+                match *context.resolve_type(expr) {
+                    crate::TypeInner::Vector { size, .. } => {
+                        write!(
+                            self.out,
+                            "{}::{}{}",
+                            NAMESPACE,
+                            scalar,
+                            back::vector_size_str(size)
+                        )?;
+                    }
+                    _ => {
+                        write!(self.out, "{}", scalar)?;
+                    }
+                }
+                write!(self.out, ">(")?;
                 self.put_expression(expr, context, true)?;
                 write!(self.out, ")")?;
             }
