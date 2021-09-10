@@ -19,7 +19,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
 
-use std::{borrow::Cow, iter, marker::PhantomData, mem, ops::Range, ptr, sync::atomic::Ordering};
+use std::{borrow::Cow, iter, marker::PhantomData, mem, ops::Range, ptr};
 
 mod life;
 pub mod queue;
@@ -2812,7 +2812,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let last_submission = {
             let (buffer_guard, _) = hub.buffers.write(&mut token);
             match buffer_guard.get(buffer_id) {
-                Ok(buffer) => buffer.life_guard.submission_index.load(Ordering::Acquire),
+                Ok(buffer) => buffer.life_guard.life_count(),
                 Err(_) => return Ok(()),
             }
         };
@@ -2964,7 +2964,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if device.pending_writes.dst_buffers.contains(&buffer_id) {
             device.pending_writes.temp_resources.push(temp);
         } else {
-            let last_submit_index = buffer.life_guard.submission_index.load(Ordering::Acquire);
+            let last_submit_index = buffer.life_guard.life_count();
             drop(buffer_guard);
             device
                 .lock_life(&mut token)
@@ -2986,8 +2986,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             match buffer_guard.get_mut(buffer_id) {
                 Ok(buffer) => {
                     let ref_count = buffer.life_guard.ref_count.take().unwrap();
-                    let last_submit_index =
-                        buffer.life_guard.submission_index.load(Ordering::Acquire);
+                    let last_submit_index = buffer.life_guard.life_count();
                     (ref_count, last_submit_index, buffer.device_id.value)
                 }
                 Err(InvalidId) => {
@@ -3170,8 +3169,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if device.pending_writes.dst_textures.contains(&texture_id) {
                     device.pending_writes.temp_resources.push(temp);
                 } else {
-                    let last_submit_index =
-                        texture.life_guard.submission_index.load(Ordering::Acquire);
+                    let last_submit_index = texture.life_guard.life_count();
                     drop(texture_guard);
                     device
                         .lock_life(&mut token)
@@ -3195,8 +3193,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             match texture_guard.get_mut(texture_id) {
                 Ok(texture) => {
                     let ref_count = texture.life_guard.ref_count.take().unwrap();
-                    let last_submit_index =
-                        texture.life_guard.submission_index.load(Ordering::Acquire);
+                    let last_submit_index = texture.life_guard.life_count();
                     (ref_count, last_submit_index, texture.device_id.value)
                 }
                 Err(InvalidId) => {
@@ -3303,8 +3300,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             match texture_view_guard.get_mut(texture_view_id) {
                 Ok(view) => {
                     let _ref_count = view.life_guard.ref_count.take();
-                    let last_submit_index =
-                        view.life_guard.submission_index.load(Ordering::Acquire);
+                    let last_submit_index = view.life_guard.life_count();
                     let device_id = texture_guard[view.parent_id.value].device_id.value;
                     (last_submit_index, device_id)
                 }

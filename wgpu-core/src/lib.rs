@@ -47,7 +47,7 @@ mod validation;
 
 pub use hal::api;
 
-use atomic::{AtomicU64, AtomicUsize, Ordering};
+use atomic::{AtomicUsize, Ordering};
 
 use std::{borrow::Cow, os::raw::c_char, ptr, sync::atomic};
 
@@ -147,7 +147,7 @@ impl Drop for MultiRefCount {
 #[derive(Debug)]
 pub struct LifeGuard {
     ref_count: Option<RefCount>,
-    submission_index: AtomicU64,
+    submission_index: AtomicUsize,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
@@ -158,7 +158,7 @@ impl LifeGuard {
         let bx = Box::new(AtomicUsize::new(1));
         Self {
             ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
-            submission_index: AtomicU64::new(0),
+            submission_index: AtomicUsize::new(0),
             #[cfg(debug_assertions)]
             label: label.to_string(),
         }
@@ -170,8 +170,13 @@ impl LifeGuard {
 
     /// Returns `true` if the resource is still needed by the user.
     fn use_at(&self, submit_index: SubmissionIndex) -> bool {
-        self.submission_index.store(submit_index, Ordering::Release);
+        self.submission_index
+            .store(submit_index as _, Ordering::Release);
         self.ref_count.is_some()
+    }
+
+    fn life_count(&self) -> SubmissionIndex {
+        self.submission_index.load(Ordering::Acquire) as _
     }
 }
 
