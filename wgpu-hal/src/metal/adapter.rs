@@ -853,17 +853,22 @@ impl super::PrivateCapabilities {
         }
     }
 
-    pub fn features(&self) -> wgt::Features {
+    pub fn features(&self, device: &mtl::Device) -> wgt::Features {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::DEPTH_CLAMPING
             | F::TEXTURE_COMPRESSION_BC
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::POLYGON_MODE_LINE
             | F::CLEAR_COMMANDS;
+         
+        //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
+        if device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
+            || device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1) {
+            features |= F::DEPTH_CLAMPING;
+        }
 
         features.set(
             F::TEXTURE_BINDING_ARRAY
