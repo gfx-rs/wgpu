@@ -2688,7 +2688,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         merger(&mut accept_block, info)
                     } else {
                         // Note the body index for the block we're branching to.
-                        debug_assert!(block_ctx.body_for_label.insert(true_id, accept).is_none());
+                        let prev = block_ctx.body_for_label.insert(true_id, accept);
+                        debug_assert!(prev.is_none());
                     }
 
                     block_ctx.bodies.push(accept_block);
@@ -2700,7 +2701,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     if let Some(info) = block_ctx.mergers.get(&false_id) {
                         merger(&mut reject_block, info)
                     } else {
-                        debug_assert!(block_ctx.body_for_label.insert(false_id, reject).is_none());
+                        let prev = block_ctx.body_for_label.insert(false_id, reject);
+                        debug_assert!(prev.is_none());
                     }
 
                     block_ctx.bodies.push(reject_block);
