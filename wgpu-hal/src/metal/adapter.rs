@@ -852,7 +852,7 @@ impl super::PrivateCapabilities {
             },
             //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
             supports_depth_clamping: device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
-            || device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
+                        || os_is_mac
         }
     }
 
