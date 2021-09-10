@@ -268,9 +268,12 @@ impl crate::Surface<super::Api> for super::Surface {
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
         let (drawable, texture) = autoreleasepool(|| {
-            let drawable = render_layer.next_drawable().unwrap();
-            (drawable.to_owned(), drawable.texture().to_owned())
-        });
+            if let Some(drawable) = render_layer.next_drawable() {
+                Ok((drawable.to_owned(), drawable.texture().to_owned()))
+            } else {
+                return Err(crate::SurfaceError::Other("failed to allocate drawable due to metal resource exhaustion"));
+            }
+        })?;
 
         let suf_texture = super::SurfaceTexture {
             texture: super::Texture {
