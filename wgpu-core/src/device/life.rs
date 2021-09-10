@@ -17,7 +17,7 @@ use hal::Device as _;
 use parking_lot::Mutex;
 use thiserror::Error;
 
-use std::{mem, sync::atomic::Ordering};
+use std::mem;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
@@ -367,7 +367,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     if let Some(res) = hub.bind_groups.unregister_locked(id.0, &mut *guard) {
                         self.suspected_resources.add_trackers(&res.used);
 
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
@@ -393,7 +393,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     if let Some(res) = hub.texture_views.unregister_locked(id.0, &mut *guard) {
                         self.suspected_resources.textures.push(res.parent_id.value);
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
@@ -418,7 +418,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.textures.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let submit_index = res.life_guard.life_count();
                         let raw = match res.inner {
                             resource::TextureInner::Native { raw: Some(raw) } => raw,
                             _ => continue,
@@ -446,7 +446,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.samplers.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
@@ -471,7 +471,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::debug!("Buffer {:?} is detached", id);
 
                     if let Some(res) = hub.buffers.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let submit_index = res.life_guard.life_count();
                         if let resource::BufferMapState::Init { stage_buffer, .. } = res.map_state {
                             self.free_resources.buffers.push(stage_buffer);
                         }
@@ -498,7 +498,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.compute_pipelines.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
@@ -522,7 +522,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
 
                     if let Some(res) = hub.render_pipelines.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
@@ -588,7 +588,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     // #[cfg(feature = "trace")]
                     // trace.map(|t| t.lock().add(trace::Action::DestroyComputePipeline(id.0)));
                     if let Some(res) = hub.query_sets.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                        let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
@@ -615,7 +615,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             let resource_id = stored.value;
             let buf = &buffer_guard[resource_id];
 
-            let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
+            let submit_index = buf.life_guard.life_count();
             log::trace!(
                 "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
                 resource_id,
