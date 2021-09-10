@@ -578,7 +578,7 @@ impl Parser {
                             name: None,
                             inner: TypeInner::Vector { size, kind, width },
                         },
-                        Span::Unknown,
+                        Span::default(),
                     );
                     let temp_var = ctx.locals.append(
                         LocalVariable {
@@ -586,7 +586,7 @@ impl Parser {
                             ty,
                             init: None,
                         },
-                        Span::Unknown,
+                        Span::default(),
                     );
                     let temp_expr = ctx.add_expression(
                         Expression::LocalVariable(temp_var),
@@ -599,7 +599,7 @@ impl Parser {
                             pointer: temp_expr,
                             value: handle,
                         },
-                        Span::Unknown,
+                        Span::default(),
                     );
 
                     arguments.push(temp_expr);

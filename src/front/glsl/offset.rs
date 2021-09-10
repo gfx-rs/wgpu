@@ -84,7 +84,7 @@ pub fn calculate_offset(
                 crate::ArraySize::Dynamic => stride,
             };
 
-            let ty_span = types.get_span(ty).clone();
+            let ty_span = types.get_span(ty);
             ty = types.fetch_or_append(
                 Type {
                     name,
@@ -144,7 +144,7 @@ pub fn calculate_offset(
 
             span = align_up(span, align);
 
-            let ty_span = types.get_span(ty).clone();
+            let ty_span = types.get_span(ty);
             ty = types.fetch_or_append(
                 Type {
                     name,

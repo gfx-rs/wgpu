@@ -260,15 +260,18 @@ impl<T> Arena<T> {
         self.data.clear()
     }
 
-    pub fn get_span(&self, handle: Handle<T>) -> &Span {
+    pub fn get_span(&self, handle: Handle<T>) -> Span {
         #[cfg(feature = "span")]
         {
-            return self.span_info.get(handle.index()).unwrap_or(&Span::Unknown);
+            *self
+                .span_info
+                .get(handle.index())
+                .unwrap_or(&Span::default())
         }
         #[cfg(not(feature = "span"))]
         {
             let _ = handle;
-            &Span::Unknown
+            Span::default()
         }
     }
 }
@@ -284,7 +287,9 @@ where
     {
         let data = Vec::deserialize(deserializer)?;
         #[cfg(feature = "span")]
-        let span_info = std::iter::repeat(Span::Unknown).take(data.len()).collect();
+        let span_info = std::iter::repeat(Span::default())
+            .take(data.len())
+            .collect();
 
         Ok(Self {
             data,

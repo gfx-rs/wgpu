@@ -23,7 +23,9 @@ impl Block {
 
     pub fn from_vec(body: Vec<Statement>) -> Self {
         #[cfg(feature = "span")]
-        let span_info = std::iter::repeat(Span::Unknown).take(body.len()).collect();
+        let span_info = std::iter::repeat(Span::default())
+            .take(body.len())
+            .collect();
         Self {
             body,
             #[cfg(feature = "span")]

@@ -101,7 +101,7 @@ impl Context {
         self.emit_flush(body);
         let (expr, load) = match kind {
             GlobalLookupKind::Variable(v) => {
-                let span = parser.module.global_variables.get_span(v).clone();
+                let span = parser.module.global_variables.get_span(v);
                 let res = (
                     self.expressions.append(Expression::GlobalVariable(v), span),
                     parser.module.global_variables[v].class != StorageClass::Handle,
@@ -111,10 +111,10 @@ impl Context {
                 res
             }
             GlobalLookupKind::BlockSelect(handle, index) => {
-                let span = parser.module.global_variables.get_span(handle).clone();
+                let span = parser.module.global_variables.get_span(handle);
                 let base = self
                     .expressions
-                    .append(Expression::GlobalVariable(handle), span.clone());
+                    .append(Expression::GlobalVariable(handle), span);
                 self.emit_start();
                 let expr = self
                     .expressions
@@ -140,7 +140,7 @@ impl Context {
                 })
             }
             GlobalLookupKind::Constant(v) => {
-                let span = parser.module.constants.get_span(v).clone();
+                let span = parser.module.constants.get_span(v);
                 let res = (
                     self.expressions.append(Expression::Constant(v), span),
                     false,
@@ -245,7 +245,7 @@ impl Context {
         };
 
         if qualifier.is_lhs() {
-            let span = parser.module.types.get_span(arg.ty).clone();
+            let span = parser.module.types.get_span(arg.ty);
             arg.ty = parser.module.types.fetch_or_append(
                 Type {
                     name: None,

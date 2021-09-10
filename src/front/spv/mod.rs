@@ -564,11 +564,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 
     fn span_from(&self, from: usize) -> crate::Span {
-        crate::Span::ByteRange(from..self.data_offset)
+        crate::Span::from(from..self.data_offset)
     }
 
     fn span_from_with_op(&self, from: usize) -> crate::Span {
-        crate::Span::ByteRange((from - 4)..self.data_offset)
+        crate::Span::from((from - 4)..self.data_offset)
     }
 
     fn next(&mut self) -> Result<u32, Error> {
@@ -742,17 +742,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ty,
                     init: None,
                 },
-                crate::Span::Unknown,
+                crate::Span::default(),
             );
 
             block.extend(emitter.finish(expressions));
             let pointer = expressions.append(
                 crate::Expression::LocalVariable(local),
-                crate::Span::Unknown,
+                crate::Span::default(),
             );
             emitter.start(expressions);
             let expr =
-                expressions.append(crate::Expression::Load { pointer }, crate::Span::Unknown);
+                expressions.append(crate::Expression::Load { pointer }, crate::Span::default());
 
             // Add a slightly odd entry to the phi table, so that while `id`'s
             // `Expression` is still in scope, the usual phi processing will
@@ -924,7 +924,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         kind,
                         convert: None,
                     },
-                    span.clone(),
+                    span,
                 )
             },
             right: if p2_lexp.type_id == result_type_id {
@@ -936,7 +936,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         kind,
                         convert: None,
                     },
-                    span.clone(),
+                    span,
                 )
             },
         };
@@ -1001,7 +1001,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 kind: crate::ScalarKind::Uint,
                 convert: None,
             },
-            span.clone(),
+            span,
         );
 
         let expr = crate::Expression::Binary { op, left, right };
@@ -1075,7 +1075,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             Some(&index) => index,
             None => return Ok(object_expr),
         };
-        let root_span = expressions.get_span(root_expr).clone();
+        let root_span = expressions.get_span(root_expr);
         let root_lookup = self.lookup_type.lookup(root_type_id)?;
         let (count, child_type_id) = match type_arena[root_lookup.handle].inner {
             crate::TypeInner::Struct { ref members, .. } => {
@@ -1103,11 +1103,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     base: root_expr,
                     index,
                 },
-                if index == selection {
-                    span.clone()
-                } else {
-                    root_span.clone()
-                },
+                if index == selection { span } else { root_span },
             );
             components.push(expr);
         }
@@ -1118,7 +1114,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             &selections[1..],
             type_arena,
             expressions,
-            span.clone(),
+            span,
         )?;
 
         Ok(expressions.append(
@@ -1260,7 +1256,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             use spirv::Op;
             let start = self.data_offset;
             let inst = self.next_inst()?;
-            let span = crate::Span::ByteRange(start..(start + 4 * (inst.wc as usize)));
+            let span = crate::Span::from(start..(start + 4 * (inst.wc as usize)));
             log::debug!("\t\t{:?} [{}]", inst.op, inst.wc);
 
             match inst.op {
@@ -1317,7 +1313,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             },
                             init,
                         },
-                        span.clone(),
+                        span,
                     );
 
                     self.lookup_expression.insert(
@@ -1347,8 +1343,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                         self.span_from(start),
                     );
-                    let pointer =
-                        expressions.append(crate::Expression::LocalVariable(local), span.clone());
+                    let pointer = expressions.append(crate::Expression::LocalVariable(local), span);
 
                     let in_count = (inst.wc - 3) / 2;
                     let mut phi = PhiExpression {
@@ -1430,7 +1425,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                         base: acex.base_handle,
                                         index,
                                     },
-                                    span.clone(),
+                                    span,
                                 );
                                 AccessExpression {
                                     base_handle,
@@ -1446,7 +1441,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                     crate::Expression::Load {
                                                         pointer: base_handle,
                                                     },
-                                                    span.clone(),
+                                                    span,
                                                 );
                                                 let transposed = expressions.append(
                                                     crate::Expression::Math {
@@ -1455,7 +1450,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                         arg1: None,
                                                         arg2: None,
                                                     },
-                                                    span.clone(),
+                                                    span,
                                                 );
                                                 LookupLoadOverride::Loaded(transposed)
                                             }
@@ -1478,7 +1473,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                 base: load_expr,
                                                 index,
                                             },
-                                            span.clone(),
+                                            span,
                                         );
                                         Some(LookupLoadOverride::Loaded(sub_handle))
                                     }
@@ -1495,7 +1490,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     },
                                 };
                                 AccessExpression {
-                                    base_handle: expressions.append(sub_expr, span.clone()),
+                                    base_handle: expressions.append(sub_expr, span),
                                     type_id: type_lookup
                                         .base_id
                                         .ok_or(Error::InvalidAccessType(acex.type_id))?,
@@ -1509,7 +1504,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                         base: acex.base_handle,
                                         index: index_expr_handle,
                                     },
-                                    span.clone(),
+                                    span,
                                 );
                                 let load_override = match acex.load_override {
                                     // If there is a load override in place, then we always end up
@@ -1523,7 +1518,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                     crate::Expression::Load {
                                                         pointer: base_handle,
                                                     },
-                                                    span.clone(),
+                                                    span,
                                                 );
                                                 expressions.append(
                                                     crate::Expression::Math {
@@ -1532,7 +1527,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                         arg1: None,
                                                         arg2: None,
                                                     },
-                                                    span.clone(),
+                                                    span,
                                                 )
                                             }
                                             // We are indexing inside a row-major matrix.
@@ -1542,7 +1537,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                         base: load_expr,
                                                         index: index_expr_handle,
                                                     },
-                                                    span.clone(),
+                                                    span,
                                                 ),
                                         };
                                         Some(LookupLoadOverride::Loaded(sub_expr))
@@ -1594,7 +1589,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             base: root_handle,
                             index: self.index_constant_expressions[0],
                         },
-                        span.clone(),
+                        span,
                     );
                     for &index_expr in self.index_constant_expressions[1..num_components].iter() {
                         let access_expr = expressions.append(
@@ -1602,7 +1597,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 base: root_handle,
                                 index: index_expr,
                             },
-                            span.clone(),
+                            span,
                         );
                         let cond = expressions.append(
                             crate::Expression::Binary {
@@ -1610,7 +1605,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 left: index_expr,
                                 right: index_handle,
                             },
-                            span.clone(),
+                            span,
                         );
                         handle = expressions.append(
                             crate::Expression::Select {
@@ -1618,7 +1613,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 accept: access_expr,
                                 reject: handle,
                             },
-                            span.clone(),
+                            span,
                         );
                     }
 
@@ -1659,7 +1654,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 base: root_handle,
                                 index: index_expr,
                             },
-                            span.clone(),
+                            span,
                         );
                         let cond = expressions.append(
                             crate::Expression::Binary {
@@ -1667,7 +1662,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 left: index_expr,
                                 right: index_handle,
                             },
-                            span.clone(),
+                            span,
                         );
                         let handle = expressions.append(
                             crate::Expression::Select {
@@ -1675,7 +1670,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 accept: object_handle,
                                 reject: access_expr,
                             },
-                            span.clone(),
+                            span,
                         );
                         components.push(handle);
                     }
@@ -1684,7 +1679,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             ty: root_type_lookup.handle,
                             components,
                         },
-                        span.clone(),
+                        span,
                     );
 
                     self.lookup_expression.insert(
@@ -1732,7 +1727,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     base: lexp.handle,
                                     index,
                                 },
-                                span.clone(),
+                                span,
                             ),
                             type_id,
                             block_id,
@@ -2298,7 +2293,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             } else {
                                 return Err(Error::InvalidAccessIndex(index));
                             };
-                            components.push(expressions.append(expr, span.clone()));
+                            components.push(expressions.append(expr, span));
                         }
                         crate::Expression::Compose {
                             ty: self.lookup_type.lookup(result_type_id)?.handle,
@@ -2376,8 +2371,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result = if self.lookup_void_type == Some(result_type_id) {
                         None
                     } else {
-                        let expr_handle = expressions
-                            .append(crate::Expression::CallResult(function), span.clone());
+                        let expr_handle =
+                            expressions.append(crate::Expression::CallResult(function), span);
                         self.lookup_expression.insert(
                             result_id,
                             LookupExpression {
@@ -2898,7 +2893,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             base: structure_handle,
                             index: member_index,
                         },
-                        span.clone(),
+                        span,
                     );
 
                     let length =
@@ -2936,7 +2931,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::Expression::Load {
                             pointer: source_handle,
                         },
-                        span.clone(),
+                        span,
                     );
 
                     block.extend(emitter.finish(expressions));
@@ -2996,7 +2991,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         block.extend(emitter.finish(expressions));
         if let Some(stmt) = terminator {
-            block.push(stmt, crate::Span::Unknown);
+            block.push(stmt, crate::Span::default());
         }
 
         // Save this block fragment in `block_ctx.blocks`, and mark it to be
@@ -3019,7 +3014,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
         // register global variables
         for (&id, var) in self.lookup_variable.iter() {
-            let span = globals.get_span(var.handle).clone();
+            let span = globals.get_span(var.handle);
             let handle = expressions.append(crate::Expression::GlobalVariable(var.handle), span);
             self.lookup_expression.insert(
                 id,
@@ -3036,13 +3031,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         // register special constants
         self.index_constant_expressions.clear();
         for &con_handle in self.index_constants.iter() {
-            let span = constants.get_span(con_handle).clone();
+            let span = constants.get_span(con_handle);
             let handle = expressions.append(crate::Expression::Constant(con_handle), span);
             self.index_constant_expressions.push(handle);
         }
         // register constants
         for (&id, con) in self.lookup_constant.iter() {
-            let span = constants.get_span(con.handle).clone();
+            let span = constants.get_span(con.handle);
             let handle = expressions.append(crate::Expression::Constant(con.handle), span);
             self.lookup_expression.insert(
                 id,
@@ -3298,7 +3293,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 // add it to the newly formed arena, and adjust the lookup
                 lookup.handle = module
                     .functions
-                    .append(fun, functions.get_span(lookup.handle).clone());
+                    .append(fun, functions.get_span(lookup.handle));
             }
         }
         // patch all the functions
@@ -4247,7 +4242,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let inner = null::generate_null_constant(ty, types, constants, span.clone())?;
+        let inner = null::generate_null_constant(ty, types, constants, span)?;
         let handle = constants.append(
             crate::Constant {
                 name: self.future_decor.remove(&id).and_then(|dec| dec.name),
@@ -4427,7 +4422,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             effective_ty,
                             &module.types,
                             &mut module.constants,
-                            span.clone(),
+                            span,
                         ) {
                             Ok(handle) => Some(handle),
                             Err(e) => {
@@ -4458,7 +4453,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     member_ty,
                                     &module.types,
                                     &mut module.constants,
-                                    span.clone(),
+                                    span,
                                 )?;
                                 components.push(handle);
                             }
@@ -4471,7 +4466,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                         components,
                                     },
                                 },
-                                span.clone(),
+                                span,
                             ))
                         }
                         _ => None,

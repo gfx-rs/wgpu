@@ -89,22 +89,19 @@ fn extract_image_coordinates(
         index: required_size.map_or(1, |size| size as u32),
     };
 
-    let base_span = expressions.get_span(base).clone();
+    let base_span = expressions.get_span(base);
 
     match extra_coordinate {
         ExtraCoordinate::ArrayLayer => {
             let extracted = match required_size {
-                None => expressions.append(
-                    crate::Expression::AccessIndex { base, index: 0 },
-                    base_span.clone(),
-                ),
+                None => {
+                    expressions.append(crate::Expression::AccessIndex { base, index: 0 }, base_span)
+                }
                 Some(size) => {
                     let mut components = Vec::with_capacity(size as usize);
                     for index in 0..size as u32 {
-                        let comp = expressions.append(
-                            crate::Expression::AccessIndex { base, index },
-                            base_span.clone(),
-                        );
+                        let comp = expressions
+                            .append(crate::Expression::AccessIndex { base, index }, base_span);
                         components.push(comp);
                     }
                     expressions.append(
@@ -112,11 +109,11 @@ fn extract_image_coordinates(
                             ty: required_ty.unwrap(),
                             components,
                         },
-                        base_span.clone(),
+                        base_span,
                     )
                 }
             };
-            let array_index_f32 = expressions.append(extra_expr, base_span.clone());
+            let array_index_f32 = expressions.append(extra_expr, base_span);
             let array_index = expressions.append(
                 crate::Expression::As {
                     kind: crate::ScalarKind::Sint,
@@ -128,13 +125,11 @@ fn extract_image_coordinates(
             (extracted, Some(array_index))
         }
         ExtraCoordinate::Projection => {
-            let projection = expressions.append(extra_expr, base_span.clone());
+            let projection = expressions.append(extra_expr, base_span);
             let divided = match required_size {
                 None => {
-                    let temp = expressions.append(
-                        crate::Expression::AccessIndex { base, index: 0 },
-                        base_span.clone(),
-                    );
+                    let temp = expressions
+                        .append(crate::Expression::AccessIndex { base, index: 0 }, base_span);
                     expressions.append(
                         crate::Expression::Binary {
                             op: crate::BinaryOperator::Divide,
@@ -147,17 +142,15 @@ fn extract_image_coordinates(
                 Some(size) => {
                     let mut components = Vec::with_capacity(size as usize);
                     for index in 0..size as u32 {
-                        let temp = expressions.append(
-                            crate::Expression::AccessIndex { base, index },
-                            base_span.clone(),
-                        );
+                        let temp = expressions
+                            .append(crate::Expression::AccessIndex { base, index }, base_span);
                         let comp = expressions.append(
                             crate::Expression::Binary {
                                 op: crate::BinaryOperator::Divide,
                                 left: temp,
                                 right: projection,
                             },
-                            base_span.clone(),
+                            base_span,
                         );
                         components.push(comp);
                     }
@@ -202,7 +195,7 @@ pub(super) fn patch_comparison_type(
 
     log::debug!("Flipping comparison for {:?}", var);
     let original_ty = &arena[var.ty];
-    let original_ty_span = arena.get_span(var.ty).clone();
+    let original_ty_span = arena.get_span(var.ty);
     let ty_inner = match original_ty.inner {
         crate::TypeInner::Image {
             class: crate::ImageClass::Sampled { multi, .. },
@@ -637,7 +630,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                         base: coord_handle,
                                         index: required_size.map_or(1, |size| size as u32),
                                     },
-                                    crate::Span::Unknown,
+                                    crate::Span::default(),
                                 );
                                 expr = expressions.append(
                                     crate::Expression::Binary {
@@ -645,7 +638,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                                         left: expr,
                                         right,
                                     },
-                                    crate::Span::Unknown,
+                                    crate::Span::default(),
                                 )
                             };
                             Some(expr)

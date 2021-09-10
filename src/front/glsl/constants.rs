@@ -64,7 +64,7 @@ impl<'a> ConstantSolver<'a> {
         &mut self,
         expr: Handle<Expression>,
     ) -> Result<Handle<Constant>, ConstantSolvingError> {
-        let span = self.expressions.get_span(expr).clone();
+        let span = self.expressions.get_span(expr);
         match self.expressions[expr] {
             Expression::Constant(constant) => Ok(constant),
             Expression::AccessIndex { base, index } => self.access(base, index as usize),
@@ -338,7 +338,7 @@ impl<'a> ConstantSolver<'a> {
                 }
 
                 for component in components {
-                    *component = self.cast(*component, kind, target_width, span.clone())?;
+                    *component = self.cast(*component, kind, target_width, span)?;
                 }
             }
         }
@@ -385,7 +385,7 @@ impl<'a> ConstantSolver<'a> {
                 }
 
                 for component in components {
-                    *component = self.unary_op(op, *component, span.clone())?
+                    *component = self.unary_op(op, *component, span)?
                 }
             }
         }
@@ -486,14 +486,14 @@ impl<'a> ConstantSolver<'a> {
             (&ConstantInner::Composite { ref components, ty }, &ConstantInner::Scalar { .. }) => {
                 let mut components = components.clone();
                 for comp in components.iter_mut() {
-                    *comp = self.binary_op(op, *comp, right, span.clone())?;
+                    *comp = self.binary_op(op, *comp, right, span)?;
                 }
                 ConstantInner::Composite { ty, components }
             }
             (&ConstantInner::Scalar { .. }, &ConstantInner::Composite { ref components, ty }) => {
                 let mut components = components.clone();
                 for comp in components.iter_mut() {
-                    *comp = self.binary_op(op, left, *comp, span.clone())?;
+                    *comp = self.binary_op(op, left, *comp, span)?;
                 }
                 ConstantInner::Composite { ty, components }
             }

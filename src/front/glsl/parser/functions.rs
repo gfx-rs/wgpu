@@ -55,7 +55,7 @@ impl<'source> ParsingContext<'source> {
 
         let new_break = || {
             let mut block = Block::new();
-            block.push(Statement::Break, crate::Span::Unknown);
+            block.push(Statement::Break, crate::Span::default());
             block
         };
 
@@ -332,7 +332,7 @@ impl<'source> ParsingContext<'source> {
                         accept: new_break(),
                         reject: Block::new(),
                     },
-                    crate::Span::Unknown,
+                    crate::Span::default(),
                 );
 
                 let mut meta = meta.union(&expr_meta);
@@ -389,7 +389,7 @@ impl<'source> ParsingContext<'source> {
                         accept: new_break(),
                         reject: Block::new(),
                     },
-                    crate::Span::Unknown,
+                    crate::Span::default(),
                 );
 
                 body.push(
@@ -474,7 +474,7 @@ impl<'source> ParsingContext<'source> {
                             accept: new_break(),
                             reject: Block::new(),
                         },
-                        crate::Span::Unknown,
+                        crate::Span::default(),
                     );
 
                     self.expect(parser, TokenValue::Semicolon)?;

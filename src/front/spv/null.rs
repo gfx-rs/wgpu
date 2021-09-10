@@ -30,7 +30,7 @@ pub fn generate_null_constant(
                         specialization: None,
                         inner: make_scalar_inner(kind, width),
                     },
-                    span.clone(),
+                    span,
                 ));
             }
             crate::ConstantInner::Composite { ty, components }
@@ -51,8 +51,7 @@ pub fn generate_null_constant(
                         }
                 })
                 .unwrap();
-            let vector_inner =
-                generate_null_constant(vector_ty, type_arena, constant_arena, span.clone())?;
+            let vector_inner = generate_null_constant(vector_ty, type_arena, constant_arena, span)?;
             let vector_handle = constant_arena.fetch_or_append(
                 crate::Constant {
                     name: None,
@@ -71,15 +70,14 @@ pub fn generate_null_constant(
             // copy out the types to avoid borrowing `members`
             let member_tys = members.iter().map(|member| member.ty).collect::<Vec<_>>();
             for member_ty in member_tys {
-                let inner =
-                    generate_null_constant(member_ty, type_arena, constant_arena, span.clone())?;
+                let inner = generate_null_constant(member_ty, type_arena, constant_arena, span)?;
                 components.push(constant_arena.fetch_or_append(
                     crate::Constant {
                         name: None,
                         specialization: None,
                         inner,
                     },
-                    span.clone(),
+                    span,
                 ));
             }
             crate::ConstantInner::Composite { ty, components }
@@ -92,7 +90,7 @@ pub fn generate_null_constant(
             let size = constant_arena[handle]
                 .to_array_length()
                 .ok_or(Error::InvalidArraySize(handle))?;
-            let inner = generate_null_constant(base, type_arena, constant_arena, span.clone())?;
+            let inner = generate_null_constant(base, type_arena, constant_arena, span)?;
             let value = constant_arena.fetch_or_append(
                 crate::Constant {
                     name: None,
@@ -133,7 +131,7 @@ pub fn generate_default_built_in(
                         width: 4,
                     },
                 },
-                span.clone(),
+                span,
             );
             let one = constant_arena.fetch_or_append(
                 crate::Constant {
@@ -144,7 +142,7 @@ pub fn generate_default_built_in(
                         width: 4,
                     },
                 },
-                span.clone(),
+                span,
             );
             crate::ConstantInner::Composite {
                 ty,
@@ -164,7 +162,7 @@ pub fn generate_default_built_in(
             width: 4,
         },
         //Note: `crate::BuiltIn::ClipDistance` is intentionally left for the default path
-        _ => generate_null_constant(ty, type_arena, constant_arena, span.clone())?,
+        _ => generate_null_constant(ty, type_arena, constant_arena, span)?,
     };
     Ok(constant_arena.fetch_or_append(
         crate::Constant {

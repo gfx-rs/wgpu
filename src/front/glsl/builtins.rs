@@ -21,7 +21,7 @@ impl Module {
                     name: None,
                     inner: arg,
                 },
-                Span::Unknown,
+                Span::default(),
             ));
             parameters_info.push(ParameterInfo {
                 qualifier: ParameterQualifier::In,
@@ -1190,7 +1190,7 @@ fn inject_common_builtin(
                             },
                         },
                     },
-                    Span::Unknown,
+                    Span::default(),
                 );
 
                 let parameters = vec![ty, ty];
@@ -1340,7 +1340,6 @@ fn inject_common_builtin(
             }
         }
         "smoothstep" => {
-            // bits layout
             // bit 0 - splatted
             // bit 1 trough 2 - dims
             for bits in 0..(0b1000) {
@@ -1624,7 +1623,7 @@ impl MacroCall {
                             value: ScalarValue::Float(value),
                         },
                     },
-                    Span::Unknown,
+                    Span::default(),
                 );
                 let right = ctx.add_expression(
                     Expression::Constant(constant),
@@ -1832,7 +1831,7 @@ pub fn sampled_to_depth(
                             class: ImageClass::Depth { multi },
                         },
                     },
-                    Span::Unknown,
+                    Span::default(),
                 )
             }
             ImageClass::Depth { .. } => {}
