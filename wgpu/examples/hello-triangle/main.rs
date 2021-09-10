@@ -28,6 +28,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
             },
             None,
+            true,
         )
         .await
         .expect("Failed to create device");

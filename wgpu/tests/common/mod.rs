@@ -22,6 +22,7 @@ async fn initialize_device(
                 limits,
             },
             None,
+            true,
         )
         .await;
 

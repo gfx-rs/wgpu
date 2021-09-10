@@ -82,6 +82,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
                 limits: wgpu::Limits::downlevel_defaults(),
             },
             None,
+            true,
         )
         .await
         .expect("Failed to create device");

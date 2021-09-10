@@ -18,7 +18,10 @@ use std::{
     marker::PhantomData,
     ops::Range,
     slice,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, Weak,
+    },
 };
 
 const LABEL: &str = "label";
@@ -65,22 +68,35 @@ impl Context {
     }
 
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
-        &self,
+        self: &Arc<Context>,
         adapter: &wgc::id::AdapterId,
         hal_device: hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor,
+        auto_poll: bool,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, wgc::id::QueueId), crate::RequestDeviceError> {
         let global = &self.0;
+        // First, launch the background thread and store a handle in the Device struct.
+        // Once the device ID is known, send it to the background thread.
+        let (buffer_map_notifier, id_sender) = if auto_poll {
+            let (notifier, sender) = spawn_poll_thread(Arc::downgrade(self));
+            (Some(notifier), Some(sender))
+        } else {
+            (None, None)
+        };
         let (device_id, error) = global.create_device_from_hal(
             *adapter,
             hal_device,
             &desc.map_label(|l| l.map(Borrowed)),
+            buffer_map_notifier,
             trace_dir,
             PhantomData,
         );
         if let Some(err) = error {
             self.handle_error_fatal(err, "Adapter::create_device_from_hal");
+        }
+        if let Some(s) = id_sender {
+            let _ = s.send(device_id);
         }
         let device = Device {
             id: device_id,
@@ -793,21 +809,34 @@ impl crate::Context for Context {
     }
 
     fn adapter_request_device(
-        &self,
+        self: &Arc<Self>,
         adapter: &Self::AdapterId,
         desc: &crate::DeviceDescriptor,
+        auto_poll: bool,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
         let global = &self.0;
+        // First, launch the background thread and store a handle in the Device struct.
+        // Once the device ID is known, send it to the background thread.
+        let (buffer_map_notifier, id_sender) = if auto_poll {
+            let (notifier, sender) = spawn_poll_thread(Arc::downgrade(self));
+            (Some(notifier), Some(sender))
+        } else {
+            (None, None)
+        };
         let (device_id, error) = wgc::gfx_select!(*adapter => global.adapter_request_device(
             *adapter,
             &desc.map_label(|l| l.map(Borrowed)),
+            buffer_map_notifier,
             trace_dir,
             PhantomData
         ));
         if let Some(err) = error {
             log::error!("Error in Adapter::request_device: {}", err);
             return ready(Err(crate::RequestDeviceError));
+        }
+        if let Some(s) = id_sender {
+            let _ = s.send(device_id);
         }
         let device = Device {
             id: device_id,
@@ -2193,5 +2222,74 @@ impl Drop for BufferMappedRange {
     fn drop(&mut self) {
         // Intentionally left blank so that `BufferMappedRange` still
         // implements `Drop`, to match the web backend
+    }
+}
+
+/// Spawns a background thread which polls the device on request.
+///
+/// This function has to take a weak reference to the `Context` instance,
+/// otherwise there would be a cycle `Device --> background thread --> Context --> Device`.
+///
+/// Returns
+/// - a closure which, when called, triggers a device poll,
+/// - and a `SyncSender` which is used to pass the device ID to the background thread.
+fn spawn_poll_thread(
+    context: Weak<Context>,
+) -> (
+    wgc::device::BufferMapNotifier,
+    mpsc::SyncSender<wgc::id::DeviceId>,
+) {
+    let exit_flag = Arc::new(AtomicBool::new(false));
+    let exit_flag_read = exit_flag.clone();
+    let (sender, receiver) = mpsc::sync_channel::<wgc::id::DeviceId>(1);
+
+    // Returns Option<_> so that we can use the ?-operator.
+    fn poll_thread_fn(
+        context: Weak<Context>,
+        exit_flag: Arc<AtomicBool>,
+        receiver: mpsc::Receiver<wgc::id::DeviceId>,
+    ) -> Option<()> {
+        let device_id = receiver.recv().ok()?;
+
+        while !exit_flag.load(Ordering::Acquire) {
+            // Exit when the Context instance is gone, or when something went wrong with
+            // polling the device.
+            let ctx = context.upgrade()?;
+            let global = &ctx.0;
+            wgc::gfx_select!(device_id => global.device_poll(device_id, true)).ok()?;
+            drop(ctx);
+
+            // If unpark() was called while we were in device_poll(), park() will return
+            // immediately; see the std::thread::park() docs for details.
+            std::thread::park();
+        }
+        Some(())
+    }
+
+    let thread = std::thread::spawn(move || {
+        poll_thread_fn(context, exit_flag_read, receiver);
+    });
+    let handle = PollThreadHandle { thread, exit_flag };
+    // This closure captures the PollThreadHandle, so that when the closure is dropped,
+    // the background thread is told to shut down.
+    let notifier = Arc::new(move || {
+        // Wake up background thread. If the thread isn't parked right now, this is
+        // basically a no-op, so redundant calls of the closure don't incur unnecessary
+        // overhead.
+        handle.thread.thread().unpark();
+    });
+    (notifier, sender)
+}
+
+struct PollThreadHandle {
+    thread: std::thread::JoinHandle<()>,
+    exit_flag: Arc<AtomicBool>,
+}
+
+impl Drop for PollThreadHandle {
+    fn drop(&mut self) {
+        // Shut down background thread
+        self.exit_flag.store(true, Ordering::Release);
+        self.thread.thread().unpark();
     }
 }

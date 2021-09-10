@@ -1,5 +1,5 @@
 use crate::{
-    device::{Device, DeviceDescriptor},
+    device::{BufferMapNotifier, Device, DeviceDescriptor},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
     present::Presentation,
@@ -277,6 +277,7 @@ impl<A: HalApi> Adapter<A> {
         self_id: AdapterId,
         open: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
+        buffer_map_notifier: Option<BufferMapNotifier>,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
         // Verify all features were exposed by the adapter
@@ -323,6 +324,7 @@ impl<A: HalApi> Adapter<A> {
             caps.alignments.clone(),
             caps.downlevel.clone(),
             desc,
+            buffer_map_notifier,
             trace_path,
         )
         .or(Err(RequestDeviceError::OutOfMemory))
@@ -332,6 +334,7 @@ impl<A: HalApi> Adapter<A> {
         &self,
         self_id: AdapterId,
         desc: &DeviceDescriptor,
+        buffer_map_notifier: Option<BufferMapNotifier>,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
         let open = unsafe { self.raw.adapter.open(desc.features) }.map_err(|err| match err {
@@ -339,7 +342,7 @@ impl<A: HalApi> Adapter<A> {
             hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
         })?;
 
-        self.create_device_from_hal(self_id, open, desc, trace_path)
+        self.create_device_from_hal(self_id, open, desc, buffer_map_notifier, trace_path)
     }
 }
 
@@ -812,6 +815,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
+        buffer_map_notifier: Option<BufferMapNotifier>,
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
@@ -827,10 +831,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let device = match adapter.create_device(adapter_id, desc, trace_path) {
-                Ok(device) => device,
-                Err(e) => break e,
-            };
+            let device =
+                match adapter.create_device(adapter_id, desc, buffer_map_notifier, trace_path) {
+                    Ok(device) => device,
+                    Err(e) => break e,
+                };
             let id = fid.assign(device, &mut token);
             return (id.0, None);
         };
@@ -848,6 +853,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
+        buffer_map_notifier: Option<BufferMapNotifier>,
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
@@ -863,11 +869,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let device =
-                match adapter.create_device_from_hal(adapter_id, hal_device, desc, trace_path) {
-                    Ok(device) => device,
-                    Err(e) => break e,
-                };
+            let device = match adapter.create_device_from_hal(
+                adapter_id,
+                hal_device,
+                desc,
+                buffer_map_notifier,
+                trace_path,
+            ) {
+                Ok(device) => device,
+                Err(e) => break e,
+            };
             let id = fid.assign(device, &mut token);
             return (id.0, None);
         };

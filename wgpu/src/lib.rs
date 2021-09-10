@@ -193,9 +193,10 @@ trait Context: Debug + Send + Sized + Sync {
         options: &RequestAdapterOptions<'_>,
     ) -> Self::RequestAdapterFuture;
     fn adapter_request_device(
-        &self,
+        self: &Arc<Self>,
         adapter: &Self::AdapterId,
         desc: &DeviceDescriptor,
+        auto_poll: bool,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
     fn instance_poll_all_devices(&self, force_wait: bool);
@@ -1538,6 +1539,8 @@ impl Adapter {
     /// - `desc` - Description of the features and limits requested from the given device.
     /// - `trace_path` - Can be used for API call tracing, if that feature is
     ///   enabled in `wgpu-core`.
+    /// - `auto_poll` - Set to `true` to automatically resolve [`BufferSlice::map_async`]
+    ///   futures in a background thread. Ignored on the web backend.
     ///
     /// # Panics
     ///
@@ -1549,9 +1552,11 @@ impl Adapter {
         &self,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
+        auto_poll: bool,
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + Send {
         let context = Arc::clone(&self.context);
-        let device = Context::adapter_request_device(&*self.context, &self.id, desc, trace_path);
+        let device =
+            Context::adapter_request_device(&self.context, &self.id, desc, auto_poll, trace_path);
         async move {
             device.await.map(|(device_id, queue_id)| {
                 (
@@ -1579,11 +1584,12 @@ impl Adapter {
         &self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
+        auto_poll: bool,
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), RequestDeviceError> {
         let context = Arc::clone(&self.context);
         self.context
-            .create_device_from_hal(&self.id, hal_device, desc, trace_path)
+            .create_device_from_hal(&self.id, hal_device, desc, auto_poll, trace_path)
             .map(|(device_id, queue_id)| {
                 (
                     Device {
@@ -2038,14 +2044,17 @@ impl Buffer {
 impl<'a> BufferSlice<'a> {
     //TODO: fn slice(&self) -> Self
 
-    /// Map the buffer. Buffer is ready to map once the future is resolved.
+    /// Maps this slice of a buffer into memory. The buffer slice is ready to be read or written
+    /// once the future has been resolved.
     ///
-    /// For the future to complete, `device.poll(...)` must be called elsewhere in the runtime, possibly integrated
-    /// into an event loop, run on a separate thread, or continually polled in the same task runtime that this
-    /// future will be run on.
+    /// For the future to complete, the device has to be polled. This is done automatically
+    /// in a background thread if
     ///
-    /// It's expected that wgpu will eventually supply its own event loop infrastructure that will be easy to integrate
-    /// into other event loops, like winit's.
+    /// - the `auto_poll` parameter on [`Adapter::request_device`] was set to `true`, or
+    /// - the web backend of wgpu is used.
+    ///
+    /// Otherwise, [`Device::poll`] must be called manually, for example in an event loop,
+    /// on a separate thread, or in a blocking manner on the same thread.
     pub fn map_async(
         &self,
         mode: MapMode,
