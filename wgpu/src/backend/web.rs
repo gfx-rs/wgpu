@@ -865,8 +865,8 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
 fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<web_sys::GpuAdapter>> {
-    match result {
-        Ok(js_value) => Some(Sendable(web_sys::GpuAdapter::from(js_value))),
+    match result.and_then(wasm_bindgen::JsCast::dyn_into) {
+        Ok(adapter) => Some(Sendable(adapter)),
         Err(_) => None,
     }
 }
