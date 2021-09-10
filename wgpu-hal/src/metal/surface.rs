@@ -271,7 +271,7 @@ impl crate::Surface<super::Api> for super::Surface {
             if let Some(drawable) = render_layer.next_drawable() {
                 Ok((drawable.to_owned(), drawable.texture().to_owned()))
             } else {
-                return Err(crate::SurfaceError::Other("failed to allocate drawable due to metal resource exhaustion"));
+                Err(crate::SurfaceError::Other("failed to allocate drawable due to metal resource exhaustion"))
             }
         })?;
 
