@@ -1191,7 +1191,7 @@ impl crate::Context for Context {
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: false,
                     strict_capabilities: true,
-                    flow_graph_dump_prefix: None,
+                    block_ctx_dump_prefix: None,
                 };
                 let spv_parser = front::spv::Parser::new(spv.iter().cloned(), &options);
                 let spv_module = spv_parser.parse().unwrap();
