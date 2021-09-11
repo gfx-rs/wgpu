@@ -131,14 +131,14 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
 
                 let (dim, arrayed, class) = match size {
                     "1D" => (ImageDimension::D1, false, sampled(false)),
-                    "1DArray" => (ImageDimension::D1, false, sampled(false)),
+                    "1DArray" => (ImageDimension::D1, true, sampled(false)),
                     "2D" => (ImageDimension::D2, false, sampled(false)),
-                    "2DArray" => (ImageDimension::D2, false, sampled(false)),
-                    "2DMS" => (ImageDimension::D2, true, sampled(true)),
+                    "2DArray" => (ImageDimension::D2, true, sampled(false)),
+                    "2DMS" => (ImageDimension::D2, false, sampled(true)),
                     "2DMSArray" => (ImageDimension::D2, true, sampled(true)),
                     "3D" => (ImageDimension::D3, false, sampled(false)),
                     "Cube" => (ImageDimension::Cube, false, sampled(false)),
-                    "CubeArray" => (ImageDimension::D2, false, sampled(false)),
+                    "CubeArray" => (ImageDimension::D2, true, sampled(false)),
                     _ => return None,
                 };
 

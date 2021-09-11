@@ -834,6 +834,25 @@ impl Context {
             .and_then(|(kind, width)| type_power(kind, width)))
     }
 
+    pub fn conversion(
+        &mut self,
+        expr: &mut Handle<Expression>,
+        meta: SourceMetadata,
+        kind: ScalarKind,
+        width: crate::Bytes,
+    ) -> Result<()> {
+        *expr = self.expressions.append(
+            Expression::As {
+                expr: *expr,
+                kind,
+                convert: Some(width),
+            },
+            meta.as_span(),
+        );
+
+        Ok(())
+    }
+
     pub fn implicit_conversion(
         &mut self,
         parser: &mut Parser,
@@ -847,14 +866,7 @@ impl Context {
             self.expr_power(parser, *expr, meta)?,
         ) {
             if tgt_power > expr_power {
-                *expr = self.expressions.append(
-                    Expression::As {
-                        expr: *expr,
-                        kind,
-                        convert: Some(width),
-                    },
-                    meta.as_span(),
-                )
+                self.conversion(expr, meta, kind, width)?;
             }
         }
 
@@ -882,25 +894,11 @@ impl Context {
         ) {
             match left_power.cmp(&right_power) {
                 std::cmp::Ordering::Less => {
-                    *left = self.expressions.append(
-                        Expression::As {
-                            expr: *left,
-                            kind: right_kind,
-                            convert: Some(right_width),
-                        },
-                        left_meta.as_span(),
-                    )
+                    self.conversion(left, left_meta, right_kind, right_width)?;
                 }
                 std::cmp::Ordering::Equal => {}
                 std::cmp::Ordering::Greater => {
-                    *right = self.expressions.append(
-                        Expression::As {
-                            expr: *right,
-                            kind: left_kind,
-                            convert: Some(left_width),
-                        },
-                        right_meta.as_span(),
-                    )
+                    self.conversion(right, right_meta, left_kind, left_width)?;
                 }
             }
         }

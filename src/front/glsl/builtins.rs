@@ -1670,12 +1670,18 @@ fn texture_call(
     meta: SourceMetadata,
 ) -> Result<Handle<Expression>> {
     if let Some(sampler) = ctx.samplers.get(&image).copied() {
+        let mut array_index = comps.array_index;
+
+        if let Some(ref mut array_index_expr) = array_index {
+            ctx.conversion(array_index_expr, meta, Sk::Sint, 4)?;
+        }
+
         Ok(ctx.add_expression(
             Expression::ImageSample {
                 image,
                 sampler,
                 coordinate: comps.coordinate,
-                array_index: comps.array_index,
+                array_index,
                 offset: None,
                 level,
                 depth_ref: comps.depth_ref,
