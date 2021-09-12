@@ -1,9 +1,11 @@
 # Change Log
 
-### wgpu-hal-0.10.5 (2021-09-12)
+### wgpu-hal-0.10.6 (2021-09-12)
   - Metal:
     - fix stencil operations
     - fix memory leak on M1 when out of focus
+    - fix depth clamping checks
+    - fix unsized storage buffers beyond the first
 
 ### wgpu-core-0.10.3, wgpu-hal-0.10.4 (2021-09-08)
   - Vulkan:
