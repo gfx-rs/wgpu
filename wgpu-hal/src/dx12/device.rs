@@ -253,7 +253,7 @@ impl super::Device {
                             error.GetBufferSize(),
                         )
                     };
-                    write!(full_msg, ": {}", String::from_utf8_lossy(message));
+                    let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
                     unsafe {
                         error.destroy();
                     }
