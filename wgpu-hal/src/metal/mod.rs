@@ -691,7 +691,7 @@ struct IndexState {
 
 #[derive(Default)]
 struct Temp {
-    binding_sizes: Vec<wgt::BufferSize>,
+    binding_sizes: Vec<u32>,
 }
 
 struct CommandState {
