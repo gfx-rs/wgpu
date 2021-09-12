@@ -1402,7 +1402,7 @@ pub enum TextureFormat {
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
     #[cfg_attr(feature = "serde", serde(rename = "rg8uint"))]
     Rg8Uint,
-    /// Red and green channel s. 8 bit integer per channel. Signed in shader.
+    /// Red and green channels. 8 bit integer per channel. Signed in shader.
     #[cfg_attr(feature = "serde", serde(rename = "rg8sint"))]
     Rg8Sint,
 
