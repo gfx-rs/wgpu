@@ -296,7 +296,10 @@ impl HalTextureViewDescriptor {
 #[derive(Debug)]
 pub struct TextureView<A: hal::Api> {
     pub(crate) raw: A::TextureView,
+    // The parent's refcount is held alive, but the parent may still be deleted
+    // if it's a surface texture. TODO: make this cleaner.
     pub(crate) parent_id: Stored<TextureId>,
+    pub(crate) device_id: Stored<DeviceId>,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,

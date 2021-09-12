@@ -809,6 +809,7 @@ impl<A: HalApi> Device<A> {
                 value: id::Valid(texture_id),
                 ref_count: texture.life_guard.add_ref(),
             },
+            device_id: texture.device_id.clone(),
             desc: resource::HalTextureViewDescriptor {
                 format: hal_desc.format,
                 dimension: hal_desc.dimension,
@@ -3294,15 +3295,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (last_submit_index, device_id) = {
-            let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (mut texture_view_guard, _) = hub.texture_views.write(&mut token);
 
             match texture_view_guard.get_mut(texture_view_id) {
                 Ok(view) => {
                     let _ref_count = view.life_guard.ref_count.take();
                     let last_submit_index = view.life_guard.life_count();
-                    let device_id = texture_guard[view.parent_id.value].device_id.value;
-                    (last_submit_index, device_id)
+                    (last_submit_index, view.device_id.value)
                 }
                 Err(InvalidId) => {
                     hub.texture_views
