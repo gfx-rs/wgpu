@@ -372,13 +372,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 let at_descriptor = descriptor.stencil_attachment().unwrap();
                 at_descriptor.set_texture(Some(&at.target.view.raw));
 
-                let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
+                let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                     mtl::MTLLoadAction::Load
                 } else {
                     at_descriptor.set_clear_stencil(at.clear_value.1);
                     mtl::MTLLoadAction::Clear
                 };
-                let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
+                let store_action = if at.stencil_ops.contains(crate::AttachmentOps::STORE) {
                     mtl::MTLStoreAction::Store
                 } else {
                     mtl::MTLStoreAction::DontCare
