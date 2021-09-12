@@ -1034,11 +1034,11 @@ impl<W: Write> Writer<W> {
         // If the plain form of the expression is not what we need, emit the
         // operator necessary to correct that.
         let plain = plain_form_indirection(expr, module, func_ctx);
-        match (requested, plain) {
-            (Indirection::Ordinary, Indirection::Reference) => write!(self.out, "&")?,
-            (Indirection::Reference, Indirection::Ordinary) => write!(self.out, "*")?,
-            (_, _) => {}
-        }
+        let opened_paren = match (requested, plain) {
+            (Indirection::Ordinary, Indirection::Reference) => { write!(self.out, "&")?; false },
+            (Indirection::Reference, Indirection::Ordinary) => { write!(self.out, "(*")?; true },
+            (_, _) => { false },
+        };
 
         let expression = &func_ctx.expressions[expr];
 
@@ -1542,6 +1542,10 @@ impl<W: Write> Writer<W> {
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_) | Expression::AtomicResult { .. } => {}
         }
+
+        if opened_paren {
+            write!(self.out, ")")?
+        };
 
         Ok(())
     }
