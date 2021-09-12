@@ -265,10 +265,14 @@ impl crate::Surface<super::Api> for super::Surface {
         _timeout_ms: u32, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
-        let (drawable, texture) = autoreleasepool(|| {
-            let drawable = render_layer.next_drawable().unwrap();
-            (drawable.to_owned(), drawable.texture().to_owned())
-        });
+        let (drawable, texture) = match autoreleasepool(|| {
+            render_layer
+                .next_drawable()
+                .map(|drawable| (drawable.to_owned(), drawable.texture().to_owned()))
+        }) {
+            Some(pair) => pair,
+            None => return Ok(None),
+        };
 
         let suf_texture = super::SurfaceTexture {
             texture: super::Texture {
