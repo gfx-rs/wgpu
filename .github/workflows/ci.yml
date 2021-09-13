@@ -187,7 +187,13 @@ jobs:
         run: cd wgpu && cargo build -p cts_runner
 
       - name: run CTS
-        run: cd cts && ../wgpu/target/debug/cts_runner.exe ./tools/run_deno --verbose 'unittests:*'
+        shell: bash
+        run: >-
+          cd cts;
+          grep -v '^//' ../wgpu/cts_runner/test.lst | while IFS=$' \t\r\n' read test; do
+            echo "=== Running $test ===";
+            cargo run --manifest-path ../wgpu/cts_runner/Cargo.toml --frozen -- ./tools/run_deno --verbose "$test";
+          done
 
   fmt:
     name: Format

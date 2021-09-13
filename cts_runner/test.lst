@@ -1,0 +1,3 @@
+unittests:*
+webgpu:api,operation,compute,basic:*
+//webgpu:api,validation,queue,copyToTexture,ImageBitmap:destination_texture,format:format="stencil8";*'
