@@ -42,7 +42,7 @@ fn create_depth_stencil_desc(state: &wgt::DepthStencilState) -> mtl::DepthStenci
         let front_desc = create_stencil_desc(&s.front, s.read_mask, s.write_mask);
         desc.set_front_face_stencil(Some(&front_desc));
         let back_desc = create_stencil_desc(&s.back, s.read_mask, s.write_mask);
-        desc.set_front_face_stencil(Some(&back_desc));
+        desc.set_back_face_stencil(Some(&back_desc));
     }
     desc
 }
