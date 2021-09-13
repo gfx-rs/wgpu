@@ -1035,9 +1035,15 @@ impl<W: Write> Writer<W> {
         // operator necessary to correct that.
         let plain = plain_form_indirection(expr, module, func_ctx);
         let opened_paren = match (requested, plain) {
-            (Indirection::Ordinary, Indirection::Reference) => { write!(self.out, "&")?; false },
-            (Indirection::Reference, Indirection::Ordinary) => { write!(self.out, "(*")?; true },
-            (_, _) => { false },
+            (Indirection::Ordinary, Indirection::Reference) => {
+                write!(self.out, "&")?;
+                false
+            }
+            (Indirection::Reference, Indirection::Ordinary) => {
+                write!(self.out, "(*")?;
+                true
+            }
+            (_, _) => false,
         };
 
         let expression = &func_ctx.expressions[expr];

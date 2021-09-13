@@ -3850,27 +3850,10 @@ impl Parser {
             (Token::Word("var"), _) => {
                 let pvar =
                     self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
-                let class = match pvar.class {
-                    Some(c) => c,
-                    None => match module.types[pvar.ty].inner {
-                        crate::TypeInner::Struct { .. } if binding.is_some() => {
-                            crate::StorageClass::Uniform
-                        }
-                        crate::TypeInner::Array { .. } if binding.is_some() => {
-                            crate::StorageClass::Storage {
-                                access: crate::StorageAccess::LOAD,
-                            }
-                        }
-                        crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
-                            crate::StorageClass::Handle
-                        }
-                        _ => crate::StorageClass::Private,
-                    },
-                };
                 let var_handle = module.global_variables.append(
                     crate::GlobalVariable {
                         name: Some(pvar.name.to_owned()),
-                        class,
+                        class: pvar.class.unwrap_or(crate::StorageClass::Handle),
                         binding: binding.take(),
                         ty: pvar.ty,
                         init: pvar.init,
