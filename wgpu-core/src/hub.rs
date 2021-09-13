@@ -644,19 +644,12 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                 }
             }
         }
-        {
-            let textures = self.textures.data.read();
-            for element in self.texture_views.data.write().map.drain(..) {
-                if let Element::Occupied(texture_view, _) = element {
-                    // the texture should generally be present, unless it's a surface
-                    // texture, and we are in emergency shutdown.
-                    if textures.contains(texture_view.parent_id.value.0) {
-                        let texture = &textures[texture_view.parent_id.value];
-                        let device = &devices[texture.device_id.value];
-                        unsafe {
-                            device.raw.destroy_texture_view(texture_view.raw);
-                        }
-                    }
+
+        for element in self.texture_views.data.write().map.drain(..) {
+            if let Element::Occupied(texture_view, _) = element {
+                let device = &devices[texture_view.device_id.value];
+                unsafe {
+                    device.raw.destroy_texture_view(texture_view.raw);
                 }
             }
         }
