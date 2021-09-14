@@ -173,7 +173,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: gpuweb/cts
-          ref: 8dbacc65e37f2c0d1a5c4adbb2f6ca363fe2f459 # from "gh-pages" branch
+          ref: a44186d9fa1d5babdb4a198e8ef04cf0d7035ebb # from "gh-pages" branch
           path: cts
 
       - name: install rust
@@ -184,7 +184,7 @@ jobs:
           profile: minimal
 
       - name: build CTS runner
-        run: cd wgpu && cargo build -p cts_runner
+        run: cd wgpu/cts_runner && cargo build
 
       - name: run CTS
         shell: bash
