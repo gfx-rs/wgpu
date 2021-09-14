@@ -46,11 +46,12 @@ struct TimestampData {
     end: u64,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct QueryData {
-    timestamps: [TimestampData; MIP_PASS_COUNT as usize],
-    pipeline_queries: [u64; MIP_PASS_COUNT as usize],
+type TimestampQueries = [TimestampData; MIP_PASS_COUNT as usize];
+type PipelineStatisticsQueries = [u64; MIP_PASS_COUNT as usize];
+
+fn pipeline_statistics_offset() -> wgpu::BufferAddress {
+    (mem::size_of::<TimestampQueries>() as wgpu::BufferAddress)
+        .max(wgpu::QUERY_RESOLVE_BUFFER_ALIGNMENT)
 }
 
 struct Example {
@@ -191,7 +192,7 @@ impl Example {
                 &query_sets.pipeline_statistics,
                 0..MIP_PASS_COUNT,
                 &query_sets.data_buffer,
-                (timestamp_query_count * mem::size_of::<u64>() as u32) as wgpu::BufferAddress,
+                pipeline_statistics_offset(),
             );
         }
     }
@@ -352,9 +353,8 @@ impl framework::Example for Example {
             // and 1 * passes statistics queries. Each query returns a u64 value.
             let data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("query buffer"),
-                size: mip_passes as wgpu::BufferAddress
-                    * 3
-                    * mem::size_of::<u64>() as wgpu::BufferAddress,
+                size: pipeline_statistics_offset()
+                    + mem::size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             });
@@ -387,14 +387,22 @@ impl framework::Example for Example {
             // Wait for device to be done rendering mipmaps
             device.poll(wgpu::Maintain::Wait);
             // This is guaranteed to be ready.
-            let view = query_sets.data_buffer.slice(..).get_mapped_range();
+            let timestamp_view = query_sets
+                .data_buffer
+                .slice(..mem::size_of::<TimestampQueries>() as wgpu::BufferAddress)
+                .get_mapped_range();
+            let pipeline_stats_view = query_sets
+                .data_buffer
+                .slice(pipeline_statistics_offset()..)
+                .get_mapped_range();
             // Convert the raw data into a useful structure
-            let data: &QueryData = bytemuck::from_bytes(&*view);
+            let timestamp_data: &TimestampQueries = bytemuck::from_bytes(&*timestamp_view);
+            let pipeline_stats_data: &PipelineStatisticsQueries =
+                bytemuck::from_bytes(&*pipeline_stats_view);
             // Iterate over the data
-            for (idx, (timestamp, pipeline)) in data
-                .timestamps
+            for (idx, (timestamp, pipeline)) in timestamp_data
                 .iter()
-                .zip(data.pipeline_queries.iter())
+                .zip(pipeline_stats_data.iter())
                 .enumerate()
             {
                 // Figure out the timestamp differences and multiply by the period to get nanoseconds
