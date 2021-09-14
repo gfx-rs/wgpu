@@ -1,7 +1,4 @@
-//TODO: move this to a binary target once Rust supports
-// binary-specific dependencies.
-
-use std::{fs, path::Path, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 const BASE_DIR_IN: &str = "tests/in";
 const BASE_DIR_OUT: &str = "tests/out";
@@ -169,7 +166,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
 fn write_output_spv(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &Path,
+    destination: &PathBuf,
     file_name: &str,
     params: &Parameters,
 ) {
@@ -226,7 +223,7 @@ fn write_output_spv(
 fn write_output_msl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &Path,
+    destination: &PathBuf,
     file_name: &str,
     params: &Parameters,
 ) {
@@ -263,7 +260,7 @@ fn write_output_msl(
 fn write_output_glsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &Path,
+    destination: &PathBuf,
     file_name: &str,
     stage: naga::ShaderStage,
     ep_name: &str,
@@ -304,7 +301,7 @@ fn write_output_glsl(
 fn write_output_hlsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &Path,
+    destination: &PathBuf,
     file_name: &str,
     params: &Parameters,
 ) {
@@ -393,7 +390,7 @@ fn write_output_hlsl(
 fn write_output_wgsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
-    destination: &Path,
+    destination: &PathBuf,
     file_name: &str,
 ) {
     use naga::back::wgsl;

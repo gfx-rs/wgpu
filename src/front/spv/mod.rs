@@ -268,7 +268,6 @@ struct EntryPoint {
     name: String,
     early_depth_test: Option<crate::EarlyDepthTest>,
     workgroup_size: [u32; 3],
-    function_id: spirv::Word,
     variable_ids: Vec<spirv::Word>,
 }
 
@@ -331,12 +330,6 @@ enum LookupLoadOverride {
     Pending,
     /// For matrices, vectors, and scalars, we pre-load the data.
     Loaded(Handle<crate::Expression>),
-}
-
-#[derive(Clone, Debug)]
-struct Assignment {
-    to: Handle<crate::Expression>,
-    value: Handle<crate::Expression>,
 }
 
 #[derive(PartialEq)]
@@ -3397,7 +3390,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             name,
             early_depth_test: None,
             workgroup_size: [0; 3],
-            function_id,
             variable_ids: self.data.by_ref().take(left as usize).collect(),
         };
         self.lookup_entry_point.insert(function_id, ep);
