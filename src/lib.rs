@@ -579,7 +579,13 @@ pub enum TypeInner {
         base: Handle<Type>,
         class: StorageClass,
     },
+
     /// Pointer to a value.
+    ///
+    /// A `ValuePointer` type is equivalent to a `Pointer` to a `Scalar` or `Vector`.
+    /// This is for use in [`TypeResolution::Value`] variants.
+    ///
+    /// [`TypeResolution::Value`]: proc::TypeResolution::Value
     ValuePointer {
         size: Option<VectorSize>,
         kind: ScalarKind,
