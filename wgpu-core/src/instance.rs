@@ -876,3 +876,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 }
+
+/// Generates a set of backends from a comma separated list of case-insensitive backend names.
+///
+/// Whitespace is stripped, so both 'gl, dx12' and 'gl,dx12' are valid.
+///
+/// Always returns WEBGPU on wasm over webgpu.
+///
+/// Names:
+/// - vulkan = "vulkan" or "vk"
+/// - dx12   = "dx12" or "d3d12"
+/// - dx11   = "dx11" or "d3d11"
+/// - metal  = "metal" or "mtl"
+/// - gles   = "opengl" or "gles" or "gl"
+/// - webgpu = "webgpu"
+pub fn parse_backends_from_comma_list(string: &str) -> Backends {
+    let mut backends = Backends::empty();
+    for backend in string.to_lowercase().split(',') {
+        backends |= match backend.trim() {
+            "vulkan" | "vk" => Backends::VULKAN,
+            "dx12" | "d3d12" => Backends::DX12,
+            "dx11" | "d3d11" => Backends::DX11,
+            "metal" | "mtl" => Backends::METAL,
+            "opengl" | "gles" | "gl" => Backends::GL,
+            "webgpu" => Backends::BROWSER_WEBGPU,
+            b => {
+                log::warn!("unknown backend string '{}'", b);
+                continue;
+            }
+        }
+    }
+
+    if backends.is_empty() {
+        log::warn!("no valid backend strings found!");
+    }
+
+    backends
+}

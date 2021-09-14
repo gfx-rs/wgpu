@@ -229,6 +229,7 @@ pub struct Texture {
     mip_level_count: u32,
     array_layer_count: u32,
     format: wgt::TextureFormat,
+    #[allow(unused)]
     format_desc: TextureFormatDesc,
     copy_size: crate::CopyExtent,
 }
@@ -345,6 +346,7 @@ struct VertexBufferDesc {
     stride: u32,
 }
 
+#[allow(unused)]
 #[derive(Clone)]
 struct UniformDesc {
     location: glow::UniformLocation,
@@ -533,6 +535,7 @@ enum Command {
         dst_target: BindTarget,
         range: crate::MemoryRange,
     },
+    #[allow(unused)] // yet unimplemented
     ClearTexture {
         dst: glow::Texture,
         dst_target: BindTarget,
@@ -554,6 +557,7 @@ enum Command {
     },
     CopyBufferToTexture {
         src: glow::Buffer,
+        #[allow(unused)]
         src_target: BindTarget,
         dst: glow::Texture,
         dst_target: BindTarget,
@@ -565,6 +569,7 @@ enum Command {
         src_target: BindTarget,
         src_format: wgt::TextureFormat,
         dst: glow::Buffer,
+        #[allow(unused)]
         dst_target: BindTarget,
         copy: crate::BufferTextureCopy,
     },

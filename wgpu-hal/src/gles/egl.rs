@@ -317,6 +317,7 @@ impl AdapterContext {
 #[derive(Debug)]
 struct Inner {
     egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
+    #[allow(unused)]
     version: (i32, i32),
     supports_native_window: bool,
     display: egl::Display,
@@ -721,6 +722,7 @@ pub struct Swapchain {
     extent: wgt::Extent3d,
     format: wgt::TextureFormat,
     format_desc: super::TextureFormatDesc,
+    #[allow(unused)]
     sample_type: wgt::TextureSampleType,
 }
 
@@ -731,6 +733,7 @@ pub struct Surface {
     config: egl::Config,
     display: egl::Display,
     context: egl::Context,
+    #[allow(unused)]
     pbuffer: Option<egl::Surface>,
     pub(super) presentable: bool,
     raw_window_handle: RawWindowHandle,

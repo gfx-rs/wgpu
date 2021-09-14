@@ -3,11 +3,6 @@
  */
 
 #![allow(
-    // The intra doc links to the wgpu crate in this crate actually successfully link to the types in the wgpu crate, when built from the wgpu crate.
-    // However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
-    // despite the fact that it works fine when it needs to.
-    // So we just disable those warnings.
-    broken_intra_doc_links,
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
 )]
@@ -722,6 +717,8 @@ impl Limits {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DownlevelLimits {}
 
+#[allow(unknown_lints)] // derivable_impls is nightly only currently
+#[allow(clippy::derivable_impls)]
 impl Default for DownlevelLimits {
     fn default() -> Self {
         DownlevelLimits {}
@@ -2776,7 +2773,7 @@ impl<L> TextureDescriptor<L> {
     /// # use wgpu_types as wgpu;
     /// let desc = wgpu::TextureDescriptor {
     ///   label: (),
-    ///   size: Extent3d { width: 100, height: 60, depth_or_array_layers: 2 },
+    ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
     ///   mip_level_count: 7,
     ///   sample_count: 1,
     ///   dimension: wgpu::TextureDimension::D3,
