@@ -1036,8 +1036,8 @@ impl<W: Write> Writer<W> {
         let plain = plain_form_indirection(expr, module, func_ctx);
         let opened_paren = match (requested, plain) {
             (Indirection::Ordinary, Indirection::Reference) => {
-                write!(self.out, "&")?;
-                false
+                write!(self.out, "(&")?;
+                true
             }
             (Indirection::Reference, Indirection::Ordinary) => {
                 write!(self.out, "(*")?;

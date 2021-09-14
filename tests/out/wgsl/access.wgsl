@@ -19,7 +19,7 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
     let matrix: mat4x4<f32> = bar.matrix;
     let arr: array<vec2<u32>,2> = bar.arr;
     let b: f32 = bar.matrix[3][0];
-    let a: i32 = bar.data[(arrayLength(&bar.data) - 2u)];
+    let a: i32 = bar.data[(arrayLength((&bar.data)) - 2u)];
     bar.matrix[1][2] = 1.0;
     bar.matrix = mat4x4<f32>(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(2.0), vec4<f32>(3.0));
     bar.arr = array<vec2<u32>,2>(vec2<u32>(0u), vec2<u32>(1u));
@@ -33,23 +33,23 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 fn atomics() {
     var tmp: i32;
 
-    let value: i32 = atomicLoad(&bar.atom);
-    let _e6: i32 = atomicAdd(&bar.atom, 5);
+    let value: i32 = atomicLoad((&bar.atom));
+    let _e6: i32 = atomicAdd((&bar.atom), 5);
     tmp = _e6;
-    let _e9: i32 = atomicSub(&bar.atom, 5);
+    let _e9: i32 = atomicSub((&bar.atom), 5);
     tmp = _e9;
-    let _e12: i32 = atomicAnd(&bar.atom, 5);
+    let _e12: i32 = atomicAnd((&bar.atom), 5);
     tmp = _e12;
-    let _e15: i32 = atomicOr(&bar.atom, 5);
+    let _e15: i32 = atomicOr((&bar.atom), 5);
     tmp = _e15;
-    let _e18: i32 = atomicXor(&bar.atom, 5);
+    let _e18: i32 = atomicXor((&bar.atom), 5);
     tmp = _e18;
-    let _e21: i32 = atomicMin(&bar.atom, 5);
+    let _e21: i32 = atomicMin((&bar.atom), 5);
     tmp = _e21;
-    let _e24: i32 = atomicMax(&bar.atom, 5);
+    let _e24: i32 = atomicMax((&bar.atom), 5);
     tmp = _e24;
-    let _e27: i32 = atomicExchange(&bar.atom, 5);
+    let _e27: i32 = atomicExchange((&bar.atom), 5);
     tmp = _e27;
-    atomicStore(&bar.atom, value);
+    atomicStore((&bar.atom), value);
     return;
 }
