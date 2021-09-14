@@ -4637,7 +4637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     resource::BufferMapState::Waiting(resource::BufferPendingMapping {
                         range,
                         op,
-                        parent_ref_count: buffer.life_guard.add_ref(),
+                        _parent_ref_count: buffer.life_guard.add_ref(),
                     })
                 }
             };

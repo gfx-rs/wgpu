@@ -155,13 +155,17 @@ unsafe impl Sync for Surface {}
 
 #[derive(Debug, Clone, Copy)]
 enum MemoryArchitecture {
-    Unified { cache_coherent: bool },
+    Unified {
+        #[allow(unused)]
+        cache_coherent: bool,
+    },
     NonUnified,
 }
 
 #[derive(Debug, Clone, Copy)]
 struct PrivateCapabilities {
     instance_flags: crate::InstanceFlags,
+    #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
     heap_create_not_zeroed: bool,

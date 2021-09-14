@@ -32,6 +32,7 @@ pub const DESIRED_NUM_FRAMES: u32 = 3;
 pub(crate) struct Presentation {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) config: wgt::SurfaceConfiguration,
+    #[allow(unused)]
     pub(crate) num_frames: u32,
     pub(crate) acquired_texture: Option<Stored<TextureId>>,
 }

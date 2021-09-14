@@ -419,6 +419,7 @@ pub struct BindGroupLayout<A: hal::Api> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) multi_ref_count: MultiRefCount,
     pub(crate) entries: BindEntryMap,
+    #[allow(unused)]
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
     #[cfg(debug_assertions)]

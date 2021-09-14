@@ -6,6 +6,9 @@ on:
     tags: [v0.*]
   pull_request:
 
+env:
+  RUST_BACKTRACE: 1
+
 jobs:
   build:
     strategy:
@@ -18,6 +21,13 @@ jobs:
             channel: stable
             target: x86_64-pc-windows-msvc
             kind: test
+            backends: dx12 # dx11
+
+          - name: Windows Nightly x86_64
+            os: windows-2019
+            channel: nightly
+            target: x86_64-pc-windows-msvc
+            kind: compile
           
           # MacOS
 
@@ -42,7 +52,8 @@ jobs:
             os: ubuntu-20.04
             channel: stable
             target: x86_64-unknown-linux-gnu
-            kind: test
+            kind: compile
+            backends: # vulkan gl
 
           - name: Linux Nightly x86_64
             os: ubuntu-20.04
@@ -71,7 +82,7 @@ jobs:
 
     env:
       PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
-      RUSTFLAGS: --cfg=web_sys_unstable_apis
+      RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
       RUSTDOCFLAGS: -Dwarnings
 
     steps:
@@ -87,6 +98,11 @@ jobs:
           profile: minimal
           components: clippy
 
+      - name: caching
+        uses: Swatinem/rust-cache@v1
+        with:
+          key: ${{ matrix.target }}-a # suffix for cache busting
+
       - name: add android apk to path
         if: matrix.os == 'ubuntu-20.04' && matrix.target == 'aarch64-linux-android'
         run: |
@@ -95,73 +111,69 @@ jobs:
       - name: install llvmpipe and lavapipe
         if: matrix.os == 'ubuntu-20.04' && matrix.kind == 'test'
         run: |
-          echo "Installing Vulkan"
           sudo apt-get update -y -qq
           sudo add-apt-repository ppa:ubuntu-x-swat/updates -y
           sudo apt-get update
           sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
+        # add libegl1-mesa libgl1-mesa-dri for egl
+
+      # We enable line numbers for panics, but that's it
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir .cargo
+          echo """[profile.dev]
+          debug = 1" > .cargo/config.toml
 
       # This is separate for now because webgl isn't hooked up so we can't compile wgpu-core for wasm
       - name: check web
         if: matrix.kind == 'webgl'
         run: |
-          cargo clippy --target ${{ matrix.target }} -p wgpu -- -D warnings
+          cargo clippy --target ${{ matrix.target }} -p wgpu
 
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
 
-      - name: check native stable (fatal warnings)
-        if: (matrix.kind == 'compile' || matrix.kind == 'test') && matrix.channel == 'stable'
-        run: |
-          # check with no features
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player -- -D warnings
-
-          # check with all features
-          # explicitly don't mention wgpu-hal so that --all-features don't apply to it
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features -- -D warnings 
-
-          # build docs
-          cargo doc --target ${{ matrix.target }} --no-deps
-          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
-
-      - name: check native nightly (non-fatal warnings)
-        if: (matrix.kind == 'compile' || matrix.kind == 'test') && matrix.channel != 'stable'
+      - name: check native
+        if: matrix.kind == 'compile' || matrix.kind == 'test'
         run: |
           # check with no features
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player
 
           # check with all features
           # explicitly don't mention wgpu-hal so that --all-features don't apply to it
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features 
 
-      - name: build tests
-        if: matrix.kind == 'test'
-        run: |
-          cargo build --target ${{ matrix.target }} --bin wgpu-info 
-          cargo build --target ${{ matrix.target }} --tests -p wgpu-types -p wgpu-hal -p wgpu-core
-          cargo build --target ${{ matrix.target }} --examples --tests -p wgpu
+          # build docs
+          cargo doc --target ${{ matrix.target }} --no-deps
+          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
 
       - name: tests
-        if: matrix.kind == 'test' && matrix.os == 'windows-2019'
+        if: matrix.kind == 'test'
+        shell: bash
         run: |
           # run wgpu-info
           cargo run --target ${{ matrix.target }} --bin wgpu-info
-          # run player tests
-          cargo test --target ${{ matrix.target }} -p wgpu-types -p wgpu-hal -p wgpu-core --no-fail-fast -- --nocapture
-          # run coretests
-          cargo run --target ${{ matrix.target }} --bin wgpu-info -- cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture
+          for backend in ${{ matrix.backends }}; do
+            echo "======= NATIVE TESTS $backend ======";
+            # run player tests
+            WGPU_BACKEND=$backend cargo test --target ${{ matrix.target }} -p wgpu-types -p wgpu-hal -p wgpu-core --no-fail-fast -- --nocapture --test-threads=1
+            # run coretests
+            WGPU_BACKEND=$backend cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture --test-threads=1
+          done
 
-  test:
+  cts:
     strategy:
       fail-fast: false
       matrix:
         include:
           # Windows
           - name: Windows x86_64
-            os: windows-latest
+            os: windows-2019
             target: x86_64-pc-windows-msvc
+            backends: dx12 # dx11
 
-    name: Test ${{ matrix.name }}
+    name: CTS ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -169,6 +181,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: wgpu
+      
       - name: checkout cts
         uses: actions/checkout@v2
         with:
@@ -183,16 +196,36 @@ jobs:
           target: ${{ matrix.target }}
           profile: minimal
 
+      - name: caching
+        uses: Swatinem/rust-cache@v1
+        with:
+          key: cts-a # suffix for cache busting
+          working-directory: wgpu/cts_runner
+          target-dir: wgpu/cts_runner/target
+
+      # We enable line numbers for panics, but that's it
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir wgpu/.cargo
+          echo """[profile.dev]
+          debug = 1" > wgpu/.cargo/config.toml
+
       - name: build CTS runner
-        run: cd wgpu/cts_runner && cargo build
+        run: |
+          cargo build --manifest-path wgpu/cts_runner/Cargo.toml 
 
       - name: run CTS
+        if: ${{ matrix.os }} == 'windows-2019'
         shell: bash
-        run: >-
+        run: |
           cd cts;
-          grep -v '^//' ../wgpu/cts_runner/test.lst | while IFS=$' \t\r\n' read test; do
-            echo "=== Running $test ===";
-            cargo run --manifest-path ../wgpu/cts_runner/Cargo.toml --frozen -- ./tools/run_deno --verbose "$test";
+          for backend in ${{ matrix.backends }}; do
+            echo "======= CTS TESTS $backend ======";
+            grep -v '^//' ../wgpu/cts_runner/test.lst | while IFS=$' \t\r\n' read test; do
+              echo "=== Running $test ===";
+              DENO_WEBGPU_BACKEND=$backend cargo run --manifest-path ../wgpu/cts_runner/Cargo.toml --frozen -- ./tools/run_deno --verbose "$test";
+            done
           done
 
   fmt:

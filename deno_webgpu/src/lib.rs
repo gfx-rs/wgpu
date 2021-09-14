@@ -242,13 +242,14 @@ pub async fn op_webgpu_request_adapter(
 ) -> Result<GpuAdapterDeviceOrErr, AnyError> {
     let mut state = state.borrow_mut();
     check_unstable(&state, "navigator.gpu.requestAdapter");
+    let backends = std::env::var("DENO_WEBGPU_BACKEND").ok().map_or_else(wgpu_types::Backends::all, |s| wgpu_core::instance::parse_backends_from_comma_list(&s));
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
         instance
     } else {
         state.put(wgpu_core::hub::Global::new(
             "webgpu",
             wgpu_core::hub::IdentityManagerFactory,
-            wgpu_types::Backends::PRIMARY,
+            backends,
         ));
         state.borrow::<Instance>()
     };
@@ -263,7 +264,7 @@ pub async fn op_webgpu_request_adapter(
     };
     let res = instance.request_adapter(
         &descriptor,
-        wgpu_core::instance::AdapterInputs::Mask(wgpu_types::Backends::PRIMARY, |_| {
+        wgpu_core::instance::AdapterInputs::Mask(backends, |_| {
             std::marker::PhantomData
         }),
     );

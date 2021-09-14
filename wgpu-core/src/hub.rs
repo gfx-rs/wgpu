@@ -17,19 +17,10 @@ use std::cell::Cell;
 use std::{fmt::Debug, marker::PhantomData, mem, ops};
 
 /// A simple structure to manage identities of objects.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct IdentityManager {
     free: Vec<Index>,
     epochs: Vec<Epoch>,
-}
-
-impl Default for IdentityManager {
-    fn default() -> Self {
-        Self {
-            free: Default::default(),
-            epochs: Default::default(),
-        }
-    }
 }
 
 impl IdentityManager {

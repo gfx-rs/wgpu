@@ -109,7 +109,7 @@ pub(crate) struct BufferPendingMapping {
     pub range: Range<wgt::BufferAddress>,
     pub op: BufferMapOperation,
     // hold the parent alive while the mapping is active
-    pub parent_ref_count: RefCount,
+    pub _parent_ref_count: RefCount,
 }
 
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
