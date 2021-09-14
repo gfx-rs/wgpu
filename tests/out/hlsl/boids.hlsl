@@ -123,20 +123,20 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     float2 _expr132 = vVel;
     float _expr134 = params.deltaT;
     vPos = (_expr131 + (_expr132 * _expr134));
-    float2 _expr137 = vPos;
-    if ((_expr137.x < -1.0)) {
+    float _expr138 = vPos.x;
+    if ((_expr138 < -1.0)) {
         vPos.x = 1.0;
     }
-    float2 _expr143 = vPos;
-    if ((_expr143.x > 1.0)) {
+    float _expr144 = vPos.x;
+    if ((_expr144 > 1.0)) {
         vPos.x = -1.0;
     }
-    float2 _expr149 = vPos;
-    if ((_expr149.y < -1.0)) {
+    float _expr150 = vPos.y;
+    if ((_expr150 < -1.0)) {
         vPos.y = 1.0;
     }
-    float2 _expr155 = vPos;
-    if ((_expr155.y > 1.0)) {
+    float _expr156 = vPos.y;
+    if ((_expr156 > 1.0)) {
         vPos.y = -1.0;
     }
     float2 _expr164 = vPos;

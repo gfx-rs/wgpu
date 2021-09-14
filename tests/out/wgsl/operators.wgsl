@@ -37,8 +37,8 @@ fn constructors() -> f32 {
     var foo: Foo;
 
     foo = Foo(vec4<f32>(1.0), 1);
-    let _e10: vec4<f32> = foo.a;
-    return _e10.x;
+    let _e11: f32 = foo.a.x;
+    return _e11;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]

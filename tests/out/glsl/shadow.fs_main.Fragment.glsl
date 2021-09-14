@@ -47,8 +47,8 @@ void main() {
         }
         loop_init = false;
         uint _e12 = i;
-        uvec4 _e14 = _group_0_binding_0.num_lights;
-        if ((_e12 >= min(_e14.x, 10u))) {
+        uint _e15 = _group_0_binding_0.num_lights.x;
+        if ((_e12 >= min(_e15, 10u))) {
             break;
         }
         uint _e19 = i;

@@ -19,8 +19,7 @@ void main() {
     foo1 = 1.0;
     mat4x4 matrix = _group_0_binding_0.matrix;
     uvec2 arr[2] = _group_0_binding_0.arr;
-    vec4 _e13 = _group_0_binding_0.matrix[3];
-    float b = _e13.x;
+    float b = _group_0_binding_0.matrix[3][0];
     int a = _group_0_binding_0.data[(uint(_group_0_binding_0.data.length()) - 2u)];
     _group_0_binding_0.matrix[1][2] = 1.0;
     _group_0_binding_0.matrix = mat4x4(vec4(0.0), vec4(1.0), vec4(2.0), vec4(3.0));

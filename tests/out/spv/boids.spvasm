@@ -99,7 +99,7 @@ OpDecorate %40 BuiltIn GlobalInvocationId
 %145 = OpConstant  %4  4
 %151 = OpConstant  %4  5
 %157 = OpConstant  %4  6
-%179 = OpTypePointer Function %6
+%174 = OpTypePointer Function %6
 %43 = OpFunction  %2  None %44
 %39 = OpLabel
 %37 = OpVariable  %38  Function %9
@@ -280,43 +280,43 @@ OpStore %28 %167
 %172 = OpVectorTimesScalar  %15  %169 %171
 %173 = OpFAdd  %15  %168 %172
 OpStore %26 %173
-%174 = OpLoad  %15  %26
-%175 = OpCompositeExtract  %6  %174 0
-%176 = OpFOrdLessThan  %47  %175 %13
-OpSelectionMerge %177 None
-OpBranchConditional %176 %178 %177
-%178 = OpLabel
-%180 = OpAccessChain  %179  %26 %9
+%175 = OpAccessChain  %174  %26 %9
+%176 = OpLoad  %6  %175
+%177 = OpFOrdLessThan  %47  %176 %13
+OpSelectionMerge %178 None
+OpBranchConditional %177 %179 %178
+%179 = OpLabel
+%180 = OpAccessChain  %174  %26 %9
 OpStore %180 %14
-OpBranch %177
-%177 = OpLabel
-%181 = OpLoad  %15  %26
-%182 = OpCompositeExtract  %6  %181 0
+OpBranch %178
+%178 = OpLabel
+%181 = OpAccessChain  %174  %26 %9
+%182 = OpLoad  %6  %181
 %183 = OpFOrdGreaterThan  %47  %182 %14
 OpSelectionMerge %184 None
 OpBranchConditional %183 %185 %184
 %185 = OpLabel
-%186 = OpAccessChain  %179  %26 %9
+%186 = OpAccessChain  %174  %26 %9
 OpStore %186 %13
 OpBranch %184
 %184 = OpLabel
-%187 = OpLoad  %15  %26
-%188 = OpCompositeExtract  %6  %187 1
+%187 = OpAccessChain  %174  %26 %11
+%188 = OpLoad  %6  %187
 %189 = OpFOrdLessThan  %47  %188 %13
 OpSelectionMerge %190 None
 OpBranchConditional %189 %191 %190
 %191 = OpLabel
-%192 = OpAccessChain  %179  %26 %11
+%192 = OpAccessChain  %174  %26 %11
 OpStore %192 %14
 OpBranch %190
 %190 = OpLabel
-%193 = OpLoad  %15  %26
-%194 = OpCompositeExtract  %6  %193 1
+%193 = OpAccessChain  %174  %26 %11
+%194 = OpLoad  %6  %193
 %195 = OpFOrdGreaterThan  %47  %194 %14
 OpSelectionMerge %196 None
 OpBranchConditional %195 %197 %196
 %197 = OpLabel
-%198 = OpAccessChain  %179  %26 %11
+%198 = OpAccessChain  %174  %26 %11
 OpStore %198 %13
 OpBranch %196
 %196 = OpLabel

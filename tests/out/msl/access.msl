@@ -37,8 +37,7 @@ vertex fooOutput foo(
     foo1 = 1.0;
     metal::float4x4 matrix = bar.matrix;
     type3 arr = bar.arr;
-    metal::float4 _e13 = bar.matrix[3];
-    float b = _e13.x;
+    float b = bar.matrix[3].x;
     int a = bar.data[(1 + (_buffer_sizes.size0 - 88 - 4) / 4) - 2u];
     bar.matrix[1].z = 1.0;
     bar.matrix = metal::float4x4(metal::float4(0.0), metal::float4(1.0), metal::float4(2.0), metal::float4(3.0));

@@ -129,20 +129,20 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     let _e132: vec2<f32> = vVel;
     let _e134: f32 = params.deltaT;
     vPos = (_e131 + (_e132 * _e134));
-    let _e137: vec2<f32> = vPos;
-    if ((_e137.x < -1.0)) {
+    let _e138: f32 = vPos.x;
+    if ((_e138 < -1.0)) {
         vPos.x = 1.0;
     }
-    let _e143: vec2<f32> = vPos;
-    if ((_e143.x > 1.0)) {
+    let _e144: f32 = vPos.x;
+    if ((_e144 > 1.0)) {
         vPos.x = -1.0;
     }
-    let _e149: vec2<f32> = vPos;
-    if ((_e149.y < -1.0)) {
+    let _e150: f32 = vPos.y;
+    if ((_e150 < -1.0)) {
         vPos.y = 1.0;
     }
-    let _e155: vec2<f32> = vPos;
-    if ((_e155.y > 1.0)) {
+    let _e156: f32 = vPos.y;
+    if ((_e156 > 1.0)) {
         vPos.y = -1.0;
     }
     let _e164: vec2<f32> = vPos;

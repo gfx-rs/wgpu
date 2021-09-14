@@ -44,8 +44,8 @@ float constructors(
 ) {
     Foo foo;
     foo = Foo {metal::float4(1.0), 1};
-    metal::float4 _e10 = foo.a;
-    return _e10.x;
+    float _e11 = foo.a.x;
+    return _e11;
 }
 
 kernel void main1(

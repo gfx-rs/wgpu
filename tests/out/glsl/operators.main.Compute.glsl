@@ -40,8 +40,8 @@ int unary() {
 float constructors() {
     Foo foo;
     foo = Foo(vec4(1.0), 1);
-    vec4 _e10 = foo.a;
-    return _e10.x;
+    float _e11 = foo.a.x;
+    return _e11;
 }
 
 void main() {

@@ -44,8 +44,8 @@ fn fs_main([[location(0)]] raw_normal: vec3<f32>, [[location(1)]] position: vec4
     let normal: vec3<f32> = normalize(raw_normal);
     loop {
         let _e12: u32 = i;
-        let _e14: vec4<u32> = u_globals.num_lights;
-        if ((_e12 >= min(_e14.x, c_max_lights))) {
+        let _e15: u32 = u_globals.num_lights.x;
+        if ((_e12 >= min(_e15, c_max_lights))) {
             break;
         }
         let _e19: u32 = i;

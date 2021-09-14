@@ -49,8 +49,8 @@ float constructors()
     Foo foo = (Foo)0;
 
     foo = ConstructFoo(float4(1.0.xxxx), 1);
-    float4 _expr10 = foo.a;
-    return _expr10.x;
+    float _expr11 = foo.a.x;
+    return _expr11;
 }
 
 [numthreads(1, 1, 1)]

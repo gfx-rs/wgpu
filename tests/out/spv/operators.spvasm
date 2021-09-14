@@ -41,8 +41,9 @@ OpMemberDecorate %22 1 Offset 16
 %80 = OpTypePointer Function %22
 %83 = OpTypeFunction %4
 %87 = OpTypePointer Function %19
-%89 = OpTypeInt 32 0
-%88 = OpConstant  %89  0
+%88 = OpTypePointer Function %4
+%90 = OpTypeInt 32 0
+%89 = OpConstant  %90  0
 %95 = OpTypeFunction %2
 %28 = OpFunction  %19  None %29
 %27 = OpLabel
@@ -113,9 +114,8 @@ OpBranch %84
 %85 = OpCompositeConstruct  %19  %3 %3 %3 %3
 %86 = OpCompositeConstruct  %22  %85 %7
 OpStore %79 %86
-%90 = OpAccessChain  %87  %79 %88
-%91 = OpLoad  %19  %90
-%92 = OpCompositeExtract  %4  %91 0
+%91 = OpAccessChain  %88  %79 %89 %89
+%92 = OpLoad  %4  %91
 OpReturnValue %92
 OpFunctionEnd
 %94 = OpFunction  %2  None %95

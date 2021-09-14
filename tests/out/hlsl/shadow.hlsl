@@ -48,8 +48,8 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
         }
         loop_init = false;
         uint _expr12 = i;
-        uint4 _expr14 = u_globals.num_lights;
-        if ((_expr12 >= min(_expr14.x, c_max_lights))) {
+        uint _expr15 = u_globals.num_lights.x;
+        if ((_expr12 >= min(_expr15, c_max_lights))) {
             break;
         }
         uint _expr19 = i;

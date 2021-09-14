@@ -165,6 +165,9 @@ pub enum Error<'a> {
     MissingType(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
+    NotPointer(Span),
+    AddressOfNotReference(Span),
+    AssignmentNotReference(Span),
     Other,
 }
 
@@ -409,6 +412,21 @@ impl<'a> Error<'a> {
             Error::InvalidAtomicOperandType(ref span) => ParseError {
                 message: "atomic operand type is inconsistent with the operation".to_string(),
                 labels: vec![(span.clone(), "atomic operand type is invalid".into())],
+                notes: vec![],
+            },
+            Error::NotPointer(ref span) => ParseError {
+                message: "the operand of the `*` operator must be a pointer".to_string(),
+                labels: vec![(span.clone(), "expression is not a pointer".into())],
+                notes: vec![],
+            },
+            Error::AddressOfNotReference(ref span) => ParseError {
+                message: "the operand of the `&` operator must be a reference".to_string(),
+                labels: vec![(span.clone(), "expression is not a reference".into())],
+                notes: vec![],
+            },
+            Error::AssignmentNotReference(ref span) => ParseError {
+                message: "the left-hand side of an assignment be a reference".to_string(),
+                labels: vec![(span.clone(), "expression is not a reference".into())],
                 notes: vec![],
             },
             Error::Other => ParseError {
@@ -730,7 +748,6 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             arguments: self.arguments,
             block,
             emitter,
-            rhs: true,
         }
     }
 }
@@ -752,9 +769,6 @@ struct ExpressionContext<'input, 'temp, 'out> {
     functions: &'out Arena<crate::Function>,
     block: &'temp mut crate::Block,
     emitter: &'temp mut super::Emitter,
-    /// Wether or not the current expression is in the right hand side of an
-    /// assignemnt statement or equivalent
-    rhs: bool,
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -771,20 +785,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             arguments: self.arguments,
             block: self.block,
             emitter: self.emitter,
-            rhs: self.rhs,
         }
-    }
-
-    fn reborrow_rhs(&mut self) -> ExpressionContext<'a, '_, '_> {
-        let mut reborrow = self.reborrow();
-        reborrow.rhs = true;
-        reborrow
-    }
-
-    fn reborrow_lhs(&mut self) -> ExpressionContext<'a, '_, '_> {
-        let mut reborrow = self.reborrow();
-        reborrow.rhs = false;
-        reborrow
     }
 
     fn resolve_type(
@@ -827,20 +828,25 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         mut parser: impl FnMut(
             &mut Lexer<'a>,
             ExpressionContext<'a, '_, '_>,
-        ) -> Result<Handle<crate::Expression>, Error<'a>>,
-    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        ) -> Result<TypedExpression, Error<'a>>,
+    ) -> Result<TypedExpression, Error<'a>> {
         let start = lexer.current_byte_offset() as u32;
-        let mut left = parser(lexer, self.reborrow())?;
+        let mut accumulator = parser(lexer, self.reborrow())?;
         while let Some(op) = classifier(lexer.peek().0) {
             let _ = lexer.next();
-            let right = parser(lexer, self.reborrow())?;
+            // Binary expressions always apply the load rule to their operands.
+            let mut left = self.apply_load_rule(accumulator);
+            let unloaded_right = parser(lexer, self.reborrow())?;
+            let right = self.apply_load_rule(unloaded_right);
             let end = lexer.current_byte_offset() as u32;
             left = self.expressions.append(
                 crate::Expression::Binary { op, left, right },
                 NagaSpan::new(start, end),
             );
+            // Binary expressions never produce references.
+            accumulator = TypedExpression::non_reference(left);
         }
-        Ok(left)
+        Ok(accumulator)
     }
 
     fn parse_binary_splat_op(
@@ -850,15 +856,20 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         mut parser: impl FnMut(
             &mut Lexer<'a>,
             ExpressionContext<'a, '_, '_>,
-        ) -> Result<Handle<crate::Expression>, Error<'a>>,
-    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        ) -> Result<TypedExpression, Error<'a>>,
+    ) -> Result<TypedExpression, Error<'a>> {
         let start = lexer.current_byte_offset() as u32;
-        let mut left = parser(lexer, self.reborrow())?;
+        let mut accumulator = parser(lexer, self.reborrow())?;
         while let Some(op) = classifier(lexer.peek().0) {
             let _ = lexer.next();
-            let mut right = parser(lexer, self.reborrow())?;
+            // Binary expressions always apply the load rule to their operands.
+            let mut left = self.apply_load_rule(accumulator);
+            let unloaded_right = parser(lexer, self.reborrow())?;
+            let mut right = self.apply_load_rule(unloaded_right);
             let end = lexer.current_byte_offset() as u32;
-            // insert splats, if needed by the non-'*' operations
+
+            // Insert splats, if needed by the non-'*' operations.
+            // (`BinaryOperator::Multiply` handles splats itself.)
             if op != crate::BinaryOperator::Multiply {
                 let left_size = match *self.resolve_type(left)? {
                     crate::TypeInner::Vector { size, .. } => Some(size),
@@ -880,12 +891,12 @@ impl<'a> ExpressionContext<'a, '_, '_> {
                     _ => {}
                 }
             }
-            left = self.expressions.append(
+            accumulator = TypedExpression::non_reference(self.expressions.append(
                 crate::Expression::Binary { op, left, right },
                 NagaSpan::new(start, end),
-            );
+            ));
         }
-        Ok(left)
+        Ok(accumulator)
     }
 
     /// Add a single expression to the expression table that is not covered by `self.emitter`.
@@ -901,6 +912,49 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         let result = self.expressions.append(expression, span);
         self.emitter.start(self.expressions);
         result
+    }
+
+    /// Apply the WGSL Load Rule to `expr`.
+    ///
+    /// If `expr` is has type `ref<SC, T, A>`, perform a load to produce a value of type
+    /// `T`. Otherwise, return `expr` unchanged.
+    fn apply_load_rule(&mut self, expr: TypedExpression) -> Handle<crate::Expression> {
+        if expr.is_reference {
+            let load = crate::Expression::Load {
+                pointer: expr.handle,
+            };
+            let span = self.expressions.get_span(expr.handle);
+            self.expressions.append(load, span)
+        } else {
+            expr.handle
+        }
+    }
+}
+
+/// A Naga [`Expression`] handle, with WGSL type information.
+///
+/// Naga and WGSL types are very close, but Naga lacks WGSL's 'reference' types,
+/// which we need to know to apply the Load Rule. This struct carries a Naga
+/// `Handle<Expression>` along with enough information to determine its WGSL type.
+///
+/// [`Expression`]: crate::Expression
+#[derive(Debug, Copy, Clone)]
+struct TypedExpression {
+    /// The handle of the Naga expression.
+    handle: Handle<crate::Expression>,
+
+    /// True if this expression's WGSL type is a reference.
+    ///
+    /// When this is true, `handle` must be a pointer.
+    is_reference: bool,
+}
+
+impl TypedExpression {
+    fn non_reference(handle: Handle<crate::Expression>) -> TypedExpression {
+        TypedExpression {
+            handle,
+            is_reference: false,
+        }
     }
 }
 
@@ -931,15 +985,6 @@ impl Composition {
             Some(sc) => Ok(sc as u32),
             None => Err(Error::BadAccessor(name_span)),
         }
-    }
-
-    fn extract(
-        base: Handle<crate::Expression>,
-        name: &str,
-        name_span: Span,
-    ) -> Result<crate::Expression, Error> {
-        Self::extract_impl(name, name_span)
-            .map(|index| crate::Expression::AccessIndex { base, index })
     }
 
     fn make(name: &str, name_span: Span) -> Result<Self, Error> {
@@ -980,6 +1025,7 @@ pub enum Scope {
     ConstantExpr,
     PrimaryExpr,
     SingularExpr,
+    UnaryExpr,
     GeneralExpr,
 }
 
@@ -1202,7 +1248,7 @@ impl Parser {
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         let (pointer, pointer_span) =
-            lexer.capture_span(|lexer| self.parse_singular_expression(lexer, ctx.reborrow()))?;
+            lexer.capture_span(|lexer| self.parse_general_expression(lexer, ctx.reborrow()))?;
         // Check if the pointer expression is to an atomic.
         // The IR uses regular `Expression::Load` and `Statement::Store` for atomic load/stores,
         // and it will not catch the use of a non-atomic variable here.
@@ -1258,11 +1304,11 @@ impl Parser {
         mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         lexer.open_arguments()?;
-        let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+        let pointer = self.parse_general_expression(lexer, ctx.reborrow())?;
         lexer.expect(Token::Separator(','))?;
         let ctx_span = ctx.reborrow();
         let (value, value_span) =
-            lexer.capture_span(|lexer| self.parse_singular_expression(lexer, ctx_span))?;
+            lexer.capture_span(|lexer| self.parse_general_expression(lexer, ctx_span))?;
         lexer.close_arguments()?;
 
         let expression = match *ctx.resolve_type(value)? {
@@ -1383,7 +1429,7 @@ impl Parser {
                 "arrayLength" => {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
-                    let array = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    let array = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.close_arguments()?;
                     crate::Expression::ArrayLength(array)
                 }
@@ -1464,12 +1510,12 @@ impl Parser {
                 "atomicCompareExchangeWeak" => {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
-                    let pointer = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    let pointer = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
-                    let cmp = self.parse_singular_expression(lexer, ctx.reborrow())?;
+                    let cmp = self.parse_general_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Separator(','))?;
                     let (value, value_span) = lexer.capture_span(|lexer| {
-                        self.parse_singular_expression(lexer, ctx.reborrow())
+                        self.parse_general_expression(lexer, ctx.reborrow())
                     })?;
                     lexer.close_arguments()?;
 
@@ -2005,13 +2051,13 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+    ) -> Result<TypedExpression, Error<'a>> {
         // Will be popped inside match, possibly inside parse_function_call_inner or parse_construction
         self.push_scope(Scope::PrimaryExpr, lexer);
-        let handle = match lexer.peek() {
+        let expr = match lexer.peek() {
             (Token::Paren('('), _) => {
                 let _ = lexer.next();
-                let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
+                let expr = self.parse_general_expression_for_reference(lexer, ctx.reborrow())?;
                 lexer.expect(Token::Paren(')'))?;
                 self.pop_scope(lexer);
                 expr
@@ -2023,23 +2069,45 @@ impl Parser {
                 let const_handle =
                     self.parse_const_expression_impl(token, lexer, None, ctx.types, ctx.constants)?;
                 let span = NagaSpan::from(self.pop_scope(lexer));
-                ctx.interrupt_emitter(crate::Expression::Constant(const_handle), span)
+                TypedExpression::non_reference(
+                    ctx.interrupt_emitter(crate::Expression::Constant(const_handle), span),
+                )
             }
             (Token::Word(word), span) => {
-                if let Some(&expr) = ctx.lookup_ident.get(word) {
+                if let Some(&handle) = ctx.lookup_ident.get(word) {
                     let _ = lexer.next();
                     self.pop_scope(lexer);
-                    expr
+
+                    // Not all identifiers constitute references in WGSL.
+                    let is_reference = match ctx.expressions[handle] {
+                        // `let`-bound identifiers don't evaluate to references. But that
+                        // means `let` declarations apply the Load Rule to their values,
+                        // so we will never see a `LocalVariable` in `lookup_ident` for a
+                        // `let` binding. Thus, a Naga `LocalVariable` always means a WGSL
+                        // `var` binding.
+                        crate::Expression::LocalVariable(_) => true,
+                        // Global variables in the `Handle` storage class do not evaluate
+                        // to references.
+                        crate::Expression::GlobalVariable(global) => {
+                            ctx.global_vars[global].class != crate::StorageClass::Handle
+                        }
+                        _ => false,
+                    };
+
+                    TypedExpression {
+                        handle,
+                        is_reference,
+                    }
                 } else if let Some(expr) =
-                    self.parse_function_call_inner(lexer, word, ctx.reborrow_rhs())?
+                    self.parse_function_call_inner(lexer, word, ctx.reborrow())?
                 {
                     //TODO: resolve the duplicate call in `parse_singular_expression`
                     self.pop_scope(lexer);
-                    expr
+                    TypedExpression::non_reference(expr)
                 } else {
                     let _ = lexer.next();
-                    if let Some(expr) = self.parse_construction(lexer, word, ctx.reborrow_rhs())? {
-                        expr
+                    if let Some(expr) = self.parse_construction(lexer, word, ctx.reborrow())? {
+                        TypedExpression::non_reference(expr)
                     } else {
                         return Err(Error::UnknownIdent(span, word));
                     }
@@ -2047,7 +2115,7 @@ impl Parser {
             }
             other => return Err(Error::Unexpected(other, ExpectedToken::PrimaryExpression)),
         };
-        Ok(handle)
+        Ok(expr)
     }
 
     fn parse_postfix<'a>(
@@ -2055,41 +2123,57 @@ impl Parser {
         span_start: usize,
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
-        mut handle: Handle<crate::Expression>,
-        allow_deref: bool,
-    ) -> Result<Handle<crate::Expression>, Error<'a>> {
-        let mut needs_deref = match ctx.expressions[handle] {
-            crate::Expression::LocalVariable(_) => allow_deref,
-            crate::Expression::GlobalVariable(var) => {
-                ctx.global_vars[var].class != crate::StorageClass::Handle && allow_deref
-            }
-            _ => false,
-        };
-        loop {
-            // insert the E::Load when we reach a value
-            if needs_deref {
-                let now = match *ctx.resolve_type(handle)? {
-                    crate::TypeInner::Pointer { base, class: _ } => match ctx.types[base].inner {
-                        crate::TypeInner::Scalar { .. } | crate::TypeInner::Vector { .. } => true,
-                        _ => false,
-                    },
-                    crate::TypeInner::ValuePointer { .. } => true,
-                    _ => false,
-                };
-                if now {
-                    let expression = crate::Expression::Load { pointer: handle };
-                    handle = ctx
-                        .expressions
-                        .append(expression, NagaSpan::from(lexer.span_from(span_start)));
-                    needs_deref = false;
-                }
-            }
+        expr: TypedExpression,
+    ) -> Result<TypedExpression, Error<'a>> {
+        // Parse postfix expressions, adjusting `handle` and `is_reference` along the way.
+        //
+        // Most postfix expressions don't affect `is_reference`: for example, `s.x` is a
+        // reference whenever `s` is a reference. But swizzles (WGSL spec: "multiple
+        // component selection") apply the load rule, converting references to values, so
+        // those affect `is_reference` as well as `handle`.
+        let TypedExpression {
+            mut handle,
+            mut is_reference,
+        } = expr;
 
+        loop {
             let expression = match lexer.peek().0 {
                 Token::Separator('.') => {
                     let _ = lexer.next();
                     let (name, name_span) = lexer.next_ident_with_span()?;
-                    match *ctx.resolve_type(handle)? {
+
+                    // Step lightly around `resolve_type`'s mutable borrow.
+                    ctx.resolve_type(handle)?;
+
+                    // Find the type of the composite whose components or members we're
+                    // accessing, skipping through pointers: except for swizzles, the
+                    // `Access` or `AccessIndex` expressions we'd generate are the same
+                    // either way.
+                    let temp_inner;
+                    let composite = match *ctx.typifier.get(handle, ctx.types) {
+                        crate::TypeInner::Pointer { base, .. } => &ctx.types[base].inner,
+                        crate::TypeInner::ValuePointer {
+                            size: None,
+                            kind,
+                            width,
+                            ..
+                        } => {
+                            temp_inner = crate::TypeInner::Scalar { kind, width };
+                            &temp_inner
+                        }
+                        crate::TypeInner::ValuePointer {
+                            size: Some(size),
+                            kind,
+                            width,
+                            ..
+                        } => {
+                            temp_inner = crate::TypeInner::Vector { size, kind, width };
+                            &temp_inner
+                        }
+                        ref other => other,
+                    };
+
+                    let access = match *composite {
                         crate::TypeInner::Struct { ref members, .. } => {
                             let index = members
                                 .iter()
@@ -2103,10 +2187,19 @@ impl Parser {
                         }
                         crate::TypeInner::Vector { .. } | crate::TypeInner::Matrix { .. } => {
                             match Composition::make(name, name_span)? {
-                                Composition::Multi(dst_size, pattern) => {
+                                Composition::Multi(size, pattern) => {
+                                    // Once you apply the load rule, the expression is no
+                                    // longer a reference.
+                                    let current_expr = TypedExpression {
+                                        handle,
+                                        is_reference,
+                                    };
+                                    let vector = ctx.apply_load_rule(current_expr);
+                                    is_reference = false;
+
                                     crate::Expression::Swizzle {
-                                        size: dst_size,
-                                        vector: handle,
+                                        size,
+                                        vector,
                                         pattern,
                                     }
                                 }
@@ -2116,30 +2209,14 @@ impl Parser {
                                 },
                             }
                         }
-                        crate::TypeInner::ValuePointer { .. } => {
-                            Composition::extract(handle, name, name_span)?
-                        }
-                        crate::TypeInner::Pointer { base, class: _ } => match ctx.types[base].inner
-                        {
-                            crate::TypeInner::Struct { ref members, .. } => {
-                                let index = members
-                                    .iter()
-                                    .position(|m| m.name.as_deref() == Some(name))
-                                    .ok_or(Error::BadAccessor(name_span))?
-                                    as u32;
-                                crate::Expression::AccessIndex {
-                                    base: handle,
-                                    index,
-                                }
-                            }
-                            _ => Composition::extract(handle, name, name_span)?,
-                        },
                         _ => return Err(Error::BadAccessor(name_span)),
-                    }
+                    };
+
+                    access
                 }
                 Token::Paren('[') => {
                     let (_, open_brace_span) = lexer.next();
-                    let index = self.parse_general_expression(lexer, ctx.reborrow_rhs())?;
+                    let index = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let close_brace_span = lexer.expect_span(Token::Paren(']'))?;
 
                     if let crate::Expression::Constant(constant) = ctx.expressions[index] {
@@ -2168,86 +2245,124 @@ impl Parser {
                         }
                     }
                 }
-                _ => {
-                    // after we reached for the value, load it
-                    return Ok(if needs_deref {
-                        let expression = crate::Expression::Load { pointer: handle };
-                        ctx.expressions
-                            .append(expression, ctx.expressions.get_span(handle))
-                    } else {
-                        handle
-                    });
-                }
+                _ => break,
             };
 
             handle = ctx
                 .expressions
                 .append(expression, NagaSpan::from(lexer.span_from(span_start)));
         }
+
+        Ok(TypedExpression {
+            handle,
+            is_reference,
+        })
     }
 
+    /// Parse a `unary_expression`.
+    fn parse_unary_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<TypedExpression, Error<'a>> {
+        self.push_scope(Scope::UnaryExpr, lexer);
+        //TODO: refactor this to avoid backing up
+        let expr = match lexer.peek().0 {
+            Token::Operation('-') => {
+                let _ = lexer.next();
+                let unloaded_expr = self.parse_unary_expression(lexer, ctx.reborrow())?;
+                let expr = ctx.apply_load_rule(unloaded_expr);
+                let expr = crate::Expression::Unary {
+                    op: crate::UnaryOperator::Negate,
+                    expr,
+                };
+                let span = NagaSpan::from(self.peek_scope(lexer));
+                TypedExpression::non_reference(ctx.expressions.append(expr, span))
+            }
+            Token::Operation('!') | Token::Operation('~') => {
+                let _ = lexer.next();
+                let unloaded_expr = self.parse_unary_expression(lexer, ctx.reborrow())?;
+                let expr = ctx.apply_load_rule(unloaded_expr);
+                let expr = crate::Expression::Unary {
+                    op: crate::UnaryOperator::Not,
+                    expr,
+                };
+                let span = NagaSpan::from(self.peek_scope(lexer));
+                TypedExpression::non_reference(ctx.expressions.append(expr, span))
+            }
+            Token::Operation('*') => {
+                let _ = lexer.next();
+                // The `*` operator does not accept a reference, so we must apply the Load
+                // Rule here. But the operator itself simply changes the type from
+                // `ptr<SC, T, A>` to `ref<SC, T, A>`, so we generate no code for the
+                // operator itself. We simply return a `TypedExpression` with
+                // `is_reference` set to true.
+                let unloaded_pointer = self.parse_unary_expression(lexer, ctx.reborrow())?;
+                let pointer = ctx.apply_load_rule(unloaded_pointer);
+
+                // An expression like `&*ptr` may generate no Naga IR at all, but WGSL requires
+                // an error if `ptr` is not a pointer. So we have to type-check this ourselves.
+                if ctx.resolve_type(pointer)?.pointer_class().is_none() {
+                    let span = ctx
+                        .expressions
+                        .get_span(pointer)
+                        .to_range()
+                        .unwrap_or_else(|| self.peek_scope(lexer));
+                    return Err(Error::NotPointer(span));
+                }
+
+                TypedExpression {
+                    handle: pointer,
+                    is_reference: true,
+                }
+            }
+            Token::Operation('&') => {
+                let _ = lexer.next();
+                // The `&` operator simply converts a reference to a pointer. And since a
+                // reference is required, the Load Rule is not applied.
+                let operand = self.parse_unary_expression(lexer, ctx.reborrow())?;
+                if !operand.is_reference {
+                    let span = ctx
+                        .expressions
+                        .get_span(operand.handle)
+                        .to_range()
+                        .unwrap_or_else(|| self.peek_scope(lexer));
+                    return Err(Error::AddressOfNotReference(span));
+                }
+
+                // No code is generated. We just declare the pointer a reference now.
+                TypedExpression {
+                    is_reference: false,
+                    ..operand
+                }
+            }
+            _ => self.parse_singular_expression(lexer, ctx.reborrow())?,
+        };
+
+        self.pop_scope(lexer);
+        Ok(expr)
+    }
+
+    /// Parse a `singular_expression`.
     fn parse_singular_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+    ) -> Result<TypedExpression, Error<'a>> {
         let start = lexer.current_byte_offset();
         self.push_scope(Scope::SingularExpr, lexer);
-        //TODO: refactor this to avoid backing up
-        let (allow_deref, handle) = match lexer.peek().0 {
-            Token::Operation('-') => {
-                let _ = lexer.next();
-                let expr = crate::Expression::Unary {
-                    op: crate::UnaryOperator::Negate,
-                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
-                };
-                let span = self.peek_scope(lexer);
-                (true, ctx.expressions.append(expr, NagaSpan::from(span)))
-            }
-            Token::Operation('!') | Token::Operation('~') => {
-                let _ = lexer.next();
-                let expr = crate::Expression::Unary {
-                    op: crate::UnaryOperator::Not,
-                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
-                };
-                let span = self.peek_scope(lexer);
-                (true, ctx.expressions.append(expr, NagaSpan::from(span)))
-            }
-            Token::Operation('*') => {
-                let _ = lexer.next();
-                let pointer = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                let span = self.peek_scope(lexer);
-                (
-                    false,
-                    match ctx.rhs {
-                        true => ctx
-                            .expressions
-                            .append(crate::Expression::Load { pointer }, NagaSpan::from(span)),
-                        false => pointer,
-                    },
-                )
-            }
-            Token::Operation('&') => {
-                let _ = lexer.next();
-                let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                (false, handle)
-            }
-            _ => {
-                let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                (ctx.rhs, handle)
-            }
-        };
-
-        let post_handle = self.parse_postfix(start, lexer, ctx.reborrow(), handle, allow_deref)?;
+        let primary_expr = self.parse_primary_expression(lexer, ctx.reborrow())?;
+        let singular_expr = self.parse_postfix(start, lexer, ctx.reborrow(), primary_expr)?;
         self.pop_scope(lexer);
-        Ok(post_handle)
+
+        Ok(singular_expr)
     }
 
     fn parse_equality_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+    ) -> Result<TypedExpression, Error<'a>> {
         // equality_expression
         context.parse_binary_op(
             lexer,
@@ -2308,7 +2423,7 @@ impl Parser {
                                                 _ => None,
                                             },
                                             |lexer, context| {
-                                                self.parse_singular_expression(lexer, context)
+                                                self.parse_unary_expression(lexer, context)
                                             },
                                         )
                                     },
@@ -2324,8 +2439,17 @@ impl Parser {
     fn parse_general_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        mut context: ExpressionContext<'a, '_, '_>,
+        mut ctx: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        let expr = self.parse_general_expression_for_reference(lexer, ctx.reborrow())?;
+        Ok(ctx.apply_load_rule(expr))
+    }
+
+    fn parse_general_expression_for_reference<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut context: ExpressionContext<'a, '_, '_>,
+    ) -> Result<TypedExpression, Error<'a>> {
         self.push_scope(Scope::GeneralExpr, lexer);
         // logical_or_expression
         let handle = context.parse_binary_op(
@@ -2937,7 +3061,12 @@ impl Parser {
     ) -> Result<(), Error<'a>> {
         let span_start = lexer.current_byte_offset();
         context.emitter.start(context.expressions);
-        let pointer = self.parse_singular_expression(lexer, context.reborrow_lhs())?;
+        let reference = self.parse_unary_expression(lexer, context.reborrow())?;
+        // The left hand side of an assignment must be a reference.
+        if !reference.is_reference {
+            let span = span_start..lexer.current_byte_offset();
+            return Err(Error::AssignmentNotReference(span));
+        }
         lexer.expect(Token::Operation('='))?;
         let value = self.parse_general_expression(lexer, context.reborrow())?;
         let span_end = lexer.current_byte_offset();
@@ -2945,7 +3074,10 @@ impl Parser {
             .block
             .extend(context.emitter.finish(context.expressions));
         context.block.push(
-            crate::Statement::Store { pointer, value },
+            crate::Statement::Store {
+                pointer: reference.handle,
+                value,
+            },
             NagaSpan::from(span_start..span_end),
         );
         Ok(())

@@ -96,6 +96,7 @@ OpDecorate %75 Location 0
 %75 = OpVariable  %76  Output
 %78 = OpTypeFunction %2
 %88 = OpTypePointer Uniform %13
+%89 = OpTypePointer Uniform %10
 %96 = OpTypePointer StorageBuffer %18
 %98 = OpTypePointer StorageBuffer %17
 %36 = OpFunction  %4  None %37
@@ -148,9 +149,8 @@ OpLoopMerge %84 %86 None
 OpBranch %85
 %85 = OpLabel
 %87 = OpLoad  %10  %66
-%89 = OpAccessChain  %88  %25 %11
-%90 = OpLoad  %13  %89
-%91 = OpCompositeExtract  %10  %90 0
+%90 = OpAccessChain  %89  %25 %11 %11
+%91 = OpLoad  %10  %90
 %92 = OpExtInst  %10  %1 UMin %91 %9
 %93 = OpUGreaterThanEqual  %42  %87 %92
 OpSelectionMerge %94 None

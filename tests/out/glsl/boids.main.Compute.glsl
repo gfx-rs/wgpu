@@ -131,20 +131,20 @@ void main() {
     vec2 _e132 = vVel;
     float _e134 = _group_0_binding_0.deltaT;
     vPos = (_e131 + (_e132 * _e134));
-    vec2 _e137 = vPos;
-    if ((_e137.x < -1.0)) {
+    float _e138 = vPos.x;
+    if ((_e138 < -1.0)) {
         vPos.x = 1.0;
     }
-    vec2 _e143 = vPos;
-    if ((_e143.x > 1.0)) {
+    float _e144 = vPos.x;
+    if ((_e144 > 1.0)) {
         vPos.x = -1.0;
     }
-    vec2 _e149 = vPos;
-    if ((_e149.y < -1.0)) {
+    float _e150 = vPos.y;
+    if ((_e150 < -1.0)) {
         vPos.y = 1.0;
     }
-    vec2 _e155 = vPos;
-    if ((_e155.y > 1.0)) {
+    float _e156 = vPos.y;
+    if ((_e156 > 1.0)) {
         vPos.y = -1.0;
     }
     vec2 _e164 = vPos;

@@ -63,8 +63,8 @@ fragment fs_mainOutput fs_main(
         }
         loop_init = false;
         metal::uint _e12 = i;
-        metal::uint4 _e14 = u_globals.num_lights;
-        if (_e12 >= metal::min(_e14.x, c_max_lights)) {
+        uint _e15 = u_globals.num_lights.x;
+        if (_e12 >= metal::min(_e15, c_max_lights)) {
             break;
         }
         metal::uint _e19 = i;
