@@ -4,6 +4,8 @@ use parking_lot::Mutex;
 
 use std::{sync::Arc, thread};
 
+const MAX_COMMAND_BUFFERS: u64 = 2048;
+
 unsafe impl Send for super::Adapter {}
 unsafe impl Sync for super::Adapter {}
 
@@ -18,7 +20,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         &self,
         features: wgt::Features,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let queue = self.shared.device.lock().new_command_queue();
+        let queue = self
+            .shared
+            .device
+            .lock()
+            .new_command_queue_with_max_command_buffer_count(MAX_COMMAND_BUFFERS);
         Ok(crate::OpenDevice {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
