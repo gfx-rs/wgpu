@@ -1,0 +1,50 @@
+name: Test
+
+on:
+  pull_request:
+    types: [ready_for_review]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v2
+        with:
+          path: wgpu
+      - name: checkout cts
+        uses: actions/checkout@v2
+        with:
+          repository: gpuweb/cts
+          ref: a44186d9fa1d5babdb4a198e8ef04cf0d7035ebb # from "gh-pages" branch
+          path: cts
+
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          profile: minimal
+
+      - name: build CTS runner
+        run: cargo build --manifest-path wgpu/cts_runner/Cargo.toml
+
+      - name: run CTS
+        shell: bash
+        run: >-
+          cd cts;
+          grep -v '^//' ../wgpu/cts_runner/test.lst | while IFS=$' \t\r\n' read test; do
+            echo "=== Running $test ===";
+            cargo run --manifest-path ../wgpu/cts_runner/Cargo.toml --frozen -- ./tools/run_deno "$test";
+          done
