@@ -5,6 +5,7 @@ on:
     branches: [master, staging]
     tags: [v0.*]
   pull_request:
+    types: [labeled, opened, synchronize]
 
 env:
   RUST_BACKTRACE: 1
@@ -163,6 +164,9 @@ jobs:
           done
 
   cts:
+    # Only run if we add this label
+    if: contains(github.event.pull_request.labels.*.name, 'needs testing')
+
     strategy:
       fail-fast: false
       matrix:
