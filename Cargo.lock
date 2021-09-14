@@ -1828,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.10.6"
+version = "0.10.7"
 dependencies = [
  "arrayvec",
  "ash",
