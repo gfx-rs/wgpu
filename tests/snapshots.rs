@@ -101,9 +101,6 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     } else {
         naga::valid::Capabilities::empty()
     };
-    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
-        .validate(module)
-        .unwrap();
 
     let dest = PathBuf::from(root).join(BASE_DIR_OUT);
 
@@ -114,6 +111,14 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
             let string = ron::ser::to_string_pretty(module, config).unwrap();
             fs::write(dest.join(format!("ir/{}.ron", name)), string).unwrap();
         }
+    }
+
+    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        .validate(module)
+        .unwrap();
+
+    #[cfg(feature = "serialize")]
+    {
         if targets.contains(Targets::ANALYSIS) {
             let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
             let string = ron::ser::to_string_pretty(&info, config).unwrap();
