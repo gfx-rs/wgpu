@@ -5,7 +5,6 @@ on:
     branches: [master, staging]
     tags: [v0.*]
   pull_request:
-    types: [labeled, opened, synchronize]
 
 env:
   RUST_BACKTRACE: 1
@@ -161,75 +160,6 @@ jobs:
             WGPU_BACKEND=$backend cargo test --target ${{ matrix.target }} -p wgpu-types -p wgpu-hal -p wgpu-core --no-fail-fast -- --nocapture --test-threads=1
             # run coretests
             WGPU_BACKEND=$backend cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture --test-threads=1
-          done
-
-  cts:
-    # Only run if we add this label
-    if: contains(github.event.pull_request.labels.*.name, 'needs testing')
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Windows
-          - name: Windows x86_64
-            os: windows-2019
-            target: x86_64-pc-windows-msvc
-            backends: dx12 # dx11
-
-    name: CTS ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: checkout repo
-        uses: actions/checkout@v2
-        with:
-          path: wgpu
-      
-      - name: checkout cts
-        uses: actions/checkout@v2
-        with:
-          repository: gpuweb/cts
-          ref: a44186d9fa1d5babdb4a198e8ef04cf0d7035ebb # from "gh-pages" branch
-          path: cts
-
-      - name: install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          profile: minimal
-
-      - name: caching
-        uses: Swatinem/rust-cache@v1
-        with:
-          key: cts-a # suffix for cache busting
-          working-directory: wgpu/cts_runner
-          target-dir: wgpu/cts_runner/target
-
-      # We enable line numbers for panics, but that's it
-      - name: disable debug
-        shell: bash
-        run: |
-          mkdir wgpu/.cargo
-          echo """[profile.dev]
-          debug = 1" > wgpu/.cargo/config.toml
-
-      - name: build CTS runner
-        run: |
-          cargo build --manifest-path wgpu/cts_runner/Cargo.toml 
-
-      - name: run CTS
-        if: ${{ matrix.os }} == 'windows-2019'
-        shell: bash
-        run: |
-          cd cts;
-          for backend in ${{ matrix.backends }}; do
-            echo "======= CTS TESTS $backend ======";
-            grep -v '^//' ../wgpu/cts_runner/test.lst | while IFS=$' \t\r\n' read test; do
-              echo "=== Running $test ===";
-              DENO_WEBGPU_BACKEND=$backend cargo run --manifest-path ../wgpu/cts_runner/Cargo.toml --frozen -- ./tools/run_deno --verbose "$test";
-            done
           done
 
   fmt:
