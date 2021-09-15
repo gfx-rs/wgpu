@@ -118,7 +118,21 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let mut parameters_sampling =
             vec![super::image::SamplingFlags::empty(); fun.arguments.len()];
 
-        let mut block_ctx = BlockContext::default();
+        let mut block_ctx = BlockContext {
+            phis: Default::default(),
+            blocks: Default::default(),
+            body_for_label: Default::default(),
+            mergers: Default::default(),
+            bodies: Default::default(),
+            function_id: fun_id,
+            expressions: &mut fun.expressions,
+            local_arena: &mut fun.local_variables,
+            const_arena: &mut module.constants,
+            type_arena: &module.types,
+            global_arena: &module.global_variables,
+            arguments: &fun.arguments,
+            parameter_sampling: &mut parameters_sampling,
+        };
         // Insert the main body whose parent is also himself
         block_ctx.bodies.push(super::Body::with_parent(0));
 
@@ -132,18 +146,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     fun_inst.expect(2)?;
                     let block_id = self.next()?;
 
-                    self.next_block(
-                        block_id,
-                        fun_id,
-                        &mut fun.expressions,
-                        &mut fun.local_variables,
-                        &mut module.constants,
-                        &module.types,
-                        &module.global_variables,
-                        &fun.arguments,
-                        &mut parameters_sampling,
-                        &mut block_ctx,
-                    )?;
+                    self.next_block(block_id, &mut block_ctx)?;
                 }
                 spirv::Op::FunctionEnd => {
                     fun_inst.expect(1)?;
@@ -174,7 +177,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         // to get the spill.
         for phi in block_ctx.phis.iter() {
             // Get a pointer to the local variable for the phi's value.
-            let phi_pointer = fun.expressions.append(
+            let phi_pointer = block_ctx.expressions.append(
                 crate::Expression::LocalVariable(phi.local),
                 crate::Span::default(),
             );
@@ -213,7 +216,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     // variable, to ensure we can still use it at the end of the
                     // predecessor.
                     let ty = self.lookup_type[&source_lexp.type_id].handle;
-                    let local = fun.local_variables.append(
+                    let local = block_ctx.local_arena.append(
                         crate::LocalVariable {
                             name: None,
                             ty,
@@ -222,17 +225,17 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                         crate::Span::default(),
                     );
 
-                    let pointer = fun.expressions.append(
+                    let pointer = block_ctx.expressions.append(
                         crate::Expression::LocalVariable(local),
                         crate::Span::default(),
                     );
 
                     // Get the spilled value of the source expression.
-                    let start = fun.expressions.len();
-                    let expr = fun
+                    let start = block_ctx.expressions.len();
+                    let expr = block_ctx
                         .expressions
                         .append(crate::Expression::Load { pointer }, crate::Span::default());
-                    let range = fun.expressions.range_from(start);
+                    let range = block_ctx.expressions.range_from(start);
 
                     block_ctx
                         .blocks
@@ -513,7 +516,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     }
 }
 
-impl BlockContext {
+impl<'function> BlockContext<'function> {
     /// Consumes the `BlockContext` producing a Ir [`Block`](crate::Block)
     fn lower(mut self) -> crate::Block {
         fn lower_impl(

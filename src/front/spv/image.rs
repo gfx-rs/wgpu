@@ -311,18 +311,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn parse_image_load(
         &mut self,
         mut words_left: u16,
-        type_arena: &Arena<crate::Type>,
-        global_arena: &Arena<crate::GlobalVariable>,
-        arguments: &[FunctionArgument],
-        block_ctx: &mut super::BlockContext,
+        ctx: &mut super::BlockContext,
         emitter: &mut crate::front::Emitter,
         block: &mut crate::Block,
-        expressions: &mut Arena<crate::Expression>,
-        local_arena: &mut Arena<crate::LocalVariable>,
         block_id: spirv::Word,
         body_idx: usize,
     ) -> Result<(), Error> {
@@ -369,21 +363,17 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         // No need to call get_expr_handle here since only globals/arguments are
         // allowed as images and they are always in the root scope
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_ty = expressions.get_image_expr_ty(image_lexp.handle, global_arena, arguments)?;
+        let image_ty = ctx.expressions.get_image_expr_ty(
+            image_lexp.handle,
+            ctx.global_arena,
+            ctx.arguments,
+        )?;
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
-        let coord_handle = self.get_expr_handle(
-            coordinate_id,
-            coord_lexp,
-            block_ctx,
-            emitter,
-            block,
-            expressions,
-            local_arena,
-            body_idx,
-        );
+        let coord_handle =
+            self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let (coordinate, array_index) = match type_arena[image_ty].inner {
+        let (coordinate, array_index) = match ctx.type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -397,8 +387,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 },
                 coord_handle,
                 coord_type_handle,
-                type_arena,
-                expressions,
+                ctx.type_arena,
+                ctx.expressions,
             ),
             _ => return Err(Error::InvalidImage(image_ty)),
         };
@@ -412,7 +402,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr, self.span_from_with_op(start)),
+                handle: ctx.expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
                 block_id,
             },
@@ -425,15 +415,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         &mut self,
         mut words_left: u16,
         options: SamplingOptions,
-        type_arena: &Arena<crate::Type>,
-        global_arena: &Arena<crate::GlobalVariable>,
-        arguments: &[FunctionArgument],
-        parameters_sampling: &mut [SamplingFlags],
-        block_ctx: &mut super::BlockContext,
+        ctx: &mut super::BlockContext,
         emitter: &mut crate::front::Emitter,
         block: &mut crate::Block,
-        expressions: &mut Arena<crate::Expression>,
-        local_arena: &mut Arena<crate::LocalVariable>,
         block_id: spirv::Word,
         body_idx: usize,
     ) -> Result<(), Error> {
@@ -463,32 +447,16 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 spirv::ImageOperands::BIAS => {
                     let bias_expr = self.next()?;
                     let bias_lexp = self.lookup_expression.lookup(bias_expr)?;
-                    let bias_handle = self.get_expr_handle(
-                        bias_expr,
-                        bias_lexp,
-                        block_ctx,
-                        emitter,
-                        block,
-                        expressions,
-                        local_arena,
-                        body_idx,
-                    );
+                    let bias_handle =
+                        self.get_expr_handle(bias_expr, bias_lexp, ctx, emitter, block, body_idx);
                     level = crate::SampleLevel::Bias(bias_handle);
                     words_left -= 1;
                 }
                 spirv::ImageOperands::LOD => {
                     let lod_expr = self.next()?;
                     let lod_lexp = self.lookup_expression.lookup(lod_expr)?;
-                    let lod_handle = self.get_expr_handle(
-                        lod_expr,
-                        lod_lexp,
-                        block_ctx,
-                        emitter,
-                        block,
-                        expressions,
-                        local_arena,
-                        body_idx,
-                    );
+                    let lod_handle =
+                        self.get_expr_handle(lod_expr, lod_lexp, ctx, emitter, block, body_idx);
                     level = if options.compare {
                         log::debug!("Assuming {:?} is zero", lod_handle);
                         crate::SampleLevel::Zero
@@ -503,11 +471,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     let grad_x_handle = self.get_expr_handle(
                         grad_x_expr,
                         grad_x_lexp,
-                        block_ctx,
+                        ctx,
                         emitter,
                         block,
-                        expressions,
-                        local_arena,
                         body_idx,
                     );
                     let grad_y_expr = self.next()?;
@@ -515,11 +481,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     let grad_y_handle = self.get_expr_handle(
                         grad_y_expr,
                         grad_y_lexp,
-                        block_ctx,
+                        ctx,
                         emitter,
                         block,
-                        expressions,
-                        local_arena,
                         body_idx,
                     );
                     level = if options.compare {
@@ -556,16 +520,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
         let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
-        let coord_handle = self.get_expr_handle(
-            coordinate_id,
-            coord_lexp,
-            block_ctx,
-            emitter,
-            block,
-            expressions,
-            local_arena,
-            body_idx,
-        );
+        let coord_handle =
+            self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
 
         let sampling_bit = if options.compare {
@@ -574,31 +530,31 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             SamplingFlags::REGULAR
         };
 
-        let image_ty = match expressions[si_lexp.image] {
+        let image_ty = match ctx.expressions[si_lexp.image] {
             crate::Expression::GlobalVariable(handle) => {
                 if let Some(flags) = self.handle_sampling.get_mut(&handle) {
                     *flags |= sampling_bit;
                 }
 
-                global_arena[handle].ty
+                ctx.global_arena[handle].ty
             }
             crate::Expression::FunctionArgument(i) => {
-                parameters_sampling[i as usize] |= sampling_bit;
-                arguments[i as usize].ty
+                ctx.parameter_sampling[i as usize] |= sampling_bit;
+                ctx.arguments[i as usize].ty
             }
             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
         };
-        match expressions[si_lexp.sampler] {
+        match ctx.expressions[si_lexp.sampler] {
             crate::Expression::GlobalVariable(handle) => {
                 *self.handle_sampling.get_mut(&handle).unwrap() |= sampling_bit
             }
             crate::Expression::FunctionArgument(i) => {
-                parameters_sampling[i as usize] |= sampling_bit;
+                ctx.parameter_sampling[i as usize] |= sampling_bit;
             }
             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
         }
 
-        let ((coordinate, array_index), depth_ref) = match type_arena[image_ty].inner {
+        let ((coordinate, array_index), depth_ref) = match ctx.type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -615,8 +571,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     },
                     coord_handle,
                     coord_type_handle,
-                    type_arena,
-                    expressions,
+                    ctx.type_arena,
+                    ctx.expressions,
                 ),
                 {
                     match dref_id {
@@ -625,14 +581,14 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
                             if options.project {
                                 let required_size = dim.required_coordinate_size();
-                                let right = expressions.append(
+                                let right = ctx.expressions.append(
                                     crate::Expression::AccessIndex {
                                         base: coord_handle,
                                         index: required_size.map_or(1, |size| size as u32),
                                     },
                                     crate::Span::default(),
                                 );
-                                expr = expressions.append(
+                                expr = ctx.expressions.append(
                                     crate::Expression::Binary {
                                         op: crate::BinaryOperator::Divide,
                                         left: expr,
@@ -662,7 +618,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr, self.span_from_with_op(start)),
+                handle: ctx.expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
                 block_id,
             },
@@ -670,15 +626,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn parse_image_query_size(
         &mut self,
         at_level: bool,
-        block_ctx: &mut super::BlockContext,
+        ctx: &mut super::BlockContext,
         emitter: &mut crate::front::Emitter,
         block: &mut crate::Block,
-        expressions: &mut Arena<crate::Expression>,
-        local_arena: &mut Arena<crate::LocalVariable>,
         block_id: spirv::Word,
         body_idx: usize,
     ) -> Result<(), Error> {
@@ -689,16 +642,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let level = if at_level {
             let level_id = self.next()?;
             let level_lexp = self.lookup_expression.lookup(level_id)?;
-            Some(self.get_expr_handle(
-                level_id,
-                level_lexp,
-                block_ctx,
-                emitter,
-                block,
-                expressions,
-                local_arena,
-                body_idx,
-            ))
+            Some(self.get_expr_handle(level_id, level_lexp, ctx, emitter, block, body_idx))
         } else {
             None
         };
@@ -715,7 +659,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: expressions.append(expr, self.span_from_with_op(start)),
+                handle: ctx.expressions.append(expr, self.span_from_with_op(start)),
                 type_id: result_type_id,
                 block_id,
             },
