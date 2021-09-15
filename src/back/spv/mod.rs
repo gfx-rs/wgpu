@@ -218,19 +218,47 @@ impl LocalImageType {
 
 /// A SPIR-V type constructed during code generation.
 ///
-/// In the process of writing SPIR-V, we need to synthesize various types for
-/// intermediate results and such. However, it's inconvenient to use
-/// `crate::Type` or `crate::TypeInner` for these, as the IR module is immutable
-/// so we can't ever create a `Handle<Type>` to refer to them. So for local use
-/// in the SPIR-V writer, we have this home-grown type enum that covers only the
-/// cases we need (for example, it doesn't cover structs).
+/// This is the variant of [`LookupType`] used to represent types that might not
+/// be available in the arena. Variants are present here for one of two reasons:
 ///
-/// As explained in §2.8 of the SPIR-V spec, some classes of type instructions
-/// must be unique; for example, you can't have two `OpTypeInt 32 1`
-/// instructions in the same module. `Writer::lookup_type` maps each `LocalType`
-/// value for which we've written instructions to its id, so we can avoid
-/// writing out duplicates. `LocalType` also includes variants like `Pointer`
-/// that do not need to be unique - but it is harmless to avoid the duplication.
+/// -   They represent types synthesized during code generation, as explained
+///     in the documentation for [`LookupType`].
+///
+/// -   They represent types for which SPIR-V forbids duplicate `OpType...`
+///     instructions, requiring deduplication.
+///
+/// This is not a complete copy of [`TypeInner`]: for example, SPIR-V generation
+/// never synthesizes new struct types, so `LocalType` has nothing for that.
+///
+/// Each `LocalType` variant should be handled identically to its analogous
+/// `TypeInner` variant. You can use the [`make_local`] function to help with
+/// this, by converting everything possible to a `LocalType` before inspecting
+/// it.
+///
+/// ## `Localtype` equality and SPIR-V `OpType` uniqueness
+///
+/// The definition of `Eq` on `LocalType` is carefully chosen to help us follow
+/// certain SPIR-V rules. SPIR-V §2.8 requires some classes of `OpType...`
+/// instructions to be unique; for example, you can't have two `OpTypeInt 32 1`
+/// instructions in the same module. All 32-bit signed integers must use the
+/// same type id.
+///
+/// All SPIR-V types that must be unique can be represented as a `LocalType`,
+/// and two `LocalType`s are always `Eq` if SPIR-V would require them to use the
+/// same `OpType...` instruction. This lets us avoid duplicates by recording the
+/// ids of the type instructions we've already generated in a hash table,
+/// [`Writer::lookup_type`], keyed by `LocalType`.
+///
+/// As another example, [`LocalImageType`], stored in the `LocalType::Image`
+/// variant, is designed to help us deduplicate `OpTypeImage` instructions. See
+/// its documentation for details.
+///
+/// `LocalType` also includes variants like `Pointer` that do not need to be
+/// unique - but it is harmless to avoid the duplication.
+///
+/// As it always must, the `Hash` implementation respects the `Eq` relation.
+///
+/// [`TypeInner`]: crate::TypeInner
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LocalType {
     /// A scalar, vector, or pointer to one of those.
@@ -259,6 +287,28 @@ enum LocalType {
     Sampler,
 }
 
+/// A type encountered during SPIR-V generation.
+///
+/// In the process of writing SPIR-V, we need to synthesize various types for
+/// intermediate results and such: pointer types, vector/matrix component types,
+/// or even booleans, which usually appear in SPIR-V code even when they're not
+/// used by the module source.
+///
+/// However, we can't use `crate::Type` or `crate::TypeInner` for these, as the
+/// type arena may not contain what we need (it only contains types used
+/// directly by other parts of the IR), and the IR module is immutable, so we
+/// can't add anything to it.
+///
+/// So for local use in the SPIR-V writer, we use this type, which holds either
+/// a handle into the arena, or a [`LocalType`] containing something synthesized
+/// locally.
+///
+/// This is very similar to the [`proc::TypeResolution`] enum, with `LocalType`
+/// playing the role of `TypeInner`. However, `LocalType` also has other
+/// properties needed for SPIR-V generation; see the description of
+/// [`LocalType`] for details.
+///
+/// [`proc::TypeResolution`]: crate::proc::TypeResolution
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LookupType {
     Handle(Handle<crate::Type>),
@@ -511,8 +561,9 @@ bitflags::bitflags! {
         const DEBUG = 0x1;
         /// Flip Y coordinate of `BuiltIn::Position` output.
         const ADJUST_COORDINATE_SPACE = 0x2;
-        /// Emit `OpLabel` for input/output locations.
-        /// Some drivers treat it as semantic, not allowing any conflicts.
+        /// Emit `OpName` for input/output locations.
+        /// Contrary to spec, some drivers treat it as semantic, not allowing
+        /// any conflicts.
         const LABEL_VARYINGS = 0x4;
     }
 }
