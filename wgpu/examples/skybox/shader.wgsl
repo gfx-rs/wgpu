@@ -15,7 +15,7 @@ struct Data {
     cam_pos: vec4<f32>;
 };
 [[group(0), binding(0)]]
-var r_data: Data;
+var<uniform> r_data: Data;
 
 [[stage(vertex)]]
 fn vs_sky([[builtin(vertex_index)]] vertex_index: u32) -> SkyOutput {

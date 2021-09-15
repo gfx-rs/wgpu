@@ -847,6 +847,13 @@ impl super::Adapter {
                 spv::WriterFlags::LABEL_VARYINGS,
                 self.phd_capabilities.properties.vendor_id != crate::auxil::db::qualcomm::VENDOR,
             );
+            flags.set(
+                spv::WriterFlags::FORCE_POINT_SIZE,
+                //Note: we could technically disable this when we are compiling separate entry points,
+                // and we know exactly that the primitive topology is not `PointList`.
+                // But this requires cloning the `spv::Options` struct, which has heap allocations.
+                true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
+            );
             spv::Options {
                 lang_version: (1, 0),
                 flags,

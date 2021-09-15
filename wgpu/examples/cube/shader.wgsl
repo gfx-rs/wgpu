@@ -8,7 +8,7 @@ struct Locals {
     transform: mat4x4<f32>;
 };
 [[group(0), binding(0)]]
-var r_locals: Locals;
+var<uniform> r_locals: Locals;
 
 [[stage(vertex)]]
 fn vs_main(
