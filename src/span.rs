@@ -54,7 +54,7 @@ impl Span {
 
     /// Check wether `self` was defined or is a default/unknown span
     fn is_defined(&self) -> bool {
-        *self == Self::default()
+        *self != Self::default()
     }
 }
 
