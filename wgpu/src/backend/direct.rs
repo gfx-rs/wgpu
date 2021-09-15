@@ -971,10 +971,12 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         desc: &ShaderModuleDescriptor,
+        runtime_checks: bool,
     ) -> Self::ShaderModuleId {
         let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
+            runtime_checks,
         };
         let source = match desc.source {
             #[cfg(feature = "spirv")]
@@ -1014,6 +1016,9 @@ impl crate::Context for Context {
         let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
+            // Doesn't matter the value since spirv shaders aren't mutated to include
+            // runtime checks
+            runtime_checks: false,
         };
         let (id, error) = wgc::gfx_select!(
             device.id => global.device_create_shader_module_spirv(device.id, &descriptor, Borrowed(&desc.source), PhantomData)

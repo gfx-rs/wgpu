@@ -898,6 +898,7 @@ pub enum ShaderInput<'a> {
 
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
+    pub runtime_checks: bool,
 }
 
 /// Describes a programmable pipeline stage.

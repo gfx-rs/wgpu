@@ -372,7 +372,10 @@ pub struct CommandBuffer {
 #[derive(Debug)]
 pub enum ShaderModule {
     Raw(vk::ShaderModule),
-    Intermediate(crate::NagaShader),
+    Intermediate {
+        naga_shader: crate::NagaShader,
+        runtime_checks: bool,
+    },
 }
 
 #[derive(Debug)]
