@@ -692,15 +692,15 @@ trait StringValueLookup<'a> {
     type Value;
     fn lookup(&self, key: &'a str, span: Span) -> Result<Self::Value, Error<'a>>;
 }
-impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Handle<crate::Expression>> {
-    type Value = Handle<crate::Expression>;
+impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, TypedExpression> {
+    type Value = TypedExpression;
     fn lookup(&self, key: &'a str, span: Span) -> Result<Self::Value, Error<'a>> {
         self.get(key).cloned().ok_or(Error::UnknownIdent(span, key))
     }
 }
 
 struct StatementContext<'input, 'temp, 'out> {
-    lookup_ident: &'temp mut FastHashMap<&'input str, Handle<crate::Expression>>,
+    lookup_ident: &'temp mut FastHashMap<&'input str, TypedExpression>,
     typifier: &'temp mut super::Typifier,
     variables: &'out mut Arena<crate::LocalVariable>,
     expressions: &'out mut Arena<crate::Expression>,
@@ -758,7 +758,7 @@ struct SamplingContext {
 }
 
 struct ExpressionContext<'input, 'temp, 'out> {
-    lookup_ident: &'temp FastHashMap<&'input str, Handle<crate::Expression>>,
+    lookup_ident: &'temp FastHashMap<&'input str, TypedExpression>,
     typifier: &'temp mut super::Typifier,
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
@@ -811,7 +811,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         image_name: &'a str,
         span: Span,
     ) -> Result<SamplingContext, Error<'a>> {
-        let image = self.lookup_ident.lookup(image_name, span.clone())?;
+        let image = self.lookup_ident.lookup(image_name, span.clone())?.handle;
         Ok(SamplingContext {
             image,
             arrayed: match *self.resolve_type(image)? {
@@ -1567,7 +1567,7 @@ impl Parser {
                     lexer.close_arguments()?;
                     crate::Expression::ImageSample {
                         image: sc.image,
-                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
                         coordinate,
                         array_index,
                         offset,
@@ -1600,7 +1600,7 @@ impl Parser {
                     lexer.close_arguments()?;
                     crate::Expression::ImageSample {
                         image: sc.image,
-                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
                         coordinate,
                         array_index,
                         offset,
@@ -1633,7 +1633,7 @@ impl Parser {
                     lexer.close_arguments()?;
                     crate::Expression::ImageSample {
                         image: sc.image,
-                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
                         coordinate,
                         array_index,
                         offset,
@@ -1668,7 +1668,7 @@ impl Parser {
                     lexer.close_arguments()?;
                     crate::Expression::ImageSample {
                         image: sc.image,
-                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
                         coordinate,
                         array_index,
                         offset,
@@ -1701,7 +1701,7 @@ impl Parser {
                     lexer.close_arguments()?;
                     crate::Expression::ImageSample {
                         image: sc.image,
-                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
                         coordinate,
                         array_index,
                         offset,
@@ -1734,7 +1734,7 @@ impl Parser {
                     lexer.close_arguments()?;
                     crate::Expression::ImageSample {
                         image: sc.image,
-                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
                         coordinate,
                         array_index,
                         offset,
@@ -1746,7 +1746,10 @@ impl Parser {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
-                    let image = ctx.lookup_ident.lookup(image_name, image_span.clone())?;
+                    let image = ctx
+                        .lookup_ident
+                        .lookup(image_name, image_span.clone())?
+                        .handle;
                     lexer.expect(Token::Separator(','))?;
                     let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let (class, arrayed) = match *ctx.resolve_type(image)? {
@@ -1779,7 +1782,7 @@ impl Parser {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
-                    let image = ctx.lookup_ident.lookup(image_name, image_span)?;
+                    let image = ctx.lookup_ident.lookup(image_name, image_span)?.handle;
                     let level = if lexer.skip(Token::Separator(',')) {
                         let expr = self.parse_general_expression(lexer, ctx.reborrow())?;
                         Some(expr)
@@ -1796,7 +1799,7 @@ impl Parser {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
-                    let image = ctx.lookup_ident.lookup(image_name, image_span)?;
+                    let image = ctx.lookup_ident.lookup(image_name, image_span)?.handle;
                     lexer.close_arguments()?;
                     crate::Expression::ImageQuery {
                         image,
@@ -1807,7 +1810,7 @@ impl Parser {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
-                    let image = ctx.lookup_ident.lookup(image_name, image_span)?;
+                    let image = ctx.lookup_ident.lookup(image_name, image_span)?.handle;
                     lexer.close_arguments()?;
                     crate::Expression::ImageQuery {
                         image,
@@ -1818,7 +1821,7 @@ impl Parser {
                     let _ = lexer.next();
                     lexer.open_arguments()?;
                     let (image_name, image_span) = lexer.next_ident_with_span()?;
-                    let image = ctx.lookup_ident.lookup(image_name, image_span)?;
+                    let image = ctx.lookup_ident.lookup(image_name, image_span)?.handle;
                     lexer.close_arguments()?;
                     crate::Expression::ImageQuery {
                         image,
@@ -2074,18 +2077,15 @@ impl Parser {
                 )
             }
             (Token::Word(word), span) => {
-                if let Some(&handle) = ctx.lookup_ident.get(word) {
+                if let Some(definition) = ctx.lookup_ident.get(word) {
                     let _ = lexer.next();
                     self.pop_scope(lexer);
 
                     // Not all identifiers constitute references in WGSL.
-                    let is_reference = match ctx.expressions[handle] {
-                        // `let`-bound identifiers don't evaluate to references. But that
-                        // means `let` declarations apply the Load Rule to their values,
-                        // so we will never see a `LocalVariable` in `lookup_ident` for a
-                        // `let` binding. Thus, a Naga `LocalVariable` always means a WGSL
-                        // `var` binding.
-                        crate::Expression::LocalVariable(_) => true,
+                    let is_reference = match ctx.expressions[definition.handle] {
+                        // `let`-bound identifiers don't evaluate to references: `let`
+                        // declarations apply the Load Rule to their values.
+                        crate::Expression::LocalVariable(_) => definition.is_reference,
                         // Global variables in the `Handle` storage class do not evaluate
                         // to references.
                         crate::Expression::GlobalVariable(global) => {
@@ -2095,7 +2095,7 @@ impl Parser {
                     };
 
                     TypedExpression {
-                        handle,
+                        handle: definition.handle,
                         is_reference,
                     }
                 } else if let Some(expr) =
@@ -3183,7 +3183,13 @@ impl Parser {
                             }
                         }
                         block.extend(emitter.finish(context.expressions));
-                        context.lookup_ident.insert(name, expr_id);
+                        context.lookup_ident.insert(
+                            name,
+                            TypedExpression {
+                                handle: expr_id,
+                                is_reference: false,
+                            },
+                        );
                         context
                             .named_expressions
                             .insert(expr_id, String::from(name));
@@ -3291,7 +3297,13 @@ impl Parser {
                         let expr_id = context
                             .expressions
                             .append(crate::Expression::LocalVariable(var_id), Default::default());
-                        context.lookup_ident.insert(name, expr_id);
+                        context.lookup_ident.insert(
+                            name,
+                            TypedExpression {
+                                handle: expr_id,
+                                is_reference: true,
+                            },
+                        );
 
                         if let Init::Variable(value) = init {
                             Some(crate::Statement::Store {
@@ -3597,7 +3609,8 @@ impl Parser {
                         let (image_name, image_span) = lexer.next_ident_with_span()?;
                         let image = context
                             .lookup_ident
-                            .lookup(image_name, image_span.clone())?;
+                            .lookup(image_name, image_span.clone())?
+                            .handle;
                         lexer.expect(Token::Separator(','))?;
                         let mut expr_context = context.as_expression(block, &mut emitter);
                         let arrayed = match *expr_context.resolve_type(image)? {
@@ -3722,15 +3735,22 @@ impl Parser {
         // populate initial expressions
         let mut expressions = Arena::new();
         for (&name, expression) in lookup_global_expression.iter() {
-            let span = match *expression {
-                crate::Expression::GlobalVariable(handle) => {
-                    module.global_variables.get_span(handle)
-                }
-                crate::Expression::Constant(handle) => module.constants.get_span(handle),
+            let (span, is_reference) = match *expression {
+                crate::Expression::GlobalVariable(handle) => (
+                    module.global_variables.get_span(handle),
+                    module.global_variables[handle].class != crate::StorageClass::Handle,
+                ),
+                crate::Expression::Constant(handle) => (module.constants.get_span(handle), false),
                 _ => unreachable!(),
             };
-            let expr_handle = expressions.append(expression.clone(), span);
-            lookup_ident.insert(name, expr_handle);
+            let expression = expressions.append(expression.clone(), span);
+            lookup_ident.insert(
+                name,
+                TypedExpression {
+                    handle: expression,
+                    is_reference,
+                },
+            );
         }
         // read parameter list
         let mut arguments = Vec::new();
@@ -3747,11 +3767,17 @@ impl Parser {
             let (param_name, param_name_span, param_type, _access) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
             let param_index = arguments.len() as u32;
-            let expression_token = expressions.append(
+            let expression = expressions.append(
                 crate::Expression::FunctionArgument(param_index),
                 NagaSpan::from(param_name_span),
             );
-            lookup_ident.insert(param_name, expression_token);
+            lookup_ident.insert(
+                param_name,
+                TypedExpression {
+                    handle: expression,
+                    is_reference: false,
+                },
+            );
             arguments.push(crate::FunctionArgument {
                 name: Some(param_name.to_string()),
                 ty: param_type,
