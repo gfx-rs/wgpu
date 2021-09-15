@@ -35,11 +35,10 @@ jobs:
           path: wgpu
       
       - name: checkout cts
-        uses: actions/checkout@v2
-        with:
-          repository: gpuweb/cts
-          ref: a44186d9fa1d5babdb4a198e8ef04cf0d7035ebb # from "gh-pages" branch
-          path: cts
+        run: |
+          git clone https://github.com/gpuweb/cts.git
+          cd cts
+          git checkout $(cat ../wgpu/cts_runner/revision.txt)
 
       - name: install rust
         uses: actions-rs/toolchain@v1

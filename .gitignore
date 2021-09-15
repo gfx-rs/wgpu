@@ -20,3 +20,6 @@ wgpu/red.png
 # Output from invalid comparison tests
 **/*-actual.png
 **/*-difference.png
+
+# Readme says to check out CTS here
+cts/
