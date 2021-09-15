@@ -2207,6 +2207,7 @@ impl CommandEncoder {
     ///
     /// - Buffer offsets or copy size not a multiple of [`COPY_BUFFER_ALIGNMENT`].
     /// - Copy would overrun buffer.
+    /// - Copy within the same buffer.
     pub fn copy_buffer_to_buffer(
         &mut self,
         source: &Buffer,
@@ -2300,7 +2301,7 @@ impl CommandEncoder {
     ///
     /// - `CLEAR_COMMANDS` extension not enabled
     /// - Texture does not have `COPY_DST` usage.
-    /// - Range it out of bounds
+    /// - Range is out of bounds
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
         Context::command_encoder_clear_texture(
             &*self.context,
