@@ -1,8 +1,11 @@
 (
-	spv_version: (1, 0),
-	spv_capabilities: [ Shader, SampleRateShading ],
-	spv_debug: true,
-	spv_adjust_coordinate_space: true,
+	spv: (
+		version: (1, 0),
+		capabilities: [ Shader, SampleRateShading ],
+		debug: true,
+		force_point_size: true,
+		adjust_coordinate_space: true,
+	),
 	glsl: (
 		version: Desktop(400),
 		writer_flags: (bits: 0),

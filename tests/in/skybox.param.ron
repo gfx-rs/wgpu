@@ -1,8 +1,10 @@
 (
 	spv_flow_dump_prefix: "",
-	spv_version: (1, 0),
-	spv_debug: false,
-	spv_adjust_coordinate_space: false,
+	spv: (
+		version: (1, 0),
+		debug: false,
+		adjust_coordinate_space: false,
+	),
 	msl_custom: true,
 	msl: (
 		lang_version: (2, 1),

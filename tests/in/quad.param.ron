@@ -1,7 +1,9 @@
 (
-	spv_version: (1, 0),
-	spv_debug: true,
-	spv_adjust_coordinate_space: true,
+	spv: (
+		version: (1, 0),
+		debug: true,
+		adjust_coordinate_space: true,
+	),
 	glsl_custom: true,
 	glsl: (
 		version: Embedded(300),

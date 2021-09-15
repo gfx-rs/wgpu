@@ -1,7 +1,9 @@
 (
-        index_bounds_check_policy: Restrict,
-        buffer_bounds_check_policy: Unchecked,
-        image_bounds_check_policy: ReadZeroSkipWrite,
-	spv_version: (1, 1),
-	spv_debug: true,
+	index_bounds_check_policy: Restrict,
+	buffer_bounds_check_policy: Unchecked,
+	image_bounds_check_policy: ReadZeroSkipWrite,
+	spv: (
+		version: (1, 1),
+		debug: true,
+	),
 )

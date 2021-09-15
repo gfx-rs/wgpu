@@ -1,4 +1,6 @@
 (
-	spv_version: (1, 0),
-	spv_debug: true,
+	spv: (
+		version: (1, 0),
+		debug: true,
+	),
 )

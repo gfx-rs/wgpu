@@ -40,6 +40,31 @@ impl From<BoundsCheckPolicyArg> for naga::back::BoundsCheckPolicy {
     }
 }
 
+#[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+#[derive(serde::Deserialize)]
+struct SpvOutVersion(u8, u8);
+impl Default for SpvOutVersion {
+    fn default() -> Self {
+        SpvOutVersion(1, 1)
+    }
+}
+
+#[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+#[derive(Default, serde::Deserialize)]
+struct SpirvOutParameters {
+    version: SpvOutVersion,
+    #[serde(default)]
+    capabilities: naga::FastHashSet<spirv::Capability>,
+    #[serde(default)]
+    debug: bool,
+    #[serde(default)]
+    adjust_coordinate_space: bool,
+    #[serde(default)]
+    force_point_size: bool,
+    #[serde(default)]
+    separate_entry_points: bool,
+}
+
 #[derive(Default, serde::Deserialize)]
 struct Parameters {
     #[serde(default)]
@@ -54,21 +79,9 @@ struct Parameters {
     #[allow(dead_code)]
     #[serde(default)]
     image_bounds_check_policy: BoundsCheckPolicyArg,
-
-    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
-    spv_version: (u8, u8),
     #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
     #[serde(default)]
-    spv_capabilities: naga::FastHashSet<spirv::Capability>,
-    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
-    #[serde(default)]
-    spv_debug: bool,
-    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
-    #[serde(default)]
-    spv_adjust_coordinate_space: bool,
-    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
-    #[serde(default)]
-    spv_separate_entry_points: bool,
+    spv: SpirvOutParameters,
     #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     #[serde(default)]
     msl: naga::back::msl::Options,
@@ -179,18 +192,22 @@ fn write_output_spv(
     use rspirv::binary::Disassemble;
 
     let mut flags = spv::WriterFlags::LABEL_VARYINGS;
-    flags.set(spv::WriterFlags::DEBUG, params.spv_debug);
+    flags.set(spv::WriterFlags::DEBUG, params.spv.debug);
     flags.set(
         spv::WriterFlags::ADJUST_COORDINATE_SPACE,
-        params.spv_adjust_coordinate_space,
+        params.spv.adjust_coordinate_space,
+    );
+    flags.set(
+        spv::WriterFlags::FORCE_POINT_SIZE,
+        params.spv.force_point_size,
     );
     let options = spv::Options {
-        lang_version: params.spv_version,
+        lang_version: (params.spv.version.0, params.spv.version.1),
         flags,
-        capabilities: if params.spv_capabilities.is_empty() {
+        capabilities: if params.spv.capabilities.is_empty() {
             None
         } else {
-            Some(params.spv_capabilities.clone())
+            Some(params.spv.capabilities.clone())
         },
 
         bounds_check_policies: naga::back::BoundsCheckPolicies {
@@ -202,7 +219,7 @@ fn write_output_spv(
         ..spv::Options::default()
     };
 
-    if params.spv_separate_entry_points {
+    if params.spv.separate_entry_points {
         for ep in module.entry_points.iter() {
             let pipeline_options = spv::PipelineOptions {
                 entry_point: ep.name.clone(),

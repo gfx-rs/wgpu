@@ -1,8 +1,11 @@
 (
-	spv_version: (1, 0),
-	spv_capabilities: [ Shader, SampleRateShading ],
-	spv_adjust_coordinate_space: false,
-	spv_separate_entry_points: true,
+	spv: (
+		version: (1, 0),
+		capabilities: [ Shader, SampleRateShading ],
+		adjust_coordinate_space: false,
+		force_point_size: true,
+		separate_entry_points: true,
+	),
 	hlsl_custom: true,
 	hlsl: (
 		shader_model: V5_1,
