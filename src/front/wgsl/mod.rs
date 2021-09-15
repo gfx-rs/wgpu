@@ -165,9 +165,9 @@ pub enum Error<'a> {
     MissingType(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
+    Pointer(&'static str, Span),
     NotPointer(Span),
-    AddressOfNotReference(Span),
-    AssignmentNotReference(Span),
+    NotReference(&'static str, Span),
     Other,
 }
 
@@ -419,14 +419,14 @@ impl<'a> Error<'a> {
                 labels: vec![(span.clone(), "expression is not a pointer".into())],
                 notes: vec![],
             },
-            Error::AddressOfNotReference(ref span) => ParseError {
-                message: "the operand of the `&` operator must be a reference".to_string(),
+            Error::NotReference(what, ref span) => ParseError {
+                message: format!("{} must be a reference", what),
                 labels: vec![(span.clone(), "expression is not a reference".into())],
                 notes: vec![],
             },
-            Error::AssignmentNotReference(ref span) => ParseError {
-                message: "the left-hand side of an assignment be a reference".to_string(),
-                labels: vec![(span.clone(), "expression is not a reference".into())],
+            Error::Pointer(what, ref span) => ParseError {
+                message: format!("{} must not be a pointer", what),
+                labels: vec![(span.clone(), "expression is a pointer".into())],
                 notes: vec![],
             },
             Error::Other => ParseError {
@@ -2135,43 +2135,56 @@ impl Parser {
             mut handle,
             mut is_reference,
         } = expr;
+        let mut prefix_span = lexer.span_from(span_start);
 
         loop {
+            // Step lightly around `resolve_type`'s mutable borrow.
+            ctx.resolve_type(handle)?;
+
+            // Find the type of the composite whose elements, components or members we're
+            // accessing, skipping through references: except for swizzles, the `Access`
+            // or `AccessIndex` expressions we'd generate are the same either way.
+            //
+            // Pointers, however, are not permitted. For error checks below, note whether
+            // the base expression is a WGSL pointer.
+            let temp_inner;
+            let (composite, wgsl_pointer) = match *ctx.typifier.get(handle, ctx.types) {
+                crate::TypeInner::Pointer { base, .. } => (&ctx.types[base].inner, !is_reference),
+                crate::TypeInner::ValuePointer {
+                    size: None,
+                    kind,
+                    width,
+                    ..
+                } => {
+                    temp_inner = crate::TypeInner::Scalar { kind, width };
+                    (&temp_inner, !is_reference)
+                }
+                crate::TypeInner::ValuePointer {
+                    size: Some(size),
+                    kind,
+                    width,
+                    ..
+                } => {
+                    temp_inner = crate::TypeInner::Vector { size, kind, width };
+                    (&temp_inner, !is_reference)
+                }
+                ref other => (other, false),
+            };
+
             let expression = match lexer.peek().0 {
                 Token::Separator('.') => {
                     let _ = lexer.next();
                     let (name, name_span) = lexer.next_ident_with_span()?;
 
-                    // Step lightly around `resolve_type`'s mutable borrow.
-                    ctx.resolve_type(handle)?;
-
-                    // Find the type of the composite whose components or members we're
-                    // accessing, skipping through pointers: except for swizzles, the
-                    // `Access` or `AccessIndex` expressions we'd generate are the same
-                    // either way.
-                    let temp_inner;
-                    let composite = match *ctx.typifier.get(handle, ctx.types) {
-                        crate::TypeInner::Pointer { base, .. } => &ctx.types[base].inner,
-                        crate::TypeInner::ValuePointer {
-                            size: None,
-                            kind,
-                            width,
-                            ..
-                        } => {
-                            temp_inner = crate::TypeInner::Scalar { kind, width };
-                            &temp_inner
-                        }
-                        crate::TypeInner::ValuePointer {
-                            size: Some(size),
-                            kind,
-                            width,
-                            ..
-                        } => {
-                            temp_inner = crate::TypeInner::Vector { size, kind, width };
-                            &temp_inner
-                        }
-                        ref other => other,
-                    };
+                    // WGSL doesn't allow accessing members on pointers, or swizzling
+                    // them. But Naga IR doesn't distinguish pointers and references, so
+                    // we must check here.
+                    if wgsl_pointer {
+                        return Err(Error::Pointer(
+                            "the value accessed by a `.member` expression",
+                            prefix_span,
+                        ));
+                    }
 
                     let access = match *composite {
                         crate::TypeInner::Struct { ref members, .. } => {
@@ -2219,6 +2232,15 @@ impl Parser {
                     let index = self.parse_general_expression(lexer, ctx.reborrow())?;
                     let close_brace_span = lexer.expect_span(Token::Paren(']'))?;
 
+                    // WGSL doesn't allow pointers to be subscripted. But Naga IR doesn't
+                    // distinguish pointers and references, so we must check here.
+                    if wgsl_pointer {
+                        return Err(Error::Pointer(
+                            "the value indexed by a `[]` subscripting expression",
+                            prefix_span,
+                        ));
+                    }
+
                     if let crate::Expression::Constant(constant) = ctx.expressions[index] {
                         let expr_span = open_brace_span.end..close_brace_span.start;
 
@@ -2248,9 +2270,10 @@ impl Parser {
                 _ => break,
             };
 
+            prefix_span = lexer.span_from(span_start);
             handle = ctx
                 .expressions
-                .append(expression, NagaSpan::from(lexer.span_from(span_start)));
+                .append(expression, NagaSpan::from(prefix_span.clone()));
         }
 
         Ok(TypedExpression {
@@ -2327,7 +2350,7 @@ impl Parser {
                         .get_span(operand.handle)
                         .to_range()
                         .unwrap_or_else(|| self.peek_scope(lexer));
-                    return Err(Error::AddressOfNotReference(span));
+                    return Err(Error::NotReference("the operand of the `&` operator", span));
                 }
 
                 // No code is generated. We just declare the pointer a reference now.
@@ -3065,7 +3088,10 @@ impl Parser {
         // The left hand side of an assignment must be a reference.
         if !reference.is_reference {
             let span = span_start..lexer.current_byte_offset();
-            return Err(Error::AssignmentNotReference(span));
+            return Err(Error::NotReference(
+                "the left-hand side of an assignment",
+                span,
+            ));
         }
         lexer.expect(Token::Operation('='))?;
         let value = self.parse_general_expression(lexer, context.reborrow())?;

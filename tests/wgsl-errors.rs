@@ -493,6 +493,44 @@ fn local_var_missing_type() {
     );
 }
 
+#[test]
+fn postfix_pointers() {
+    check(
+        r#"
+            fn main() {
+                var v: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+                let pv = &v;
+                let a = *pv[3]; // Problematic line
+            }
+        "#,
+        r#"error: the value indexed by a `[]` subscripting expression must not be a pointer
+  ┌─ wgsl:5:26
+  │
+5 │                 let a = *pv[3]; // Problematic line
+  │                          ^^ expression is a pointer
+
+"#,
+    );
+
+    check(
+        r#"
+            struct S { m: i32; };
+            fn main() {
+                var s: S = S(42);
+                let ps = &s;
+                let a = *ps.m; // Problematic line
+            }
+        "#,
+        r#"error: the value accessed by a `.member` expression must not be a pointer
+  ┌─ wgsl:6:26
+  │
+6 │                 let a = *ps.m; // Problematic line
+  │                          ^^ expression is a pointer
+
+"#,
+    );
+}
+
 macro_rules! check_validation_error {
     // We want to support an optional guard expression after the pattern, so
     // that we can check values we can't match against, like strings.
@@ -778,6 +816,13 @@ fn valid_access() {
             // `Access` to a `ValuePointer`.
             return temp[i][j];
         }
+        ",
+        "
+        fn main() {
+            var v: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+            let pv = &v;
+            let a = (*pv)[3];
+        }
         ":
         Ok(_)
     }
@@ -789,7 +834,7 @@ fn invalid_local_vars() {
         "
         struct Unsized { data: array<f32>; };
         fn local_ptr_dynamic_array(okay: ptr<storage, Unsized>) {
-            var not_okay: ptr<storage, array<f32>> = okay.data;
+            var not_okay: ptr<storage, array<f32>> = &(*okay).data;
         }
         ":
         Err(naga::valid::ValidationError::Function {
