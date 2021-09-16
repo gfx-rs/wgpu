@@ -539,6 +539,9 @@ impl Context {
                         BinaryOperator::Add
                         | BinaryOperator::Subtract
                         | BinaryOperator::Divide
+                        | BinaryOperator::And
+                        | BinaryOperator::ExclusiveOr
+                        | BinaryOperator::InclusiveOr
                         | BinaryOperator::ShiftLeft
                         | BinaryOperator::ShiftRight => {
                             let scalar_vector = self.add_expression(
@@ -562,7 +565,12 @@ impl Context {
                         }
                     },
                     (&TypeInner::Scalar { .. }, &TypeInner::Vector { size, .. }) => match op {
-                        BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Divide => {
+                        BinaryOperator::Add
+                        | BinaryOperator::Subtract
+                        | BinaryOperator::Divide
+                        | BinaryOperator::And
+                        | BinaryOperator::ExclusiveOr
+                        | BinaryOperator::InclusiveOr => {
                             let scalar_vector = self.add_expression(
                                 Expression::Splat { size, value: left },
                                 meta,
