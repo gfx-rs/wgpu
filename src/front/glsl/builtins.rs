@@ -360,7 +360,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
             // 0b100 is the latest since 3D arrayed images aren't allowed
             for bits in 0..(0b101) {
                 let dim = bits & 0b1 | (bits & 0b100) >> 1;
-                let arrayed = bits & 0b1000 == 0b1000;
+                let arrayed = bits & 0b10 == 0b10;
 
                 let image = TypeInner::Image {
                     dim: match dim {
