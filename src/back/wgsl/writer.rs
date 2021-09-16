@@ -998,11 +998,20 @@ impl<W: Write> Writer<W> {
     /// argument's value directly, so any pointer it produces is merely the value
     /// passed by the caller.
     fn plain_form_indirection(
+        &self,
         expr: Handle<crate::Expression>,
         module: &Module,
         func_ctx: &back::FunctionCtx<'_>,
     ) -> Indirection {
         use crate::Expression as Ex;
+
+        // Named expressions are `let` expressions, which apply the Load Rule,
+        // so if their type is a Naga pointer, then that must be a WGSL pointer
+        // as well.
+        if self.named_expressions.contains_key(&expr) {
+            return Indirection::Ordinary;
+        }
+
         match func_ctx.expressions[expr] {
             Ex::LocalVariable(_) => Indirection::Reference,
             Ex::GlobalVariable(handle) => {
@@ -1080,27 +1089,46 @@ impl<W: Write> Writer<W> {
         func_ctx: &back::FunctionCtx<'_>,
         requested: Indirection,
     ) -> BackendResult {
+        // If the plain form of the expression is not what we need, emit the
+        // operator necessary to correct that.
+        let plain = self.plain_form_indirection(expr, module, func_ctx);
+        match (requested, plain) {
+            (Indirection::Ordinary, Indirection::Reference) => {
+                write!(self.out, "(&")?;
+                self.write_expr_plain_form(module, expr, func_ctx, plain)?;
+                write!(self.out, ")")?;
+            }
+            (Indirection::Reference, Indirection::Ordinary) => {
+                write!(self.out, "(*")?;
+                self.write_expr_plain_form(module, expr, func_ctx, plain)?;
+                write!(self.out, ")")?;
+            }
+            (_, _) => self.write_expr_plain_form(module, expr, func_ctx, plain)?,
+        }
+
+        Ok(())
+    }
+
+    /// Write the 'plain form' of `expr`.
+    ///
+    /// An expression's 'plain form' is the most general rendition of that
+    /// expression into WGSL, lacking `&` or `*` operators. The plain forms of
+    /// `LocalVariable(x)` and `GlobalVariable(g)` are simply `x` and `g`. Such
+    /// Naga expressions represent both WGSL pointers and references; it's the
+    /// caller's responsibility to distinguish those cases appropriately.
+    fn write_expr_plain_form(
+        &mut self,
+        module: &Module,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx<'_>,
+        indirection: Indirection,
+    ) -> BackendResult {
         use crate::Expression;
 
         if let Some(name) = self.named_expressions.get(&expr) {
             write!(self.out, "{}", name)?;
             return Ok(());
         }
-
-        // If the plain form of the expression is not what we need, emit the
-        // operator necessary to correct that.
-        let plain = Self::plain_form_indirection(expr, module, func_ctx);
-        let opened_paren = match (requested, plain) {
-            (Indirection::Ordinary, Indirection::Reference) => {
-                write!(self.out, "(&")?;
-                true
-            }
-            (Indirection::Reference, Indirection::Ordinary) => {
-                write!(self.out, "(*")?;
-                true
-            }
-            (_, _) => false,
-        };
 
         let expression = &func_ctx.expressions[expr];
 
@@ -1173,7 +1201,7 @@ impl<W: Write> Writer<W> {
             }
             // TODO: copy-paste from glsl-out
             Expression::Access { base, index } => {
-                self.write_expr_with_indirection(module, base, func_ctx, plain)?;
+                self.write_expr_with_indirection(module, base, func_ctx, indirection)?;
                 write!(self.out, "[")?;
                 self.write_expr(module, index, func_ctx)?;
                 write!(self.out, "]")?
@@ -1183,7 +1211,7 @@ impl<W: Write> Writer<W> {
                 let base_ty_res = &func_ctx.info[base].ty;
                 let mut resolved = base_ty_res.inner_with(&module.types);
 
-                self.write_expr_with_indirection(module, base, func_ctx, plain)?;
+                self.write_expr_with_indirection(module, base, func_ctx, indirection)?;
 
                 let base_ty_handle = match *resolved {
                     TypeInner::Pointer { base, class: _ } => {
@@ -1609,10 +1637,6 @@ impl<W: Write> Writer<W> {
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_) | Expression::AtomicResult { .. } => {}
         }
-
-        if opened_paren {
-            write!(self.out, ")")?
-        };
 
         Ok(())
     }
