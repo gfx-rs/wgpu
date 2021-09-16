@@ -51,56 +51,6 @@ enum Indirection {
     Reference,
 }
 
-/// Return the sort of indirection that `expr`'s plain form evaluates to.
-///
-/// An expression's 'plain form' is the most general rendition of that
-/// expression into WGSL, lacking `&` or `*` operators:
-///
-/// - The plain form of `LocalVariable(x)` is simply `x`, which is a reference
-///   to the local variable's storage.
-///
-/// - The plain form of `GlobalVariable(g)` is simply `g`, which is usually a
-///   reference to the global variable's storage. However, globals in the
-///   `Handle` storage class are immutable, and `GlobalVariable` expressions for
-///   those produce the value directly, not a pointer to it. Such
-///   `GlobalVariable` expressions are `Ordinary`.
-///
-/// - `Access` and `AccessIndex` are `Reference` when their `base` operand is a
-///   pointer. If they are applied directly to a composite value, they are
-///   `Ordinary`.
-///
-/// Note that `FunctionArgument` expressions are never `Reference`, even when
-/// the argument's type is `Pointer`. `FunctionArgument` always evaluates to the
-/// argument's value directly, so any pointer it produces is merely the value
-/// passed by the caller.
-fn plain_form_indirection(
-    expr: Handle<crate::Expression>,
-    module: &Module,
-    func_ctx: &back::FunctionCtx<'_>,
-) -> Indirection {
-    use crate::Expression as Ex;
-    match func_ctx.expressions[expr] {
-        Ex::LocalVariable(_) => Indirection::Reference,
-        Ex::GlobalVariable(handle) => {
-            let global = &module.global_variables[handle];
-            match global.class {
-                crate::StorageClass::Handle => Indirection::Ordinary,
-                _ => Indirection::Reference,
-            }
-        }
-        Ex::Access { base, .. } | Ex::AccessIndex { base, .. } => {
-            let base_ty = func_ctx.info[base].ty.inner_with(&module.types);
-            match *base_ty {
-                crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
-                    Indirection::Reference
-                }
-                _ => Indirection::Ordinary,
-            }
-        }
-        _ => Indirection::Ordinary,
-    }
-}
-
 pub struct Writer<W> {
     out: W,
     names: crate::FastHashMap<NameKey, String>,
@@ -1025,6 +975,56 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Return the sort of indirection that `expr`'s plain form evaluates to.
+    ///
+    /// An expression's 'plain form' is the most general rendition of that
+    /// expression into WGSL, lacking `&` or `*` operators:
+    ///
+    /// - The plain form of `LocalVariable(x)` is simply `x`, which is a reference
+    ///   to the local variable's storage.
+    ///
+    /// - The plain form of `GlobalVariable(g)` is simply `g`, which is usually a
+    ///   reference to the global variable's storage. However, globals in the
+    ///   `Handle` storage class are immutable, and `GlobalVariable` expressions for
+    ///   those produce the value directly, not a pointer to it. Such
+    ///   `GlobalVariable` expressions are `Ordinary`.
+    ///
+    /// - `Access` and `AccessIndex` are `Reference` when their `base` operand is a
+    ///   pointer. If they are applied directly to a composite value, they are
+    ///   `Ordinary`.
+    ///
+    /// Note that `FunctionArgument` expressions are never `Reference`, even when
+    /// the argument's type is `Pointer`. `FunctionArgument` always evaluates to the
+    /// argument's value directly, so any pointer it produces is merely the value
+    /// passed by the caller.
+    fn plain_form_indirection(
+        expr: Handle<crate::Expression>,
+        module: &Module,
+        func_ctx: &back::FunctionCtx<'_>,
+    ) -> Indirection {
+        use crate::Expression as Ex;
+        match func_ctx.expressions[expr] {
+            Ex::LocalVariable(_) => Indirection::Reference,
+            Ex::GlobalVariable(handle) => {
+                let global = &module.global_variables[handle];
+                match global.class {
+                    crate::StorageClass::Handle => Indirection::Ordinary,
+                    _ => Indirection::Reference,
+                }
+            }
+            Ex::Access { base, .. } | Ex::AccessIndex { base, .. } => {
+                let base_ty = func_ctx.info[base].ty.inner_with(&module.types);
+                match *base_ty {
+                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                        Indirection::Reference
+                    }
+                    _ => Indirection::Ordinary,
+                }
+            }
+            _ => Indirection::Ordinary,
+        }
+    }
+
     fn start_named_expr(
         &mut self,
         module: &Module,
@@ -1089,7 +1089,7 @@ impl<W: Write> Writer<W> {
 
         // If the plain form of the expression is not what we need, emit the
         // operator necessary to correct that.
-        let plain = plain_form_indirection(expr, module, func_ctx);
+        let plain = Self::plain_form_indirection(expr, module, func_ctx);
         let opened_paren = match (requested, plain) {
             (Indirection::Ordinary, Indirection::Reference) => {
                 write!(self.out, "(&")?;
