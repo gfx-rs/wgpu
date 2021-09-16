@@ -25,10 +25,13 @@ use std::ops::Range;
 ///
 /// ```rust
 /// # use naga::front::glsl::SourceMetadata;
+/// # #[cfg(feature = "codespan_reporting")]
+/// # {
 /// use codespan_reporting::diagnostic::Label;
 /// # let file = ();
 /// # let meta = SourceMetadata::default();
 /// let label = Label::primary(file, meta);
+/// # }
 /// ```
 ///
 /// # Notes
