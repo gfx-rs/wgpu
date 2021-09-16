@@ -101,6 +101,7 @@ impl Parser {
                 expr,
                 load: true,
                 mutable: data.mutable,
+                constant: None,
                 entry_arg: Some(idx),
             },
         );
@@ -595,7 +596,7 @@ impl Parser {
             })?;
             if let Some(name) = name {
                 let lookup = GlobalLookup {
-                    kind: GlobalLookupKind::Constant(init),
+                    kind: GlobalLookupKind::Constant(init, ty),
                     entry_arg: None,
                     mutable: false,
                 };

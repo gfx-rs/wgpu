@@ -9,7 +9,7 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub enum GlobalLookupKind {
     Variable(Handle<GlobalVariable>),
-    Constant(Handle<Constant>),
+    Constant(Handle<Constant>, Handle<Type>),
     BlockSelect(Handle<GlobalVariable>, u32),
 }
 
@@ -82,6 +82,7 @@ pub struct VariableReference {
     pub expr: Handle<Expression>,
     pub load: bool,
     pub mutable: bool,
+    pub constant: Option<(Handle<Constant>, Handle<Type>)>,
     pub entry_arg: Option<usize>,
 }
 

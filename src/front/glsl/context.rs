@@ -24,15 +24,18 @@ pub enum ExprPos {
     Rhs,
     /// The expression is an array being indexed, needed to allow constant
     /// arrays to be dinamically indexed
-    ArrayBase,
+    ArrayBase {
+        /// The index is a constant
+        constant_index: bool,
+    },
 }
 
 impl ExprPos {
     /// Returns an lhs position if the current position is lhs otherwise ArrayBase
-    fn maybe_array_base(&self) -> Self {
+    fn maybe_array_base(&self, constant_index: bool) -> Self {
         match *self {
             ExprPos::Lhs => *self,
-            _ => ExprPos::ArrayBase,
+            _ => ExprPos::ArrayBase { constant_index },
         }
     }
 }
@@ -99,12 +102,13 @@ impl Context {
         body: &mut Block,
     ) {
         self.emit_flush(body);
-        let (expr, load) = match kind {
+        let (expr, load, constant) = match kind {
             GlobalLookupKind::Variable(v) => {
                 let span = parser.module.global_variables.get_span(v);
                 let res = (
                     self.expressions.append(Expression::GlobalVariable(v), span),
                     parser.module.global_variables[v].class != StorageClass::Handle,
+                    None,
                 );
                 self.emit_start();
 
@@ -120,30 +124,35 @@ impl Context {
                     .expressions
                     .append(Expression::AccessIndex { base, index }, span);
 
-                (expr, {
-                    let ty = parser.module.global_variables[handle].ty;
+                (
+                    expr,
+                    {
+                        let ty = parser.module.global_variables[handle].ty;
 
-                    match parser.module.types[ty].inner {
-                        TypeInner::Struct { ref members, .. } => {
-                            if let TypeInner::Array {
-                                size: crate::ArraySize::Dynamic,
-                                ..
-                            } = parser.module.types[members[index as usize].ty].inner
-                            {
-                                false
-                            } else {
-                                true
+                        match parser.module.types[ty].inner {
+                            TypeInner::Struct { ref members, .. } => {
+                                if let TypeInner::Array {
+                                    size: crate::ArraySize::Dynamic,
+                                    ..
+                                } = parser.module.types[members[index as usize].ty].inner
+                                {
+                                    false
+                                } else {
+                                    true
+                                }
                             }
+                            _ => true,
                         }
-                        _ => true,
-                    }
-                })
+                    },
+                    None,
+                )
             }
-            GlobalLookupKind::Constant(v) => {
+            GlobalLookupKind::Constant(v, ty) => {
                 let span = parser.module.constants.get_span(v);
                 let res = (
                     self.expressions.append(Expression::Constant(v), span),
                     false,
+                    Some((v, ty)),
                 );
                 self.emit_start();
                 res
@@ -154,6 +163,7 @@ impl Context {
             expr,
             load,
             mutable,
+            constant,
             entry_arg,
         };
 
@@ -216,6 +226,7 @@ impl Context {
                     expr,
                     load: true,
                     mutable,
+                    constant: None,
                     entry_arg: None,
                 },
             );
@@ -299,6 +310,7 @@ impl Context {
                             expr: local_expr,
                             load: true,
                             mutable,
+                            constant: None,
                             entry_arg: None,
                         },
                     );
@@ -310,6 +322,7 @@ impl Context {
                         expr,
                         load,
                         mutable,
+                        constant: None,
                         entry_arg: None,
                     },
                 );
@@ -418,15 +431,21 @@ impl Context {
 
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
-                let base = self
-                    .lower_expect_inner(stmt, parser, base, pos.maybe_array_base(), body)?
-                    .0;
                 let (index, index_meta) =
                     self.lower_expect_inner(stmt, parser, index, ExprPos::Rhs, body)?;
+                let maybe_constant_index = parser.solve_constant(self, index, index_meta).ok();
 
-                let pointer = parser
-                    .solve_constant(self, index, index_meta)
-                    .ok()
+                let base = self
+                    .lower_expect_inner(
+                        stmt,
+                        parser,
+                        base,
+                        pos.maybe_array_base(maybe_constant_index.is_some()),
+                        body,
+                    )?
+                    .0;
+
+                let pointer = maybe_constant_index
                     .and_then(|constant| {
                         Some(self.add_expression(
                             Expression::AccessIndex {
@@ -572,9 +591,9 @@ impl Context {
 
                 self.add_expression(Expression::Unary { op, expr }, meta, body)
             }
-            HirExprKind::Variable(ref var) => {
-                if pos != ExprPos::Rhs {
-                    if !var.mutable && ExprPos::Lhs == pos {
+            HirExprKind::Variable(ref var) => match pos {
+                ExprPos::Lhs => {
+                    if !var.mutable {
                         parser.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Variable cannot be used in LHS position".into(),
@@ -584,12 +603,34 @@ impl Context {
                     }
 
                     var.expr
-                } else if var.load {
-                    self.add_expression(Expression::Load { pointer: var.expr }, meta, body)
-                } else {
-                    var.expr
                 }
-            }
+                ExprPos::ArrayBase {
+                    constant_index: false,
+                } => {
+                    if let Some((constant, ty)) = var.constant {
+                        let local = self.locals.append(
+                            LocalVariable {
+                                name: None,
+                                ty,
+                                init: Some(constant),
+                            },
+                            crate::Span::default(),
+                        );
+
+                        self.add_expression(
+                            Expression::LocalVariable(local),
+                            SourceMetadata::none(),
+                            body,
+                        )
+                    } else {
+                        var.expr
+                    }
+                }
+                _ if var.load => {
+                    self.add_expression(Expression::Load { pointer: var.expr }, meta, body)
+                }
+                _ => var.expr,
+            },
             HirExprKind::Call(ref call) if pos != ExprPos::Lhs => {
                 let maybe_expr = parser.function_or_constructor_call(
                     self,

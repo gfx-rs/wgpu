@@ -544,15 +544,14 @@ impl<'source> ParsingContext<'source> {
             },
         )?;
 
-        for (i, k) in members
-            .into_iter()
-            .enumerate()
-            .filter_map(|(i, m)| m.name.map(|s| (i as u32, s)))
-        {
+        for (i, k, ty) in members.into_iter().enumerate().filter_map(|(i, m)| {
+            let ty = m.ty;
+            m.name.map(|s| (i as u32, s, ty))
+        }) {
             let lookup = GlobalLookup {
                 kind: match global {
                     GlobalOrConstant::Global(handle) => GlobalLookupKind::BlockSelect(handle, i),
-                    GlobalOrConstant::Constant(handle) => GlobalLookupKind::Constant(handle),
+                    GlobalOrConstant::Constant(handle) => GlobalLookupKind::Constant(handle, ty),
                 },
                 entry_arg: None,
                 mutable: true,
