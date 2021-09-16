@@ -25,6 +25,12 @@ jobs:
             target: x86_64-pc-windows-msvc
             backends: dx12 # dx11
 
+          # Linux
+          #- name: Linux x86_64
+          #  os: ubuntu-20.04
+          #  target: x86_64-unknown-linux-gnu
+          #  backends: vulkan # gl
+
     name: CTS ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
@@ -54,6 +60,15 @@ jobs:
           working-directory: wgpu/cts_runner
           target-dir: wgpu/cts_runner/target
 
+      - name: install llvmpipe and lavapipe
+        if: matrix.os == 'ubuntu-20.04'
+        run: |
+          sudo apt-get update -y -qq
+          sudo add-apt-repository ppa:oibaf/graphics-drivers -y
+          sudo apt-get update
+          sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
+        # libegl1-mesa libgl1-mesa-dri for gl
+
       # We enable line numbers for panics, but that's it
       - name: disable debug
         shell: bash
@@ -67,7 +82,6 @@ jobs:
           cargo build --manifest-path wgpu/cts_runner/Cargo.toml 
 
       - name: run CTS
-        if: ${{ matrix.os }} == 'windows-2019'
         shell: bash
         run: |
           cd cts;

@@ -52,8 +52,8 @@ jobs:
             os: ubuntu-20.04
             channel: stable
             target: x86_64-unknown-linux-gnu
-            kind: compile
-            backends: # vulkan gl
+            kind: test
+            backends: vulkan # gl
 
           - name: Linux Nightly x86_64
             os: ubuntu-20.04
@@ -109,13 +109,12 @@ jobs:
           echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: install llvmpipe and lavapipe
-        if: matrix.os == 'ubuntu-20.04' && matrix.kind == 'test'
+        if: matrix.os == 'ubuntu-20.04' && matrix.target != 'aarch64-linux-android' && matrix.kind == 'test'
         run: |
           sudo apt-get update -y -qq
-          sudo add-apt-repository ppa:ubuntu-x-swat/updates -y
+          sudo add-apt-repository ppa:oibaf/graphics-drivers -y
           sudo apt-get update
-          sudo apt install -y libxcb-xfixes0-dev mesa-vulkan-drivers
-        # add libegl1-mesa libgl1-mesa-dri for egl
+          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev mesa-vulkan-drivers
 
       # We enable line numbers for panics, but that's it
       - name: disable debug

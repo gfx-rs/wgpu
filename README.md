@@ -86,7 +86,7 @@ We have multiple methods of testing, each of which tests different qualities abo
 | DX12/Windows 10  | :heavy_check_mark: (over WARP)                                         |
 | DX11/Windows 10  | :construction: (over WARP)                                             |
 | Metal/MacOS      | :x: (no CPU runner)                                                    |
-| Vulkan/Linux     | :x: ([lavapipe segfaults](https://github.com/gfx-rs/wgpu/issues/1551)) |
+| Vulkan/Linux     | :ok: ([cts hangs](https://github.com/gfx-rs/wgpu/issues/1974))         |
 | GLES/Linux       | :x: ([egl fails init](https://github.com/gfx-rs/wgpu/issues/1551))     |
 
 ### Core Test Infrastructure
