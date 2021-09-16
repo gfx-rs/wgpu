@@ -243,7 +243,8 @@ impl super::Validator {
             let ty = context
                 .resolve_type_impl(expr, &self.valid_expression_set)
                 .map_err(|error| CallError::Argument { index, error })?;
-            if ty != &context.types[arg.ty].inner {
+            let arg_inner = &context.types[arg.ty].inner;
+            if !ty.equivalent(arg_inner, context.types) {
                 return Err(CallError::ArgumentType {
                     index,
                     required: arg.ty,
@@ -448,7 +449,17 @@ impl super::Validator {
                         .map(|expr| context.resolve_type(expr, &self.valid_expression_set))
                         .transpose()?;
                     let expected_ty = context.return_type.map(|ty| &context.types[ty].inner);
-                    if value_ty != expected_ty {
+                    // We can't return pointers, but it seems best not to embed that
+                    // assumption here, so use `TypeInner::equivalent` for comparison.
+                    let okay = match (value_ty, expected_ty) {
+                        (None, None) => true,
+                        (Some(value_inner), Some(expected_inner)) => {
+                            value_inner.equivalent(expected_inner, context.types)
+                        }
+                        (_, _) => false,
+                    };
+
+                    if !okay {
                         log::error!(
                             "Returning {:?} where {:?} is expected",
                             value_ty,

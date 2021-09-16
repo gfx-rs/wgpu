@@ -3231,7 +3231,7 @@ impl Parser {
                                 .resolve_type(expr_id)?;
                             let expr_inner = context.typifier.get(expr_id, context.types);
                             let given_inner = &context.types[ty].inner;
-                            if given_inner != expr_inner {
+                            if !given_inner.equivalent(expr_inner, context.types) {
                                 log::error!(
                                     "Given type {:?} doesn't match expected {:?}",
                                     given_inner,
@@ -3292,7 +3292,7 @@ impl Parser {
                                 Some(ty) => {
                                     let expr_inner = context.typifier.get(value, context.types);
                                     let given_inner = &context.types[ty].inner;
-                                    if given_inner != expr_inner {
+                                    if !given_inner.equivalent(expr_inner, context.types) {
                                         log::error!(
                                             "Given type {:?} doesn't match expected {:?}",
                                             given_inner,

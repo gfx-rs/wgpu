@@ -96,7 +96,11 @@ pub fn validate_compose(
                 });
             }
             for (index, comp_res) in component_resolutions.enumerate() {
-                if comp_res.inner_with(type_arena) != &type_arena[base].inner {
+                let base_inner = &type_arena[base].inner;
+                let comp_res_inner = comp_res.inner_with(type_arena);
+                // We don't support arrays of pointers, but it seems best not to
+                // embed that assumption here, so use `TypeInner::equivalent`.
+                if !base_inner.equivalent(comp_res_inner, type_arena) {
                     log::error!("Array component[{}] type {:?}", index, comp_res);
                     return Err(ComposeError::ComponentType {
                         index: index as u32,
@@ -113,7 +117,11 @@ pub fn validate_compose(
             }
             for (index, (member, comp_res)) in members.iter().zip(component_resolutions).enumerate()
             {
-                if comp_res.inner_with(type_arena) != &type_arena[member.ty].inner {
+                let member_inner = &type_arena[member.ty].inner;
+                let comp_res_inner = comp_res.inner_with(type_arena);
+                // We don't support pointers in structs, but it seems best not to embed
+                // that assumption here, so use `TypeInner::equivalent`.
+                if !comp_res_inner.equivalent(member_inner, type_arena) {
                     log::error!("Struct component[{}] type {:?}", index, comp_res);
                     return Err(ComposeError::ComponentType {
                         index: index as u32,

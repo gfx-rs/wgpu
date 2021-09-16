@@ -688,6 +688,24 @@ fn invalid_functions() {
 }
 
 #[test]
+fn pointer_type_equivalence() {
+    check_validation_error! {
+        r#"
+            fn f(pv: ptr<function, vec2<f32>>, pf: ptr<function, f32>) { }
+
+            fn g() {
+               var m: mat2x2<f32>;
+               let pv: ptr<function, vec2<f32>> = &m.x;
+               let pf: ptr<function, f32> = &m.x.x;
+
+               f(pv, pf);
+            }
+        "#:
+        Ok(_)
+    }
+}
+
+#[test]
 fn missing_bindings() {
     check_validation_error! {
         "

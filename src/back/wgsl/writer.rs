@@ -630,15 +630,64 @@ impl<W: Write> Writer<W> {
             }
             TypeInner::Pointer { base, class } => {
                 let (storage, maybe_access) = storage_class_str(class);
+                // Everything but `StorageClass::Handle` gives us a `storage` name, but
+                // Naga IR never produces pointers to handles, so it doesn't matter much
+                // how we write such a type. Just write it as the base type alone.
                 if let Some(class) = storage {
                     write!(self.out, "ptr<{}, ", class)?;
-                    if let Some(access) = maybe_access {
-                        write!(self.out, ", {}", access)?;
-                    }
                 }
                 self.write_type(module, base)?;
                 if storage.is_some() {
+                    if let Some(access) = maybe_access {
+                        write!(self.out, ", {}", access)?;
+                    }
                     write!(self.out, ">")?;
+                }
+            }
+            TypeInner::ValuePointer {
+                size: None,
+                kind,
+                width: _,
+                class,
+            } => {
+                let (storage, maybe_access) = storage_class_str(class);
+                if let Some(class) = storage {
+                    write!(self.out, "ptr<{}, {}", class, scalar_kind_str(kind))?;
+                    if let Some(access) = maybe_access {
+                        write!(self.out, ", {}", access)?;
+                    }
+                    write!(self.out, ">")?;
+                } else {
+                    return Err(Error::Unimplemented(format!(
+                        "ValuePointer to StorageClass::Handle {:?}",
+                        inner
+                    )));
+                }
+            }
+            TypeInner::ValuePointer {
+                size: Some(size),
+                kind,
+                width: _,
+                class,
+            } => {
+                let (storage, maybe_access) = storage_class_str(class);
+                if let Some(class) = storage {
+                    write!(
+                        self.out,
+                        "ptr<{}, vec{}<{}>",
+                        class,
+                        back::vector_size_str(size),
+                        scalar_kind_str(kind)
+                    )?;
+                    if let Some(access) = maybe_access {
+                        write!(self.out, ", {}", access)?;
+                    }
+                    write!(self.out, ">")?;
+                } else {
+                    return Err(Error::Unimplemented(format!(
+                        "ValuePointer to StorageClass::Handle {:?}",
+                        inner
+                    )));
                 }
             }
             _ => {
