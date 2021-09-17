@@ -15,10 +15,10 @@ var<uniform> global: ColorMaterial_color;
 fn main1() {
     var color: vec4<f32>;
 
-    let _e4: vec4<f32> = global.Color;
-    color = _e4;
-    let _e6: vec4<f32> = color;
-    o_Target = _e6;
+    let e4: vec4<f32> = global.Color;
+    color = e4;
+    let e6: vec4<f32> = color;
+    o_Target = e6;
     return;
 }
 
@@ -26,6 +26,6 @@ fn main1() {
 fn main([[location(0)]] v_Uv: vec2<f32>) -> FragmentOutput {
     v_Uv1 = v_Uv;
     main1();
-    let _e9: vec4<f32> = o_Target;
-    return FragmentOutput(_e9);
+    let e9: vec4<f32> = o_Target;
+    return FragmentOutput(e9);
 }

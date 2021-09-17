@@ -37,15 +37,15 @@ fn constructors() -> f32 {
     var foo: Foo;
 
     foo = Foo(vec4<f32>(1.0), 1);
-    let _e11: f32 = foo.a.x;
-    return _e11;
+    let e11: f32 = foo.a.x;
+    return e11;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn main() {
-    let _e4: vec4<f32> = builtins();
-    let _e5: vec4<f32> = splat();
-    let _e6: i32 = unary();
-    let _e7: f32 = constructors();
+    let e4: vec4<f32> = builtins();
+    let e5: vec4<f32> = splat();
+    let e6: i32 = unary();
+    let e7: f32 = constructors();
     return;
 }

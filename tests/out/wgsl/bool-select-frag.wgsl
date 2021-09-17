@@ -10,9 +10,9 @@ fn TevPerCompGT(a: f32, b: f32) -> f32 {
 
     a1 = a;
     b1 = b;
-    let _e5: f32 = a1;
-    let _e6: f32 = b1;
-    return select(0.0, 1.0, (_e5 > _e6));
+    let e5: f32 = a1;
+    let e6: f32 = b1;
+    return select(0.0, 1.0, (e5 > e6));
 }
 
 fn TevPerCompGT1(a2: vec3<f32>, b2: vec3<f32>) -> vec3<f32> {
@@ -21,25 +21,25 @@ fn TevPerCompGT1(a2: vec3<f32>, b2: vec3<f32>) -> vec3<f32> {
 
     a3 = a2;
     b3 = b2;
-    let _e7: vec3<f32> = a3;
-    let _e8: vec3<f32> = b3;
-    return select(vec3<f32>(0.0), vec3<f32>(1.0), (_e7 > _e8));
+    let e7: vec3<f32> = a3;
+    let e8: vec3<f32> = b3;
+    return select(vec3<f32>(0.0), vec3<f32>(1.0), (e7 > e8));
 }
 
 fn main1() {
-    let _e1: vec4<f32> = o_color;
-    let _e11: vec3<f32> = TevPerCompGT1(vec3<f32>(3.0), vec3<f32>(5.0));
-    o_color.x = _e11.x;
-    o_color.y = _e11.y;
-    o_color.z = _e11.z;
-    let _e23: f32 = TevPerCompGT(3.0, 5.0);
-    o_color.w = _e23;
+    let e1: vec4<f32> = o_color;
+    let e11: vec3<f32> = TevPerCompGT1(vec3<f32>(3.0), vec3<f32>(5.0));
+    o_color.x = e11.x;
+    o_color.y = e11.y;
+    o_color.z = e11.z;
+    let e23: f32 = TevPerCompGT(3.0, 5.0);
+    o_color.w = e23;
     return;
 }
 
 [[stage(fragment)]]
 fn main() -> FragmentOutput {
     main1();
-    let _e3: vec4<f32> = o_color;
-    return FragmentOutput(_e3);
+    let e3: vec4<f32> = o_color;
+    return FragmentOutput(e3);
 }

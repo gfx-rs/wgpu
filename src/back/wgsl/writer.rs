@@ -701,7 +701,7 @@ impl<W: Write> Writer<W> {
                                 }
                             }
 
-                            Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
+                            Some(format!("{}{}", super::BAKE_PREFIX, handle.index()))
                         } else {
                             None
                         }
@@ -804,7 +804,7 @@ impl<W: Write> Writer<W> {
             } => {
                 write!(self.out, "{}", level)?;
                 if let Some(expr) = result {
-                    let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
+                    let name = format!("{}{}", super::BAKE_PREFIX, expr.index());
                     self.start_named_expr(module, expr, func_ctx, &name)?;
                     self.named_expressions.insert(expr, name);
                 }
@@ -827,7 +827,7 @@ impl<W: Write> Writer<W> {
                 result,
             } => {
                 write!(self.out, "{}", level)?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_name = format!("{}{}", super::BAKE_PREFIX, result.index());
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 

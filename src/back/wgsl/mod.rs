@@ -5,6 +5,8 @@ use thiserror::Error;
 
 pub use writer::Writer;
 
+const BAKE_PREFIX: &str = "e";
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]

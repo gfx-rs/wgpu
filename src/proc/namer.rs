@@ -32,7 +32,7 @@ impl Namer {
     fn sanitize(&self, string: &str) -> String {
         let mut base = string
             .chars()
-            .skip_while(|c| c.is_numeric())
+            .skip_while(|&c| c.is_numeric() || c == '_')
             .filter(|&c| c.is_ascii_alphanumeric() || c == '_')
             .collect::<String>();
         // close the name by '_' if the re is a number, so that

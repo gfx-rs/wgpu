@@ -9,10 +9,10 @@ var<private> v_uv: vec2<f32>;
 var<private> gl_Position: vec4<f32>;
 
 fn main1() {
-    let _e4: vec2<f32> = a_uv1;
-    v_uv = _e4;
-    let _e6: vec2<f32> = a_pos1;
-    gl_Position = vec4<f32>((1.2000000476837158 * _e6), 0.0, 1.0);
+    let e4: vec2<f32> = a_uv1;
+    v_uv = e4;
+    let e6: vec2<f32> = a_pos1;
+    gl_Position = vec4<f32>((1.2000000476837158 * e6), 0.0, 1.0);
     return;
 }
 
@@ -21,7 +21,7 @@ fn main([[location(0)]] a_pos: vec2<f32>, [[location(1)]] a_uv: vec2<f32>) -> Ve
     a_pos1 = a_pos;
     a_uv1 = a_uv;
     main1();
-    let _e14: vec2<f32> = v_uv;
-    let _e16: vec4<f32> = gl_Position;
-    return VertexOutput(_e14, _e16);
+    let e14: vec2<f32> = v_uv;
+    let e16: vec4<f32> = gl_Position;
+    return VertexOutput(e14, e16);
 }
