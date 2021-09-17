@@ -336,7 +336,7 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
             }
         }
         '0'..='9' => consume_number(input),
-        'a'..='z' | 'A'..='Z' | '_' => {
+        'a'..='z' | 'A'..='Z' => {
             let (word, rest) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
             (Token::Word(word), rest)
         }
@@ -655,6 +655,7 @@ fn test_tokens() {
     );
     sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
     sub_test("No好", &[Token::Word("No"), Token::Unknown('好')]);
+    sub_test("_No", &[Token::Unknown('_'), Token::Word("No")]);
     sub_test("\"\u{2}ПЀ\u{0}\"", &[Token::String("\u{2}ПЀ\u{0}")]); // https://github.com/gfx-rs/naga/issues/90
 }
 
