@@ -2165,9 +2165,8 @@ impl fmt::Debug for ErrorSinkRaw {
 }
 
 fn default_error_handler(err: crate::Error) {
-    log::error!("wgpu error: {}\n", err);
-
-    panic!("Handling wgpu errors as fatal by default");
+    log::error!("Handling wgpu errors as fatal by default");
+    panic!("wgpu error: {}\n", err);
 }
 
 #[derive(Debug)]
