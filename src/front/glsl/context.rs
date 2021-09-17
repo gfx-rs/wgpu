@@ -750,102 +750,108 @@ impl Context {
 
                 value
             }
-            HirExprKind::IncDec {
-                increment,
-                postfix,
-                expr,
-            } => {
-                let op = match increment {
-                    true => BinaryOperator::Add,
-                    false => BinaryOperator::Subtract,
-                };
-
+            HirExprKind::PrePostfix { op, postfix, expr } if ExprPos::Lhs != pos => {
                 let pointer = self
                     .lower_expect_inner(stmt, parser, expr, ExprPos::Lhs, body)?
                     .0;
                 let left = self.add_expression(Expression::Load { pointer }, meta, body);
 
-                let uint = match parser.resolve_type(self, left, meta)?.scalar_kind() {
-                    Some(ScalarKind::Sint) => false,
-                    Some(ScalarKind::Uint) => true,
-                    _ => {
+                let make_constant_inner = |kind, width| {
+                    let value = match kind {
+                        ScalarKind::Sint => crate::ScalarValue::Sint(1),
+                        ScalarKind::Uint => crate::ScalarValue::Uint(1),
+                        ScalarKind::Float => crate::ScalarValue::Float(1.0),
+                        ScalarKind::Bool => return None,
+                    };
+
+                    Some(crate::ConstantInner::Scalar { width, value })
+                };
+                let res = match *parser.resolve_type(self, left, meta)? {
+                    TypeInner::Scalar { kind, width } => {
+                        let ty = TypeInner::Scalar { kind, width };
+                        make_constant_inner(kind, width).map(|i| (ty, i, None, None))
+                    }
+                    TypeInner::Vector { size, kind, width } => {
+                        let ty = TypeInner::Vector { size, kind, width };
+                        make_constant_inner(kind, width).map(|i| (ty, i, Some(size), None))
+                    }
+                    TypeInner::Matrix {
+                        columns,
+                        rows,
+                        width,
+                    } => {
+                        let ty = TypeInner::Matrix {
+                            columns,
+                            rows,
+                            width,
+                        };
+                        make_constant_inner(ScalarKind::Float, width)
+                            .map(|i| (ty, i, Some(rows), Some(columns)))
+                    }
+                    _ => None,
+                };
+                let (ty_inner, inner, rows, columns) = match res {
+                    Some(res) => res,
+                    None => {
                         parser.errors.push(Error {
                             kind: ErrorKind::SemanticError(
-                                "Increment/decrement operations must operate in integers".into(),
+                                "Increment/decrement only works on scalar/vector/matrix".into(),
                             ),
                             meta,
                         });
-                        true
+                        return Ok((Some(left), meta));
                     }
                 };
 
-                let one = parser.module.constants.append(
+                let constant_1 = parser.module.constants.append(
                     Constant {
                         name: None,
                         specialization: None,
-                        inner: crate::ConstantInner::Scalar {
-                            width: 4,
-                            value: match uint {
-                                true => crate::ScalarValue::Uint(1),
-                                false => crate::ScalarValue::Sint(1),
-                            },
-                        },
+                        inner,
                     },
                     Default::default(),
                 );
-                let right = self.add_expression(Expression::Constant(one), meta, body);
+                let mut right = self.add_expression(Expression::Constant(constant_1), meta, body);
+
+                // Glsl allows pre/postfixes operations on vectors and matrices, so if the
+                // target is either of them change the right side of the addition to be splatted
+                // to the same size as the target, furthermore if the target is a matrix
+                // use a composed matrix using the splatted value.
+                if let Some(size) = rows {
+                    right =
+                        self.add_expression(Expression::Splat { size, value: right }, meta, body);
+
+                    if let Some(cols) = columns {
+                        let ty = parser.module.types.fetch_or_append(
+                            Type {
+                                name: None,
+                                inner: ty_inner,
+                            },
+                            meta.as_span(),
+                        );
+
+                        right = self.add_expression(
+                            Expression::Compose {
+                                ty,
+                                components: std::iter::repeat(right).take(cols as usize).collect(),
+                            },
+                            meta,
+                            body,
+                        );
+                    }
+                }
 
                 let value = self.add_expression(Expression::Binary { op, left, right }, meta, body);
 
+                self.emit_flush(body);
+                self.emit_start();
+
+                body.push(Statement::Store { pointer, value }, meta.as_span());
+
                 if postfix {
-                    let local = self.locals.append(
-                        LocalVariable {
-                            name: None,
-                            ty: parser.module.types.fetch_or_append(
-                                Type {
-                                    name: None,
-                                    inner: TypeInner::Scalar {
-                                        kind: match uint {
-                                            true => ScalarKind::Uint,
-                                            false => ScalarKind::Sint,
-                                        },
-                                        width: 4,
-                                    },
-                                },
-                                meta.as_span(),
-                            ),
-                            init: None,
-                        },
-                        meta.as_span(),
-                    );
-
-                    let expr = self.add_expression(Expression::LocalVariable(local), meta, body);
-                    let load = self.add_expression(Expression::Load { pointer: expr }, meta, body);
-
-                    self.emit_flush(body);
-                    self.emit_start();
-
-                    body.push(
-                        Statement::Store {
-                            pointer: expr,
-                            value: left,
-                        },
-                        meta.as_span(),
-                    );
-
-                    self.emit_flush(body);
-                    self.emit_start();
-
-                    body.push(Statement::Store { pointer, value }, meta.as_span());
-
-                    load
-                } else {
-                    self.emit_flush(body);
-                    self.emit_start();
-
-                    body.push(Statement::Store { pointer, value }, meta.as_span());
-
                     left
+                } else {
+                    value
                 }
             }
             _ => {

@@ -123,9 +123,13 @@ pub enum HirExprKind {
         tgt: Handle<HirExpr>,
         value: Handle<HirExpr>,
     },
-    IncDec {
-        increment: bool,
+    /// A prefix/postfix operator like `++`
+    PrePostfix {
+        /// The operation to be performed
+        op: BinaryOperator,
+        /// Whether this is a postfix or a prefix
         postfix: bool,
+        /// The target expression
         expr: Handle<HirExpr>,
     },
 }

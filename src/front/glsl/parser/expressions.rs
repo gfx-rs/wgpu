@@ -257,24 +257,14 @@ impl<'source> ParsingContext<'source> {
                         Default::default(),
                     )
                 }
-                TokenValue::Increment => {
+                TokenValue::Increment | TokenValue::Decrement => {
                     base = stmt.hir_exprs.append(
                         HirExpr {
-                            kind: HirExprKind::IncDec {
-                                increment: true,
-                                postfix: true,
-                                expr: base,
-                            },
-                            meta,
-                        },
-                        Default::default(),
-                    )
-                }
-                TokenValue::Decrement => {
-                    base = stmt.hir_exprs.append(
-                        HirExpr {
-                            kind: HirExprKind::IncDec {
-                                increment: false,
+                            kind: HirExprKind::PrePostfix {
+                                op: match value {
+                                    TokenValue::Increment => crate::BinaryOperator::Add,
+                                    _ => crate::BinaryOperator::Subtract,
+                                },
                                 postfix: true,
                                 expr: base,
                             },
@@ -331,11 +321,10 @@ impl<'source> ParsingContext<'source> {
 
                 stmt.hir_exprs.append(
                     HirExpr {
-                        kind: HirExprKind::IncDec {
-                            increment: match value {
-                                TokenValue::Increment => true,
-                                TokenValue::Decrement => false,
-                                _ => unreachable!(),
+                        kind: HirExprKind::PrePostfix {
+                            op: match value {
+                                TokenValue::Increment => crate::BinaryOperator::Add,
+                                _ => crate::BinaryOperator::Subtract,
                             },
                             postfix: false,
                             expr,

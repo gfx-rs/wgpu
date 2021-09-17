@@ -10,7 +10,6 @@ var<private> gl_GlobalInvocationID: vec3<u32>;
 fn collatz_iterations(n: u32) -> u32 {
     var n1: u32;
     var i: u32 = 0u;
-    var local: u32;
 
     n1 = n;
     loop {
@@ -32,12 +31,11 @@ fn collatz_iterations(n: u32) -> u32 {
                 }
             }
             let _e33: u32 = i;
-            local = _e33;
             i = (_e33 + 1u);
         }
     }
-    let _e38: u32 = i;
-    return _e38;
+    let _e36: u32 = i;
+    return _e36;
 }
 
 fn main1() {
