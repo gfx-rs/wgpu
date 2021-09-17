@@ -6,7 +6,7 @@ use super::{
     PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Handle, UniqueArena},
     proc::TypeResolution,
     valid::{FunctionInfo, ModuleInfo},
 };
@@ -195,7 +195,7 @@ impl Writer {
 
     pub(super) fn get_pointer_id(
         &mut self,
-        arena: &Arena<crate::Type>,
+        arena: &UniqueArena<crate::Type>,
         handle: Handle<crate::Type>,
         class: spirv::StorageClass,
     ) -> Result<Word, Error> {
@@ -766,7 +766,7 @@ impl Writer {
 
     fn write_type_declaration_arena(
         &mut self,
-        arena: &Arena<crate::Type>,
+        arena: &UniqueArena<crate::Type>,
         handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
         let ty = &arena[handle];

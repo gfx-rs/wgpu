@@ -1,4 +1,4 @@
-use crate::arena::{Arena, Handle};
+use crate::arena::{Arena, Handle, UniqueArena};
 use std::{num::NonZeroU32, ops};
 
 pub type Alignment = NonZeroU32;
@@ -64,7 +64,7 @@ impl Layouter {
 
     pub fn update(
         &mut self,
-        types: &Arena<crate::Type>,
+        types: &UniqueArena<crate::Type>,
         constants: &Arena<crate::Constant>,
     ) -> Result<(), InvalidBaseType> {
         use crate::TypeInner as Ti;

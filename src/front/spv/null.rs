@@ -1,5 +1,5 @@
 use super::Error;
-use crate::arena::{Arena, Handle};
+use crate::arena::{Arena, Handle, UniqueArena};
 
 fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::ConstantInner {
     crate::ConstantInner::Scalar {
@@ -15,7 +15,7 @@ fn make_scalar_inner(kind: crate::ScalarKind, width: crate::Bytes) -> crate::Con
 
 pub fn generate_null_constant(
     ty: Handle<crate::Type>,
-    type_arena: &Arena<crate::Type>,
+    type_arena: &UniqueArena<crate::Type>,
     constant_arena: &mut Arena<crate::Constant>,
     span: crate::Span,
 ) -> Result<crate::ConstantInner, Error> {
@@ -42,13 +42,13 @@ pub fn generate_null_constant(
         } => {
             // If we successfully declared a matrix type, we have declared a vector type for it too.
             let vector_ty = type_arena
-                .fetch_if(|t| {
-                    t.inner
-                        == crate::TypeInner::Vector {
-                            kind: crate::ScalarKind::Float,
-                            size: rows,
-                            width,
-                        }
+                .get(&crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::Vector {
+                        kind: crate::ScalarKind::Float,
+                        size: rows,
+                        width,
+                    },
                 })
                 .unwrap();
             let vector_inner = generate_null_constant(vector_ty, type_arena, constant_arena, span)?;
@@ -116,7 +116,7 @@ pub fn generate_null_constant(
 pub fn generate_default_built_in(
     built_in: Option<crate::BuiltIn>,
     ty: Handle<crate::Type>,
-    type_arena: &Arena<crate::Type>,
+    type_arena: &UniqueArena<crate::Type>,
     constant_arena: &mut Arena<crate::Constant>,
     span: crate::Span,
 ) -> Result<Handle<crate::Constant>, Error> {

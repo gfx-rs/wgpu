@@ -35,7 +35,7 @@ pub use error::Error;
 use function::*;
 
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Arena, Handle, UniqueArena},
     proc::Layouter,
     FastHashMap,
 };
@@ -495,7 +495,7 @@ struct BlockContext<'function> {
     /// Constants arena of the module being processed
     const_arena: &'function mut Arena<crate::Constant>,
     /// Type arena of the module being processed
-    type_arena: &'function Arena<crate::Type>,
+    type_arena: &'function UniqueArena<crate::Type>,
     /// Global arena of the module being processed
     global_arena: &'function Arena<crate::GlobalVariable>,
     /// Arguments of the function currently being processed
@@ -991,7 +991,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         root_type_id: spirv::Word,
         object_expr: Handle<crate::Expression>,
         selections: &[spirv::Word],
-        type_arena: &Arena<crate::Type>,
+        type_arena: &UniqueArena<crate::Type>,
         expressions: &mut Arena<crate::Expression>,
         span: crate::Span,
     ) -> Result<Handle<crate::Expression>, Error> {
@@ -3388,7 +3388,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(
+                handle: module.types.fetch_or_append(
                     crate::Type {
                         name: self.future_decor.remove(&id).and_then(|dec| dec.name),
                         inner,
@@ -3423,7 +3423,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(
+                handle: module.types.fetch_or_append(
                     crate::Type {
                         name: self.future_decor.remove(&id).and_then(|dec| dec.name),
                         inner,
@@ -3453,7 +3453,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(
+                handle: module.types.fetch_or_append(
                     crate::Type {
                         name: self.future_decor.remove(&id).and_then(|dec| dec.name),
                         inner,
@@ -3490,7 +3490,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(
+                handle: module.types.fetch_or_append(
                     crate::Type {
                         name: self.future_decor.remove(&id).and_then(|dec| dec.name),
                         inner,
@@ -3529,7 +3529,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(
+                handle: module.types.fetch_or_append(
                     crate::Type {
                         name: decor.and_then(|dec| dec.name),
                         inner,
@@ -3593,7 +3593,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             base_lookup_ty.clone()
         } else {
             LookupType {
-                handle: module.types.append(
+                handle: module.types.fetch_or_append(
                     crate::Type {
                         name: decor.and_then(|dec| dec.name),
                         inner: crate::TypeInner::Pointer {
@@ -3636,7 +3636,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(
+                handle: module.types.fetch_or_append(
                     crate::Type {
                         name: decor.name,
                         inner,
@@ -3673,7 +3673,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(
+                handle: module.types.fetch_or_append(
                     crate::Type {
                         name: decor.name,
                         inner,
@@ -3777,7 +3777,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             members,
         };
 
-        let ty_handle = module.types.append(
+        let ty_handle = module.types.fetch_or_append(
             crate::Type {
                 name: parent_decor.and_then(|dec| dec.name),
                 inner,
@@ -3862,7 +3862,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             arrayed: is_array,
         };
 
-        let handle = module.types.append(
+        let handle = module.types.fetch_or_append(
             crate::Type {
                 name: decor.name,
                 inner,
@@ -3905,7 +3905,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect(2)?;
         let id = self.next()?;
         let decor = self.future_decor.remove(&id).unwrap_or_default();
-        let handle = module.types.append(
+        let handle = module.types.fetch_or_append(
             crate::Type {
                 name: decor.name,
                 inner: crate::TypeInner::Sampler { comparison: false },
@@ -4051,7 +4051,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     fn parse_null_constant(
         &mut self,
         inst: Instruction,
-        types: &Arena<crate::Type>,
+        types: &UniqueArena<crate::Type>,
         constants: &mut Arena<crate::Constant>,
     ) -> Result<(u32, u32, Handle<crate::Constant>), Error> {
         let start = self.data_offset;
@@ -4151,7 +4151,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     class: crate::ImageClass::Storage { format, access },
                 },
             };
-            effective_ty = module.types.append(ty, Default::default());
+            effective_ty = module.types.fetch_or_append(ty, Default::default());
         }
 
         let ext_class = match self.lookup_storage_buffer_types.get(&effective_ty) {

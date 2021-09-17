@@ -2,7 +2,7 @@ use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
     ExpressionError, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags, ValidationFlags,
 };
-use crate::arena::{Arena, Handle};
+use crate::arena::{Arena, Handle, UniqueArena};
 use bit_set::BitSet;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -144,7 +144,7 @@ struct BlockContext<'a> {
     abilities: ControlFlowAbility,
     info: &'a FunctionInfo,
     expressions: &'a Arena<crate::Expression>,
-    types: &'a Arena<crate::Type>,
+    types: &'a UniqueArena<crate::Type>,
     global_vars: &'a Arena<crate::GlobalVariable>,
     functions: &'a Arena<crate::Function>,
     prev_infos: &'a [FunctionInfo],
@@ -627,7 +627,7 @@ impl super::Validator {
     fn validate_local_var(
         &self,
         var: &crate::LocalVariable,
-        types: &Arena<crate::Type>,
+        types: &UniqueArena<crate::Type>,
         constants: &Arena<crate::Constant>,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);

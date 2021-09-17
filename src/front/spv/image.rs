@@ -1,5 +1,5 @@
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Arena, Handle, UniqueArena},
     FunctionArgument,
 };
 
@@ -62,7 +62,7 @@ fn extract_image_coordinates(
     extra_coordinate: ExtraCoordinate,
     base: Handle<crate::Expression>,
     coordinate_ty: Handle<crate::Type>,
-    type_arena: &Arena<crate::Type>,
+    type_arena: &UniqueArena<crate::Type>,
     expressions: &mut Arena<crate::Expression>,
 ) -> (Handle<crate::Expression>, Option<Handle<crate::Expression>>) {
     let (given_size, kind) = match type_arena[coordinate_ty].inner {
@@ -74,13 +74,13 @@ fn extract_image_coordinates(
     let required_size = image_dim.required_coordinate_size();
     let required_ty = required_size.map(|size| {
         type_arena
-            .fetch_if(|ty| {
-                ty.inner
-                    == crate::TypeInner::Vector {
-                        size,
-                        kind,
-                        width: 4,
-                    }
+            .get(&crate::Type {
+                name: None,
+                inner: crate::TypeInner::Vector {
+                    size,
+                    kind,
+                    width: 4,
+                },
             })
             .expect("Required coordinate type should have been set up by `parse_type_image`!")
     });
@@ -184,7 +184,7 @@ fn extract_image_coordinates(
 pub(super) fn patch_comparison_type(
     flags: SamplingFlags,
     var: &mut crate::GlobalVariable,
-    arena: &mut Arena<crate::Type>,
+    arena: &mut UniqueArena<crate::Type>,
 ) -> bool {
     if !flags.contains(SamplingFlags::COMPARISON) {
         return true;
@@ -211,7 +211,7 @@ pub(super) fn patch_comparison_type(
     };
 
     let name = original_ty.name.clone();
-    var.ty = arena.append(
+    var.ty = arena.fetch_or_append(
         crate::Type {
             name,
             inner: ty_inner,
@@ -257,7 +257,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     pub(super) fn parse_image_write(
         &mut self,
         words_left: u16,
-        type_arena: &Arena<crate::Type>,
+        type_arena: &UniqueArena<crate::Type>,
         global_arena: &Arena<crate::GlobalVariable>,
         arguments: &[FunctionArgument],
         expressions: &mut Arena<crate::Expression>,

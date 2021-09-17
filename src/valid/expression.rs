@@ -1,6 +1,6 @@
 use super::{compose::validate_compose, ComposeError, FunctionInfo, ShaderStages, TypeFlags};
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Handle, UniqueArena},
     proc::{ProcError, ResolveError},
 };
 
@@ -113,7 +113,7 @@ pub enum ExpressionError {
 
 struct ExpressionTypeResolver<'a> {
     root: Handle<crate::Expression>,
-    types: &'a Arena<crate::Type>,
+    types: &'a UniqueArena<crate::Type>,
     info: &'a FunctionInfo,
 }
 

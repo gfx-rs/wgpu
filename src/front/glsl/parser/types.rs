@@ -47,7 +47,7 @@ impl<'source> ParsingContext<'source> {
                     self.parse_struct_declaration_list(parser, &mut members, StructLayout::Std140)?;
                 let end_meta = self.expect(parser, TokenValue::RightBrace)?.meta;
                 meta.subsume(end_meta);
-                let ty = parser.module.types.append(
+                let ty = parser.module.types.fetch_or_append(
                     Type {
                         name: Some(ty_name.clone()),
                         inner: TypeInner::Struct {

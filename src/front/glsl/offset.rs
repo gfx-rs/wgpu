@@ -13,7 +13,7 @@ use super::{
     error::{Error, ErrorKind},
     Span,
 };
-use crate::{front::align_up, Arena, Constant, Handle, Type, TypeInner};
+use crate::{front::align_up, Arena, Constant, Handle, Type, TypeInner, UniqueArena};
 
 /// Struct with information needed for defining a struct member.
 ///
@@ -39,7 +39,7 @@ pub fn calculate_offset(
     mut ty: Handle<Type>,
     meta: Span,
     layout: StructLayout,
-    types: &mut Arena<Type>,
+    types: &mut UniqueArena<Type>,
     constants: &Arena<Constant>,
     errors: &mut Vec<Error>,
 ) -> TypeAlignSpan {

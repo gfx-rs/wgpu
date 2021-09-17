@@ -3,7 +3,7 @@ use super::{
     Capabilities, Disalignment, FunctionError, ModuleInfo, ShaderStages, TypeFlags,
     ValidationFlags,
 };
-use crate::arena::{Arena, Handle};
+use crate::arena::{Handle, UniqueArena};
 
 use bit_set::BitSet;
 
@@ -93,7 +93,7 @@ struct VaryingContext<'a> {
     ty: Handle<crate::Type>,
     stage: crate::ShaderStage,
     output: bool,
-    types: &'a Arena<crate::Type>,
+    types: &'a UniqueArena<crate::Type>,
     location_mask: &'a mut BitSet,
     built_in_mask: u32,
     capabilities: Capabilities,
@@ -320,7 +320,7 @@ impl super::Validator {
     pub(super) fn validate_global_var(
         &self,
         var: &crate::GlobalVariable,
-        types: &Arena<crate::Type>,
+        types: &UniqueArena<crate::Type>,
     ) -> Result<(), GlobalVariableError> {
         log::debug!("var {:?}", var);
         let type_info = &self.types[var.ty.index()];

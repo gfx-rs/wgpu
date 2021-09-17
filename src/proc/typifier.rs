@@ -1,4 +1,4 @@
-use crate::arena::{Arena, Handle};
+use crate::arena::{Arena, Handle, UniqueArena};
 
 use thiserror::Error;
 
@@ -10,8 +10,8 @@ use thiserror::Error;
 /// You might expect such a function to simply return a `Handle<Type>`. However,
 /// we want type resolution to be a read-only process, and that would limit the
 /// possible results to types already present in the expression's associated
-/// `Arena<Type>`. Naga IR does have certain expressions whose types are not
-/// certain to be present.
+/// `UniqueArena<Type>`. Naga IR does have certain expressions whose types are
+/// not certain to be present.
 ///
 /// So instead, type resolution returns a `TypeResolution` enum: either a
 /// [`Handle`], referencing some type in the arena, or a [`Value`], holding a
@@ -104,7 +104,7 @@ impl TypeResolution {
         }
     }
 
-    pub fn inner_with<'a>(&'a self, arena: &'a Arena<crate::Type>) -> &'a crate::TypeInner {
+    pub fn inner_with<'a>(&'a self, arena: &'a UniqueArena<crate::Type>) -> &'a crate::TypeInner {
         match *self {
             Self::Handle(handle) => &arena[handle].inner,
             Self::Value(ref inner) => inner,
@@ -197,7 +197,7 @@ pub enum ResolveError {
 
 pub struct ResolveContext<'a> {
     pub constants: &'a Arena<crate::Constant>,
-    pub types: &'a Arena<crate::Type>,
+    pub types: &'a UniqueArena<crate::Type>,
     pub global_vars: &'a Arena<crate::GlobalVariable>,
     pub local_vars: &'a Arena<crate::LocalVariable>,
     pub functions: &'a Arena<crate::Function>,

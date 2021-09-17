@@ -869,8 +869,8 @@ fn uniform_control_flow() {
         },
         Default::default(),
     );
-    let mut type_arena = Arena::new();
-    let ty = type_arena.append(
+    let mut type_arena = crate::UniqueArena::new();
+    let ty = type_arena.fetch_or_append(
         crate::Type {
             name: None,
             inner: crate::TypeInner::Vector {

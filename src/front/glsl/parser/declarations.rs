@@ -497,7 +497,7 @@ impl<'source> ParsingContext<'source> {
         let span = self.parse_struct_declaration_list(parser, &mut members, layout)?;
         self.expect(parser, TokenValue::RightBrace)?;
 
-        let mut ty = parser.module.types.append(
+        let mut ty = parser.module.types.fetch_or_append(
             Type {
                 name: Some(ty_name),
                 inner: TypeInner::Struct {

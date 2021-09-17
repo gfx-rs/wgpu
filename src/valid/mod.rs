@@ -6,7 +6,7 @@ mod interface;
 mod r#type;
 
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Arena, Handle, UniqueArena},
     proc::{InvalidBaseType, Layouter},
     FastHashSet,
 };
@@ -217,7 +217,7 @@ impl Validator {
         &self,
         handle: Handle<crate::Constant>,
         constants: &Arena<crate::Constant>,
-        types: &Arena<crate::Type>,
+        types: &UniqueArena<crate::Type>,
     ) -> Result<(), ConstantError> {
         let con = &constants[handle];
         match con.inner {

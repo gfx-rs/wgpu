@@ -6,7 +6,7 @@ struct gl_PerVertex {
     float gl_CullDistance[1] : SV_CullDistance;
 };
 
-struct type10 {
+struct type9 {
     linear float2 member : LOC0;
     float4 gl_Position : SV_Position;
     float gl_PointSize : PSIZE;
@@ -36,8 +36,8 @@ void main1()
     return;
 }
 
-type10 Constructtype10(float2 arg0, float4 arg1, float arg2, float arg3[1], float arg4[1]) {
-    type10 ret;
+type9 Constructtype9(float2 arg0, float4 arg1, float arg2, float arg3[1], float arg4[1]) {
+    type9 ret;
     ret.member = arg0;
     ret.gl_Position = arg1;
     ret.gl_PointSize = arg2;
@@ -56,7 +56,7 @@ VertexOutput_main main(float2 a_uv : LOC1, float2 a_pos : LOC0)
     float _expr12 = perVertexStruct.gl_PointSize;
     float _expr13[1] = perVertexStruct.gl_ClipDistance;
     float _expr14[1] = perVertexStruct.gl_CullDistance;
-    const type10 type10_ = Constructtype10(_expr10, _expr11, _expr12, _expr13, _expr14);
-    const VertexOutput_main type10_1 = { type10_.member, type10_.gl_Position, type10_.gl_ClipDistance, type10_.gl_CullDistance, type10_.gl_PointSize };
-    return type10_1;
+    const type9 type9_ = Constructtype9(_expr10, _expr11, _expr12, _expr13, _expr14);
+    const VertexOutput_main type9_1 = { type9_.member, type9_.gl_Position, type9_.gl_ClipDistance, type9_.gl_CullDistance, type9_.gl_PointSize };
+    return type9_1;
 }

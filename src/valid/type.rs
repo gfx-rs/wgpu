@@ -1,6 +1,6 @@
 use super::Capabilities;
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Arena, Handle, UniqueArena},
     proc::Alignment,
 };
 
@@ -187,7 +187,7 @@ impl super::Validator {
     pub(super) fn validate_type(
         &self,
         handle: Handle<crate::Type>,
-        types: &Arena<crate::Type>,
+        types: &UniqueArena<crate::Type>,
         constants: &Arena<crate::Constant>,
     ) -> Result<TypeInfo, TypeError> {
         use crate::TypeInner as Ti;

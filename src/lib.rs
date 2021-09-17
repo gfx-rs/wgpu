@@ -44,6 +44,15 @@ and compound expressions refer to their sub-expressions via `Handle<Expression>`
 values. (When examining the serialized form of a `Module`, note that the first
 element of an `Arena` has an index of 1, not 0.)
 
+A [`UniqueArena`] is just like an `Arena`, except that it stores only a single
+instance of each value. The value type must implement `Eq` and `Hash`. Like an
+`Arena`, inserting a value into a `UniqueArena` returns a `Handle` which can be
+used to efficiently access the value, without a hash lookup. Inserting a value
+multiple times returns the same `Handle`.
+
+If the `span` feature is enabled, both `Arena` and `UniqueArena` can associate a
+source code span with each element.
+
 ## Function Calls
 
 Naga's representation of function calls is unusual. Most languages treat
@@ -203,7 +212,7 @@ pub mod proc;
 mod span;
 pub mod valid;
 
-pub use crate::arena::{Arena, Handle, Range};
+pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -412,7 +421,7 @@ pub enum Sampling {
 
 /// Member of a user-defined structure.
 // Clone is used only for error reporting and is not intended for end users
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct StructMember {
@@ -531,7 +540,7 @@ pub enum ImageClass {
 }
 
 /// A data type declared in the module.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Type {
@@ -542,7 +551,7 @@ pub struct Type {
 }
 
 /// Enum with additional information, depending on the kind of type.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum TypeInner {
@@ -704,7 +713,7 @@ pub enum ConstantInner {
 }
 
 /// Describes how an input/output variable is to be bound.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Binding {
@@ -1552,7 +1561,7 @@ pub struct EntryPoint {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Module {
     /// Storage for the types defined in this module.
-    pub types: Arena<Type>,
+    pub types: UniqueArena<Type>,
     /// Storage for the constants defined in this module.
     pub constants: Arena<Constant>,
     /// Storage for the global variables defined in this module.

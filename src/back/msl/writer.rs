@@ -22,7 +22,7 @@ const ATOMIC_REFERENCE: &str = "&";
 
 struct TypeContext<'a> {
     handle: Handle<crate::Type>,
-    arena: &'a crate::Arena<crate::Type>,
+    arena: &'a crate::UniqueArena<crate::Type>,
     names: &'a FastHashMap<NameKey, String>,
     access: crate::StorageAccess,
     first_time: bool,
@@ -354,7 +354,7 @@ fn should_pack_struct_member(
     }
 }
 
-fn needs_array_length(ty: Handle<crate::Type>, arena: &crate::Arena<crate::Type>) -> bool {
+fn needs_array_length(ty: Handle<crate::Type>, arena: &crate::UniqueArena<crate::Type>) -> bool {
     if let crate::TypeInner::Struct { ref members, .. } = arena[ty].inner {
         if let Some(member) = members.last() {
             if let crate::TypeInner::Array {

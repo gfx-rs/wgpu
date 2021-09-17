@@ -1,4 +1,4 @@
-use crate::{Arena, Handle};
+use crate::{Handle, UniqueArena};
 use spirv::Word;
 
 pub(super) fn bytes_to_words(bytes: &[u8]) -> Vec<Word> {
@@ -35,7 +35,7 @@ pub(super) fn map_storage_class(class: crate::StorageClass) -> spirv::StorageCla
 pub(super) fn contains_builtin(
     binding: Option<&crate::Binding>,
     ty: Handle<crate::Type>,
-    arena: &Arena<crate::Type>,
+    arena: &UniqueArena<crate::Type>,
     built_in: crate::BuiltIn,
 ) -> bool {
     if let Some(&crate::Binding::BuiltIn(bi)) = binding {

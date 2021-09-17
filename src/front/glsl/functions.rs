@@ -900,7 +900,7 @@ impl Parser {
         }
 
         let (ty, value) = if !components.is_empty() {
-            let ty = self.module.types.append(
+            let ty = self.module.types.fetch_or_append(
                 Type {
                     name: None,
                     inner: TypeInner::Struct {

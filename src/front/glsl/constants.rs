@@ -1,12 +1,12 @@
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Arena, Handle, UniqueArena},
     BinaryOperator, Constant, ConstantInner, Expression, ScalarKind, ScalarValue, Type, TypeInner,
     UnaryOperator,
 };
 
 #[derive(Debug)]
 pub struct ConstantSolver<'a> {
-    pub types: &'a mut Arena<Type>,
+    pub types: &'a mut UniqueArena<Type>,
     pub expressions: &'a Arena<Expression>,
     pub constants: &'a mut Arena<Constant>,
 }
@@ -531,18 +531,18 @@ mod tests {
 
     use crate::{
         Arena, Constant, ConstantInner, Expression, ScalarKind, ScalarValue, Type, TypeInner,
-        UnaryOperator, VectorSize,
+        UnaryOperator, UniqueArena, VectorSize,
     };
 
     use super::ConstantSolver;
 
     #[test]
     fn unary_op() {
-        let mut types = Arena::new();
+        let mut types = UniqueArena::new();
         let mut expressions = Arena::new();
         let mut constants = Arena::new();
 
-        let vec_ty = types.append(
+        let vec_ty = types.fetch_or_append(
             Type {
                 name: None,
                 inner: TypeInner::Vector {
@@ -698,7 +698,7 @@ mod tests {
         );
 
         let mut solver = ConstantSolver {
-            types: &mut Arena::new(),
+            types: &mut UniqueArena::new(),
             expressions: &expressions,
             constants: &mut constants,
         };
@@ -716,11 +716,11 @@ mod tests {
 
     #[test]
     fn access() {
-        let mut types = Arena::new();
+        let mut types = UniqueArena::new();
         let mut expressions = Arena::new();
         let mut constants = Arena::new();
 
-        let matrix_ty = types.append(
+        let matrix_ty = types.fetch_or_append(
             Type {
                 name: None,
                 inner: TypeInner::Matrix {
@@ -732,7 +732,7 @@ mod tests {
             Default::default(),
         );
 
-        let vec_ty = types.append(
+        let vec_ty = types.fetch_or_append(
             Type {
                 name: None,
                 inner: TypeInner::Vector {

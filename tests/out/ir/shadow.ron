@@ -64,14 +64,6 @@
         ),
         (
             name: None,
-            inner: Vector(
-                size: Bi,
-                kind: Float,
-                width: 4,
-            ),
-        ),
-        (
-            name: None,
             inner: Scalar(
                 kind: Sint,
                 width: 4,
@@ -106,7 +98,7 @@
                 members: [
                     (
                         name: Some("num_lights"),
-                        ty: 13,
+                        ty: 12,
                         binding: None,
                         offset: 0,
                     ),
@@ -117,14 +109,14 @@
         (
             name: None,
             inner: Pointer(
-                base: 14,
+                base: 13,
                 class: Uniform,
             ),
         ),
         (
             name: None,
             inner: Pointer(
-                base: 13,
+                base: 12,
                 class: Uniform,
             ),
         ),
@@ -150,7 +142,7 @@
                 members: [
                     (
                         name: Some("proj"),
-                        ty: 18,
+                        ty: 17,
                         binding: None,
                         offset: 0,
                     ),
@@ -173,7 +165,7 @@
         (
             name: None,
             inner: Array(
-                base: 19,
+                base: 18,
                 size: Dynamic,
                 stride: 96,
             ),
@@ -185,7 +177,7 @@
                 members: [
                     (
                         name: Some("data"),
-                        ty: 20,
+                        ty: 19,
                         binding: None,
                         offset: 0,
                     ),
@@ -196,19 +188,12 @@
         (
             name: None,
             inner: Pointer(
-                base: 21,
+                base: 20,
                 class: Storage(
                     access: (
                         bits: 0,
                     ),
                 ),
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 20,
-                class: Uniform,
             ),
         ),
         (
@@ -222,6 +207,13 @@
             name: None,
             inner: Pointer(
                 base: 18,
+                class: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 17,
                 class: Uniform,
             ),
         ),
@@ -242,76 +234,6 @@
         (
             name: None,
             inner: Pointer(
-                base: 20,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 19,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 4,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 1,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 20,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 19,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 4,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 1,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 20,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 19,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
                 base: 4,
                 class: Uniform,
             ),
@@ -327,111 +249,6 @@
             name: None,
             inner: Pointer(
                 base: 1,
-                class: Private,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 1,
-                class: Private,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 1,
-                class: Private,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 20,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 19,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 4,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 1,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 20,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 19,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 4,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 1,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 20,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 19,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 4,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 1,
-                class: Uniform,
-            ),
-        ),
-        (
-            name: None,
-            inner: Pointer(
-                base: 4,
                 class: Private,
             ),
         ),
@@ -778,7 +595,7 @@
                 group: 0,
                 binding: 2,
             )),
-            ty: 56,
+            ty: 30,
             init: None,
         ),
         (
@@ -788,7 +605,7 @@
                 group: 0,
                 binding: 3,
             )),
-            ty: 57,
+            ty: 31,
             init: None,
         ),
         (
@@ -798,7 +615,7 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 14,
+            ty: 13,
             init: None,
         ),
         (
@@ -812,7 +629,7 @@
                 group: 0,
                 binding: 1,
             )),
-            ty: 21,
+            ty: 20,
             init: None,
         ),
         (
@@ -924,14 +741,14 @@
                     index: 1,
                 ),
                 Compose(
-                    ty: 9,
+                    ty: 6,
                     components: [
                         51,
                         52,
                     ],
                 ),
                 Compose(
-                    ty: 9,
+                    ty: 6,
                     components: [
                         13,
                         22,

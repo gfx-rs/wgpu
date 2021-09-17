@@ -1,5 +1,5 @@
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Arena, Handle, UniqueArena},
     proc::TypeResolution,
 };
 
@@ -19,7 +19,7 @@ pub enum ComposeError {
 pub fn validate_compose(
     self_ty_handle: Handle<crate::Type>,
     constant_arena: &Arena<crate::Constant>,
-    type_arena: &Arena<crate::Type>,
+    type_arena: &UniqueArena<crate::Type>,
     component_resolutions: impl ExactSizeIterator<Item = TypeResolution>,
 ) -> Result<(), ComposeError> {
     use crate::TypeInner as Ti;

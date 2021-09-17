@@ -2,25 +2,25 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-struct type6 {
+struct type5 {
     float inner[1u];
 };
 struct gl_PerVertex {
     metal::float4 gl_Position;
     float gl_PointSize;
-    type6 gl_ClipDistance;
-    type6 gl_CullDistance;
+    type5 gl_ClipDistance;
+    type5 gl_CullDistance;
 };
-struct type10 {
+struct type9 {
     metal::float2 member;
     metal::float4 gl_Position;
     float gl_PointSize;
-    type6 gl_ClipDistance;
-    type6 gl_CullDistance;
+    type5 gl_ClipDistance;
+    type5 gl_CullDistance;
 };
-constant metal::float4 const_type4_ = {0.0, 0.0, 0.0, 1.0};
-constant type6 const_type6_ = {0.0};
-constant gl_PerVertex const_gl_PerVertex = {const_type4_, 1.0, const_type6_, const_type6_};
+constant metal::float4 const_type3_ = {0.0, 0.0, 0.0, 1.0};
+constant type5 const_type5_ = {0.0};
+constant gl_PerVertex const_gl_PerVertex = {const_type3_, 1.0, const_type5_, const_type5_};
 
 void main2(
     thread metal::float2& v_uv,
@@ -60,8 +60,8 @@ vertex main1Output main1(
     metal::float2 _e10 = v_uv;
     metal::float4 _e11 = perVertexStruct.gl_Position;
     float _e12 = perVertexStruct.gl_PointSize;
-    type6 _e13 = perVertexStruct.gl_ClipDistance;
-    type6 _e14 = perVertexStruct.gl_CullDistance;
-    const auto _tmp = type10 {_e10, _e11, _e12, _e13, _e14};
+    type5 _e13 = perVertexStruct.gl_ClipDistance;
+    type5 _e14 = perVertexStruct.gl_CullDistance;
+    const auto _tmp = type9 {_e10, _e11, _e12, _e13, _e14};
     return main1Output { _tmp.member, _tmp.gl_Position, _tmp.gl_PointSize, {_tmp.gl_ClipDistance.inner[0]} };
 }

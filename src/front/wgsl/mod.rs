@@ -9,7 +9,7 @@ mod number_literals;
 mod tests;
 
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Arena, Handle, UniqueArena},
     proc::{
         ensure_block_returns, Alignment, Layouter, ResolveContext, ResolveError, TypeResolution,
     },
@@ -486,7 +486,11 @@ impl crate::TypeInner {
     /// For example `vec3<f32>`.
     ///
     /// Note: The names of a `TypeInner::Struct` is not known. Therefore this method will simply return "struct" for them.
-    fn to_wgsl(&self, types: &Arena<crate::Type>, constants: &Arena<crate::Constant>) -> String {
+    fn to_wgsl(
+        &self,
+        types: &UniqueArena<crate::Type>,
+        constants: &Arena<crate::Constant>,
+    ) -> String {
         use crate::TypeInner as Ti;
 
         match *self {
@@ -584,7 +588,7 @@ impl crate::TypeInner {
 mod type_inner_tests {
     #[test]
     fn to_wgsl() {
-        let mut types = crate::Arena::new();
+        let mut types = crate::UniqueArena::new();
         let mut constants = crate::Arena::new();
         let c = constants.append(
             crate::Constant {
@@ -598,7 +602,7 @@ mod type_inner_tests {
             Default::default(),
         );
 
-        let mytype1 = types.append(
+        let mytype1 = types.fetch_or_append(
             crate::Type {
                 name: Some("MyType1".to_string()),
                 inner: crate::TypeInner::Struct {
@@ -609,7 +613,7 @@ mod type_inner_tests {
             },
             Default::default(),
         );
-        let mytype2 = types.append(
+        let mytype2 = types.fetch_or_append(
             crate::Type {
                 name: Some("MyType2".to_string()),
                 inner: crate::TypeInner::Struct {
@@ -707,7 +711,7 @@ struct StatementContext<'input, 'temp, 'out> {
     variables: &'out mut Arena<crate::LocalVariable>,
     expressions: &'out mut Arena<crate::Expression>,
     named_expressions: &'out mut FastHashMap<Handle<crate::Expression>, String>,
-    types: &'out mut Arena<crate::Type>,
+    types: &'out mut UniqueArena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
     global_vars: &'out Arena<crate::GlobalVariable>,
     functions: &'out Arena<crate::Function>,
@@ -763,7 +767,7 @@ struct ExpressionContext<'input, 'temp, 'out> {
     lookup_ident: &'temp FastHashMap<&'input str, TypedExpression>,
     typifier: &'temp mut super::Typifier,
     expressions: &'out mut Arena<crate::Expression>,
-    types: &'out mut Arena<crate::Type>,
+    types: &'out mut UniqueArena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
     global_vars: &'out Arena<crate::GlobalVariable>,
     local_vars: &'out Arena<crate::LocalVariable>,
@@ -1993,7 +1997,7 @@ impl Parser {
         first_token_span: TokenSpan<'a>,
         lexer: &mut Lexer<'a>,
         register_name: Option<&'a str>,
-        type_arena: &mut Arena<crate::Type>,
+        type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Handle<crate::Constant>, Error<'a>> {
         self.push_scope(Scope::ConstantExpr, lexer);
@@ -2068,7 +2072,7 @@ impl Parser {
     fn parse_const_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_arena: &mut Arena<crate::Type>,
+        type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Handle<crate::Constant>, Error<'a>> {
         self.parse_const_expression_impl(lexer.next(), lexer, None, type_arena, const_arena)
@@ -2560,7 +2564,7 @@ impl Parser {
     fn parse_variable_ident_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_arena: &mut Arena<crate::Type>,
+        type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<(&'a str, Span, Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
         let (name, name_span) = lexer.next_ident_with_span()?;
@@ -2572,7 +2576,7 @@ impl Parser {
     fn parse_variable_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_arena: &mut Arena<crate::Type>,
+        type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<ParsedVariable<'a>, Error<'a>> {
         self.push_scope(Scope::VariableDecl, lexer);
@@ -2624,7 +2628,7 @@ impl Parser {
     fn parse_struct_body<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_arena: &mut Arena<crate::Type>,
+        type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<(Vec<crate::StructMember>, u32), Error<'a>> {
         let mut offset = 0;
@@ -2722,7 +2726,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         attribute: TypeAttributes,
         word: &'a str,
-        type_arena: &mut Arena<crate::Type>,
+        type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Option<crate::TypeInner>, Error<'a>> {
         if let Some((kind, width)) = conv::get_scalar_type(word) {
@@ -3034,7 +3038,7 @@ impl Parser {
         name_span: Span,
         debug_name: Option<&'a str>,
         attribute: TypeAttributes,
-        type_arena: &mut Arena<crate::Type>,
+        type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<Handle<crate::Type>, Error<'a>> {
         Ok(match self.lookup_type.get(name) {
@@ -3061,7 +3065,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         debug_name: Option<&'a str>,
-        type_arena: &mut Arena<crate::Type>,
+        type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<(Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
         self.push_scope(Scope::TypeDecl, lexer);

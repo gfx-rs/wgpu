@@ -10,7 +10,7 @@ pub mod spv;
 pub mod wgsl;
 
 use crate::{
-    arena::{Arena, Handle},
+    arena::{Arena, Handle, UniqueArena},
     proc::{ResolveContext, ResolveError, TypeResolution},
 };
 use std::ops;
@@ -81,7 +81,7 @@ impl Typifier {
     pub fn get<'a>(
         &'a self,
         expr_handle: Handle<crate::Expression>,
-        types: &'a Arena<crate::Type>,
+        types: &'a UniqueArena<crate::Type>,
     ) -> &'a crate::TypeInner {
         self.resolutions[expr_handle.index()].inner_with(types)
     }
