@@ -576,11 +576,19 @@ impl<'function> BlockContext<'function> {
                                     .map(|&(value, body_idx)| {
                                         let body = lower_impl(blocks, bodies, body_idx);
 
+                                        // Handle simple cases that would make a fallthrough statement unreachable code
+                                        let fall_through = match body.last() {
+                                            Some(&crate::Statement::Break)
+                                            | Some(&crate::Statement::Continue)
+                                            | Some(&crate::Statement::Kill)
+                                            | Some(&crate::Statement::Return { .. }) => false,
+                                            _ => true,
+                                        };
+
                                         crate::SwitchCase {
                                             value,
                                             body,
-                                            // TODO
-                                            fall_through: true,
+                                            fall_through,
                                         }
                                     })
                                     .collect(),
