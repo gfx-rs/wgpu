@@ -43,10 +43,7 @@ fn make_coords_arg(number_of_components: usize, kind: Sk) -> TypeInner {
     let width = 4;
 
     match number_of_components {
-        1 => TypeInner::Scalar {
-            kind,
-            width,
-        },
+        1 => TypeInner::Scalar { kind, width },
         _ => TypeInner::Vector {
             size: match number_of_components {
                 2 => VectorSize::Bi,
@@ -138,9 +135,18 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                 ))
             }
         }
-        "texture" | "textureGrad" | "textureGradOffset" | "textureLod" | "textureLodOffset" | "textureOffset"
-        | "textureProj" | "textureProjGrad" | "textureProjGradOffset" | "textureProjLod"
-        | "textureProjLodOffset" | "textureProjOffset" => {
+        "texture"
+        | "textureGrad"
+        | "textureGradOffset"
+        | "textureLod"
+        | "textureLodOffset"
+        | "textureOffset"
+        | "textureProj"
+        | "textureProjGrad"
+        | "textureProjGradOffset"
+        | "textureProjLod"
+        | "textureProjLodOffset"
+        | "textureProjOffset" => {
             // bits layout
             // bits 0 through 1 - dims
             // bit 2 - shadow
@@ -157,36 +163,108 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
 
                 let builtin = match name {
                     // texture(gsampler, gvec P, [float bias]);
-                    "texture" => MacroCall::Texture { proj: false, offset: false, shadow, level_type: TextureLevelType::None, },
+                    "texture" => MacroCall::Texture {
+                        proj: false,
+                        offset: false,
+                        shadow,
+                        level_type: TextureLevelType::None,
+                    },
                     // textureGrad(gsampler, gvec P, gvec dPdx, gvec dPdy);
-                    "textureGrad" => MacroCall::Texture { proj: false, offset: false, shadow, level_type: TextureLevelType::Grad, },
+                    "textureGrad" => MacroCall::Texture {
+                        proj: false,
+                        offset: false,
+                        shadow,
+                        level_type: TextureLevelType::Grad,
+                    },
                     // textureGradOffset(gsampler, gvec P, gvec dPdx, gvec dPdy, ivec offset);
-                    "textureGradOffset" => MacroCall::Texture { proj: false, offset: true, shadow, level_type: TextureLevelType::Grad, },
+                    "textureGradOffset" => MacroCall::Texture {
+                        proj: false,
+                        offset: true,
+                        shadow,
+                        level_type: TextureLevelType::Grad,
+                    },
                     // textureLod(gsampler, gvec P, float lod);
-                    "textureLod" => MacroCall::Texture { proj: false, offset: false, shadow, level_type: TextureLevelType::Lod, },
+                    "textureLod" => MacroCall::Texture {
+                        proj: false,
+                        offset: false,
+                        shadow,
+                        level_type: TextureLevelType::Lod,
+                    },
                     // textureLodOffset(gsampler, gvec P, float lod, ivec offset);
-                    "textureLodOffset" => MacroCall::Texture { proj: false, offset: true, shadow, level_type: TextureLevelType::Lod, },
+                    "textureLodOffset" => MacroCall::Texture {
+                        proj: false,
+                        offset: true,
+                        shadow,
+                        level_type: TextureLevelType::Lod,
+                    },
                     // textureOffset(gsampler, gvec+1 P, ivec offset, [float bias]);
-                    "textureOffset" => MacroCall::Texture { proj: false, offset: true, shadow, level_type: TextureLevelType::None, },
+                    "textureOffset" => MacroCall::Texture {
+                        proj: false,
+                        offset: true,
+                        shadow,
+                        level_type: TextureLevelType::None,
+                    },
                     // textureProj(gsampler, gvec+1 P, [float bias]);
-                    "textureProj" => MacroCall::Texture { proj: true, offset: false, shadow, level_type: TextureLevelType::None, },
+                    "textureProj" => MacroCall::Texture {
+                        proj: true,
+                        offset: false,
+                        shadow,
+                        level_type: TextureLevelType::None,
+                    },
                     // textureProjGrad(gsampler, gvec+1 P, gvec dPdx, gvec dPdy);
-                    "textureProjGrad" => MacroCall::Texture { proj: true, offset: false, shadow, level_type: TextureLevelType::Grad, },
+                    "textureProjGrad" => MacroCall::Texture {
+                        proj: true,
+                        offset: false,
+                        shadow,
+                        level_type: TextureLevelType::Grad,
+                    },
                     // textureProjGradOffset(gsampler, gvec+1 P, gvec dPdx, gvec dPdy, ivec offset);
-                    "textureProjGradOffset" => MacroCall::Texture { proj: true, offset: true, shadow, level_type: TextureLevelType::Grad, },
+                    "textureProjGradOffset" => MacroCall::Texture {
+                        proj: true,
+                        offset: true,
+                        shadow,
+                        level_type: TextureLevelType::Grad,
+                    },
                     // textureProjLod(gsampler, gvec+1 P, float lod);
-                    "textureProjLod" => MacroCall::Texture { proj: true, offset: false, shadow, level_type: TextureLevelType::Lod, },
+                    "textureProjLod" => MacroCall::Texture {
+                        proj: true,
+                        offset: false,
+                        shadow,
+                        level_type: TextureLevelType::Lod,
+                    },
                     // textureProjLodOffset(gsampler, gvec+1 P, gvec dPdx, gvec dPdy, ivec offset);
-                    "textureProjLodOffset" => MacroCall::Texture { proj: true, offset: true, shadow, level_type: TextureLevelType::Lod, },
+                    "textureProjLodOffset" => MacroCall::Texture {
+                        proj: true,
+                        offset: true,
+                        shadow,
+                        level_type: TextureLevelType::Lod,
+                    },
                     // textureProjOffset(gsampler, gvec+1 P, ivec offset, [float bias]);
-                    "textureProjOffset" => MacroCall::Texture { proj: true, offset: true, shadow, level_type: TextureLevelType::None, },
+                    "textureProjOffset" => MacroCall::Texture {
+                        proj: true,
+                        offset: true,
+                        shadow,
+                        level_type: TextureLevelType::None,
+                    },
                     _ => unreachable!(),
                 };
 
                 // Parse out the variant settings.
                 let proj = matches!(builtin, MacroCall::Texture { proj: true, .. });
-                let grad = matches!(builtin, MacroCall::Texture { level_type: TextureLevelType::Grad, .. });
-                let lod = matches!(builtin, MacroCall::Texture { level_type: TextureLevelType::Lod, .. });
+                let grad = matches!(
+                    builtin,
+                    MacroCall::Texture {
+                        level_type: TextureLevelType::Grad,
+                        ..
+                    }
+                );
+                let lod = matches!(
+                    builtin,
+                    MacroCall::Texture {
+                        level_type: TextureLevelType::Lod,
+                        ..
+                    }
+                );
                 let offset = matches!(builtin, MacroCall::Texture { offset: true, .. });
 
                 let supports_variant = proj && !shadow;
@@ -194,7 +272,13 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                     continue;
                 }
 
-                let supports_bias = matches!(builtin, MacroCall::Texture { level_type: TextureLevelType::None, .. }) && !shadow;
+                let supports_bias = matches!(
+                    builtin,
+                    MacroCall::Texture {
+                        level_type: TextureLevelType::None,
+                        ..
+                    }
+                ) && !shadow;
                 if bias && !supports_bias {
                     continue;
                 }
@@ -275,17 +359,23 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                 }
 
                 match builtin {
-                    MacroCall::Texture { level_type: TextureLevelType::Lod, .. } => {
+                    MacroCall::Texture {
+                        level_type: TextureLevelType::Lod,
+                        ..
+                    } => {
                         args.push(TypeInner::Scalar {
                             kind: Sk::Float,
                             width,
                         });
-                    },
-                    MacroCall::Texture { level_type: TextureLevelType::Grad, .. } => {
+                    }
+                    MacroCall::Texture {
+                        level_type: TextureLevelType::Grad,
+                        ..
+                    } => {
                         args.push(make_coords_arg(num_coords_from_dim, Sk::Float));
                         args.push(make_coords_arg(num_coords_from_dim, Sk::Float));
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 };
 
                 if offset {
@@ -1344,7 +1434,11 @@ fn inject_common_builtin(
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum TextureLevelType { None, Lod, Grad }
+pub enum TextureLevelType {
+    None,
+    Lod,
+    Grad,
+}
 
 /// A compiler defined builtin function
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -1393,7 +1487,12 @@ impl MacroCall {
                 ctx.samplers.insert(args[0], args[1]);
                 Ok(args[0])
             }
-            MacroCall::Texture { proj, offset, shadow, level_type } => {
+            MacroCall::Texture {
+                proj,
+                offset,
+                shadow,
+                level_type,
+            } => {
                 let mut coords = args[1];
 
                 if proj {
@@ -1411,7 +1510,10 @@ impl MacroCall {
                     );
                     let left = if let VectorSize::Bi = size {
                         ctx.add_expression(
-                            Expression::AccessIndex { base: coords, index: 0 },
+                            Expression::AccessIndex {
+                                base: coords,
+                                index: 0,
+                            },
                             SourceMetadata::none(),
                             body,
                         )
@@ -1439,7 +1541,8 @@ impl MacroCall {
                 }
 
                 let extra = args.get(2).copied();
-                let comps = parser.coordinate_components(ctx, args[0], coords, extra, meta, body)?;
+                let comps =
+                    parser.coordinate_components(ctx, args[0], coords, extra, meta, body)?;
 
                 let mut num_args = 2;
 
@@ -1455,10 +1558,7 @@ impl MacroCall {
                         num_args += 1;
 
                         if shadow {
-                            log::warn!(
-                                "Assuming LOD {:?} is zero",
-                                args[2],
-                            );
+                            log::warn!("Assuming LOD {:?} is zero", args[2],);
 
                             SampleLevel::Zero
                         } else {
@@ -1494,10 +1594,10 @@ impl MacroCall {
                             Err(e) => {
                                 parser.errors.push(e);
                                 None
-                            },
+                            }
                         }
                     }
-                    false => None
+                    false => None,
                 };
 
                 // Now go back and look for optional bias arg (if available)
@@ -1521,7 +1621,8 @@ impl MacroCall {
                 body,
             )),
             MacroCall::TexelFetch => {
-                let comps = parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
+                let comps =
+                    parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
                 Ok(ctx.add_expression(
                     Expression::ImageLoad {
                         image: args[0],
