@@ -141,6 +141,12 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             let fun_inst = self.next_inst()?;
             log::debug!("{:?}", fun_inst.op);
             match fun_inst.op {
+                spirv::Op::Line => {
+                    fun_inst.expect(4)?;
+                    let _file_id = self.next()?;
+                    let _row_id = self.next()?;
+                    let _col_id = self.next()?;
+                }
                 spirv::Op::Label => {
                     // Read the label ID
                     fun_inst.expect(2)?;
