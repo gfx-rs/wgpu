@@ -242,7 +242,7 @@ impl Parser {
         meta: Span,
     ) -> Result<Handle<Constant>> {
         let mut solver = ConstantSolver {
-            types: &self.module.types,
+            types: &mut self.module.types,
             expressions: &ctx.expressions,
             constants: &mut self.module.constants,
         };

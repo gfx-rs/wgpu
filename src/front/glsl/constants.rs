@@ -6,7 +6,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct ConstantSolver<'a> {
-    pub types: &'a Arena<Type>,
+    pub types: &'a mut Arena<Type>,
     pub expressions: &'a Arena<Expression>,
     pub constants: &'a mut Arena<Constant>,
 }
@@ -53,8 +53,10 @@ pub enum ConstantSolvingError {
     InvalidBinaryOpArgs,
     #[error("Cannot apply math function to type")]
     InvalidMathArg,
-    #[error("Splat/swizzle type is not registered")]
-    DestinationTypeNotFound,
+    #[error("Splat is defined only on scalar values")]
+    SplatScalarOnly,
+    #[error("Can only swizzle vector constants")]
+    SwizzleVectorOnly,
     #[error("Not implemented: {0}")]
     NotImplemented(String),
 }
@@ -81,14 +83,19 @@ impl<'a> ConstantSolver<'a> {
                 let ty = match self.constants[value_constant].inner {
                     ConstantInner::Scalar { ref value, width } => {
                         let kind = value.scalar_kind();
-                        self.types
-                            .fetch_if(|t| t.inner == crate::TypeInner::Vector { size, kind, width })
+                        self.types.fetch_or_append(
+                            Type {
+                                name: None,
+                                inner: TypeInner::Vector { size, kind, width },
+                            },
+                            span,
+                        )
                     }
-                    ConstantInner::Composite { .. } => None,
+                    ConstantInner::Composite { .. } => {
+                        return Err(ConstantSolvingError::SplatScalarOnly);
+                    }
                 };
 
-                //TODO: register the new type if needed
-                let ty = ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?;
                 Ok(self.constants.fetch_or_append(
                     Constant {
                         name: None,
@@ -108,7 +115,9 @@ impl<'a> ConstantSolver<'a> {
             } => {
                 let src_constant = self.solve(src_vector)?;
                 let (ty, src_components) = match self.constants[src_constant].inner {
-                    ConstantInner::Scalar { .. } => (None, &[][..]),
+                    ConstantInner::Scalar { .. } => {
+                        return Err(ConstantSolvingError::SwizzleVectorOnly);
+                    }
                     ConstantInner::Composite {
                         ty,
                         components: ref src_components,
@@ -118,16 +127,21 @@ impl<'a> ConstantSolver<'a> {
                             kind,
                             width,
                         } => {
-                            let dst_ty = self.types.fetch_if(|t| {
-                                t.inner == crate::TypeInner::Vector { size, kind, width }
-                            });
+                            let dst_ty = self.types.fetch_or_append(
+                                Type {
+                                    name: None,
+                                    inner: crate::TypeInner::Vector { size, kind, width },
+                                },
+                                span,
+                            );
                             (dst_ty, &src_components[..])
                         }
-                        _ => (None, &[][..]),
+                        _ => {
+                            return Err(ConstantSolvingError::SwizzleVectorOnly);
+                        }
                     },
                 };
-                //TODO: register the new type if needed
-                let ty = ty.ok_or(ConstantSolvingError::DestinationTypeNotFound)?;
+
                 let components = pattern
                     .iter()
                     .map(|&sc| src_components[sc as usize])
@@ -604,7 +618,7 @@ mod tests {
         );
 
         let mut solver = ConstantSolver {
-            types: &types,
+            types: &mut types,
             expressions: &expressions,
             constants: &mut constants,
         };
@@ -684,7 +698,7 @@ mod tests {
         );
 
         let mut solver = ConstantSolver {
-            types: &Arena::new(),
+            types: &mut Arena::new(),
             expressions: &expressions,
             constants: &mut constants,
         };
@@ -815,7 +829,7 @@ mod tests {
         );
 
         let mut solver = ConstantSolver {
-            types: &types,
+            types: &mut types,
             expressions: &expressions,
             constants: &mut constants,
         };
