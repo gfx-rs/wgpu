@@ -2625,6 +2625,7 @@ fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
                 "gl_FragCoord"
             }
         }
+        Bi::ViewIndex => "gl_ViewIndex",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",

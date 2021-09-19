@@ -34,6 +34,7 @@ bitflags::bitflags! {
         const SAMPLE_VARIABLES = 1 << 15;
         /// Arrays with a dynamic length
         const DYNAMIC_ARRAY_SIZE = 1 << 16;
+        const MULTI_VIEW = 1 << 17;
     }
 }
 
@@ -101,6 +102,7 @@ impl FeaturesManager {
         check_feature!(CULL_DISTANCE, 450, 300);
         check_feature!(SAMPLE_VARIABLES, 400, 300);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
+        check_feature!(MULTI_VIEW, 140, 310);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -192,6 +194,16 @@ impl FeaturesManager {
         if self.0.contains(Features::SAMPLE_VARIABLES) && version.is_es() {
             // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_sample_variables.txt
             writeln!(out, "#extension GL_OES_sample_variables : require")?;
+        }
+
+        if self.0.contains(Features::SAMPLE_VARIABLES) && version.is_es() {
+            // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_sample_variables.txt
+            writeln!(out, "#extension GL_OES_sample_variables : require")?;
+        }
+
+        if self.0.contains(Features::MULTI_VIEW) {
+            // https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GL_EXT_multiview.txt
+            writeln!(out, "#extension GL_EXT_multiview : require")?;
         }
 
         Ok(())
@@ -371,6 +383,9 @@ impl<'a, W> Writer<'a, W> {
                             }
                             crate::BuiltIn::SampleIndex => {
                                 self.features.request(Features::SAMPLE_VARIABLES)
+                            }
+                            crate::BuiltIn::ViewIndex => {
+                                self.features.request(Features::MULTI_VIEW)
                             }
                             _ => {}
                         },

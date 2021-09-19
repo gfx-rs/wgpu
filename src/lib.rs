@@ -307,6 +307,7 @@ pub enum StorageClass {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum BuiltIn {
     Position,
+    ViewIndex,
     // vertex
     BaseInstance,
     BaseVertex,

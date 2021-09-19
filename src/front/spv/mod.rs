@@ -75,6 +75,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_KHR_storage_buffer_storage_class",
     "SPV_KHR_vulkan_memory_model",
+    "SPV_KHR_multiview",
 ];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 

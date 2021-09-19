@@ -158,6 +158,17 @@ impl VaryingContext<'_> {
                                 width,
                             },
                     ),
+                    Bi::ViewIndex => (
+                        match self.stage {
+                            St::Vertex | St::Fragment => !self.output,
+                            St::Compute => false,
+                        },
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Sint,
+                                width,
+                            },
+                    ),
                     Bi::FragDepth => (
                         self.stage == St::Fragment && self.output,
                         *ty_inner

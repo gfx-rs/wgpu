@@ -358,7 +358,9 @@ impl ResolvedBinding {
                     Bi::WorkGroupId => "threadgroup_position_in_grid",
                     Bi::WorkGroupSize => "dispatch_threads_per_threadgroup",
                     Bi::NumWorkGroups => "threadgroups_per_grid",
-                    Bi::CullDistance => return Err(Error::UnsupportedBuiltIn(built_in)),
+                    Bi::CullDistance | Bi::ViewIndex => {
+                        return Err(Error::UnsupportedBuiltIn(built_in))
+                    }
                 };
                 write!(out, "{}", name)?;
             }

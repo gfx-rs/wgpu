@@ -1159,6 +1159,10 @@ impl Writer {
                             BuiltIn::FragCoord
                         }
                     }
+                    Bi::ViewIndex => {
+                        self.require_any("`view_index` built-in", &[spirv::Capability::MultiView])?;
+                        BuiltIn::ViewIndex
+                    }
                     // vertex
                     Bi::BaseInstance => BuiltIn::BaseInstance,
                     Bi::BaseVertex => BuiltIn::BaseVertex,
@@ -1284,6 +1288,19 @@ impl Writer {
         mod_info: &ModuleInfo,
         ep_index: Option<usize>,
     ) -> Result<(), Error> {
+        fn has_view_index_check(
+            ir_module: &crate::Module,
+            binding: Option<&crate::Binding>,
+            ty: Handle<crate::Type>,
+        ) -> bool {
+            match ir_module.types[ty].inner {
+                crate::TypeInner::Struct { ref members, .. } => members.iter().any(|member| {
+                    has_view_index_check(ir_module, member.binding.as_ref(), member.ty)
+                }),
+                _ => binding == Some(&crate::Binding::BuiltIn(crate::BuiltIn::ViewIndex)),
+            }
+        }
+
         let has_storage_buffers =
             ir_module
                 .global_variables
@@ -1292,10 +1309,20 @@ impl Writer {
                     crate::StorageClass::Storage { .. } => true,
                     _ => false,
                 });
+        let has_view_index = ir_module
+            .entry_points
+            .iter()
+            .flat_map(|entry| entry.function.arguments.iter())
+            .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
+
         if self.physical_layout.version < 0x10300 && has_storage_buffers {
             // enable the storage buffer class on < SPV-1.3
             Instruction::extension("SPV_KHR_storage_buffer_storage_class")
                 .to_words(&mut self.logical_layout.extensions);
+        }
+        if has_view_index {
+            Instruction::extension("SPV_KHR_multiview")
+                .to_words(&mut self.logical_layout.extensions)
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
