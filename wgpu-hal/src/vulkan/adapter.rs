@@ -18,6 +18,8 @@ pub struct PhysicalDeviceFeatures {
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
     imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
+    image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
+    robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -223,6 +225,28 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder()
                         .timeline_semaphore(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            image_robustness: if enabled_extensions.contains(&vk::ExtImageRobustnessFn::name()) {
+                Some(
+                    vk::PhysicalDeviceImageRobustnessFeaturesEXT::builder()
+                        .robust_image_access(private_caps.robust_image_access)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            robustness2: if enabled_extensions.contains(&vk::ExtRobustness2Fn::name()) {
+                // Note: enabling `robust_buffer_access2` isn't requires, strictly speaking
+                // since we can enable `robust_buffer_access` all the time. But it improves
+                // program portability, so we opt into it anyway.
+                Some(
+                    vk::PhysicalDeviceRobustness2FeaturesEXT::builder()
+                        .robust_buffer_access2(private_caps.robust_buffer_access)
+                        .robust_image_access2(private_caps.robust_image_access)
                         .build(),
                 )
             } else {
@@ -571,6 +595,21 @@ impl super::InstanceShared {
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
+            if capabilities.supports_extension(vk::ExtImageRobustnessFn::name()) {
+                features.image_robustness =
+                    Some(vk::PhysicalDeviceImageRobustnessFeaturesEXT::builder().build());
+
+                let mut_ref = features.image_robustness.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+            if capabilities.supports_extension(vk::ExtRobustness2Fn::name()) {
+                features.robustness2 =
+                    Some(vk::PhysicalDeviceRobustness2FeaturesEXT::builder().build());
+
+                let mut_ref = features.robustness2.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
             unsafe {
                 get_device_properties.get_physical_device_features2_khr(phd, &mut features2);
             }
@@ -593,6 +632,8 @@ impl super::InstanceShared {
             null_p_next(&mut features.descriptor_indexing);
             null_p_next(&mut features.imageless_framebuffer);
             null_p_next(&mut features.timeline_semaphore);
+            null_p_next(&mut features.image_robustness);
+            null_p_next(&mut features.robustness2);
         }
 
         (capabilities, features)
@@ -675,13 +716,13 @@ impl super::Instance {
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
             imageless_framebuffers: match phd_features.vulkan_1_2 {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
-                None => phd_capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()),
+                None => phd_features.imageless_framebuffer.is_some(),
             },
             image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
             timeline_semaphores: match phd_features.vulkan_1_2 {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
-                None => phd_capabilities.supports_extension(vk::KhrTimelineSemaphoreFn::name()),
+                None => phd_features.timeline_semaphore.is_some(),
             },
             texture_d24: unsafe {
                 self.shared
@@ -701,6 +742,13 @@ impl super::Instance {
             can_present: true,
             //TODO: make configurable
             robust_buffer_access: phd_features.core.robust_buffer_access != 0,
+            robust_image_access: match phd_features.robustness2 {
+                Some(ref f) => f.robust_image_access2 != 0,
+                None => match phd_features.image_robustness {
+                    Some(ref f) => f.robust_image_access != 0,
+                    None => false,
+                },
+            },
         };
 
         let capabilities = crate::Capabilities {
@@ -860,8 +908,12 @@ impl super::Adapter {
                 capabilities: Some(capabilities.iter().cloned().collect()),
                 bounds_check_policies: naga::back::BoundsCheckPolicies {
                     index: naga::back::BoundsCheckPolicy::Restrict,
-                    image: naga::back::BoundsCheckPolicy::Restrict,
                     buffer: if self.private_caps.robust_buffer_access {
+                        naga::back::BoundsCheckPolicy::Unchecked
+                    } else {
+                        naga::back::BoundsCheckPolicy::Restrict
+                    },
+                    image: if self.private_caps.robust_image_access {
                         naga::back::BoundsCheckPolicy::Unchecked
                     } else {
                         naga::back::BoundsCheckPolicy::Restrict
