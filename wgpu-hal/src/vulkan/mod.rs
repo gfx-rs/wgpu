@@ -163,6 +163,7 @@ struct PrivateCapabilities {
     can_present: bool,
     non_coherent_map_mask: wgt::BufferAddress,
     robust_buffer_access: bool,
+    robust_image_access: bool,
 }
 
 bitflags::bitflags!(
