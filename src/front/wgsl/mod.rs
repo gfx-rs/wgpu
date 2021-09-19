@@ -21,7 +21,7 @@ use self::{
     lexer::Lexer,
     number_literals::{
         get_f32_literal, get_i32_literal, get_u32_literal, parse_generic_non_negative_int_literal,
-        parse_non_negative_sint_literal, parse_sint_literal,
+        parse_non_negative_sint_literal,
     },
 };
 use codespan_reporting::{
@@ -83,6 +83,7 @@ pub enum ExpectedToken<'a> {
         ty: Option<NumberType>,
         width: Option<Bytes>,
     },
+    Integer,
     Constant,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
@@ -218,6 +219,7 @@ impl<'a> Error<'a> {
                                 )
                             }
                         },
+                        ExpectedToken::Integer => "unsigned/signed integer literal".to_string(),
                         ExpectedToken::Constant => "constant".to_string(),
                         ExpectedToken::PrimaryExpression => "expression".to_string(),
                         ExpectedToken::AttributeSeparator => "attribute separator (',') or an end of the attribute list (']]')".to_string(),
@@ -1240,6 +1242,28 @@ impl Parser {
             value,
             width: width.unwrap_or(4),
         })
+    }
+
+    fn parse_switch_value<'a>(lexer: &mut Lexer<'a>, uint: bool) -> Result<i32, Error<'a>> {
+        let token_span = lexer.next();
+        let word = match token_span.0 {
+            Token::Number { value, width, .. } => {
+                if let Some(width) = width {
+                    if width != 4 {
+                        // Only 32-bit literals supported by the spec and naga for now!
+                        return Err(Error::BadScalarWidth(token_span.1, width));
+                    }
+                }
+
+                value
+            }
+            _ => return Err(Error::Unexpected(token_span, ExpectedToken::Integer)),
+        };
+
+        match uint {
+            true => get_u32_literal(word, token_span.1).map(|v| v as i32),
+            false => get_i32_literal(word, token_span.1),
+        }
     }
 
     fn parse_atomic_pointer<'a>(
@@ -3425,6 +3449,11 @@ impl Parser {
                             lexer,
                             context.as_expression(block, &mut emitter),
                         )?;
+                        let uint = Some(crate::ScalarKind::Uint)
+                            == context
+                                .as_expression(block, &mut emitter)
+                                .resolve_type(selector)?
+                                .scalar_kind();
                         lexer.expect(Token::Paren(')'))?;
                         block.extend(emitter.finish(context.expressions));
                         lexer.expect(Token::Paren('{'))?;
@@ -3438,7 +3467,7 @@ impl Parser {
                                     // parse a list of values
                                     let value = loop {
                                         // TODO: Switch statements also allow for floats, bools and unsigned integers. See https://www.w3.org/TR/WGSL/#switch-statement
-                                        let value = parse_sint_literal(lexer, 4)?;
+                                        let value = Self::parse_switch_value(lexer, uint)?;
                                         if lexer.skip(Token::Separator(',')) {
                                             if lexer.skip(Token::Separator(':')) {
                                                 break value;

@@ -1439,10 +1439,17 @@ impl<W: Write> Writer<W> {
                 } => {
                     write!(self.out, "{}switch(", level)?;
                     self.put_expression(selector, &context.expression, true)?;
+                    let type_postfix = match *context.expression.resolve_type(selector) {
+                        crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            ..
+                        } => "u",
+                        _ => "",
+                    };
                     writeln!(self.out, ") {{")?;
                     let lcase = level.next();
                     for case in cases.iter() {
-                        writeln!(self.out, "{}case {}: {{", lcase, case.value)?;
+                        writeln!(self.out, "{}case {}{}: {{", lcase, case.value, type_postfix)?;
                         self.put_block(lcase.next(), &case.body, context)?;
                         if !case.fall_through {
                             writeln!(self.out, "{}break;", lcase.next())?;

@@ -68,8 +68,13 @@ void main(uint3 global_id : SV_DispatchThreadID)
             pos = 3;
         }
     }
-    int _expr9 = pos;
-    switch(_expr9) {
+    switch(0u) {
+        case 0u: {
+            break;
+        }
+    }
+    int _expr10 = pos;
+    switch(_expr10) {
         case 1: {
             pos = 0;
             break;

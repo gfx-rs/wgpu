@@ -1260,7 +1260,7 @@ pub use block::Block;
 pub struct SwitchCase {
     /// Value, upon which the case is considered true.
     pub value: i32,
-    /// Body of the cae.
+    /// Body of the case.
     pub body: Block,
     /// If true, the control flow continues to the next case in the list,
     /// or default.

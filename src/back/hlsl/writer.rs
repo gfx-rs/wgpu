@@ -1370,13 +1370,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "switch(")?;
                 self.write_expr(module, selector, func_ctx)?;
                 writeln!(self.out, ") {{")?;
+                let type_postfix = match *func_ctx.info[selector].ty.inner_with(&module.types) {
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    } => "u",
+                    _ => "",
+                };
 
                 // Write all cases
                 let indent_level_1 = level.next();
                 let indent_level_2 = indent_level_1.next();
 
                 for case in cases {
-                    writeln!(self.out, "{}case {}: {{", indent_level_1, case.value)?;
+                    writeln!(
+                        self.out,
+                        "{}case {}{}: {{",
+                        indent_level_1, case.value, type_postfix
+                    )?;
 
                     if case.fall_through {
                         // Generate each fallthrough case statement in a new block. This is done to

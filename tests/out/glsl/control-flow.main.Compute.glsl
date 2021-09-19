@@ -56,8 +56,12 @@ void main() {
         default:
             pos = 3;
     }
-    int _e9 = pos;
-    switch(_e9) {
+    switch(0u) {
+        case 0u:
+            break;
+    }
+    int _e10 = pos;
+    switch(_e10) {
         case 1:
             pos = 0;
             break;

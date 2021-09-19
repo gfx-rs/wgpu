@@ -56,8 +56,12 @@ fn main([[builtin(global_invocation_id)]] global_id: vec3<u32>) {
             pos = 3;
         }
     }
-    let e9: i32 = pos;
-    switch(e9) {
+    switch(0u) {
+        case 0u: {
+        }
+    }
+    let e10: i32 = pos;
+    switch(e10) {
         case 1: {
             pos = 0;
             break;

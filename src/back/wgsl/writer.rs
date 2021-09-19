@@ -887,6 +887,13 @@ impl<W: Write> Writer<W> {
                 let all_fall_through = cases
                     .iter()
                     .all(|case| case.fall_through && case.body.is_empty());
+                let type_postfix = match *func_ctx.info[selector].ty.inner_with(&module.types) {
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    } => "u",
+                    _ => "",
+                };
 
                 let l2 = level.next();
                 if !cases.is_empty() {
@@ -896,11 +903,11 @@ impl<W: Write> Writer<W> {
                         }
                         if !all_fall_through && case.fall_through && case.body.is_empty() {
                             write_case = false;
-                            write!(self.out, "{}, ", case.value)?;
+                            write!(self.out, "{}{}, ", case.value, type_postfix)?;
                             continue;
                         } else {
                             write_case = true;
-                            writeln!(self.out, "{}: {{", case.value)?;
+                            writeln!(self.out, "{}{}: {{", case.value, type_postfix)?;
                         }
 
                         for sta in case.body.iter() {

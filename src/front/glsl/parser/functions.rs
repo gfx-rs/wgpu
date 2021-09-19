@@ -157,18 +157,11 @@ impl<'source> ParsingContext<'source> {
 
                 self.expect(parser, TokenValue::LeftParen)?;
 
-                let (mut selector, selector_meta) = {
+                let selector = {
                     let mut stmt = ctx.stmt_ctx();
                     let expr = self.parse_expression(parser, ctx, &mut stmt, body)?;
-                    ctx.lower_expect(stmt, parser, expr, ExprPos::Rhs, body)?
+                    ctx.lower_expect(stmt, parser, expr, ExprPos::Rhs, body)?.0
                 };
-
-                if let Some(crate::ScalarKind::Uint) = parser
-                    .resolve_type(ctx, selector, selector_meta)?
-                    .scalar_kind()
-                {
-                    ctx.conversion(&mut selector, selector_meta, crate::ScalarKind::Sint, 4)?
-                }
 
                 self.expect(parser, TokenValue::RightParen)?;
 

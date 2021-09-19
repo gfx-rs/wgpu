@@ -32,6 +32,12 @@ fn main([[builtin(global_invocation_id)]] global_id: vec3<u32>) {
         }
     }
 
+	// switch with unsigned integer selectors
+	switch(0u) {
+		case 0u: {
+		}
+	}
+
     // non-empty switch in last-statement-in-function position
     switch (pos) {
         case 1: {

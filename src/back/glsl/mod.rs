@@ -1427,11 +1427,18 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, "switch(")?;
                 self.write_expr(selector, ctx)?;
                 writeln!(self.out, ") {{")?;
+                let type_postfix = match *ctx.info[selector].ty.inner_with(&self.module.types) {
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    } => "u",
+                    _ => "",
+                };
 
                 // Write all cases
                 let l2 = level.next();
                 for case in cases {
-                    writeln!(self.out, "{}case {}:", l2, case.value)?;
+                    writeln!(self.out, "{}case {}{}:", l2, case.value, type_postfix)?;
 
                     for sta in case.body.iter() {
                         self.write_stmt(sta, ctx, l2.next())?;

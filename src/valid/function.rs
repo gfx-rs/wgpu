@@ -90,7 +90,7 @@ pub enum FunctionError {
     InvalidIfType(Handle<crate::Expression>),
     #[error("The `switch` value {0:?} is not an integer scalar")]
     InvalidSwitchType(Handle<crate::Expression>),
-    #[error("Multiple `switch` cases for {0} are present")]
+    #[error("Multiple `switch` cases for {0:?} are present")]
     ConflictingSwitchCase(i32),
     #[error("The pointer {0:?} doesn't relate to a valid destination for a store")]
     InvalidStorePointer(Handle<crate::Expression>),
@@ -375,6 +375,10 @@ impl super::Validator {
                     ref default,
                 } => {
                     match *context.resolve_type(selector, &self.valid_expression_set)? {
+                        Ti::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            width: _,
+                        } => {}
                         Ti::Scalar {
                             kind: crate::ScalarKind::Sint,
                             width: _,

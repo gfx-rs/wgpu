@@ -69,36 +69,6 @@ pub fn get_f32_literal(word: &str, span: Span) -> Result<f32, Error<'_>> {
     parsed_val.map_err(|e| Error::BadFloat(span, e))
 }
 
-pub(super) fn parse_sint_literal<'a>(
-    lexer: &mut Lexer<'a>,
-    width: Bytes,
-) -> Result<i32, Error<'a>> {
-    let token_span = lexer.next();
-
-    if width != 4 {
-        // Only 32-bit literals supported by the spec and naga for now!
-        return Err(Error::BadScalarWidth(token_span.1, width));
-    }
-
-    match token_span {
-        (
-            Token::Number {
-                value,
-                ty: NumberType::Sint,
-                width: token_width,
-            },
-            span,
-        ) if token_width.unwrap_or(4) == width => get_i32_literal(value, span),
-        other => Err(Error::Unexpected(
-            other,
-            ExpectedToken::Number {
-                ty: Some(NumberType::Sint),
-                width: Some(width),
-            },
-        )),
-    }
-}
-
 pub(super) fn _parse_uint_literal<'a>(
     lexer: &mut Lexer<'a>,
     width: Bytes,
