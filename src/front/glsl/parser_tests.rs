@@ -104,7 +104,7 @@ fn version() {
     parser
         .parse(
             &Options::from(ShaderStage::Vertex),
-            "#version 450 core\nvoid main() {}",
+            "#version 450 core\nvoid main(void) {}",
         )
         .unwrap();
     assert_eq!(

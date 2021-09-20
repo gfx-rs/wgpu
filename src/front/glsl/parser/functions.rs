@@ -586,6 +586,10 @@ impl<'source> ParsingContext<'source> {
         context: &mut Context,
         body: &mut Block,
     ) -> Result<()> {
+        if self.bump_if(parser, TokenValue::Void).is_some() {
+            return Ok(());
+        }
+
         loop {
             if self.peek_type_name(parser) || self.peek_parameter_qualifier(parser) {
                 let qualifier = self.parse_parameter_qualifier(parser);
