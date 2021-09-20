@@ -1287,12 +1287,17 @@ impl<W: Write> Writer<W> {
                         )?;
                     }
                     TypeInner::Vector { size, .. } => {
-                        write!(
-                            self.out,
-                            "vec{}<{}>",
-                            back::vector_size_str(size),
-                            scalar_kind_str(kind)
-                        )?;
+                        let vector_size_str = back::vector_size_str(size);
+                        let scalar_kind_str = scalar_kind_str(kind);
+                        if convert.is_some() {
+                            write!(self.out, "vec{}<{}>", vector_size_str, scalar_kind_str)?;
+                        } else {
+                            write!(
+                                self.out,
+                                "bitcast<vec{}<{}>>",
+                                vector_size_str, scalar_kind_str
+                            )?;
+                        }
                     }
                     TypeInner::Scalar { .. } => {
                         if convert.is_some() {
