@@ -14,7 +14,7 @@
 //      therefore this leads to a `MemoryInitKind.ImplicitlyInitialized` action, exactly like a read would.
 
 use smallvec::SmallVec;
-use std::{iter, ops::Range};
+use std::{fmt, iter, ops::Range};
 
 mod buffer;
 //mod texture;
@@ -46,7 +46,7 @@ pub(crate) struct InitTracker<Idx: Ord + Copy + Default> {
     uninitialized_ranges: UninitializedRangeVec<Idx>,
 }
 
-pub(crate) struct InitTrackerDrain<'a, Idx: Ord + Copy> {
+pub(crate) struct InitTrackerDrain<'a, Idx: fmt::Debug + Ord + Copy> {
     uninitialized_ranges: &'a mut UninitializedRangeVec<Idx>,
     drain_range: Range<Idx>,
     first_index: usize,
@@ -55,7 +55,7 @@ pub(crate) struct InitTrackerDrain<'a, Idx: Ord + Copy> {
 
 impl<'a, Idx> Iterator for InitTrackerDrain<'a, Idx>
 where
-    Idx: Ord + Copy,
+    Idx: fmt::Debug + Ord + Copy,
 {
     type Item = Range<Idx>;
 
@@ -78,7 +78,6 @@ where
             if num_affected == 0 {
                 return None;
             }
-
             let first_range = &mut self.uninitialized_ranges[self.first_index];
 
             // Split one "big" uninitialized range?
@@ -118,7 +117,7 @@ where
 
 impl<Idx> InitTracker<Idx>
 where
-    Idx: Ord + Copy + Default,
+    Idx: fmt::Debug + Ord + Copy + Default,
 {
     pub(crate) fn new(size: Idx) -> Self {
         Self {

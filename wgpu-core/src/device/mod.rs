@@ -160,6 +160,8 @@ fn map_buffer<A: hal::Api>(
         _ => None,
     };
 
+    assert_eq!(offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
+    assert_eq!(size % wgt::COPY_BUFFER_ALIGNMENT, 0);
     // Zero out uninitialized parts of the mapping. (Spec dictates all resources behave as if they were initialized with zero)
     //
     // If this is a read mapping, ideally we would use a `clear_buffer` command before reading the data from GPU (i.e. `invalidate_range`).
@@ -510,13 +512,19 @@ impl<A: HalApi> Device<A> {
         } else {
             desc.size
         };
+        let clear_remainder = actual_size % wgt::COPY_BUFFER_ALIGNMENT;
+        let aligned_size = if clear_remainder != 0 {
+            actual_size + wgt::COPY_BUFFER_ALIGNMENT - clear_remainder
+        } else {
+            actual_size
+        };
 
         let mut memory_flags = hal::MemoryFlags::empty();
         memory_flags.set(hal::MemoryFlags::TRANSIENT, transient);
 
         let hal_desc = hal::BufferDescriptor {
             label: desc.label.borrow_option(),
-            size: actual_size,
+            size: aligned_size,
             usage,
             memory_flags,
         };
@@ -1323,9 +1331,10 @@ impl<A: HalApi> Device<A> {
             return Err(Error::BindingZeroSize(bb.buffer_id));
         }
 
+        assert_eq!(bb.offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
         used_buffer_ranges.extend(buffer.initialization_status.create_action(
             bb.buffer_id,
-            bb.offset..(bb.offset + bind_size),
+            bb.offset..bb.offset + bind_size,
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
@@ -2771,6 +2780,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 };
 
+                assert_eq!(buffer.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
                 // Zero initialize memory and then mark both staging and buffer as initialized
                 // (it's guaranteed that this is the case by the time the buffer is usable)
                 unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
