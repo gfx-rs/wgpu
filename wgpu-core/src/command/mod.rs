@@ -90,7 +90,17 @@ impl<A: hal::Api> BakedCommands<A> {
                 .get_mut(buffer_use.id)
                 .map_err(|_| DestroyedBufferError(buffer_use.id))?;
 
-            let uninitialized_ranges = buffer.initialization_status.drain(buffer_use.range.clone());
+            // align the end to 4
+            let end_remainder = buffer_use.range.end % wgt::COPY_BUFFER_ALIGNMENT;
+            let end = if end_remainder == 0 {
+                buffer_use.range.end
+            } else {
+                buffer_use.range.end + wgt::COPY_BUFFER_ALIGNMENT - end_remainder
+            };
+            let uninitialized_ranges = buffer
+                .initialization_status
+                .drain(buffer_use.range.start..end);
+
             match buffer_use.kind {
                 MemoryInitKind::ImplicitlyInitialized => {
                     uninitialized_ranges.for_each(drop);
@@ -140,8 +150,8 @@ impl<A: hal::Api> BakedCommands<A> {
             }
 
             for range in ranges.iter() {
-                assert!(range.start % 4 == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", raw_buf, range.start);
-                assert!(range.end % 4 == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
+                assert!(range.start % wgt::COPY_BUFFER_ALIGNMENT == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", raw_buf, range.start);
+                assert!(range.end % wgt::COPY_BUFFER_ALIGNMENT == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
 
                 unsafe {
                     self.encoder.clear_buffer(raw_buf, range.clone());
