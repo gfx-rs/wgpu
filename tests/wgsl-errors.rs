@@ -848,3 +848,34 @@ fn invalid_local_vars() {
         if local_var_name == "not_okay"
     }
 }
+
+#[test]
+fn dead_code() {
+    check_validation_error! {
+        "
+        fn dead_code_after_if(condition: bool) -> i32 {
+            if (condition) {
+                return 1;
+            } else {
+                return 2;
+            }
+            return 3;
+        }
+        ":
+        Ok(_)
+    }
+    check_validation_error! {
+        "
+        fn dead_code_after_block() -> i32 {
+            {
+                return 1;
+            }
+            return 2;
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            error: naga::valid::FunctionError::InstructionsAfterReturn,
+            ..
+        })
+    }
+}
