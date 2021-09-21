@@ -1041,9 +1041,8 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn start_capture(&self) -> bool {
         #[cfg(feature = "renderdoc")]
         {
-            //Note: it doesn't look like the device pointer is used by RD
             self.render_doc
-                .start_frame_capture(ptr::null_mut(), ptr::null_mut())
+                .start_frame_capture(self.shared.context.egl_context.as_ptr(), ptr::null_mut())
         }
         #[cfg(not(feature = "renderdoc"))]
         false
