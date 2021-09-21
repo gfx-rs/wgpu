@@ -1,4 +1,4 @@
-fn function() -> f32 {
+fn function1() -> f32 {
     return 0.0;
 }
 
