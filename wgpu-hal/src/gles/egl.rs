@@ -160,7 +160,14 @@ fn choose_config(
 
         match egl.choose_first_config(display, &attributes) {
             Ok(Some(config)) => {
-                return Ok((config, tier_max >= 1));
+                if tier_max == 1 {
+                    log::warn!(
+                        "EGL says it can present to the window but not natively. {}. {}",
+                        "This has been confirmed to malfunction on Intel+NV laptops",
+                        "Therefore, we disable presentation entirely for this platform"
+                    );
+                }
+                return Ok((config, tier_max >= 2));
             }
             Ok(None) => {
                 log::warn!("No config found!");
