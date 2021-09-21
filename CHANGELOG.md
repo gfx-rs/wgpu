@@ -1,5 +1,9 @@
 # Change Log
 
+### Unreleased
+  - GL & Vulkan:
+    - Fix renderdoc device pointers.
+
 ### wgpu-hal-0.10.7 (2021-09-14)
   - Metal:
     - fix stencil back-face state

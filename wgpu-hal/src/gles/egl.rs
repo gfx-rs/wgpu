@@ -236,7 +236,7 @@ pub struct AdapterContext {
     glow_context: Mutex<glow::Context>,
     egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
     egl_display: egl::Display,
-    egl_context: egl::Context,
+    pub(super) egl_context: egl::Context,
     egl_pbuffer: Option<egl::Surface>,
 }
 
