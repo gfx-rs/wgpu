@@ -505,6 +505,7 @@ fn convert_wgsl() {
             "texture-arg",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        ("cubeArrayShadow", Targets::GLSL),
     ];
 
     for &(name, targets) in inputs.iter() {

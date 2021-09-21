@@ -1860,6 +1860,24 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => unreachable!(),
                 };
 
+                if dim == crate::ImageDimension::Cube
+                    && array_index.is_some()
+                    && depth_ref.is_some()
+                {
+                    match level {
+                        crate::SampleLevel::Zero
+                        | crate::SampleLevel::Exact(_)
+                        | crate::SampleLevel::Gradient { .. }
+                        | crate::SampleLevel::Bias(_) => {
+                            return Err(Error::Custom(String::from(
+                                "gsamplerCubeArrayShadow isn't supported in textureGrad, \
+                                 textureLod or texture with bias",
+                            )))
+                        }
+                        crate::SampleLevel::Auto => {}
+                    }
+                }
+
                 // textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL.
                 // To emulate this, we will have to use textureGrad with a constant gradient of 0.
                 let workaround_lod_array_shadow_as_grad = (array_index.is_some()
@@ -1905,7 +1923,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 if array_index.is_some() {
                     coord_dim += 1;
                 }
-                if depth_ref.is_some() {
+                let cube_array_shadow = coord_dim == 4;
+                if depth_ref.is_some() && !cube_array_shadow {
                     coord_dim += 1;
                 }
 
@@ -1916,11 +1935,20 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, ", ")?;
                     self.write_expr(expr, ctx)?;
                 }
-                if let Some(expr) = depth_ref {
-                    write!(self.out, ", ")?;
-                    self.write_expr(expr, ctx)?;
+                if !cube_array_shadow {
+                    if let Some(expr) = depth_ref {
+                        write!(self.out, ", ")?;
+                        self.write_expr(expr, ctx)?;
+                    }
                 }
                 write!(self.out, ")")?;
+
+                if cube_array_shadow {
+                    if let Some(expr) = depth_ref {
+                        write!(self.out, ", ")?;
+                        self.write_expr(expr, ctx)?;
+                    }
+                }
 
                 match level {
                     // Auto needs no more arguments
