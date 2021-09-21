@@ -122,109 +122,89 @@ impl<'source> ParsingContext<'source> {
         stmt: &mut StmtContext,
         body: &mut Block,
     ) -> Result<Handle<HirExpr>> {
-        let mut base = match self.expect_peek(parser)?.value {
-            TokenValue::Identifier(_) => {
-                let (name, mut meta) = self.expect_ident(parser)?;
+        let mut base = if self.peek_type_name(parser) {
+            let (mut handle, mut meta) = self.parse_type_non_void(parser)?;
 
-                let expr = if self.bump_if(parser, TokenValue::LeftParen).is_some() {
-                    let args = self.parse_function_call_args(parser, ctx, stmt, body, &mut meta)?;
+            self.expect(parser, TokenValue::LeftParen)?;
+            let args = self.parse_function_call_args(parser, ctx, stmt, body, &mut meta)?;
 
-                    let kind = match parser.lookup_type.get(&name) {
-                        Some(ty) => FunctionCallKind::TypeConstructor(*ty),
-                        None => FunctionCallKind::Function(name),
-                    };
+            if let TypeInner::Array {
+                size: ArraySize::Dynamic,
+                stride,
+                base,
+            } = parser.module.types[handle].inner
+            {
+                let span = parser.module.types.get_span(handle);
 
-                    HirExpr {
-                        kind: HirExprKind::Call(FunctionCall { kind, args }),
-                        meta,
-                    }
-                } else {
-                    let var = match parser.lookup_variable(ctx, body, &name, meta) {
-                        Some(var) => var,
-                        None => {
-                            return Err(Error {
-                                kind: ErrorKind::UnknownVariable(name),
-                                meta,
-                            })
-                        }
-                    };
-
-                    HirExpr {
-                        kind: HirExprKind::Variable(var),
-                        meta,
-                    }
-                };
-
-                stmt.hir_exprs.append(expr, Default::default())
-            }
-            TokenValue::TypeName(_) => {
-                let Token {
-                    value,
-                    meta: mut name_meta,
-                } = self.bump(parser)?;
-                let mut meta = name_meta;
-
-                let mut handle = if let TokenValue::TypeName(ty) = value {
-                    parser.module.types.fetch_or_append(ty, name_meta)
-                } else {
-                    unreachable!()
-                };
-
-                let maybe_size = self.parse_array_specifier(parser)?;
-
-                self.expect(parser, TokenValue::LeftParen)?;
-                let args = self.parse_function_call_args(parser, ctx, stmt, body, &mut meta)?;
-
-                if let Some((array_size, array_meta)) = maybe_size {
-                    let stride = parser.module.types[handle]
-                        .inner
-                        .span(&parser.module.constants);
-
-                    let size = match array_size {
-                        ArraySize::Constant(size) => ArraySize::Constant(size),
-                        ArraySize::Dynamic => {
-                            let constant = parser.module.constants.fetch_or_append(
-                                Constant {
-                                    name: None,
-                                    specialization: None,
-                                    inner: ConstantInner::Scalar {
-                                        width: 4,
-                                        value: ScalarValue::Sint(args.len() as i64),
-                                    },
-                                },
-                                meta,
-                            );
-
-                            ArraySize::Constant(constant)
-                        }
-                    };
-
-                    name_meta.subsume(array_meta);
-                    handle = parser.module.types.fetch_or_append(
-                        Type {
-                            name: None,
-                            inner: TypeInner::Array {
-                                base: handle,
-                                size,
-                                stride,
-                            },
+                let constant = parser.module.constants.fetch_or_append(
+                    Constant {
+                        name: None,
+                        specialization: None,
+                        inner: ConstantInner::Scalar {
+                            width: 4,
+                            value: ScalarValue::Uint(args.len() as u64),
                         },
-                        name_meta,
-                    );
-                }
-
-                stmt.hir_exprs.append(
-                    HirExpr {
-                        kind: HirExprKind::Call(FunctionCall {
-                            kind: FunctionCallKind::TypeConstructor(handle),
-                            args,
-                        }),
-                        meta,
                     },
-                    Default::default(),
+                    Span::default(),
+                );
+                handle = parser.module.types.fetch_or_append(
+                    Type {
+                        name: None,
+                        inner: TypeInner::Array {
+                            stride,
+                            base,
+                            size: ArraySize::Constant(constant),
+                        },
+                    },
+                    span,
                 )
             }
-            _ => self.parse_primary(parser, ctx, stmt, body)?,
+
+            stmt.hir_exprs.append(
+                HirExpr {
+                    kind: HirExprKind::Call(FunctionCall {
+                        kind: FunctionCallKind::TypeConstructor(handle),
+                        args,
+                    }),
+                    meta,
+                },
+                Default::default(),
+            )
+        } else if let TokenValue::Identifier(_) = self.expect_peek(parser)?.value {
+            let (name, mut meta) = self.expect_ident(parser)?;
+
+            let expr = if self.bump_if(parser, TokenValue::LeftParen).is_some() {
+                let args = self.parse_function_call_args(parser, ctx, stmt, body, &mut meta)?;
+
+                let kind = match parser.lookup_type.get(&name) {
+                    Some(ty) => FunctionCallKind::TypeConstructor(*ty),
+                    None => FunctionCallKind::Function(name),
+                };
+
+                HirExpr {
+                    kind: HirExprKind::Call(FunctionCall { kind, args }),
+                    meta,
+                }
+            } else {
+                let var = match parser.lookup_variable(ctx, body, &name, meta) {
+                    Some(var) => var,
+                    None => {
+                        return Err(Error {
+                            kind: ErrorKind::UnknownVariable(name),
+                            meta,
+                        })
+                    }
+                };
+
+                HirExpr {
+                    kind: HirExprKind::Variable(var),
+                    meta,
+                }
+            };
+
+            stmt.hir_exprs.append(expr, Default::default())
+        } else {
+            self.parse_primary(parser, ctx, stmt, body)?
         };
 
         while let TokenValue::LeftBracket

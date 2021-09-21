@@ -62,6 +62,14 @@ void testBinOpUintUVec(uint a, uvec4 b) {
     v = a ^ b;
 }
 
+void testStructConstructor() {
+	struct BST {
+		int data;
+	};
+
+	BST tree = BST(1);
+}
+
 out vec4 o_color;
 void main() {
     o_color.rgba = vec4(1.0);
