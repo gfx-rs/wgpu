@@ -1598,20 +1598,27 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn start_capture(&self) -> bool {
         #[cfg(feature = "renderdoc")]
         {
-            self.render_doc.start_frame_capture(
-                ash::vk::Handle::as_raw(self.shared.raw.handle()) as *mut _,
-                ptr::null_mut(),
-            )
+            // Renderdoc requires us to give us the pointer that vkInstance _points to_.
+            let raw_vk_instance =
+                ash::vk::Handle::as_raw(self.shared.instance.raw.handle()) as *mut *mut _;
+            let raw_vk_instance_dispatch_table = *raw_vk_instance;
+            self.render_doc
+                .start_frame_capture(raw_vk_instance_dispatch_table, ptr::null_mut())
         }
         #[cfg(not(feature = "renderdoc"))]
         false
     }
     unsafe fn stop_capture(&self) {
         #[cfg(feature = "renderdoc")]
-        self.render_doc.end_frame_capture(
-            ash::vk::Handle::as_raw(self.shared.raw.handle()) as *mut _,
-            ptr::null_mut(),
-        )
+        {
+            // Renderdoc requires us to give us the pointer that vkInstance _points to_.
+            let raw_vk_instance =
+                ash::vk::Handle::as_raw(self.shared.instance.raw.handle()) as *mut *mut _;
+            let raw_vk_instance_dispatch_table = *raw_vk_instance;
+
+            self.render_doc
+                .end_frame_capture(raw_vk_instance_dispatch_table, ptr::null_mut())
+        }
     }
 }
 
