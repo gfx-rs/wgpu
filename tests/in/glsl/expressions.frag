@@ -70,6 +70,10 @@ void testStructConstructor() {
 	BST tree = BST(1);
 }
 
+void testArrayConstructor() {
+	float tree[1] = float[1](0.0);
+}
+
 out vec4 o_color;
 void main() {
     o_color.rgba = vec4(1.0);

@@ -179,6 +179,11 @@ fn testStructConstructor() {
 
 }
 
+fn testArrayConstructor() {
+    var tree1: array<f32,1> = array<f32,1>(0.0);
+
+}
+
 fn main1() {
     let e1: vec4<f32> = o_color;
     let e4: vec4<f32> = vec4<f32>(1.0);

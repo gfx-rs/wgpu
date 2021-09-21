@@ -243,7 +243,7 @@ impl Parser {
                                 }
                             }
                         }
-                        TypeInner::Struct { .. } => ctx.add_expression(
+                        TypeInner::Struct { .. } | TypeInner::Array { .. } => ctx.add_expression(
                             Expression::Compose {
                                 ty,
                                 components: args.into_iter().map(|arg| arg.0).collect(),
@@ -253,7 +253,7 @@ impl Parser {
                         ),
                         _ => {
                             self.errors.push(Error {
-                                kind: ErrorKind::SemanticError("Bad cast".into()),
+                                kind: ErrorKind::SemanticError("Bad type constructor".into()),
                                 meta,
                             });
 
