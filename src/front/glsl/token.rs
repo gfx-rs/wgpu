@@ -1,85 +1,11 @@
-use pp_rs::token::Location;
-pub use pp_rs::token::{Float, Integer, PreprocessorError, Token as PPToken};
+pub use pp_rs::token::{Float, Integer, Location, PreprocessorError, Token as PPToken};
 
 use super::ast::Precision;
-use crate::{Interpolation, Sampling, Type};
-use std::ops::Range;
+use crate::{Interpolation, Sampling, Span, Type};
 
-/// Represents a range of the source code
-///
-/// The `SourceMetadata` is used in error reporting to indicate a range of the
-/// original source code where the error happened.
-///
-/// For easy interaction with error crates like
-/// [`codespan`][codespan] the [`From`](From) trait is
-/// implemeted for [`Range<usize>`](Range) allowing for conversions from `SourceMetadata`.
-///
-/// ```rust
-/// # use naga::front::glsl::SourceMetadata;
-/// # use std::ops::Range;
-/// # let meta = SourceMetadata::default();
-/// let range: Range<usize> = meta.into();
-/// ```
-///
-/// Or in the case of [`codespan`][codespan]
-///
-/// ```rust
-/// # use naga::front::glsl::SourceMetadata;
-/// # #[cfg(feature = "codespan_reporting")]
-/// # {
-/// use codespan_reporting::diagnostic::Label;
-/// # let file = ();
-/// # let meta = SourceMetadata::default();
-/// let label = Label::primary(file, meta);
-/// # }
-/// ```
-///
-/// # Notes
-///
-/// [`start`](SourceMetadata::start) can be equal to
-/// [`end`](SourceMetadata::end) especially when reporting errors which aren't
-/// associated with a specific portion of the code.
-///
-/// [codespan]: https://docs.rs/codespan-reporting
-#[derive(Debug, Clone, Copy, Default)]
-#[cfg_attr(test, derive(PartialEq))]
-pub struct SourceMetadata {
-    /// Byte offset into the source where the first char starts
-    pub start: usize,
-    /// Byte offset into the source where the first char not belonging to this
-    /// source metadata starts
-    pub end: usize,
-}
-
-impl SourceMetadata {
-    pub(crate) fn union(&self, other: &Self) -> Self {
-        SourceMetadata {
-            start: self.start.min(other.start),
-            end: self.end.max(other.end),
-        }
-    }
-
-    pub fn as_span(&self) -> crate::Span {
-        crate::Span::new(self.start as u32, self.end as u32)
-    }
-
-    pub(crate) fn none() -> Self {
-        SourceMetadata::default()
-    }
-}
-
-impl From<Location> for SourceMetadata {
+impl From<Location> for Span {
     fn from(loc: Location) -> Self {
-        SourceMetadata {
-            start: loc.start as usize,
-            end: loc.end as usize,
-        }
-    }
-}
-
-impl From<SourceMetadata> for Range<usize> {
-    fn from(meta: SourceMetadata) -> Self {
-        meta.start..meta.end
+        Span::new(loc.start, loc.end)
     }
 }
 
@@ -87,7 +13,7 @@ impl From<SourceMetadata> for Range<usize> {
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Token {
     pub value: TokenValue,
-    pub meta: SourceMetadata,
+    pub meta: Span,
 }
 
 /// A token passed from the lexing used in the parsing

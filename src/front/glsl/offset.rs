@@ -11,7 +11,7 @@
 use super::{
     ast::StructLayout,
     error::{Error, ErrorKind},
-    SourceMetadata,
+    Span,
 };
 use crate::{front::align_up, Arena, Constant, Handle, Type, TypeInner};
 
@@ -37,7 +37,7 @@ pub struct TypeAlignSpan {
 /// change the stride and as such need to have a different type.
 pub fn calculate_offset(
     mut ty: Handle<Type>,
-    meta: SourceMetadata,
+    meta: Span,
     layout: StructLayout,
     types: &mut Arena<Type>,
     constants: &Arena<Constant>,

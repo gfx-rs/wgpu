@@ -3,10 +3,10 @@ use crate::{
         ast::{StorageQualifier, StructLayout, TypeQualifier},
         error::ExpectedToken,
         parser::ParsingContext,
-        token::{SourceMetadata, Token, TokenValue},
+        token::{Token, TokenValue},
         Error, ErrorKind, Parser, Result,
     },
-    ArraySize, Handle, StorageClass, Type, TypeInner,
+    ArraySize, Handle, Span, StorageClass, Type, TypeInner,
 };
 
 impl<'source> ParsingContext<'source> {
@@ -15,44 +15,38 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_array_specifier(
         &mut self,
         parser: &mut Parser,
-    ) -> Result<Option<(ArraySize, SourceMetadata)>> {
-        if let Some(Token { meta, .. }) = self.bump_if(parser, TokenValue::LeftBracket) {
+    ) -> Result<Option<(ArraySize, Span)>> {
+        if let Some(Token { mut meta, .. }) = self.bump_if(parser, TokenValue::LeftBracket) {
             if let Some(Token { meta: end_meta, .. }) =
                 self.bump_if(parser, TokenValue::RightBracket)
             {
-                return Ok(Some((ArraySize::Dynamic, meta.union(&end_meta))));
+                meta.subsume(end_meta);
+                return Ok(Some((ArraySize::Dynamic, meta)));
             }
 
             let (constant, _) = self.parse_constant_expression(parser)?;
             let end_meta = self.expect(parser, TokenValue::RightBracket)?.meta;
-            Ok(Some((ArraySize::Constant(constant), meta.union(&end_meta))))
+            meta.subsume(end_meta);
+            Ok(Some((ArraySize::Constant(constant), meta)))
         } else {
             Ok(None)
         }
     }
 
-    pub fn parse_type(
-        &mut self,
-        parser: &mut Parser,
-    ) -> Result<(Option<Handle<Type>>, SourceMetadata)> {
+    pub fn parse_type(&mut self, parser: &mut Parser) -> Result<(Option<Handle<Type>>, Span)> {
         let token = self.bump(parser)?;
         let handle = match token.value {
             TokenValue::Void => None,
-            TokenValue::TypeName(ty) => Some(
-                parser
-                    .module
-                    .types
-                    .fetch_or_append(ty, token.meta.as_span()),
-            ),
+            TokenValue::TypeName(ty) => Some(parser.module.types.fetch_or_append(ty, token.meta)),
             TokenValue::Struct => {
-                let meta = token.meta;
+                let mut meta = token.meta;
                 let ty_name = self.expect_ident(parser)?.0;
                 self.expect(parser, TokenValue::LeftBrace)?;
                 let mut members = Vec::new();
                 let span =
                     self.parse_struct_declaration_list(parser, &mut members, StructLayout::Std140)?;
                 let end_meta = self.expect(parser, TokenValue::RightBrace)?.meta;
-
+                meta.subsume(end_meta);
                 let ty = parser.module.types.append(
                     Type {
                         name: Some(ty_name.clone()),
@@ -62,7 +56,7 @@ impl<'source> ParsingContext<'source> {
                             span,
                         },
                     },
-                    meta.union(&end_meta).as_span(),
+                    meta,
                 );
                 parser.lookup_type.insert(ty_name, ty);
                 Some(ty)
@@ -94,14 +88,12 @@ impl<'source> ParsingContext<'source> {
         let token_meta = token.meta;
         let array_specifier = self.parse_array_specifier(parser)?;
         let handle = handle.map(|ty| parser.maybe_array(ty, token_meta, array_specifier));
-        let meta = array_specifier.map_or(token_meta, |(_, meta)| meta.union(&token_meta));
+        let mut meta = array_specifier.map_or(token_meta, |(_, meta)| meta);
+        meta.subsume(token_meta);
         Ok((handle, meta))
     }
 
-    pub fn parse_type_non_void(
-        &mut self,
-        parser: &mut Parser,
-    ) -> Result<(Handle<Type>, SourceMetadata)> {
+    pub fn parse_type_non_void(&mut self, parser: &mut Parser) -> Result<(Handle<Type>, Span)> {
         let (maybe_ty, meta) = self.parse_type(parser)?;
         let ty = maybe_ty.ok_or_else(|| Error {
             kind: ErrorKind::SemanticError("Type can't be void".into()),
@@ -132,7 +124,7 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_type_qualifiers(
         &mut self,
         parser: &mut Parser,
-    ) -> Result<Vec<(TypeQualifier, SourceMetadata)>> {
+    ) -> Result<Vec<(TypeQualifier, Span)>> {
         let mut qualifiers = Vec::new();
 
         while self.peek_type_qualifier(parser) {
@@ -177,7 +169,7 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_layout_qualifier_id_list(
         &mut self,
         parser: &mut Parser,
-        qualifiers: &mut Vec<(TypeQualifier, SourceMetadata)>,
+        qualifiers: &mut Vec<(TypeQualifier, Span)>,
     ) -> Result<()> {
         self.expect(parser, TokenValue::LeftParen)?;
         loop {
@@ -197,7 +189,7 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_layout_qualifier_id(
         &mut self,
         parser: &mut Parser,
-        qualifiers: &mut Vec<(TypeQualifier, SourceMetadata)>,
+        qualifiers: &mut Vec<(TypeQualifier, Span)>,
     ) -> Result<()> {
         // layout_qualifier_id:
         //     IDENTIFIER
@@ -208,7 +200,7 @@ impl<'source> ParsingContext<'source> {
             TokenValue::Identifier(name) => {
                 if self.bump_if(parser, TokenValue::Assign).is_some() {
                     let (value, end_meta) = self.parse_uint_constant(parser)?;
-                    token.meta = token.meta.union(&end_meta);
+                    token.meta.subsume(end_meta);
 
                     qualifiers.push((
                         match name.as_str() {

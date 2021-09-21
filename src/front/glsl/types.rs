@@ -1,6 +1,4 @@
-use super::{
-    constants::ConstantSolver, context::Context, Error, ErrorKind, Parser, Result, SourceMetadata,
-};
+use super::{constants::ConstantSolver, context::Context, Error, ErrorKind, Parser, Result, Span};
 use crate::{
     proc::ResolveContext, ArraySize, Bytes, Constant, Expression, Handle, ImageClass,
     ImageDimension, ScalarKind, Type, TypeInner, VectorSize,
@@ -184,7 +182,7 @@ impl Parser {
         &self,
         ctx: &mut Context,
         handle: Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<()> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
@@ -207,7 +205,7 @@ impl Parser {
         &'b self,
         ctx: &'b mut Context,
         handle: Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<&'b TypeInner> {
         self.typifier_grow(ctx, handle, meta)?;
         Ok(ctx.typifier.get(handle, &self.module.types))
@@ -218,7 +216,7 @@ impl Parser {
         &'b self,
         ctx: &'b mut Context,
         handle: Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<()> {
         let resolve_ctx = ResolveContext {
             constants: &self.module.constants,
@@ -241,7 +239,7 @@ impl Parser {
         &mut self,
         ctx: &Context,
         root: Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<Handle<Constant>> {
         let mut solver = ConstantSolver {
             types: &self.module.types,
@@ -258,11 +256,12 @@ impl Parser {
     pub(crate) fn maybe_array(
         &mut self,
         base: Handle<Type>,
-        meta: SourceMetadata,
-        array_specifier: Option<(ArraySize, SourceMetadata)>,
+        mut meta: Span,
+        array_specifier: Option<(ArraySize, Span)>,
     ) -> Handle<Type> {
         array_specifier
             .map(|(size, size_meta)| {
+                meta.subsume(size_meta);
                 self.module.types.fetch_or_append(
                     Type {
                         name: None,
@@ -272,7 +271,7 @@ impl Parser {
                             stride: self.module.types[base].inner.span(&self.module.constants),
                         },
                     },
-                    meta.union(&size_meta).as_span(),
+                    meta,
                 )
             })
             .unwrap_or(base)

@@ -3,7 +3,7 @@ use super::{
     error::ExpectedToken,
     error::{Error, ErrorKind},
     token::TokenValue,
-    Options, Parser, SourceMetadata,
+    Options, Parser, Span,
 };
 use crate::ShaderStage;
 use pp_rs::token::PreprocessorError;
@@ -23,7 +23,7 @@ fn version() {
             .unwrap(),
         vec![Error {
             kind: ErrorKind::InvalidVersion(99000),
-            meta: SourceMetadata { start: 9, end: 14 }
+            meta: Span::new(9, 14)
         }],
     );
 
@@ -37,7 +37,7 @@ fn version() {
             .unwrap(),
         vec![Error {
             kind: ErrorKind::InvalidVersion(449),
-            meta: SourceMetadata { start: 9, end: 12 }
+            meta: Span::new(9, 12)
         }]
     );
 
@@ -51,7 +51,7 @@ fn version() {
             .unwrap(),
         vec![Error {
             kind: ErrorKind::InvalidProfile("smart".into()),
-            meta: SourceMetadata { start: 13, end: 18 },
+            meta: Span::new(13, 18),
         }]
     );
 
@@ -66,14 +66,14 @@ fn version() {
         vec![
             Error {
                 kind: ErrorKind::PreprocessorError(PreprocessorError::UnexpectedHash,),
-                meta: SourceMetadata { start: 27, end: 28 },
+                meta: Span::new(27, 28),
             },
             Error {
                 kind: ErrorKind::InvalidToken(
                     TokenValue::Identifier("version".into()),
                     vec![ExpectedToken::Eof]
                 ),
-                meta: SourceMetadata { start: 28, end: 35 }
+                meta: Span::new(28, 35)
             }
         ]
     );
@@ -449,10 +449,7 @@ fn functions() {
             .unwrap(),
         vec![Error {
             kind: ErrorKind::SemanticError("Function already defined".into()),
-            meta: SourceMetadata {
-                start: 134,
-                end: 152
-            },
+            meta: Span::new(134, 152),
         }]
     );
 
@@ -608,10 +605,7 @@ fn implicit_conversions() {
             .unwrap(),
         vec![Error {
             kind: ErrorKind::SemanticError("Unknown function \'test\'".into()),
-            meta: SourceMetadata {
-                start: 156,
-                end: 165
-            },
+            meta: Span::new(156, 165),
         }]
     );
 
@@ -633,10 +627,7 @@ fn implicit_conversions() {
             .unwrap(),
         vec![Error {
             kind: ErrorKind::SemanticError("Ambiguous best function for \'test\'".into()),
-            meta: SourceMetadata {
-                start: 158,
-                end: 165
-            },
+            meta: Span::new(158, 165),
         }]
     );
 }

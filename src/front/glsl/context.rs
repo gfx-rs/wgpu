@@ -5,13 +5,13 @@ use super::{
     },
     error::{Error, ErrorKind},
     types::{scalar_components, type_power},
-    Parser, Result, SourceMetadata,
+    Parser, Result,
 };
 use crate::{
     front::{Emitter, Typifier},
     Arena, BinaryOperator, Block, Constant, Expression, FastHashMap, FunctionArgument, Handle,
-    LocalVariable, RelationalFunction, ScalarKind, ScalarValue, Statement, StorageClass, Type,
-    TypeInner, VectorSize,
+    LocalVariable, RelationalFunction, ScalarKind, ScalarValue, Span, Statement, StorageClass,
+    Type, TypeInner, VectorSize,
 };
 use std::{convert::TryFrom, ops::Index};
 
@@ -181,14 +181,14 @@ impl Context {
     pub fn add_expression(
         &mut self,
         expr: Expression,
-        meta: SourceMetadata,
+        meta: Span,
         body: &mut Block,
     ) -> Handle<Expression> {
         let needs_pre_emit = expr.needs_pre_emit();
         if needs_pre_emit {
             self.emit_flush(body);
         }
-        let handle = self.expressions.append(expr, meta.as_span());
+        let handle = self.expressions.append(expr, meta);
         if needs_pre_emit {
             self.emit_start();
         }
@@ -238,7 +238,7 @@ impl Context {
         &mut self,
         parser: &mut Parser,
         body: &mut Block,
-        name_meta: Option<(String, SourceMetadata)>,
+        name_meta: Option<(String, Span)>,
         ty: Handle<Type>,
         qualifier: ParameterQualifier,
     ) {
@@ -288,7 +288,7 @@ impl Context {
                         ty,
                         init: None,
                     },
-                    meta.as_span(),
+                    meta,
                 );
                 let local_expr = self.add_expression(Expression::LocalVariable(handle), meta, body);
 
@@ -300,7 +300,7 @@ impl Context {
                         pointer: local_expr,
                         value: expr,
                     },
-                    meta.as_span(),
+                    meta,
                 );
 
                 if let Some(current) = self.scopes.last_mut() {
@@ -360,7 +360,7 @@ impl Context {
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
-    ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
+    ) -> Result<(Option<Handle<Expression>>, Span)> {
         let res = self.lower_inner(&stmt, parser, expr, pos, body);
 
         stmt.hir_exprs.clear();
@@ -381,7 +381,7 @@ impl Context {
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
-    ) -> Result<(Handle<Expression>, SourceMetadata)> {
+    ) -> Result<(Handle<Expression>, Span)> {
         let res = self.lower_expect_inner(&stmt, parser, expr, pos, body);
 
         stmt.hir_exprs.clear();
@@ -402,7 +402,7 @@ impl Context {
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
-    ) -> Result<(Handle<Expression>, SourceMetadata)> {
+    ) -> Result<(Handle<Expression>, Span)> {
         let (maybe_expr, meta) = self.lower_inner(stmt, parser, expr, pos, body)?;
 
         let expr = match maybe_expr {
@@ -426,7 +426,7 @@ impl Context {
         expr: Handle<HirExpr>,
         pos: ExprPos,
         body: &mut Block,
-    ) -> Result<(Option<Handle<Expression>>, SourceMetadata)> {
+    ) -> Result<(Option<Handle<Expression>>, Span)> {
         let HirExpr { ref kind, meta } = stmt.hir_exprs[expr];
 
         let handle = match *kind {
@@ -523,7 +523,7 @@ impl Context {
 
                             let argument = self
                                 .expressions
-                                .append(Expression::Binary { op, left, right }, meta.as_span());
+                                .append(Expression::Binary { op, left, right }, meta);
 
                             self.add_expression(
                                 Expression::Relational { fun, argument },
@@ -622,14 +622,10 @@ impl Context {
                                 ty,
                                 init: Some(constant),
                             },
-                            crate::Span::default(),
+                            Span::default(),
                         );
 
-                        self.add_expression(
-                            Expression::LocalVariable(local),
-                            SourceMetadata::none(),
-                            body,
-                        )
+                        self.add_expression(Expression::LocalVariable(local), Span::default(), body)
                     } else {
                         var.expr
                     }
@@ -738,14 +734,14 @@ impl Context {
                                 pointer: dst,
                                 value: src,
                             },
-                            meta.as_span(),
+                            meta,
                         );
                     }
                 } else {
                     self.emit_flush(body);
                     self.emit_start();
 
-                    body.push(Statement::Store { pointer, value }, meta.as_span());
+                    body.push(Statement::Store { pointer, value }, meta);
                 }
 
                 value
@@ -827,7 +823,7 @@ impl Context {
                                 name: None,
                                 inner: ty_inner,
                             },
-                            meta.as_span(),
+                            meta,
                         );
 
                         right = self.add_expression(
@@ -846,7 +842,7 @@ impl Context {
                 self.emit_flush(body);
                 self.emit_start();
 
-                body.push(Statement::Store { pointer, value }, meta.as_span());
+                body.push(Statement::Store { pointer, value }, meta);
 
                 if postfix {
                     left
@@ -872,7 +868,7 @@ impl Context {
         &mut self,
         parser: &mut Parser,
         expr: Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<Option<(ScalarKind, crate::Bytes)>> {
         let ty = parser.resolve_type(self, expr, meta)?;
         Ok(scalar_components(ty))
@@ -882,7 +878,7 @@ impl Context {
         &mut self,
         parser: &mut Parser,
         expr: Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<Option<u32>> {
         Ok(self
             .expr_scalar_components(parser, expr, meta)?
@@ -892,7 +888,7 @@ impl Context {
     pub fn conversion(
         &mut self,
         expr: &mut Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
         kind: ScalarKind,
         width: crate::Bytes,
     ) -> Result<()> {
@@ -902,7 +898,7 @@ impl Context {
                 kind,
                 convert: Some(width),
             },
-            meta.as_span(),
+            meta,
         );
 
         Ok(())
@@ -912,7 +908,7 @@ impl Context {
         &mut self,
         parser: &mut Parser,
         expr: &mut Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
         kind: ScalarKind,
         width: crate::Bytes,
     ) -> Result<()> {
@@ -932,9 +928,9 @@ impl Context {
         &mut self,
         parser: &mut Parser,
         left: &mut Handle<Expression>,
-        left_meta: SourceMetadata,
+        left_meta: Span,
         right: &mut Handle<Expression>,
-        right_meta: SourceMetadata,
+        right_meta: Span,
     ) -> Result<()> {
         let left_components = self.expr_scalar_components(parser, *left, left_meta)?;
         let right_components = self.expr_scalar_components(parser, *right, right_meta)?;
@@ -965,7 +961,7 @@ impl Context {
         &mut self,
         parser: &mut Parser,
         expr: &mut Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
         vector_size: Option<VectorSize>,
     ) -> Result<()> {
         let expr_type = parser.resolve_type(self, *expr, meta)?;
@@ -973,7 +969,7 @@ impl Context {
         if let (&TypeInner::Scalar { .. }, Some(size)) = (expr_type, vector_size) {
             *expr = self
                 .expressions
-                .append(Expression::Splat { size, value: *expr }, meta.as_span())
+                .append(Expression::Splat { size, value: *expr }, meta)
         }
 
         Ok(())
@@ -983,7 +979,7 @@ impl Context {
         &mut self,
         size: VectorSize,
         vector: Handle<Expression>,
-        meta: SourceMetadata,
+        meta: Span,
         body: &mut Block,
     ) -> Handle<Expression> {
         self.add_expression(

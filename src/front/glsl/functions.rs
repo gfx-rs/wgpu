@@ -4,7 +4,7 @@ use super::{
     context::{Context, ExprPos, StmtContext},
     error::{Error, ErrorKind},
     types::scalar_components,
-    Parser, Result, SourceMetadata,
+    Parser, Result,
 };
 use crate::{
     front::glsl::types::type_power, proc::ensure_block_returns, Arena, Block, Constant,
@@ -18,7 +18,7 @@ impl Parser {
         &mut self,
         scalar_kind: ScalarKind,
         value: u64,
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Handle<Constant> {
         let value = match scalar_kind {
             ScalarKind::Uint => ScalarValue::Uint(value),
@@ -33,7 +33,7 @@ impl Parser {
                 specialization: None,
                 inner: ConstantInner::Scalar { width: 4, value },
             },
-            meta.as_span(),
+            meta,
         )
     }
 
@@ -44,7 +44,7 @@ impl Parser {
         body: &mut Block,
         fc: FunctionCallKind,
         raw_args: &[Handle<HirExpr>],
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<Option<Handle<Expression>>> {
         let args: Vec<_> = raw_args
             .iter()
@@ -158,7 +158,7 @@ impl Parser {
                                                 width,
                                             },
                                         },
-                                        meta.as_span(),
+                                        meta,
                                     );
                                     let zero_constant = self.module.constants.fetch_or_append(
                                         Constant {
@@ -169,7 +169,7 @@ impl Parser {
                                                 value: ScalarValue::Float(0.0),
                                             },
                                         },
-                                        meta.as_span(),
+                                        meta,
                                     );
                                     let zero = ctx.add_expression(
                                         Expression::Constant(zero_constant),
@@ -305,7 +305,7 @@ impl Parser {
                                         width,
                                     },
                                 },
-                                meta.as_span(),
+                                meta,
                             );
 
                             for chunk in flattened.chunks(rows as usize) {
@@ -350,9 +350,9 @@ impl Parser {
         stmt: &StmtContext,
         body: &mut Block,
         name: String,
-        args: Vec<(Handle<Expression>, SourceMetadata)>,
+        args: Vec<(Handle<Expression>, Span)>,
         raw_args: &[Handle<HirExpr>],
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<Option<Handle<Expression>>> {
         // If the name for the function hasn't yet been initialized check if any
         // builtin can be injected.
@@ -590,7 +590,7 @@ impl Parser {
                     );
                     let temp_expr = ctx.add_expression(
                         Expression::LocalVariable(temp_var),
-                        SourceMetadata::none(),
+                        Span::default(),
                         body,
                     );
 
@@ -632,7 +632,7 @@ impl Parser {
                         arguments,
                         result,
                     },
-                    meta.as_span(),
+                    meta,
                 );
 
                 ctx.emit_start();
@@ -650,7 +650,7 @@ impl Parser {
                             pointer: target,
                             value,
                         },
-                        meta.as_span(),
+                        meta,
                     );
                 }
 
@@ -668,7 +668,7 @@ impl Parser {
         name: String,
         result: Option<FunctionResult>,
         mut body: Block,
-        meta: SourceMetadata,
+        meta: Span,
     ) {
         if self.lookup_function.get(&name).is_none() {
             let declaration = self.lookup_function.entry(name.clone()).or_default();
@@ -741,14 +741,14 @@ impl Parser {
             match decl.kind {
                 FunctionKind::Call(handle) => *self.module.functions.get_mut(handle) = function,
                 FunctionKind::Macro(_) => {
-                    let handle = module.functions.append(function, meta.as_span());
+                    let handle = module.functions.append(function, meta);
                     decl.kind = FunctionKind::Call(handle)
                 }
             }
             return;
         }
 
-        let handle = module.functions.append(function, meta.as_span());
+        let handle = module.functions.append(function, meta);
         declaration.overloads.push(Overload {
             parameters,
             parameters_info,
@@ -763,7 +763,7 @@ impl Parser {
         ctx: Context,
         name: String,
         result: Option<FunctionResult>,
-        meta: SourceMetadata,
+        meta: Span,
     ) {
         if self.lookup_function.get(&name).is_none() {
             let declaration = self.lookup_function.entry(name.clone()).or_default();
@@ -823,7 +823,7 @@ impl Parser {
             });
         }
 
-        let handle = module.functions.append(function, meta.as_span());
+        let handle = module.functions.append(function, meta);
         declaration.overloads.push(Overload {
             parameters,
             parameters_info,

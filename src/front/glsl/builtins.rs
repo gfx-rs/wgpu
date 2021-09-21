@@ -1,7 +1,7 @@
 use super::{
     ast::{FunctionDeclaration, FunctionKind, Overload, ParameterInfo, ParameterQualifier},
     context::Context,
-    Error, ErrorKind, Parser, Result, SourceMetadata,
+    Error, ErrorKind, Parser, Result,
 };
 use crate::{
     BinaryOperator, Block, Constant, ConstantInner, DerivativeAxis, Expression, Handle, ImageClass,
@@ -1474,7 +1474,7 @@ impl MacroCall {
         ctx: &mut Context,
         body: &mut Block,
         args: &mut [Handle<Expression>],
-        meta: SourceMetadata,
+        meta: Span,
     ) -> Result<Handle<Expression>> {
         match *self {
             MacroCall::Sampler => {
@@ -1505,7 +1505,7 @@ impl MacroCall {
                             base: coords,
                             index: size as u32 - 1,
                         },
-                        SourceMetadata::none(),
+                        Span::default(),
                         body,
                     );
                     let left = if let VectorSize::Bi = size {
@@ -1514,7 +1514,7 @@ impl MacroCall {
                                 base: coords,
                                 index: 0,
                             },
-                            SourceMetadata::none(),
+                            Span::default(),
                             body,
                         )
                     } else {
@@ -1524,10 +1524,10 @@ impl MacroCall {
                         };
                         right = ctx.add_expression(
                             Expression::Splat { size, value: right },
-                            SourceMetadata::none(),
+                            Span::default(),
                             body,
                         );
-                        ctx.vector_resize(size, coords, SourceMetadata::none(), body)
+                        ctx.vector_resize(size, coords, Span::default(), body)
                     };
                     coords = ctx.add_expression(
                         Expression::Binary {
@@ -1535,7 +1535,7 @@ impl MacroCall {
                             left,
                             right,
                         },
-                        SourceMetadata::none(),
+                        Span::default(),
                         body,
                     );
                 }
@@ -1617,7 +1617,7 @@ impl MacroCall {
                         level: args.get(1).copied(),
                     },
                 },
-                SourceMetadata::none(),
+                Span::default(),
                 body,
             )),
             MacroCall::TexelFetch => {
@@ -1630,7 +1630,7 @@ impl MacroCall {
                         array_index: comps.array_index,
                         index: Some(args[2]),
                     },
-                    SourceMetadata::none(),
+                    Span::default(),
                     body,
                 ))
             }
@@ -1641,7 +1641,7 @@ impl MacroCall {
                     arg1: args.get(1).copied(),
                     arg2: args.get(2).copied(),
                 },
-                SourceMetadata::none(),
+                Span::default(),
                 body,
             )),
             MacroCall::Relational(fun) => Ok(ctx.add_expression(
@@ -1649,7 +1649,7 @@ impl MacroCall {
                     fun,
                     argument: args[0],
                 },
-                SourceMetadata::none(),
+                Span::default(),
                 body,
             )),
             MacroCall::Binary(op) => Ok(ctx.add_expression(
@@ -1658,7 +1658,7 @@ impl MacroCall {
                     left: args[0],
                     right: args[1],
                 },
-                SourceMetadata::none(),
+                Span::default(),
                 body,
             )),
             MacroCall::Mod(size) => {
@@ -1670,7 +1670,7 @@ impl MacroCall {
                         left: args[0],
                         right: args[1],
                     },
-                    SourceMetadata::none(),
+                    Span::default(),
                     body,
                 ))
             }
@@ -1684,7 +1684,7 @@ impl MacroCall {
                         arg1: args.get(1).copied(),
                         arg2: args.get(2).copied(),
                     },
-                    SourceMetadata::none(),
+                    Span::default(),
                     body,
                 ))
             }
@@ -1694,7 +1694,7 @@ impl MacroCall {
                     accept: args[1],
                     reject: args[0],
                 },
-                SourceMetadata::none(),
+                Span::default(),
                 body,
             )),
             MacroCall::Clamp(size) => {
@@ -1708,7 +1708,7 @@ impl MacroCall {
                         arg1: args.get(1).copied(),
                         arg2: args.get(2).copied(),
                     },
-                    SourceMetadata::none(),
+                    Span::default(),
                     body,
                 ))
             }
@@ -1724,18 +1724,15 @@ impl MacroCall {
                     },
                     Span::default(),
                 );
-                let right = ctx.add_expression(
-                    Expression::Constant(constant),
-                    SourceMetadata::none(),
-                    body,
-                );
+                let right =
+                    ctx.add_expression(Expression::Constant(constant), Span::default(), body);
                 Ok(ctx.add_expression(
                     Expression::Binary {
                         op: BinaryOperator::Multiply,
                         left: args[0],
                         right,
                     },
-                    SourceMetadata::none(),
+                    Span::default(),
                     body,
                 ))
             }
@@ -1745,7 +1742,7 @@ impl MacroCall {
                     kind,
                     convert: None,
                 },
-                SourceMetadata::none(),
+                Span::default(),
                 body,
             )),
             MacroCall::Derivate(axis) => Ok(ctx.add_expression(
@@ -1753,7 +1750,7 @@ impl MacroCall {
                     axis,
                     expr: args[0],
                 },
-                SourceMetadata::none(),
+                Span::default(),
                 body,
             )),
         }
@@ -1767,7 +1764,7 @@ fn texture_call(
     comps: CoordComponents,
     offset: Option<Handle<Constant>>,
     body: &mut Block,
-    meta: SourceMetadata,
+    meta: Span,
 ) -> Result<Handle<Expression>> {
     if let Some(sampler) = ctx.samplers.get(&image).copied() {
         let mut array_index = comps.array_index;
@@ -1816,7 +1813,7 @@ impl Parser {
         image: Handle<Expression>,
         coord: Handle<Expression>,
         extra: Option<Handle<Expression>>,
-        meta: SourceMetadata,
+        meta: Span,
         body: &mut Block,
     ) -> Result<CoordComponents> {
         if let TypeInner::Image {
@@ -1842,14 +1839,14 @@ impl Parser {
 
             let coordinate = match (image_size, coord_size) {
                 (Some(size), Some(coord_s)) if size != coord_s => {
-                    ctx.vector_resize(size, coord, SourceMetadata::none(), body)
+                    ctx.vector_resize(size, coord, Span::default(), body)
                 }
                 (None, Some(_)) => ctx.add_expression(
                     Expression::AccessIndex {
                         base: coord,
                         index: 0,
                     },
-                    SourceMetadata::none(),
+                    Span::default(),
                     body,
                 ),
                 _ => coord,
@@ -1864,7 +1861,7 @@ impl Parser {
 
                     Some(ctx.add_expression(
                         Expression::AccessIndex { base: coord, index },
-                        SourceMetadata::none(),
+                        Span::default(),
                         body,
                     ))
                 }
@@ -1881,7 +1878,7 @@ impl Parser {
                     } else {
                         Some(ctx.add_expression(
                             Expression::AccessIndex { base: coord, index },
-                            SourceMetadata::none(),
+                            Span::default(),
                             body,
                         ))
                     }
@@ -1917,7 +1914,7 @@ pub fn sampled_to_depth(
     module: &mut Module,
     ctx: &mut Context,
     image: Handle<Expression>,
-    meta: SourceMetadata,
+    meta: Span,
     errors: &mut Vec<Error>,
 ) -> Result<()> {
     let ty = match ctx[image] {

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{builtins::MacroCall, context::ExprPos, SourceMetadata};
+use super::{builtins::MacroCall, context::ExprPos, Span};
 use crate::{
     BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle, Interpolation,
     Sampling, StorageAccess, StorageClass, Type, UnaryOperator,
@@ -89,7 +89,7 @@ pub struct VariableReference {
 #[derive(Debug, Clone)]
 pub struct HirExpr {
     pub kind: HirExprKind,
-    pub meta: SourceMetadata,
+    pub meta: Span,
 }
 
 #[derive(Debug, Clone)]

@@ -465,9 +465,11 @@ pub fn emit_glsl_parser_error(errors: Vec<naga::front::glsl::Error>, filename: &
     let writer = StandardStream::stderr(ColorChoice::Auto);
 
     for err in errors {
-        let diagnostic = Diagnostic::error()
-            .with_message(err.kind.to_string())
-            .with_labels(vec![Label::primary((), err.meta.start..err.meta.end)]);
+        let mut diagnostic = Diagnostic::error().with_message(err.kind.to_string());
+
+        if let Some(range) = err.meta.to_range() {
+            diagnostic = diagnostic.with_labels(vec![Label::primary((), range)]);
+        }
 
         term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
     }
