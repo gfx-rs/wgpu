@@ -1,7 +1,10 @@
 # Change Log
 
-### Unreleased
-  - GL & Vulkan:
+### wgpu-core-0.10.4 (TBD)
+  - fix `write_texture` for array textures
+
+### wgpu-hal-0.10.8 (TBD)
+  - GL and Vulkan:
     - Fix renderdoc device pointers.
 
 ### wgpu-hal-0.10.7 (2021-09-14)

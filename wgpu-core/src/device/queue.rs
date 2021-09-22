@@ -371,7 +371,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (selector, dst_base, texture_format) =
             extract_texture_selector(destination, size, &*texture_guard)?;
         let format_desc = texture_format.describe();
-        let (_, bytes_per_array_layer) = validate_linear_texture_data(
+        //Note: `_source_bytes_per_array_layer` is ignored since we have a staging copy,
+        // and it can have a different value.
+        let (_, _source_bytes_per_array_layer) = validate_linear_texture_data(
             data_layout,
             texture_format,
             data.len() as wgt::BufferAddress,
@@ -444,6 +446,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(DeviceError::from)?;
         unsafe {
             profiling::scope!("copy");
+
             if stage_bytes_per_row == bytes_per_row {
                 // Fast path if the data is already being aligned optimally.
                 ptr::copy_nonoverlapping(
@@ -488,7 +491,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             texture_base.array_layer += rel_array_layer;
             hal::BufferTextureCopy {
                 buffer_layout: wgt::ImageDataLayout {
-                    offset: rel_array_layer as u64 * bytes_per_array_layer,
+                    offset: rel_array_layer as u64
+                        * block_rows_per_image as u64
+                        * stage_bytes_per_row as u64,
                     bytes_per_row: NonZeroU32::new(stage_bytes_per_row),
                     rows_per_image: NonZeroU32::new(block_rows_per_image),
                 },
