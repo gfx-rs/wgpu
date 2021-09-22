@@ -110,7 +110,11 @@ impl RenderPassContext {
     }
 }
 
-pub type BufferMapPendingClosure = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
+pub type BufferMapPendingClosure = (
+    resource::BufferMapOperation,
+    resource::BufferMapAsyncStatus,
+    id::BufferId,
+);
 
 #[derive(Default)]
 pub struct UserClosures {
@@ -127,7 +131,7 @@ impl UserClosures {
     unsafe fn fire(self) {
         //Note: this logic is specifically moved out of `handle_mapping()` in order to
         // have nothing locked by the time we execute users callback code.
-        for (operation, status) in self.mappings {
+        for (operation, status, _id) in self.mappings {
             (operation.callback)(status, operation.user_data);
         }
         for closure in self.submissions {
@@ -4824,7 +4828,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(resource::BufferAccessError::NotMapped);
             }
             resource::BufferMapState::Waiting(pending) => {
-                return Ok(Some((pending.op, resource::BufferMapAsyncStatus::Aborted)));
+                return Ok(Some((
+                    pending.op,
+                    resource::BufferMapAsyncStatus::Aborted,
+                    buffer_id,
+                )));
             }
             resource::BufferMapState::Active { ptr, range, host } => {
                 if host == HostMap::Write {
@@ -4861,7 +4869,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), resource::BufferAccessError> {
         //Note: outside inner function so no locks are held when calling the callback
         let closure = self.buffer_unmap_inner::<A>(buffer_id)?;
-        if let Some((operation, status)) = closure {
+        if let Some((operation, status, _)) = closure {
             unsafe {
                 (operation.callback)(status, operation.user_data);
             }

@@ -17,7 +17,7 @@ use hal::Device as _;
 use parking_lot::Mutex;
 use thiserror::Error;
 
-use std::mem;
+use std::{mem, ptr};
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
@@ -674,28 +674,35 @@ impl<A: HalApi> LifetimeTracker<A> {
                     }
                     _ => panic!("No pending mapping."),
                 };
-                let status = if mapping.range.start != mapping.range.end {
+
+                let size = mapping.range.end - mapping.range.start;
+                let host = mapping.op.host;
+                let ptr_maybe = if size != 0 {
                     log::debug!("Buffer {:?} map state -> Active", buffer_id);
-                    let host = mapping.op.host;
-                    let size = mapping.range.end - mapping.range.start;
                     match super::map_buffer(raw, buffer, mapping.range.start, size, host) {
-                        Ok(ptr) => {
-                            buffer.map_state = resource::BufferMapState::Active {
-                                ptr,
-                                range: mapping.range.start..mapping.range.start + size,
-                                host,
-                            };
-                            resource::BufferMapAsyncStatus::Success
-                        }
+                        Ok(ptr) => Some(ptr),
                         Err(e) => {
                             log::error!("Mapping failed {:?}", e);
-                            resource::BufferMapAsyncStatus::Error
+                            None
                         }
                     }
                 } else {
-                    resource::BufferMapAsyncStatus::Success
+                    // Note: `&mut []` has a `static` lifetime in Rust
+                    ptr::NonNull::new((&mut []).as_mut_ptr())
                 };
-                pending_callbacks.push((mapping.op, status));
+                let status = match ptr_maybe {
+                    Some(ptr) => {
+                        buffer.map_state = resource::BufferMapState::Active {
+                            ptr,
+                            range: mapping.range.start..mapping.range.start + size,
+                            host,
+                        };
+                        resource::BufferMapAsyncStatus::Success
+                    }
+                    None => resource::BufferMapAsyncStatus::Error,
+                };
+
+                pending_callbacks.push((mapping.op, status, buffer_id.0));
             }
         }
         pending_callbacks

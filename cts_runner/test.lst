@@ -1,5 +1,6 @@
 unittests:*
 webgpu:api,operation,command_buffer,basic:*
+webgpu:api,operation,command_buffer,copyBufferToBuffer:*
 webgpu:api,operation,compute,basic:*
 //FAIL: webgpu:api,validation,queue,copyToTexture,ImageBitmap:destination_texture,format:format="stencil8";*'
 webgpu:api,operation,rendering,basic:clear:*
