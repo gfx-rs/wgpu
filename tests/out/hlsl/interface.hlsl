@@ -13,7 +13,7 @@ struct VertexOutput {
 struct FragmentOutput {
     float depth : SV_Depth;
     uint sample_mask : SV_Coverage;
-    float color : SV_Target0;
+    linear float color : SV_Target0;
 };
 
 groupshared uint output[1];

@@ -341,13 +341,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
 
                     let mut arg = arg.clone();
                     if ep.stage == crate::ShaderStage::Fragment {
-                        if let Some(crate::Binding::Location {
-                            interpolation: ref mut interpolation @ None,
-                            ..
-                        }) = arg.binding
-                        {
-                            *interpolation = Some(crate::Interpolation::Perspective);
-                            // default
+                        if let Some(ref mut binding) = arg.binding {
+                            binding.apply_default_interpolation(&module.types[arg.ty].inner);
                         }
                     }
                     function.arguments.push(arg);
@@ -515,8 +510,6 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 function,
             });
         }
-
-        module.apply_common_default_interpolation();
 
         Ok(())
     }

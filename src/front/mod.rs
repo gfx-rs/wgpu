@@ -1,5 +1,7 @@
 //! Parsers which load shaders into memory.
 
+mod interpolator;
+
 #[cfg(feature = "glsl-in")]
 pub mod glsl;
 #[cfg(feature = "spv-in")]

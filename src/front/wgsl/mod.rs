@@ -1085,7 +1085,7 @@ impl BindingParser {
             (None, None, None, None) => Ok(None),
             (Some(location), None, interpolation, sampling) => {
                 // Before handing over the completed `Module`, we call
-                // `apply_common_default_interpolation` to ensure that the interpolation and
+                // `apply_default_interpolation` to ensure that the interpolation and
                 // sampling have been explicitly specified on all vertex shader output and fragment
                 // shader input user bindings, so leaving them potentially `None` here is fine.
                 Ok(Some(crate::Binding::Location {
@@ -2704,10 +2704,14 @@ impl Parser {
             alignment = alignment.max(align);
             offset = range.end;
 
+            let mut binding = bind_parser.finish(bind_span)?;
+            if let Some(ref mut binding) = binding {
+                binding.apply_default_interpolation(&type_arena[ty].inner);
+            }
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
                 ty,
-                binding: bind_parser.finish(bind_span)?,
+                binding,
                 offset: range.start,
             });
         }
@@ -3818,7 +3822,7 @@ impl Parser {
                     ExpectedToken::Token(Token::Separator(',')),
                 ));
             }
-            let binding = self.parse_varying_binding(lexer)?;
+            let mut binding = self.parse_varying_binding(lexer)?;
             let (param_name, param_name_span, param_type, _access) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
             let param_index = arguments.len() as u32;
@@ -3833,6 +3837,9 @@ impl Parser {
                     is_reference: false,
                 },
             );
+            if let Some(ref mut binding) = binding {
+                binding.apply_default_interpolation(&module.types[param_type].inner);
+            }
             arguments.push(crate::FunctionArgument {
                 name: Some(param_name.to_string()),
                 ty: param_type,
@@ -3842,9 +3849,12 @@ impl Parser {
         }
         // read return type
         let result = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
-            let binding = self.parse_varying_binding(lexer)?;
+            let mut binding = self.parse_varying_binding(lexer)?;
             let (ty, _access) =
                 self.parse_type_decl(lexer, None, &mut module.types, &mut module.constants)?;
+            if let Some(ref mut binding) = binding {
+                binding.apply_default_interpolation(&module.types[ty].inner);
+            }
             Some(crate::FunctionResult { ty, binding })
         } else {
             None
@@ -4122,7 +4132,6 @@ impl Parser {
                         log::error!("Reached the end of file, but scopes are not closed");
                         return Err(Error::Other.as_parse_error(lexer.source));
                     };
-                    module.apply_common_default_interpolation();
                     return Ok(module);
                 }
             }

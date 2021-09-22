@@ -1527,8 +1527,8 @@
                     ty: 4,
                     binding: Some(Location(
                         location: 0,
-                        interpolation: None,
-                        sampling: None,
+                        interpolation: Some(Perspective),
+                        sampling: Some(Center),
                     )),
                 )),
                 local_variables: [],

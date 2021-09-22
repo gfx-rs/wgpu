@@ -3725,7 +3725,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             span = crate::front::align_up(span, self.layouter[ty].alignment.get());
             alignment = self.layouter[ty].alignment.get().max(alignment);
 
-            let binding = decor.io_binding().ok();
+            let mut binding = decor.io_binding().ok();
             if let Some(offset) = decor.offset {
                 span = offset;
             }
@@ -3733,11 +3733,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
             span += self.layouter[ty].size;
 
+            let inner = &module.types[ty].inner;
             if let crate::TypeInner::Matrix {
                 columns,
                 rows,
                 width,
-            } = module.types[ty].inner
+            } = *inner
             {
                 if let Some(stride) = decor.matrix_stride {
                     let rounded_rows = if rows > crate::VectorSize::Bi {
@@ -3757,6 +3758,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
             }
 
+            if let Some(ref mut binding) = binding {
+                binding.apply_default_interpolation(inner);
+            }
             members.push(crate::StructMember {
                 name: decor.name,
                 ty,
@@ -4181,7 +4185,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 (Variable::Global, var)
             }
             ExtendedClass::Input => {
-                let binding = dec.io_binding()?;
+                let mut binding = dec.io_binding()?;
                 let mut unsigned_ty = effective_ty;
                 if let crate::Binding::BuiltIn(built_in) = binding {
                     let needs_inner_uint = match built_in {
@@ -4222,6 +4226,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ty: effective_ty,
                     init: None,
                 };
+
+                binding.apply_default_interpolation(&module.types[unsigned_ty].inner);
+
                 let inner = Variable::Input(crate::FunctionArgument {
                     name: dec.name,
                     ty: unsigned_ty,
@@ -4231,7 +4238,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
             ExtendedClass::Output => {
                 // For output interface blocks, this would be a structure.
-                let binding = dec.io_binding().ok();
+                let mut binding = dec.io_binding().ok();
                 let init = match binding {
                     Some(crate::Binding::BuiltIn(built_in)) => {
                         match null::generate_default_built_in(
@@ -4297,6 +4304,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     ty: effective_ty,
                     init,
                 };
+                if let Some(ref mut binding) = binding {
+                    binding.apply_default_interpolation(&module.types[effective_ty].inner);
+                }
                 let inner = Variable::Output(crate::FunctionResult {
                     ty: effective_ty,
                     binding,

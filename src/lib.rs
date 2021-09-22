@@ -710,7 +710,23 @@ pub enum ConstantInner {
 pub enum Binding {
     /// Built-in shader variable.
     BuiltIn(BuiltIn),
+
     /// Indexed location.
+    ///
+    /// Values passed from the [`Vertex`] stage to the [`Fragment`] stage must
+    /// have their `interpolation` defaulted (i.e. not `None`) by the front end
+    /// as appropriate for that language.
+    ///
+    /// For other stages, we permit interpolations even though they're ignored.
+    /// When a front end is parsing a struct type, it usually doesn't know what
+    /// stages will be using it for IO, so it's easiest if it can apply the
+    /// defaults to anything with a `Location` binding, just in case.
+    ///
+    /// For anything other than floating-point scalars and vectors, the
+    /// interpolation must be `Flat`.
+    ///
+    /// [`Vertex`]: crate::ShaderStage::Vertex
+    /// [`Fragment`]: crate::ShaderStage::Fragment
     Location {
         location: u32,
         interpolation: Option<Interpolation>,

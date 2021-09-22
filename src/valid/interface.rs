@@ -256,10 +256,6 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::BindingCollision { location });
                 }
 
-                // Values passed from the vertex shader to the fragment shader must have their
-                // interpolation defaulted (i.e. not `None`) by the front end, as appropriate for
-                // that language. For anything other than floating-point scalars and vectors, the
-                // interpolation must be `Flat`.
                 let needs_interpolation = match self.stage {
                     crate::ShaderStage::Vertex => self.output,
                     crate::ShaderStage::Fragment => !self.output,
