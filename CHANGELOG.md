@@ -1,11 +1,14 @@
 # Change Log
 
-### wgpu-core-0.10.4 (TBD)
-  - fix `write_texture` for array textures
-
 ### wgpu-hal-0.10.8 (TBD)
   - GL and Vulkan:
     - Fix renderdoc device pointers.
+
+### wgpu-core-0.10.4, wgpu-0.10.2 (2021-09-23)
+  - fix `write_texture` for array textures
+  - fix closing an encoder on validation error
+  - expose Metal surface creation
+  - panic with an actual error message in the default handler
 
 ### wgpu-hal-0.10.7 (2021-09-14)
   - Metal:
