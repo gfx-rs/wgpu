@@ -1772,7 +1772,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "arrayvec",
  "async-executor",
@@ -1806,7 +1806,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "arrayvec",
  "bitflags",
