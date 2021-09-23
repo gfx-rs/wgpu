@@ -63,18 +63,22 @@ void testBinOpUintUVec(uint a, uvec4 b) {
 }
 
 void testStructConstructor() {
-	struct BST {
-		int data;
-	};
+    struct BST {
+        int data;
+    };
 
-	BST tree = BST(1);
+    BST tree = BST(1);
 }
 
 void testArrayConstructor() {
-	float tree[1] = float[1](0.0);
+    float tree[1] = float[1](0.0);
 }
+
+float global;
+void privatePointer(inout float a) {}
 
 out vec4 o_color;
 void main() {
+    privatePointer(global);
     o_color.rgba = vec4(1.0);
 }

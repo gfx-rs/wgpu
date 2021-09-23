@@ -2,6 +2,7 @@ struct BST {
     data: i32;
 };
 
+var<private> global: f32;
 var<private> o_color: vec4<f32>;
 
 fn testBinOpVecFloat(a: vec4<f32>, b: f32) {
@@ -184,13 +185,24 @@ fn testArrayConstructor() {
 
 }
 
+fn privatePointer(a12: ptr<function, f32>) {
+    return;
+}
+
 fn main1() {
-    let e1: vec4<f32> = o_color;
-    let e4: vec4<f32> = vec4<f32>(1.0);
-    o_color.x = e4.x;
-    o_color.y = e4.y;
-    o_color.z = e4.z;
-    o_color.w = e4.w;
+    var local: f32;
+
+    let e3: f32 = global;
+    local = e3;
+    privatePointer((&local));
+    let e5: f32 = local;
+    global = e5;
+    let e6: vec4<f32> = o_color;
+    let e9: vec4<f32> = vec4<f32>(1.0);
+    o_color.x = e9.x;
+    o_color.y = e9.y;
+    o_color.z = e9.z;
+    o_color.w = e9.w;
     return;
 }
 

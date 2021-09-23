@@ -9,7 +9,8 @@ use super::{
 use crate::{
     front::glsl::types::type_power, proc::ensure_block_returns, Arena, Block, Constant,
     ConstantInner, EntryPoint, Expression, FastHashMap, Function, FunctionArgument, FunctionResult,
-    Handle, LocalVariable, ScalarKind, ScalarValue, Span, Statement, StructMember, Type, TypeInner,
+    Handle, LocalVariable, ScalarKind, ScalarValue, Span, Statement, StorageClass, StructMember,
+    Type, TypeInner,
 };
 use std::iter;
 
@@ -549,47 +550,85 @@ impl Parser {
                 ctx.lower_expect_inner(stmt, self, *expr, parameter_info.qualifier.as_pos(), body)?;
 
             if parameter_info.qualifier.is_lhs() {
-                // If the argument is to be passed as a pointer but the type of the
-                // expression returns a vector it must mean that it was for example
-                // swizzled and it must be spilled into a local before calling
-                if let TypeInner::Vector { size, kind, width } =
-                    *self.resolve_type(ctx, handle, meta)?
-                {
-                    let ty = self.module.types.insert(
-                        Type {
-                            name: None,
-                            inner: TypeInner::Vector { size, kind, width },
-                        },
-                        Span::default(),
-                    );
-                    let temp_var = ctx.locals.append(
-                        LocalVariable {
-                            name: None,
-                            ty,
-                            init: None,
-                        },
-                        Span::default(),
-                    );
-                    let temp_expr = ctx.add_expression(
-                        Expression::LocalVariable(temp_var),
-                        Span::default(),
-                        body,
-                    );
+                let (ty, value) = match *self.resolve_type(ctx, handle, meta)? {
+                    // If the argument is to be passed as a pointer but the type of the
+                    // expression returns a vector it must mean that it was for example
+                    // swizzled and it must be spilled into a local before calling
+                    // TODO: this part doesn't work because of #1385 once that's sorted out
+                    // revisit this part.
+                    TypeInner::Vector { size, kind, width } => (
+                        self.module.types.insert(
+                            Type {
+                                name: None,
+                                inner: TypeInner::Vector { size, kind, width },
+                            },
+                            Span::default(),
+                        ),
+                        handle,
+                    ),
+                    // If the argument is a pointer whose storage class isn't `Function` an
+                    // indirection trough a local variable is needed to align the storage
+                    // classes of the call argument and the overload parameter
+                    TypeInner::Pointer { base, class } if class != StorageClass::Function => (
+                        base,
+                        ctx.add_expression(
+                            Expression::Load { pointer: handle },
+                            Span::default(),
+                            body,
+                        ),
+                    ),
+                    TypeInner::ValuePointer {
+                        size,
+                        kind,
+                        width,
+                        class,
+                    } if class != StorageClass::Function => {
+                        let inner = match size {
+                            Some(size) => TypeInner::Vector { size, kind, width },
+                            None => TypeInner::Scalar { kind, width },
+                        };
 
-                    body.push(
-                        Statement::Store {
-                            pointer: temp_expr,
-                            value: handle,
-                        },
-                        Span::default(),
-                    );
+                        (
+                            self.module
+                                .types
+                                .insert(Type { name: None, inner }, Span::default()),
+                            ctx.add_expression(
+                                Expression::Load { pointer: handle },
+                                Span::default(),
+                                body,
+                            ),
+                        )
+                    }
+                    _ => {
+                        arguments.push(handle);
+                        continue;
+                    }
+                };
 
-                    arguments.push(temp_expr);
-                    // Register the temporary local to be written back to it's original
-                    // place after the function call
-                    proxy_writes.push((*expr, temp_expr));
-                    continue;
-                }
+                let temp_var = ctx.locals.append(
+                    LocalVariable {
+                        name: None,
+                        ty,
+                        init: None,
+                    },
+                    Span::default(),
+                );
+                let temp_expr =
+                    ctx.add_expression(Expression::LocalVariable(temp_var), Span::default(), body);
+
+                body.push(
+                    Statement::Store {
+                        pointer: temp_expr,
+                        value,
+                    },
+                    Span::default(),
+                );
+
+                arguments.push(temp_expr);
+                // Register the temporary local to be written back to it's original
+                // place after the function call
+                proxy_writes.push((handle, temp_expr));
+                continue;
             }
 
             // Apply implicit conversions as needed
@@ -623,18 +662,15 @@ impl Parser {
                 ctx.emit_start();
 
                 // Write back all the variables that were scheduled to their original place
-                for (tgt, pointer) in proxy_writes {
+                for (original, pointer) in proxy_writes {
                     let value = ctx.add_expression(Expression::Load { pointer }, meta, body);
-                    let target = ctx
-                        .lower_expect_inner(stmt, self, tgt, ExprPos::Rhs, body)?
-                        .0;
 
                     ctx.emit_flush(body);
                     ctx.emit_start();
 
                     body.push(
                         Statement::Store {
-                            pointer: target,
+                            pointer: original,
                             value,
                         },
                         meta,

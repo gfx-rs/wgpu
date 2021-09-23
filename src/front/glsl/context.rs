@@ -433,7 +433,12 @@ impl Context {
             HirExprKind::Access { base, index } => {
                 let (index, index_meta) =
                     self.lower_expect_inner(stmt, parser, index, ExprPos::Rhs, body)?;
-                let maybe_constant_index = parser.solve_constant(self, index, index_meta).ok();
+                let maybe_constant_index = match pos {
+                    // Don't try to generate `AccessIndex` if in a LHS position, since it
+                    // wouldn't produce a pointer.
+                    ExprPos::Lhs => None,
+                    _ => parser.solve_constant(self, index, index_meta).ok(),
+                };
 
                 let base = self
                     .lower_expect_inner(
