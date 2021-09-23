@@ -376,128 +376,103 @@ impl Parser {
         // Borrow again but without mutability
         let declaration = self.lookup_function.get(&name).unwrap();
 
-        // Helper enum containing the type of conversion need for a call
-        #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-        enum Conversion {
-            // No conversion needed
-            Exact,
-            // Float to double conversion needed
-            FloatToDouble,
-            // Int or uint to float conversion needed
-            IntToFloat,
-            // Int or uint to double conversion needed
-            IntToDouble,
-            // Other type of conversion needed
-            Other,
-            // No conversion was yet registered
-            None,
-        }
-
-        let mut maybe_decl = None;
+        // Possibly contains the overload to be used in the call
+        let mut maybe_overload = None;
+        // The conversions needed for the best analyzed overload, this is initialized all to
+        // `NONE` to make sure that conversions always pass the first time without ambiguity
         let mut old_conversions = vec![Conversion::None; args.len()];
+        // Tracks whether the comparison between overloads lead to an ambiguity
         let mut ambiguous = false;
 
-        'outer: for decl in declaration.overloads.iter() {
-            if args.len() != decl.parameters.len() {
+        // Iterate over all the available overloads to select either an exact match or a
+        // overload which has suitable implicit conversions
+        'outer: for overload in declaration.overloads.iter() {
+            // If the overload and the function call don't have the same number of arguments
+            // continue to the next overload
+            if args.len() != overload.parameters.len() {
                 continue;
             }
 
+            // Stores whether the current overload matches exactly the function call
             let mut exact = true;
             // State of the selection
-            // If None we still don't know what is the best declaration
-            // If Some(true) the new declaration is better
-            // If Some(false) the old declaration is better
+            // If None we still don't know what is the best overload
+            // If Some(true) the new overload is better
+            // If Some(false) the old overload is better
             let mut superior = None;
+            // Store the conversions for the current overload so that later they can replace the
+            // conversions used for querying the best overload
             let mut new_conversions = vec![Conversion::None; args.len()];
 
-            for ((i, decl_arg), call_arg) in decl.parameters.iter().enumerate().zip(args.iter()) {
-                use ScalarKind::*;
+            // Loop trough the overload parameters and check if the current overload is better
+            // compared to the previous best overload.
+            for (i, overload_parameter) in overload.parameters.iter().enumerate() {
+                let call_argument = &args[i];
+                let parameter_info = &overload.parameters_info[i];
 
-                if decl.parameters_info[i].depth {
+                // If the image is used in the overload as a depth texture convert it
+                // before comparing, otherwise exact matches wouldn't be reported
+                if parameter_info.depth {
                     sampled_to_depth(
                         &mut self.module,
                         ctx,
-                        call_arg.0,
-                        call_arg.1,
+                        call_argument.0,
+                        call_argument.1,
                         &mut self.errors,
-                    )?;
-                    self.invalidate_expression(ctx, call_arg.0, call_arg.1)?
+                    );
+                    self.invalidate_expression(ctx, call_argument.0, call_argument.1)?
                 }
 
-                let decl_inner = &self.module.types[*decl_arg].inner;
-                let call_inner = self.resolve_type(ctx, call_arg.0, call_arg.1)?;
+                let overload_param_ty = &self.module.types[*overload_parameter].inner;
+                let call_arg_ty = self.resolve_type(ctx, call_argument.0, call_argument.1)?;
 
-                if decl_inner == call_inner {
+                // If the types match there's no need to check for conversions so continue
+                if overload_param_ty == call_arg_ty {
                     new_conversions[i] = Conversion::Exact;
                     continue;
                 }
 
-                exact = false;
-
-                let (decl_kind, decl_width, call_kind, call_width) = match (decl_inner, call_inner)
-                {
-                    (
-                        &TypeInner::Scalar {
-                            kind: decl_kind,
-                            width: decl_width,
-                        },
-                        &TypeInner::Scalar {
-                            kind: call_kind,
-                            width: call_width,
-                        },
-                    ) => (decl_kind, decl_width, call_kind, call_width),
-                    (
-                        &TypeInner::Vector {
-                            kind: decl_kind,
-                            size: decl_size,
-                            width: decl_width,
-                        },
-                        &TypeInner::Vector {
-                            kind: call_kind,
-                            size: call_size,
-                            width: call_width,
-                        },
-                    ) if decl_size == call_size => (decl_kind, decl_width, call_kind, call_width),
-                    (
-                        &TypeInner::Matrix {
-                            rows: decl_rows,
-                            columns: decl_columns,
-                            width: decl_width,
-                        },
-                        &TypeInner::Matrix {
-                            rows: call_rows,
-                            columns: call_columns,
-                            width: call_width,
-                        },
-                    ) if decl_columns == call_columns && decl_rows == call_rows => {
-                        (Float, decl_width, Float, call_width)
-                    }
-                    _ => continue 'outer,
-                };
-
-                if type_power(decl_kind, decl_width) < type_power(call_kind, call_width) {
+                // If the argument is to be passed as a pointer (i.e. either `out` or
+                // `inout` where used as qualifiers) no conversion shall be performed
+                if parameter_info.qualifier.is_lhs() {
                     continue 'outer;
                 }
 
-                let conversion = match ((decl_kind, decl_width), (call_kind, call_width)) {
-                    ((Float, 8), (Float, 4)) => Conversion::FloatToDouble,
-                    ((Float, 4), (Sint, _)) | ((Float, 4), (Uint, _)) => Conversion::IntToFloat,
-                    ((Float, 8), (Sint, _)) | ((Float, 8), (Uint, _)) => Conversion::IntToDouble,
-                    _ => Conversion::Other,
+                // Try to get the type of conversion needed otherwise this overload can't be used
+                // since no conversion makes it possible so skip it
+                let conversion = match conversion(overload_param_ty, call_arg_ty) {
+                    Some(info) => info,
+                    None => continue 'outer,
                 };
 
-                // true - New declaration argument has a better conversion
-                // false - Old declaration argument has a better conversion
+                // At this point a conversion will be needed so the overload no longer
+                // exactly matches the call arguments
+                exact = false;
+
+                // Compare the conversions needed for this overload parameter to that of the
+                // last overload analyzed respective parameter, the value is:
+                // - `true` when the new overload argument has a better conversion
+                // - `false` when the old overload argument has a better conversion
                 let best_arg = match (conversion, old_conversions[i]) {
+                    // An exact match is always better, we don't need to check this for the
+                    // current overload since it was checked earlier
                     (_, Conversion::Exact) => false,
-                    (Conversion::FloatToDouble, _)
-                    | (_, Conversion::None)
-                    | (Conversion::IntToFloat, Conversion::IntToDouble) => true,
-                    (_, Conversion::FloatToDouble)
-                    | (Conversion::IntToDouble, Conversion::IntToFloat) => false,
+                    // No overload was yet analyzed so this one is the best yet
+                    (_, Conversion::None) => true,
+                    // A conversion from a float to a double is the best possible conversion
+                    (Conversion::FloatToDouble, _) => true,
+                    (_, Conversion::FloatToDouble) => false,
+                    // A conversion from a float to an integer is preferred than one
+                    // from double to an integer
+                    (Conversion::IntToFloat, Conversion::IntToDouble) => true,
+                    (Conversion::IntToDouble, Conversion::IntToFloat) => false,
+                    // This case handles things like no conversion and exact which were already
+                    // treated and other cases which no conversion is better than the other
                     _ => continue,
                 };
 
+                // Check if the best parameter corresponds to the current selected overload
+                // to pass to the next comparation, if this isn't true mark it as ambiguous
                 match best_arg {
                     true => match superior {
                         Some(false) => ambiguous = true,
@@ -513,28 +488,33 @@ impl Parser {
                 }
             }
 
+            // The overload matches exactly the function call so there's no ambiguity (since
+            // repeated overload aren't allowed) and the current overload is selected, no
+            // further querying is needed.
             if exact {
-                maybe_decl = Some(decl);
+                maybe_overload = Some(overload);
                 ambiguous = false;
                 break;
             }
 
             match superior {
-                // New declaration is better keep it
+                // New overload is better keep it
                 Some(true) => {
-                    maybe_decl = Some(decl);
+                    maybe_overload = Some(overload);
                     // Replace the conversions
                     old_conversions = new_conversions;
                 }
-                // Old declaration is better do nothing
+                // Old overload is better do nothing
                 Some(false) => {}
-                // No declaration was better than the other this can be caused
-                // when
+                // No overload was better than the other this can be caused
+                // when all conversions are ambiguous in which the overloads themselves are
+                // ambiguous.
                 None => {
                     ambiguous = true;
-                    // Assign the new declaration to make sure we always have
-                    // one to make error reporting happy
-                    maybe_decl = Some(decl);
+                    // Assign the new overload, this helps ensures that in this case of
+                    // amiguity the parsing won't end immediately and allow for further
+                    // collection of errors.
+                    maybe_overload = Some(overload);
                 }
             }
         }
@@ -548,18 +528,19 @@ impl Parser {
             })
         }
 
-        let decl = maybe_decl.ok_or_else(|| Error {
+        let overload = maybe_overload.ok_or_else(|| Error {
             kind: ErrorKind::SemanticError(format!("Unknown function '{}'", name).into()),
             meta,
         })?;
 
-        let parameters_info = decl.parameters_info.clone();
-        let parameters = decl.parameters.clone();
-        let is_void = decl.void;
-        let kind = decl.kind;
+        let parameters_info = overload.parameters_info.clone();
+        let parameters = overload.parameters.clone();
+        let is_void = overload.void;
+        let kind = overload.kind;
 
         let mut arguments = Vec::with_capacity(args.len());
         let mut proxy_writes = Vec::new();
+        // Iterate trough the function call arguments applying transformations as needed
         for (parameter_info, (expr, parameter)) in parameters_info
             .iter()
             .zip(raw_args.iter().zip(parameters.iter()))
@@ -567,11 +548,12 @@ impl Parser {
             let (mut handle, meta) =
                 ctx.lower_expect_inner(stmt, self, *expr, parameter_info.qualifier.as_pos(), body)?;
 
-            if let TypeInner::Vector { size, kind, width } =
-                *self.resolve_type(ctx, handle, meta)?
-            {
-                if parameter_info.qualifier.is_lhs()
-                    && matches!(ctx[handle], Expression::Swizzle { .. })
+            if parameter_info.qualifier.is_lhs() {
+                // If the argument is to be passed as a pointer but the type of the
+                // expression returns a vector it must mean that it was for example
+                // swizzled and it must be spilled into a local before calling
+                if let TypeInner::Vector { size, kind, width } =
+                    *self.resolve_type(ctx, handle, meta)?
                 {
                     let ty = self.module.types.fetch_or_append(
                         Type {
@@ -603,11 +585,14 @@ impl Parser {
                     );
 
                     arguments.push(temp_expr);
+                    // Register the temporary local to be written back to it's original
+                    // place after the function call
                     proxy_writes.push((*expr, temp_expr));
                     continue;
                 }
             }
 
+            // Apply implicit conversions as needed
             let scalar_components = scalar_components(&self.module.types[*parameter].inner);
             if let Some((kind, width)) = scalar_components {
                 ctx.implicit_conversion(self, &mut handle, meta, kind, width)?;
@@ -636,6 +621,8 @@ impl Parser {
                 );
 
                 ctx.emit_start();
+
+                // Write back all the variables that were scheduled to their original place
                 for (tgt, pointer) in proxy_writes {
                     let value = ctx.add_expression(Expression::Load { pointer }, meta, body);
                     let target = ctx
@@ -965,4 +952,89 @@ fn is_double(ty: &TypeInner) -> bool {
         TypeInner::Matrix { width, .. } => width == 8,
         _ => false,
     }
+}
+
+/// Helper enum containing the type of conversion need for a call
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+enum Conversion {
+    /// No conversion needed
+    Exact,
+    /// Float to double conversion needed
+    FloatToDouble,
+    /// Int or uint to float conversion needed
+    IntToFloat,
+    /// Int or uint to double conversion needed
+    IntToDouble,
+    /// Other type of conversion needed
+    Other,
+    /// No conversion was yet registered
+    None,
+}
+
+/// Helper function, returns the type of conversion from `source` to `target`, if a
+/// conversion is not possible returns None.
+fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
+    use ScalarKind::*;
+
+    // Gather the `ScalarKind` and scalar width from both the target and the source
+    let (target_kind, target_width, source_kind, source_width) = match (target, source) {
+        // Conversions between scalars are allowed
+        (
+            &TypeInner::Scalar {
+                kind: tgt_kind,
+                width: tgt_width,
+            },
+            &TypeInner::Scalar {
+                kind: src_kind,
+                width: src_width,
+            },
+        ) => (tgt_kind, tgt_width, src_kind, src_width),
+        // Conversions between vectors of the same size are allowed
+        (
+            &TypeInner::Vector {
+                kind: tgt_kind,
+                size: tgt_size,
+                width: tgt_width,
+            },
+            &TypeInner::Vector {
+                kind: src_kind,
+                size: src_size,
+                width: src_width,
+            },
+        ) if tgt_size == src_size => (tgt_kind, tgt_width, src_kind, src_width),
+        // Conversions between matrices of the same size are allowed
+        (
+            &TypeInner::Matrix {
+                rows: tgt_rows,
+                columns: tgt_cols,
+                width: tgt_width,
+            },
+            &TypeInner::Matrix {
+                rows: src_rows,
+                columns: src_cols,
+                width: src_width,
+            },
+        ) if tgt_cols == src_cols && tgt_rows == src_rows => (Float, tgt_width, Float, src_width),
+        _ => return None,
+    };
+
+    // Check if source can be converted into target, if this is the case then the type
+    // power of target must be higher than that of source
+    let target_power = type_power(target_kind, target_width);
+    let source_power = type_power(source_kind, source_width);
+    if target_power < source_power {
+        return None;
+    }
+
+    Some(
+        match ((target_kind, target_width), (source_kind, source_width)) {
+            // A conversion from a float to a double is special
+            ((Float, 8), (Float, 4)) => Conversion::FloatToDouble,
+            // A conversion from an integer to a float is special
+            ((Float, 4), (Sint, _)) | ((Float, 4), (Uint, _)) => Conversion::IntToFloat,
+            // A conversion from an integer to a double is special
+            ((Float, 8), (Sint, _)) | ((Float, 8), (Uint, _)) => Conversion::IntToDouble,
+            _ => Conversion::Other,
+        },
+    )
 }

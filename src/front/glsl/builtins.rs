@@ -1482,7 +1482,7 @@ impl MacroCall {
                 Ok(args[0])
             }
             MacroCall::SamplerShadow => {
-                sampled_to_depth(&mut parser.module, ctx, args[0], meta, &mut parser.errors)?;
+                sampled_to_depth(&mut parser.module, ctx, args[0], meta, &mut parser.errors);
                 parser.invalidate_expression(ctx, args[0], meta)?;
                 ctx.samplers.insert(args[0], args[1]);
                 Ok(args[0])
@@ -1916,7 +1916,7 @@ pub fn sampled_to_depth(
     image: Handle<Expression>,
     meta: Span,
     errors: &mut Vec<Error>,
-) -> Result<()> {
+) {
     let ty = match ctx[image] {
         Expression::GlobalVariable(handle) => &mut module.global_variables.get_mut(handle).ty,
         Expression::FunctionArgument(i) => {
@@ -1924,7 +1924,7 @@ pub fn sampled_to_depth(
             &mut ctx.arguments[i as usize].ty
         }
         _ => {
-            return Err(Error {
+            return errors.push(Error {
                 kind: ErrorKind::SemanticError("Not a valid texture expression".into()),
                 meta,
             })
@@ -1960,6 +1960,4 @@ pub fn sampled_to_depth(
             meta,
         }),
     };
-
-    Ok(())
 }
