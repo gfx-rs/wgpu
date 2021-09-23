@@ -18,7 +18,7 @@ pub enum ShaderModuleSource<'a> {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
-    pub runtime_checks: bool,
+    pub shader_bound_checks: wgt::ShaderBoundChecks,
 }
 
 #[derive(Debug)]

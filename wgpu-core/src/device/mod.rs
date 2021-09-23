@@ -962,7 +962,7 @@ impl<A: HalApi> Device<A> {
 
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.borrow_option(),
-            runtime_checks: desc.runtime_checks,
+            runtime_checks: desc.shader_bound_checks.runtime_checks(),
         };
         let raw = match unsafe { self.raw.create_shader_module(&hal_desc, hal_shader) } {
             Ok(raw) => raw,
@@ -1001,7 +1001,7 @@ impl<A: HalApi> Device<A> {
         self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.borrow_option(),
-            runtime_checks: desc.runtime_checks,
+            runtime_checks: desc.shader_bound_checks.runtime_checks(),
         };
         let hal_shader = hal::ShaderInput::SpirV(source);
         let raw = match unsafe { self.raw.create_shader_module(&hal_desc, hal_shader) } {

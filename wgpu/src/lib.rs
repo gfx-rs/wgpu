@@ -242,7 +242,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         device: &Self::DeviceId,
         desc: &ShaderModuleDescriptor,
-        runtime_checks: bool,
+        shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId;
     unsafe fn device_create_shader_module_spirv(
         &self,
@@ -1665,7 +1665,12 @@ impl Device {
     pub fn create_shader_module(&self, desc: &ShaderModuleDescriptor) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module(&*self.context, &self.id, desc, true),
+            id: Context::device_create_shader_module(
+                &*self.context,
+                &self.id,
+                desc,
+                wgt::ShaderBoundChecks::new(),
+            ),
         }
     }
 
@@ -1685,7 +1690,12 @@ impl Device {
     ) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module(&*self.context, &self.id, desc, false),
+            id: Context::device_create_shader_module(
+                &*self.context,
+                &self.id,
+                desc,
+                wgt::ShaderBoundChecks::unchecked(),
+            ),
         }
     }
 

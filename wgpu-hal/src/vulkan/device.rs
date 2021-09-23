@@ -590,18 +590,24 @@ impl super::Device {
                     entry_point: stage.entry_point.to_string(),
                     shader_stage: naga_stage,
                 };
-                let mut naga_options = self.naga_options.clone();
-                if !runtime_checks {
-                    naga_options.bounds_check_policies = naga::back::BoundsCheckPolicies {
-                        index: naga::back::BoundsCheckPolicy::Unchecked,
-                        buffer: naga::back::BoundsCheckPolicy::Unchecked,
-                        image: naga::back::BoundsCheckPolicy::Unchecked,
+                let temp_options;
+                let options = if !runtime_checks {
+                    temp_options = naga::back::spv::Options {
+                        bounds_check_policies: naga::back::BoundsCheckPolicies {
+                            index: naga::back::BoundsCheckPolicy::Unchecked,
+                            buffer: naga::back::BoundsCheckPolicy::Unchecked,
+                            image: naga::back::BoundsCheckPolicy::Unchecked,
+                        },
+                        ..self.naga_options.clone()
                     };
-                }
+                    &temp_options
+                } else {
+                    &self.naga_options
+                };
                 let spv = naga::back::spv::write_vec(
                     &naga_shader.module,
                     &naga_shader.info,
-                    &naga_options,
+                    options,
                     Some(&pipeline_options),
                 )
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{}", e)))?;

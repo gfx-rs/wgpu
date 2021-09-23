@@ -3440,3 +3440,42 @@ pub struct DispatchIndirectArgs {
     /// Z dimension of the grid of workgroups to dispatch.
     pub group_size_z: u32,
 }
+
+/// Describes how shader bound checks should be performed.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ShaderBoundChecks {
+    runtime_checks: bool,
+}
+
+impl ShaderBoundChecks {
+    /// Creates a new configuration where the shader is bound checked.
+    pub fn new() -> Self {
+        ShaderBoundChecks {
+            runtime_checks: true,
+        }
+    }
+
+    /// Creates a new configuration where the shader isn't bound checked.
+    ///
+    /// # Safety
+    /// The caller MUST ensure that all shaders built with this configuration don't perform any
+    /// out of bounds reads or writes.
+    pub unsafe fn unchecked() -> Self {
+        ShaderBoundChecks {
+            runtime_checks: false,
+        }
+    }
+
+    /// Query whether runtime bound checks are enabled in this configuration
+    pub fn runtime_checks(&self) -> bool {
+        self.runtime_checks
+    }
+}
+
+impl Default for ShaderBoundChecks {
+    fn default() -> Self {
+        Self::new()
+    }
+}
