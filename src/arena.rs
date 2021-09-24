@@ -75,6 +75,21 @@ impl<T> Handle<T> {
         let index = self.index.get() - 1;
         index as usize
     }
+
+    /// Convert a `usize` index into a `Handle<T>`.
+    fn from_usize(index: usize) -> Self {
+        use std::convert::TryFrom;
+
+        let handle_index = u32::try_from(index + 1)
+            .and_then(Index::try_from)
+            .expect("Failed to insert into UniqueArena. Handle overflows");
+        Handle::new(handle_index)
+    }
+
+    /// Convert a `usize` index into a `Handle<T>`, without range checks.
+    unsafe fn from_usize_unchecked(index: usize) -> Self {
+        Handle::new(Index::new_unchecked((index + 1) as u32))
+    }
 }
 
 /// A strongly typed range of handles.
@@ -174,34 +189,30 @@ impl<T> Arena<T> {
     /// Returns an iterator over the items stored in this arena, returning both
     /// the item's handle and a reference to it.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Handle<T>, &T)> {
-        self.data.iter().enumerate().map(|(i, v)| {
-            let position = i + 1;
-            let index = unsafe { Index::new_unchecked(position as u32) };
-            (Handle::new(index), v)
-        })
+        self.data
+            .iter()
+            .enumerate()
+            .map(|(i, v)| unsafe { (Handle::from_usize_unchecked(i), v) })
     }
 
     /// Returns a iterator over the items stored in this arena,
     /// returning both the item's handle and a mutable reference to it.
     pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = (Handle<T>, &mut T)> {
-        self.data.iter_mut().enumerate().map(|(i, v)| {
-            let position = i + 1;
-            let index = unsafe { Index::new_unchecked(position as u32) };
-            (Handle::new(index), v)
-        })
+        self.data
+            .iter_mut()
+            .enumerate()
+            .map(|(i, v)| unsafe { (Handle::from_usize_unchecked(i), v) })
     }
 
     /// Adds a new value to the arena, returning a typed handle.
     pub fn append(&mut self, value: T, span: Span) -> Handle<T> {
         #[cfg(not(feature = "span"))]
         let _ = span;
-        let position = self.data.len() + 1;
-        let index =
-            Index::new(position as u32).expect("Failed to append to Arena. Handle overflows");
+        let index = self.data.len();
         self.data.push(value);
         #[cfg(feature = "span")]
         self.span_info.push(span);
-        Handle::new(index)
+        Handle::from_usize(index)
     }
 
     /// Fetch a handle to an existing type.
@@ -209,7 +220,7 @@ impl<T> Arena<T> {
         self.data
             .iter()
             .position(fun)
-            .map(|index| Handle::new(unsafe { Index::new_unchecked((index + 1) as u32) }))
+            .map(|index| unsafe { Handle::from_usize_unchecked(index) })
     }
 
     /// Adds a value with a custom check for uniqueness:
@@ -223,8 +234,7 @@ impl<T> Arena<T> {
         fun: F,
     ) -> Handle<T> {
         if let Some(index) = self.data.iter().position(|d| fun(d, &value)) {
-            let index = unsafe { Index::new_unchecked((index + 1) as u32) };
-            Handle::new(index)
+            unsafe { Handle::from_usize_unchecked(index) }
         } else {
             self.append(value, span)
         }
