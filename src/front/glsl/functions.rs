@@ -149,7 +149,7 @@ impl Parser {
                                     // value is used to initialize all the values along the diagonal of
                                     // the matrix; the rest are given zeros.
                                     let mut components = Vec::with_capacity(columns as usize);
-                                    let vector_ty = self.module.types.fetch_or_append(
+                                    let vector_ty = self.module.types.insert(
                                         Type {
                                             name: None,
                                             inner: TypeInner::Vector {
@@ -296,7 +296,7 @@ impl Parser {
                                 }
                             }
 
-                            let ty = self.module.types.fetch_or_append(
+                            let ty = self.module.types.insert(
                                 Type {
                                     name: None,
                                     inner: TypeInner::Vector {
@@ -555,7 +555,7 @@ impl Parser {
                 if let TypeInner::Vector { size, kind, width } =
                     *self.resolve_type(ctx, handle, meta)?
                 {
-                    let ty = self.module.types.fetch_or_append(
+                    let ty = self.module.types.insert(
                         Type {
                             name: None,
                             inner: TypeInner::Vector { size, kind, width },
@@ -900,7 +900,7 @@ impl Parser {
         }
 
         let (ty, value) = if !components.is_empty() {
-            let ty = self.module.types.fetch_or_append(
+            let ty = self.module.types.insert(
                 Type {
                     name: None,
                     inner: TypeInner::Struct {

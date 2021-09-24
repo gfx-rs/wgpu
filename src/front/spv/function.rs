@@ -477,7 +477,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     let span = crate::Span::total_span(
                         components.iter().map(|h| function.expressions.get_span(*h)),
                     );
-                    let ty = module.types.fetch_or_append(
+                    let ty = module.types.insert(
                         crate::Type {
                             name: None,
                             inner: crate::TypeInner::Struct {

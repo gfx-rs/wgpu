@@ -16,7 +16,7 @@ impl Module {
         let mut parameters_info = Vec::with_capacity(args.len());
 
         for arg in args {
-            parameters.push(self.types.fetch_or_append(
+            parameters.push(self.types.insert(
                 Type {
                     name: None,
                     inner: arg,
@@ -1224,7 +1224,7 @@ fn inject_common_builtin(
                     _ => Some(VectorSize::Quad),
                 };
 
-                let ty = module.types.fetch_or_append(
+                let ty = module.types.insert(
                     Type {
                         name: None,
                         inner: match size {
@@ -1937,7 +1937,7 @@ pub fn sampled_to_depth(
             arrayed,
         } => match class {
             ImageClass::Sampled { multi, .. } => {
-                *ty = module.types.fetch_or_append(
+                *ty = module.types.insert(
                     Type {
                         name: None,
                         inner: TypeInner::Image {

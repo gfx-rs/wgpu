@@ -262,7 +262,7 @@ impl Parser {
         array_specifier
             .map(|(size, size_meta)| {
                 meta.subsume(size_meta);
-                self.module.types.fetch_or_append(
+                self.module.types.insert(
                     Type {
                         name: None,
                         inner: TypeInner::Array {

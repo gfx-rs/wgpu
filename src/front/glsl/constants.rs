@@ -83,7 +83,7 @@ impl<'a> ConstantSolver<'a> {
                 let ty = match self.constants[value_constant].inner {
                     ConstantInner::Scalar { ref value, width } => {
                         let kind = value.scalar_kind();
-                        self.types.fetch_or_append(
+                        self.types.insert(
                             Type {
                                 name: None,
                                 inner: TypeInner::Vector { size, kind, width },
@@ -127,7 +127,7 @@ impl<'a> ConstantSolver<'a> {
                             kind,
                             width,
                         } => {
-                            let dst_ty = self.types.fetch_or_append(
+                            let dst_ty = self.types.insert(
                                 Type {
                                     name: None,
                                     inner: crate::TypeInner::Vector { size, kind, width },
@@ -542,7 +542,7 @@ mod tests {
         let mut expressions = Arena::new();
         let mut constants = Arena::new();
 
-        let vec_ty = types.fetch_or_append(
+        let vec_ty = types.insert(
             Type {
                 name: None,
                 inner: TypeInner::Vector {
@@ -720,7 +720,7 @@ mod tests {
         let mut expressions = Arena::new();
         let mut constants = Arena::new();
 
-        let matrix_ty = types.fetch_or_append(
+        let matrix_ty = types.insert(
             Type {
                 name: None,
                 inner: TypeInner::Matrix {
@@ -732,7 +732,7 @@ mod tests {
             Default::default(),
         );
 
-        let vec_ty = types.fetch_or_append(
+        let vec_ty = types.insert(
             Type {
                 name: None,
                 inner: TypeInner::Vector {

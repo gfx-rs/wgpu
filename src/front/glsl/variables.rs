@@ -58,7 +58,7 @@ impl Parser {
         data: BuiltInData,
         meta: Span,
     ) -> Option<VariableReference> {
-        let ty = self.module.types.fetch_or_append(
+        let ty = self.module.types.insert(
             Type {
                 name: None,
                 inner: data.inner,
@@ -188,7 +188,7 @@ impl Parser {
                 storage: StorageQualifier::Output,
             },
             "gl_ClipDistance" | "gl_CullDistance" => {
-                let base = self.module.types.fetch_or_append(
+                let base = self.module.types.insert(
                     Type {
                         name: None,
                         inner: TypeInner::Scalar {

@@ -85,7 +85,7 @@ pub fn calculate_offset(
             };
 
             let ty_span = types.get_span(ty);
-            ty = types.fetch_or_append(
+            ty = types.insert(
                 Type {
                     name,
                     inner: TypeInner::Array {
@@ -145,7 +145,7 @@ pub fn calculate_offset(
             span = align_up(span, align);
 
             let ty_span = types.get_span(ty);
-            ty = types.fetch_or_append(
+            ty = types.insert(
                 Type {
                     name,
                     inner: TypeInner::Struct {

@@ -211,7 +211,7 @@ pub(super) fn patch_comparison_type(
     };
 
     let name = original_ty.name.clone();
-    var.ty = arena.fetch_or_append(
+    var.ty = arena.insert(
         crate::Type {
             name,
             inner: ty_inner,

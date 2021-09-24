@@ -37,7 +37,7 @@ impl<'source> ParsingContext<'source> {
         let token = self.bump(parser)?;
         let handle = match token.value {
             TokenValue::Void => None,
-            TokenValue::TypeName(ty) => Some(parser.module.types.fetch_or_append(ty, token.meta)),
+            TokenValue::TypeName(ty) => Some(parser.module.types.insert(ty, token.meta)),
             TokenValue::Struct => {
                 let mut meta = token.meta;
                 let ty_name = self.expect_ident(parser)?.0;
@@ -47,7 +47,7 @@ impl<'source> ParsingContext<'source> {
                     self.parse_struct_declaration_list(parser, &mut members, StructLayout::Std140)?;
                 let end_meta = self.expect(parser, TokenValue::RightBrace)?.meta;
                 meta.subsume(end_meta);
-                let ty = parser.module.types.fetch_or_append(
+                let ty = parser.module.types.insert(
                     Type {
                         name: Some(ty_name.clone()),
                         inner: TypeInner::Struct {

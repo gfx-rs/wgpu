@@ -25,7 +25,7 @@ pub fn validate_compose(
     use crate::TypeInner as Ti;
 
     let self_ty = type_arena
-        .try_get(self_ty_handle)
+        .get_handle(self_ty_handle)
         .ok_or(ComposeError::TypeDoesntExist(self_ty_handle))?;
     match self_ty.inner {
         // vectors are composed from scalars or other vectors

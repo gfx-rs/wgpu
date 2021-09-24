@@ -602,7 +602,7 @@ mod type_inner_tests {
             Default::default(),
         );
 
-        let mytype1 = types.fetch_or_append(
+        let mytype1 = types.insert(
             crate::Type {
                 name: Some("MyType1".to_string()),
                 inner: crate::TypeInner::Struct {
@@ -613,7 +613,7 @@ mod type_inner_tests {
             },
             Default::default(),
         );
-        let mytype2 = types.fetch_or_append(
+        let mytype2 = types.insert(
             crate::Type {
                 name: Some("MyType2".to_string()),
                 inner: crate::TypeInner::Struct {
@@ -1982,7 +1982,7 @@ impl Parser {
                 TypeResolution::Handle(handle) => handle,
                 TypeResolution::Value(inner) => ctx
                     .types
-                    .fetch_or_append(crate::Type { name: None, inner }, Default::default()),
+                    .insert(crate::Type { name: None, inner }, Default::default()),
             };
             components.push(last_component);
             crate::Expression::Compose { ty, components }
@@ -3047,7 +3047,7 @@ impl Parser {
                 match self.parse_type_decl_impl(lexer, attribute, name, type_arena, const_arena)? {
                     Some(inner) => {
                         let span = name_span.start..lexer.current_byte_offset();
-                        type_arena.fetch_or_append(
+                        type_arena.insert(
                             crate::Type {
                                 name: debug_name.map(|s| s.to_string()),
                                 inner,
@@ -3308,12 +3308,10 @@ impl Parser {
                                     // register the type, if needed
                                     match context.typifier[value].clone() {
                                         TypeResolution::Handle(ty) => ty,
-                                        TypeResolution::Value(inner) => {
-                                            context.types.fetch_or_append(
-                                                crate::Type { name: None, inner },
-                                                Default::default(),
-                                            )
-                                        }
+                                        TypeResolution::Value(inner) => context.types.insert(
+                                            crate::Type { name: None, inner },
+                                            Default::default(),
+                                        ),
                                     }
                                 }
                             };
@@ -4004,7 +4002,7 @@ impl Parser {
                 let (members, span) =
                     self.parse_struct_body(lexer, &mut module.types, &mut module.constants)?;
                 let type_span = NagaSpan::from(lexer.span_from(start));
-                let ty = module.types.fetch_or_append(
+                let ty = module.types.insert(
                     crate::Type {
                         name: Some(name.to_string()),
                         inner: crate::TypeInner::Struct {

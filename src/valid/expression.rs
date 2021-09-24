@@ -1224,7 +1224,7 @@ impl super::Validator {
                     if let Some(&Ti::Array {
                         size: crate::ArraySize::Dynamic,
                         ..
-                    }) = resolver.types.try_get(base).map(|ty| &ty.inner)
+                    }) = resolver.types.get_handle(base).map(|ty| &ty.inner)
                     {
                         ShaderStages::all()
                     } else {

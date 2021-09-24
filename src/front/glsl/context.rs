@@ -257,7 +257,7 @@ impl Context {
 
         if qualifier.is_lhs() {
             let span = parser.module.types.get_span(arg.ty);
-            arg.ty = parser.module.types.fetch_or_append(
+            arg.ty = parser.module.types.insert(
                 Type {
                     name: None,
                     inner: TypeInner::Pointer {
@@ -818,7 +818,7 @@ impl Context {
                         self.add_expression(Expression::Splat { size, value: right }, meta, body);
 
                     if let Some(cols) = columns {
-                        let ty = parser.module.types.fetch_or_append(
+                        let ty = parser.module.types.insert(
                             Type {
                                 name: None,
                                 inner: ty_inner,

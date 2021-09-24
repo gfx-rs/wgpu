@@ -476,7 +476,7 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
     ///
     /// [`Handle<T>`]: Handle
     /// [`get_span`]: UniqueArena::get_span
-    pub fn fetch_or_append(&mut self, value: T, span: Span) -> Handle<T> {
+    pub fn insert(&mut self, value: T, span: Span) -> Handle<T> {
         let (index, added) = self.set.insert_full(value);
 
         #[cfg(feature = "span")]
@@ -503,7 +503,7 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
     }
 
     /// Return this arena's value at `handle`, if that is a valid handle.
-    pub fn try_get(&self, handle: Handle<T>) -> Option<&T> {
+    pub fn get_handle(&self, handle: Handle<T>) -> Option<&T> {
         self.set.get_index(handle.index())
     }
 }

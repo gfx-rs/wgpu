@@ -147,7 +147,7 @@ impl<'source> ParsingContext<'source> {
                     },
                     Span::default(),
                 );
-                handle = parser.module.types.fetch_or_append(
+                handle = parser.module.types.insert(
                     Type {
                         name: None,
                         inner: TypeInner::Array {
