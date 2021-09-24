@@ -19,7 +19,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
 
-use std::{borrow::Cow, iter, marker::PhantomData, mem, ops::Range, ptr};
+use std::{borrow::Cow, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, ptr};
 
 mod life;
 pub mod queue;
@@ -1183,10 +1183,13 @@ impl<A: HalApi> Device<A> {
                 })?;
         }
 
+        let bgl_flags = conv::bind_group_layout_flags(self.features);
+
         let mut hal_bindings = entry_map.values().cloned().collect::<Vec<_>>();
         hal_bindings.sort_by_key(|b| b.binding);
         let hal_desc = hal::BindGroupLayoutDescriptor {
             label,
+            flags: bgl_flags,
             entries: &hal_bindings,
         };
         let raw = unsafe {
@@ -1387,7 +1390,7 @@ impl<A: HalApi> Device<A> {
                 .entries
                 .get(&binding)
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
-            let res_index = match entry.resource {
+            let (res_index, count) = match entry.resource {
                 Br::Buffer(ref bb) => {
                     let bb = Self::create_buffer_binding(
                         bb,
@@ -1402,21 +1405,11 @@ impl<A: HalApi> Device<A> {
 
                     let res_index = hal_buffers.len();
                     hal_buffers.push(bb);
-                    res_index
+                    (res_index, 1)
                 }
                 Br::BufferArray(ref bindings_array) => {
-                    if let Some(count) = decl.count {
-                        let count = count.get() as usize;
-                        let num_bindings = bindings_array.len();
-                        if count != num_bindings {
-                            return Err(Error::BindingArrayLengthMismatch {
-                                actual: num_bindings,
-                                expected: count,
-                            });
-                        }
-                    } else {
-                        return Err(Error::SingleBindingExpected);
-                    }
+                    let num_bindings = bindings_array.len();
+                    Self::check_array_binding(self.features, decl.count, num_bindings)?;
 
                     let res_index = hal_buffers.len();
                     for bb in bindings_array.iter() {
@@ -1432,7 +1425,7 @@ impl<A: HalApi> Device<A> {
                         )?;
                         hal_buffers.push(bb);
                     }
-                    res_index
+                    (res_index, num_bindings)
                 }
                 Br::Sampler(id) => {
                     match decl.ty {
@@ -1464,7 +1457,7 @@ impl<A: HalApi> Device<A> {
 
                             let res_index = hal_samplers.len();
                             hal_samplers.push(&sampler.raw);
-                            res_index
+                            (res_index, 1)
                         }
                         _ => {
                             return Err(Error::WrongBindingType {
@@ -1505,21 +1498,11 @@ impl<A: HalApi> Device<A> {
                         view: &view.raw,
                         usage: internal_use,
                     });
-                    res_index
+                    (res_index, 1)
                 }
                 Br::TextureViewArray(ref bindings_array) => {
-                    if let Some(count) = decl.count {
-                        let count = count.get() as usize;
-                        let num_bindings = bindings_array.len();
-                        if count != num_bindings {
-                            return Err(Error::BindingArrayLengthMismatch {
-                                actual: num_bindings,
-                                expected: count,
-                            });
-                        }
-                    } else {
-                        return Err(Error::SingleBindingExpected);
-                    }
+                    let num_bindings = bindings_array.len();
+                    Self::check_array_binding(self.features, decl.count, num_bindings)?;
 
                     let res_index = hal_textures.len();
                     for &id in bindings_array.iter() {
@@ -1551,13 +1534,14 @@ impl<A: HalApi> Device<A> {
                         });
                     }
 
-                    res_index
+                    (res_index, num_bindings)
                 }
             };
 
             hal_entries.push(hal::BindGroupEntry {
                 binding,
                 resource_index: res_index as u32,
+                count: count as u32,
             });
         }
 
@@ -1594,6 +1578,39 @@ impl<A: HalApi> Device<A> {
             used_buffer_ranges,
             dynamic_binding_info,
         })
+    }
+
+    fn check_array_binding(
+        features: wgt::Features,
+        count: Option<NonZeroU32>,
+        num_bindings: usize,
+    ) -> Result<(), super::binding_model::CreateBindGroupError> {
+        use super::binding_model::CreateBindGroupError as Error;
+
+        if let Some(count) = count {
+            let count = count.get() as usize;
+            if count < num_bindings {
+                return Err(Error::BindingArrayPartialLengthMismatch {
+                    actual: num_bindings,
+                    expected: count,
+                });
+            }
+            if count != num_bindings
+                && !features.contains(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY)
+            {
+                return Err(Error::BindingArrayLengthMismatch {
+                    actual: num_bindings,
+                    expected: count,
+                });
+            }
+            if num_bindings == 0 {
+                return Err(Error::BindingArrayZeroLength);
+            }
+        } else {
+            return Err(Error::SingleBindingExpected);
+        };
+
+        Ok(())
     }
 
     fn texture_use_parameters(

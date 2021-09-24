@@ -102,8 +102,11 @@ impl<A: hal::Api> Example<A> {
             );
             (exposed.adapter, exposed.capabilities)
         };
-        let hal::OpenDevice { device, mut queue } =
-            unsafe { adapter.open(wgt::Features::empty()).unwrap() };
+        let hal::OpenDevice { device, mut queue } = unsafe {
+            adapter
+                .open(wgt::Features::empty(), &wgt::Limits::default())
+                .unwrap()
+        };
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
@@ -146,6 +149,7 @@ impl<A: hal::Api> Example<A> {
 
         let global_bgl_desc = hal::BindGroupLayoutDescriptor {
             label: None,
+            flags: hal::BindGroupLayoutFlags::empty(),
             entries: &[
                 wgt::BindGroupLayoutEntry {
                     binding: 0,
@@ -183,6 +187,8 @@ impl<A: hal::Api> Example<A> {
             unsafe { device.create_bind_group_layout(&global_bgl_desc).unwrap() };
 
         let local_bgl_desc = hal::BindGroupLayoutDescriptor {
+            label: None,
+            flags: hal::BindGroupLayoutFlags::empty(),
             entries: &[wgt::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgt::ShaderStages::VERTEX,
@@ -193,7 +199,6 @@ impl<A: hal::Api> Example<A> {
                 },
                 count: None,
             }],
-            label: None,
         };
         let local_group_layout =
             unsafe { device.create_bind_group_layout(&local_bgl_desc).unwrap() };
@@ -417,14 +422,17 @@ impl<A: hal::Api> Example<A> {
                     hal::BindGroupEntry {
                         binding: 0,
                         resource_index: 0,
+                        count: 1,
                     },
                     hal::BindGroupEntry {
                         binding: 1,
                         resource_index: 0,
+                        count: 1,
                     },
                     hal::BindGroupEntry {
                         binding: 2,
                         resource_index: 0,
+                        count: 1,
                     },
                 ],
             };
@@ -446,6 +454,7 @@ impl<A: hal::Api> Example<A> {
                 entries: &[hal::BindGroupEntry {
                     binding: 0,
                     resource_index: 0,
+                    count: 1,
                 }],
             };
             unsafe { device.create_bind_group(&local_group_desc).unwrap() }

@@ -334,10 +334,12 @@ impl<A: HalApi> Adapter<A> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
-        let open = unsafe { self.raw.adapter.open(desc.features) }.map_err(|err| match err {
-            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
-            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
-        })?;
+        let open = unsafe { self.raw.adapter.open(desc.features, &desc.limits) }.map_err(
+            |err| match err {
+                hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
+                hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
+            },
+        )?;
 
         self.create_device_from_hal(self_id, open, desc, trace_path)
     }
