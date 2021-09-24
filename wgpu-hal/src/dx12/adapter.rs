@@ -262,6 +262,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
         features: wgt::Features,
+        _limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = self
             .device

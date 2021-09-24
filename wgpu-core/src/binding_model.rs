@@ -65,8 +65,16 @@ pub enum CreateBindGroupError {
     InvalidTextureView(TextureViewId),
     #[error("sampler {0:?} is invalid")]
     InvalidSampler(SamplerId),
-    #[error("binding count declared with {expected} items, but {actual} items were provided")]
+    #[error(
+        "binding count declared with at most {expected} items, but {actual} items were provided"
+    )]
+    BindingArrayPartialLengthMismatch { actual: usize, expected: usize },
+    #[error(
+        "binding count declared with exactly {expected} items, but {actual} items were provided"
+    )]
     BindingArrayLengthMismatch { actual: usize, expected: usize },
+    #[error("array binding provided zero elements")]
+    BindingArrayZeroLength,
     #[error("bound buffer range {range:?} does not fit in buffer of size {size}")]
     BindingRangeTooLarge {
         buffer: BufferId,

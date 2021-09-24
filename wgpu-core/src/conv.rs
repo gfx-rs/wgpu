@@ -152,3 +152,12 @@ pub fn check_texture_dimension_size(
 
     Ok(())
 }
+
+pub fn bind_group_layout_flags(features: wgt::Features) -> hal::BindGroupLayoutFlags {
+    let mut flags = hal::BindGroupLayoutFlags::empty();
+    flags.set(
+        hal::BindGroupLayoutFlags::PARTIALLY_BOUND,
+        features.contains(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY),
+    );
+    flags
+}

@@ -377,7 +377,12 @@ impl
             })
             .collect::<ArrayVec<_, 8>>();
 
-        let mut vk_flags = vk::DescriptorPoolCreateFlags::empty();
+        let mut vk_flags =
+            if flags.contains(gpu_descriptor::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND) {
+                vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
+            } else {
+                vk::DescriptorPoolCreateFlags::empty()
+            };
         if flags.contains(gpu_descriptor::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
             vk_flags |= vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET;
         }
@@ -1029,9 +1034,69 @@ impl crate::Device<super::Api> for super::Device {
             })
             .collect::<Vec<_>>();
 
-        let vk_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .flags(vk::DescriptorSetLayoutCreateFlags::empty())
-            .bindings(&vk_bindings);
+        let vk_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&vk_bindings);
+
+        let mut binding_flag_info;
+        let binding_flag_vec;
+        let mut requires_update_after_bind = false;
+
+        let partially_bound = desc
+            .flags
+            .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
+
+        let vk_info = if !self.shared.uab_types.is_empty() || partially_bound {
+            binding_flag_vec = desc
+                .entries
+                .iter()
+                .map(|entry| {
+                    let mut flags = vk::DescriptorBindingFlags::empty();
+
+                    if partially_bound && entry.count.is_some() {
+                        flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
+                    }
+
+                    let uab_type = match entry.ty {
+                        wgt::BindingType::Buffer {
+                            ty: wgt::BufferBindingType::Uniform,
+                            ..
+                        } => super::UpdateAfterBindTypes::UNIFORM_BUFFER,
+                        wgt::BindingType::Buffer {
+                            ty: wgt::BufferBindingType::Storage { .. },
+                            ..
+                        } => super::UpdateAfterBindTypes::STORAGE_BUFFER,
+                        wgt::BindingType::Texture { .. } => {
+                            super::UpdateAfterBindTypes::SAMPLED_TEXTURE
+                        }
+                        wgt::BindingType::StorageTexture { .. } => {
+                            super::UpdateAfterBindTypes::STORAGE_TEXTURE
+                        }
+                        _ => super::UpdateAfterBindTypes::empty(),
+                    };
+
+                    if !uab_type.is_empty() && self.shared.uab_types.contains(uab_type) {
+                        flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
+                        requires_update_after_bind = true;
+                    }
+
+                    flags
+                })
+                .collect::<Vec<_>>();
+
+            binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::builder()
+                .binding_flags(&binding_flag_vec);
+
+            vk_info.push_next(&mut binding_flag_info)
+        } else {
+            vk_info
+        };
+
+        let dsl_create_flags = if requires_update_after_bind {
+            vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL
+        } else {
+            vk::DescriptorSetLayoutCreateFlags::empty()
+        };
+
+        let vk_info = vk_info.flags(dsl_create_flags);
 
         let raw = self
             .shared
@@ -1047,6 +1112,7 @@ impl crate::Device<super::Api> for super::Device {
             raw,
             desc_count,
             types: types.into_boxed_slice(),
+            requires_update_after_bind,
         })
     }
     unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
@@ -1102,7 +1168,11 @@ impl crate::Device<super::Api> for super::Device {
         let mut vk_sets = self.desc_allocator.lock().allocate(
             &*self.shared,
             &desc.layout.raw,
-            gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
+            if desc.layout.requires_update_after_bind {
+                gpu_descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
+            } else {
+                gpu_descriptor::DescriptorSetLayoutCreateFlags::empty()
+            },
             &desc.layout.desc_count,
             1,
         )?;
@@ -1139,7 +1209,7 @@ impl crate::Device<super::Api> for super::Device {
                 vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
                     let index = image_infos.len();
                     let start = entry.resource_index;
-                    let end = start + size;
+                    let end = start + entry.count;
                     image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
                         |binding| {
                             let layout =
@@ -1158,7 +1228,7 @@ impl crate::Device<super::Api> for super::Device {
                 | vk::DescriptorType::STORAGE_BUFFER_DYNAMIC => {
                     let index = buffer_infos.len();
                     let start = entry.resource_index;
-                    let end = start + size;
+                    let end = start + entry.count;
                     buffer_infos.extend(desc.buffers[start as usize..end as usize].iter().map(
                         |binding| {
                             vk::DescriptorBufferInfo::builder()

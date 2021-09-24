@@ -188,7 +188,11 @@ pub trait Surface<A: Api>: Send + Sync {
 }
 
 pub trait Adapter<A: Api>: Send + Sync {
-    unsafe fn open(&self, features: wgt::Features) -> Result<OpenDevice<A>, DeviceError>;
+    unsafe fn open(
+        &self,
+        features: wgt::Features,
+        limits: &wgt::Limits,
+    ) -> Result<OpenDevice<A>, DeviceError>;
 
     /// Return the set of supported capabilities for a texture format.
     unsafe fn texture_format_capabilities(
@@ -525,6 +529,14 @@ bitflags!(
 );
 
 bitflags!(
+    /// Pipeline layout creation flags.
+    pub struct BindGroupLayoutFlags: u32 {
+        /// Allows for bind group binding arrays to be shorter than the array in the BGL.
+        const PARTIALLY_BOUND = 1 << 0;
+    }
+);
+
+bitflags!(
     /// Texture format capability flags.
     pub struct TextureFormatCapabilities: u32 {
         /// Format can be sampled.
@@ -798,6 +810,7 @@ pub struct SamplerDescriptor<'a> {
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     pub label: Label<'a>,
+    pub flags: BindGroupLayoutFlags,
     pub entries: &'a [wgt::BindGroupLayoutEntry],
 }
 
@@ -847,6 +860,7 @@ impl<A: Api> Clone for TextureBinding<'_, A> {
 pub struct BindGroupEntry {
     pub binding: u32,
     pub resource_index: u32,
+    pub count: u32,
 }
 
 /// BindGroup descriptor.
