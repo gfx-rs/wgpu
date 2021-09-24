@@ -626,10 +626,34 @@ impl<'a> ResolveContext<'a> {
             }
             crate::Expression::Select { accept, .. } => past(accept).clone(),
             crate::Expression::Derivative { axis: _, expr } => past(expr).clone(),
-            crate::Expression::Relational { .. } => TypeResolution::Value(Ti::Scalar {
-                kind: crate::ScalarKind::Bool,
-                width: crate::BOOL_WIDTH,
-            }),
+            crate::Expression::Relational { fun, argument } => match fun {
+                crate::RelationalFunction::All | crate::RelationalFunction::Any => {
+                    TypeResolution::Value(Ti::Scalar {
+                        kind: crate::ScalarKind::Bool,
+                        width: crate::BOOL_WIDTH,
+                    })
+                }
+                crate::RelationalFunction::IsNan
+                | crate::RelationalFunction::IsInf
+                | crate::RelationalFunction::IsFinite
+                | crate::RelationalFunction::IsNormal => match *past(argument).inner_with(types) {
+                    Ti::Scalar { .. } => TypeResolution::Value(Ti::Scalar {
+                        kind: crate::ScalarKind::Bool,
+                        width: crate::BOOL_WIDTH,
+                    }),
+                    Ti::Vector { size, .. } => TypeResolution::Value(Ti::Vector {
+                        kind: crate::ScalarKind::Bool,
+                        width: crate::BOOL_WIDTH,
+                        size,
+                    }),
+                    ref other => {
+                        return Err(ResolveError::IncompatibleOperands(format!(
+                            "{:?}({:?})",
+                            fun, other
+                        )))
+                    }
+                },
+            },
             crate::Expression::Math {
                 fun,
                 arg,
