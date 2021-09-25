@@ -22,17 +22,17 @@ use std::mem;
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
 pub(super) struct SuspectedResources {
-    pub(crate) buffers: Vec<id::Valid<id::BufferId>>,
-    pub(crate) textures: Vec<id::Valid<id::TextureId>>,
-    pub(crate) texture_views: Vec<id::Valid<id::TextureViewId>>,
-    pub(crate) samplers: Vec<id::Valid<id::SamplerId>>,
-    pub(crate) bind_groups: Vec<id::Valid<id::BindGroupId>>,
-    pub(crate) compute_pipelines: Vec<id::Valid<id::ComputePipelineId>>,
-    pub(crate) render_pipelines: Vec<id::Valid<id::RenderPipelineId>>,
-    pub(crate) bind_group_layouts: Vec<id::Valid<id::BindGroupLayoutId>>,
-    pub(crate) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
-    pub(crate) render_bundles: Vec<id::Valid<id::RenderBundleId>>,
-    pub(crate) query_sets: Vec<id::Valid<id::QuerySetId>>,
+    pub(super) buffers: Vec<id::Valid<id::BufferId>>,
+    pub(super) textures: Vec<id::Valid<id::TextureId>>,
+    pub(super) texture_views: Vec<id::Valid<id::TextureViewId>>,
+    pub(super) samplers: Vec<id::Valid<id::SamplerId>>,
+    pub(super) bind_groups: Vec<id::Valid<id::BindGroupId>>,
+    pub(super) compute_pipelines: Vec<id::Valid<id::ComputePipelineId>>,
+    pub(super) render_pipelines: Vec<id::Valid<id::RenderPipelineId>>,
+    pub(super) bind_group_layouts: Vec<id::Valid<id::BindGroupLayoutId>>,
+    pub(super) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
+    pub(super) render_bundles: Vec<id::Valid<id::RenderBundleId>>,
+    pub(super) query_sets: Vec<id::Valid<id::QuerySetId>>,
 }
 
 impl SuspectedResources {

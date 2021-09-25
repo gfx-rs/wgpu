@@ -235,10 +235,17 @@ impl<S: ResourceState> ResourceTracker<S> {
         let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.entry(index) {
+            // This code explicitly ignores requests for IDs that are no longer valid,
+            // i.e. corresponding to removed entries, or entries that got re-filled
+            // with new elements (having different epochs).
+            // This is needed because of the asynchronous nature of the device internals.
+            // As such, by the time a resource is added to the suspected list, it may
+            // already be fully removed from all the trackers (and be a stale ID).
+            // see https://github.com/gfx-rs/wgpu/issues/1996
             Entry::Occupied(e) => {
-                if e.get().ref_count.load() == 1 {
-                    let res = e.remove();
-                    assert_eq!(res.epoch, epoch, "Epoch mismatch for {:?}", id);
+                // see https://github.com/gfx-rs/wgpu/issues/1996
+                if e.get().epoch == epoch && e.get().ref_count.load() == 1 {
+                    e.remove();
                     true
                 } else {
                     false
