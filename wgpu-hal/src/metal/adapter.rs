@@ -854,7 +854,17 @@ impl super::PrivateCapabilities {
             supports_mutability: if os_is_mac {
                 Self::version_at_least(major, minor, 10, 13)
             } else {
-                Self::version_at_least(major, minor, 11, 0)
+                // Work around the bug on A9 and below which breaks
+                // storage buffer bindings if mutability is set.
+                // https://github.com/gfx-rs/wgpu/issues/1997
+                let actually_working = Self::supports_any(
+                    device,
+                    &[
+                        MTLFeatureSet::iOS_GPUFamily4_v1,
+                        MTLFeatureSet::iOS_GPUFamily5_v1,
+                    ],
+                );
+                Self::version_at_least(major, minor, 11, 0) && actually_working
             },
             //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
             supports_depth_clamping: device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
