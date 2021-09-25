@@ -1,5 +1,8 @@
 # Change Log
 
+### wgpu-core-0.10.5 (TBD)
+  - fix a panic in resource cleanup happening when they are dropped on another thread
+
 ### wgpu-hal-0.10.8 (TBD)
   - GL and Vulkan:
     - Fix renderdoc device pointers.
