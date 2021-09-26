@@ -560,6 +560,47 @@ impl<A: HalApi> Device<A> {
             .describe_format_features(adapter, desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
 
+        Ok(resource::Texture {
+            inner: resource::TextureInner::Native {
+                raw: Some(hal_texture),
+            },
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            desc: desc.map_label(|_| ()),
+            hal_usage,
+            format_features,
+            full_range: TextureSelector {
+                levels: 0..desc.mip_level_count,
+                layers: 0..desc.array_layer_count(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        })
+    }
+
+    fn create_texture(
+        &self,
+        self_id: id::DeviceId,
+        adapter: &crate::instance::Adapter<A>,
+        desc: &resource::TextureDescriptor,
+    ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
+        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
+        let hal_desc = hal::TextureDescriptor {
+            label: desc.label.borrow_option(),
+            size: desc.size,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+            dimension: desc.dimension,
+            format: desc.format,
+            usage: hal_usage,
+            memory_flags: hal::MemoryFlags::empty(),
+        };
+
+        let format_features = self
+            .describe_format_features(adapter, desc.format)
+            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
+
         // Ensure `D24Plus` textures cannot be copied
         match desc.format {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
@@ -597,42 +638,6 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateTextureError::InvalidMipLevelCount(mips));
         }
 
-        Ok(resource::Texture {
-            inner: resource::TextureInner::Native {
-                raw: Some(hal_texture),
-            },
-            device_id: Stored {
-                value: id::Valid(self_id),
-                ref_count: self.life_guard.add_ref(),
-            },
-            desc: desc.map_label(|_| ()),
-            hal_usage,
-            format_features,
-            full_range: TextureSelector {
-                levels: 0..desc.mip_level_count,
-                layers: 0..desc.array_layer_count(),
-            },
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-        })
-    }
-
-    fn create_texture(
-        &self,
-        self_id: id::DeviceId,
-        adapter: &crate::instance::Adapter<A>,
-        desc: &resource::TextureDescriptor,
-    ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
-        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
-        let hal_desc = hal::TextureDescriptor {
-            label: desc.label.borrow_option(),
-            size: desc.size,
-            mip_level_count: desc.mip_level_count,
-            sample_count: desc.sample_count,
-            dimension: desc.dimension,
-            format: desc.format,
-            usage: hal_usage,
-            memory_flags: hal::MemoryFlags::empty(),
-        };
         let raw = unsafe {
             self.raw
                 .create_texture(&hal_desc)
