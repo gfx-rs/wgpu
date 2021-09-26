@@ -539,6 +539,16 @@ pub struct Parser<I> {
     options: Options,
     index_constants: Vec<Handle<crate::Constant>>,
     index_constant_expressions: Vec<Handle<crate::Expression>>,
+
+    /// Maps for a switch from a case target to the respective body and associated literals that
+    /// use that target block id.
+    ///
+    /// Used to preserve allocations between instruction parsing.
+    switch_cases: indexmap::IndexMap<
+        spirv::Word,
+        (BodyIndex, Vec<i32>),
+        std::hash::BuildHasherDefault<fxhash::FxHasher>,
+    >,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -571,6 +581,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             options: options.clone(),
             index_constants: Vec::new(),
             index_constant_expressions: Vec::new(),
+            switch_cases: indexmap::IndexMap::default(),
         }
     }
 
@@ -2593,12 +2604,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         ref other => unimplemented!("Unexpected selector {:?}", other),
                     };
 
-                    let mut cases = Vec::new();
+                    // Clear past switch cases to prevent them from entering this one
+                    self.switch_cases.clear();
+
                     for _ in 0..(inst.wc - 3) / 2 {
                         let literal = self.next()?;
                         let target = self.next()?;
 
                         let case_body_idx = ctx.bodies.len();
+
+                        // Check if any previous case already used this target block id, if so
+                        // group them together to reorder them later so that no weird
+                        // falltrough cases happen.
+                        if let Some(&mut (_, ref mut literals)) = self.switch_cases.get_mut(&target)
+                        {
+                            literals.push(literal as i32);
+                            continue;
+                        }
+
                         let mut body = Body::with_parent(body_idx);
 
                         if let Some(info) = ctx.mergers.get(&target) {
@@ -2608,7 +2631,34 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         ctx.bodies.push(body);
                         ctx.body_for_label.entry(target).or_insert(case_body_idx);
 
-                        cases.push((literal as i32, case_body_idx));
+                        // Register this target block id as already having been processed and
+                        // the respective body index assigned and the first case value
+                        self.switch_cases
+                            .insert(target, (case_body_idx, vec![literal as i32]));
+                    }
+
+                    // Loop trough the collected target blocks creating a new case for each
+                    // literal pointing to it, only one case will have the true body and all the
+                    // others will be empty falltrough so that they all execute the same body
+                    // without duplicating code.
+                    //
+                    // Since `switch_cases` is an indexmap the order of insertation is preserved
+                    // this is needed because spir-v defines falltrough order in the switch
+                    // instruction.
+                    let mut cases = Vec::with_capacity((inst.wc as usize - 3) / 2);
+                    for &(case_body_idx, ref literals) in self.switch_cases.values() {
+                        let value = literals[0];
+
+                        for &literal in literals.iter().skip(1) {
+                            let empty_body_idx = ctx.bodies.len();
+                            let body = Body::with_parent(body_idx);
+
+                            ctx.bodies.push(body);
+
+                            cases.push((literal, empty_body_idx));
+                        }
+
+                        cases.push((value, case_body_idx));
                     }
 
                     block.extend(emitter.finish(ctx.expressions));
