@@ -17,9 +17,16 @@ struct Bar {
     type3 arr;
     type5 data;
 };
-struct type9 {
+struct type11 {
     int inner[5];
 };
+
+float read_from_private(
+    thread float& foo2
+) {
+    float _e2 = foo2;
+    return _e2;
+}
 
 struct fooInput {
 };
@@ -32,17 +39,18 @@ vertex fooOutput foo(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo1 = 0.0;
-    type9 c;
+    type11 c;
     float baz = foo1;
     foo1 = 1.0;
     metal::float4x4 matrix = bar.matrix;
     type3 arr = bar.arr;
     float b = bar.matrix[3].x;
     int a = bar.data[(1 + (_buffer_sizes.size0 - 88 - 4) / 4) - 2u];
+    float _e25 = read_from_private(foo1);
     bar.matrix[1].z = 1.0;
     bar.matrix = metal::float4x4(metal::float4(0.0), metal::float4(1.0), metal::float4(2.0), metal::float4(3.0));
     for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type3 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
-    for(int _i=0; _i<5; ++_i) c.inner[_i] = type9 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
+    for(int _i=0; _i<5; ++_i) c.inner[_i] = type11 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
     c.inner[vi + 1u] = 42;
     int value = c.inner[vi];
     return fooOutput { matrix * static_cast<metal::float4>(metal::int4(value)) };

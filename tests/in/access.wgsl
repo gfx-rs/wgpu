@@ -11,6 +11,10 @@ struct Bar {
 [[group(0), binding(0)]]
 var<storage,read_write> bar: Bar;
 
+fn read_from_private(foo: ptr<function, f32>) -> f32 {
+    return *foo;
+}
+
 [[stage(vertex)]]
 fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
     var foo: f32 = 0.0;
@@ -24,6 +28,10 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 	let index = 3u;
 	let b = bar.matrix[index].x;
 	let a = bar.data[arrayLength(&bar.data) - 2u];
+
+	// test pointer types
+	let pointer: ptr<storage, i32, read_write> = &bar.data[0];
+	let foo_value = read_from_private(&foo);
 
 	// test storage stores
 	bar.matrix[1].z = 1.0;

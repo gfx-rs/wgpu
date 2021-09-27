@@ -76,6 +76,12 @@ pub enum FunctionError {
     },
     #[error("Argument '{name}' at index {index} has a type that can't be passed into functions.")]
     InvalidArgumentType { index: usize, name: String },
+    #[error("Argument '{name}' at index {index} is a pointer of class {class:?}, which can't be passed into functions.")]
+    InvalidArgumentPointerClass {
+        index: usize,
+        name: String,
+        class: crate::StorageClass,
+    },
     #[error("There are instructions after `return`/`break`/`continue`")]
     InstructionsAfterReturn,
     #[error("The `break` is used outside of a `loop` or `switch` context")]
@@ -695,6 +701,19 @@ impl super::Validator {
                     index,
                     name: argument.name.clone().unwrap_or_default(),
                 });
+            }
+            match module.types[argument.ty].inner.pointer_class() {
+                Some(crate::StorageClass::Private)
+                | Some(crate::StorageClass::Function)
+                | Some(crate::StorageClass::WorkGroup)
+                | None => {}
+                Some(other) => {
+                    return Err(FunctionError::InvalidArgumentPointerClass {
+                        index,
+                        name: argument.name.clone().unwrap_or_default(),
+                        class: other,
+                    })
+                }
             }
         }
 

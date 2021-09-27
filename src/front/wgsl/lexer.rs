@@ -558,24 +558,24 @@ impl<'a> Lexer<'a> {
         Ok(pair)
     }
 
-    // TODO relocate storage texture specifics
+    pub(super) fn next_storage_access(&mut self) -> Result<crate::StorageAccess, Error<'a>> {
+        let (ident, span) = self.next_ident_with_span()?;
+        match ident {
+            "read" => Ok(crate::StorageAccess::LOAD),
+            "write" => Ok(crate::StorageAccess::STORE),
+            "read_write" => Ok(crate::StorageAccess::LOAD | crate::StorageAccess::STORE),
+            _ => Err(Error::UnknownAccess(span)),
+        }
+    }
+
     pub(super) fn next_format_generic(
         &mut self,
     ) -> Result<(crate::StorageFormat, crate::StorageAccess), Error<'a>> {
         self.expect(Token::Paren('<'))?;
         let (ident, ident_span) = self.next_ident_with_span()?;
         let format = conv::map_storage_format(ident, ident_span)?;
-        let access = if self.skip(Token::Separator(',')) {
-            let (raw, span) = self.next_ident_with_span()?;
-            match raw {
-                "read" => crate::StorageAccess::LOAD,
-                "write" => crate::StorageAccess::STORE,
-                "read_write" => crate::StorageAccess::all(),
-                _ => return Err(Error::UnknownAccess(span)),
-            }
-        } else {
-            crate::StorageAccess::LOAD
-        };
+        self.expect(Token::Separator(','))?;
+        let access = self.next_storage_access()?;
         self.expect(Token::Paren('>'))?;
         Ok((format, access))
     }

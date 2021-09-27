@@ -525,10 +525,13 @@ impl<W: Write> Writer<W> {
                         "storage_",
                         "",
                         storage_format_str(format),
-                        if access.contains(crate::StorageAccess::STORE) {
-                            ",write"
+                        if access.contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
+                        {
+                            ",read_write"
+                        } else if access.contains(crate::StorageAccess::LOAD) {
+                            ",read"
                         } else {
-                            ""
+                            ",write"
                         },
                     ),
                 };
@@ -639,6 +642,7 @@ impl<W: Write> Writer<W> {
                         inner
                     )));
                 }
+                write!(self.out, ">")?;
             }
             _ => {
                 return Err(Error::Unimplemented(format!(
@@ -666,6 +670,7 @@ impl<W: Write> Writer<W> {
         match *stmt {
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
+                    let info = &func_ctx.info[handle];
                     let expr_name = if let Some(name) = func_ctx.named_expressions.get(&handle) {
                         // Front end provides names for all variables at the start of writing.
                         // But we write them to step by step. We need to recache them
@@ -682,8 +687,7 @@ impl<W: Write> Writer<W> {
                             | Expression::ImageSample { .. } => true,
                             _ => false,
                         };
-                        if min_ref_count <= func_ctx.info[handle].ref_count || required_baking_expr
-                        {
+                        if min_ref_count <= info.ref_count || required_baking_expr {
                             // If expression contains unsupported builtin we should skip it
                             if let Expression::Load { pointer } = func_ctx.expressions[handle] {
                                 if let Expression::AccessIndex { base, index } =
@@ -809,8 +813,8 @@ impl<W: Write> Writer<W> {
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
                 write!(self.out, "{}(", func_name)?;
-                for (index, argument) in arguments.iter().enumerate() {
-                    self.write_expr(module, *argument, func_ctx)?;
+                for (index, &argument) in arguments.iter().enumerate() {
+                    self.write_expr(module, argument, func_ctx)?;
                     // Only write a comma if isn't the last element
                     if index != arguments.len().saturating_sub(1) {
                         // The leading space is for readability only
@@ -1199,14 +1203,12 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, right, func_ctx)?;
                 write!(self.out, ")")?;
             }
-            // TODO: copy-paste from glsl-out
             Expression::Access { base, index } => {
                 self.write_expr_with_indirection(module, base, func_ctx, indirection)?;
                 write!(self.out, "[")?;
                 self.write_expr(module, index, func_ctx)?;
                 write!(self.out, "]")?
             }
-            // TODO: copy-paste from glsl-out
             Expression::AccessIndex { base, index } => {
                 let base_ty_res = &func_ctx.info[base].ty;
                 let mut resolved = base_ty_res.inner_with(&module.types);

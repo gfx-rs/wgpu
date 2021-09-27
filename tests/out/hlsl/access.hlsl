@@ -1,6 +1,12 @@
 
 RWByteAddressBuffer bar : register(u0);
 
+float read_from_private(inout float foo2)
+{
+    float _expr2 = foo2;
+    return _expr2;
+}
+
 uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
 {
     uint ret;
@@ -19,6 +25,7 @@ float4 foo(uint vi : SV_VertexID) : SV_Position
     uint2 arr[2] = {asuint(bar.Load2(72+0)), asuint(bar.Load2(72+8))};
     float b = asfloat(bar.Load(0+48+0));
     int a = asint(bar.Load((((NagaBufferLengthRW(bar) - 88) / 4) - 2u)*4+88));
+    const float _e25 = read_from_private(foo1);
     bar.Store(8+16+0, asuint(1.0));
     {
         float4x4 _value2 = float4x4(float4(0.0.xxxx), float4(1.0.xxxx), float4(2.0.xxxx), float4(3.0.xxxx));

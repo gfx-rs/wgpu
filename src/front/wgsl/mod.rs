@@ -2587,13 +2587,7 @@ impl Parser {
             class = Some(match class_str {
                 "storage" => {
                     let access = if lexer.skip(Token::Separator(',')) {
-                        let (ident, span) = lexer.next_ident_with_span()?;
-                        match ident {
-                            "read" => crate::StorageAccess::LOAD,
-                            "write" => crate::StorageAccess::STORE,
-                            "read_write" => crate::StorageAccess::all(),
-                            _ => return Err(Error::UnknownAccess(span)),
-                        }
+                        lexer.next_storage_access()?
                     } else {
                         // defaulting to `read`
                         crate::StorageAccess::LOAD
@@ -2836,9 +2830,16 @@ impl Parser {
             "ptr" => {
                 lexer.expect_generic_paren('<')?;
                 let (ident, span) = lexer.next_ident_with_span()?;
-                let class = conv::map_storage_class(ident, span)?;
+                let mut class = conv::map_storage_class(ident, span)?;
                 lexer.expect(Token::Separator(','))?;
                 let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
+                if let crate::StorageClass::Storage { ref mut access } = class {
+                    *access = if lexer.skip(Token::Separator(',')) {
+                        lexer.next_storage_access()?
+                    } else {
+                        crate::StorageAccess::LOAD
+                    };
+                }
                 lexer.expect_generic_paren('>')?;
                 crate::TypeInner::Pointer { base, class }
             }

@@ -13,6 +13,11 @@ buffer Bar_block_0Cs {
 } _group_0_binding_0;
 
 
+float read_from_private(inout float foo2) {
+    float _e2 = foo2;
+    return _e2;
+}
+
 void main() {
     int tmp = 0;
     int value = _group_0_binding_0.atom;

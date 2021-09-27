@@ -9,6 +9,11 @@ struct Bar {
 [[group(0), binding(0)]]
 var<storage, read_write> bar: Bar;
 
+fn read_from_private(foo2: ptr<function, f32>) -> f32 {
+    let e2: f32 = (*foo2);
+    return e2;
+}
+
 [[stage(vertex)]]
 fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
     var foo1: f32 = 0.0;
@@ -20,6 +25,8 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
     let arr: array<vec2<u32>,2> = bar.arr;
     let b: f32 = bar.matrix[3][0];
     let a: i32 = bar.data[(arrayLength((&bar.data)) - 2u)];
+    let pointer1: ptr<storage, i32, read_write> = (&bar.data[0]);
+    let e25: f32 = read_from_private((&foo1));
     bar.matrix[1][2] = 1.0;
     bar.matrix = mat4x4<f32>(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(2.0), vec4<f32>(3.0));
     bar.arr = array<vec2<u32>,2>(vec2<u32>(0u), vec2<u32>(1u));

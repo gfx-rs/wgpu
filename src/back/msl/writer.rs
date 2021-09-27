@@ -1355,7 +1355,7 @@ impl<W: Write> Writer<W> {
                 )?;
             }
             TypeResolution::Value(ref other) => {
-                log::error!("Type {:?} isn't a known local", other);
+                log::warn!("Type {:?} isn't a known local", other); //TEMP!
                 return Err(Error::FeatureNotImplemented("weird local type".to_string()));
             }
         }
@@ -1383,7 +1383,14 @@ impl<W: Write> Writer<W> {
             match *statement {
                 crate::Statement::Emit(ref range) => {
                     for handle in range.clone() {
-                        let expr_name = if let Some(name) =
+                        let info = &context.expression.info[handle];
+                        let ptr_class = info
+                            .ty
+                            .inner_with(&context.expression.module.types)
+                            .pointer_class();
+                        let expr_name = if ptr_class.is_some() {
+                            None // don't bake pointer expressions (just yet)
+                        } else if let Some(name) =
                             context.expression.function.named_expressions.get(&handle)
                         {
                             // Front end provides names for all variables at the start of writing.
@@ -1394,7 +1401,7 @@ impl<W: Write> Writer<W> {
                         } else {
                             let min_ref_count =
                                 context.expression.function.expressions[handle].bake_ref_count();
-                            if min_ref_count <= context.expression.info[handle].ref_count {
+                            if min_ref_count <= info.ref_count {
                                 Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
                             } else {
                                 None

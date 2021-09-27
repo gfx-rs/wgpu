@@ -715,7 +715,9 @@ impl<'a, W: Write> Writer<'a, W> {
             TypeInner::Pointer { .. }
             | TypeInner::Struct { .. }
             | TypeInner::Image { .. }
-            | TypeInner::Sampler { .. } => unreachable!(),
+            | TypeInner::Sampler { .. } => {
+                return Err(Error::Custom(format!("Unable to write type {:?}", inner)))
+            }
         }
 
         Ok(())
@@ -1332,7 +1334,14 @@ impl<'a, W: Write> Writer<'a, W> {
             // This is where we can generate intermediate constants for some expression types.
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
-                    let expr_name = if let Some(name) = ctx.named_expressions.get(&handle) {
+                    let info = &ctx.info[handle];
+                    let ptr_class = info.ty.inner_with(&self.module.types).pointer_class();
+                    let expr_name = if ptr_class.is_some() {
+                        // GLSL can't save a pointer-valued expression in a variable,
+                        // but we shouldn't ever need to: they should never be named expressions,
+                        // and none of the expression types flagged by bake_ref_count can be pointer-valued.
+                        None
+                    } else if let Some(name) = ctx.named_expressions.get(&handle) {
                         // Front end provides names for all variables at the start of writing.
                         // But we write them to step by step. We need to recache them
                         // Otherwise, we could accidentally write variable name instead of full expression.
@@ -1340,7 +1349,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         Some(self.namer.call_unique(name))
                     } else {
                         let min_ref_count = ctx.expressions[handle].bake_ref_count();
-                        if min_ref_count <= ctx.info[handle].ref_count {
+                        if min_ref_count <= info.ref_count {
                             Some(format!("{}{}", super::BAKE_PREFIX, handle.index()))
                         } else {
                             None

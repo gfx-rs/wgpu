@@ -1057,7 +1057,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         match *stmt {
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
-                    let expr_name = if let Some(name) = func_ctx.named_expressions.get(&handle) {
+                    let info = &func_ctx.info[handle];
+                    let ptr_class = info.ty.inner_with(&module.types).pointer_class();
+                    let expr_name = if ptr_class.is_some() {
+                        // HLSL can't save a pointer-valued expression in a variable,
+                        // but we shouldn't ever need to: they should never be named expressions,
+                        // and none of the expression types flagged by bake_ref_count can be pointer-valued.
+                        None
+                    } else if let Some(name) = func_ctx.named_expressions.get(&handle) {
                         // Front end provides names for all variables at the start of writing.
                         // But we write them to step by step. We need to recache them
                         // Otherwise, we could accidentally write variable name instead of full expression.
@@ -1065,7 +1072,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         Some(self.namer.call_unique(name))
                     } else {
                         let min_ref_count = func_ctx.expressions[handle].bake_ref_count();
-                        if min_ref_count <= func_ctx.info[handle].ref_count {
+                        if min_ref_count <= info.ref_count {
                             Some(format!("_expr{}", handle.index()))
                         } else {
                             None

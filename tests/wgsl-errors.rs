@@ -677,13 +677,29 @@ fn invalid_functions() {
         if function_name == "unacceptable_unsized" && argument_name == "arg"
     }
 
-    // A *valid* way to pass an unsized value.
     check_validation_error! {
         "
         struct Unsized { data: array<f32>; };
-        fn acceptable_ptr_to_unsized(okay: ptr<storage, Unsized>) { }
+        fn acceptable_pointer_to_unsized(arg: ptr<workgroup, Unsized>) { }
         ":
         Ok(_)
+    }
+
+    check_validation_error! {
+        "
+        struct Unsized { data: array<f32>; };
+        fn unacceptable_uniform_class(arg: ptr<uniform, f32>) { }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            error: naga::valid::FunctionError::InvalidArgumentPointerClass {
+                index: 0,
+                name: argument_name,
+                class: naga::StorageClass::Uniform,
+            },
+            ..
+        })
+        if function_name == "unacceptable_uniform_class" && argument_name == "arg"
     }
 }
 

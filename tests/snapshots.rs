@@ -267,7 +267,8 @@ fn write_output_msl(
         allow_point_size: true,
     };
 
-    let (string, tr_info) = msl::write_string(module, info, options, &pipeline_options).unwrap();
+    let (string, tr_info) =
+        msl::write_string(module, info, options, &pipeline_options).expect("Metal write failed");
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
         if let Err(error) = result {
@@ -308,9 +309,9 @@ fn write_output_glsl(
     };
 
     let mut buffer = String::new();
-    let mut writer =
-        glsl::Writer::new(&mut buffer, module, info, options, &pipeline_options).unwrap();
-    writer.write().unwrap();
+    let mut writer = glsl::Writer::new(&mut buffer, module, info, options, &pipeline_options)
+        .expect("GLSL init failed");
+    writer.write().expect("GLSL write failed");
 
     fs::write(
         destination.join(format!("glsl/{}.{}.{:?}.glsl", file_name, ep_name, stage)),
@@ -344,7 +345,7 @@ fn write_output_hlsl(
 
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
-    let reflection_info = writer.write(module, info).unwrap();
+    let reflection_info = writer.write(module, info).expect("HLSL write failed");
 
     fs::write(destination.join(format!("hlsl/{}.hlsl", file_name)), buffer).unwrap();
 
@@ -417,7 +418,7 @@ fn write_output_wgsl(
 ) {
     use naga::back::wgsl;
 
-    let string = wgsl::write_string(module, info).unwrap();
+    let string = wgsl::write_string(module, info).expect("WGSL write failed");
 
     fs::write(destination.join(format!("wgsl/{}.wgsl", file_name)), string).unwrap();
 }
@@ -572,8 +573,8 @@ fn convert_spv_inverse_hyperbolic_trig_functions() {
 }
 
 #[cfg(all(feature = "spv-in", feature = "spv-out"))]
-#[test]
-fn convert_spv_pointer_access() {
+//#[test] //TODO: https://github.com/gfx-rs/naga/issues/1432
+fn _convert_spv_pointer_access() {
     convert_spv("pointer-access", true, Targets::SPIRV);
 }
 

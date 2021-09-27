@@ -92,7 +92,7 @@ fn parse_types() {
     parse_str("var t: texture_cube_array<i32>;").unwrap();
     parse_str("var t: texture_multisampled_2d<u32>;").unwrap();
     parse_str("var t: texture_storage_1d<rgba8uint,write>;").unwrap();
-    parse_str("var t: texture_storage_3d<r32float>;").unwrap();
+    parse_str("var t: texture_storage_3d<r32float,read>;").unwrap();
 }
 
 #[test]
@@ -305,7 +305,7 @@ fn parse_texture_load() {
     .unwrap();
     parse_str(
         "
-        var t: texture_storage_1d_array<r32float>;
+        var t: texture_storage_1d_array<r32float,read>;
         fn foo() {
             let r: vec4<f32> = textureLoad(t, 10, 2);
         }
