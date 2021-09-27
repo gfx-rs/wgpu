@@ -489,6 +489,9 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
             debug_assert!(self.set.len() == self.span_info.len());
         }
 
+        #[cfg(not(feature = "span"))]
+        let _ = (span, added);
+
         Handle::from_usize(index)
     }
 
