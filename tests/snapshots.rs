@@ -62,6 +62,8 @@ struct SpirvOutParameters {
     #[serde(default)]
     force_point_size: bool,
     #[serde(default)]
+    clamp_frag_depth: bool,
+    #[serde(default)]
     separate_entry_points: bool,
 }
 
@@ -200,6 +202,10 @@ fn write_output_spv(
     flags.set(
         spv::WriterFlags::FORCE_POINT_SIZE,
         params.spv.force_point_size,
+    );
+    flags.set(
+        spv::WriterFlags::CLAMP_FRAG_DEPTH,
+        params.spv.clamp_frag_depth,
     );
     let options = spv::Options {
         lang_version: (params.spv.version.0, params.spv.version.1),

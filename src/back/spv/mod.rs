@@ -568,6 +568,8 @@ bitflags::bitflags! {
         /// Emit `PointSize` output builtin to vertex shaders, which is
         /// required for drawing with `PointList` topology.
         const FORCE_POINT_SIZE = 0x8;
+        /// Clamp `BuiltIn::FragDepth` output between 0 and 1.
+        const CLAMP_FRAG_DEPTH = 0x10;
     }
 }
 
@@ -592,7 +594,9 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        let mut flags = WriterFlags::ADJUST_COORDINATE_SPACE | WriterFlags::LABEL_VARYINGS;
+        let mut flags = WriterFlags::ADJUST_COORDINATE_SPACE
+            | WriterFlags::LABEL_VARYINGS
+            | WriterFlags::CLAMP_FRAG_DEPTH;
         if cfg!(debug_assertions) {
             flags |= WriterFlags::DEBUG;
         }

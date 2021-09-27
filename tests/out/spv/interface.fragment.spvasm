@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 49
+; Bound: 51
 OpCapability Shader
 OpCapability SampleRateShading
 %1 = OpExtInstImport "GLSL.std.450"
@@ -70,9 +70,12 @@ OpBranch %40
 %45 = OpCompositeConstruct  %13  %44 %42 %43
 %46 = OpCompositeExtract  %4  %45 0
 OpStore %33 %46
-%47 = OpCompositeExtract  %6  %45 1
-OpStore %35 %47
-%48 = OpCompositeExtract  %4  %45 2
-OpStore %37 %48
+%47 = OpLoad  %4  %33
+%48 = OpExtInst  %4  %1 FClamp %47 %7 %3
+OpStore %33 %48
+%49 = OpCompositeExtract  %6  %45 1
+OpStore %35 %49
+%50 = OpCompositeExtract  %4  %45 2
+OpStore %37 %50
 OpReturn
 OpFunctionEnd

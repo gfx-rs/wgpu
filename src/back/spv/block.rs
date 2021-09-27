@@ -20,6 +20,87 @@ fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
 }
 
 impl Writer {
+    // Flip Y coordinate to adjust for coordinate space difference
+    // between SPIR-V and our IR.
+    // The `position_id` argument is a pointer to a `vecN<f32>`,
+    // whose `y` component we will negate.
+    fn write_epilogue_position_y_flip(
+        &mut self,
+        position_id: Word,
+        body: &mut Vec<Instruction>,
+    ) -> Result<(), Error> {
+        let float_ptr_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Float,
+            width: 4,
+            pointer_class: Some(spirv::StorageClass::Output),
+        }));
+        let index_y_id = self.get_index_constant(1);
+        let access_id = self.id_gen.next();
+        body.push(Instruction::access_chain(
+            float_ptr_type_id,
+            access_id,
+            position_id,
+            &[index_y_id],
+        ));
+
+        let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Float,
+            width: 4,
+            pointer_class: None,
+        }));
+        let load_id = self.id_gen.next();
+        body.push(Instruction::load(float_type_id, load_id, access_id, None));
+
+        let neg_id = self.id_gen.next();
+        body.push(Instruction::unary(
+            spirv::Op::FNegate,
+            float_type_id,
+            neg_id,
+            load_id,
+        ));
+
+        body.push(Instruction::store(access_id, neg_id, None));
+        Ok(())
+    }
+
+    // Clamp fragment depth between 0 and 1.
+    fn write_epilogue_frag_depth_clamp(
+        &mut self,
+        frag_depth_id: Word,
+        body: &mut Vec<Instruction>,
+    ) -> Result<(), Error> {
+        let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: None,
+            kind: crate::ScalarKind::Float,
+            width: 4,
+            pointer_class: None,
+        }));
+        let value0_id = self.get_constant_scalar(crate::ScalarValue::Float(0.0), 4);
+        let value1_id = self.get_constant_scalar(crate::ScalarValue::Float(1.0), 4);
+
+        let original_id = self.id_gen.next();
+        body.push(Instruction::load(
+            float_type_id,
+            original_id,
+            frag_depth_id,
+            None,
+        ));
+
+        let clamp_id = self.id_gen.next();
+        body.push(Instruction::ext_inst(
+            self.gl450_ext_inst_id,
+            spirv::GLOp::FClamp,
+            float_type_id,
+            clamp_id,
+            &[original_id, value0_id, value1_id],
+        ));
+
+        body.push(Instruction::store(frag_depth_id, clamp_id, None));
+        Ok(())
+    }
+
     fn write_entry_point_return(
         &mut self,
         value_id: Word,
@@ -44,43 +125,18 @@ impl Writer {
 
             body.push(Instruction::store(res_member.id, member_value_id, None));
 
-            // Flip Y coordinate to adjust for coordinate space difference
-            // between SPIR-V and our IR.
-            if self.flags.contains(WriterFlags::ADJUST_COORDINATE_SPACE)
-                && res_member.built_in == Some(crate::BuiltIn::Position)
-            {
-                let access_id = self.id_gen.next();
-                let float_ptr_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                    pointer_class: Some(spirv::StorageClass::Output),
-                }));
-                let index_y_id = self.get_index_constant(1);
-                body.push(Instruction::access_chain(
-                    float_ptr_type_id,
-                    access_id,
-                    res_member.id,
-                    &[index_y_id],
-                ));
-
-                let load_id = self.id_gen.next();
-                let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                    pointer_class: None,
-                }));
-                body.push(Instruction::load(float_type_id, load_id, access_id, None));
-
-                let neg_id = self.id_gen.next();
-                body.push(Instruction::unary(
-                    spirv::Op::FNegate,
-                    float_type_id,
-                    neg_id,
-                    load_id,
-                ));
-                body.push(Instruction::store(access_id, neg_id, None));
+            match res_member.built_in {
+                Some(crate::BuiltIn::Position)
+                    if self.flags.contains(WriterFlags::ADJUST_COORDINATE_SPACE) =>
+                {
+                    self.write_epilogue_position_y_flip(res_member.id, body)?;
+                }
+                Some(crate::BuiltIn::FragDepth)
+                    if self.flags.contains(WriterFlags::CLAMP_FRAG_DEPTH) =>
+                {
+                    self.write_epilogue_frag_depth_clamp(res_member.id, body)?;
+                }
+                _ => {}
             }
         }
         Ok(())

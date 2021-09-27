@@ -4,6 +4,7 @@
 		capabilities: [ Shader, SampleRateShading ],
 		adjust_coordinate_space: false,
 		force_point_size: true,
+		clamp_frag_depth: true,
 		separate_entry_points: true,
 	),
 	hlsl_custom: true,
