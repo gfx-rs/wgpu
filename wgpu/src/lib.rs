@@ -242,6 +242,7 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         device: &Self::DeviceId,
         desc: &ShaderModuleDescriptor,
+        shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId;
     unsafe fn device_create_shader_module_spirv(
         &self,
@@ -1664,7 +1665,37 @@ impl Device {
     pub fn create_shader_module(&self, desc: &ShaderModuleDescriptor) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module(&*self.context, &self.id, desc),
+            id: Context::device_create_shader_module(
+                &*self.context,
+                &self.id,
+                desc,
+                wgt::ShaderBoundChecks::new(),
+            ),
+        }
+    }
+
+    /// Creates a shader module from either SPIR-V or WGSL source code without runtime checks.
+    ///
+    /// # Safety
+    /// In contrast with [`create_shader_module`](Self::create_shader_module) this function
+    /// creates a shader module without runtime checks which allows shaders to perform
+    /// operations which can lead to undefined behavior like indexing out of bounds, thus it's
+    /// the caller responsibility to pass a shader which doesn't perform any of this
+    /// operations.
+    ///
+    /// This has no effect on web.
+    pub unsafe fn create_shader_module_unchecked(
+        &self,
+        desc: &ShaderModuleDescriptor,
+    ) -> ShaderModule {
+        ShaderModule {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_shader_module(
+                &*self.context,
+                &self.id,
+                desc,
+                wgt::ShaderBoundChecks::unchecked(),
+            ),
         }
     }
 

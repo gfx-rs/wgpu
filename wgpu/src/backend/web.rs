@@ -1182,6 +1182,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         desc: &crate::ShaderModuleDescriptor,
+        _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId {
         let mut descriptor = match desc.source {
             #[cfg(feature = "spirv-web")]

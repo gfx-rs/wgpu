@@ -582,15 +582,32 @@ impl super::Device {
         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
         let vk_module = match *stage.module {
             super::ShaderModule::Raw(raw) => raw,
-            super::ShaderModule::Intermediate(ref naga_shader) => {
+            super::ShaderModule::Intermediate {
+                ref naga_shader,
+                runtime_checks,
+            } => {
                 let pipeline_options = naga::back::spv::PipelineOptions {
                     entry_point: stage.entry_point.to_string(),
                     shader_stage: naga_stage,
                 };
+                let temp_options;
+                let options = if !runtime_checks {
+                    temp_options = naga::back::spv::Options {
+                        bounds_check_policies: naga::back::BoundsCheckPolicies {
+                            index: naga::back::BoundsCheckPolicy::Unchecked,
+                            buffer: naga::back::BoundsCheckPolicy::Unchecked,
+                            image: naga::back::BoundsCheckPolicy::Unchecked,
+                        },
+                        ..self.naga_options.clone()
+                    };
+                    &temp_options
+                } else {
+                    &self.naga_options
+                };
                 let spv = naga::back::spv::write_vec(
                     &naga_shader.module,
                     &naga_shader.info,
-                    &self.naga_options,
+                    options,
                     Some(&pipeline_options),
                 )
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{}", e)))?;
@@ -610,7 +627,7 @@ impl super::Device {
             _entry_point: entry_point,
             temp_raw_module: match *stage.module {
                 super::ShaderModule::Raw(_) => None,
-                super::ShaderModule::Intermediate(_) => Some(vk_module),
+                super::ShaderModule::Intermediate { .. } => Some(vk_module),
             },
         })
     }
@@ -1179,13 +1196,24 @@ impl crate::Device<super::Api> for super::Device {
                     .workarounds
                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
                 {
-                    return Ok(super::ShaderModule::Intermediate(naga_shader));
+                    return Ok(super::ShaderModule::Intermediate {
+                        naga_shader,
+                        runtime_checks: desc.runtime_checks,
+                    });
+                }
+                let mut naga_options = self.naga_options.clone();
+                if !desc.runtime_checks {
+                    naga_options.bounds_check_policies = naga::back::BoundsCheckPolicies {
+                        index: naga::back::BoundsCheckPolicy::Unchecked,
+                        buffer: naga::back::BoundsCheckPolicy::Unchecked,
+                        image: naga::back::BoundsCheckPolicy::Unchecked,
+                    };
                 }
                 Cow::Owned(
                     naga::back::spv::write_vec(
                         &naga_shader.module,
                         &naga_shader.info,
-                        &self.naga_options,
+                        &naga_options,
                         None,
                     )
                     .map_err(|e| crate::ShaderError::Compilation(format!("{}", e)))?,
@@ -1208,7 +1236,7 @@ impl crate::Device<super::Api> for super::Device {
             super::ShaderModule::Raw(raw) => {
                 let _ = self.shared.raw.destroy_shader_module(raw, None);
             }
-            super::ShaderModule::Intermediate(_) => {}
+            super::ShaderModule::Intermediate { .. } => {}
         }
     }
 
