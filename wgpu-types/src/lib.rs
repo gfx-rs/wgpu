@@ -580,7 +580,7 @@ pub struct Limits {
     pub max_texture_dimension_3d: u32,
     /// Maximum allowed value for the `size.depth_or_array_layers` of a texture created with
     /// `TextureDimension::D1` or `TextureDimension::D2`.
-    /// Defaults to 2048. Higher is "better".
+    /// Defaults to 256. Higher is "better".
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
@@ -638,7 +638,7 @@ impl Default for Limits {
             max_texture_dimension_1d: 8192,
             max_texture_dimension_2d: 8192,
             max_texture_dimension_3d: 2048,
-            max_texture_array_layers: 2048,
+            max_texture_array_layers: 256,
             max_bind_groups: 4,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
