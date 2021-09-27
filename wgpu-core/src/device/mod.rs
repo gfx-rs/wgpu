@@ -3122,12 +3122,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let format_features = match device
                 .describe_format_features(adapter, desc.format)
-                .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error)) {
+                .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))
+            {
                 Ok(features) => features,
                 Err(error) => break error,
             };
 
-            let texture = device.create_texture_from_hal(hal_texture, device_id, desc, format_features);
+            let texture =
+                device.create_texture_from_hal(hal_texture, device_id, desc, format_features);
             let num_levels = texture.full_range.levels.end;
             let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();
