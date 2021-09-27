@@ -97,7 +97,11 @@ impl RenderBundleEncoder {
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
-                    colors: desc.color_formats.iter().cloned().collect(),
+                    colors: if desc.color_formats.len() > hal::MAX_COLOR_TARGETS {
+                        return Err(CreateRenderBundleError::TooManyColorAttachments);
+                    } else {
+                        desc.color_formats.iter().cloned().collect()
+                    },
                     resolves: ArrayVec::new(),
                     depth_stencil: desc.depth_stencil.map(|ds| ds.format),
                 },
@@ -545,6 +549,8 @@ impl RenderBundleEncoder {
 pub enum CreateRenderBundleError {
     #[error("invalid number of samples {0}")]
     InvalidSampleCount(u32),
+    #[error("number of color attachments exceeds the limit")]
+    TooManyColorAttachments,
 }
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
