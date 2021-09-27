@@ -549,18 +549,14 @@ impl<A: HalApi> Device<A> {
         &self,
         hal_texture: A::Texture,
         self_id: id::DeviceId,
-        adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
+        format_features: wgt::TextureFormatFeatures,
+    ) -> resource::Texture<A> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
 
-        let format_features = self
-            .describe_format_features(adapter, desc.format)
-            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
-
-        Ok(resource::Texture {
+        resource::Texture {
             inner: resource::TextureInner::Native {
                 raw: Some(hal_texture),
             },
@@ -576,7 +572,7 @@ impl<A: HalApi> Device<A> {
                 layers: 0..desc.array_layer_count(),
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-        })
+        }
     }
 
     fn create_texture(
@@ -644,7 +640,7 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
-        self.create_texture_from_hal(raw, self_id, adapter, desc)
+        Ok(self.create_texture_from_hal(raw, self_id, desc, format_features))
     }
 
     fn create_texture_view(
@@ -3123,11 +3119,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let adapter = &adapter_guard[device.adapter_id.value];
-            let texture =
-                match device.create_texture_from_hal(hal_texture, device_id, adapter, desc) {
-                    Ok(texture) => texture,
-                    Err(error) => break error,
-                };
+
+            let format_features = match device
+                .describe_format_features(adapter, desc.format)
+                .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error)) {
+                Ok(features) => features,
+                Err(error) => break error,
+            };
+
+            let texture = device.create_texture_from_hal(hal_texture, device_id, desc, format_features);
             let num_levels = texture.full_range.levels.end;
             let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();
