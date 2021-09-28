@@ -130,7 +130,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
         .validate(module)
-        .unwrap();
+        .expect("Naga module validation failed");
 
     #[cfg(feature = "serialize")]
     {
@@ -193,6 +193,7 @@ fn write_output_spv(
     use naga::back::spv;
     use rspirv::binary::Disassemble;
 
+    println!("writing SPIR-V");
     let mut flags = spv::WriterFlags::LABEL_VARYINGS;
     flags.set(spv::WriterFlags::DEBUG, params.spv.debug);
     flags.set(
@@ -257,6 +258,8 @@ fn write_output_msl(
 ) {
     use naga::back::msl;
 
+    println!("writing MSL");
+
     #[cfg_attr(feature = "deserialize", allow(unused_variables))]
     let default_options = msl::Options::default();
     #[cfg(feature = "deserialize")]
@@ -297,6 +300,8 @@ fn write_output_glsl(
 ) {
     use naga::back::glsl;
 
+    println!("writing GLSL");
+
     #[cfg_attr(feature = "deserialize", allow(unused_variables))]
     let default_options = glsl::Options::default();
     #[cfg(feature = "deserialize")]
@@ -336,6 +341,8 @@ fn write_output_hlsl(
 ) {
     use naga::back::hlsl;
     use std::fmt::Write;
+
+    println!("writing HLSL");
 
     #[cfg_attr(feature = "deserialize", allow(unused_variables))]
     let default_options = hlsl::Options::default();
@@ -423,6 +430,8 @@ fn write_output_wgsl(
     file_name: &str,
 ) {
     use naga::back::wgsl;
+
+    println!("writing WGSL");
 
     let string = wgsl::write_string(module, info).expect("WGSL write failed");
 
