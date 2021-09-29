@@ -20,11 +20,11 @@ uniform SimParams_block_0Cs {
     float rule3Scale;
 } _group_0_binding_0;
 
-readonly buffer Particles_block_1Cs {
+layout(std430) readonly buffer Particles_block_1Cs {
     Particle particles[];
 } _group_0_binding_1;
 
-buffer Particles_block_2Cs {
+layout(std430) buffer Particles_block_2Cs {
     Particle particles[];
 } _group_0_binding_2;
 

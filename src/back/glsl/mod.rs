@@ -129,6 +129,10 @@ impl Version {
     fn supports_early_depth_test(&self) -> bool {
         *self >= Version::Desktop(130) || *self >= Version::Embedded(310)
     }
+
+    fn supports_std430_layout(&self) -> bool {
+        *self >= Version::Desktop(430) || *self >= Version::Embedded(310)
+    }
 }
 
 impl PartialOrd for Version {
@@ -816,8 +820,28 @@ impl<'a, W: Write> Writer<'a, W> {
         if self.options.version.supports_explicit_locations() {
             if let Some(ref br) = global.binding {
                 match self.options.binding_map.get(br) {
-                    Some(binding) => write!(self.out, "layout(binding = {}) ", binding)?,
-                    None => log::debug!("unassigned binding for {:?}", global.name),
+                    Some(binding) => {
+                        let layout = match global.class {
+                            crate::StorageClass::Storage { .. } => {
+                                if self.options.version.supports_std430_layout() {
+                                    "std430, "
+                                } else {
+                                    "std140, "
+                                }
+                            }
+                            crate::StorageClass::Uniform => "std140, ",
+                            _ => "",
+                        };
+                        write!(self.out, "layout({}binding = {}) ", layout, binding)?
+                    }
+                    None => {
+                        log::debug!("unassigned binding for {:?}", global.name);
+                        if let crate::StorageClass::Storage { .. } = global.class {
+                            if self.options.version.supports_std430_layout() {
+                                write!(self.out, "layout(std430) ")?
+                            }
+                        }
+                    }
                 }
             }
         }
