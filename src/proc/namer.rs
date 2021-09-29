@@ -21,10 +21,9 @@ pub enum NameKey {
 /// that may need identifiers in a textual backend.
 #[derive(Default)]
 pub struct Namer {
-    unique: FastHashMap<(String, u32), u32>,
+    /// The last numeric suffix used for each base name.
+    unique: FastHashMap<String, u32>,
     keywords: FastHashSet<String>,
-    /// Currently active namespace.
-    namespace_index: u32,
     reserved_prefixes: Vec<String>,
 }
 
@@ -55,14 +54,14 @@ impl Namer {
     /// This function should be used **after** [`Namer`](crate::proc::Namer) initialization by [`reset`](Self::reset()) function.
     pub fn call_unique(&mut self, string: &str) -> String {
         let base = self.sanitize(string);
-        match self.unique.entry((base, self.namespace_index)) {
+        match self.unique.entry(base) {
             Entry::Occupied(mut e) => {
                 *e.get_mut() += 1;
-                format!("{}{}", e.key().0, e.get())
+                format!("{}{}", e.key(), e.get())
             }
             Entry::Vacant(e) => {
-                let name = &e.key().0;
-                if self.keywords.contains(&e.key().0) {
+                let name = e.key();
+                if self.keywords.contains(e.key()) {
                     let name = format!("{}1", name);
                     e.insert(1);
                     name
@@ -75,14 +74,14 @@ impl Namer {
 
     pub fn call(&mut self, label_raw: &str) -> String {
         let base = self.sanitize(label_raw);
-        match self.unique.entry((base, self.namespace_index)) {
+        match self.unique.entry(base) {
             Entry::Occupied(mut e) => {
                 *e.get_mut() += 1;
-                format!("{}{}", e.key().0, e.get())
+                format!("{}{}", e.key(), e.get())
             }
             Entry::Vacant(e) => {
-                let name = &e.key().0;
-                if self.keywords.contains(&e.key().0) {
+                let name = e.key();
+                if self.keywords.contains(e.key()) {
                     let name = format!("{}1", name);
                     e.insert(1);
                     name
@@ -102,12 +101,16 @@ impl Namer {
         })
     }
 
-    fn namespace(&mut self, f: impl FnOnce(&mut Self)) {
-        self.namespace_index += 1;
-        f(self);
-        let current_ns = self.namespace_index;
-        self.unique.retain(|&(_, ns), _| ns != current_ns);
-        self.namespace_index -= 1;
+    /// Enter a local namespace for things like structs.
+    ///
+    /// Struct member names only need to be unique amongst themselves, not
+    /// globally. This function temporarily establishes a fresh, empty naming
+    /// context for the duration of the call to `body`.
+    fn namespace(&mut self, capacity: usize, body: impl FnOnce(&mut Self)) {
+        let fresh = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
+        let outer = std::mem::replace(&mut self.unique, fresh);
+        body(self);
+        self.unique = outer;
     }
 
     pub fn reset(
@@ -133,7 +136,7 @@ impl Namer {
 
             if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
                 // struct members have their own namespace, because access is always prefixed
-                self.namespace(|namer| {
+                self.namespace(members.len(), |namer| {
                     for (index, member) in members.iter().enumerate() {
                         let name = namer.call_or(&member.name, "member");
                         output.insert(NameKey::StructMember(ty_handle, index as u32), name);
