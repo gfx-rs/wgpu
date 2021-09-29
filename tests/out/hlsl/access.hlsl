@@ -53,7 +53,7 @@ void atomics()
 {
     int tmp = (int)0;
 
-    int value = asint(bar.Load(64));
+    int value1 = asint(bar.Load(64));
     int _e6; bar.InterlockedAdd(64, 5, _e6);
     tmp = _e6;
     int _e9; bar.InterlockedAdd(64, -5, _e9);
@@ -70,6 +70,6 @@ void atomics()
     tmp = _e24;
     int _e27; bar.InterlockedExchange(64, 5, _e27);
     tmp = _e27;
-    bar.Store(64, asuint(value));
+    bar.Store(64, asuint(value1));
     return;
 }

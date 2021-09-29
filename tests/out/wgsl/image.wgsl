@@ -83,8 +83,8 @@ fn sample() -> [[location(0)]] vec4<f32> {
 
 [[stage(fragment)]]
 fn sample_comparison() -> [[location(0)]] f32 {
-    let tc: vec2<f32> = vec2<f32>(0.5);
-    let s2d_depth: f32 = textureSampleCompare(image_2d_depth, sampler_cmp, tc, 0.5);
-    let s2d_depth_level: f32 = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc, 0.5);
+    let tc1: vec2<f32> = vec2<f32>(0.5);
+    let s2d_depth: f32 = textureSampleCompare(image_2d_depth, sampler_cmp, tc1, 0.5);
+    let s2d_depth_level: f32 = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc1, 0.5);
     return (s2d_depth + s2d_depth_level);
 }

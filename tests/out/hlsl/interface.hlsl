@@ -24,8 +24,8 @@ struct VertexOutput_vertex {
 };
 
 struct FragmentInput_fragment {
-    float varying : LOC1;
-    float4 position : SV_Position;
+    float varying1 : LOC1;
+    float4 position1 : SV_Position;
     bool front_facing1 : SV_IsFrontFace;
     uint sample_index1 : SV_SampleIndex;
     uint sample_mask1 : SV_Coverage;
@@ -56,7 +56,7 @@ FragmentOutput ConstructFragmentOutput(float arg0, uint arg1, float arg2) {
 
 FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
 {
-    VertexOutput in1 = { fragmentinput_fragment.position, fragmentinput_fragment.varying };
+    VertexOutput in1 = { fragmentinput_fragment.position1, fragmentinput_fragment.varying1 };
     bool front_facing = fragmentinput_fragment.front_facing1;
     uint sample_index = fragmentinput_fragment.sample_index1;
     uint sample_mask = fragmentinput_fragment.sample_mask1;

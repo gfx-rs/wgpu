@@ -208,8 +208,8 @@ float4 sample1() : SV_Target0
 
 float sample_comparison() : SV_Target0
 {
-    float2 tc = float2(0.5.xx);
-    float s2d_depth = image_2d_depth.SampleCmp(sampler_cmp, tc, 0.5);
-    float s2d_depth_level = image_2d_depth.SampleCmpLevelZero(sampler_cmp, tc, 0.5);
+    float2 tc1 = float2(0.5.xx);
+    float s2d_depth = image_2d_depth.SampleCmp(sampler_cmp, tc1, 0.5);
+    float s2d_depth_level = image_2d_depth.SampleCmpLevelZero(sampler_cmp, tc1, 0.5);
     return (s2d_depth + s2d_depth_level);
 }

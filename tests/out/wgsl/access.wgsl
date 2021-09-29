@@ -40,7 +40,7 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 fn atomics() {
     var tmp: i32;
 
-    let value: i32 = atomicLoad((&bar.atom));
+    let value1: i32 = atomicLoad((&bar.atom));
     let e6: i32 = atomicAdd((&bar.atom), 5);
     tmp = e6;
     let e9: i32 = atomicSub((&bar.atom), 5);
@@ -57,6 +57,6 @@ fn atomics() {
     tmp = e24;
     let e27: i32 = atomicExchange((&bar.atom), 5);
     tmp = e27;
-    atomicStore((&bar.atom), value);
+    atomicStore((&bar.atom), value1);
     return;
 }

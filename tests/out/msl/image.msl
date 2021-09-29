@@ -86,8 +86,8 @@ fragment sample_comparisonOutput sample_comparison(
   metal::sampler sampler_cmp [[user(fake0)]]
 , metal::depth2d<float, metal::access::sample> image_2d_depth [[user(fake0)]]
 ) {
-    metal::float2 tc = metal::float2(0.5);
-    float s2d_depth = image_2d_depth.sample_compare(sampler_cmp, tc, 0.5);
-    float s2d_depth_level = image_2d_depth.sample_compare(sampler_cmp, tc, 0.5);
+    metal::float2 tc1 = metal::float2(0.5);
+    float s2d_depth = image_2d_depth.sample_compare(sampler_cmp, tc1, 0.5);
+    float s2d_depth_level = image_2d_depth.sample_compare(sampler_cmp, tc1, 0.5);
     return sample_comparisonOutput { s2d_depth + s2d_depth_level };
 }

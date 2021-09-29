@@ -22,14 +22,14 @@ struct VertexOutput_main {
 };
 
 struct FragmentInput_main {
-    uint flat : LOC0;
+    uint flat1 : LOC0;
     float linear2 : LOC1;
-    float2 linear_centroid : LOC2;
-    float3 linear_sample : LOC3;
-    float4 perspective : LOC4;
-    float perspective_centroid : LOC5;
-    float perspective_sample : LOC6;
-    float4 position : SV_Position;
+    float2 linear_centroid1 : LOC2;
+    float3 linear_sample1 : LOC3;
+    float4 perspective1 : LOC4;
+    float perspective_centroid1 : LOC5;
+    float perspective_sample1 : LOC6;
+    float4 position1 : SV_Position;
 };
 
 VertexOutput_main main()
@@ -52,6 +52,6 @@ VertexOutput_main main()
 
 void main1(FragmentInput_main fragmentinput_main)
 {
-    FragmentInput val = { fragmentinput_main.position, fragmentinput_main.flat, fragmentinput_main.linear2, fragmentinput_main.linear_centroid, fragmentinput_main.linear_sample, fragmentinput_main.perspective, fragmentinput_main.perspective_centroid, fragmentinput_main.perspective_sample };
+    FragmentInput val = { fragmentinput_main.position1, fragmentinput_main.flat1, fragmentinput_main.linear2, fragmentinput_main.linear_centroid1, fragmentinput_main.linear_sample1, fragmentinput_main.perspective1, fragmentinput_main.perspective_centroid1, fragmentinput_main.perspective_sample1 };
     return;
 }

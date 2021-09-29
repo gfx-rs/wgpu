@@ -1370,7 +1370,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         // But we write them to step by step. We need to recache them
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
-                        Some(self.namer.call_unique(name))
+                        Some(self.namer.call(name))
                     } else {
                         let min_ref_count = ctx.expressions[handle].bake_ref_count();
                         if min_ref_count <= info.ref_count {

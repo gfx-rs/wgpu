@@ -368,7 +368,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         Ok(EntryPointBinding {
-            arg_name: self.namer.call_unique(struct_name.to_lowercase().as_str()),
+            arg_name: self.namer.call(struct_name.to_lowercase().as_str()),
             ty_name: struct_name,
             members,
         })
@@ -391,14 +391,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             match module.types[arg.ty].inner {
                 TypeInner::Struct { ref members, .. } => {
                     for member in members.iter() {
-                        let member_name = if let Some(ref name) = member.name {
-                            name
-                        } else {
-                            "member"
-                        };
+                        let name = self.namer.call_or(&member.name, "member");
                         let index = fake_members.len() as u32;
                         fake_members.push(EpStructMember {
-                            name: self.namer.call(member_name),
+                            name,
                             ty: member.ty,
                             binding: member.binding.clone(),
                             index,
@@ -406,11 +402,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 }
                 _ => {
-                    let member_name = if let Some(ref name) = arg.name {
-                        self.namer.call_unique(name)
-                    } else {
-                        self.namer.call("member")
-                    };
+                    let member_name = self.namer.call_or(&arg.name, "member");
                     let index = fake_members.len() as u32;
                     fake_members.push(EpStructMember {
                         name: member_name,
@@ -448,11 +440,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         };
 
         for member in members.iter() {
-            let member_name = if let Some(ref name) = member.name {
-                self.namer.call_unique(name)
-            } else {
-                self.namer.call("member")
-            };
+            let member_name = self.namer.call_or(&member.name, "member");
             let index = fake_members.len() as u32;
             fake_members.push(EpStructMember {
                 name: member_name,
@@ -1069,7 +1057,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // But we write them to step by step. We need to recache them
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
-                        Some(self.namer.call_unique(name))
+                        Some(self.namer.call(name))
                     } else {
                         let min_ref_count = func_ctx.expressions[handle].bake_ref_count();
                         if min_ref_count <= info.ref_count {
@@ -1159,7 +1147,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     };
                     let final_name = match ep_output {
                         Some(ep_output) => {
-                            let final_name = self.namer.call_unique(&variable_name);
+                            let final_name = self.namer.call(&variable_name);
                             write!(
                                 self.out,
                                 "{}const {} {} = {{ ",

@@ -62,7 +62,7 @@ kernel void atomics(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     int tmp;
-    int value = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
+    int value1 = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
     int _e6 = metal::atomic_fetch_add_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e6;
     int _e9 = metal::atomic_fetch_sub_explicit(&bar.atom, 5, metal::memory_order_relaxed);
@@ -79,6 +79,6 @@ kernel void atomics(
     tmp = _e24;
     int _e27 = metal::atomic_exchange_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e27;
-    metal::atomic_store_explicit(&bar.atom, value, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&bar.atom, value1, metal::memory_order_relaxed);
     return;
 }

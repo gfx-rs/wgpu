@@ -25,8 +25,8 @@ struct VertexOutput_vs_main {
 };
 
 struct FragmentInput_fs_main {
-    float3 uv : LOC0;
-    float4 position : SV_Position;
+    float3 uv1 : LOC0;
+    float4 position1 : SV_Position;
 };
 
 VertexOutput ConstructVertexOutput(float4 arg0, float3 arg1) {
@@ -59,7 +59,7 @@ VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
 
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
-    VertexOutput in1 = { fragmentinput_fs_main.position, fragmentinput_fs_main.uv };
+    VertexOutput in1 = { fragmentinput_fs_main.position1, fragmentinput_fs_main.uv1 };
     float4 _expr5 = r_texture.Sample(r_sampler, in1.uv);
     return _expr5;
 }
