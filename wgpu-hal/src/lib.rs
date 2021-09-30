@@ -15,6 +15,8 @@
  */
 
 #![allow(
+    // for `if_then_panic` until it reaches stable
+    unknown_lints,
     // We use loops for getting early-out of scope without closures.
     clippy::never_loop,
     // We don't use syntax sugar where it's not necessary.
@@ -29,6 +31,8 @@
     clippy::single_match,
     // Push commands are more regular than macros.
     clippy::vec_init_then_push,
+    // "if panic" is a good uniform construct.
+    clippy::if_then_panic,
     // TODO!
     clippy::missing_safety_doc,
 )]
