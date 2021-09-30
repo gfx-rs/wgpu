@@ -573,6 +573,10 @@ pub enum TypeInner {
     Atomic { kind: ScalarKind, width: Bytes },
     /// Pointer to another type.
     ///
+    /// Pointers to scalars and vectors should be treated as equivalent to
+    /// [`ValuePointer`] types. Use the [`TypeInner::equivalent`] method to
+    /// compare types in a way that treats pointers correctly.
+    ///
     /// ## Pointers to non-`SIZED` types
     ///
     /// The `base` type of a pointer may be a non-[`SIZED`] type like a
@@ -590,6 +594,7 @@ pub enum TypeInner {
     /// [`DATA`]: valid::TypeFlags::DATA
     /// [`Array`]: TypeInner::Array
     /// [`Struct`]: TypeInner::Struct
+    /// [`ValuePointer`]: TypeInner::ValuePointer
     /// [`GlobalVariable`]: Expression::GlobalVariable
     /// [`AccessIndex`]: Expression::AccessIndex
     Pointer {
@@ -597,11 +602,17 @@ pub enum TypeInner {
         class: StorageClass,
     },
 
-    /// Pointer to a value.
+    /// Pointer to a scalar or vector.
     ///
-    /// A `ValuePointer` type is equivalent to a `Pointer` to a `Scalar` or `Vector`.
-    /// This is for use in [`TypeResolution::Value`] variants.
+    /// A `ValuePointer` type is equivalent to a `Pointer` whose `base` is a
+    /// `Scalar` or `Vector` type. This is for use in [`TypeResolution::Value`]
+    /// variants; see the documentation for [`TypeResolution`] for details.
     ///
+    /// Use the [`TypeInner::equivalent`] method to compare types that could be
+    /// pointers, to ensure that `Pointer` and `ValuePointer` types are
+    /// recognized as equivalent.
+    ///
+    /// [`TypeResolution`]: proc::TypeResolution
     /// [`TypeResolution::Value`]: proc::TypeResolution::Value
     ValuePointer {
         size: Option<VectorSize>,
@@ -1008,17 +1019,12 @@ pub enum Expression {
     /// Indexing a [`Vector`] or [`Array`] produces a value of its element type.
     /// Indexing a [`Matrix`] produces a [`Vector`].
     ///
-    /// Indexing a [`Pointer`] to an [`Array`] produces a [`Pointer`] to its
-    /// `base` type, taking on the `Pointer`'s storage class.
-    ///
-    /// Indexing a [`Pointer`] to a [`Vector`] produces a [`ValuePointer`] whose
-    /// size is `None`, taking on the [`Vector`]'s scalar kind and width and the
-    /// [`Pointer`]'s storage class.
-    ///
-    /// Indexing a [`Pointer`] to a [`Matrix`] produces a [`ValuePointer`] for a
-    /// column of the matrix: its size is the matrix's height, its `kind` is
-    /// [`Float`], and it inherits the [`Matrix`]'s width and the [`Pointer`]'s
-    /// storage class.
+    /// Indexing a [`Pointer`] to any of the above produces a pointer to the
+    /// element/component type, in the same [`class`]. In the case of [`Array`],
+    /// the result is an actual [`Pointer`], but for vectors and matrices, there
+    /// may not be any type in the arena representing the component's type, so
+    /// those produce [`ValuePointer`] types equivalent to the appropriate
+    /// [`Pointer`].
     ///
     /// ## Dynamic indexing restrictions
     ///
@@ -1043,6 +1049,7 @@ pub enum Expression {
     /// [`Matrix`]: TypeInner::Matrix
     /// [`Array`]: TypeInner::Array
     /// [`Pointer`]: TypeInner::Pointer
+    /// [`class`]: TypeInner::Pointer::class
     /// [`ValuePointer`]: TypeInner::ValuePointer
     /// [`Float`]: ScalarKind::Float
     Access {

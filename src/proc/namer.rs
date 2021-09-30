@@ -28,6 +28,12 @@ pub struct Namer {
 }
 
 impl Namer {
+    /// Return a form of `string` suitable for use as the base of an identifier.
+    ///
+    /// Retain only alphanumeric and `_` characters. Drop leading digits. Ensure
+    /// that the string does not end with a digit, so we can attach numeric
+    /// suffixes without merging. Avoid prefixes in
+    /// [`Namer::reserved_prefixes`].
     fn sanitize(&self, string: &str) -> String {
         let mut base = string
             .chars()
@@ -50,6 +56,15 @@ impl Namer {
         base
     }
 
+    /// Return a new identifier based on `label_raw`.
+    ///
+    /// The result:
+    /// - is a valid identifier even if `label_raw` is not
+    /// - conflicts with no keywords listed in `Namer::keywords`, and
+    /// - is different from any identifier previously constructed by this
+    ///   `Namer`.
+    ///
+    /// Guarantee uniqueness by applying a numeric suffix when necessary.
     pub fn call(&mut self, label_raw: &str) -> String {
         let base = self.sanitize(label_raw);
         match self.unique.entry(base) {

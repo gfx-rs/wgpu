@@ -4,8 +4,8 @@ use thiserror::Error;
 
 /// The result of computing an expression's type.
 ///
-/// This is the type returned by [`ResolveContext::resolve`] to represent the type
-/// it ascribes to some expression.
+/// This is the (Rust) type returned by [`ResolveContext::resolve`] to represent
+/// the (Naga) type it ascribes to some expression.
 ///
 /// You might expect such a function to simply return a `Handle<Type>`. However,
 /// we want type resolution to be a read-only process, and that would limit the

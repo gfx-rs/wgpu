@@ -14,6 +14,9 @@ use std::{
 type BackendResult = Result<(), Error>;
 
 const NAMESPACE: &str = "metal";
+// The name of the array member of the Metal struct types we generate to
+// represent Naga `Array` types. See the comments in `Writer::write_type_defs`
+// for details.
 const WRAPPED_ARRAY_FIELD: &str = "inner";
 // This is a hack: we need to pass a pointer to an atomic,
 // but generally the backend isn't putting "&" in front of every pointer.
@@ -1771,6 +1774,19 @@ impl<W: Write> Writer<W> {
             }
             let name = &self.names[&NameKey::Type(handle)];
             match ty.inner {
+                // Naga IR can pass around arrays by value, but Metal, following
+                // C++, performs an array-to-pointer conversion (C++ [conv.array])
+                // on expressions of array type, so assigning the array by value
+                // isn't possible. However, Metal *does* assign structs by
+                // value. So in our Metal output, we wrap all array types in
+                // synthetic struct types:
+                //
+                //     struct type1 {
+                //         float inner[10]
+                //     };
+                //
+                // Then we carefully include `.inner` (`WRAPPED_ARRAY_FIELD`) in
+                // any expression that actually wants access to the array.
                 crate::TypeInner::Array {
                     base,
                     size,
