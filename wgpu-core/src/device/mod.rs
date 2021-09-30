@@ -413,13 +413,13 @@ impl<A: HalApi> Device<A> {
         &'this mut self,
         hub: &Hub<A, G>,
         trackers: &TrackerSet,
-        mut token: &mut Token<'token, Self>,
+        token: &mut Token<'token, Self>,
     ) {
         self.temp_suspected.clear();
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
         {
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            let (bind_group_guard, mut token) = hub.bind_groups.read(token);
             let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
             let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
@@ -470,7 +470,7 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        self.lock_life(&mut token)
+        self.lock_life(token)
             .suspected_resources
             .extend(&self.temp_suspected);
 
