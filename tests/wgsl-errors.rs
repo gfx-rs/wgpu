@@ -913,3 +913,35 @@ fn dead_code() {
         })
     }
 }
+
+#[test]
+fn invalid_runtime_sized_arrays() {
+    // You can't have structs whose last member is an unsized struct. An unsized
+    // array may only appear as the last member of a struct used directly as a
+    // variable's store type.
+    check_validation_error! {
+        "
+        struct Unsized {
+            arr: array<f32>;
+        };
+
+        [[block]]
+        struct Outer {
+            legit: i32;
+            unsized: Unsized;
+        };
+
+        [[group(0), binding(0)]] var<storage> outer: Outer;
+
+        fn fetch(i: i32) -> f32 {
+           return outer.unsized.arr[i];
+        }
+        ":
+        Err(naga::valid::ValidationError::Type {
+            name: struct_name,
+            error: naga::valid::TypeError::InvalidDynamicArray(member_name, _),
+            ..
+        })
+        if struct_name == "Outer" && member_name == "unsized"
+    }
+}

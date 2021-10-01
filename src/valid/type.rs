@@ -473,9 +473,13 @@ impl super::Validator {
                         handle,
                     );
 
-                    // only the last field can be unsized
+                    // The last field may be an unsized array.
                     if !base_info.flags.contains(TypeFlags::SIZED) {
-                        if i + 1 != members.len() {
+                        let is_array = match types[member.ty].inner {
+                            crate::TypeInner::Array { .. } => true,
+                            _ => false,
+                        };
+                        if !is_array || i + 1 != members.len() {
                             let name = member.name.clone().unwrap_or_default();
                             return Err(TypeError::InvalidDynamicArray(name, member.ty));
                         }
