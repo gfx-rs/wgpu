@@ -3,25 +3,6 @@
 use super::{selection::Selection, Block, BlockContext, Error, IdGenerator, Instruction, Word};
 use crate::{arena::Handle, proc::BoundsCheckPolicy};
 
-/// The results of emitting code for a left-hand-side expression.
-///
-/// On success, `write_expression_pointer` returns one of these.
-pub(super) enum ExpressionPointer {
-    /// The pointer to the expression's value is available, as the value of the
-    /// expression with the given id.
-    Ready { pointer_id: Word },
-
-    /// The access expression must be conditional on the value of `condition`, a boolean
-    /// expression that is true if all indices are in bounds. If `condition` is true, then
-    /// `access` is an `OpAccessChain` instruction that will compute a pointer to the
-    /// expression's value. If `condition` is false, then executing `access` would be
-    /// undefined behavior.
-    Conditional {
-        condition: Word,
-        access: Instruction,
-    },
-}
-
 /// The results of performing a bounds check.
 ///
 /// On success, `write_bounds_check` returns a value of this type.

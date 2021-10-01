@@ -1,11 +1,8 @@
 //! Implementations for `BlockContext` methods.
 
 use super::{
-    index::{BoundsCheckResult, ExpressionPointer},
-    make_local,
-    selection::Selection,
-    Block, BlockContext, Dimension, Error, Instruction, LocalType, LookupType, LoopContext,
-    ResultMember, Writer, WriterFlags,
+    index::BoundsCheckResult, make_local, selection::Selection, Block, BlockContext, Dimension,
+    Error, Instruction, LocalType, LookupType, LoopContext, ResultMember, Writer, WriterFlags,
 };
 use crate::{arena::Handle, proc::TypeResolution};
 use spirv::Word;
@@ -17,6 +14,25 @@ fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
         crate::TypeInner::Matrix { .. } => Dimension::Matrix,
         _ => unreachable!(),
     }
+}
+
+/// The results of emitting code for a left-hand-side expression.
+///
+/// On success, `write_expression_pointer` returns one of these.
+enum ExpressionPointer {
+    /// The pointer to the expression's value is available, as the value of the
+    /// expression with the given id.
+    Ready { pointer_id: Word },
+
+    /// The access expression must be conditional on the value of `condition`, a boolean
+    /// expression that is true if all indices are in bounds. If `condition` is true, then
+    /// `access` is an `OpAccessChain` instruction that will compute a pointer to the
+    /// expression's value. If `condition` is false, then executing `access` would be
+    /// undefined behavior.
+    Conditional {
+        condition: Word,
+        access: Instruction,
+    },
 }
 
 impl Writer {
