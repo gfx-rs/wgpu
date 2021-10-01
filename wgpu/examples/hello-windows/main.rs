@@ -66,9 +66,9 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
         .collect();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
             // Request an adapter which can render to our surface
             compatible_surface: viewports.first().map(|desc| &desc.surface),
+            ..Default::default()
         })
         .await
         .expect("Failed to find an appropriate adapter");

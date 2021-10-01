@@ -79,6 +79,7 @@ pub async fn initialize_adapter_from_env_or_default(
             instance
                 .request_adapter(&RequestAdapterOptions {
                     power_preference: power_preference_from_env().unwrap_or_default(),
+                    force_fallback_adapter: false,
                     compatible_surface,
                 })
                 .await

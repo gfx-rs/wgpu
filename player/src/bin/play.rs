@@ -55,6 +55,7 @@ fn main() {
                 .request_adapter(
                     &wgc::instance::RequestAdapterOptions {
                         power_preference: wgt::PowerPreference::LowPower,
+                        force_fallback_adapter: false,
                         #[cfg(feature = "winit")]
                         compatible_surface: Some(surface),
                         #[cfg(not(feature = "winit"))]
