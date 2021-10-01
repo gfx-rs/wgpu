@@ -777,6 +777,7 @@ impl crate::Context for Context {
         let id = self.0.request_adapter(
             &wgc::instance::RequestAdapterOptions {
                 power_preference: options.power_preference,
+                force_fallback_adapter: options.force_fallback_adapter,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id.id),
             },
             wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| PhantomData),

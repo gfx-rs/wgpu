@@ -12,6 +12,7 @@ fn request_adapter_inner(power: wgt::PowerPreference) {
 
     let _adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: power,
+        force_fallback_adapter: false,
         compatible_surface: None,
     }))
     .unwrap();

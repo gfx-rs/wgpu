@@ -551,7 +551,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<AdapterId, RequestAdapterError> {
         profiling::scope!("pick_adapter", "Instance");
 
-        let instance = &self.instance;
+        fn gather<A: HalApi, I: Clone>(
+            _: A,
+            instance: Option<&A::Instance>,
+            inputs: &AdapterInputs<I>,
+            compatible_surface: Option<&Surface>,
+            force_software: bool,
+            device_types: &mut Vec<wgt::DeviceType>,
+        ) -> (Option<I>, Vec<hal::ExposedAdapter<A>>) {
+            let id = inputs.find(A::VARIANT);
+            match instance {
+                Some(inst) if id.is_some() => {
+                    let mut adapters = unsafe { inst.enumerate_adapters() };
+                    if force_software {
+                        adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
+                    }
+                    if let Some(surface) = compatible_surface {
+                        let suf_raw = &A::get_surface(surface).raw;
+                        adapters.retain(|exposed| unsafe {
+                            exposed.adapter.surface_capabilities(suf_raw).is_some()
+                        });
+                    }
+                    device_types.extend(adapters.iter().map(|ad| ad.info.device_type));
+                    (id, adapters)
+                }
+                _ => (id, Vec::new()),
+            }
+        }
+
         let mut token = Token::root();
         let (surface_guard, mut token) = self.surfaces.read(&mut token);
         let compatible_surface = desc
@@ -564,67 +591,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .transpose()?;
         let mut device_types = Vec::new();
 
-        let mut id_vulkan = inputs.find(Backend::Vulkan);
-        let mut id_metal = inputs.find(Backend::Metal);
-        let mut id_dx12 = inputs.find(Backend::Dx12);
-        let mut id_dx11 = inputs.find(Backend::Dx11);
-        let mut id_gl = inputs.find(Backend::Gl);
-
-        backends_map! {
-            let map = |(instance_backend, id_backend, surface_backend)| {
-                match *instance_backend {
-                    Some(ref inst) if id_backend.is_some() => {
-                        let mut adapters = unsafe { inst.enumerate_adapters() };
-                        if let Some(surface_backend) = compatible_surface.and_then(surface_backend) {
-                            adapters.retain(|exposed| unsafe {
-                                exposed.adapter.surface_capabilities(&surface_backend.raw).is_some()
-                            });
-                        }
-                        device_types.extend(adapters.iter().map(|ad| ad.info.device_type));
-                        adapters
-                    }
-                    _ => Vec::new(),
-                }
-            };
-
-            // NB: The internal function definitions are a workaround for Rust
-            // being weird with lifetimes for closure literals...
-            #[cfg(vulkan)]
-            let adapters_vk = map((&instance.vulkan, &id_vulkan, {
-                fn surface_vulkan(surf: &Surface) -> Option<&HalSurface<hal::api::Vulkan>> {
-                    surf.vulkan.as_ref()
-                }
-                surface_vulkan
-            }));
-            #[cfg(metal)]
-            let adapters_mtl = map((&instance.metal, &id_metal, {
-                fn surface_metal(surf: &Surface) -> Option<&HalSurface<hal::api::Metal>> {
-                    surf.metal.as_ref()
-                }
-                surface_metal
-            }));
-            #[cfg(dx12)]
-            let adapters_dx12 = map((&instance.dx12, &id_dx12, {
-                fn surface_dx12(surf: &Surface) -> Option<&HalSurface<hal::api::Dx12>> {
-                    surf.dx12.as_ref()
-                }
-                surface_dx12
-            }));
-            #[cfg(dx11)]
-            let adapters_dx11 = map((&instance.dx11, &id_dx11, {
-                fn surface_dx11(surf: &Surface) -> Option<&HalSurface<hal::api::Dx11>> {
-                    surf.dx11.as_ref()
-                }
-                surface_dx11
-            }));
-            #[cfg(gl)]
-            let adapters_gl = map((&instance.gl, &id_gl, {
-                fn surface_gl(surf: &Surface) -> Option<&HalSurface<hal::api::Gles>> {
-                    surf.gl.as_ref()
-                }
-                surface_gl
-            }));
-        }
+        #[cfg(vulkan)]
+        let (mut id_vulkan, adapters_vk) = gather(
+            hal::api::Vulkan,
+            self.instance.vulkan.as_ref(),
+            &inputs,
+            compatible_surface,
+            desc.force_fallback_adapter,
+            &mut device_types,
+        );
+        #[cfg(metal)]
+        let (mut id_metal, adapters_metal) = gather(
+            hal::api::Metal,
+            self.instance.metal.as_ref(),
+            &inputs,
+            compatible_surface,
+            desc.force_fallback_adapter,
+            &mut device_types,
+        );
+        #[cfg(dx12)]
+        let (mut id_dx12, adapters_dx12) = gather(
+            hal::api::Dx12,
+            self.instance.dx12.as_ref(),
+            &inputs,
+            compatible_surface,
+            desc.force_fallback_adapter,
+            &mut device_types,
+        );
+        #[cfg(dx11)]
+        let (mut id_dx11, adapters_dx11) = gather(
+            hal::api::Dx11,
+            self.instance.dx11.as_ref(),
+            &inputs,
+            compatible_surface,
+            desc.force_fallback_adapter,
+            &mut device_types,
+        );
+        #[cfg(gl)]
+        let (mut id_gl, adapters_gl) = gather(
+            hal::api::Gles,
+            self.instance.gl.as_ref(),
+            &inputs,
+            compatible_surface,
+            desc.force_fallback_adapter,
+            &mut device_types,
+        );
 
         if device_types.is_empty() {
             return Err(RequestAdapterError::NotFound);
@@ -676,7 +687,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(vulkan)]
             map(("Vulkan", &mut id_vulkan, adapters_vk)),
             #[cfg(metal)]
-            map(("Metal", &mut id_metal, adapters_mtl)),
+            map(("Metal", &mut id_metal, adapters_metal)),
             #[cfg(dx12)]
             map(("Dx12", &mut id_dx12, adapters_dx12)),
             #[cfg(dx11)]
@@ -685,14 +696,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             map(("GL", &mut id_gl, adapters_gl)),
         }
 
-        let _ = (
-            selected,
-            id_vulkan.take(),
-            id_metal.take(),
-            id_dx12.take(),
-            id_dx11.take(),
-            id_gl.take(),
-        );
+        let _ = selected;
         log::warn!("Some adapters are present, but enumerating them failed!");
         Err(RequestAdapterError::NotFound)
     }

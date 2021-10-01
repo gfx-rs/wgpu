@@ -216,6 +216,7 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
 #[serde(rename_all = "camelCase")]
 pub struct RequestAdapterArgs {
     power_preference: Option<wgpu_types::PowerPreference>,
+    force_fallback_adapter: bool,
 }
 
 #[derive(Serialize)]
@@ -259,7 +260,7 @@ pub async fn op_webgpu_request_adapter(
             Some(power_preference) => power_preference.into(),
             None => PowerPreference::default(),
         },
-        // TODO(lucacasonato): respect forceFallbackAdapter
+        force_fallback_adapter: args.force_fallback_adapter,
         compatible_surface: None, // windowless
     };
     let res = instance.request_adapter(

@@ -131,6 +131,9 @@ impl From<Backend> for Backends {
 pub struct RequestAdapterOptions<S> {
     /// Power preference for the adapter.
     pub power_preference: PowerPreference,
+    /// Indicates that only a fallback adapter can be returned. This is generally a "software"
+    /// implementation on the system.
+    pub force_fallback_adapter: bool,
     /// Surface that is required to be presentable with the requested adapter. This does not
     /// create the surface, only guarantees that the adapter can present to said surface.
     pub compatible_surface: Option<S>,
@@ -140,6 +143,7 @@ impl<S> Default for RequestAdapterOptions<S> {
     fn default() -> Self {
         Self {
             power_preference: PowerPreference::default(),
+            force_fallback_adapter: false,
             compatible_surface: None,
         }
     }
