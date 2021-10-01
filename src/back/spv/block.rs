@@ -989,7 +989,7 @@ impl<'w> BlockContext<'w> {
         Ok(())
     }
 
-    /// Build an `OpAccessChain` instruction for a left-hand-side expression.
+    /// Build an `OpAccessChain` instruction.
     ///
     /// Emit any needed bounds-checking expressions to `block`.
     ///
