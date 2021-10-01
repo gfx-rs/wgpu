@@ -795,7 +795,14 @@ impl super::Validator {
                     Ti::Scalar {
                         kind: Sk::Bool,
                         width: _,
-                    } => accept_inner.is_sized(),
+                    } => {
+                        // When `condition` is a single boolean, `accept` and
+                        // `reject` can be vectors or scalars.
+                        match *accept_inner {
+                            Ti::Scalar { .. } | Ti::Vector { .. } => true,
+                            _ => false,
+                        }
+                    }
                     Ti::Vector {
                         size,
                         kind: Sk::Bool,

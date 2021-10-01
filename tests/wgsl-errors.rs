@@ -945,3 +945,45 @@ fn invalid_runtime_sized_arrays() {
         if struct_name == "Outer" && member_name == "unsized"
     }
 }
+
+#[test]
+fn select() {
+    check_validation_error! {
+        "
+        fn select_pointers(which: bool) -> i32 {
+            var x: i32 = 1;
+            var y: i32 = 2;
+            let ptr = select(&x, &y, which);
+            return *ptr;
+        }
+        ",
+        "
+        fn select_arrays(which: bool) -> i32 {
+            var x: array<i32, 4>;
+            var y: array<i32, 4>;
+            let s = select(x, y, which);
+            return s[0];
+        }
+        ",
+        "
+        struct S { member: i32; };
+        fn select_structs(which: bool) -> S {
+            var x: S = S(1);
+            var y: S = S(2);
+            let s = select(x, y, which);
+            return s;
+        }
+        ":
+        Err(
+            naga::valid::ValidationError::Function {
+                name,
+                error: naga::valid::FunctionError::Expression {
+                    error: naga::valid::ExpressionError::InvalidSelectTypes,
+                    ..
+                },
+                ..
+            },
+        )
+        if name.starts_with("select_")
+    }
+}
