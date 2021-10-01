@@ -671,55 +671,57 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_array_length(
+    /// Write the length of the dynamically sized array at the end of `handle`.
+    ///
+    /// `expr` must be the handle of a global variable whose final member is a dynamically
+    /// sized array.
+    fn put_dynamic_array_length(
         &mut self,
-        expr: Handle<crate::Expression>,
+        handle: Handle<crate::GlobalVariable>,
         context: &ExpressionContext,
     ) -> BackendResult {
-        let handle = match context.function.expressions[expr] {
-            crate::Expression::AccessIndex { base, .. } => {
-                match context.function.expressions[base] {
-                    crate::Expression::GlobalVariable(handle) => handle,
-                    _ => return Err(Error::Validation),
-                }
-            }
+        let global = &context.module.global_variables[handle];
+        let members = match context.module.types[global.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => members,
             _ => return Err(Error::Validation),
         };
 
-        let global = &context.module.global_variables[handle];
-        if let crate::TypeInner::Struct { ref members, .. } = context.module.types[global.ty].inner
-        {
-            if let Some(&crate::StructMember {
-                offset,
-                ty: array_ty,
-                ..
-            }) = members.last()
-            {
-                let (span, stride) = match context.module.types[array_ty].inner {
-                    crate::TypeInner::Array { base, stride, .. } => (
-                        context.module.types[base]
-                            .inner
-                            .span(&context.module.constants),
-                        stride,
-                    ),
-                    _ => return Err(Error::Validation),
-                };
+        let (offset, array_ty) = match members.last() {
+            Some(&crate::StructMember { offset, ty, .. }) => (offset, ty),
+            None => return Err(Error::Validation),
+        };
 
-                write!(
-                    self.out,
-                    "(1 + (_buffer_sizes.size{idx} - {offset} - {span}) / {stride})",
-                    idx = handle.index(),
-                    offset = offset,
-                    span = span,
-                    stride = stride,
-                )?;
-                Ok(())
-            } else {
-                Err(Error::Validation)
-            }
-        } else {
-            Err(Error::Validation)
-        }
+        let (span, stride) = match context.module.types[array_ty].inner {
+            crate::TypeInner::Array { base, stride, .. } => (
+                context.module.types[base]
+                    .inner
+                    .span(&context.module.constants),
+                stride,
+            ),
+            _ => return Err(Error::Validation),
+        };
+
+        // When the stride length is larger than the span, the final element's stride of
+        // bytes would have padding following the value. But the buffer size in
+        // `buffer_sizes.sizeN` may not include this padding - it only needs to be large
+        // enough to hold the actual values' bytes.
+        //
+        // So subtract off the span to get a byte size that falls at the start or within
+        // the final element. Then divide by the stride size, to get one less than the
+        // length, and then add one. This works even if the buffer size does include the
+        // stride padding, since division rounds towards zero (MSL 2.4 §6.1). It will fail
+        // if there are zero elements in the array, but the WebGPU `validating shader binding`
+        // rules, together with draw-time validation when `minBindingSize` is zero,
+        // prevent that.
+        write!(
+            self.out,
+            "(1 + (_buffer_sizes.size{idx} - {offset} - {span}) / {stride})",
+            idx = handle.index(),
+            offset = offset,
+            span = span,
+            stride = stride,
+        )?;
+        Ok(())
     }
 
     fn put_atomic_fetch(
@@ -1265,7 +1267,18 @@ impl<W: Write> Writer<W> {
                 unreachable!()
             }
             crate::Expression::ArrayLength(expr) => {
-                self.put_array_length(expr, context)?;
+                // Find the global to which the array belongs.
+                let global = match context.function.expressions[expr] {
+                    crate::Expression::AccessIndex { base, .. } => {
+                        match context.function.expressions[base] {
+                            crate::Expression::GlobalVariable(handle) => handle,
+                            _ => return Err(Error::Validation),
+                        }
+                    }
+                    _ => return Err(Error::Validation),
+                };
+
+                self.put_dynamic_array_length(global, context)?;
             }
         }
         Ok(())
