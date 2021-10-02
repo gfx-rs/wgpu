@@ -439,6 +439,7 @@ impl crate::Device<super::Api> for super::Device {
         gl.bind_buffer(buffer.target, Some(buffer.raw));
 
         if let Some(buf) = buffer.emulate_map_allocation.lock().unwrap().take() {
+            gl.buffer_sub_data_u8_slice(buffer.target, 0, &buf);
             drop(buf);
         } else {
             gl.unmap_buffer(buffer.target);
@@ -1078,7 +1079,7 @@ impl crate::Device<super::Api> for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if fence.last_completed < wait_value {
+        if cfg!(not(target_arch = "wasm32")) && fence.last_completed < wait_value {
             let gl = &self.shared.context.lock();
             let timeout_ns = (timeout_ms as u64 * 1_000_000).min(!0u32 as u64);
             let &(_, sync) = fence
