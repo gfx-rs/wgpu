@@ -22,7 +22,7 @@ The repository hosts the following libraries:
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between all crates.
   - [![Crates.io](https://img.shields.io/crates/v/deno_webgpu.svg?label=deno_webgpu)](https://crates.io/crates/deno_webgpu) - WebGPU implementation for the Deno JavaScript/TypeScript runtime
 
-The folowing binaries:
+The following binaries:
   - `cts_runner` - WebGPU Conformance Test Suite runner using `deno_webgpu`.
   - `player` - standalone application for replaying the API traces.
   - `wgpu-info` - program that prints out information about all the adapters on the system or invokes a command for every adapter.
