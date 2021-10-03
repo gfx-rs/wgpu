@@ -22,6 +22,7 @@ renderdoc = ["libloading", "renderdoc-sys"]
 [dependencies]
 bitflags = "1.0"
 parking_lot = "0.11"
+profiling = { version = "1", default-features = false }
 raw-window-handle = "0.3"
 thiserror = "1"
 

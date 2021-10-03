@@ -45,19 +45,24 @@ impl super::Adapter {
         instance_flags: crate::InstanceFlags,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
-        let device = match library.create_device(adapter, native::FeatureLevel::L11_0) {
-            Ok(pair) => match pair.into_result() {
-                Ok(device) => device,
+        let device = {
+            profiling::scope!("ID3D12Device::create_device");
+            match library.create_device(adapter, native::FeatureLevel::L11_0) {
+                Ok(pair) => match pair.into_result() {
+                    Ok(device) => device,
+                    Err(err) => {
+                        log::warn!("Device creation failed: {}", err);
+                        return None;
+                    }
+                },
                 Err(err) => {
-                    log::warn!("Device creation failed: {}", err);
+                    log::warn!("Device creation function is not found: {:?}", err);
                     return None;
                 }
-            },
-            Err(err) => {
-                log::warn!("Device creation function is not found: {:?}", err);
-                return None;
             }
         };
+
+        profiling::scope!("feature queries");
 
         // We have found a possible adapter.
         // Acquire the device information.
@@ -264,15 +269,17 @@ impl crate::Adapter<super::Api> for super::Adapter {
         features: wgt::Features,
         _limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let queue = self
-            .device
-            .create_command_queue(
-                native::CmdListType::Direct,
-                native::Priority::Normal,
-                native::CommandQueueFlags::empty(),
-                0,
-            )
-            .into_device_result("Queue creation")?;
+        let queue = {
+            profiling::scope!("ID3D12Device::CreateCommandQueue");
+            self.device
+                .create_command_queue(
+                    native::CmdListType::Direct,
+                    native::Priority::Normal,
+                    native::CommandQueueFlags::empty(),
+                    0,
+                )
+                .into_device_result("Queue creation")?
+        };
 
         let device = super::Device::new(
             self.device,

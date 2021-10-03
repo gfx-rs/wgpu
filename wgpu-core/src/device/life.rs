@@ -128,35 +128,65 @@ impl<A: hal::Api> NonReferencedResources<A> {
     }
 
     unsafe fn clean(&mut self, device: &A::Device) {
-        for raw in self.buffers.drain(..) {
-            device.destroy_buffer(raw);
+        if !self.buffers.is_empty() {
+            profiling::scope!("destroy_buffers");
+            for raw in self.buffers.drain(..) {
+                device.destroy_buffer(raw);
+            }
         }
-        for raw in self.textures.drain(..) {
-            device.destroy_texture(raw);
+        if !self.textures.is_empty() {
+            profiling::scope!("destroy_textures");
+            for raw in self.textures.drain(..) {
+                device.destroy_texture(raw);
+            }
         }
-        for (_, raw) in self.texture_views.drain(..) {
-            device.destroy_texture_view(raw);
+        if !self.texture_views.is_empty() {
+            profiling::scope!("destroy_texture_views");
+            for (_, raw) in self.texture_views.drain(..) {
+                device.destroy_texture_view(raw);
+            }
         }
-        for raw in self.samplers.drain(..) {
-            device.destroy_sampler(raw);
+        if !self.samplers.is_empty() {
+            profiling::scope!("destroy_samplers");
+            for raw in self.samplers.drain(..) {
+                device.destroy_sampler(raw);
+            }
         }
-        for raw in self.bind_groups.drain(..) {
-            device.destroy_bind_group(raw);
+        if !self.bind_groups.is_empty() {
+            profiling::scope!("destroy_bind_groups");
+            for raw in self.bind_groups.drain(..) {
+                device.destroy_bind_group(raw);
+            }
         }
-        for raw in self.compute_pipes.drain(..) {
-            device.destroy_compute_pipeline(raw);
+        if !self.compute_pipes.is_empty() {
+            profiling::scope!("destroy_compute_pipelines");
+            for raw in self.compute_pipes.drain(..) {
+                device.destroy_compute_pipeline(raw);
+            }
         }
-        for raw in self.render_pipes.drain(..) {
-            device.destroy_render_pipeline(raw);
+        if !self.render_pipes.is_empty() {
+            profiling::scope!("destroy_render_pipelines");
+            for raw in self.render_pipes.drain(..) {
+                device.destroy_render_pipeline(raw);
+            }
         }
-        for raw in self.bind_group_layouts.drain(..) {
-            device.destroy_bind_group_layout(raw);
+        if !self.bind_group_layouts.is_empty() {
+            profiling::scope!("destroy_bind_group_layouts");
+            for raw in self.bind_group_layouts.drain(..) {
+                device.destroy_bind_group_layout(raw);
+            }
         }
-        for raw in self.pipeline_layouts.drain(..) {
-            device.destroy_pipeline_layout(raw);
+        if !self.pipeline_layouts.is_empty() {
+            profiling::scope!("destroy_pipeline_layouts");
+            for raw in self.pipeline_layouts.drain(..) {
+                device.destroy_pipeline_layout(raw);
+            }
         }
-        for raw in self.query_sets.drain(..) {
-            device.destroy_query_set(raw);
+        if !self.query_sets.is_empty() {
+            profiling::scope!("destroy_query_sets");
+            for raw in self.query_sets.drain(..) {
+                device.destroy_query_set(raw);
+            }
         }
     }
 }
@@ -290,7 +320,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
     }
 
     pub fn cleanup(&mut self, device: &A::Device) {
-        profiling::scope!("cleanup");
+        profiling::scope!("cleanup", "LifetimeTracker");
         unsafe {
             self.free_resources.clean(device);
         }

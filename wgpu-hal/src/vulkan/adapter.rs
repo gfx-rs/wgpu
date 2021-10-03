@@ -960,10 +960,12 @@ impl super::Adapter {
         family_index: u32,
         queue_index: u32,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let mem_properties = self
-            .instance
-            .raw
-            .get_physical_device_memory_properties(self.raw);
+        let mem_properties = {
+            profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
+            self.instance
+                .raw
+                .get_physical_device_memory_properties(self.raw)
+        };
         let memory_types =
             &mem_properties.memory_types[..mem_properties.memory_type_count as usize];
         let valid_ash_memory_types = memory_types.iter().enumerate().fold(0, |u, (i, mem)| {
@@ -1051,7 +1053,10 @@ impl super::Adapter {
         };
 
         log::info!("Private capabilities: {:?}", self.private_caps);
-        let raw_queue = raw_device.get_device_queue(family_index, queue_index);
+        let raw_queue = {
+            profiling::scope!("vkGetDeviceQueue");
+            raw_device.get_device_queue(family_index, queue_index)
+        };
 
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
@@ -1166,7 +1171,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let info = enabled_phd_features
             .add_to_device_create_builder(pre_info)
             .build();
-        let raw_device = self.instance.raw.create_device(self.raw, &info, None)?;
+        let raw_device = {
+            profiling::scope!("vkCreateDevice");
+            self.instance.raw.create_device(self.raw, &info, None)?
+        };
 
         self.device_from_raw(
             raw_device,
@@ -1247,27 +1255,33 @@ impl crate::Adapter<super::Api> for super::Adapter {
         }
 
         let queue_family_index = 0; //TODO
-        match surface.functor.get_physical_device_surface_support(
-            self.raw,
-            queue_family_index,
-            surface.raw,
-        ) {
-            Ok(true) => (),
-            Ok(false) => return None,
-            Err(e) => {
-                log::error!("get_physical_device_surface_support: {}", e);
-                return None;
+        {
+            profiling::scope!("vkGetPhysicalDeviceSurfaceSupportKHR");
+            match surface.functor.get_physical_device_surface_support(
+                self.raw,
+                queue_family_index,
+                surface.raw,
+            ) {
+                Ok(true) => (),
+                Ok(false) => return None,
+                Err(e) => {
+                    log::error!("get_physical_device_surface_support: {}", e);
+                    return None;
+                }
             }
         }
 
-        let caps = match surface
-            .functor
-            .get_physical_device_surface_capabilities(self.raw, surface.raw)
-        {
-            Ok(caps) => caps,
-            Err(e) => {
-                log::error!("get_physical_device_surface_capabilities: {}", e);
-                return None;
+        let caps = {
+            profiling::scope!("vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+            match surface
+                .functor
+                .get_physical_device_surface_capabilities(self.raw, surface.raw)
+            {
+                Ok(caps) => caps,
+                Err(e) => {
+                    log::error!("get_physical_device_surface_capabilities: {}", e);
+                    return None;
+                }
             }
         };
 
@@ -1302,25 +1316,31 @@ impl crate::Adapter<super::Api> for super::Adapter {
             depth_or_array_layers: caps.max_image_array_layers,
         };
 
-        let raw_present_modes = match surface
-            .functor
-            .get_physical_device_surface_present_modes(self.raw, surface.raw)
-        {
-            Ok(present_modes) => present_modes,
-            Err(e) => {
-                log::error!("get_physical_device_surface_present_modes: {}", e);
-                Vec::new()
+        let raw_present_modes = {
+            profiling::scope!("vkGetPhysicalDeviceSurfacePresentModesKHR");
+            match surface
+                .functor
+                .get_physical_device_surface_present_modes(self.raw, surface.raw)
+            {
+                Ok(present_modes) => present_modes,
+                Err(e) => {
+                    log::error!("get_physical_device_surface_present_modes: {}", e);
+                    Vec::new()
+                }
             }
         };
 
-        let raw_surface_formats = match surface
-            .functor
-            .get_physical_device_surface_formats(self.raw, surface.raw)
-        {
-            Ok(formats) => formats,
-            Err(e) => {
-                log::error!("get_physical_device_surface_formats: {}", e);
-                Vec::new()
+        let raw_surface_formats = {
+            profiling::scope!("vkGetPhysicalDeviceSurfaceFormatsKHR");
+            match surface
+                .functor
+                .get_physical_device_surface_formats(self.raw, surface.raw)
+            {
+                Ok(formats) => formats,
+                Err(e) => {
+                    log::error!("get_physical_device_surface_formats: {}", e);
+                    Vec::new()
+                }
             }
         };
 

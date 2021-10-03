@@ -478,6 +478,7 @@ impl super::Device {
         config: &crate::SurfaceConfiguration,
         provided_old_swapchain: Option<super::Swapchain>,
     ) -> Result<super::Swapchain, crate::SurfaceError> {
+        profiling::scope!("Device::create_swapchain");
         let functor = khr::Swapchain::new(&surface.instance.raw, &self.shared.raw);
 
         let old_swapchain = match provided_old_swapchain {
@@ -504,7 +505,10 @@ impl super::Device {
             .clipped(true)
             .old_swapchain(old_swapchain);
 
-        let result = functor.create_swapchain(&info, None);
+        let result = {
+            profiling::scope!("vkCreateSwapchainKHR");
+            functor.create_swapchain(&info, None)
+        };
 
         // doing this before bailing out with error
         if old_swapchain != vk::SwapchainKHR::null() {
@@ -575,7 +579,10 @@ impl super::Device {
             .flags(vk::ShaderModuleCreateFlags::empty())
             .code(spv);
 
-        let raw = unsafe { self.shared.raw.create_shader_module(&vk_info, None)? };
+        let raw = unsafe {
+            profiling::scope!("vkCreateShaderModule");
+            self.shared.raw.create_shader_module(&vk_info, None)?
+        };
         Ok(raw)
     }
 
@@ -609,12 +616,15 @@ impl super::Device {
                 } else {
                     &self.naga_options
                 };
-                let spv = naga::back::spv::write_vec(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    options,
-                    Some(&pipeline_options),
-                )
+                let spv = {
+                    profiling::scope!("naga::spv::write_vec");
+                    naga::back::spv::write_vec(
+                        &naga_shader.module,
+                        &naga_shader.info,
+                        options,
+                        Some(&pipeline_options),
+                    )
+                }
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{}", e)))?;
                 self.create_shader_module_impl(&spv)?
             }
@@ -1146,7 +1156,10 @@ impl crate::Device<super::Api> for super::Device {
             .set_layouts(&vk_set_layouts)
             .push_constant_ranges(&vk_push_constant_ranges);
 
-        let raw = self.shared.raw.create_pipeline_layout(&vk_info, None)?;
+        let raw = {
+            profiling::scope!("vkCreatePipelineLayout");
+            self.shared.raw.create_pipeline_layout(&vk_info, None)?
+        };
 
         if let Some(label) = desc.label {
             self.shared
@@ -1494,11 +1507,13 @@ impl crate::Device<super::Api> for super::Device {
                 .build()
         }];
 
-        let mut raw_vec = self
-            .shared
-            .raw
-            .create_graphics_pipelines(vk::PipelineCache::null(), &vk_infos, None)
-            .map_err(|(_, e)| crate::DeviceError::from(e))?;
+        let mut raw_vec = {
+            profiling::scope!("vkCreateGraphicsPipelines");
+            self.shared
+                .raw
+                .create_graphics_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+                .map_err(|(_, e)| crate::DeviceError::from(e))?
+        };
 
         let raw = raw_vec.pop().unwrap();
         if let Some(label) = desc.label {
@@ -1536,11 +1551,13 @@ impl crate::Device<super::Api> for super::Device {
                 .build()
         }];
 
-        let mut raw_vec = self
-            .shared
-            .raw
-            .create_compute_pipelines(vk::PipelineCache::null(), &vk_infos, None)
-            .map_err(|(_, e)| crate::DeviceError::from(e))?;
+        let mut raw_vec = {
+            profiling::scope!("vkCreateComputePipelines");
+            self.shared
+                .raw
+                .create_compute_pipelines(vk::PipelineCache::null(), &vk_infos, None)
+                .map_err(|(_, e)| crate::DeviceError::from(e))?
+        };
 
         let raw = raw_vec.pop().unwrap();
         if let Some(label) = desc.label {

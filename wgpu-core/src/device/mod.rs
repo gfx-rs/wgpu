@@ -2658,6 +2658,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         surface_id: id::SurfaceId,
         adapter_id: id::AdapterId,
     ) -> Result<TextureFormat, instance::GetSurfacePreferredFormatError> {
+        profiling::scope!("surface_get_preferred_format");
         let hub = A::hub(self);
         let mut token = Token::root();
 
