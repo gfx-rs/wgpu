@@ -96,6 +96,9 @@ struct Parameters {
     #[cfg(all(not(feature = "deserialize"), feature = "glsl-out"))]
     #[serde(default)]
     glsl_custom: bool,
+    #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
+    #[serde(default)]
+    glsl_blacklist: naga::FastHashSet<String>,
     #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
     #[serde(default)]
     hlsl: naga::back::hlsl::Options,
@@ -313,6 +316,10 @@ fn write_output_glsl(
     } else {
         &default_options
     };
+
+    if params.glsl_blacklist.contains(ep_name) {
+        return;
+    }
 
     let pipeline_options = glsl::PipelineOptions {
         shader_stage: stage,
