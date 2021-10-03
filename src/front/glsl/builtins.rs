@@ -1852,7 +1852,7 @@ impl Parser {
                 _ => coord,
             };
 
-            let mut coord_index = image_size.map_or(0, |s| s as u32);
+            let mut coord_index = image_size.map_or(1, |s| s as u32);
 
             let array_index = match arrayed {
                 true => {

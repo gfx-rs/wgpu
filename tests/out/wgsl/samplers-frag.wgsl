@@ -146,28 +146,28 @@ fn testTex1DArray(coord2: vec2<f32>) {
 
     coord3 = coord2;
     let e18: vec2<f32> = coord3;
-    let e22: vec4<f32> = textureSample(tex1DArray, samp, e18.x, i32(e18.x));
+    let e22: vec4<f32> = textureSample(tex1DArray, samp, e18.x, i32(e18.y));
     c1 = e22;
     let e25: vec2<f32> = coord3;
-    let e30: vec4<f32> = textureSampleBias(tex1DArray, samp, e25.x, i32(e25.x), 2.0);
+    let e30: vec4<f32> = textureSampleBias(tex1DArray, samp, e25.x, i32(e25.y), 2.0);
     c1 = e30;
     let e34: vec2<f32> = coord3;
-    let e40: vec4<f32> = textureSampleGrad(tex1DArray, samp, e34.x, i32(e34.x), 4.0, 4.0);
+    let e40: vec4<f32> = textureSampleGrad(tex1DArray, samp, e34.x, i32(e34.y), 4.0, 4.0);
     c1 = e40;
     let e45: vec2<f32> = coord3;
-    let e52: vec4<f32> = textureSampleGrad(tex1DArray, samp, e45.x, i32(e45.x), 4.0, 4.0, 5);
+    let e52: vec4<f32> = textureSampleGrad(tex1DArray, samp, e45.x, i32(e45.y), 4.0, 4.0, 5);
     c1 = e52;
     let e55: vec2<f32> = coord3;
-    let e60: vec4<f32> = textureSampleLevel(tex1DArray, samp, e55.x, i32(e55.x), 3.0);
+    let e60: vec4<f32> = textureSampleLevel(tex1DArray, samp, e55.x, i32(e55.y), 3.0);
     c1 = e60;
     let e64: vec2<f32> = coord3;
-    let e70: vec4<f32> = textureSampleLevel(tex1DArray, samp, e64.x, i32(e64.x), 3.0, 5);
+    let e70: vec4<f32> = textureSampleLevel(tex1DArray, samp, e64.x, i32(e64.y), 3.0, 5);
     c1 = e70;
     let e73: vec2<f32> = coord3;
-    let e78: vec4<f32> = textureSample(tex1DArray, samp, e73.x, i32(e73.x), 5);
+    let e78: vec4<f32> = textureSample(tex1DArray, samp, e73.x, i32(e73.y), 5);
     c1 = e78;
     let e82: vec2<f32> = coord3;
-    let e88: vec4<f32> = textureSampleBias(tex1DArray, samp, e82.x, i32(e82.x), 2.0, 5);
+    let e88: vec4<f32> = textureSampleBias(tex1DArray, samp, e82.x, i32(e82.y), 2.0, 5);
     c1 = e88;
     return;
 }
