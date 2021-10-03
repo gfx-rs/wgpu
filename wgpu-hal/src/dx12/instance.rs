@@ -183,6 +183,7 @@ impl crate::Instance<super::Api> for super::Instance {
         for cur_index in 0.. {
             let raw = match factory6 {
                 Some(factory) => {
+                    profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
                     let mut adapter2 = native::WeakPtr::<dxgi1_2::IDXGIAdapter2>::null();
                     let hr = factory.EnumAdapterByGpuPreference(
                         cur_index,
@@ -202,6 +203,7 @@ impl crate::Instance<super::Api> for super::Instance {
                     adapter2
                 }
                 None => {
+                    profiling::scope!("IDXGIFactory1::EnumAdapters1");
                     let mut adapter1 = native::WeakPtr::<dxgi::IDXGIAdapter1>::null();
                     let hr = self
                         .factory

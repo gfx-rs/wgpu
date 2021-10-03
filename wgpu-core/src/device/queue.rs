@@ -269,7 +269,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let stage = device.prepare_stage(data_size)?;
-        unsafe { stage.write(&device.raw, 0, data) }.map_err(DeviceError::from)?;
+        unsafe {
+            profiling::scope!("copy");
+            stage.write(&device.raw, 0, data)
+        }
+        .map_err(DeviceError::from)?;
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers
@@ -445,9 +449,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mapping = unsafe { device.raw.map_buffer(&stage.buffer, 0..stage_size) }
             .map_err(DeviceError::from)?;
         unsafe {
-            profiling::scope!("copy");
-
             if stage_bytes_per_row == bytes_per_row {
+                profiling::scope!("copy aligned");
                 // Fast path if the data is already being aligned optimally.
                 ptr::copy_nonoverlapping(
                     data.as_ptr().offset(data_layout.offset as isize),
@@ -455,6 +458,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     stage_size as usize,
                 );
             } else {
+                profiling::scope!("copy chunked");
                 // Copy row by row into the optimal alignment.
                 let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
                 for layer in 0..size.depth_or_array_layers {

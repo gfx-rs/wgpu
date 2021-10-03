@@ -767,9 +767,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 };
                 self.temp.barriers.push(barrier);
             }
-            list.ResourceBarrier(self.temp.barriers.len() as u32, self.temp.barriers.as_ptr());
+
+            if !self.temp.barriers.is_empty() {
+                profiling::scope!("ID3D12GraphicsCommandList::ResourceBarrier");
+                list.ResourceBarrier(self.temp.barriers.len() as u32, self.temp.barriers.as_ptr());
+            }
 
             for resolve in self.pass.resolves.iter() {
+                profiling::scope!("ID3D12GraphicsCommandList::ResolveSubresource");
                 list.ResolveSubresource(
                     resolve.dst.0.as_mut_ptr(),
                     resolve.dst.1,
@@ -784,7 +789,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 let transition = barrier.u.Transition_mut();
                 mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
             }
-            list.ResourceBarrier(self.temp.barriers.len() as u32, self.temp.barriers.as_ptr());
+            if !self.temp.barriers.is_empty() {
+                profiling::scope!("ID3D12GraphicsCommandList::ResourceBarrier");
+                list.ResourceBarrier(self.temp.barriers.len() as u32, self.temp.barriers.as_ptr());
+            }
         }
 
         self.end_pass();

@@ -193,6 +193,7 @@ impl Surface {
 
         let suf = A::get_surface(self);
         let caps = unsafe {
+            profiling::scope!("surface_capabilities");
             adapter
                 .raw
                 .adapter
@@ -517,6 +518,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if let Some(ref inst) = *instance_field {
                     let hub = HalApi::hub(self);
                     if let Some(id_backend) = inputs.find(backend) {
+                        profiling::scope!("enumerating", backend_info);
                         for raw in unsafe {inst.enumerate_adapters()} {
                             let adapter = Adapter::new(raw);
                             log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);

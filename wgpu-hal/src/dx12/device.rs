@@ -22,6 +22,7 @@ impl super::Device {
     ) -> Result<Self, crate::DeviceError> {
         let mut idle_fence = native::Fence::null();
         let hr = unsafe {
+            profiling::scope!("ID3D12Device::CreateFence");
             raw.CreateFence(
                 0,
                 d3d12::D3D12_FENCE_FLAG_NONE,
@@ -60,6 +61,7 @@ impl super::Device {
                 VisibleNodeMask: 0,
             };
 
+            profiling::scope!("Zero Buffer Allocation");
             raw.CreateCommittedResource(
                 &heap_properties,
                 d3d12::D3D12_HEAP_FLAG_NONE,
@@ -71,7 +73,7 @@ impl super::Device {
             )
             .into_device_result("Zero buffer creation")?;
 
-            //Note: without `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED`
+            // Note: without `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED`
             // this resource is zeroed by default.
         };
 
@@ -182,9 +184,12 @@ impl super::Device {
         //TODO: reuse the writer
         let mut source = String::new();
         let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
-        let reflection_info = writer
-            .write(module, &stage.module.naga.info)
-            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {:?}", e)))?;
+        let reflection_info = {
+            profiling::scope!("naga::back::hlsl::write");
+            writer
+                .write(module, &stage.module.naga.info)
+                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {:?}", e)))?
+        };
 
         let full_stage = format!(
             "{}_{}\0",
@@ -226,6 +231,7 @@ impl super::Device {
         };
 
         let hr = unsafe {
+            profiling::scope!("d3dcompiler::D3DCompile");
             d3dcompiler::D3DCompile(
                 source.as_ptr() as *const _,
                 source.len(),
@@ -1332,11 +1338,14 @@ impl crate::Device<super::Api> for super::Device {
         };
 
         let mut raw = native::PipelineState::null();
-        let hr = self.raw.CreateGraphicsPipelineState(
-            &raw_desc,
-            &d3d12::ID3D12PipelineState::uuidof(),
-            raw.mut_void(),
-        );
+        let hr = {
+            profiling::scope!("ID3D12Device::CreateGraphicsPipelineState");
+            self.raw.CreateGraphicsPipelineState(
+                &raw_desc,
+                &d3d12::ID3D12PipelineState::uuidof(),
+                raw.mut_void(),
+            )
+        };
 
         blob_vs.destroy();
         if !blob_fs.is_null() {
@@ -1368,13 +1377,16 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let blob_cs = self.load_shader(&desc.stage, desc.layout, naga::ShaderStage::Compute)?;
 
-        let pair = self.raw.create_compute_pipeline_state(
-            desc.layout.shared.signature,
-            native::Shader::from_blob(blob_cs),
-            0,
-            native::CachedPSO::null(),
-            native::PipelineStateFlags::empty(),
-        );
+        let pair = {
+            profiling::scope!("ID3D12Device::CreateComputePipelineState");
+            self.raw.create_compute_pipeline_state(
+                desc.layout.shared.signature,
+                native::Shader::from_blob(blob_cs),
+                0,
+                native::CachedPSO::null(),
+                native::PipelineStateFlags::empty(),
+            )
+        };
 
         blob_cs.destroy();
 

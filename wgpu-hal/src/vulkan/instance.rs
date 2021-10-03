@@ -108,7 +108,11 @@ unsafe extern "system" fn debug_utils_messenger_callback(
 
 impl super::Swapchain {
     unsafe fn release_resources(self, device: &ash::Device) -> Self {
-        let _ = device.device_wait_idle();
+        profiling::scope!("Swapchain::release_resources");
+        {
+            profiling::scope!("vkDeviceWaitIdle");
+            let _ = device.device_wait_idle();
+        };
         device.destroy_fence(self.fence, None);
         self
     }
