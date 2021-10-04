@@ -488,7 +488,7 @@ fn convert_wgsl() {
         ),
         (
             "image",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL | Targets::GLSL,
         ),
         ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
         (

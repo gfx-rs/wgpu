@@ -10,7 +10,6 @@ kernel void main1(
   metal::uint3 local_id [[thread_position_in_threadgroup]]
 , metal::texture2d<uint, metal::access::sample> image_mipmapped_src [[user(fake0)]]
 , metal::texture2d_ms<uint, metal::access::read> image_multisampled_src [[user(fake0)]]
-, metal::depth2d_ms<float, metal::access::read> image_depth_multisampled_src [[user(fake0)]]
 , metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
 , metal::texture2d_array<uint, metal::access::sample> image_array_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
@@ -19,16 +18,31 @@ kernel void main1(
     metal::int2 itc = (dim * static_cast<metal::int2>(local_id.xy)) % metal::int2(10, 20);
     metal::uint4 value1_ = image_mipmapped_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
-    float value3_ = image_depth_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value4_ = image_storage_src.read(metal::uint2(itc));
     metal::uint4 value5_ = image_array_src.read(metal::uint2(itc), static_cast<int>(local_id.z), static_cast<int>(local_id.z) + 1);
-    image_dst.write((((value1_ + value2_) + metal::uint4(static_cast<uint>(value3_))) + value4_) + value5_, metal::uint(itc.x));
+    image_dst.write(((value1_ + value2_) + value4_) + value5_, metal::uint(itc.x));
+    return;
+}
+
+
+struct depth_loadInput {
+};
+kernel void depth_load(
+  metal::uint3 local_id1 [[thread_position_in_threadgroup]]
+, metal::depth2d_ms<float, metal::access::read> image_depth_multisampled_src [[user(fake0)]]
+, metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
+, metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
+) {
+    metal::int2 dim1 = int2(image_storage_src.get_width(), image_storage_src.get_height());
+    metal::int2 itc1 = (dim1 * static_cast<metal::int2>(local_id1.xy)) % metal::int2(10, 20);
+    float val = image_depth_multisampled_src.read(metal::uint2(itc1), static_cast<int>(local_id1.z));
+    image_dst.write(metal::uint4(static_cast<uint>(val)), metal::uint(itc1.x));
     return;
 }
 
 
 struct queriesOutput {
-    metal::float4 member1 [[position]];
+    metal::float4 member2 [[position]];
 };
 vertex queriesOutput queries(
   metal::texture1d<float, metal::access::sample> image_1d [[user(fake0)]]
@@ -37,50 +51,67 @@ vertex queriesOutput queries(
 , metal::texturecube<float, metal::access::sample> image_cube [[user(fake0)]]
 , metal::texturecube_array<float, metal::access::sample> image_cube_array [[user(fake0)]]
 , metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
-, metal::texture2d_ms<float, metal::access::read> image_aa [[user(fake0)]]
 ) {
     int dim_1d = int(image_1d.get_width());
     metal::int2 dim_2d = int2(image_2d.get_width(), image_2d.get_height());
-    int num_levels_2d = int(image_2d.get_num_mip_levels());
     metal::int2 dim_2d_lod = int2(image_2d.get_width(1), image_2d.get_height(1));
     metal::int2 dim_2d_array = int2(image_2d_array.get_width(), image_2d_array.get_height());
-    int num_levels_2d_array = int(image_2d_array.get_num_mip_levels());
     metal::int2 dim_2d_array_lod = int2(image_2d_array.get_width(1), image_2d_array.get_height(1));
-    int num_layers_2d = int(image_2d_array.get_array_size());
     metal::int2 dim_cube = int2(image_cube.get_width());
-    int num_levels_cube = int(image_cube.get_num_mip_levels());
     metal::int2 dim_cube_lod = int2(image_cube.get_width(1));
     metal::int2 dim_cube_array = int2(image_cube_array.get_width());
-    int num_levels_cube_array = int(image_cube_array.get_num_mip_levels());
     metal::int2 dim_cube_array_lod = int2(image_cube_array.get_width(1));
-    int num_layers_cube = int(image_cube_array.get_array_size());
     metal::int3 dim_3d = int3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth());
-    int num_levels_3d = int(image_3d.get_num_mip_levels());
     metal::int3 dim_3d_lod = int3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1));
-    int num_samples_aa = int(image_aa.get_num_samples());
-    int sum = (((((((((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + num_layers_2d) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + num_layers_cube) + dim_3d.z) + dim_3d_lod.z) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array;
+    int sum = (((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + dim_3d.z) + dim_3d_lod.z;
     return queriesOutput { metal::float4(static_cast<float>(sum)) };
 }
 
 
+struct levels_queriesOutput {
+    metal::float4 member3 [[position]];
+};
+vertex levels_queriesOutput levels_queries(
+  metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
+, metal::texture2d_array<float, metal::access::sample> image_2d_array [[user(fake0)]]
+, metal::texturecube<float, metal::access::sample> image_cube [[user(fake0)]]
+, metal::texturecube_array<float, metal::access::sample> image_cube_array [[user(fake0)]]
+, metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
+, metal::texture2d_ms<float, metal::access::read> image_aa [[user(fake0)]]
+) {
+    int num_levels_2d = int(image_2d.get_num_mip_levels());
+    int num_levels_2d_array = int(image_2d_array.get_num_mip_levels());
+    int num_layers_2d = int(image_2d_array.get_array_size());
+    int num_levels_cube = int(image_cube.get_num_mip_levels());
+    int num_levels_cube_array = int(image_cube_array.get_num_mip_levels());
+    int num_layers_cube = int(image_cube_array.get_array_size());
+    int num_levels_3d = int(image_3d.get_num_mip_levels());
+    int num_samples_aa = int(image_aa.get_num_samples());
+    int sum1 = ((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array;
+    return levels_queriesOutput { metal::float4(static_cast<float>(sum1)) };
+}
+
+
 struct sampleOutput {
-    metal::float4 member2 [[color(0)]];
+    metal::float4 member4 [[color(0)]];
 };
 fragment sampleOutput sample(
-  metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
+  metal::texture1d<float, metal::access::sample> image_1d [[user(fake0)]]
+, metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
 , metal::sampler sampler_reg [[user(fake0)]]
 ) {
     metal::float2 tc = metal::float2(0.5);
+    metal::float4 s1d = image_1d.sample(sampler_reg, tc.x);
     metal::float4 s2d = image_2d.sample(sampler_reg, tc);
     metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type8_);
     metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284));
     metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284), const_type8_);
-    return sampleOutput { ((s2d + s2d_offset) + s2d_level) + s2d_level_offset };
+    return sampleOutput { (((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset };
 }
 
 
 struct sample_comparisonOutput {
-    float member3 [[color(0)]];
+    float member5 [[color(0)]];
 };
 fragment sample_comparisonOutput sample_comparison(
   metal::sampler sampler_cmp [[user(fake0)]]

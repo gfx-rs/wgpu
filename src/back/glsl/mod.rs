@@ -514,7 +514,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // We treat images separately because they might require
                 // writing the storage format
                 TypeInner::Image {
-                    dim,
+                    mut dim,
                     arrayed,
                     class,
                 } => {
@@ -526,6 +526,11 @@ impl<'a, W: Write> Writer<'a, W> {
                         } => Some((format, access)),
                         _ => None,
                     };
+
+                    if dim == crate::ImageDimension::D1 && es {
+                        dim = crate::ImageDimension::D2
+                    }
+
                     // Gether the location if needed
                     let layout_binding = if self.options.version.supports_explicit_locations() {
                         let br = global.binding.as_ref().unwrap();
@@ -1954,12 +1959,12 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // We need to get the coordinates vector size to later build a vector that's `size + 1`
                 // if `depth_ref` is some, if it isn't a vector we panic as that's not a valid expression
-                let size = match *ctx.info[coordinate].ty.inner_with(&self.module.types) {
-                    TypeInner::Vector { size, .. } => size,
+                let mut coord_dim = match *ctx.info[coordinate].ty.inner_with(&self.module.types) {
+                    TypeInner::Vector { size, .. } => size as u8,
+                    TypeInner::Scalar { .. } => 1,
                     _ => unreachable!(),
                 };
 
-                let mut coord_dim = size as u8;
                 if array_index.is_some() {
                     coord_dim += 1;
                 }
@@ -1968,9 +1973,16 @@ impl<'a, W: Write> Writer<'a, W> {
                     coord_dim += 1;
                 }
 
+                let tex_1d_hack = dim == crate::ImageDimension::D1 && self.options.version.is_es();
+                let is_vec = tex_1d_hack || coord_dim != 1;
                 // Compose a new texture coordinates vector
-                write!(self.out, "vec{}(", coord_dim)?;
+                if is_vec {
+                    write!(self.out, "vec{}(", coord_dim + tex_1d_hack as u8)?;
+                }
                 self.write_expr(coordinate, ctx)?;
+                if tex_1d_hack {
+                    write!(self.out, ", 0.0")?;
+                }
                 if let Some(expr) = array_index {
                     write!(self.out, ", ")?;
                     self.write_expr(expr, ctx)?;
@@ -1981,7 +1993,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(expr, ctx)?;
                     }
                 }
-                write!(self.out, ")")?;
+                if is_vec {
+                    write!(self.out, ")")?;
+                }
 
                 if cube_array_shadow {
                     if let Some(expr) = depth_ref {
@@ -2025,7 +2039,13 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 if let Some(constant) = offset {
                     write!(self.out, ", ")?;
+                    if tex_1d_hack {
+                        write!(self.out, "ivec2(")?;
+                    }
                     self.write_constant(constant)?;
+                    if tex_1d_hack {
+                        write!(self.out, ", 0)")?;
+                    }
                 }
 
                 // End the function
@@ -2103,11 +2123,11 @@ impl<'a, W: Write> Writer<'a, W> {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => {
                                 write!(self.out, "textureSize(")?;
                                 self.write_expr(image, ctx)?;
-                                write!(self.out, ",")?;
+                                write!(self.out, ", ")?;
                                 if let Some(expr) = level {
                                     self.write_expr(expr, ctx)?;
                                 } else {
-                                    write!(self.out, "0",)?;
+                                    write!(self.out, "0")?;
                                 }
                             }
                             ImageClass::Storage { .. } => {
@@ -2115,7 +2135,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                 self.write_expr(image, ctx)?;
                             }
                         }
-                        write!(self.out, ").{}", &"xyz"[..components])?;
+                        write!(self.out, ")")?;
+                        if components != 1 || self.options.version.is_es() {
+                            write!(self.out, ".{}", &"xyz"[..components])?;
+                        }
                     }
                     crate::ImageQuery::NumLevels => {
                         write!(self.out, "textureQueryLevels(",)?;
@@ -2129,7 +2152,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         };
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(image, ctx)?;
-                        write!(self.out, ",0).{}", back::COMPONENTS[components])?;
+                        if components != 1 || self.options.version.is_es() {
+                            write!(self.out, ", 0).{}", back::COMPONENTS[components])?;
+                        }
                     }
                     crate::ImageQuery::NumSamples => {
                         // assumes ARB_shader_texture_image_samples
@@ -2473,7 +2498,14 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ")")?;
             }
             None => {
+                let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
+                if tex_1d_hack {
+                    write!(self.out, "ivec2(")?;
+                }
                 self.write_expr(coordinate, ctx)?;
+                if tex_1d_hack {
+                    write!(self.out, ", 0.0)")?;
+                }
             }
         }
         Ok(())

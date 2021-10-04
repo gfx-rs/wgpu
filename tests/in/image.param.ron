@@ -3,4 +3,5 @@
 		version: (1, 1),
 		debug: true,
 	),
+	glsl_blacklist: ["depth_load", "levels_queries"]
 )

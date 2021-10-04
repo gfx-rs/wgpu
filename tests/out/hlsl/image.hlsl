@@ -31,10 +31,19 @@ void main(uint3 local_id : SV_GroupThreadID)
     int2 itc = ((dim * int2(local_id.xy)) % int2(10, 20));
     uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
     uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
-    float value3_ = image_depth_multisampled_src.Load(itc, int(local_id.z)).x;
     uint4 value4_ = image_storage_src.Load(itc);
     uint4 value5_ = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
-    image_dst[itc.x] = ((((value1_ + value2_) + uint4(uint(value3_).xxxx)) + value4_) + value5_);
+    image_dst[itc.x] = (((value1_ + value2_) + value4_) + value5_);
+    return;
+}
+
+[numthreads(16, 1, 1)]
+void depth_load(uint3 local_id1 : SV_GroupThreadID)
+{
+    int2 dim1 = NagaRWDimensions2D(image_storage_src);
+    int2 itc1 = ((dim1 * int2(local_id1.xy)) % int2(10, 20));
+    float val = image_depth_multisampled_src.Load(itc1, int(local_id1.z)).x;
+    image_dst[itc1.x] = uint4(uint(val).xxxx);
     return;
 }
 
@@ -52,13 +61,6 @@ int2 NagaDimensions2D(Texture2D<float4> tex)
     return ret.xy;
 }
 
-int NagaNumLevels2D(Texture2D<float4> tex)
-{
-    uint4 ret;
-    tex.GetDimensions(0, ret.x, ret.y, ret.z);
-    return ret.z;
-}
-
 int2 NagaMipDimensions2D(Texture2D<float4> tex, uint mip_level)
 {
     uint4 ret;
@@ -73,13 +75,6 @@ int2 NagaDimensions2DArray(Texture2DArray<float4> tex)
     return ret.xy;
 }
 
-int NagaNumLevels2DArray(Texture2DArray<float4> tex)
-{
-    uint4 ret;
-    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
-    return ret.w;
-}
-
 int2 NagaMipDimensions2DArray(Texture2DArray<float4> tex, uint mip_level)
 {
     uint4 ret;
@@ -87,25 +82,11 @@ int2 NagaMipDimensions2DArray(Texture2DArray<float4> tex, uint mip_level)
     return ret.xy;
 }
 
-int NagaNumLayers2DArray(Texture2DArray<float4> tex)
-{
-    uint4 ret;
-    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
-    return ret.w;
-}
-
 int2 NagaDimensionsCube(TextureCube<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y, ret.z);
     return ret.xy;
-}
-
-int NagaNumLevelsCube(TextureCube<float4> tex)
-{
-    uint4 ret;
-    tex.GetDimensions(0, ret.x, ret.y, ret.z);
-    return ret.z;
 }
 
 int2 NagaMipDimensionsCube(TextureCube<float4> tex, uint mip_level)
@@ -122,25 +103,11 @@ int2 NagaDimensionsCubeArray(TextureCubeArray<float4> tex)
     return ret.xy;
 }
 
-int NagaNumLevelsCubeArray(TextureCubeArray<float4> tex)
-{
-    uint4 ret;
-    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
-    return ret.w;
-}
-
 int2 NagaMipDimensionsCubeArray(TextureCubeArray<float4> tex, uint mip_level)
 {
     uint4 ret;
     tex.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
     return ret.xy;
-}
-
-int NagaNumLayersCubeArray(TextureCubeArray<float4> tex)
-{
-    uint4 ret;
-    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
-    return ret.w;
 }
 
 int3 NagaDimensions3D(Texture3D<float4> tex)
@@ -150,18 +117,77 @@ int3 NagaDimensions3D(Texture3D<float4> tex)
     return ret.xyz;
 }
 
-int NagaNumLevels3D(Texture3D<float4> tex)
+int3 NagaMipDimensions3D(Texture3D<float4> tex, uint mip_level)
+{
+    uint4 ret;
+    tex.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
+    return ret.xyz;
+}
+
+float4 queries() : SV_Position
+{
+    int dim_1d = NagaDimensions1D(image_1d);
+    int2 dim_2d = NagaDimensions2D(image_2d);
+    int2 dim_2d_lod = NagaMipDimensions2D(image_2d, 1);
+    int2 dim_2d_array = NagaDimensions2DArray(image_2d_array);
+    int2 dim_2d_array_lod = NagaMipDimensions2DArray(image_2d_array, 1);
+    int2 dim_cube = NagaDimensionsCube(image_cube);
+    int2 dim_cube_lod = NagaMipDimensionsCube(image_cube, 1);
+    int2 dim_cube_array = NagaDimensionsCubeArray(image_cube_array);
+    int2 dim_cube_array_lod = NagaMipDimensionsCubeArray(image_cube_array, 1);
+    int3 dim_3d = NagaDimensions3D(image_3d);
+    int3 dim_3d_lod = NagaMipDimensions3D(image_3d, 1);
+    int sum = ((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + dim_3d.z) + dim_3d_lod.z);
+    return float4(float(sum).xxxx);
+}
+
+int NagaNumLevels2D(Texture2D<float4> tex)
+{
+    uint4 ret;
+    tex.GetDimensions(0, ret.x, ret.y, ret.z);
+    return ret.z;
+}
+
+int NagaNumLevels2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.w;
 }
 
-int3 NagaMipDimensions3D(Texture3D<float4> tex, uint mip_level)
+int NagaNumLayers2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
-    tex.GetDimensions(mip_level, ret.x, ret.y, ret.z, ret.w);
-    return ret.xyz;
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    return ret.w;
+}
+
+int NagaNumLevelsCube(TextureCube<float4> tex)
+{
+    uint4 ret;
+    tex.GetDimensions(0, ret.x, ret.y, ret.z);
+    return ret.z;
+}
+
+int NagaNumLevelsCubeArray(TextureCubeArray<float4> tex)
+{
+    uint4 ret;
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    return ret.w;
+}
+
+int NagaNumLayersCubeArray(TextureCubeArray<float4> tex)
+{
+    uint4 ret;
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    return ret.w;
+}
+
+int NagaNumLevels3D(Texture3D<float4> tex)
+{
+    uint4 ret;
+    tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
+    return ret.w;
 }
 
 int NagaMSNumSamples2D(Texture2DMS<float4> tex)
@@ -171,39 +197,29 @@ int NagaMSNumSamples2D(Texture2DMS<float4> tex)
     return ret.z;
 }
 
-float4 queries() : SV_Position
+float4 levels_queries() : SV_Position
 {
-    int dim_1d = NagaDimensions1D(image_1d);
-    int2 dim_2d = NagaDimensions2D(image_2d);
     int num_levels_2d = NagaNumLevels2D(image_2d);
-    int2 dim_2d_lod = NagaMipDimensions2D(image_2d, 1);
-    int2 dim_2d_array = NagaDimensions2DArray(image_2d_array);
     int num_levels_2d_array = NagaNumLevels2DArray(image_2d_array);
-    int2 dim_2d_array_lod = NagaMipDimensions2DArray(image_2d_array, 1);
     int num_layers_2d = NagaNumLayers2DArray(image_2d_array);
-    int2 dim_cube = NagaDimensionsCube(image_cube);
     int num_levels_cube = NagaNumLevelsCube(image_cube);
-    int2 dim_cube_lod = NagaMipDimensionsCube(image_cube, 1);
-    int2 dim_cube_array = NagaDimensionsCubeArray(image_cube_array);
     int num_levels_cube_array = NagaNumLevelsCubeArray(image_cube_array);
-    int2 dim_cube_array_lod = NagaMipDimensionsCubeArray(image_cube_array, 1);
     int num_layers_cube = NagaNumLayersCubeArray(image_cube_array);
-    int3 dim_3d = NagaDimensions3D(image_3d);
     int num_levels_3d = NagaNumLevels3D(image_3d);
-    int3 dim_3d_lod = NagaMipDimensions3D(image_3d, 1);
     int num_samples_aa = NagaMSNumSamples2D(image_aa);
-    int sum = ((((((((((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + num_layers_2d) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + num_layers_cube) + dim_3d.z) + dim_3d_lod.z) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
-    return float4(float(sum).xxxx);
+    int sum1 = (((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
+    return float4(float(sum1).xxxx);
 }
 
 float4 sample1() : SV_Target0
 {
     float2 tc = float2(0.5.xx);
+    float4 s1d = image_1d.Sample(sampler_reg, tc.x);
     float4 s2d = image_2d.Sample(sampler_reg, tc);
     float4 s2d_offset = image_2d.Sample(sampler_reg, tc, int2(3, 1));
     float4 s2d_level = image_2d.SampleLevel(sampler_reg, tc, 2.299999952316284);
     float4 s2d_level_offset = image_2d.SampleLevel(sampler_reg, tc, 2.299999952316284, int2(3, 1));
-    return (((s2d + s2d_offset) + s2d_level) + s2d_level_offset);
+    return ((((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset);
 }
 
 float sample_comparison() : SV_Target0

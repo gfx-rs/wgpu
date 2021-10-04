@@ -22,8 +22,6 @@ bitflags::bitflags! {
         /// Adds support for image load and early depth tests
         const IMAGE_LOAD_STORE = 1 << 8;
         const CONSERVATIVE_DEPTH = 1 << 9;
-        /// Isn't supported in ES
-        const TEXTURE_1D = 1 << 10;
         /// Interpolation and auxiliary qualifiers. Perspective, Flat, and
         /// Centroid are available in all GLSL versions we support.
         const NOPERSPECTIVE_QUALIFIER = 1 << 11;
@@ -92,9 +90,6 @@ impl FeaturesManager {
         check_feature!(IMAGE_LOAD_STORE, 130, 310);
         check_feature!(CONSERVATIVE_DEPTH, 130, 300);
         check_feature!(CONSERVATIVE_DEPTH, 130, 300);
-        // 1D textures are supported by all core versions and aren't supported by an es versions
-        // so use 0 that way the check will always be false and can be optimized away
-        check_feature!(TEXTURE_1D, 0);
         check_feature!(NOPERSPECTIVE_QUALIFIER, 130);
         check_feature!(SAMPLE_QUALIFIER, 400, 320);
         // gl_ClipDistance is supported by core versions > 1.3 and aren't supported by an es versions without extensions
@@ -298,8 +293,6 @@ impl<'a, W> Writer<'a, W> {
                 } => {
                     if arrayed && dim == ImageDimension::Cube {
                         self.features.request(Features::CUBE_TEXTURES_ARRAY)
-                    } else if dim == ImageDimension::D1 {
-                        self.features.request(Features::TEXTURE_1D)
                     }
 
                     match class {

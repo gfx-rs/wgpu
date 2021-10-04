@@ -39,10 +39,18 @@ fn main([[builtin(local_invocation_id)]] local_id: vec3<u32>) {
     let itc: vec2<i32> = ((dim * vec2<i32>(local_id.xy)) % vec2<i32>(10, 20));
     let value1_: vec4<u32> = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
     let value2_: vec4<u32> = textureLoad(image_multisampled_src, itc, i32(local_id.z));
-    let value3_: f32 = textureLoad(image_depth_multisampled_src, itc, i32(local_id.z));
     let value4_: vec4<u32> = textureLoad(image_storage_src, itc);
     let value5_: vec4<u32> = textureLoad(image_array_src, itc, i32(local_id.z), (i32(local_id.z) + 1));
-    textureStore(image_dst, itc.x, ((((value1_ + value2_) + vec4<u32>(u32(value3_))) + value4_) + value5_));
+    textureStore(image_dst, itc.x, (((value1_ + value2_) + value4_) + value5_));
+    return;
+}
+
+[[stage(compute), workgroup_size(16, 1, 1)]]
+fn depth_load([[builtin(local_invocation_id)]] local_id1: vec3<u32>) {
+    let dim1: vec2<i32> = textureDimensions(image_storage_src);
+    let itc1: vec2<i32> = ((dim1 * vec2<i32>(local_id1.xy)) % vec2<i32>(10, 20));
+    let val: f32 = textureLoad(image_depth_multisampled_src, itc1, i32(local_id1.z));
+    textureStore(image_dst, itc1.x, vec4<u32>(u32(val)));
     return;
 }
 
@@ -50,35 +58,42 @@ fn main([[builtin(local_invocation_id)]] local_id: vec3<u32>) {
 fn queries() -> [[builtin(position)]] vec4<f32> {
     let dim_1d: i32 = textureDimensions(image_1d);
     let dim_2d: vec2<i32> = textureDimensions(image_2d);
-    let num_levels_2d: i32 = textureNumLevels(image_2d);
     let dim_2d_lod: vec2<i32> = textureDimensions(image_2d, 1);
     let dim_2d_array: vec2<i32> = textureDimensions(image_2d_array);
-    let num_levels_2d_array: i32 = textureNumLevels(image_2d_array);
     let dim_2d_array_lod: vec2<i32> = textureDimensions(image_2d_array, 1);
-    let num_layers_2d: i32 = textureNumLayers(image_2d_array);
     let dim_cube: vec2<i32> = textureDimensions(image_cube);
-    let num_levels_cube: i32 = textureNumLevels(image_cube);
     let dim_cube_lod: vec2<i32> = textureDimensions(image_cube, 1);
     let dim_cube_array: vec2<i32> = textureDimensions(image_cube_array);
-    let num_levels_cube_array: i32 = textureNumLevels(image_cube_array);
     let dim_cube_array_lod: vec2<i32> = textureDimensions(image_cube_array, 1);
-    let num_layers_cube: i32 = textureNumLayers(image_cube_array);
     let dim_3d: vec3<i32> = textureDimensions(image_3d);
-    let num_levels_3d: i32 = textureNumLevels(image_3d);
     let dim_3d_lod: vec3<i32> = textureDimensions(image_3d, 1);
-    let num_samples_aa: i32 = textureNumSamples(image_aa);
-    let sum: i32 = ((((((((((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + num_layers_2d) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + num_layers_cube) + dim_3d.z) + dim_3d_lod.z) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
+    let sum: i32 = ((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + dim_3d.z) + dim_3d_lod.z);
     return vec4<f32>(f32(sum));
+}
+
+[[stage(vertex)]]
+fn levels_queries() -> [[builtin(position)]] vec4<f32> {
+    let num_levels_2d: i32 = textureNumLevels(image_2d);
+    let num_levels_2d_array: i32 = textureNumLevels(image_2d_array);
+    let num_layers_2d: i32 = textureNumLayers(image_2d_array);
+    let num_levels_cube: i32 = textureNumLevels(image_cube);
+    let num_levels_cube_array: i32 = textureNumLevels(image_cube_array);
+    let num_layers_cube: i32 = textureNumLayers(image_cube_array);
+    let num_levels_3d: i32 = textureNumLevels(image_3d);
+    let num_samples_aa: i32 = textureNumSamples(image_aa);
+    let sum1: i32 = (((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
+    return vec4<f32>(f32(sum1));
 }
 
 [[stage(fragment)]]
 fn sample() -> [[location(0)]] vec4<f32> {
     let tc: vec2<f32> = vec2<f32>(0.5);
+    let s1d: vec4<f32> = textureSample(image_1d, sampler_reg, tc.x);
     let s2d: vec4<f32> = textureSample(image_2d, sampler_reg, tc);
     let s2d_offset: vec4<f32> = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
     let s2d_level: vec4<f32> = textureSampleLevel(image_2d, sampler_reg, tc, 2.299999952316284);
     let s2d_level_offset: vec4<f32> = textureSampleLevel(image_2d, sampler_reg, tc, 2.299999952316284, vec2<i32>(3, 1));
-    return (((s2d + s2d_offset) + s2d_level) + s2d_level_offset);
+    return ((((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset);
 }
 
 [[stage(fragment)]]
