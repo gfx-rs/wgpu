@@ -234,6 +234,11 @@ trait Context: Debug + Send + Sized + Sync {
         Self::SurfaceOutputDetail,
     );
     fn surface_present(&self, texture: &Self::TextureId, detail: &Self::SurfaceOutputDetail);
+    fn surface_texture_discard(
+        &self,
+        texture: &Self::TextureId,
+        detail: &Self::SurfaceOutputDetail,
+    );
 
     fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
@@ -1331,24 +1336,19 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 }
 
 /// Surface texture that can be rendered to.
+/// Result of a successful call to [`Surface::get_current_texture`].
 #[derive(Debug)]
 pub struct SurfaceTexture {
     /// Accessible view of the frame.
     pub texture: Texture,
-    detail: <C as Context>::SurfaceOutputDetail,
-}
-
-/// Result of a successful call to [`Surface::get_current_frame`].
-#[derive(Debug)]
-pub struct SurfaceFrame {
-    /// The texture into which the next frame should be rendered.
-    pub output: SurfaceTexture,
     /// `true` if the acquired buffer can still be used for rendering,
     /// but should be recreated for maximum performance.
     pub suboptimal: bool,
+    presented: bool,
+    detail: <C as Context>::SurfaceOutputDetail,
 }
 
-/// Result of an unsuccessful call to [`Surface::get_current_frame`].
+/// Result of an unsuccessful call to [`Surface::get_current_texture`].
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SurfaceError {
     /// A timeout was encountered while trying to acquire the next frame.
@@ -3144,10 +3144,24 @@ impl Queue {
     }
 }
 
+impl SurfaceTexture {
+    /// Schedule this texture to be presented on the owning surface.
+    ///
+    /// Needs to be called after any work on the texture is scheduled via [`Queue::submit`].
+    pub fn present(mut self) {
+        self.presented = true;
+        Context::surface_present(&*self.texture.context, &self.texture.id, &self.detail);
+    }
+}
+
 impl Drop for SurfaceTexture {
     fn drop(&mut self) {
-        if !thread::panicking() {
-            Context::surface_present(&*self.texture.context, &self.texture.id, &self.detail);
+        if !self.presented && !thread::panicking() {
+            Context::surface_texture_discard(
+                &*self.texture.context,
+                &self.texture.id,
+                &self.detail,
+            );
         }
     }
 }
@@ -3164,7 +3178,7 @@ impl Surface {
     ///
     /// # Panics
     ///
-    /// - A old [`SurfaceFrame`] is still alive referencing an old surface.
+    /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
         Context::surface_configure(&*self.context, &self.id, &device.id, config)
@@ -3172,36 +3186,36 @@ impl Surface {
 
     /// Returns the next texture to be presented by the swapchain for drawing.
     ///
-    /// When the [`SurfaceFrame`] returned by this method is dropped, the swapchain will present
-    /// the texture to the associated [`Surface`].
+    /// In order to present the [`SurfaceTexture`] returned by this method,
+    /// first a [`Queue::submit`] needs to be done with some work rendering to this texture.
+    /// Then [`SurfaceTexture::present`] needs to be called.
     ///
-    /// If a SurfaceFrame referencing this surface is alive when the swapchain is recreated,
+    /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
-    pub fn get_current_frame(&self) -> Result<SurfaceFrame, SurfaceError> {
+    pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
         let (texture_id, status, detail) =
             Context::surface_get_current_texture(&*self.context, &self.id);
-        let output = texture_id.map(|id| SurfaceTexture {
-            texture: Texture {
-                context: Arc::clone(&self.context),
-                id,
-                owned: false,
-            },
-            detail,
-        });
 
-        match status {
-            SurfaceStatus::Good => Ok(SurfaceFrame {
-                output: output.unwrap(),
-                suboptimal: false,
-            }),
-            SurfaceStatus::Suboptimal => Ok(SurfaceFrame {
-                output: output.unwrap(),
-                suboptimal: true,
-            }),
-            SurfaceStatus::Timeout => Err(SurfaceError::Timeout),
-            SurfaceStatus::Outdated => Err(SurfaceError::Outdated),
-            SurfaceStatus::Lost => Err(SurfaceError::Lost),
-        }
+        let suboptimal = match status {
+            SurfaceStatus::Good => false,
+            SurfaceStatus::Suboptimal => true,
+            SurfaceStatus::Timeout => return Err(SurfaceError::Timeout),
+            SurfaceStatus::Outdated => return Err(SurfaceError::Outdated),
+            SurfaceStatus::Lost => return Err(SurfaceError::Lost),
+        };
+
+        texture_id
+            .map(|id| SurfaceTexture {
+                texture: Texture {
+                    context: Arc::clone(&self.context),
+                    id,
+                    owned: false,
+                },
+                suboptimal,
+                presented: false,
+                detail,
+            })
+            .ok_or(SurfaceError::Lost)
     }
 }
 

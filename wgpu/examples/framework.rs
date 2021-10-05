@@ -293,21 +293,22 @@ fn start<E: Example>(
                     }
                 }
 
-                let frame = match surface.get_current_frame() {
+                let frame = match surface.get_current_texture() {
                     Ok(frame) => frame,
                     Err(_) => {
                         surface.configure(&device, &config);
                         surface
-                            .get_current_frame()
+                            .get_current_texture()
                             .expect("Failed to acquire next surface texture!")
                     }
                 };
                 let view = frame
-                    .output
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
                 example.render(&view, &device, &queue, &spawner);
+
+                frame.present();
             }
             _ => {}
         }

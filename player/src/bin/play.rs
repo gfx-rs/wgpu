@@ -139,6 +139,11 @@ fn main() {
                             gfx_select!(device => global.surface_present(id)).unwrap();
                             break;
                         }
+                        Some(trace::Action::DiscardSurfaceTexture(id)) => {
+                            log::debug!("Discarding frame {}", frame_count);
+                            gfx_select!(device => global.surface_texture_discard(id)).unwrap();
+                            break;
+                        }
                         Some(action) => {
                             gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
                         }

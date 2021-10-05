@@ -944,6 +944,18 @@ impl crate::Context for Context {
         }
     }
 
+    fn surface_texture_discard(
+        &self,
+        texture: &Self::TextureId,
+        detail: &Self::SurfaceOutputDetail,
+    ) {
+        let global = &self.0;
+        match wgc::gfx_select!(texture.id => global.surface_texture_discard(detail.surface_id)) {
+            Ok(_status) => (),
+            Err(err) => self.handle_error_fatal(err, "Surface::discard_texture"),
+        }
+    }
+
     fn device_features(&self, device: &Self::DeviceId) -> Features {
         let global = &self.0;
         match wgc::gfx_select!(device.id => global.device_features(device.id)) {

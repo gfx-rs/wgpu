@@ -1163,6 +1163,14 @@ impl crate::Context for Context {
         // Swapchain is presented automatically
     }
 
+    fn surface_texture_discard(
+        &self,
+        _texture: &Self::TextureId,
+        _detail: &Self::SurfaceOutputDetail,
+    ) {
+        // Can't really discard this on the Web
+    }
+
     fn device_features(&self, _device: &Self::DeviceId) -> wgt::Features {
         // TODO
         wgt::Features::empty()
