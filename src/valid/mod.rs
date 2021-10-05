@@ -5,8 +5,11 @@ mod function;
 mod interface;
 mod r#type;
 
+#[cfg(feature = "validate")]
+use crate::arena::{Arena, UniqueArena};
+
 use crate::{
-    arena::{Arena, Handle, UniqueArena},
+    arena::Handle,
     proc::{InvalidBaseType, Layouter},
     FastHashSet,
 };
@@ -29,14 +32,19 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct ValidationFlags: u8 {
         /// Expressions.
+        #[cfg(feature = "validate")]
         const EXPRESSIONS = 0x1;
         /// Statements and blocks of them.
+        #[cfg(feature = "validate")]
         const BLOCKS = 0x2;
         /// Uniformity of control flow for operations that require it.
+        #[cfg(feature = "validate")]
         const CONTROL_FLOW_UNIFORMITY = 0x4;
         /// Host-shareable structure layouts.
+        #[cfg(feature = "validate")]
         const STRUCT_LAYOUTS = 0x8;
         /// Constants.
+        #[cfg(feature = "validate")]
         const CONSTANTS = 0x10;
     }
 }
@@ -97,6 +105,7 @@ pub struct Validator {
     layouter: Layouter,
     location_mask: BitSet,
     bind_group_masks: Vec<BitSet>,
+    #[allow(dead_code)]
     select_cases: FastHashSet<i32>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: BitSet,
@@ -158,6 +167,7 @@ pub enum ValidationError {
 }
 
 impl crate::TypeInner {
+    #[cfg(feature = "validate")]
     fn is_sized(&self) -> bool {
         match *self {
             Self::Scalar { .. }
@@ -176,6 +186,7 @@ impl crate::TypeInner {
     }
 
     /// Return the `ImageDimension` for which `self` is an appropriate coordinate.
+    #[cfg(feature = "validate")]
     fn image_storage_coordinates(&self) -> Option<crate::ImageDimension> {
         match *self {
             Self::Scalar {
@@ -213,6 +224,7 @@ impl Validator {
         }
     }
 
+    #[cfg(feature = "validate")]
     fn validate_constant(
         &self,
         handle: Handle<crate::Constant>,
@@ -257,6 +269,7 @@ impl Validator {
         self.reset_types(module.types.len());
         self.layouter.update(&module.types, &module.constants)?;
 
+        #[cfg(feature = "validate")]
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, constant) in module.constants.iter() {
                 self.validate_constant(handle, &module.constants, &module.types)
@@ -279,6 +292,7 @@ impl Validator {
             self.types[handle.index()] = ty_info;
         }
 
+        #[cfg(feature = "validate")]
         for (var_handle, var) in module.global_variables.iter() {
             self.validate_global_var(var, &module.types)
                 .map_err(|error| ValidationError::GlobalVariable {

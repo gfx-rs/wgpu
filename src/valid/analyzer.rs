@@ -190,6 +190,7 @@ struct Sampling {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {
     /// Validation flags.
+    #[allow(dead_code)]
     flags: ValidationFlags,
     /// Set of shader stages where calling this function is valid.
     pub available_stages: ShaderStages,
@@ -621,6 +622,7 @@ impl FunctionInfo {
                     let mut requirements = UniformityRequirements::empty();
                     for expr in range.clone() {
                         let req = self.expressions[expr.index()].uniformity.requirements;
+                        #[cfg(feature = "validate")]
                         if self
                             .flags
                             .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
@@ -854,6 +856,7 @@ impl ModuleInfo {
 }
 
 #[test]
+#[cfg(feature = "validate")]
 fn uniform_control_flow() {
     use crate::{Expression as E, Statement as S};
 

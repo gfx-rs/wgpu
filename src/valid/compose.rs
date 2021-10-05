@@ -1,7 +1,10 @@
+#[cfg(feature = "validate")]
 use crate::{
-    arena::{Arena, Handle, UniqueArena},
+    arena::{Arena, UniqueArena},
     proc::TypeResolution,
 };
+
+use crate::Handle;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -16,6 +19,7 @@ pub enum ComposeError {
     ComponentType { index: u32 },
 }
 
+#[cfg(feature = "validate")]
 pub fn validate_compose(
     self_ty_handle: Handle<crate::Type>,
     constant_arena: &Arena<crate::Constant>,

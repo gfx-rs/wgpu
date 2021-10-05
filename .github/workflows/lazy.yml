@@ -149,3 +149,14 @@ jobs:
                echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
            done
            cat counter
+  check_snapshots_without_validation:
+    name: Check snapshots (without validation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions-rs/cargo@v1
+        name: Test all (without validation)
+        with:
+          command: test
+          args: --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
+      - name: Check snapshots (without validation)
+        run: git diff --exit-code -- tests/out

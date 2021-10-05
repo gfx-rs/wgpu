@@ -45,6 +45,7 @@ wgsl-in = ["codespan-reporting", "hexf-parse"]
 wgsl-out = []
 hlsl-out = []
 span = ["codespan-reporting"]
+validate = []
 
 [dev-dependencies]
 diff = "0.1"

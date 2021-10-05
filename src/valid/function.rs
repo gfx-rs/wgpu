@@ -1,8 +1,13 @@
+use crate::arena::Handle;
+#[cfg(feature = "validate")]
+use crate::arena::{Arena, UniqueArena};
+
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
-    ExpressionError, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags, ValidationFlags,
+    ExpressionError, FunctionInfo, ModuleInfo,
 };
-use crate::arena::{Arena, Handle, UniqueArena};
+
+#[cfg(feature = "validate")]
 use bit_set::BitSet;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -141,11 +146,13 @@ bitflags::bitflags! {
     }
 }
 
+#[cfg(feature = "validate")]
 struct BlockInfo {
-    stages: ShaderStages,
+    stages: super::ShaderStages,
     finished: bool,
 }
 
+#[cfg(feature = "validate")]
 struct BlockContext<'a> {
     abilities: ControlFlowAbility,
     info: &'a FunctionInfo,
@@ -157,6 +164,7 @@ struct BlockContext<'a> {
     return_type: Option<Handle<crate::Type>>,
 }
 
+#[cfg(feature = "validate")]
 impl<'a> BlockContext<'a> {
     fn new(
         fun: &'a crate::Function,
@@ -228,13 +236,14 @@ impl<'a> BlockContext<'a> {
 }
 
 impl super::Validator {
+    #[cfg(feature = "validate")]
     fn validate_call(
         &mut self,
         function: Handle<crate::Function>,
         arguments: &[Handle<crate::Expression>],
         result: Option<Handle<crate::Expression>>,
         context: &BlockContext,
-    ) -> Result<ShaderStages, CallError> {
+    ) -> Result<super::ShaderStages, CallError> {
         let fun = context
             .functions
             .try_get(function)
@@ -278,6 +287,7 @@ impl super::Validator {
         Ok(callee_info.available_stages)
     }
 
+    #[cfg(feature = "validate")]
     fn validate_atomic(
         &mut self,
         pointer: Handle<crate::Expression>,
@@ -334,6 +344,7 @@ impl super::Validator {
         Ok(())
     }
 
+    #[cfg(feature = "validate")]
     fn validate_block_impl(
         &mut self,
         statements: &[crate::Statement],
@@ -341,7 +352,7 @@ impl super::Validator {
     ) -> Result<BlockInfo, FunctionError> {
         use crate::{Statement as S, TypeInner as Ti};
         let mut finished = false;
-        let mut stages = ShaderStages::all();
+        let mut stages = super::ShaderStages::all();
         for statement in statements {
             if finished {
                 return Err(FunctionError::InstructionsAfterReturn);
@@ -479,7 +490,7 @@ impl super::Validator {
                     finished = true;
                 }
                 S::Barrier(_) => {
-                    stages &= ShaderStages::COMPUTE;
+                    stages &= super::ShaderStages::COMPUTE;
                 }
                 S::Store { pointer, value } => {
                     let mut current = pointer;
@@ -628,6 +639,7 @@ impl super::Validator {
         Ok(BlockInfo { stages, finished })
     }
 
+    #[cfg(feature = "validate")]
     fn validate_block(
         &mut self,
         statements: &[crate::Statement],
@@ -641,6 +653,7 @@ impl super::Validator {
         Ok(info)
     }
 
+    #[cfg(feature = "validate")]
     fn validate_local_var(
         &self,
         var: &crate::LocalVariable,
@@ -650,7 +663,7 @@ impl super::Validator {
         log::debug!("var {:?}", var);
         if !self.types[var.ty.index()]
             .flags
-            .contains(TypeFlags::DATA | TypeFlags::SIZED)
+            .contains(super::TypeFlags::DATA | super::TypeFlags::SIZED)
         {
             return Err(LocalVariableError::InvalidType(var.ty));
         }
@@ -681,8 +694,13 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, FunctionError> {
+        #[cfg(feature = "validate")]
         let mut info = mod_info.process_function(fun, module, self.flags)?;
 
+        #[cfg(not(feature = "validate"))]
+        let info = mod_info.process_function(fun, module, self.flags)?;
+
+        #[cfg(feature = "validate")]
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, &module.types, &module.constants)
                 .map_err(|error| FunctionError::LocalVariable {
@@ -692,10 +710,11 @@ impl super::Validator {
                 })?;
         }
 
+        #[cfg(feature = "validate")]
         for (index, argument) in fun.arguments.iter().enumerate() {
             if !self.types[argument.ty.index()]
                 .flags
-                .contains(TypeFlags::ARGUMENT)
+                .contains(super::TypeFlags::ARGUMENT)
             {
                 return Err(FunctionError::InvalidArgumentType {
                     index,
@@ -723,7 +742,8 @@ impl super::Validator {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle.index());
             }
-            if self.flags.contains(ValidationFlags::EXPRESSIONS) {
+            #[cfg(feature = "validate")]
+            if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
                 match self.validate_expression(
                     handle,
                     expr,
@@ -738,7 +758,8 @@ impl super::Validator {
             }
         }
 
-        if self.flags.contains(ValidationFlags::BLOCKS) {
+        #[cfg(feature = "validate")]
+        if self.flags.contains(super::ValidationFlags::BLOCKS) {
             let stages = self
                 .validate_block(
                     &fun.body,

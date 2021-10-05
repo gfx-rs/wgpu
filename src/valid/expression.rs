@@ -1,6 +1,10 @@
-use super::{compose::validate_compose, ComposeError, FunctionInfo, ShaderStages, TypeFlags};
+#[cfg(feature = "validate")]
+use super::{compose::validate_compose, FunctionInfo, ShaderStages, TypeFlags};
+#[cfg(feature = "validate")]
+use crate::arena::UniqueArena;
+
 use crate::{
-    arena::{Handle, UniqueArena},
+    arena::Handle,
     proc::{ProcError, ResolveError},
 };
 
@@ -40,7 +44,7 @@ pub enum ExpressionError {
     #[error("Swizzle component {0:?} is outside of vector size {1:?}")]
     InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
     #[error(transparent)]
-    Compose(#[from] ComposeError),
+    Compose(#[from] super::ComposeError),
     #[error(transparent)]
     Proc(#[from] ProcError),
     #[error("Operation {0:?} can't work with {1:?}")]
@@ -111,12 +115,14 @@ pub enum ExpressionError {
     InvalidAtomicResultType(crate::ScalarKind, crate::Bytes),
 }
 
+#[cfg(feature = "validate")]
 struct ExpressionTypeResolver<'a> {
     root: Handle<crate::Expression>,
     types: &'a UniqueArena<crate::Type>,
     info: &'a FunctionInfo,
 }
 
+#[cfg(feature = "validate")]
 impl<'a> ExpressionTypeResolver<'a> {
     fn resolve(
         &self,
@@ -130,6 +136,7 @@ impl<'a> ExpressionTypeResolver<'a> {
     }
 }
 
+#[cfg(feature = "validate")]
 impl super::Validator {
     pub(super) fn validate_expression(
         &self,
