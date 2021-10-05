@@ -181,7 +181,7 @@ fn testStructConstructor() {
 }
 
 fn testArrayConstructor() {
-    var tree1: array<f32,1> = array<f32,1>(0.0);
+    var tree1: array<f32,1u> = array<f32,1u>(0.0);
 
 }
 

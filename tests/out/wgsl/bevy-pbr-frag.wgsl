@@ -23,8 +23,8 @@ struct CameraPosition {
 struct Lights {
     AmbientColor: vec4<f32>;
     NumLights: vec4<u32>;
-    PointLights: [[stride(48)]] array<PointLight,10>;
-    DirectionalLights: [[stride(32)]] array<DirectionalLight,1>;
+    PointLights: [[stride(48)]] array<PointLight,10u>;
+    DirectionalLights: [[stride(32)]] array<DirectionalLight,1u>;
 };
 
 [[block]]

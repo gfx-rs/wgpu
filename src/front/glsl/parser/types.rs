@@ -24,7 +24,18 @@ impl<'source> ParsingContext<'source> {
                 return Ok(Some((ArraySize::Dynamic, meta)));
             }
 
-            let (constant, _) = self.parse_constant_expression(parser)?;
+            let (value, span) = self.parse_uint_constant(parser)?;
+            let constant = parser.module.constants.fetch_or_append(
+                crate::Constant {
+                    name: None,
+                    specialization: None,
+                    inner: crate::ConstantInner::Scalar {
+                        width: 4,
+                        value: crate::ScalarValue::Uint(value as u64),
+                    },
+                },
+                span,
+            );
             let end_meta = self.expect(parser, TokenValue::RightBracket)?.meta;
             meta.subsume(end_meta);
             Ok(Some((ArraySize::Constant(constant), meta)))
