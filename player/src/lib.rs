@@ -149,7 +149,9 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             Action::Init { .. } => {
                 panic!("Unexpected Action::Init: has to be the first action only")
             }
-            Action::ConfigureSurface { .. } | Action::Present(_) => {
+            Action::ConfigureSurface { .. }
+            | Action::Present(_)
+            | Action::DiscardSurfaceTexture(_) => {
                 panic!("Unexpected Surface action: winit feature is not enabled")
             }
             Action::CreateBuffer(id, desc) => {

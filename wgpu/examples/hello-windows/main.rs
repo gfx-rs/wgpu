@@ -49,12 +49,11 @@ impl Viewport {
         self.config.height = size.height;
         self.desc.surface.configure(device, &self.config);
     }
-    fn get_current_frame(&mut self) -> wgpu::SurfaceTexture {
+    fn get_current_texture(&mut self) -> wgpu::SurfaceTexture {
         self.desc
             .surface
-            .get_current_frame()
+            .get_current_texture()
             .expect("Failed to acquire next swap chain texture")
-            .output
     }
 }
 
@@ -111,7 +110,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
             }
             Event::RedrawRequested(window_id) => {
                 if let Some(viewport) = viewports.get_mut(&window_id) {
-                    let frame = viewport.get_current_frame();
+                    let frame = viewport.get_current_texture();
                     let view = frame
                         .texture
                         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -133,6 +132,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
                     }
 
                     queue.submit(Some(encoder.finish()));
+                    frame.present();
                 }
             }
             Event::WindowEvent {
