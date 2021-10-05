@@ -276,6 +276,7 @@ impl PhysicalDeviceFeatures {
     }
 
     fn to_wgpu(&self, caps: &PhysicalDeviceCapabilities) -> (wgt::Features, wgt::DownlevelFlags) {
+        use crate::auxil::db;
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
             | F::SPIRV_SHADER_PASSTHROUGH
@@ -365,6 +366,8 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(vk::ExtConservativeRasterizationFn::name()),
         );
 
+        let intel_windows = caps.properties.vendor_id == db::intel::VENDOR && cfg!(windows);
+
         if let Some(ref vulkan_1_2) = self.vulkan_1_2 {
             const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
             if Self::all_features_supported(
@@ -400,7 +403,7 @@ impl PhysicalDeviceFeatures {
             if vulkan_1_2.runtime_descriptor_array != 0 {
                 features |= F::UNSIZED_BINDING_ARRAY;
             }
-            if vulkan_1_2.descriptor_binding_partially_bound != 0 {
+            if vulkan_1_2.descriptor_binding_partially_bound != 0 && !intel_windows {
                 features |= F::PARTIALLY_BOUND_BINDING_ARRAY;
             }
             //if vulkan_1_2.sampler_mirror_clamp_to_edge != 0 {
@@ -442,7 +445,7 @@ impl PhysicalDeviceFeatures {
             ) {
                 features.insert(F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING);
             }
-            if descriptor_indexing.descriptor_binding_partially_bound != 0 {
+            if descriptor_indexing.descriptor_binding_partially_bound != 0 && !intel_windows {
                 features |= F::PARTIALLY_BOUND_BINDING_ARRAY;
             }
             if descriptor_indexing.runtime_descriptor_array != 0 {
