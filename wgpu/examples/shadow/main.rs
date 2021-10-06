@@ -213,25 +213,6 @@ impl framework::Example for Example {
         wgpu::Features::DEPTH_CLAMPING
     }
 
-    fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
-        let downlevel_limits = wgpu::Limits::downlevel_defaults();
-        let webgl_limits = wgpu::Limits::downlevel_webgl2_defaults();
-        if adapter
-            .get_downlevel_properties()
-            .flags
-            .contains(wgpu::DownlevelFlags::VERTEX_STORAGE | wgpu::DownlevelFlags::FRAGMENT_STORAGE)
-        {
-            wgpu::Limits {
-                max_storage_buffers_per_shader_stage: downlevel_limits
-                    .max_storage_buffers_per_shader_stage,
-                max_storage_buffer_binding_size: downlevel_limits.max_storage_buffer_binding_size,
-                ..webgl_limits
-            }
-        } else {
-            webgl_limits
-        }
-    }
-
     fn init(
         sc_desc: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
@@ -241,7 +222,8 @@ impl framework::Example for Example {
         let supports_storage_resources = adapter
             .get_downlevel_properties()
             .flags
-            .contains(wgpu::DownlevelFlags::VERTEX_STORAGE);
+            .contains(wgpu::DownlevelFlags::VERTEX_STORAGE)
+            && device.limits().max_storage_buffers_per_shader_stage > 0;
 
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();

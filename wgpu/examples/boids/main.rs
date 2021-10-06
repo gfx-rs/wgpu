@@ -31,7 +31,7 @@ struct Example {
 }
 
 impl framework::Example for Example {
-    fn required_limits(_: &wgpu::Adapter) -> wgpu::Limits {
+    fn required_limits() -> wgpu::Limits {
         wgpu::Limits::downlevel_defaults()
     }
 
