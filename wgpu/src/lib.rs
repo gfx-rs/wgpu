@@ -878,9 +878,6 @@ impl Drop for CommandBuffer {
 pub struct CommandEncoder {
     context: Arc<C>,
     id: Option<<C as Context>::CommandEncoderId>,
-    /// This type should be !Send !Sync, because it represents an allocation on this thread's
-    /// command buffer.
-    _p: PhantomData<*const u8>,
 }
 
 impl Drop for CommandEncoder {
@@ -1726,7 +1723,6 @@ impl Device {
                 &self.id,
                 desc,
             )),
-            _p: Default::default(),
         }
     }
 
