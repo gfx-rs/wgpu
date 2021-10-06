@@ -934,6 +934,20 @@ pub enum MathFunction {
     // bits
     CountOneBits,
     ReverseBits,
+    ExtractBits,
+    InsertBits,
+    // data packing
+    Pack4x8snorm,
+    Pack4x8unorm,
+    Pack2x16snorm,
+    Pack2x16unorm,
+    Pack2x16float,
+    // data unpacking
+    Unpack4x8snorm,
+    Unpack4x8unorm,
+    Unpack2x16snorm,
+    Unpack2x16unorm,
+    Unpack2x16float,
 }
 
 /// Sampling modifier to control the level of detail.
@@ -1255,6 +1269,7 @@ pub enum Expression {
         arg: Handle<Expression>,
         arg1: Option<Handle<Expression>>,
         arg2: Option<Handle<Expression>>,
+        arg3: Option<Handle<Expression>>,
     },
     /// Cast a simple type to another kind.
     As {

@@ -1456,6 +1456,7 @@ impl<W: Write> Writer<W> {
                 arg,
                 arg1,
                 arg2,
+                arg3,
             } => {
                 use crate::MathFunction as Mf;
 
@@ -1523,6 +1524,20 @@ impl<W: Write> Writer<W> {
                     // bits
                     Mf::CountOneBits => Function::Regular("countOneBits"),
                     Mf::ReverseBits => Function::Regular("reverseBits"),
+                    Mf::ExtractBits => Function::Regular("extractBits"),
+                    Mf::InsertBits => Function::Regular("insertBits"),
+                    // data packing
+                    Mf::Pack4x8snorm => Function::Regular("pack4x8snorm"),
+                    Mf::Pack4x8unorm => Function::Regular("pack4x8unorm"),
+                    Mf::Pack2x16snorm => Function::Regular("pack2x16snorm"),
+                    Mf::Pack2x16unorm => Function::Regular("pack2x16unorm"),
+                    Mf::Pack2x16float => Function::Regular("pack2x16float"),
+                    // data unpacking
+                    Mf::Unpack4x8snorm => Function::Regular("unpack4x8snorm"),
+                    Mf::Unpack4x8unorm => Function::Regular("unpack4x8unorm"),
+                    Mf::Unpack2x16snorm => Function::Regular("unpack2x16snorm"),
+                    Mf::Unpack2x16unorm => Function::Regular("unpack2x16unorm"),
+                    Mf::Unpack2x16float => Function::Regular("unpack2x16float"),
                     _ => {
                         return Err(Error::UnsupportedMathFunction(fun));
                     }
@@ -1556,6 +1571,10 @@ impl<W: Write> Writer<W> {
                             self.write_expr(module, arg, func_ctx)?;
                         }
                         if let Some(arg) = arg2 {
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                        }
+                        if let Some(arg) = arg3 {
                             write!(self.out, ", ")?;
                             self.write_expr(module, arg, func_ctx)?;
                         }

@@ -630,7 +630,21 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                 ))
             }
         }
-        "bitCount" | "bitfieldReverse" => {
+        "bitCount" | "bitfieldReverse" | "bitfieldExtract" | "bitfieldInsert" => {
+            let fun = match name {
+                "bitCount" => MathFunction::CountOneBits,
+                "bitfieldReverse" => MathFunction::ReverseBits,
+                "bitfieldExtract" => MathFunction::ExtractBits,
+                "bitfieldInsert" => MathFunction::InsertBits,
+                _ => unreachable!(),
+            };
+
+            let mc = match fun {
+                MathFunction::ExtractBits => MacroCall::BitfieldExtract,
+                MathFunction::InsertBits => MacroCall::BitfieldInsert,
+                _ => MacroCall::MathFunction(fun),
+            };
+
             // bits layout
             // bit 0 - int/uint
             // bit 1 trough 2 - dims
@@ -646,20 +660,92 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                     _ => Some(VectorSize::Quad),
                 };
 
-                let args = vec![match size {
+                let ty = || match size {
                     Some(size) => TypeInner::Vector { size, kind, width },
                     None => TypeInner::Scalar { kind, width },
-                }];
+                };
 
-                declaration.overloads.push(module.add_builtin(
-                    args,
-                    MacroCall::MathFunction(match name {
-                        "bitCount" => MathFunction::CountOneBits,
-                        "bitfieldReverse" => MathFunction::ReverseBits,
-                        _ => unreachable!(),
-                    }),
-                ))
+                let mut args = vec![ty()];
+
+                match fun {
+                    MathFunction::ExtractBits => {
+                        args.push(TypeInner::Scalar {
+                            kind: Sk::Sint,
+                            width: 4,
+                        });
+                        args.push(TypeInner::Scalar {
+                            kind: Sk::Sint,
+                            width: 4,
+                        });
+                    }
+                    MathFunction::InsertBits => {
+                        args.push(ty());
+                        args.push(TypeInner::Scalar {
+                            kind: Sk::Sint,
+                            width: 4,
+                        });
+                        args.push(TypeInner::Scalar {
+                            kind: Sk::Sint,
+                            width: 4,
+                        });
+                    }
+                    _ => {}
+                }
+
+                declaration.overloads.push(module.add_builtin(args, mc))
             }
+        }
+        "packSnorm4x8" | "packUnorm4x8" | "packSnorm2x16" | "packUnorm2x16" | "packHalf2x16" => {
+            let fun = match name {
+                "packSnorm4x8" => MathFunction::Pack4x8snorm,
+                "packUnorm4x8" => MathFunction::Pack4x8unorm,
+                "packSnorm2x16" => MathFunction::Pack2x16unorm,
+                "packUnorm2x16" => MathFunction::Pack2x16snorm,
+                "packHalf2x16" => MathFunction::Pack2x16float,
+                _ => unreachable!(),
+            };
+
+            let ty = match fun {
+                MathFunction::Pack4x8snorm | MathFunction::Pack4x8unorm => TypeInner::Vector {
+                    size: crate::VectorSize::Quad,
+                    kind: Sk::Float,
+                    width: 4,
+                },
+                MathFunction::Pack2x16unorm
+                | MathFunction::Pack2x16snorm
+                | MathFunction::Pack2x16float => TypeInner::Vector {
+                    size: crate::VectorSize::Bi,
+                    kind: Sk::Float,
+                    width: 4,
+                },
+                _ => unreachable!(),
+            };
+
+            let args = vec![ty];
+
+            declaration
+                .overloads
+                .push(module.add_builtin(args, MacroCall::MathFunction(fun)));
+        }
+        "unpackSnorm4x8" | "unpackUnorm4x8" | "unpackSnorm2x16" | "unpackUnorm2x16"
+        | "unpackHalf2x16" => {
+            let fun = match name {
+                "unpackSnorm4x8" => MathFunction::Unpack4x8snorm,
+                "unpackUnorm4x8" => MathFunction::Unpack4x8unorm,
+                "unpackSnorm2x16" => MathFunction::Unpack2x16snorm,
+                "unpackUnorm2x16" => MathFunction::Unpack2x16unorm,
+                "unpackHalf2x16" => MathFunction::Unpack2x16float,
+                _ => unreachable!(),
+            };
+
+            let args = vec![TypeInner::Scalar {
+                kind: Sk::Uint,
+                width: 4,
+            }];
+
+            declaration
+                .overloads
+                .push(module.add_builtin(args, MacroCall::MathFunction(fun)));
         }
         "atan" => {
             // bits layout
@@ -1454,6 +1540,8 @@ pub enum MacroCall {
     TextureSize,
     TexelFetch,
     MathFunction(MathFunction),
+    BitfieldExtract,
+    BitfieldInsert,
     Relational(RelationalFunction),
     Binary(BinaryOperator),
     Mod(Option<VectorSize>),
@@ -1640,10 +1728,73 @@ impl MacroCall {
                     arg: args[0],
                     arg1: args.get(1).copied(),
                     arg2: args.get(2).copied(),
+                    arg3: args.get(3).copied(),
                 },
                 Span::default(),
                 body,
             )),
+            MacroCall::BitfieldInsert => {
+                let conv_arg_2 = ctx.add_expression(
+                    Expression::As {
+                        expr: args[2],
+                        kind: Sk::Uint,
+                        convert: Some(4),
+                    },
+                    Span::default(),
+                    body,
+                );
+                let conv_arg_3 = ctx.add_expression(
+                    Expression::As {
+                        expr: args[3],
+                        kind: Sk::Uint,
+                        convert: Some(4),
+                    },
+                    Span::default(),
+                    body,
+                );
+                Ok(ctx.add_expression(
+                    Expression::Math {
+                        fun: MathFunction::InsertBits,
+                        arg: args[0],
+                        arg1: Some(args[1]),
+                        arg2: Some(conv_arg_2),
+                        arg3: Some(conv_arg_3),
+                    },
+                    Span::default(),
+                    body,
+                ))
+            }
+            MacroCall::BitfieldExtract => {
+                let conv_arg_1 = ctx.add_expression(
+                    Expression::As {
+                        expr: args[1],
+                        kind: Sk::Uint,
+                        convert: Some(4),
+                    },
+                    Span::default(),
+                    body,
+                );
+                let conv_arg_2 = ctx.add_expression(
+                    Expression::As {
+                        expr: args[2],
+                        kind: Sk::Uint,
+                        convert: Some(4),
+                    },
+                    Span::default(),
+                    body,
+                );
+                Ok(ctx.add_expression(
+                    Expression::Math {
+                        fun: MathFunction::ExtractBits,
+                        arg: args[0],
+                        arg1: Some(conv_arg_1),
+                        arg2: Some(conv_arg_2),
+                        arg3: None,
+                    },
+                    Span::default(),
+                    body,
+                ))
+            }
             MacroCall::Relational(fun) => Ok(ctx.add_expression(
                 Expression::Relational {
                     fun,
@@ -1683,6 +1834,7 @@ impl MacroCall {
                         arg: args[0],
                         arg1: args.get(1).copied(),
                         arg2: args.get(2).copied(),
+                        arg3: args.get(3).copied(),
                     },
                     Span::default(),
                     body,
@@ -1707,6 +1859,7 @@ impl MacroCall {
                         arg: args[0],
                         arg1: args.get(1).copied(),
                         arg2: args.get(2).copied(),
+                        arg3: args.get(3).copied(),
                     },
                     Span::default(),
                     body,

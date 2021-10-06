@@ -245,6 +245,20 @@ impl super::MathFunction {
             // bits
             Self::CountOneBits => 1,
             Self::ReverseBits => 1,
+            Self::ExtractBits => 3,
+            Self::InsertBits => 4,
+            // data packing
+            Self::Pack4x8snorm => 1,
+            Self::Pack4x8unorm => 1,
+            Self::Pack2x16snorm => 1,
+            Self::Pack2x16unorm => 1,
+            Self::Pack2x16float => 1,
+            // data unpacking
+            Self::Unpack4x8snorm => 1,
+            Self::Unpack4x8unorm => 1,
+            Self::Unpack2x16snorm => 1,
+            Self::Unpack2x16unorm => 1,
+            Self::Unpack2x16float => 1,
         }
     }
 }

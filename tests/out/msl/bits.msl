@@ -1,0 +1,87 @@
+// language: metal1.2
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+
+kernel void main1(
+) {
+    int i = 0;
+    metal::int2 i2_;
+    metal::int3 i3_;
+    metal::int4 i4_;
+    metal::uint u = 0u;
+    metal::uint2 u2_;
+    metal::uint3 u3_;
+    metal::uint4 u4_;
+    metal::float2 f2_;
+    metal::float4 f4_;
+    i2_ = metal::int2(0);
+    i3_ = metal::int3(0);
+    i4_ = metal::int4(0);
+    u2_ = metal::uint2(0u);
+    u3_ = metal::uint3(0u);
+    u4_ = metal::uint4(0u);
+    f2_ = metal::float2(0.0);
+    f4_ = metal::float4(0.0);
+    metal::float4 _e28 = f4_;
+    u = metal::pack_float_to_unorm4x8(_e28);
+    metal::float4 _e30 = f4_;
+    u = metal::pack_float_to_snorm4x8(_e30);
+    metal::float2 _e32 = f2_;
+    u = metal::pack_float_to_unorm2x16(_e32);
+    metal::float2 _e34 = f2_;
+    u = metal::pack_float_to_snorm2x16(_e34);
+    metal::float2 _e36 = f2_;
+    u = as_type<uint>(half2(_e36));
+    metal::uint _e38 = u;
+    f4_ = metal::unpack_snorm4x8_to_float(_e38);
+    metal::uint _e40 = u;
+    f4_ = metal::unpack_unorm4x8_to_float(_e40);
+    metal::uint _e42 = u;
+    f2_ = metal::unpack_snorm2x16_to_float(_e42);
+    metal::uint _e44 = u;
+    f2_ = metal::unpack_unorm2x16_to_float(_e44);
+    metal::uint _e46 = u;
+    f2_ = float2(as_type<half2>(_e46));
+    int _e48 = i;
+    int _e49 = i;
+    i = metal::insert_bits(_e48, _e49, 5u, 10u);
+    metal::int2 _e53 = i2_;
+    metal::int2 _e54 = i2_;
+    i2_ = metal::insert_bits(_e53, _e54, 5u, 10u);
+    metal::int3 _e58 = i3_;
+    metal::int3 _e59 = i3_;
+    i3_ = metal::insert_bits(_e58, _e59, 5u, 10u);
+    metal::int4 _e63 = i4_;
+    metal::int4 _e64 = i4_;
+    i4_ = metal::insert_bits(_e63, _e64, 5u, 10u);
+    metal::uint _e68 = u;
+    metal::uint _e69 = u;
+    u = metal::insert_bits(_e68, _e69, 5u, 10u);
+    metal::uint2 _e73 = u2_;
+    metal::uint2 _e74 = u2_;
+    u2_ = metal::insert_bits(_e73, _e74, 5u, 10u);
+    metal::uint3 _e78 = u3_;
+    metal::uint3 _e79 = u3_;
+    u3_ = metal::insert_bits(_e78, _e79, 5u, 10u);
+    metal::uint4 _e83 = u4_;
+    metal::uint4 _e84 = u4_;
+    u4_ = metal::insert_bits(_e83, _e84, 5u, 10u);
+    int _e88 = i;
+    i = metal::extract_bits(_e88, 5u, 10u);
+    metal::int2 _e92 = i2_;
+    i2_ = metal::extract_bits(_e92, 5u, 10u);
+    metal::int3 _e96 = i3_;
+    i3_ = metal::extract_bits(_e96, 5u, 10u);
+    metal::int4 _e100 = i4_;
+    i4_ = metal::extract_bits(_e100, 5u, 10u);
+    metal::uint _e104 = u;
+    u = metal::extract_bits(_e104, 5u, 10u);
+    metal::uint2 _e108 = u2_;
+    u2_ = metal::extract_bits(_e108, 5u, 10u);
+    metal::uint3 _e112 = u3_;
+    u3_ = metal::extract_bits(_e112, 5u, 10u);
+    metal::uint4 _e116 = u4_;
+    u4_ = metal::extract_bits(_e116, 5u, 10u);
+    return;
+}

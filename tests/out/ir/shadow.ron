@@ -968,6 +968,7 @@
                     arg: 52,
                     arg1: Some(32),
                     arg2: None,
+                    arg3: None,
                 ),
                 Binary(
                     op: GreaterEqual,
@@ -1015,6 +1016,7 @@
                     arg: 65,
                     arg1: None,
                     arg2: None,
+                    arg3: None,
                 ),
                 AccessIndex(
                     base: 6,
@@ -1129,18 +1131,21 @@
                     arg: 93,
                     arg1: None,
                     arg2: None,
+                    arg3: None,
                 ),
                 Math(
                     fun: Dot,
                     arg: 66,
                     arg1: Some(94),
                     arg2: None,
+                    arg3: None,
                 ),
                 Math(
                     fun: Max,
                     arg: 46,
                     arg1: Some(95),
                     arg2: None,
+                    arg3: None,
                 ),
                 Binary(
                     op: Multiply,

@@ -659,6 +659,7 @@ impl<'a> ResolveContext<'a> {
                 arg,
                 arg1,
                 arg2: _,
+                arg3: _,
             } => {
                 use crate::MathFunction as Mf;
                 let res_arg = past(arg);
@@ -781,7 +782,21 @@ impl<'a> ResolveContext<'a> {
                     },
                     // bits
                     Mf::CountOneBits |
-                    Mf::ReverseBits => res_arg.clone(),
+                    Mf::ReverseBits |
+                    Mf::ExtractBits |
+                    Mf::InsertBits => res_arg.clone(),
+                    // data packing
+                    Mf::Pack4x8snorm |
+                    Mf::Pack4x8unorm |
+                    Mf::Pack2x16snorm |
+                    Mf::Pack2x16unorm |
+                    Mf::Pack2x16float => TypeResolution::Value(Ti::Scalar { kind: crate::ScalarKind::Uint, width: 4 }),
+                    // data unpacking
+                    Mf::Unpack4x8snorm |
+                    Mf::Unpack4x8unorm => TypeResolution::Value(Ti::Vector { size: crate::VectorSize::Quad, kind: crate::ScalarKind::Float, width: 4 }),
+                    Mf::Unpack2x16snorm |
+                    Mf::Unpack2x16unorm |
+                    Mf::Unpack2x16float => TypeResolution::Value(Ti::Vector { size: crate::VectorSize::Bi, kind: crate::ScalarKind::Float, width: 4 }),
                 }
             }
             crate::Expression::As {

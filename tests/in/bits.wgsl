@@ -1,0 +1,39 @@
+[[stage(compute), workgroup_size(1)]]
+fn main() {
+    var i = 0;
+    var i2 = vec2<i32>(0);
+    var i3 = vec3<i32>(0);
+    var i4 = vec4<i32>(0);
+    var u = 0u;
+    var u2 = vec2<u32>(0u);
+    var u3 = vec3<u32>(0u);
+    var u4 = vec4<u32>(0u);
+    var f2 = vec2<f32>(0.0);
+    var f4 = vec4<f32>(0.0);
+    u = pack4x8snorm(f4);
+    u = pack4x8unorm(f4);
+    u = pack2x16snorm(f2);
+    u = pack2x16unorm(f2);
+    u = pack2x16float(f2);
+    f4 = unpack4x8snorm(u);
+    f4 = unpack4x8unorm(u);
+    f2 = unpack2x16snorm(u);
+    f2 = unpack2x16unorm(u);
+    f2 = unpack2x16float(u);
+    i = insertBits(i, i, 5u, 10u);
+    i2 = insertBits(i2, i2, 5u, 10u);
+    i3 = insertBits(i3, i3, 5u, 10u);
+    i4 = insertBits(i4, i4, 5u, 10u);
+    u = insertBits(u, u, 5u, 10u);
+    u2 = insertBits(u2, u2, 5u, 10u);
+    u3 = insertBits(u3, u3, 5u, 10u);
+    u4 = insertBits(u4, u4, 5u, 10u);
+    i = extractBits(i, 5u, 10u);
+    i2 = extractBits(i2, 5u, 10u);
+    i3 = extractBits(i3, 5u, 10u);
+    i4 = extractBits(i4, 5u, 10u);
+    u = extractBits(u, 5u, 10u);
+    u2 = extractBits(u2, 5u, 10u);
+    u3 = extractBits(u3, 5u, 10u);
+    u4 = extractBits(u4, 5u, 10u);
+}

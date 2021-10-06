@@ -703,6 +703,42 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn ternary(
+        op: Op,
+        result_type_id: Word,
+        id: Word,
+        operand_1: Word,
+        operand_2: Word,
+        operand_3: Word,
+    ) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(operand_1);
+        instruction.add_operand(operand_2);
+        instruction.add_operand(operand_3);
+        instruction
+    }
+
+    pub(super) fn quaternary(
+        op: Op,
+        result_type_id: Word,
+        id: Word,
+        operand_1: Word,
+        operand_2: Word,
+        operand_3: Word,
+        operand_4: Word,
+    ) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(operand_1);
+        instruction.add_operand(operand_2);
+        instruction.add_operand(operand_3);
+        instruction.add_operand(operand_4);
+        instruction
+    }
+
     pub(super) fn relational(op: Op, result_type_id: Word, id: Word, expr_id: Word) -> Self {
         let mut instruction = Self::new(op);
         instruction.set_type(result_type_id);

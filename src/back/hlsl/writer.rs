@@ -1816,6 +1816,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 arg,
                 arg1,
                 arg2,
+                arg3,
             } => {
                 use crate::MathFunction as Mf;
 
@@ -1915,6 +1916,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_expr(module, arg, func_ctx)?;
                         }
                         if let Some(arg) = arg2 {
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                        }
+                        if let Some(arg) = arg3 {
                             write!(self.out, ", ")?;
                             self.write_expr(module, arg, func_ctx)?;
                         }

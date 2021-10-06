@@ -1400,12 +1400,19 @@ impl Parser {
             } else {
                 None
             };
+            let arg3 = if arg_count > 3 {
+                lexer.expect(Token::Separator(','))?;
+                Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+            } else {
+                None
+            };
             lexer.close_arguments()?;
             crate::Expression::Math {
                 fun,
                 arg,
                 arg1,
                 arg2,
+                arg3,
             }
         } else {
             match name {

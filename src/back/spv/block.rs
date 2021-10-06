@@ -439,6 +439,7 @@ impl<'w> BlockContext<'w> {
                 arg,
                 arg1,
                 arg2,
+                arg3,
             } => {
                 use crate::MathFunction as Mf;
                 enum MathOp {
@@ -454,6 +455,10 @@ impl<'w> BlockContext<'w> {
                     None => 0,
                 };
                 let arg2_id = match arg2 {
+                    Some(handle) => self.cached[handle],
+                    None => 0,
+                };
+                let arg3_id = match arg3 {
                     Some(handle) => self.cached[handle],
                     None => 0,
                 };
@@ -606,6 +611,40 @@ impl<'w> BlockContext<'w> {
                         log::error!("unimplemented math function {:?}", fun);
                         return Err(Error::FeatureNotImplemented("math function"));
                     }
+                    Mf::ExtractBits => {
+                        let op = match arg_scalar_kind {
+                            Some(crate::ScalarKind::Uint) => spirv::Op::BitFieldUExtract,
+                            Some(crate::ScalarKind::Sint) => spirv::Op::BitFieldSExtract,
+                            other => unimplemented!("Unexpected sign({:?})", other),
+                        };
+                        MathOp::Custom(Instruction::ternary(
+                            op,
+                            result_type_id,
+                            id,
+                            arg0_id,
+                            arg1_id,
+                            arg2_id,
+                        ))
+                    }
+                    Mf::InsertBits => MathOp::Custom(Instruction::quaternary(
+                        spirv::Op::BitFieldInsert,
+                        result_type_id,
+                        id,
+                        arg0_id,
+                        arg1_id,
+                        arg2_id,
+                        arg3_id,
+                    )),
+                    Mf::Pack4x8unorm => MathOp::Ext(spirv::GLOp::PackUnorm4x8),
+                    Mf::Pack4x8snorm => MathOp::Ext(spirv::GLOp::PackSnorm4x8),
+                    Mf::Pack2x16float => MathOp::Ext(spirv::GLOp::PackHalf2x16),
+                    Mf::Pack2x16unorm => MathOp::Ext(spirv::GLOp::PackSnorm2x16),
+                    Mf::Pack2x16snorm => MathOp::Ext(spirv::GLOp::PackSnorm2x16),
+                    Mf::Unpack4x8unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm4x8),
+                    Mf::Unpack4x8snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm4x8),
+                    Mf::Unpack2x16float => MathOp::Ext(spirv::GLOp::UnpackHalf2x16),
+                    Mf::Unpack2x16unorm => MathOp::Ext(spirv::GLOp::UnpackSnorm2x16),
+                    Mf::Unpack2x16snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm2x16),
                 };
 
                 block.body.push(match math_op {
@@ -614,7 +653,7 @@ impl<'w> BlockContext<'w> {
                         op,
                         result_type_id,
                         id,
-                        &[arg0_id, arg1_id, arg2_id][..fun.argument_count()],
+                        &[arg0_id, arg1_id, arg2_id, arg3_id][..fun.argument_count()],
                     ),
                     MathOp::Custom(inst) => inst,
                 });

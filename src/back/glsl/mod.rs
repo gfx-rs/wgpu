@@ -2321,6 +2321,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 arg,
                 arg1,
                 arg2,
+                arg3,
             } => {
                 use crate::MathFunction as Mf;
 
@@ -2385,17 +2386,56 @@ impl<'a, W: Write> Writer<'a, W> {
                     // bits
                     Mf::CountOneBits => "bitCount",
                     Mf::ReverseBits => "bitfieldReverse",
+                    Mf::ExtractBits => "bitfieldExtract",
+                    Mf::InsertBits => "bitfieldInsert",
+                    // data packing
+                    Mf::Pack4x8snorm => "packSnorm4x8",
+                    Mf::Pack4x8unorm => "packUnorm4x8",
+                    Mf::Pack2x16snorm => "packSnorm2x16",
+                    Mf::Pack2x16unorm => "packUnorm2x16",
+                    Mf::Pack2x16float => "packHalf2x16",
+                    // data unpacking
+                    Mf::Unpack4x8snorm => "unpackSnorm4x8",
+                    Mf::Unpack4x8unorm => "unpackUnorm4x8",
+                    Mf::Unpack2x16snorm => "unpackSnorm2x16",
+                    Mf::Unpack2x16unorm => "unpackUnorm2x16",
+                    Mf::Unpack2x16float => "unpackHalf2x16",
                 };
+
+                let extract_bits = fun == Mf::ExtractBits;
+                let insert_bits = fun == Mf::InsertBits;
 
                 write!(self.out, "{}(", fun_name)?;
                 self.write_expr(arg, ctx)?;
                 if let Some(arg) = arg1 {
                     write!(self.out, ", ")?;
-                    self.write_expr(arg, ctx)?;
+                    if extract_bits {
+                        write!(self.out, "int(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, ")")?;
+                    } else {
+                        self.write_expr(arg, ctx)?;
+                    }
                 }
                 if let Some(arg) = arg2 {
                     write!(self.out, ", ")?;
-                    self.write_expr(arg, ctx)?;
+                    if extract_bits || insert_bits {
+                        write!(self.out, "int(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, ")")?;
+                    } else {
+                        self.write_expr(arg, ctx)?;
+                    }
+                }
+                if let Some(arg) = arg3 {
+                    write!(self.out, ", ")?;
+                    if insert_bits {
+                        write!(self.out, "int(")?;
+                        self.write_expr(arg, ctx)?;
+                        write!(self.out, ")")?;
+                    } else {
+                        self.write_expr(arg, ctx)?;
+                    }
                 }
                 write!(self.out, ")")?
             }

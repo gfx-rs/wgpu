@@ -1110,6 +1110,7 @@ impl<W: Write> Writer<W> {
                 arg,
                 arg1,
                 arg2,
+                arg3,
             } => {
                 use crate::MathFunction as Mf;
 
@@ -1178,6 +1179,20 @@ impl<W: Write> Writer<W> {
                     // bits
                     Mf::CountOneBits => "popcount",
                     Mf::ReverseBits => "reverse_bits",
+                    Mf::ExtractBits => "extract_bits",
+                    Mf::InsertBits => "insert_bits",
+                    // data packing
+                    Mf::Pack4x8snorm => "pack_float_to_unorm4x8",
+                    Mf::Pack4x8unorm => "pack_float_to_snorm4x8",
+                    Mf::Pack2x16snorm => "pack_float_to_unorm2x16",
+                    Mf::Pack2x16unorm => "pack_float_to_snorm2x16",
+                    Mf::Pack2x16float => "",
+                    // data unpacking
+                    Mf::Unpack4x8snorm => "unpack_snorm4x8_to_float",
+                    Mf::Unpack4x8unorm => "unpack_unorm4x8_to_float",
+                    Mf::Unpack2x16snorm => "unpack_snorm2x16_to_float",
+                    Mf::Unpack2x16unorm => "unpack_unorm2x16_to_float",
+                    Mf::Unpack2x16float => "",
                 };
 
                 if fun == Mf::Distance && scalar_argument {
@@ -1186,9 +1201,20 @@ impl<W: Write> Writer<W> {
                     write!(self.out, " - ")?;
                     self.put_expression(arg1.unwrap(), context, false)?;
                     write!(self.out, ")")?;
+                } else if fun == Mf::Unpack2x16float {
+                    write!(self.out, "float2(as_type<half2>(")?;
+                    self.put_expression(arg, context, false)?;
+                    write!(self.out, "))")?;
+                } else if fun == Mf::Pack2x16float {
+                    write!(self.out, "as_type<uint>(half2(")?;
+                    self.put_expression(arg, context, false)?;
+                    write!(self.out, "))")?;
                 } else {
                     write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
-                    self.put_call_parameters(iter::once(arg).chain(arg1).chain(arg2), context)?;
+                    self.put_call_parameters(
+                        iter::once(arg).chain(arg1).chain(arg2).chain(arg3),
+                        context,
+                    )?;
                 }
             }
             crate::Expression::As {
@@ -2661,8 +2687,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses.end - addresses.start;
         // check the size (in debug only)
-        // last observed macOS value: 18304
-        if !(15000..=20000).contains(&stack_size) {
+        // last observed macOS value: 20528 (CI)
+        if !(15000..=25000).contains(&stack_size) {
             panic!("`put_expression` stack size {} has changed!", stack_size);
         }
     }

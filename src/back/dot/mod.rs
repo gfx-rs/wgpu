@@ -322,6 +322,7 @@ fn write_fun(
                 arg,
                 arg1,
                 arg2,
+                arg3,
             } => {
                 edges.insert("arg", arg);
                 if let Some(expr) = arg1 {
@@ -329,6 +330,9 @@ fn write_fun(
                 }
                 if let Some(expr) = arg2 {
                     edges.insert("arg2", expr);
+                }
+                if let Some(expr) = arg3 {
+                    edges.insert("arg3", expr);
                 }
                 (format!("{:?}", fun).into(), 7)
             }

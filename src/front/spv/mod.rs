@@ -1330,6 +1330,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                         arg: loaded,
                                                         arg1: None,
                                                         arg2: None,
+                                                        arg3: None,
                                                     },
                                                     span,
                                                 );
@@ -1407,6 +1408,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                                         arg: loaded,
                                                         arg1: None,
                                                         arg2: None,
+                                                        arg3: None,
                                                     },
                                                     span,
                                                 )
@@ -1811,6 +1813,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         arg: matrix_handle,
                         arg1: None,
                         arg2: None,
+                        arg3: None,
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -1837,6 +1840,70 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         arg: left_handle,
                         arg1: Some(right_handle),
                         arg2: None,
+                        arg3: None,
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: ctx.expressions.append(expr, span),
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+                }
+                Op::BitFieldInsert => {
+                    inst.expect(7)?;
+
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let base_id = self.next()?;
+                    let insert_id = self.next()?;
+                    let offset_id = self.next()?;
+                    let count_id = self.next()?;
+                    let base_lexp = self.lookup_expression.lookup(base_id)?;
+                    let base_handle = get_expr_handle!(base_id, base_lexp);
+                    let insert_lexp = self.lookup_expression.lookup(insert_id)?;
+                    let insert_handle = get_expr_handle!(insert_id, insert_lexp);
+                    let offset_lexp = self.lookup_expression.lookup(offset_id)?;
+                    let offset_handle = get_expr_handle!(offset_id, offset_lexp);
+                    let count_lexp = self.lookup_expression.lookup(count_id)?;
+                    let count_handle = get_expr_handle!(count_id, count_lexp);
+                    let expr = crate::Expression::Math {
+                        fun: crate::MathFunction::InsertBits,
+                        arg: base_handle,
+                        arg1: Some(insert_handle),
+                        arg2: Some(offset_handle),
+                        arg3: Some(count_handle),
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: ctx.expressions.append(expr, span),
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+                }
+                Op::BitFieldSExtract | Op::BitFieldUExtract => {
+                    inst.expect(6)?;
+
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let base_id = self.next()?;
+                    let offset_id = self.next()?;
+                    let count_id = self.next()?;
+                    let base_lexp = self.lookup_expression.lookup(base_id)?;
+                    let base_handle = get_expr_handle!(base_id, base_lexp);
+                    let offset_lexp = self.lookup_expression.lookup(offset_id)?;
+                    let offset_handle = get_expr_handle!(offset_id, offset_lexp);
+                    let count_lexp = self.lookup_expression.lookup(count_id)?;
+                    let count_handle = get_expr_handle!(count_id, count_lexp);
+                    let expr = crate::Expression::Math {
+                        fun: crate::MathFunction::ExtractBits,
+                        arg: base_handle,
+                        arg1: Some(offset_handle),
+                        arg2: Some(count_handle),
+                        arg3: None,
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -1863,6 +1930,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         arg: left_handle,
                         arg1: Some(right_handle),
                         arg2: None,
+                        arg3: None,
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -2352,6 +2420,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             Glo::FaceForward => Mf::FaceForward,
                             Glo::Reflect => Mf::Reflect,
                             Glo::Refract => Mf::Refract,
+                            Glo::PackUnorm4x8 => Mf::Pack4x8unorm,
+                            Glo::PackSnorm4x8 => Mf::Pack4x8snorm,
+                            Glo::PackHalf2x16 => Mf::Pack2x16float,
+                            Glo::PackUnorm2x16 => Mf::Pack2x16unorm,
+                            Glo::PackSnorm2x16 => Mf::Pack2x16snorm,
+                            Glo::UnpackUnorm4x8 => Mf::Unpack4x8unorm,
+                            Glo::UnpackSnorm4x8 => Mf::Unpack4x8snorm,
+                            Glo::UnpackHalf2x16 => Mf::Unpack2x16float,
+                            Glo::UnpackUnorm2x16 => Mf::Unpack2x16unorm,
+                            Glo::UnpackSnorm2x16 => Mf::Unpack2x16snorm,
                             _ => return Err(Error::UnsupportedExtInst(inst_id)),
                         };
 
@@ -2376,12 +2454,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         } else {
                             None
                         };
+                        let arg3 = if arg_count > 3 {
+                            let arg_id = self.next()?;
+                            let lexp = self.lookup_expression.lookup(arg_id)?;
+                            Some(get_expr_handle!(arg_id, lexp))
+                        } else {
+                            None
+                        };
 
                         let expr = crate::Expression::Math {
                             fun,
                             arg,
                             arg1,
                             arg2,
+                            arg3,
                         };
                         self.lookup_expression.insert(
                             result_id,
