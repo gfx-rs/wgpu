@@ -598,12 +598,6 @@ fn convert_spv_inverse_hyperbolic_trig_functions() {
     );
 }
 
-#[cfg(all(feature = "spv-in", feature = "spv-out"))]
-//#[test] //TODO: https://github.com/gfx-rs/naga/issues/1432
-fn _convert_spv_pointer_access() {
-    convert_spv("pointer-access", true, Targets::SPIRV);
-}
-
 #[cfg(feature = "glsl-in")]
 #[allow(unused_variables)]
 #[test]
