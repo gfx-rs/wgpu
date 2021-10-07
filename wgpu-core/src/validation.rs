@@ -793,7 +793,7 @@ impl Interface {
         list: &mut Vec<Varying>,
         binding: Option<&naga::Binding>,
         ty: naga::Handle<naga::Type>,
-        arena: &naga::Arena<naga::Type>,
+        arena: &naga::UniqueArena<naga::Type>,
     ) {
         let numeric_ty = match arena[ty].inner {
             naga::TypeInner::Scalar { kind, width } => NumericType {
