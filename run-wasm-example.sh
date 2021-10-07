@@ -17,16 +17,16 @@ SERVE_ARGS=""
 if which basic-http-server; then
     SERVE_CMD="basic-http-server"
     SERVE_ARGS="target/wasm-examples/$1 -a 127.0.0.1:1234"
-elif which miniserve && python3 -m http.server --help > /dev/null; then 
+elif which miniserve && python3 -m http.server --help > /dev/null; then
     SERVE_CMD="miniserve"
     SERVE_ARGS="target/wasm-examples/$1 -p 1234 --index index.html"
-elif python3 -m http.server --help > /dev/null; then 
+elif python3 -m http.server --help > /dev/null; then
     SERVE_CMD="python3"
     SERVE_ARGS="-m http.server --directory target/wasm-examples/$1 1234"
 fi
 
 # Exit if we couldn't find a tool to serve the example with
-if [ "$SERVE_CMD" = "" ]; then 
+if [ "$SERVE_CMD" = "" ]; then
     echo "Couldn't find a utility to use to serve the example web page. You can serve the `target/wasm-examples/$1` folder yourself using any simple static http file server."
 fi
 

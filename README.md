@@ -94,7 +94,7 @@ We have multiple methods of testing, each of which tests different qualities abo
 
 ### Core Test Infrastructure
 
-All framework based examples have image comparison tested against their screenshot. 
+All framework based examples have image comparison tested against their screenshot.
 
 To run the test suite on the default device:
 
@@ -142,7 +142,7 @@ To run a given set of tests:
 cargo run --manifest-path ../cts_runner/Cargo.toml --frozen -- ./tools/run_deno --verbose "<test string>"
 ```
 
-To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*). 
+To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
 
 The list of currently enabled CTS tests can be found [here](./cts_runner/test.lst).
 

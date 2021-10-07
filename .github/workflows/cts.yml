@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: wgpu
-      
+
       - name: checkout cts
         run: |
           git clone https://github.com/gpuweb/cts.git
@@ -79,7 +79,7 @@ jobs:
 
       - name: build CTS runner
         run: |
-          cargo build --manifest-path wgpu/cts_runner/Cargo.toml 
+          cargo build --manifest-path wgpu/cts_runner/Cargo.toml
 
       - name: run CTS
         shell: bash
