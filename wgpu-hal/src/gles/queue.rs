@@ -1,8 +1,9 @@
 use super::Command as C;
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use std::{mem, ops::Range, slice, sync::Arc};
+use std::{mem, slice, sync::Arc};
 
+#[cfg(not(target_arch = "wasm32"))]
 const DEBUG_ID: u32 = 0;
 
 const CUBEMAP_FACES: [u32; 6] = [
@@ -14,7 +15,8 @@ const CUBEMAP_FACES: [u32; 6] = [
     glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
 ];
 
-fn extract_marker<'a>(data: &'a [u8], range: &Range<u32>) -> &'a str {
+#[cfg(not(target_arch = "wasm32"))]
+fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
     std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
@@ -49,6 +51,7 @@ impl super::Queue {
             .map(|i| glow::COLOR_ATTACHMENT0 + i)
             .collect::<ArrayVec<_, { crate::MAX_COLOR_TARGETS }>>();
         gl.draw_buffers(&indices);
+        #[cfg(not(target_arch = "wasm32"))]
         for draw_buffer in 0..self.draw_buffer_count as u32 {
             gl.disable_draw_buffer(glow::BLEND, draw_buffer);
         }
@@ -105,7 +108,7 @@ impl super::Queue {
         &mut self,
         gl: &glow::Context,
         command: &C,
-        data_bytes: &[u8],
+        #[cfg_attr(target_arch = "wasm32", allow(unused))] data_bytes: &[u8],
         queries: &[glow::Query],
     ) {
         match *command {
@@ -231,16 +234,54 @@ impl super::Queue {
                 dst_target,
                 copy,
             } => {
-                gl.bind_buffer(src_target, Some(src));
-                gl.bind_buffer(dst_target, Some(dst));
+                let is_index_buffer_only_element_dst = !self
+                    .shared
+                    .private_caps
+                    .contains(super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE)
+                    && dst_target == glow::ELEMENT_ARRAY_BUFFER
+                    || src_target == glow::ELEMENT_ARRAY_BUFFER;
 
-                gl.copy_buffer_sub_data(
-                    src_target,
-                    dst_target,
-                    copy.src_offset as i32,
-                    copy.dst_offset as i32,
-                    copy.size.get() as i32,
-                );
+                let copy_src_target = glow::COPY_READ_BUFFER;
+
+                // WebGL not allowed to copy data from other targets to element buffer and can't copy element data to other buffers
+                let copy_dst_target = if is_index_buffer_only_element_dst {
+                    glow::ELEMENT_ARRAY_BUFFER
+                } else {
+                    glow::COPY_WRITE_BUFFER
+                };
+
+                gl.bind_buffer(copy_src_target, Some(src));
+                gl.bind_buffer(copy_dst_target, Some(dst));
+
+                if is_index_buffer_only_element_dst {
+                    let mut buffer_data = vec![0; copy.size.get() as usize];
+                    gl.get_buffer_sub_data(
+                        copy_src_target,
+                        copy.src_offset as i32,
+                        &mut buffer_data,
+                    );
+                    gl.buffer_sub_data_u8_slice(
+                        copy_dst_target,
+                        copy.dst_offset as i32,
+                        &buffer_data,
+                    );
+                } else {
+                    gl.copy_buffer_sub_data(
+                        copy_src_target,
+                        copy_dst_target,
+                        copy.src_offset as _,
+                        copy.dst_offset as _,
+                        copy.size.get() as _,
+                    );
+                }
+
+                gl.bind_buffer(copy_src_target, None);
+
+                if is_index_buffer_only_element_dst {
+                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, self.current_index_buffer);
+                } else {
+                    gl.bind_buffer(copy_dst_target, None);
+                }
             }
             C::CopyTextureToTexture {
                 src,
@@ -513,6 +554,7 @@ impl super::Queue {
             }
             C::SetIndexBuffer(buffer) => {
                 gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer));
+                self.current_index_buffer = Some(buffer);
             }
             C::BeginQuery(query, target) => {
                 gl.begin_query(target, query);
@@ -603,8 +645,15 @@ impl super::Queue {
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
                     .collect::<ArrayVec<_, { crate::MAX_COLOR_TARGETS }>>();
                 gl.draw_buffers(&indices);
-                for draw_buffer in 0..count as u32 {
-                    gl.disable_draw_buffer(glow::BLEND, draw_buffer);
+
+                if self
+                    .shared
+                    .private_caps
+                    .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
+                {
+                    for draw_buffer in 0..count as u32 {
+                        gl.disable_draw_buffer(glow::BLEND, draw_buffer);
+                    }
                 }
             }
             C::ClearColorF {
@@ -863,7 +912,11 @@ impl super::Queue {
                             gl.blend_equation_draw_buffer(index, blend.color.equation);
                             gl.blend_func_draw_buffer(index, blend.color.src, blend.color.dst);
                         }
-                    } else {
+                    } else if self
+                        .shared
+                        .private_caps
+                        .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
+                    {
                         gl.disable_draw_buffer(index, glow::BLEND);
                     }
                 } else {
@@ -923,6 +976,7 @@ impl super::Queue {
                     binding.format,
                 );
             }
+            #[cfg(not(target_arch = "wasm32"))]
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);
                 gl.debug_message_insert(
@@ -933,11 +987,17 @@ impl super::Queue {
                     marker,
                 );
             }
+            #[cfg(target_arch = "wasm32")]
+            C::InsertDebugMarker(_) => (),
+            #[cfg_attr(target_arch = "wasm32", allow(unused))]
             C::PushDebugGroup(ref range) => {
+                #[cfg(not(target_arch = "wasm32"))]
                 let marker = extract_marker(data_bytes, range);
+                #[cfg(not(target_arch = "wasm32"))]
                 gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker);
             }
             C::PopDebugGroup => {
+                #[cfg(not(target_arch = "wasm32"))]
                 gl.pop_debug_group();
             }
         }
@@ -954,12 +1014,16 @@ impl crate::Queue<super::Api> for super::Queue {
         let gl = &shared.context.lock();
         self.reset_state(gl);
         for cmd_buf in command_buffers.iter() {
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref label) = cmd_buf.label {
                 gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label);
             }
+
             for command in cmd_buf.commands.iter() {
                 self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.queries);
             }
+
+            #[cfg(not(target_arch = "wasm32"))]
             if cmd_buf.label.is_some() {
                 gl.pop_debug_group();
             }
@@ -981,7 +1045,12 @@ impl crate::Queue<super::Api> for super::Queue {
         surface: &mut super::Surface,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
+        #[cfg(not(target_arch = "wasm32"))]
         let gl = &self.shared.context.get_without_egl_lock();
+
+        #[cfg(target_arch = "wasm32")]
+        let gl = &self.shared.context.glow_context;
+
         surface.present(texture, gl)
     }
 
@@ -989,3 +1058,9 @@ impl crate::Queue<super::Api> for super::Queue {
         1.0
     }
 }
+
+// SAFE: WASM doesn't have threads
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for super::Queue {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for super::Queue {}

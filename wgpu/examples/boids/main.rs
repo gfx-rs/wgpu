@@ -31,6 +31,17 @@ struct Example {
 }
 
 impl framework::Example for Example {
+    fn required_limits() -> wgpu::Limits {
+        wgpu::Limits::downlevel_defaults()
+    }
+
+    fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
+        wgpu::DownlevelCapabilities {
+            flags: wgpu::DownlevelFlags::COMPUTE_SHADERS,
+            ..Default::default()
+        }
+    }
+
     /// constructs initial instance of Example struct
     fn init(
         config: &wgpu::SurfaceConfiguration,

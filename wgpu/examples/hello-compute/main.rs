@@ -33,7 +33,7 @@ async fn run() {
 
 async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
     // Instantiates instance of WebGPU
-    let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
+    let instance = wgpu::Instance::new(wgpu::Backends::all());
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance

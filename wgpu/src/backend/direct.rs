@@ -38,6 +38,7 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
+    #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self(wgc::hub::Global::from_hal_instance::<A>(
             "wgpu",
@@ -50,6 +51,7 @@ impl Context {
         &self.0
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
@@ -57,6 +59,7 @@ impl Context {
             }))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -64,6 +67,7 @@ impl Context {
         self.0.create_adapter_from_hal(hal_adapter, PhantomData)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
         adapter: &wgc::id::AdapterId,
@@ -90,6 +94,7 @@ impl Context {
         Ok((device, device_id))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -118,6 +123,7 @@ impl Context {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         texture: &Texture,
@@ -127,6 +133,7 @@ impl Context {
             .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
         self.0.generate_report()
     }
@@ -1172,17 +1179,17 @@ impl crate::Context for Context {
         // Limit is always less or equal to hal::MAX_BIND_GROUPS, so this is always right
         // Guards following ArrayVec
         assert!(
-            desc.bind_group_layouts.len() <= hal::MAX_BIND_GROUPS,
+            desc.bind_group_layouts.len() <= wgc::MAX_BIND_GROUPS,
             "Bind group layout count {} exceeds device bind group limit {}",
             desc.bind_group_layouts.len(),
-            hal::MAX_BIND_GROUPS
+            wgc::MAX_BIND_GROUPS
         );
 
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
             .map(|bgl| bgl.id)
-            .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
+            .collect::<ArrayVec<_, { wgc::MAX_BIND_GROUPS }>>();
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
@@ -1214,7 +1221,7 @@ impl crate::Context for Context {
     ) -> Self::RenderPipelineId {
         use wgc::pipeline as pipe;
 
-        let vertex_buffers: ArrayVec<_, { hal::MAX_VERTEX_BUFFERS }> = desc
+        let vertex_buffers: ArrayVec<_, { wgc::MAX_VERTEX_BUFFERS }> = desc
             .vertex
             .buffers
             .iter()
@@ -1229,7 +1236,7 @@ impl crate::Context for Context {
             Some(_) => None,
             None => Some(wgc::device::ImplicitPipelineIds {
                 root_id: PhantomData,
-                group_ids: &[PhantomData; hal::MAX_BIND_GROUPS],
+                group_ids: &[PhantomData; wgc::MAX_BIND_GROUPS],
             }),
         };
         let descriptor = pipe::RenderPipelineDescriptor {
@@ -1288,7 +1295,7 @@ impl crate::Context for Context {
             Some(_) => None,
             None => Some(wgc::device::ImplicitPipelineIds {
                 root_id: PhantomData,
-                group_ids: &[PhantomData; hal::MAX_BIND_GROUPS],
+                group_ids: &[PhantomData; wgc::MAX_BIND_GROUPS],
             }),
         };
         let descriptor = pipe::ComputePipelineDescriptor {
@@ -1480,6 +1487,7 @@ impl crate::Context for Context {
         }
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId) {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -1916,7 +1924,7 @@ impl crate::Context for Context {
                 resolve_target: ca.resolve_target.map(|rt| rt.id),
                 channel: map_pass_channel(Some(&ca.ops)),
             })
-            .collect::<ArrayVec<_, { hal::MAX_COLOR_TARGETS }>>();
+            .collect::<ArrayVec<_, { wgc::MAX_COLOR_TARGETS }>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::RenderPassDepthStencilAttachment {

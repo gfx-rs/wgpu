@@ -83,7 +83,6 @@ pub struct FailureCase {
 // This information determines if a test should run.
 pub struct TestParameters {
     pub required_features: Features,
-    pub required_limits: Limits,
     pub required_downlevel_properties: DownlevelCapabilities,
     // Backends where test should fail.
     pub failures: Vec<FailureCase>,
@@ -93,7 +92,6 @@ impl Default for TestParameters {
     fn default() -> Self {
         Self {
             required_features: Features::empty(),
-            required_limits: Limits::downlevel_defaults(),
             required_downlevel_properties: lowest_downlevel_properties(),
             failures: Vec::new(),
         }
@@ -119,12 +117,6 @@ impl TestParameters {
     /// Set the list of features this test requires.
     pub fn features(mut self, features: Features) -> Self {
         self.required_features |= features;
-        self
-    }
-
-    /// Set the list
-    pub fn limits(mut self, limits: Limits) -> Self {
-        self.required_limits = limits;
         self
     }
 
@@ -178,7 +170,6 @@ impl TestParameters {
         self
     }
 }
-
 pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {
     // We don't actually care if it fails
     let _ = env_logger::try_init();
@@ -192,6 +183,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     ))
     .expect("could not find sutable adapter on the system");
 
+    let required_limits = Limits::downlevel_defaults();
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
     let adapter_features = adapter.features();
@@ -204,7 +196,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         return;
     }
 
-    if adapter_limits < parameters.required_limits {
+    if adapter_limits < required_limits {
         println!("TEST SKIPPED: LIMIT TOO LOW");
         return;
     }
@@ -232,7 +224,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let (device, queue) = pollster::block_on(initialize_device(
         &adapter,
         parameters.required_features,
-        parameters.required_limits,
+        required_limits,
     ));
 
     let context = TestingContext {

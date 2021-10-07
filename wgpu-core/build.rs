@@ -11,6 +11,11 @@ fn main() {
         metal: { all(not(wasm), apple) },
         dx12: { all(not(wasm), windows) },
         dx11: { all(false, not(wasm), windows) },
-        gl: { all(not(wasm), unix_wo_apple) },
+        gl: {
+            any(
+                all(not(wasm), unix_wo_apple),
+                wasm
+            )
+        },
     }
 }

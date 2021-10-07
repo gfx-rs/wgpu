@@ -68,6 +68,11 @@ mtl = { package = "metal", version = "0.23.1" }
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "0.2" }
+web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext"] }
+js-sys = { version = "0.3" }
+
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
 rev = "2e7d629"

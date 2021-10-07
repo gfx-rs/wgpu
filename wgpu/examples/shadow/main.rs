@@ -214,11 +214,17 @@ impl framework::Example for Example {
     }
 
     fn init(
-        config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
+        sc_desc: &wgpu::SurfaceConfiguration,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
+        let supports_storage_resources = adapter
+            .get_downlevel_properties()
+            .flags
+            .contains(wgpu::DownlevelFlags::VERTEX_STORAGE)
+            && device.limits().max_storage_buffers_per_shader_stage > 0;
+
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
@@ -429,8 +435,11 @@ impl framework::Example for Example {
         let light_storage_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: light_uniform_size,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
+            usage: if supports_storage_resources {
+                wgpu::BufferUsages::STORAGE
+            } else {
+                wgpu::BufferUsages::UNIFORM
+            } | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -546,7 +555,11 @@ impl framework::Example for Example {
                             binding: 1, // lights
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                ty: if supports_storage_resources {
+                                    wgpu::BufferBindingType::Storage { read_only: true }
+                                } else {
+                                    wgpu::BufferBindingType::Uniform
+                                },
                                 has_dynamic_offset: false,
                                 min_binding_size: wgpu::BufferSize::new(light_uniform_size),
                             },
@@ -580,7 +593,7 @@ impl framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-            let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
+            let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
             let forward_uniforms = GlobalUniforms {
                 proj: *mx_total.as_ref(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
@@ -626,8 +639,12 @@ impl framework::Example for Example {
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: "fs_main",
-                    targets: &[config.format.into()],
+                    entry_point: if supports_storage_resources {
+                        "fs_main"
+                    } else {
+                        "fs_main_without_storage"
+                    },
+                    targets: &[sc_desc.format.into()],
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
@@ -651,7 +668,7 @@ impl framework::Example for Example {
             }
         };
 
-        let forward_depth = Self::create_depth_texture(config, device);
+        let forward_depth = Self::create_depth_texture(sc_desc, device);
 
         Example {
             entities,
