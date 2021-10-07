@@ -118,7 +118,7 @@
                     depth_or_array_layers: 1,
                 ),
             ),
-            // Partial clear to proove 
+            // Partial clear to prove
             ClearBuffer(
                 dst: Id(1, 1, Empty),
                 offset: 4,

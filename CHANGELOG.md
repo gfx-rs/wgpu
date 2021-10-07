@@ -1,11 +1,80 @@
 # Change Log
 
-## TBD
+## wgpu-0.11 (2021-10-07)
+  - Infrastructure:
+    - Deno WebGPU plugin is a part of the repository
+    - WebGPU CTS is ran on CI via Deno
+  - API:
+    - initial WebGL support
+    - `SwapchainFrame` is removed. `SurfaceTexture::present()` needs to be called instead of dropping.
+    - better SPIR-V control flow processing
+    - ability to request a software (fallback) adapter
+    - new limits for `min_uniform_buffer_offset_alignment` and `min_storage_buffer_offset_alignment`
+    - features:
+      - new `PARTIALLY_BOUND_BINDING_ARRAY`
+      - `NON_FILL_POLYGON_MODE` is split into `POLYGON_MODE_LINE` and `POLYGON_MODE_POINT`
+  - fixes:
+    - many shader-related fixes in Naga-0.7
+    - fix a panic in resource cleanup happening when they are dropped on another thread
+    - Vulkan:
+      - create SPIR-V per entry point to work around driver bugs
+      - expose higher descriptor limits based on descriptor indexing capabilities
+    - GL and Vulkan:
+      - Fix renderdoc device pointers
+  - optimization:
+    - on Vulkan, bounds checks are omitted if the platform can do them natively
+
+### wgpu-core-0.10.4, wgpu-0.10.2 (2021-09-23)
+  - fix `write_texture` for array textures
+  - fix closing an encoder on validation error
+  - expose Metal surface creation
+  - panic with an actual error message in the default handler
+
+### wgpu-hal-0.10.7 (2021-09-14)
+  - Metal:
+    - fix stencil back-face state
+    - fix the limit on command buffer count
+
+### wgpu-hal-0.10.6 (2021-09-12)
+  - Metal:
+    - fix stencil operations
+    - fix memory leak on M1 when out of focus
+    - fix depth clamping checks
+    - fix unsized storage buffers beyond the first
+
+### wgpu-core-0.10.3, wgpu-hal-0.10.4 (2021-09-08)
+  - Vulkan:
+    - fix read access barriers for writable storage buffers
+    - fix shaders using cube array textures
+    - work around Linux Intel+Nvidia driver conflicts
+    - work around Adreno bug with `OpName`
+  - DX12:
+    - fix storage binding offsets
+  - Metal:
+    - fix compressed texture copies
+
+### wgpu-core-0.10.2, wgpu-hal-0.10.3 (2021-09-01)
+  - All:
+    - fix querying the size of storage textures
+  - Vulkan:
+    - use render pass labels
+  - Metal:
+    - fix moving the surface between displays
+  - DX12:
+    - enable BC compressed textures
+  - GL:
+    - fix vertex-buffer and storage related limits
+
+### wgpu-core-0.10.1, wgpu-hal-0.10.2 (2021-08-24)
   - All:
     - expose more formats via adapter-specific feature
     - fix creation of depth+stencil views
+    - validate cube textures to not be used as storage
+    - fix mip level count check for storage textures
   - Metal:
     - fix usage of work group memory
+  - DX12:
+    - critical fix of pipeline layout
 
 ## v0.10 (2021-08-18)
   - Infrastructure:
@@ -27,10 +96,10 @@
   - Fixed:
     - `Device::create_query_set` would return an error when creating exactly `QUERY_SET_MAX_QUERIES` (8192) queries. Now it only returns an error when trying to create *more* than `QUERY_SET_MAX_QUERIES` queries.
 
-## wgpu-core-0.9.2
+### wgpu-core-0.9.2
   - fix `Features::TEXTURE_SPECIFIC_FORMAT_FEATURES` not being supported for rendertargets
 
-## wgpu-core-0.9.1 (2021-07-13)
+### wgpu-core-0.9.1 (2021-07-13)
   - fix buffer inits delayed by a frame
   - fix query resolves to initialize buffers
   - fix pipeline statistics stride
@@ -73,10 +142,10 @@
     - Add missing extern "C" in wgpu-core on `wgpu_render_pass_execute_bundles`
     - Fix incorrect function name `wgpu_render_pass_bundle_indexed_indirect` to `wgpu_render_bundle_draw_indexed_indirect`.
 
-## wgpu-types-0.8.1 (2021-06-08)
+### wgpu-types-0.8.1 (2021-06-08)
   - fix dynamic stencil reference for Replace ops
 
-## v0.8.1 (2021-05-06)
+### v0.8.1 (2021-05-06)
   - fix SPIR-V generation from WGSL, which was broken due to "Kernel" capability
   - validate buffer storage classes
   - Added support for storage texture arrays for Vulkan and Metal.
@@ -120,7 +189,7 @@
     - interpolation qualifiers
     - allow vertex components to be underspecified
 
-## wgpu-core-0.7.1 (2021-02-25)
+### wgpu-core-0.7.1 (2021-02-25)
   - expose `wgc::device::queue` sub-module in public
   - fix the indexed buffer check
   - fix command allocator race condition
@@ -179,28 +248,28 @@
     - bind group matching to the layout
     - experimental shader interface matching with Naga
 
-## wgpu-core-0.5.6 (2020-07-09)
+### wgpu-core-0.5.6 (2020-07-09)
   - add debug markers support
 
-## wgpu-core-0.5.5 (2020-05-20)
+### wgpu-core-0.5.5 (2020-05-20)
   - fix destruction of adapters, swap chains, and bind group layouts
   - fix command pool leak with temporary threads
   - improve assertion messages
   - implement `From<TextureFormat>` for `TextureComponentType`
 
-## wgpu-core-0.5.4 (2020-04-24)
+### wgpu-core-0.5.4 (2020-04-24)
   - fix memory management of staging buffers
 
-## wgpu-core-0.5.3 (2020-04-18)
+### wgpu-core-0.5.3 (2020-04-18)
   - fix reading access to storage textures
   - another fix to layout transitions for swapchain images
 
-## wgpu-core-0.5.2 (2020-04-15)
+### wgpu-core-0.5.2 (2020-04-15)
   - fix read-only storage flags
   - fix pipeline layout life time
   - improve various assert messages
 
-## wgpu-core-0.5.1 (2020-04-10)
+### wgpu-core-0.5.1 (2020-04-10)
   - fix tracking of swapchain images that are used multiple times in a command buffer
   - fix tracking of initial usage of a resource across a command buffer
 
@@ -225,13 +294,13 @@
     - unmapping dropped buffers
     - better error messages on misused swapchain frames
 
-## wgpu-core-0.4.3 (2020-01-20)
+### wgpu-core-0.4.3 (2020-01-20)
   - improved swap chain error handling
 
-## wgpu-core-0.4.2 (2019-12-15)
+### wgpu-core-0.4.2 (2019-12-15)
   - fixed render pass transitions
 
-## wgpu-core-0.4.1 (2019-11-28)
+### wgpu-core-0.4.1 (2019-11-28)
   - fixed depth/stencil transitions
   - fixed dynamic offset iteration
 
@@ -245,10 +314,10 @@
   - Validation:
     - buffer and texture usage
 
-## wgpu-core-0.3.3 (2019-08-22)
+### wgpu-core-0.3.3 (2019-08-22)
   - fixed instance creation on Windows
 
-## wgpu-core-0.3.1 (2019-08-21)
+### wgpu-core-0.3.1 (2019-08-21)
   - fixed pipeline barriers that aren't transitions
 
 ## v0.3 (2019-08-21)
@@ -271,16 +340,16 @@
     - bind group buffer ranges
     - required stencil reference, blend color
 
-## wgpu-core-0.2.6 (2019-04-04)
+### wgpu-core-0.2.6 (2019-04-04)
   - fixed frame acquisition GPU waits
 
-## wgpu-core-0.2.5 (2019-03-31)
+### wgpu-core-0.2.5 (2019-03-31)
   - fixed submission tracking
   - added support for blend colors
   - fixed bind group compatibility at the gfx-hal level
   - validating the bind groups and blend colors
 
-## wgpu-core-0.2.3 (2019-03-20)
+### wgpu-core-0.2.3 (2019-03-20)
   - fixed vertex format mapping
   - fixed building with "empty" backend on Windows
   - bumped the default descriptor pool size
