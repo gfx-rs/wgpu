@@ -1854,6 +1854,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::BitFieldInsert => {
                     inst.expect(7)?;
 
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let base_id = self.next()?;
@@ -1866,14 +1869,52 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let insert_handle = get_expr_handle!(insert_id, insert_lexp);
                     let offset_lexp = self.lookup_expression.lookup(offset_id)?;
                     let offset_handle = get_expr_handle!(offset_id, offset_lexp);
+                    let offset_lookup_ty = self.lookup_type.lookup(offset_lexp.type_id)?;
                     let count_lexp = self.lookup_expression.lookup(count_id)?;
                     let count_handle = get_expr_handle!(count_id, count_lexp);
+                    let count_lookup_ty = self.lookup_type.lookup(count_lexp.type_id)?;
+
+                    let offset_kind = ctx.type_arena[offset_lookup_ty.handle]
+                        .inner
+                        .scalar_kind()
+                        .unwrap();
+                    let count_kind = ctx.type_arena[count_lookup_ty.handle]
+                        .inner
+                        .scalar_kind()
+                        .unwrap();
+
+                    let offset_cast_handle = if offset_kind != crate::ScalarKind::Uint {
+                        ctx.expressions.append(
+                            crate::Expression::As {
+                                expr: offset_handle,
+                                kind: crate::ScalarKind::Uint,
+                                convert: None,
+                            },
+                            span,
+                        )
+                    } else {
+                        offset_handle
+                    };
+
+                    let count_cast_handle = if count_kind != crate::ScalarKind::Uint {
+                        ctx.expressions.append(
+                            crate::Expression::As {
+                                expr: count_handle,
+                                kind: crate::ScalarKind::Uint,
+                                convert: None,
+                            },
+                            span,
+                        )
+                    } else {
+                        count_handle
+                    };
+
                     let expr = crate::Expression::Math {
                         fun: crate::MathFunction::InsertBits,
                         arg: base_handle,
                         arg1: Some(insert_handle),
-                        arg2: Some(offset_handle),
-                        arg3: Some(count_handle),
+                        arg2: Some(offset_cast_handle),
+                        arg3: Some(count_cast_handle),
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -1896,13 +1937,51 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let base_handle = get_expr_handle!(base_id, base_lexp);
                     let offset_lexp = self.lookup_expression.lookup(offset_id)?;
                     let offset_handle = get_expr_handle!(offset_id, offset_lexp);
+                    let offset_lookup_ty = self.lookup_type.lookup(offset_lexp.type_id)?;
                     let count_lexp = self.lookup_expression.lookup(count_id)?;
                     let count_handle = get_expr_handle!(count_id, count_lexp);
+                    let count_lookup_ty = self.lookup_type.lookup(count_lexp.type_id)?;
+
+                    let offset_kind = ctx.type_arena[offset_lookup_ty.handle]
+                        .inner
+                        .scalar_kind()
+                        .unwrap();
+                    let count_kind = ctx.type_arena[count_lookup_ty.handle]
+                        .inner
+                        .scalar_kind()
+                        .unwrap();
+
+                    let offset_cast_handle = if offset_kind != crate::ScalarKind::Uint {
+                        ctx.expressions.append(
+                            crate::Expression::As {
+                                expr: offset_handle,
+                                kind: crate::ScalarKind::Uint,
+                                convert: None,
+                            },
+                            span,
+                        )
+                    } else {
+                        offset_handle
+                    };
+
+                    let count_cast_handle = if count_kind != crate::ScalarKind::Uint {
+                        ctx.expressions.append(
+                            crate::Expression::As {
+                                expr: count_handle,
+                                kind: crate::ScalarKind::Uint,
+                                convert: None,
+                            },
+                            span,
+                        )
+                    } else {
+                        count_handle
+                    };
+
                     let expr = crate::Expression::Math {
                         fun: crate::MathFunction::ExtractBits,
                         arg: base_handle,
-                        arg1: Some(offset_handle),
-                        arg2: Some(count_handle),
+                        arg1: Some(offset_cast_handle),
+                        arg2: Some(count_cast_handle),
                         arg3: None,
                     };
                     self.lookup_expression.insert(
