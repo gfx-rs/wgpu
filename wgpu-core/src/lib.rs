@@ -45,10 +45,7 @@ pub mod resource;
 mod track;
 mod validation;
 
-pub use hal::api;
-pub use hal::MAX_BIND_GROUPS;
-pub use hal::MAX_COLOR_TARGETS;
-pub use hal::MAX_VERTEX_BUFFERS;
+pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS};
 
 use atomic::{AtomicUsize, Ordering};
 

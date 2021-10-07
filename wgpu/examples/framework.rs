@@ -106,7 +106,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
         let level: log::Level = parse_url_query_string(&query_string, "RUST_LOG")
             .map(|x| x.parse().ok())
             .flatten()
-            .unwrap_or(log::Level::Info);
+            .unwrap_or(log::Level::Error);
         console_log::init_with_level(level).expect("could not initialize logger");
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         // On wasm, append the canvas to the document body
@@ -419,10 +419,10 @@ pub fn run<E: Example>(title: &str) {
 /// Parse the query string as returned by `web_sys::window()?.location().search()?` and get a
 /// specific key out of it.
 pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a str> {
-    let query_string = query.strip_prefix("?")?;
+    let query_string = query.strip_prefix('?')?;
 
-    for pair in query_string.split("&") {
-        let mut pair = pair.split("=");
+    for pair in query_string.split('&') {
+        let mut pair = pair.split('=');
         let key = pair.next()?;
         let value = pair.next()?;
 

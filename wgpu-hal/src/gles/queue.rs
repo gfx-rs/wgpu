@@ -645,9 +645,15 @@ impl super::Queue {
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
                     .collect::<ArrayVec<_, { crate::MAX_COLOR_TARGETS }>>();
                 gl.draw_buffers(&indices);
-                #[cfg(not(target_arch = "wasm32"))]
-                for draw_buffer in 0..count as u32 {
-                    gl.disable_draw_buffer(glow::BLEND, draw_buffer);
+
+                if self
+                    .shared
+                    .private_caps
+                    .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
+                {
+                    for draw_buffer in 0..count as u32 {
+                        gl.disable_draw_buffer(glow::BLEND, draw_buffer);
+                    }
                 }
             }
             C::ClearColorF {
@@ -906,8 +912,11 @@ impl super::Queue {
                             gl.blend_equation_draw_buffer(index, blend.color.equation);
                             gl.blend_func_draw_buffer(index, blend.color.src, blend.color.dst);
                         }
-                    } else {
-                        #[cfg(not(target_arch = "wasm32"))]
+                    } else if self
+                        .shared
+                        .private_caps
+                        .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
+                    {
                         gl.disable_draw_buffer(index, glow::BLEND);
                     }
                 } else {

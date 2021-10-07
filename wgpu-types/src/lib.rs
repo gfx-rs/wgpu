@@ -691,21 +691,22 @@ impl Limits {
 
     /// These default limits are guarenteed to be compatible with GLES3, and D3D11, and WebGL2
     pub fn downlevel_webgl2_defaults() -> Self {
-        Self {
-            #[cfg(target_arch = "wasm32")]
+        #[cfg(target_arch = "wasm32")]
+        let defaults = Self {
             max_storage_buffers_per_shader_stage: 0,
-            #[cfg(target_arch = "wasm32")]
             max_storage_textures_per_shader_stage: 0,
-            #[cfg(target_arch = "wasm32")]
             max_dynamic_storage_buffers_per_pipeline_layout: 0,
-            #[cfg(target_arch = "wasm32")]
             max_storage_buffer_binding_size: 0,
-            #[cfg(target_arch = "wasm32")]
             max_vertex_buffer_array_stride: 255,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()
-        }
+        };
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let defaults = Self::downlevel_defaults();
+
+        defaults
     }
 
     /// Modify the current limits to use the resolution limits of the other.

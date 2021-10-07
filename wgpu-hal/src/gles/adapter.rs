@@ -184,7 +184,7 @@ impl super::Adapter {
 
         log::info!("Vendor: {}", vendor);
         log::info!("Renderer: {}", renderer);
-        log::info!("Version: {}", &version);
+        log::info!("Version: {}", version);
 
         log::debug!("Extensions: {:#?}", extensions);
 
@@ -254,13 +254,9 @@ impl super::Adapter {
             wgt::DownlevelFlags::VERTEX_STORAGE,
             ver >= (3, 1)
                 && max_storage_block_size != 0
-                && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero)
-                && !cfg!(target_arch = "wasm32"),
+                && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
         );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::FRAGMENT_STORAGE,
-            ver >= (3, 1) && !cfg!(target_arch = "wasm32"),
-        );
+        downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, ver >= (3, 1));
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_COMPRESSION_ETC2
@@ -292,6 +288,10 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
+            cfg!(not(target_arch = "wasm32")),
+        );
+        private_caps.set(
+            super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER,
             cfg!(not(target_arch = "wasm32")),
         );
 
@@ -352,8 +352,10 @@ impl super::Adapter {
 
         let mut workarounds = super::Workarounds::empty();
 
-        #[cfg(target_arch = "wasm32")]
-        workarounds.set(super::Workarounds::EMULATE_BUFFER_MAP, true);
+        workarounds.set(
+            super::Workarounds::EMULATE_BUFFER_MAP,
+            cfg!(target_arch = "wasm32"),
+        );
 
         let r = renderer.to_lowercase();
         // Check for Mesa sRGB clear bug. See
@@ -373,7 +375,9 @@ impl super::Adapter {
         let downlevel_defaults = wgt::DownlevelLimits {};
 
         // Drop the GL guard so we can move the context into AdapterShared
-        #[cfg(not(target_arch = "wasm32"))]
+        // ( on WASM the gl handle is just a ref so we tell clippy to allow
+        // dropping the ref )
+        #[allow(clippy::drop_ref)]
         drop(gl);
 
         Some(crate::ExposedAdapter {
