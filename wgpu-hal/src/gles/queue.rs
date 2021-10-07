@@ -253,6 +253,8 @@ impl super::Queue {
                 gl.bind_buffer(copy_src_target, Some(src));
                 gl.bind_buffer(copy_dst_target, Some(dst));
 
+                //TODO: remove this slow path completely
+                // https://github.com/gfx-rs/wgpu/issues/2031
                 if is_index_buffer_only_element_dst {
                     let mut buffer_data = vec![0; copy.size.get() as usize];
                     gl.get_buffer_sub_data(
