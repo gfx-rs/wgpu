@@ -789,6 +789,7 @@ checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
 dependencies = [
  "autocfg",
  "hashbrown 0.11.2",
+ "serde",
 ]
 
 [[package]]
@@ -983,13 +984,14 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.6.0"
-source = "git+https://github.com/gfx-rs/naga?rev=52d74e9#52d74e91a4b062d317304250b5461890913d3bb8"
+source = "git+https://github.com/gfx-rs/naga?rev=0e3fbc8#0e3fbc81664a263e8be278d11a6083b227a5b1a2"
 dependencies = [
  "bit-set",
  "bitflags",
  "codespan-reporting",
  "fxhash",
  "hexf-parse",
+ "indexmap",
  "log",
  "num-traits 0.2.14",
  "petgraph",
