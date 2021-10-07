@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-types"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU types"

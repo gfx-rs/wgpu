@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
@@ -29,77 +29,6 @@ all-features = true
 [[test]]
 name = "wgpu-tests"
 path = "tests/root.rs"
-
-[features]
-default = []
-spirv = ["naga/spv-in"]
-spirv-web = ["spirv", "naga/wgsl-out"]
-trace = ["serde", "wgc/trace"]
-replay = ["serde", "wgc/replay"]
-webgl = ["wgc"]
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
-package = "wgpu-core"
-path = "../wgpu-core"
-version = "0.10"
-features = ["raw-window-handle"]
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
-package = "wgpu-core"
-path = "../wgpu-core"
-version = "0.10"
-features = ["raw-window-handle"]
-optional = true
-
-[dependencies.wgt]
-package = "wgpu-types"
-path = "../wgpu-types"
-version = "0.10"
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.hal]
-package = "wgpu-hal"
-path = "../wgpu-hal"
-version = "0.10"
-
-[dependencies]
-arrayvec = "0.7"
-log = "0.4"
-parking_lot = "0.11"
-raw-window-handle = "0.3"
-serde = { version = "1", features = ["derive"], optional = true }
-smallvec = "1"
-
-[dev-dependencies]
-bitflags = "1"
-bytemuck = { version = "1.4", features = ["derive"] }
-cgmath = "0.18"
-ddsfile = "0.4"
-log = "0.4"
-# Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
-# This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
-noise = { version = "0.7", default-features = false }
-obj = "0.10"
-png = "0.16"
-rand = { version = "0.7.2", features = ["wasm-bindgen"] }
-winit = { version = "0.25", features = ["web-sys"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-async-executor = "1.0"
-pollster = "0.2"
-env_logger = "0.8"
-
-[dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "2e7d629"
-#version = "0.6"
-optional = true
-
-# used to test all the example shaders
-[dev-dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "2e7d629"
-#version = "0.6"
-features = ["wgsl-in"]
 
 [[example]]
 name="boids"
@@ -145,6 +74,77 @@ test = true
 [[example]]
 name="water"
 test = true
+
+[features]
+default = []
+spirv = ["naga/spv-in"]
+spirv-web = ["spirv", "naga/wgsl-out"]
+trace = ["serde", "wgc/trace"]
+replay = ["serde", "wgc/replay"]
+webgl = ["wgc"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
+package = "wgpu-core"
+path = "../wgpu-core"
+version = "0.11"
+features = ["raw-window-handle"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
+package = "wgpu-core"
+path = "../wgpu-core"
+version = "0.11"
+features = ["raw-window-handle"]
+optional = true
+
+[dependencies.wgt]
+package = "wgpu-types"
+path = "../wgpu-types"
+version = "0.11"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.hal]
+package = "wgpu-hal"
+path = "../wgpu-hal"
+version = "0.11"
+
+[dependencies]
+arrayvec = "0.7"
+log = "0.4"
+parking_lot = "0.11"
+raw-window-handle = "0.3"
+serde = { version = "1", features = ["derive"], optional = true }
+smallvec = "1"
+
+[dev-dependencies]
+bitflags = "1"
+bytemuck = { version = "1.4", features = ["derive"] }
+cgmath = "0.18"
+ddsfile = "0.4"
+log = "0.4"
+# Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
+# This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
+noise = { version = "0.7", default-features = false }
+obj = "0.10"
+png = "0.16"
+rand = "0.7.2"
+winit = "0.25"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+async-executor = "1.0"
+pollster = "0.2"
+env_logger = "0.8"
+
+[dependencies.naga]
+#git = "https://github.com/gfx-rs/naga"
+#rev = "2e7d629"
+version = "0.7"
+optional = true
+
+# used to test all the example shaders
+[dev-dependencies.naga]
+#git = "https://github.com/gfx-rs/naga"
+#rev = "2e7d629"
+version = "0.7"
+features = ["wgsl-in"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.76" # remember to change version in wiki as well
@@ -282,3 +282,5 @@ console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 # We need the Location feature in the framework examples
 web-sys = { version = "0.3.53", features = ["Location"] }
+rand = { version = "0.7", features = ["wasm-bindgen"] }
+winit = { version = "0.25", features = ["web-sys"] }
