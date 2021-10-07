@@ -1,5 +1,77 @@
 # Change Log
 
+## v0.7 (2021-10-07)
+  - development release for wgpu-0.11
+  - API:
+    - bit extraction and packing functions
+    - hyperbolic trigonometry functionss
+    - validation is gated by a cargo feature
+    - `view_index` builtin
+    - separate bounds checking policies for locals/buffers/textures
+  - IR:
+    - types and constants are guaranteed to be unique
+  - WGSL-in:
+    - new hex literal parser
+    - updated list of reserved words
+    - rewritten logic for resolving references and pointers
+    - `switch` can use unsigned selectors
+  - GLSL-in:
+    - better support for texture sampling
+    - better logic for auto-splatting scalars
+  - GLSL-out:
+    - fixed storage buffer layout
+    - fix module operator
+  - HLSL-out:
+    - fixed texture queries
+  - SPV-in:
+    - control flow handling is rewritten from scratch
+  - SPV-out:
+    - fully covered out-of-bounds checking
+    - option to emit point size
+    - option to clamp output depth
+
+### v0.6.3 (2021-09-08)
+  - Reduced heap allocations when generating WGSL, HLSL, and GLSL
+  - WGSL-in:
+    - support module-scope `let` type inference
+  - SPV-in:
+    - fix depth sampling with projection
+  - HLSL-out:
+    - fix local struct construction
+  - GLSL-out:
+    - fix `select()` order
+  - SPV-out:
+    - allow working around Adreno issue with `OpName`
+
+### v0.6.2 (2021-09-01)
+  - SPV-out fixes:
+    - requested capabilities for 1D and cube images, storage formats
+    - handling `break` and `continue` in a `switch` statement
+    - avoid generating duplicate `OpTypeImage` types
+  - HLSL-out fixes:
+    - fix output struct member names
+  - MSL-out fixes:
+    - fix packing of fields in interface structs
+  - GLSL-out fixes:
+    - fix non-fallthrough `switch` cases
+  - GLSL-in fixes:
+    - avoid infinite loop on invalid statements
+
+### v0.6.1 (2021-08-24)
+  - HLSL-out fixes:
+    - array arguments
+    - pointers to array arguments
+    - switch statement
+    - rewritten interface matching
+  - SPV-in fixes:
+    - array storage texture stores
+    - tracking sampling across function parameters
+    - updated petgraph dependencies
+  - MSL-out:
+    - gradient sampling
+  - GLSL-out:
+    - modulo operator on floats
+
 ## v0.6 (2021-08-18)
   - development release for wgpu-0.10
   - API:
