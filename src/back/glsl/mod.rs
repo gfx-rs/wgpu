@@ -311,6 +311,16 @@ pub enum Error {
     Custom(String),
 }
 
+/// Binary operation with a different logic on the GLSL side
+enum BinaryOperation {
+    /// Vector comparison should use the function like `greaterThan()`, etc.
+    VectorCompare,
+    /// GLSL `%` is SPIR-V `OpUMod/OpSMod` and `mod()` is `OpFMod`, but [`BinaryOperator::Modulo`](crate::BinaryOperator::Modulo) is `OpFRem`
+    Modulo,
+    /// Any plain operation. No additional logic required
+    Other,
+}
+
 /// Main structure of the glsl backend responsible for all code generation
 pub struct Writer<'a, W> {
     // Inputs
@@ -2214,36 +2224,81 @@ impl<'a, W: Write> Writer<'a, W> {
                 let right_inner = ctx.info[right].ty.inner_with(&self.module.types);
 
                 let function = match (left_inner, right_inner) {
-                    (&Ti::Vector { .. }, &Ti::Vector { .. }) => match op {
-                        Bo::Less => Some("lessThan"),
-                        Bo::LessEqual => Some("lessThanEqual"),
-                        Bo::Greater => Some("greaterThan"),
-                        Bo::GreaterEqual => Some("greaterThanEqual"),
-                        Bo::Equal => Some("equal"),
-                        Bo::NotEqual => Some("notEqual"),
-                        _ => None,
+                    (
+                        &Ti::Vector {
+                            kind: left_kind, ..
+                        },
+                        &Ti::Vector {
+                            kind: right_kind, ..
+                        },
+                    ) => match op {
+                        Bo::Less
+                        | Bo::LessEqual
+                        | Bo::Greater
+                        | Bo::GreaterEqual
+                        | Bo::Equal
+                        | Bo::NotEqual => BinaryOperation::VectorCompare,
+                        Bo::Modulo => match (left_kind, right_kind) {
+                            (Sk::Float, _) | (_, Sk::Float) => match op {
+                                Bo::Modulo => BinaryOperation::Modulo,
+                                _ => BinaryOperation::Other,
+                            },
+                            _ => BinaryOperation::Other,
+                        },
+                        _ => BinaryOperation::Other,
                     },
                     _ => match (left_inner.scalar_kind(), right_inner.scalar_kind()) {
                         (Some(Sk::Float), _) | (_, Some(Sk::Float)) => match op {
-                            Bo::Modulo => Some("mod"),
-                            _ => None,
+                            Bo::Modulo => BinaryOperation::Modulo,
+                            _ => BinaryOperation::Other,
                         },
-                        _ => None,
+                        _ => BinaryOperation::Other,
                     },
                 };
 
-                write!(self.out, "{}(", function.unwrap_or(""))?;
-                self.write_expr(left, ctx)?;
+                match function {
+                    BinaryOperation::VectorCompare => {
+                        let op_str = match op {
+                            Bo::Less => "lessThan(",
+                            Bo::LessEqual => "lessThanEqual(",
+                            Bo::Greater => "greaterThan(",
+                            Bo::GreaterEqual => "greaterThanEqual(",
+                            Bo::Equal => "equal(",
+                            Bo::NotEqual => "notEqual(",
+                            _ => unreachable!(),
+                        };
+                        write!(self.out, "{}", op_str)?;
+                        self.write_expr(left, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(right, ctx)?;
+                        write!(self.out, ")")?;
+                    }
+                    BinaryOperation::Modulo => {
+                        write!(self.out, "(")?;
 
-                if function.is_some() {
-                    write!(self.out, ",")?
-                } else {
-                    write!(self.out, " {} ", super::binary_operation_str(op))?;
+                        // write `e1 - e2 * trunc(e1 / e2)`
+                        self.write_expr(left, ctx)?;
+                        write!(self.out, " - ")?;
+                        self.write_expr(right, ctx)?;
+                        write!(self.out, " * ")?;
+                        write!(self.out, "trunc(")?;
+                        self.write_expr(left, ctx)?;
+                        write!(self.out, " / ")?;
+                        self.write_expr(right, ctx)?;
+                        write!(self.out, ")")?;
+
+                        write!(self.out, ")")?;
+                    }
+                    BinaryOperation::Other => {
+                        write!(self.out, "(")?;
+
+                        self.write_expr(left, ctx)?;
+                        write!(self.out, " {} ", super::binary_operation_str(op))?;
+                        self.write_expr(right, ctx)?;
+
+                        write!(self.out, ")")?;
+                    }
                 }
-
-                self.write_expr(right, ctx)?;
-
-                write!(self.out, ")")?
             }
             // `Select` is written as `condition ? accept : reject`
             // We wrap everything in parentheses to avoid precedence issues

@@ -813,6 +813,7 @@ pub enum BinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    /// Equivalent of the WGSL's `%` operator or SPIR-V's `OpFRem`
     Modulo,
     Equal,
     NotEqual,

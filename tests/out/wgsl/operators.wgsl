@@ -41,11 +41,19 @@ fn constructors() -> f32 {
     return e11;
 }
 
+fn modulo() {
+    let a1: i32 = (1 % 1);
+    let b1: f32 = (1.0 % 1.0);
+    let c: vec3<i32> = (vec3<i32>(1) % vec3<i32>(1));
+    let d: vec3<f32> = (vec3<f32>(1.0) % vec3<f32>(1.0));
+}
+
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn main() {
     let e4: vec4<f32> = builtins();
     let e5: vec4<f32> = splat();
     let e6: i32 = unary();
     let e7: f32 = constructors();
+    modulo();
     return;
 }

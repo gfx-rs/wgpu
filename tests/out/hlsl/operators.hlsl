@@ -53,6 +53,14 @@ float constructors()
     return _expr11;
 }
 
+void modulo()
+{
+    int a1 = (1 % 1);
+    float b1 = (1.0 % 1.0);
+    int3 c = (int3(1.xxx) % int3(1.xxx));
+    float3 d = (float3(1.0.xxx) % float3(1.0.xxx));
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
@@ -60,5 +68,6 @@ void main()
     const float4 _e5 = splat();
     const int _e6 = unary();
     const float _e7 = constructors();
+    modulo();
     return;
 }

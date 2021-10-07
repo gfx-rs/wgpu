@@ -44,10 +44,19 @@ fn constructors() -> f32 {
     return foo.a.x;
 }
 
+fn modulo() {
+    // Modulo operator on float scalar or vector must be converted to mod function for GLSL
+    let a = 1 % 1;
+    let b = 1.0 % 1.0;
+    let c = vec3<i32>(1) % vec3<i32>(1);
+    let d = vec3<f32>(1.0) % vec3<f32>(1.0);
+}
+
 [[stage(compute), workgroup_size(1)]]
 fn main() {
     let a = builtins();
     let b = splat();
     let c = unary();
     let d = constructors();
+    modulo();
 }
