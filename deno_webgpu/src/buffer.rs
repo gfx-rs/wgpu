@@ -1,6 +1,5 @@
 // Copyright 2018-2021 the Deno authors. All rights reserved. MIT license.
 
-use deno_core::error::null_opbuf;
 use deno_core::error::type_error;
 use deno_core::error::AnyError;
 use deno_core::futures::channel::oneshot;
@@ -170,9 +169,8 @@ pub struct BufferGetMappedRangeArgs {
 pub fn op_webgpu_buffer_get_mapped_range(
     state: &mut OpState,
     args: BufferGetMappedRangeArgs,
-    zero_copy: Option<ZeroCopyBuf>,
+    mut zero_copy: ZeroCopyBuf,
 ) -> Result<WebGpuResult, AnyError> {
-    let mut zero_copy = zero_copy.ok_or_else(null_opbuf)?;
     let instance = state.borrow::<super::Instance>();
     let buffer_resource = state.resource_table.get::<WebGpuBuffer>(args.buffer_rid)?;
     let buffer = buffer_resource.0;
