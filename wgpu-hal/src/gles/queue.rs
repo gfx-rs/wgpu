@@ -190,7 +190,7 @@ impl super::Queue {
                 indirect_buf,
                 indirect_offset,
             } => {
-                gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf));
+                gl.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, Some(indirect_buf));
                 gl.dispatch_compute_indirect(indirect_offset as i32);
             }
             C::ClearBuffer {
