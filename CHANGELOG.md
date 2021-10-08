@@ -1,5 +1,8 @@
 # Change Log
 
+## wgpu-hal-0.11.1 (2021-10-07)
+  - WebGL: fix querying storage-related limits
+
 ## wgpu-0.11 (2021-10-07)
   - Infrastructure:
     - Deno WebGPU plugin is a part of the repository

@@ -190,6 +190,7 @@ impl super::Adapter {
 
         let ver = Self::parse_version(&version).ok()?;
 
+        let supports_storage = ver >= (3, 1);
         let shading_language_version = {
             let sl_version = gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION);
             log::info!("SL version: {}", &sl_version);
@@ -198,16 +199,31 @@ impl super::Adapter {
             naga::back::glsl::Version::Embedded(value)
         };
 
-        let vertex_shader_storage_blocks =
-            gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) as u32;
-        let fragment_shader_storage_blocks =
-            gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS) as u32;
-        let vertex_shader_storage_textures =
-            gl.get_parameter_i32(glow::MAX_VERTEX_IMAGE_UNIFORMS) as u32;
-        let fragment_shader_storage_textures =
-            gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) as u32;
-        let max_storage_block_size =
-            gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) as u32;
+        let vertex_shader_storage_blocks = if supports_storage {
+            gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) as u32
+        } else {
+            0
+        };
+        let fragment_shader_storage_blocks = if supports_storage {
+            gl.get_parameter_i32(glow::MAX_FRAGMENT_SHADER_STORAGE_BLOCKS) as u32
+        } else {
+            0
+        };
+        let vertex_shader_storage_textures = if supports_storage {
+            gl.get_parameter_i32(glow::MAX_VERTEX_IMAGE_UNIFORMS) as u32
+        } else {
+            0
+        };
+        let fragment_shader_storage_textures = if supports_storage {
+            gl.get_parameter_i32(glow::MAX_FRAGMENT_IMAGE_UNIFORMS) as u32
+        } else {
+            0
+        };
+        let max_storage_block_size = if supports_storage {
+            gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) as u32
+        } else {
+            0
+        };
 
         // WORKAROUND: In order to work around an issue with GL on RPI4 and similar, we ignore a
         // zero vertex ssbo count if there are vertex sstos. (more info:
@@ -240,7 +256,7 @@ impl super::Adapter {
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, ver >= (3, 1));
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
-            ver >= (3, 1) && max_storage_block_size != 0,
+            max_storage_block_size != 0,
         );
         downlevel_flags.set(wgt::DownlevelFlags::INDIRECT_EXECUTION, ver >= (3, 1));
         //TODO: we can actually support positive `base_vertex` in the same way
@@ -252,11 +268,10 @@ impl super::Adapter {
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::VERTEX_STORAGE,
-            ver >= (3, 1)
-                && max_storage_block_size != 0
+            max_storage_block_size != 0
                 && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
         );
-        downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, ver >= (3, 1));
+        downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, supports_storage);
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_COMPRESSION_ETC2
