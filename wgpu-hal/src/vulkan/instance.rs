@@ -193,6 +193,7 @@ impl super::Instance {
         driver_api_version: u32,
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
+        has_nv_optimus: bool,
         drop_guard: Option<super::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
         if driver_api_version == vk::API_VERSION_1_0
@@ -239,6 +240,7 @@ impl super::Instance {
                 debug_utils,
                 get_physical_device_properties,
                 entry,
+                has_nv_optimus,
             }),
             extensions,
         })
@@ -478,6 +480,11 @@ impl crate::Instance<super::Api> for super::Instance {
             crate::InstanceError
         })?;
 
+        let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
+        let has_nv_optimus = instance_layers
+            .iter()
+            .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
+
         // Check requested layers against the available layers
         let layers = {
             let mut layers: Vec<&'static CStr> = Vec::new();
@@ -528,6 +535,7 @@ impl crate::Instance<super::Api> for super::Instance {
             driver_api_version,
             extensions,
             desc.flags,
+            has_nv_optimus,
             Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
         )
     }
@@ -611,23 +619,20 @@ impl crate::Instance<super::Api> for super::Instance {
             .flat_map(|device| self.expose_adapter(device))
             .collect::<Vec<_>>();
 
-        // detect if it's an Intel + NVidia configuration
-        if cfg!(target_os = "linux") {
+        // Detect if it's an Intel + NVidia configuration with Optimus
+        if cfg!(target_os = "linux") && self.shared.has_nv_optimus {
             use crate::auxil::db;
-            let has_nvidia_dgpu = exposed_adapters.iter().any(|exposed| {
-                exposed.info.device_type == wgt::DeviceType::DiscreteGpu
-                    && exposed.info.vendor == db::nvidia::VENDOR as usize
-            });
-            if has_nvidia_dgpu {
-                for exposed in exposed_adapters.iter_mut() {
-                    if exposed.info.device_type == wgt::DeviceType::IntegratedGpu
-                        && exposed.info.vendor == db::intel::VENDOR as usize
-                    {
-                        // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
-                        log::warn!("Disabling presentation on '{}' (id {:?}) because of an Nvidia dGPU (on Linux)",
-                            exposed.info.name, exposed.adapter.raw);
-                        exposed.adapter.private_caps.can_present = false;
-                    }
+            for exposed in exposed_adapters.iter_mut() {
+                if exposed.info.device_type == wgt::DeviceType::IntegratedGpu
+                    && exposed.info.vendor == db::intel::VENDOR as usize
+                {
+                    // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
+                    log::warn!(
+                        "Disabling presentation on '{}' (id {:?}) because of NV Optimus (on Linux)",
+                        exposed.info.name,
+                        exposed.adapter.raw
+                    );
+                    exposed.adapter.private_caps.can_present = false;
                 }
             }
         }
