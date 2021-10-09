@@ -2,7 +2,11 @@
 
 ## wgpu-hal-0.11.1 (2021-10-09)
   - Vulkan: fix NV optimus detection on Linux
-  - WebGL: fix querying storage-related limits
+  - GL:
+    - fix indirect dispatch buffers
+  - WebGL:
+    - fix querying storage-related limits
+    - work around a browser bug in the clear shader
 
 ## wgpu-0.11 (2021-10-07)
   - Infrastructure:
