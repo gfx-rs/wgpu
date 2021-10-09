@@ -27,6 +27,9 @@ pub mod queue;
 pub mod trace;
 
 pub const SHADER_STAGE_COUNT: usize = 3;
+// Should be large enough for the largest possible texture row. This value is enough for a 16k texture with float4 format.
+pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
+
 const CLEANUP_WAIT_MS: u32 = 5000;
 
 const IMPLICIT_FAILURE: &str = "failed implicit";
@@ -232,7 +235,7 @@ impl<A: hal::Api> CommandAllocator<A> {
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 /// TODO: establish clear order of locking for these:
-/// `mem_allocator`, `desc_allocator`, `life_tracke`, `trackers`,
+/// `mem_allocator`, `desc_allocator`, `life_tracker`, `trackers`,
 /// `render_passes`, `pending_writes`, `trace`.
 ///
 /// Currently, the rules are:
@@ -243,6 +246,7 @@ pub struct Device<A: hal::Api> {
     pub(crate) raw: A::Device,
     pub(crate) adapter_id: Stored<id::AdapterId>,
     pub(crate) queue: A::Queue,
+    pub(crate) zero_buffer: A::Buffer,
     //pub(crate) cmd_allocator: command::CommandAllocator<A>,
     //mem_allocator: Mutex<alloc::MemoryAllocator<A>>,
     //desc_allocator: Mutex<descriptor::DescriptorAllocator<A>>,
@@ -271,6 +275,8 @@ pub struct Device<A: hal::Api> {
 pub enum CreateDeviceError {
     #[error("not enough memory left")]
     OutOfMemory,
+    #[error("failed to create internal buffer for initializing textures")]
+    FailedToCreateZeroBuffer(#[from] DeviceError),
 }
 
 impl<A: hal::Api> Device<A> {
@@ -317,12 +323,43 @@ impl<A: HalApi> Device<A> {
         let pending_encoder = com_alloc
             .acquire_encoder(&open.device, &open.queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
-        let pending_writes = queue::PendingWrites::new(pending_encoder);
+        let mut pending_writes = queue::PendingWrites::<A>::new(pending_encoder);
+
+        // Create zeroed buffer used for texture clears.
+        let zero_buffer = unsafe {
+            open.device
+                .create_buffer(&hal::BufferDescriptor {
+                    label: Some("wgpu zero init buffer"),
+                    size: ZERO_BUFFER_SIZE,
+                    usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+                .map_err(DeviceError::from)?
+        };
+        pending_writes.activate();
+        unsafe {
+            pending_writes
+                .command_encoder
+                .transition_buffers(iter::once(hal::BufferBarrier {
+                    buffer: &zero_buffer,
+                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
+                }));
+            pending_writes
+                .command_encoder
+                .clear_buffer(&zero_buffer, 0..ZERO_BUFFER_SIZE);
+            pending_writes
+                .command_encoder
+                .transition_buffers(iter::once(hal::BufferBarrier {
+                    buffer: &zero_buffer,
+                    usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
+                }));
+        }
 
         Ok(Self {
             raw: open.device,
             adapter_id,
             queue: open.queue,
+            zero_buffer,
             life_guard: LifeGuard::new("<device>"),
             command_allocator: Mutex::new(com_alloc),
             active_submission_index: 0,
@@ -2560,6 +2597,7 @@ impl<A: hal::Api> Device<A> {
         self.pending_writes.dispose(&self.raw);
         self.command_allocator.into_inner().dispose(&self.raw);
         unsafe {
+            self.raw.destroy_buffer(self.zero_buffer);
             self.raw.destroy_fence(self.fence);
             self.raw.exit(self.queue);
         }

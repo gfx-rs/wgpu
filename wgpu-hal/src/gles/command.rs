@@ -245,19 +245,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         });
     }
 
-    unsafe fn clear_texture(
-        &mut self,
-        texture: &super::Texture,
-        subresource_range: &wgt::ImageSubresourceRange,
-    ) {
-        let (dst, dst_target) = texture.inner.as_native();
-        self.cmd_buffer.commands.push(C::ClearTexture {
-            dst,
-            dst_target,
-            subresource_range: subresource_range.clone(),
-        });
-    }
-
     unsafe fn copy_buffer_to_buffer<T>(
         &mut self,
         src: &super::Buffer,

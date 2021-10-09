@@ -194,38 +194,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         );
     }
 
-    unsafe fn clear_texture(
-        &mut self,
-        texture: &super::Texture,
-        subresource_range: &wgt::ImageSubresourceRange,
-    ) {
-        self.device.raw.cmd_clear_color_image(
-            self.active,
-            texture.raw,
-            DST_IMAGE_LAYOUT,
-            &vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 0.0],
-            },
-            &[conv::map_subresource_range(
-                subresource_range,
-                texture.aspects,
-            )],
-        );
-
-        // The Vulkan api could easily support depth/stencil formats for clearing as well.
-        // But in other APIs this is more challenging which is why clear_texture excludes support for these formats.
-        // self.device.raw.cmd_clear_depth_stencil_image(
-        //     self.active,
-        //     texture.raw,
-        //     DST_IMAGE_LAYOUT,
-        //     &vk::ClearDepthStencilValue {
-        //         depth: 0.0,
-        //         stencil: 0,
-        //     },
-        //     &[range],
-        // );
-    }
-
     unsafe fn copy_buffer_to_buffer<T>(
         &mut self,
         src: &super::Buffer,

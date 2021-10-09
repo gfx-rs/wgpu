@@ -238,17 +238,11 @@ struct Settings {
     retain_command_buffer_references: bool,
 }
 
-// Using max copyable texture row
-// https://developer.apple.com/documentation/metal/mtlblitcommandencoder/1400752-copyfrombuffer?language=objc
-// "The value must be less than or equal to 32767 multiplied by the destination texture’s pixel size."
-const ZERO_BUFFER_SIZE: wgt::BufferAddress = 32767 * 16; // 512kb
-
 struct AdapterShared {
     device: Mutex<mtl::Device>,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
-    zero_buffer: mtl::Buffer,
 }
 
 unsafe impl Send for AdapterShared {}
@@ -259,20 +253,11 @@ impl AdapterShared {
         let private_caps = PrivateCapabilities::new(&device);
         log::debug!("{:#?}", private_caps);
 
-        // buffers created this way are zero initialized
-        // see https://developer.apple.com/documentation/metal/mtldevice/1433375-newbufferwithlength?language=objc
-        let zero_buffer = device.new_buffer(
-            ZERO_BUFFER_SIZE,
-            mtl::MTLResourceOptions::CPUCacheModeWriteCombined
-                | mtl::MTLResourceOptions::StorageModePrivate,
-        );
-
         Self {
             disabilities: PrivateDisabilities::new(&device),
             private_caps: PrivateCapabilities::new(&device),
             device: Mutex::new(device),
             settings: Settings::default(),
-            zero_buffer,
         }
     }
 }
@@ -296,7 +281,6 @@ pub struct Device {
 pub struct Surface {
     view: Option<NonNull<objc::runtime::Object>>,
     render_layer: Mutex<mtl::MetalLayer>,
-    swapchain_format: wgt::TextureFormat,
     raw_swapchain_format: mtl::MTLPixelFormat,
     extent: wgt::Extent3d,
     main_thread_id: thread::ThreadId,
@@ -422,7 +406,6 @@ impl Buffer {
 #[derive(Debug)]
 pub struct Texture {
     raw: mtl::Texture,
-    format: wgt::TextureFormat,
     raw_format: mtl::MTLPixelFormat,
     raw_type: mtl::MTLTextureType,
     array_layers: u32,
