@@ -410,6 +410,10 @@ impl crate::Device<super::Api> for super::Device {
             .shared
             .workarounds
             .contains(super::Workarounds::EMULATE_BUFFER_MAP)
+            || !self
+                .shared
+                .private_caps
+                .contains(super::PrivateCapabilities::BUFFER_ALLOCATION)
         {
             let mut buf = vec![0; buffer.size as usize];
             let ptr = buf.as_mut_ptr();
