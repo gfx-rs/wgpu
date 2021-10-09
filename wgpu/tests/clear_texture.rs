@@ -104,7 +104,12 @@ static TEXTURE_FORMATS_ASTC: &'static [wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Astc12x12RgbaUnormSrgb,
 ];
 
-fn single_texture_clear_test(ctx: &TestingContext, format: wgpu::TextureFormat) {
+fn single_texture_clear_test(
+    ctx: &TestingContext,
+    format: wgpu::TextureFormat,
+    size: wgpu::Extent3d,
+    dimension: wgpu::TextureDimension,
+) {
     // clear_texture not supported for depth textures.
     if format.describe().sample_type == wgpu::TextureSampleType::Depth {
         return;
@@ -114,14 +119,10 @@ fn single_texture_clear_test(ctx: &TestingContext, format: wgpu::TextureFormat) 
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&format!("texture {:?}", format)),
-        size: wgpu::Extent3d {
-            width: 64,
-            height: 64,
-            depth_or_array_layers: 1,
-        },
+        size: size,
         mip_level_count: 3, // arbitrary value between 2 and max
         sample_count: 1,    // multisampling is not supported for clear
-        dimension: wgpu::TextureDimension::D2,
+        dimension,
         format,
         usage: wgpu::TextureUsages::COPY_DST,
     });
@@ -143,14 +144,63 @@ fn single_texture_clear_test(ctx: &TestingContext, format: wgpu::TextureFormat) 
     // TODO: Read back and check zeroness?
 }
 
+fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat], supports_1d: bool) {
+    for &format in formats {
+        // 1D texture
+        if supports_1d {
+            single_texture_clear_test(
+                &ctx,
+                format,
+                wgpu::Extent3d {
+                    width: 64,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                wgpu::TextureDimension::D1,
+            );
+        }
+        // 2D texture
+        single_texture_clear_test(
+            &ctx,
+            format,
+            wgpu::Extent3d {
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 1,
+            },
+            wgpu::TextureDimension::D2,
+        );
+        // 2D array texture
+        single_texture_clear_test(
+            &ctx,
+            format,
+            wgpu::Extent3d {
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 4,
+            },
+            wgpu::TextureDimension::D2,
+        );
+        // volume texture
+        single_texture_clear_test(
+            &ctx,
+            format,
+            wgpu::Extent3d {
+                width: 16,
+                height: 16,
+                depth_or_array_layers: 16,
+            },
+            wgpu::TextureDimension::D3,
+        );
+    }
+}
+
 #[test]
 fn clear_texture_2d_uncompressed() {
     initialize_test(
         TestParameters::default().features(wgpu::Features::CLEAR_COMMANDS),
         |ctx| {
-            for &format in TEXTURE_FORMATS_UNCOMPRESSED {
-                single_texture_clear_test(&ctx, format);
-            }
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED, true);
         },
     )
 }
@@ -161,9 +211,7 @@ fn clear_texture_2d_bc() {
         TestParameters::default()
             .features(wgpu::Features::CLEAR_COMMANDS | wgpu::Features::TEXTURE_COMPRESSION_BC),
         |ctx| {
-            for &format in TEXTURE_FORMATS_BC {
-                single_texture_clear_test(&ctx, format);
-            }
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_BC, false);
         },
     )
 }
@@ -175,9 +223,7 @@ fn clear_texture_2d_astc() {
             wgpu::Features::CLEAR_COMMANDS | wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
         ),
         |ctx| {
-            for &format in TEXTURE_FORMATS_ASTC {
-                single_texture_clear_test(&ctx, format);
-            }
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC, false);
         },
     )
 }
@@ -188,9 +234,7 @@ fn clear_texture_2d_etc2() {
         TestParameters::default()
             .features(wgpu::Features::CLEAR_COMMANDS | wgpu::Features::TEXTURE_COMPRESSION_ETC2),
         |ctx| {
-            for &format in TEXTURE_FORMATS_ETC2 {
-                single_texture_clear_test(&ctx, format);
-            }
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2, false);
         },
     )
 }
