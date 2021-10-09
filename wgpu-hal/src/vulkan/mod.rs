@@ -86,6 +86,7 @@ struct InstanceShared {
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
     entry: ash::Entry,
+    has_nv_optimus: bool,
 }
 
 pub struct Instance {
