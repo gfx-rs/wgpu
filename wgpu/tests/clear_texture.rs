@@ -1,6 +1,6 @@
 use crate::common::{initialize_test, TestParameters, TestingContext};
 
-static TEXTURE_FORMATS_UNCOMPRESSED: &'static [wgpu::TextureFormat] = &[
+static TEXTURE_FORMATS_UNCOMPRESSED: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,
     wgpu::TextureFormat::R8Snorm,
     wgpu::TextureFormat::R8Uint,
@@ -43,7 +43,7 @@ static TEXTURE_FORMATS_UNCOMPRESSED: &'static [wgpu::TextureFormat] = &[
 ];
 
 // needs TEXTURE_COMPRESSION_BC
-static TEXTURE_FORMATS_BC: &'static [wgpu::TextureFormat] = &[
+static TEXTURE_FORMATS_BC: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Bc1RgbaUnorm,
     wgpu::TextureFormat::Bc1RgbaUnormSrgb,
     wgpu::TextureFormat::Bc2RgbaUnorm,
@@ -61,7 +61,7 @@ static TEXTURE_FORMATS_BC: &'static [wgpu::TextureFormat] = &[
 ];
 
 // needs TEXTURE_COMPRESSION_ETC2
-static TEXTURE_FORMATS_ETC2: &'static [wgpu::TextureFormat] = &[
+static TEXTURE_FORMATS_ETC2: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Etc2RgbUnorm,
     wgpu::TextureFormat::Etc2RgbUnormSrgb,
     wgpu::TextureFormat::Etc2RgbA1Unorm,
@@ -73,7 +73,7 @@ static TEXTURE_FORMATS_ETC2: &'static [wgpu::TextureFormat] = &[
 ];
 
 // needs TEXTURE_COMPRESSION_ASTC_LDR
-static TEXTURE_FORMATS_ASTC: &'static [wgpu::TextureFormat] = &[
+static TEXTURE_FORMATS_ASTC: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Astc4x4RgbaUnorm,
     wgpu::TextureFormat::Astc4x4RgbaUnormSrgb,
     wgpu::TextureFormat::Astc5x4RgbaUnorm,
@@ -119,7 +119,7 @@ fn single_texture_clear_test(
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&format!("texture {:?}", format)),
-        size: size,
+        size,
         mip_level_count: if dimension == wgpu::TextureDimension::D1 {
             1
         } else {
@@ -154,7 +154,7 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat], su
         // 1D texture
         if supports_1d {
             single_texture_clear_test(
-                &ctx,
+                ctx,
                 format,
                 wgpu::Extent3d {
                     width: 64,
@@ -166,7 +166,7 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat], su
         }
         // 2D texture
         single_texture_clear_test(
-            &ctx,
+            ctx,
             format,
             wgpu::Extent3d {
                 width: 64,
@@ -177,7 +177,7 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat], su
         );
         // 2D array texture
         single_texture_clear_test(
-            &ctx,
+            ctx,
             format,
             wgpu::Extent3d {
                 width: 64,
@@ -188,7 +188,7 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat], su
         );
         // volume texture
         single_texture_clear_test(
-            &ctx,
+            ctx,
             format,
             wgpu::Extent3d {
                 width: 16,

@@ -263,7 +263,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             subresource_range.base_array_layer..subresource_layer_end,
             &mut zero_buffer_copy_regions,
         );
-        if zero_buffer_copy_regions.len() > 0 {
+        if !zero_buffer_copy_regions.is_empty() {
             unsafe {
                 encoder.transition_textures(dst_barrier);
                 encoder.copy_buffer_to_texture(
