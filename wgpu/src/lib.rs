@@ -41,6 +41,9 @@ pub use wgt::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
+#[cfg(feature = "glsl")]
+pub use naga::{FastHashMap, ShaderStage};
+
 use backend::{BufferMappedRange, Context as C};
 
 trait ComputePassInner<Ctx: Context> {
@@ -747,6 +750,14 @@ pub enum ShaderSource<'a> {
     /// is passed to `gfx-rs` and `spirv_cross` for translation.
     #[cfg(feature = "spirv")]
     SpirV(Cow<'a, [u32]>),
+    /// GSLS module as a string slice.
+    ///
+    /// wgpu-rs will parse it and use for validation. It will attempt
+    /// to build a SPIR-V module internally and panic otherwise.
+    ///
+    /// Note: GLSL is not yet fully supported and must be a direct ShaderStage.
+    #[cfg(feature = "glsl")]
+    Glsl(Cow<'a, str>, ShaderStage, FastHashMap<String, String>),
     /// WGSL module as a string slice.
     ///
     /// wgpu-rs will parse it and use for validation. It will attempt

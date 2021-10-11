@@ -1214,6 +1214,25 @@ impl crate::Context for Context {
                 let wgsl_text = back::wgsl::write_string(&spv_module, &spv_module_info).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
+            #[cfg(feature = "glsl-web")]
+            ShaderSource::Glsl(ref code, stage, ref defines) => {
+                // Parse the given shader code and store its representation.
+                let options = naga::front::glsl::Options {
+                    stage,
+                    defines: defines.clone(),
+                };
+                let mut parser = naga::front::glsl::Parser::default();
+                let glsl_module = parser.parse(&options, code).unwrap();
+
+                let mut validator = valid::Validator::new(
+                    valid::ValidationFlags::all(),
+                    valid::Capabilities::all(),
+                );
+                let glsl_module_info = validator.validate(&glsl_module).unwrap();
+
+                let wgsl_text = back::wgsl::write_string(&glsl_module, &glsl_module_info).unwrap();
+                web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+            }
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
         };
         if let Some(label) = desc.label {
