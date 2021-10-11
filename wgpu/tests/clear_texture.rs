@@ -120,8 +120,13 @@ fn single_texture_clear_test(
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&format!("texture {:?}", format)),
         size: size,
-        mip_level_count: 3, // arbitrary value between 2 and max
-        sample_count: 1,    // multisampling is not supported for clear
+        mip_level_count: if dimension == wgpu::TextureDimension::D1 {
+            1
+        } else {
+            // arbitrary value between 2 and max
+            3
+        },
+        sample_count: 1, // multisampling is not supported for clear
         dimension,
         format,
         usage: wgpu::TextureUsages::COPY_DST,
