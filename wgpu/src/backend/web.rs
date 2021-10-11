@@ -1940,6 +1940,14 @@ impl crate::Context for Context {
         })
     }
 
+    fn command_encoder_clear_texture(
+        &self,
+        _encoder: &Self::CommandEncoderId,
+        _texture: &crate::Texture,
+        _subresource_range: &wgt::ImageSubresourceRange,
+    ) {
+    }
+
     fn command_encoder_clear_buffer(
         &self,
         _encoder: &Self::CommandEncoderId,
