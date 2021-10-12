@@ -79,7 +79,6 @@ test = true
 default = []
 spirv = ["naga/spv-in"]
 glsl = ["naga/glsl-in"]
-web-shader-translation = ["naga/wgsl-out"]
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
 webgl = ["wgc"]
@@ -146,6 +145,10 @@ optional = true
 #rev = "2e7d629"
 version = "0.7"
 features = ["wgsl-in"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.naga]
+version = "0.7"
+features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.76" # remember to change version in wiki as well
