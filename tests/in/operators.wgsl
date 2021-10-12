@@ -33,6 +33,11 @@ fn unary() -> i32 {
     if (!true) { return a; } else { return ~a; };
 }
 
+fn bool_cast(x: vec3<f32>) -> vec3<f32> {
+    let y = vec3<bool>(x);
+    return vec3<f32>(y);
+}
+
 struct Foo {
     a: vec4<f32>;
     b: i32;
@@ -57,6 +62,7 @@ fn main() {
     let a = builtins();
     let b = splat();
     let c = unary();
-    let d = constructors();
+    let d = bool_cast(v_f32_one.xyz);
+    let e = constructors();
     modulo();
 }

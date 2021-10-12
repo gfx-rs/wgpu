@@ -37,6 +37,12 @@ int unary()
     }
 }
 
+float3 bool_cast(float3 x)
+{
+    bool3 y = bool3(x);
+    return float3(y);
+}
+
 Foo ConstructFoo(float4 arg0, int arg1) {
     Foo ret;
     ret.a = arg0;
@@ -67,7 +73,8 @@ void main()
     const float4 _e4 = builtins();
     const float4 _e5 = splat();
     const int _e6 = unary();
-    const float _e7 = constructors();
+    const float3 _e8 = bool_cast(float4(1.0, 1.0, 1.0, 1.0).xyz);
+    const float _e9 = constructors();
     modulo();
     return;
 }

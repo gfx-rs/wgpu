@@ -165,7 +165,13 @@ impl<'a> Display for TypeContext<'a> {
                         } else if self.access.contains(crate::StorageAccess::LOAD) {
                             "read"
                         } else {
-                            unreachable!("module is not valid")
+                            log::warn!(
+                                "Storage access for {:?} (name '{}'): {:?}",
+                                self.handle,
+                                ty.name.as_deref().unwrap_or_default(),
+                                self.access
+                            );
+                            unreachable!("module is not valid");
                         };
                         ("texture", "", format.into(), access)
                     }
@@ -1223,13 +1229,15 @@ impl<W: Write> Writer<W> {
                 convert,
             } => {
                 let scalar = scalar_kind_string(kind);
-                let width = match *context.resolve_type(expr) {
-                    crate::TypeInner::Scalar { width, .. }
-                    | crate::TypeInner::Vector { width, .. } => width,
+                let (src_kind, src_width) = match *context.resolve_type(expr) {
+                    crate::TypeInner::Scalar { kind, width }
+                    | crate::TypeInner::Vector { kind, width, .. } => (kind, width),
                     _ => return Err(Error::Validation),
                 };
+                let is_bool_cast =
+                    kind == crate::ScalarKind::Bool || src_kind == crate::ScalarKind::Bool;
                 let op = match convert {
-                    Some(w) if w == width => "static_cast",
+                    Some(w) if w == src_width || is_bool_cast => "static_cast",
                     Some(8) if kind == crate::ScalarKind::Float => {
                         return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
                     }

@@ -37,6 +37,11 @@ int unary() {
     }
 }
 
+vec3 bool_cast(vec3 x) {
+    bvec3 y = bvec3(x);
+    return vec3(y);
+}
+
 float constructors() {
     Foo foo;
     foo = Foo(vec4(1.0), 1);
@@ -55,7 +60,8 @@ void main() {
     vec4 _e4 = builtins();
     vec4 _e5 = splat();
     int _e6 = unary();
-    float _e7 = constructors();
+    vec3 _e8 = bool_cast(vec4(1.0, 1.0, 1.0, 1.0).xyz);
+    float _e9 = constructors();
     modulo();
     return;
 }

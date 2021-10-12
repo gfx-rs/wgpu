@@ -40,6 +40,13 @@ int unary(
     }
 }
 
+metal::float3 bool_cast(
+    metal::float3 x
+) {
+    metal::bool3 y = static_cast<metal::bool3>(x);
+    return static_cast<metal::float3>(y);
+}
+
 float constructors(
 ) {
     Foo foo;
@@ -61,7 +68,8 @@ kernel void main1(
     metal::float4 _e4 = builtins();
     metal::float4 _e5 = splat();
     int _e6 = unary();
-    float _e7 = constructors();
+    metal::float3 _e8 = bool_cast(v_f32_one.xyz);
+    float _e9 = constructors();
     modulo();
     return;
 }

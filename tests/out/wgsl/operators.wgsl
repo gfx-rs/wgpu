@@ -33,6 +33,11 @@ fn unary() -> i32 {
     }
 }
 
+fn bool_cast(x: vec3<f32>) -> vec3<f32> {
+    let y: vec3<bool> = vec3<bool>(x);
+    return vec3<f32>(y);
+}
+
 fn constructors() -> f32 {
     var foo: Foo;
 
@@ -53,7 +58,8 @@ fn main() {
     let e4: vec4<f32> = builtins();
     let e5: vec4<f32> = splat();
     let e6: i32 = unary();
-    let e7: f32 = constructors();
+    let e8: vec3<f32> = bool_cast(vec4<f32>(1.0, 1.0, 1.0, 1.0).xyz);
+    let e9: f32 = constructors();
     modulo();
     return;
 }

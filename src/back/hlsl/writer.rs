@@ -1786,20 +1786,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{}", op_str)?;
                 self.write_expr(module, expr, func_ctx)?;
             }
-            Expression::As { expr, kind, .. } => {
+            Expression::As {
+                expr,
+                kind,
+                convert,
+            } => {
                 let inner = func_ctx.info[expr].ty.inner_with(&module.types);
-                match *inner {
-                    TypeInner::Vector { size, width, .. } => {
-                        write!(
-                            self.out,
-                            "{}{}",
-                            kind.to_hlsl_str(width)?,
-                            back::vector_size_str(size),
-                        )?;
-                    }
-                    TypeInner::Scalar { width, .. } => {
-                        write!(self.out, "{}", kind.to_hlsl_str(width)?)?
-                    }
+                let (size_str, src_width) = match *inner {
+                    TypeInner::Vector { size, width, .. } => (back::vector_size_str(size), width),
+                    TypeInner::Scalar { width, .. } => ("", width),
                     _ => {
                         return Err(Error::Unimplemented(format!(
                             "write_expr expression::as {:?}",
@@ -1807,7 +1802,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         )));
                     }
                 };
-                write!(self.out, "(")?;
+                let kind_str = kind.to_hlsl_str(convert.unwrap_or(src_width))?;
+                write!(self.out, "{}{}(", kind_str, size_str,)?;
                 self.write_expr(module, expr, func_ctx)?;
                 write!(self.out, ")")?;
             }
