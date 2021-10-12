@@ -1193,7 +1193,7 @@ impl crate::Context for Context {
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> Self::ShaderModuleId {
         let mut descriptor = match desc.source {
-            #[cfg(feature = "spirv-web")]
+            #[cfg(feature = "spirv")]
             crate::ShaderSource::SpirV(ref spv) => {
                 use naga::{back, front, valid};
 
@@ -1212,6 +1212,29 @@ impl crate::Context for Context {
                 let spv_module_info = validator.validate(&spv_module).unwrap();
 
                 let wgsl_text = back::wgsl::write_string(&spv_module, &spv_module_info).unwrap();
+                web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
+            }
+            #[cfg(feature = "glsl")]
+            ShaderSource::Glsl {
+                ref shader,
+                stage,
+                ref defines,
+            } => {
+                // Parse the given shader code and store its representation.
+                let options = naga::front::glsl::Options {
+                    stage,
+                    defines: defines.clone(),
+                };
+                let mut parser = naga::front::glsl::Parser::default();
+                let glsl_module = parser.parse(&options, shader).unwrap();
+
+                let mut validator = valid::Validator::new(
+                    valid::ValidationFlags::all(),
+                    valid::Capabilities::all(),
+                );
+                let glsl_module_info = validator.validate(&glsl_module).unwrap();
+
+                let wgsl_text = back::wgsl::write_string(&glsl_module, &glsl_module_info).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),

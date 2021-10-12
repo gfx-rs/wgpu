@@ -1011,6 +1011,22 @@ impl crate::Context for Context {
                 let module = parser.parse().unwrap();
                 wgc::pipeline::ShaderModuleSource::Naga(module)
             }
+            #[cfg(feature = "glsl")]
+            ShaderSource::Glsl {
+                ref shader,
+                stage,
+                ref defines,
+            } => {
+                // Parse the given shader code and store its representation.
+                let options = naga::front::glsl::Options {
+                    stage,
+                    defines: defines.clone(),
+                };
+                let mut parser = naga::front::glsl::Parser::default();
+                let module = parser.parse(&options, shader).unwrap();
+
+                wgc::pipeline::ShaderModuleSource::Naga(module)
+            }
             ShaderSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(Borrowed(code)),
         };
         let (id, error) = wgc::gfx_select!(
