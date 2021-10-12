@@ -135,13 +135,12 @@ impl super::CommandEncoder {
 
     fn prepare_draw(&mut self, first_instance: u32) {
         if first_instance != 0 {
-            self.state.dirty_vbuf_mask = self.state.instance_vbuf_mask;
+            self.state.dirty_vbuf_mask |= self.state.instance_vbuf_mask;
         }
         if self.state.dirty_vbuf_mask != 0 {
             self.rebind_vertex_data(first_instance);
-            if first_instance == 0 {
-                self.state.dirty_vbuf_mask = 0;
-            }
+            let vertex_rate_mask = self.state.dirty_vbuf_mask & !self.state.instance_vbuf_mask;
+            self.state.dirty_vbuf_mask ^= vertex_rate_mask;
         }
     }
 
