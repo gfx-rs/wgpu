@@ -749,8 +749,8 @@ pub enum ShaderSource<'a> {
     SpirV(Cow<'a, [u32]>),
     /// GSLS module as a string slice.
     ///
-    /// wgpu-rs will parse it and use for validation. It will attempt
-    /// to build a SPIR-V module internally and panic otherwise.
+    /// wgpu will attempt to parse and validate it. The module will get
+    /// passed to wgpu-core where it will translate it to the required languages.
     ///
     /// Note: GLSL is not yet fully supported and must be a direct ShaderStage.
     #[cfg(feature = "glsl")]
