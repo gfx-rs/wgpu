@@ -1234,6 +1234,7 @@ impl crate::Context for Context {
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
+            #[cfg(all(any (feature = "glsl", feature = "spirv"), not(feature = "web-shader-translation")))]
             _ => panic!("web-shader-translation feature must be enabled with spirv or glsl to use web shaders"),
         };
         if let Some(label) = desc.label {
