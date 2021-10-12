@@ -1215,14 +1215,18 @@ impl crate::Context for Context {
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
             #[cfg(feature = "glsl")]
-            ShaderSource::Glsl(ref code, stage, ref defines) => {
+            ShaderSource::Glsl {
+                ref shader,
+                stage,
+                ref defines,
+            } => {
                 // Parse the given shader code and store its representation.
                 let options = naga::front::glsl::Options {
                     stage,
                     defines: defines.clone(),
                 };
                 let mut parser = naga::front::glsl::Parser::default();
-                let glsl_module = parser.parse(&options, code).unwrap();
+                let glsl_module = parser.parse(&options, shader).unwrap();
 
                 let mut validator = valid::Validator::new(
                     valid::ValidationFlags::all(),

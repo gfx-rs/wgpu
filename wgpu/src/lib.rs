@@ -755,8 +755,11 @@ pub enum ShaderSource<'a> {
     /// Note: GLSL is not yet fully supported and must be a direct ShaderStage.
     #[cfg(feature = "glsl")]
     Glsl {
+        /// The shaders code
         shader: Cow<'a, str>,
+        /// Stage in which the GLSL shader is for example: naga::ShaderStage::Vertex
         stage: naga::ShaderStage,
+        /// Defines to unlock configured shader features
         defines: naga::FastHashMap<String, String>,
     },
     /// WGSL module as a string slice.
