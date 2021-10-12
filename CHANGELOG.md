@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.7.1 (2021-10-12)
+  - implement casts from and to booleans in the backends
+
 ## v0.7 (2021-10-07)
   - development release for wgpu-0.11
   - API:
