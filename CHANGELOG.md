@@ -1,5 +1,9 @@
 # Change Log
 
+## wgpu-hal-0.11.2 (2021-10-12)
+  - GL/WebGL: fix vertex buffer bindings with non-zero first instance
+  - DX12: fix cube array view construction
+
 ## wgpu-hal-0.11.1 (2021-10-09)
   - Vulkan: fix NV optimus detection on Linux
   - GL:
