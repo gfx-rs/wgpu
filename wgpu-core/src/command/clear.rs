@@ -263,9 +263,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             subresource_range.base_array_layer..subresource_layer_end,
             &mut zero_buffer_copy_regions,
         );
-        if !zero_buffer_copy_regions.is_empty() {
-            unsafe {
-                encoder.transition_textures(dst_barrier);
+        unsafe {
+            encoder.transition_textures(dst_barrier);
+            if !zero_buffer_copy_regions.is_empty() {
                 encoder.copy_buffer_to_texture(
                     &device_guard[cmd_buf.device_id.value].zero_buffer,
                     dst_raw,
@@ -287,12 +287,9 @@ pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
 
     for mip_level in mip_range {
         let mip_size = texture_desc.mip_level_size(mip_level).unwrap();
-        let bytes_per_row =
-            mip_size.width / format_desc.block_dimensions.0 as u32 * format_desc.block_size as u32;
-        // This can happen if mip_level is smaller than a block which is a valid input, but a non-existing level
-        if bytes_per_row == 0 {
-            continue;
-        }
+        let bytes_per_row = (mip_size.width + format_desc.block_dimensions.1 as u32 - 1)
+            / format_desc.block_dimensions.0 as u32
+            * format_desc.block_size as u32;
         let max_rows_per_copy = crate::device::ZERO_BUFFER_SIZE as u32 / bytes_per_row;
         // round down to a multiple of rows needed by the texture format
         let max_rows_per_copy = max_rows_per_copy / format_desc.block_dimensions.1 as u32
