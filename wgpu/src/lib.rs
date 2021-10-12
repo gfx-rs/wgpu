@@ -2871,6 +2871,18 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
+    ///
+    /// The structure expected in `indirect_buffer` is the following:
+    ///
+    /// ```rust
+    /// // x, y and z denote the number of work groups to dispatch in each dimension.
+    /// #[repr(C)]
+    /// struct DispatchIndirect {
+    ///     x: u32,
+    ///     y: u32,
+    ///     z: u32,
+    /// }
+    /// ```
     pub fn dispatch_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
