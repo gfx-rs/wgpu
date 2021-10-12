@@ -754,11 +754,11 @@ pub enum ShaderSource<'a> {
     ///
     /// Note: GLSL is not yet fully supported and must be a direct ShaderStage.
     #[cfg(feature = "glsl")]
-    Glsl(
-        Cow<'a, str>,
-        naga::ShaderStage,
-        naga::FastHashMap<String, String>,
-    ),
+    Glsl {
+        shader: Cow<'a, str>,
+        stage: naga::ShaderStage,
+        defines: naga::FastHashMap<String, String>,
+    },
     /// WGSL module as a string slice.
     ///
     /// wgpu-rs will parse it and use for validation. It will attempt
