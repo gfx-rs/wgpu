@@ -691,8 +691,10 @@ impl NumericType {
             | Tf::Bc3RgbaUnormSrgb
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb
-            | Tf::Etc2RgbA1Unorm
-            | Tf::Etc2RgbA1UnormSrgb
+            | Tf::Etc2Rgb8A1Unorm
+            | Tf::Etc2Rgb8A1UnormSrgb
+            | Tf::Etc2Rgba8Unorm
+            | Tf::Etc2Rgba8UnormSrgb
             | Tf::Astc4x4RgbaUnorm
             | Tf::Astc4x4RgbaUnormSrgb
             | Tf::Astc5x4RgbaUnorm
@@ -721,13 +723,13 @@ impl NumericType {
             | Tf::Astc12x10RgbaUnormSrgb
             | Tf::Astc12x12RgbaUnorm
             | Tf::Astc12x12RgbaUnormSrgb => (NumericDimension::Vector(Vs::Quad), Sk::Float),
-            Tf::Bc4RUnorm | Tf::Bc4RSnorm | Tf::EacRUnorm | Tf::EacRSnorm => {
+            Tf::Bc4RUnorm | Tf::Bc4RSnorm | Tf::EacR11Unorm | Tf::EacR11Snorm => {
                 (NumericDimension::Scalar, Sk::Float)
             }
-            Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EacRgUnorm | Tf::EacRgSnorm => {
+            Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EacRg11Unorm | Tf::EacRg11Snorm => {
                 (NumericDimension::Vector(Vs::Bi), Sk::Float)
             }
-            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat | Tf::Etc2RgbUnorm | Tf::Etc2RgbUnormSrgb => {
+            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
                 (NumericDimension::Vector(Vs::Tri), Sk::Float)
             }
         };

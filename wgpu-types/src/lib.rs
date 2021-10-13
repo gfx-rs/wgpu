@@ -1650,52 +1650,52 @@ pub enum TextureFormat {
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    Etc2RgbUnorm,
+    Etc2Rgb8Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    Etc2RgbUnormSrgb,
+    Etc2Rgb8UnormSrgb,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB + 1 bit alpha.
     /// [0, 255] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    Etc2RgbA1Unorm,
+    Etc2Rgb8A1Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer RGB + 1 bit alpha.
     /// Srgb-color [0, 255] ([0, 1] for alpha) converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    Etc2RgbA1UnormSrgb,
+    Etc2Rgb8A1UnormSrgb,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    //Etc2RgbA8Unorm,
+    Etc2Rgba8Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGB + 8 bit alpha.
     /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    //Etc2RgbA8UnormSrgb,
-    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer R.
+    Etc2Rgba8UnormSrgb,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    EacRUnorm,
-    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 8 bit integer R.
+    EacR11Unorm,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    EacRSnorm,
-    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer R + 8 bit integer G.
+    EacR11Snorm,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    EacRgUnorm,
-    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer R + 8 bit integer G.
+    EacRg11Unorm,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
     /// [-127, 127] converted to/from float [-1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
-    EacRgSnorm,
+    EacRg11Snorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
@@ -1947,16 +1947,16 @@ impl TextureFormat {
             Self::Bc7RgbaUnormSrgb => (bc, float, srgb, (4, 4), 16, basic, 4),
 
             // ETC compressed textures
-            Self::Etc2RgbUnorm => (etc2, float, linear, (4, 4), 8, basic, 3),
-            Self::Etc2RgbUnormSrgb => (etc2, float, srgb, (4, 4), 8, basic, 3),
-            Self::Etc2RgbA1Unorm => (etc2, float, linear, (4, 4), 8, basic, 4),
-            Self::Etc2RgbA1UnormSrgb => (etc2, float, srgb, (4, 4), 8, basic, 4),
-            //Self::Etc2RgbA8Unorm => (etc2, float, linear, (4, 4), 16, basic),
-            //Self::Etc2RgbA8UnormSrgb => (etc2, float, srgb, (4, 4), 16, basic),
-            Self::EacRUnorm => (etc2, float, linear, (4, 4), 8, basic, 1),
-            Self::EacRSnorm => (etc2, float, linear, (4, 4), 8, basic, 1),
-            Self::EacRgUnorm => (etc2, float, linear, (4, 4), 16, basic, 2),
-            Self::EacRgSnorm => (etc2, float, linear, (4, 4), 16, basic, 2),
+            Self::Etc2Rgb8Unorm => (etc2, float, linear, (4, 4), 8, basic, 3),
+            Self::Etc2Rgb8UnormSrgb => (etc2, float, srgb, (4, 4), 8, basic, 3),
+            Self::Etc2Rgb8A1Unorm => (etc2, float, linear, (4, 4), 8, basic, 4),
+            Self::Etc2Rgb8A1UnormSrgb => (etc2, float, srgb, (4, 4), 8, basic, 4),
+            Self::Etc2Rgba8Unorm => (etc2, float, linear, (4, 4), 16, basic, 4),
+            Self::Etc2Rgba8UnormSrgb => (etc2, float, srgb, (4, 4), 16, basic, 4),
+            Self::EacR11Unorm => (etc2, float, linear, (4, 4), 8, basic, 1),
+            Self::EacR11Snorm => (etc2, float, linear, (4, 4), 8, basic, 1),
+            Self::EacRg11Unorm => (etc2, float, linear, (4, 4), 16, basic, 2),
+            Self::EacRg11Snorm => (etc2, float, linear, (4, 4), 16, basic, 2),
 
             // ASTC compressed textures
             Self::Astc4x4RgbaUnorm => (astc_ldr, float, linear, (4, 4), 16, basic, 4),
