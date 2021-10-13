@@ -1,12 +1,14 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
+    align_to,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
         CommandBuffer, CopySide, ImageCopyTexture, TransferError,
     },
     conv,
     device::{DeviceError, WaitIdleError},
+    get_lowest_common_denom,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id,
     resource::{BufferAccessError, BufferMapState, TextureInner},
@@ -877,48 +879,4 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         Ok(())
     }
-}
-
-fn get_lowest_common_denom(a: u32, b: u32) -> u32 {
-    let gcd = if a >= b {
-        get_greatest_common_divisor(a, b)
-    } else {
-        get_greatest_common_divisor(b, a)
-    };
-    a * b / gcd
-}
-
-fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
-    assert!(a >= b);
-    loop {
-        let c = a % b;
-        if c == 0 {
-            return b;
-        } else {
-            a = b;
-            b = c;
-        }
-    }
-}
-
-fn align_to(value: u32, alignment: u32) -> u32 {
-    match value % alignment {
-        0 => value,
-        other => value - other + alignment,
-    }
-}
-
-#[test]
-fn test_lcd() {
-    assert_eq!(get_lowest_common_denom(2, 2), 2);
-    assert_eq!(get_lowest_common_denom(2, 3), 6);
-    assert_eq!(get_lowest_common_denom(6, 4), 12);
-}
-
-#[test]
-fn test_gcd() {
-    assert_eq!(get_greatest_common_divisor(5, 1), 1);
-    assert_eq!(get_greatest_common_divisor(4, 2), 2);
-    assert_eq!(get_greatest_common_divisor(6, 4), 2);
-    assert_eq!(get_greatest_common_divisor(7, 7), 7);
 }

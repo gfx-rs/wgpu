@@ -3,7 +3,9 @@ use std::{num::NonZeroU32, ops::Range};
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
+    align_to,
     command::CommandBuffer,
+    get_lowest_common_denom,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id::{BufferId, CommandEncoderId, DeviceId, TextureId},
     init_tracker::MemoryInitKind,
@@ -255,10 +257,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
         let encoder = cmd_buf.encoder.open();
+        let device = &device_guard[cmd_buf.device_id.value];
 
         let mut zero_buffer_copy_regions = Vec::new();
         collect_zero_buffer_copies_for_clear_texture(
             &dst_texture.desc,
+            device.alignments.buffer_copy_pitch.get() as u32,
             subresource_range.base_mip_level..subresource_level_end,
             subresource_range.base_array_layer..subresource_layer_end,
             &mut zero_buffer_copy_regions,
@@ -267,7 +271,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             encoder.transition_textures(dst_barrier);
             if !zero_buffer_copy_regions.is_empty() {
                 encoder.copy_buffer_to_texture(
-                    &device_guard[cmd_buf.device_id.value].zero_buffer,
+                    &device.zero_buffer,
                     dst_raw,
                     zero_buffer_copy_regions.into_iter(),
                 );
@@ -279,17 +283,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
     texture_desc: &wgt::TextureDescriptor<()>,
+    buffer_copy_pitch: u32,
     mip_range: Range<u32>,
     layer_range: Range<u32>,
     out_copy_regions: &mut Vec<hal::BufferTextureCopy>, // TODO: Something better than Vec
 ) {
     let format_desc = texture_desc.format.describe();
 
+    let bytes_per_row_alignment =
+        get_lowest_common_denom(buffer_copy_pitch, format_desc.block_size as u32);
+
     for mip_level in mip_range {
         let mip_size = texture_desc.mip_level_size(mip_level).unwrap();
-        let bytes_per_row = (mip_size.width + format_desc.block_dimensions.1 as u32 - 1)
-            / format_desc.block_dimensions.0 as u32
-            * format_desc.block_size as u32;
+
+        let bytes_per_row = align_to(
+            // row is at least one block wide, need to round up
+            (mip_size.width + format_desc.block_dimensions.1 as u32 - 1)
+                / format_desc.block_dimensions.0 as u32
+                * format_desc.block_size as u32,
+            bytes_per_row_alignment,
+        );
+
         let max_rows_per_copy = crate::device::ZERO_BUFFER_SIZE as u32 / bytes_per_row;
         // round down to a multiple of rows needed by the texture format
         let max_rows_per_copy = max_rows_per_copy / format_desc.block_dimensions.1 as u32
