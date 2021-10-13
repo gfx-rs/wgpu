@@ -550,14 +550,16 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Bc6hRgbUfloat
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb
-            | Tf::Etc2RgbUnorm
-            | Tf::Etc2RgbUnormSrgb
-            | Tf::Etc2RgbA1Unorm
-            | Tf::Etc2RgbA1UnormSrgb
-            | Tf::EacRUnorm
-            | Tf::EacRSnorm
-            | Tf::EacRgUnorm
-            | Tf::EacRgSnorm
+            | Tf::Etc2Rgb8Unorm
+            | Tf::Etc2Rgb8UnormSrgb
+            | Tf::Etc2Rgb8A1Unorm
+            | Tf::Etc2Rgb8A1UnormSrgb
+            | Tf::Etc2Rgba8Unorm
+            | Tf::Etc2Rgba8UnormSrgb
+            | Tf::EacR11Unorm
+            | Tf::EacR11Snorm
+            | Tf::EacRg11Unorm
+            | Tf::EacRg11Snorm
             | Tf::Astc4x4RgbaUnorm
             | Tf::Astc4x4RgbaUnormSrgb
             | Tf::Astc5x4RgbaUnorm

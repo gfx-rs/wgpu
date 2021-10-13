@@ -277,7 +277,7 @@ impl framework::Example for Skybox {
                 wgpu::TextureFormat::Astc4x4RgbaUnormSrgb
             } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
                 log::info!("Using ETC2");
-                wgpu::TextureFormat::Etc2RgbUnormSrgb
+                wgpu::TextureFormat::Etc2Rgb8UnormSrgb
             } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
                 log::info!("Using BC");
                 wgpu::TextureFormat::Bc1RgbaUnormSrgb
@@ -308,7 +308,7 @@ impl framework::Example for Skybox {
 
         let bytes = match skybox_format {
             wgpu::TextureFormat::Astc4x4RgbaUnormSrgb => &include_bytes!("images/astc.dds")[..],
-            wgpu::TextureFormat::Etc2RgbUnormSrgb => &include_bytes!("images/etc2.dds")[..],
+            wgpu::TextureFormat::Etc2Rgb8UnormSrgb => &include_bytes!("images/etc2.dds")[..],
             wgpu::TextureFormat::Bc1RgbaUnormSrgb => &include_bytes!("images/bc1.dds")[..],
             wgpu::TextureFormat::Bgra8UnormSrgb => &include_bytes!("images/bgra.dds")[..],
             _ => unreachable!(),

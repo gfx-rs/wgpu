@@ -217,14 +217,16 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     Tfc::empty()
                 }
             }
-            Tf::Etc2RgbUnorm
-            | Tf::Etc2RgbUnormSrgb
-            | Tf::Etc2RgbA1Unorm
-            | Tf::Etc2RgbA1UnormSrgb
-            | Tf::EacRUnorm
-            | Tf::EacRSnorm
-            | Tf::EacRgUnorm
-            | Tf::EacRgSnorm => {
+            Tf::Etc2Rgb8Unorm
+            | Tf::Etc2Rgb8UnormSrgb
+            | Tf::Etc2Rgb8A1Unorm
+            | Tf::Etc2Rgb8A1UnormSrgb
+            | Tf::Etc2Rgba8Unorm
+            | Tf::Etc2Rgba8UnormSrgb
+            | Tf::EacR11Unorm
+            | Tf::EacR11Snorm
+            | Tf::EacRg11Unorm
+            | Tf::EacRg11Snorm => {
                 if pc.format_eac_etc {
                     Tfc::SAMPLED_LINEAR
                 } else {
@@ -1018,14 +1020,16 @@ impl super::PrivateCapabilities {
             Tf::Bc6hRgbUfloat => BC6H_RGBUfloat,
             Tf::Bc7RgbaUnorm => BC7_RGBAUnorm,
             Tf::Bc7RgbaUnormSrgb => BC7_RGBAUnorm_sRGB,
-            Tf::Etc2RgbUnorm => ETC2_RGB8,
-            Tf::Etc2RgbUnormSrgb => ETC2_RGB8_sRGB,
-            Tf::Etc2RgbA1Unorm => ETC2_RGB8A1,
-            Tf::Etc2RgbA1UnormSrgb => ETC2_RGB8A1_sRGB,
-            Tf::EacRUnorm => EAC_R11Unorm,
-            Tf::EacRSnorm => EAC_R11Snorm,
-            Tf::EacRgUnorm => EAC_RG11Unorm,
-            Tf::EacRgSnorm => EAC_RG11Snorm,
+            Tf::Etc2Rgb8Unorm => ETC2_RGB8,
+            Tf::Etc2Rgb8UnormSrgb => ETC2_RGB8_sRGB,
+            Tf::Etc2Rgb8A1Unorm => ETC2_RGB8A1,
+            Tf::Etc2Rgb8A1UnormSrgb => ETC2_RGB8A1_sRGB,
+            Tf::Etc2Rgba8Unorm => EAC_RGBA8,
+            Tf::Etc2Rgba8UnormSrgb => EAC_RGBA8_sRGB,
+            Tf::EacR11Unorm => EAC_R11Unorm,
+            Tf::EacR11Snorm => EAC_R11Snorm,
+            Tf::EacRg11Unorm => EAC_RG11Unorm,
+            Tf::EacRg11Snorm => EAC_RG11Snorm,
             Tf::Astc4x4RgbaUnorm => ASTC_4x4_LDR,
             Tf::Astc4x4RgbaUnormSrgb => ASTC_4x4_sRGB,
             Tf::Astc5x4RgbaUnorm => ASTC_5x4_LDR,
