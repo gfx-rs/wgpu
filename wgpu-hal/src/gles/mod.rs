@@ -570,12 +570,6 @@ enum Command {
         dst_target: BindTarget,
         range: crate::MemoryRange,
     },
-    #[allow(unused)] // yet unimplemented
-    ClearTexture {
-        dst: glow::Texture,
-        dst_target: BindTarget,
-        subresource_range: wgt::ImageSubresourceRange,
-    },
     CopyBufferToBuffer {
         src: glow::Buffer,
         src_target: BindTarget,

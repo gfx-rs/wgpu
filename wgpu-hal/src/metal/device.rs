@@ -284,7 +284,6 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Texture {
             raw,
-            format: desc.format,
             raw_format: mtl_format,
             raw_type: mtl_type,
             mip_levels: desc.mip_level_count,

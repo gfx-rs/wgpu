@@ -213,20 +213,6 @@ impl super::Queue {
                     dst_offset += size;
                 }
             }
-            C::ClearTexture {
-                dst: _,
-                dst_target: _,
-                subresource_range: _,
-            } => {
-                // Should EXT_clear_texture when possible.
-                // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_clear_texture.txt
-                // But support is not very widespread. Need to fallback to do zero_buffer copies
-
-                // TODO: Need to invoke calls into CopyBufferToTexture using zero_buffer.
-                // To do that determine how many rows zero_buffer can fill and then chunk the texture up
-                // (do *not* repeat the exact logic of CopyBufferToTexture, it's way too much!)
-                //unimplemented!("texture clearing for GLES is not implemented yet");
-            }
             C::CopyBufferToBuffer {
                 src,
                 src_target,

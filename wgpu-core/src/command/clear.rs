@@ -3,9 +3,11 @@ use std::{num::NonZeroU32, ops::Range};
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
+    align_to,
     command::CommandBuffer,
+    get_lowest_common_denom,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
-    id::{BufferId, CommandEncoderId, TextureId},
+    id::{BufferId, CommandEncoderId, DeviceId, TextureId},
     init_tracker::MemoryInitKind,
     track::TextureSelector,
 };
@@ -23,6 +25,8 @@ pub enum ClearError {
     MissingClearCommandsFeature,
     #[error("command encoder {0:?} is invalid")]
     InvalidCommandEncoder(CommandEncoderId),
+    #[error("device {0:?} is invalid")]
+    InvalidDevice(DeviceId),
     #[error("buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
     #[error("texture {0:?} is invalid or destroyed")]
@@ -158,6 +162,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let mut token = Token::root();
+        let (device_guard, mut token) = hub.devices.write(&mut token);
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
@@ -251,11 +256,101 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let encoder = cmd_buf.encoder.open();
+        let device = &device_guard[cmd_buf.device_id.value];
+
+        let mut zero_buffer_copy_regions = Vec::new();
+        collect_zero_buffer_copies_for_clear_texture(
+            &dst_texture.desc,
+            device.alignments.buffer_copy_pitch.get() as u32,
+            subresource_range.base_mip_level..subresource_level_end,
+            subresource_range.base_array_layer..subresource_layer_end,
+            &mut zero_buffer_copy_regions,
+        );
         unsafe {
-            cmd_buf_raw.transition_textures(dst_barrier);
-            cmd_buf_raw.clear_texture(dst_raw, subresource_range);
+            encoder.transition_textures(dst_barrier);
+            if !zero_buffer_copy_regions.is_empty() {
+                encoder.copy_buffer_to_texture(
+                    &device.zero_buffer,
+                    dst_raw,
+                    zero_buffer_copy_regions.into_iter(),
+                );
+            }
         }
         Ok(())
+    }
+}
+
+pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
+    texture_desc: &wgt::TextureDescriptor<()>,
+    buffer_copy_pitch: u32,
+    mip_range: Range<u32>,
+    layer_range: Range<u32>,
+    out_copy_regions: &mut Vec<hal::BufferTextureCopy>, // TODO: Something better than Vec
+) {
+    let format_desc = texture_desc.format.describe();
+
+    let bytes_per_row_alignment =
+        get_lowest_common_denom(buffer_copy_pitch, format_desc.block_size as u32);
+
+    for mip_level in mip_range {
+        let mip_size = texture_desc.mip_level_size(mip_level).unwrap();
+
+        let bytes_per_row = align_to(
+            // row is at least one block wide, need to round up
+            (mip_size.width + format_desc.block_dimensions.1 as u32 - 1)
+                / format_desc.block_dimensions.0 as u32
+                * format_desc.block_size as u32,
+            bytes_per_row_alignment,
+        );
+
+        let max_rows_per_copy = crate::device::ZERO_BUFFER_SIZE as u32 / bytes_per_row;
+        // round down to a multiple of rows needed by the texture format
+        let max_rows_per_copy = max_rows_per_copy / format_desc.block_dimensions.1 as u32
+            * format_desc.block_dimensions.1 as u32;
+        assert!(max_rows_per_copy > 0, "Zero buffer size is too small to fill a single row of a texture with format {:?} and desc {:?}",
+                        texture_desc.format, texture_desc.size);
+
+        let z_range = 0..(if texture_desc.dimension == wgt::TextureDimension::D3 {
+            mip_size.depth_or_array_layers
+        } else {
+            1
+        });
+
+        for array_layer in layer_range.clone() {
+            // TODO: Only doing one layer at a time for volume textures right now.
+            for z in z_range.clone() {
+                // May need multiple copies for each subresource! However, we assume that we never need to split a row.
+                let mut num_rows_left = mip_size.height;
+                while num_rows_left > 0 {
+                    let num_rows = num_rows_left.min(max_rows_per_copy);
+
+                    out_copy_regions.push(hal::BufferTextureCopy {
+                        buffer_layout: wgt::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: NonZeroU32::new(bytes_per_row),
+                            rows_per_image: None,
+                        },
+                        texture_base: hal::TextureCopyBase {
+                            mip_level,
+                            array_layer,
+                            origin: wgt::Origin3d {
+                                x: 0, // Always full rows
+                                y: mip_size.height - num_rows_left,
+                                z,
+                            },
+                            aspect: hal::FormatAspects::all(),
+                        },
+                        size: hal::CopyExtent {
+                            width: mip_size.width, // full row
+                            height: num_rows,
+                            depth: 1, // Only single slice of volume texture at a time right now
+                        },
+                    });
+
+                    num_rows_left -= num_rows;
+                }
+            }
+        }
     }
 }
