@@ -55,6 +55,11 @@ struct Args {
     #[argh(option)]
     shader_model: Option<ShaderModelArg>,
 
+    /// if the selected frontends/backends support coordinate space conversions,
+    /// disable them
+    #[argh(switch)]
+    keep_coordinate_space: bool,
+
     /// the input file
     #[argh(positional)]
     input: String,
@@ -129,7 +134,7 @@ struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
     bounds_check_policies: naga::back::BoundsCheckPolicies,
     entry_point: Option<String>,
-    spv_adjust_coordinate_space: bool,
+    keep_coordinate_space: bool,
     spv_block_ctx_dump_prefix: Option<String>,
     spv: naga::back::spv::Options,
     msl: naga::back::msl::Options,
@@ -224,6 +229,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(model) = args.shader_model {
         params.hlsl.shader_model = model.0;
     }
+    params.keep_coordinate_space = args.keep_coordinate_space;
 
     let module = match Path::new(&input_path)
         .extension()
@@ -233,7 +239,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     {
         "spv" => {
             let options = naga::front::spv::Options {
-                adjust_coordinate_space: params.spv_adjust_coordinate_space,
+                adjust_coordinate_space: !params.keep_coordinate_space,
                 strict_capabilities: false,
                 block_ctx_dump_prefix: params
                     .spv_block_ctx_dump_prefix
@@ -356,6 +362,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 params.spv.bounds_check_policies = params.bounds_check_policies;
+                params.spv.flags.set(
+                    spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+                    !params.keep_coordinate_space,
+                );
 
                 let spv = spv::write_vec(
                     &module,
