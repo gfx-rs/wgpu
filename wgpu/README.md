@@ -56,4 +56,4 @@ Users can run the [naga](https://github.com/gfx-rs/naga) binary in the following
 cargo run -- <input.spv> <output.wgsl>
 ```
 
-In addition, SPIR-V can be used by enabling the `spirv` feature, or the `spirv-web` feature for wasm targets, at the cost of slightly increased build times.
+In addition, SPIR-V can be used by enabling the `spirv` feature and GLSL can be enabled by enabling the `glsl` feature at the cost of slightly increased build times.

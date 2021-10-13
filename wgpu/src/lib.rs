@@ -747,6 +747,21 @@ pub enum ShaderSource<'a> {
     /// is passed to `gfx-rs` and `spirv_cross` for translation.
     #[cfg(feature = "spirv")]
     SpirV(Cow<'a, [u32]>),
+    /// GSLS module as a string slice.
+    ///
+    /// wgpu will attempt to parse and validate it. The module will get
+    /// passed to wgpu-core where it will translate it to the required languages.
+    ///
+    /// Note: GLSL is not yet fully supported and must be a direct ShaderStage.
+    #[cfg(feature = "glsl")]
+    Glsl {
+        /// The shaders code
+        shader: Cow<'a, str>,
+        /// Stage in which the GLSL shader is for example: naga::ShaderStage::Vertex
+        stage: naga::ShaderStage,
+        /// Defines to unlock configured shader features
+        defines: naga::FastHashMap<String, String>,
+    },
     /// WGSL module as a string slice.
     ///
     /// wgpu-rs will parse it and use for validation. It will attempt
@@ -2871,6 +2886,18 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
+    ///
+    /// The structure expected in `indirect_buffer` is the following:
+    ///
+    /// ```rust
+    /// // x, y and z denote the number of work groups to dispatch in each dimension.
+    /// #[repr(C)]
+    /// struct DispatchIndirect {
+    ///     x: u32,
+    ///     y: u32,
+    ///     z: u32,
+    /// }
+    /// ```
     pub fn dispatch_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
