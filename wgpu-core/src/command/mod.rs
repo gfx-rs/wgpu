@@ -201,7 +201,6 @@ impl<A: hal::Api> BakedCommands<A> {
                     ranges.clear();
                     for (mip_level, mip_tracker) in affected_mip_trackers {
                         for layer_range in mip_tracker.drain(use_range.layer_range.clone()) {
-                            // TODO: Don't treat every mip_level separately and collapse equal layer ranges!
                             ranges.push(TextureInitRange {
                                 mip_range: mip_level as u32..(mip_level as u32 + 1),
                                 layer_range,
@@ -214,50 +213,43 @@ impl<A: hal::Api> BakedCommands<A> {
                         .as_raw()
                         .ok_or(DestroyedTextureError(texture_use.id))?;
 
-                    if texture.hal_usage.contains(hal::TextureUses::COLOR_TARGET)
-                        || texture
-                            .hal_usage
-                            .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
-                    {
-                        // TODO: Clear with render target
-                    } else {
-                        debug_assert!(texture.hal_usage.contains(hal::TextureUses::COPY_DST), "Every texture needs to be either a color/depth/stencil render target or has the COPY_DST flag. Otherwise we can't ensure initialized memory!");
+                    debug_assert!(texture.hal_usage.contains(hal::TextureUses::COPY_DST),
+                            "Every texture needs to have the COPY_DST flag. Otherwise we can't ensure initialized memory!");
 
-                        let mut zero_buffer_copy_regions = Vec::new();
-                        for range in &ranges {
-                            // Don't do use_replace since the texture may already no longer have a ref_count.
-                            // However, we *know* that it is currently in use, so the tracker must already know about it.
-                            let transition = device_tracker.textures.change_replace_tracked(
-                                id::Valid(texture_use.id),
-                                TextureSelector {
-                                    levels: range.mip_range.clone(),
-                                    layers: range.layer_range.clone(),
-                                },
-                                hal::TextureUses::COPY_DST,
-                            );
+                    let mut zero_buffer_copy_regions = Vec::new();
+                    for range in &ranges {
+                        // Don't do use_replace since the texture may already no longer have a ref_count.
+                        // However, we *know* that it is currently in use, so the tracker must already know about it.
+                        let transition = device_tracker.textures.change_replace_tracked(
+                            id::Valid(texture_use.id),
+                            TextureSelector {
+                                levels: range.mip_range.clone(),
+                                layers: range.layer_range.clone(),
+                            },
+                            hal::TextureUses::COPY_DST,
+                        );
 
-                            collect_zero_buffer_copies_for_clear_texture(
-                                &texture.desc,
-                                device.alignments.buffer_copy_pitch.get() as u32,
-                                range.mip_range.clone(),
-                                range.layer_range.clone(),
-                                &mut zero_buffer_copy_regions,
+                        collect_zero_buffer_copies_for_clear_texture(
+                            &texture.desc,
+                            device.alignments.buffer_copy_pitch.get() as u32,
+                            range.mip_range.clone(),
+                            range.layer_range.clone(),
+                            &mut zero_buffer_copy_regions,
+                        );
+                        unsafe {
+                            self.encoder.transition_textures(
+                                transition.map(|pending| pending.into_hal(texture)),
                             );
-                            unsafe {
-                                self.encoder.transition_textures(
-                                    transition.map(|pending| pending.into_hal(texture)),
-                                );
-                            }
                         }
+                    }
 
-                        if zero_buffer_copy_regions.len() > 0 {
-                            unsafe {
-                                self.encoder.copy_buffer_to_texture(
-                                    &device.zero_buffer,
-                                    raw_texture,
-                                    zero_buffer_copy_regions.into_iter(),
-                                );
-                            }
+                    if zero_buffer_copy_regions.len() > 0 {
+                        unsafe {
+                            self.encoder.copy_buffer_to_texture(
+                                &device.zero_buffer,
+                                raw_texture,
+                                zero_buffer_copy_regions.into_iter(),
+                            );
                         }
                     }
                 }
