@@ -2158,12 +2158,12 @@ impl Texture {
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
     #[cfg(not(target_arch = "wasm32"))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
-        hal_texture_callback: impl FnOnce(Option<&A::Texture>),
+        hal_texture_callback: F,
     ) {
         self.context
-            .texture_as_hal::<A, _>(&self.id, hal_texture_callback)
+            .texture_as_hal::<A, F>(&self.id, hal_texture_callback)
     }
 
     /// Creates a view of this texture.
