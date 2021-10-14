@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 
 set -e
 
@@ -9,7 +9,7 @@ echo "Generating bindings..."
 mkdir -p target/wasm-examples/$1
 wasm-bindgen --target web --out-dir target/wasm-examples/$1 target/wasm32-unknown-unknown/debug/examples/$1.wasm
 cp wasm-resources/index.template.html target/wasm-examples/$1/index.html
-sed -i "s/{{example}}/$1/g" target/wasm-examples/$1/index.html
+sed -i "" "s/{{example}}/$1/g" target/wasm-examples/$1/index.html
 
 # Find a serving tool to host the example
 SERVE_CMD=""
