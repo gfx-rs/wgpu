@@ -62,14 +62,16 @@ static TEXTURE_FORMATS_BC: &[wgpu::TextureFormat] = &[
 
 // needs TEXTURE_COMPRESSION_ETC2
 static TEXTURE_FORMATS_ETC2: &[wgpu::TextureFormat] = &[
-    wgpu::TextureFormat::Etc2RgbUnorm,
-    wgpu::TextureFormat::Etc2RgbUnormSrgb,
-    wgpu::TextureFormat::Etc2RgbA1Unorm,
-    wgpu::TextureFormat::Etc2RgbA1UnormSrgb,
-    wgpu::TextureFormat::EacRUnorm,
-    wgpu::TextureFormat::EacRSnorm,
-    wgpu::TextureFormat::EacRgUnorm,
-    wgpu::TextureFormat::EacRgSnorm,
+    wgpu::TextureFormat::Etc2Rgb8Unorm,
+    wgpu::TextureFormat::Etc2Rgb8UnormSrgb,
+    wgpu::TextureFormat::Etc2Rgb8A1Unorm,
+    wgpu::TextureFormat::Etc2Rgb8A1UnormSrgb,
+    wgpu::TextureFormat::Etc2Rgba8Unorm,
+    wgpu::TextureFormat::Etc2Rgba8UnormSrgb,
+    wgpu::TextureFormat::EacR11Unorm,
+    wgpu::TextureFormat::EacR11Snorm,
+    wgpu::TextureFormat::EacRg11Unorm,
+    wgpu::TextureFormat::EacRg11Snorm,
 ];
 
 // needs TEXTURE_COMPRESSION_ASTC_LDR
