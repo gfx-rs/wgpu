@@ -2,6 +2,8 @@
 
 set -e
 
+cargo install wasm-bindgen-cli
+
 echo "Compiling..."
 cargo build --example $1 --target wasm32-unknown-unknown --features webgl
 
