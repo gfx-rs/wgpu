@@ -188,9 +188,11 @@ impl crate::Surface<super::Api> for Surface {
             self.present_program = Some(Self::create_present_program(gl));
         }
 
-        if self.texture.is_none() {
-            self.texture = Some(gl.create_texture().unwrap());
+        if let Some(texture) = self.texture.take() {
+            gl.delete_texture(texture);
         }
+
+        self.texture = Some(gl.create_texture().unwrap());
 
         let desc = device.shared.describe_texture_format(config.format);
         gl.bind_texture(glow::TEXTURE_2D, self.texture);
