@@ -238,7 +238,7 @@ bitflags::bitflags! {
 }
 
 impl UpdateAfterBindTypes {
-    fn from_limits(limits: &wgt::Limits, phd_limits: &vk::PhysicalDeviceLimits) -> Self {
+    pub fn from_limits(limits: &wgt::Limits, phd_limits: &vk::PhysicalDeviceLimits) -> Self {
         let mut uab_types = UpdateAfterBindTypes::empty();
         uab_types.set(
             UpdateAfterBindTypes::UNIFORM_BUFFER,
