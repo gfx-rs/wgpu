@@ -149,15 +149,6 @@ where
             .flatten()
     }
 
-    // // Checks if we're initialized at a position
-    // pub(crate) fn check_at(&self, idx: Idx) -> bool {
-    //     // TODO: this can be done more efficiently!
-    //     match self.check(idx..idx + 1) {
-    //         Some(_) => true,
-    //         None => false,
-    //     }
-    // }
-
     // Drains uninitialized ranges in a query range.
     #[must_use]
     pub(crate) fn drain(&mut self, drain_range: Range<Idx>) -> InitTrackerDrain<Idx> {

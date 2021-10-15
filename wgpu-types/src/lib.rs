@@ -3352,7 +3352,13 @@ impl ImageSubresourceRange {
             ..self.base_array_layer
                 + match self.array_layer_count {
                     Some(array_layer_count) => array_layer_count.get(),
-                    None => texture_desc.size.depth_or_array_layers,
+                    None => {
+                        if texture_desc.dimension == TextureDimension::D3 {
+                            1
+                        } else {
+                            texture_desc.size.depth_or_array_layers
+                        }
+                    }
                 }
     }
 }
