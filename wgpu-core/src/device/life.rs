@@ -397,6 +397,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                     if let Some(res) = hub.bind_groups.unregister_locked(id.0, &mut *guard) {
                         self.suspected_resources.add_trackers(&res.used);
 
+                        self.suspected_resources
+                            .bind_group_layouts
+                            .push(res.layout_id);
+
                         let submit_index = res.life_guard.life_count();
                         self.active
                             .iter_mut()
