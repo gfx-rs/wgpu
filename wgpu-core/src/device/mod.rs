@@ -1569,6 +1569,9 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
+        // manually add a dependency on BGL
+        layout.multi_ref_count.inc();
+
         Ok(binding_model::BindGroup {
             raw,
             device_id: Stored {
@@ -1837,6 +1840,7 @@ impl<A: HalApi> Device<A> {
                 .bind_group_layouts
                 .iter()
                 .map(|&id| {
+                    // manually add a dependency to BGL
                     bgl_guard.get(id).unwrap().multi_ref_count.inc();
                     id::Valid(id)
                 })

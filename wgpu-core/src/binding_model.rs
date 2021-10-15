@@ -421,6 +421,14 @@ pub struct BindGroupLayoutDescriptor<'a> {
 
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
+/// Bind group layout.
+///
+/// The lifetime of BGLs is a bit special. They are only referenced on CPU
+/// without considering GPU operations. And on CPU they get manual
+/// inc-refs and dec-refs. In particular, the following objects depend on them:
+///  - produced bind groups
+///  - produced pipeline layouts
+///  - pipelines with implicit layouts
 #[derive(Debug)]
 pub struct BindGroupLayout<A: hal::Api> {
     pub(crate) raw: A::BindGroupLayout,
