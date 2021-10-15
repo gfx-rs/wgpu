@@ -1,5 +1,8 @@
 # Change Log
 
+## wgpu-core-0.11.1 (2021-10-15)
+  - fix bind group layout lifetime with regard to bind groups
+
 ## wgpu-hal-0.11.2 (2021-10-12)
   - GL/WebGL: fix vertex buffer bindings with non-zero first instance
   - DX12: fix cube array view construction
