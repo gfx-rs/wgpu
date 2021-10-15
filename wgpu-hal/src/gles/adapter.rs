@@ -431,12 +431,12 @@ impl super::Adapter {
         let vertex = gl
             .create_shader(glow::VERTEX_SHADER)
             .expect("Could not create shader");
-        gl.shader_source(vertex, include_str!("./shader_clear.vert"));
+        gl.shader_source(vertex, include_str!("./shaders/clear.vert"));
         gl.compile_shader(vertex);
         let fragment = gl
             .create_shader(glow::FRAGMENT_SHADER)
             .expect("Could not create shader");
-        gl.shader_source(fragment, include_str!("./shader_clear.frag"));
+        gl.shader_source(fragment, include_str!("./shaders/clear.frag"));
         gl.compile_shader(fragment);
         gl.attach_shader(program, vertex);
         gl.attach_shader(program, fragment);

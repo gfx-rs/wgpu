@@ -153,12 +153,12 @@ impl Surface {
         let vertex = gl
             .create_shader(glow::VERTEX_SHADER)
             .expect("Could not create shader");
-        gl.shader_source(vertex, include_str!("./web/present.vert"));
+        gl.shader_source(vertex, include_str!("./shaders/present.vert"));
         gl.compile_shader(vertex);
         let fragment = gl
             .create_shader(glow::FRAGMENT_SHADER)
             .expect("Could not create shader");
-        gl.shader_source(fragment, include_str!("./web/present.frag"));
+        gl.shader_source(fragment, include_str!("./shaders/present.frag"));
         gl.compile_shader(fragment);
         gl.attach_shader(program, vertex);
         gl.attach_shader(program, fragment);
