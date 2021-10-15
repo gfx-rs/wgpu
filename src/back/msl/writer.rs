@@ -307,7 +307,6 @@ pub struct Writer<W> {
     names: FastHashMap<NameKey, String>,
     named_expressions: crate::NamedExpressions,
     namer: proc::Namer,
-    runtime_sized_buffers: FastHashMap<Handle<crate::GlobalVariable>, usize>,
     #[cfg(test)]
     put_expression_stack_pointers: FastHashSet<*const ()>,
     #[cfg(test)]
@@ -473,7 +472,6 @@ impl<W: Write> Writer<W> {
             names: FastHashMap::default(),
             named_expressions: crate::NamedExpressions::default(),
             namer: proc::Namer::default(),
-            runtime_sized_buffers: FastHashMap::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
             #[cfg(test)]
@@ -707,11 +705,10 @@ impl<W: Write> Writer<W> {
                     _ => return Err(Error::Validation),
                 };
 
-                let buffer_idx = self.runtime_sized_buffers[&handle];
                 write!(
                     self.out,
                     "(1 + (_buffer_sizes.size{idx} - {offset} - {span}) / {stride})",
-                    idx = buffer_idx,
+                    idx = handle.index(),
                     offset = offset,
                     span = span,
                     stride = stride,
@@ -1761,7 +1758,6 @@ impl<W: Write> Writer<W> {
         self.names.clear();
         self.namer
             .reset(module, super::keywords::RESERVED, &[], &mut self.names);
-        self.runtime_sized_buffers.clear();
         self.struct_member_pads.clear();
 
         writeln!(
@@ -1778,7 +1774,6 @@ impl<W: Write> Writer<W> {
             for (handle, var) in module.global_variables.iter() {
                 if needs_array_length(var.ty, &module.types) {
                     let idx = handle.index();
-                    self.runtime_sized_buffers.insert(handle, idx);
                     indices.push(idx);
                 }
             }
