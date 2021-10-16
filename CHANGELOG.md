@@ -1,5 +1,10 @@
 # Change Log
 
+## wgpu-core-0.11.3 (2021-10-16)
+  - GL:
+    - fix mapping flags and buffer initialization
+    - fix context creation when sRGB is available
+
 ## wgpu-core-0.11.1 (2021-10-15)
   - fix bind group layout lifetime with regard to bind groups
 
