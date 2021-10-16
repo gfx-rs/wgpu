@@ -78,12 +78,14 @@ pub struct BakedCommands<A: hal::Api> {
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
+    discarded_surfaces: Vec<DiscardedTextureSurface>,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
 pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
 impl<A: hal::Api> BakedCommands<A> {
+    // inserts all buffer initializations that are going to be needed for executing the commands and updates resource init states accordingly
     pub(crate) fn initialize_buffer_memory(
         &mut self,
         device_tracker: &mut TrackerSet,
@@ -168,6 +170,8 @@ impl<A: hal::Api> BakedCommands<A> {
         Ok(())
     }
 
+    // inserts all texture initializations that are going to be needed for executing the commands and updates resource init states accordingly
+    // any textures that are left discarded by this command buffer will be marked as uninitialized
     pub(crate) fn initialize_texture_memory(
         &mut self,
         device_tracker: &mut TrackerSet,
@@ -255,8 +259,28 @@ impl<A: hal::Api> BakedCommands<A> {
                 }
             }
         }
+
+        // Now that all buffers/textures have the proper init state for before cmdbuf start, we discard init states for textures it left discarded after its execution.
+        for surface in self.discarded_surfaces.iter() {
+            let texture = texture_guard
+                .get_mut(surface.texture)
+                .map_err(|_| DestroyedTextureError(surface.texture))?;
+            texture
+                .initialization_status
+                .discard(surface.mip_level, surface.layer);
+        }
+
         Ok(())
     }
+}
+
+/// Surface that was discarded by `StoreOp::Discard` of a preceding renderpass.
+/// Any read access to this surface needs to be preceded by a texture initialization.
+#[derive(Clone)]
+pub(crate) struct DiscardedTextureSurface {
+    pub texture: id::TextureId,
+    pub mip_level: u32,
+    pub layer: u32,
 }
 
 pub struct CommandBuffer<A: hal::Api> {
@@ -266,6 +290,7 @@ pub struct CommandBuffer<A: hal::Api> {
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,
+    pub(crate) discarded_surfaces: Vec<DiscardedTextureSurface>,
     limits: wgt::Limits,
     support_clear_buffer_texture: bool,
     #[cfg(feature = "trace")]
@@ -294,6 +319,7 @@ impl<A: HalApi> CommandBuffer<A> {
             trackers: TrackerSet::new(A::VARIANT),
             buffer_memory_init_actions: Default::default(),
             texture_memory_init_actions: Default::default(),
+            discarded_surfaces: Default::default(),
             limits,
             support_clear_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
             #[cfg(feature = "trace")]
@@ -361,6 +387,7 @@ impl<A: hal::Api> CommandBuffer<A> {
             trackers: self.trackers,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_init_actions: self.texture_memory_init_actions,
+            discarded_surfaces: self.discarded_surfaces,
         }
     }
 }

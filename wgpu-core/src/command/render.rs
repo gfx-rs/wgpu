@@ -38,6 +38,8 @@ use serde::Serialize;
 use crate::track::UseExtendError;
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
+use super::DiscardedTextureSurface;
+
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -532,16 +534,18 @@ struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
     trackers: StatefulTrackerSubset,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
+    discarded_surfaces: AttachmentDataVec<DiscardedTextureSurface>,
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
 }
 
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
-    fn add_pass_init_actions<V>(
+    fn add_pass_texture_init_actions<V>(
         channel: &PassChannel<V>,
         cmd_buf: &mut CommandBuffer<A>,
         view: &TextureView<A>,
+        discarded_surfaces: &mut AttachmentDataVec<DiscardedTextureSurface>,
     ) {
         if channel.load_op == LoadOp::Load {
             cmd_buf
@@ -563,14 +567,11 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 });
         }
         if channel.store_op == StoreOp::Discard {
-            // TODO: Discard probably needs to be inserted into command buffer itself
-            // cmd_buf
-            //     .texture_memory_init_actions
-            //     .push(TextureInitTrackerAction {
-            //         id,
-            //         range: TextureInitRange::from(view.selector.clone()),
-            //         kind: MemoryInitKind::DiscardMemory,
-            //     });
+            discarded_surfaces.push(DiscardedTextureSurface {
+                texture: view.parent_id.value.0,
+                mip_level: view.selector.levels.start,
+                layer: view.selector.layers.start,
+            });
         }
     }
 
@@ -589,6 +590,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut is_ds_read_only = false;
 
         let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
+        let mut discarded_surfaces = AttachmentDataVec::new();
 
         let mut attachment_type_name = "";
         let mut extent = None;
@@ -636,13 +638,28 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             }
 
             if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
-                Self::add_pass_init_actions(&at.stencil, cmd_buf, view);
+                Self::add_pass_texture_init_actions(
+                    &at.stencil,
+                    cmd_buf,
+                    view,
+                    &mut discarded_surfaces,
+                );
             } else if !ds_aspects.contains(hal::FormatAspects::STENCIL) {
-                Self::add_pass_init_actions(&at.depth, cmd_buf, view);
+                Self::add_pass_texture_init_actions(
+                    &at.depth,
+                    cmd_buf,
+                    view,
+                    &mut discarded_surfaces,
+                );
             } else if at.stencil.load_op == at.depth.load_op
                 && at.stencil.store_op == at.depth.store_op
             {
-                Self::add_pass_init_actions(&at.depth, cmd_buf, view);
+                Self::add_pass_texture_init_actions(
+                    &at.depth,
+                    cmd_buf,
+                    view,
+                    &mut discarded_surfaces,
+                );
             } else {
                 // This is the only place (anywhere in wgpu) where Stencil & Depth init state can diverge.
                 // To safe us the overhead of tracking init state of texture aspects everywhere,
@@ -652,7 +669,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 // Diverging LoadOp, i.e. Load + Clear:
                 // Record MemoryInitKind::NeedsInitializedMemory for the entire surface, a bit wasteful on unit but no negative effect!
                 // Rationale: If the loaded channel is uninitialized it needs clearing, the cleared channel doesn't care. (If everything is already initialized nothing special happens)
-                // (possible  minor optimization: Clear caused by NeedsInitializedMemory should know that it doesn't need to clear the aspect that was set to C)
+                // (possible minor optimization: Clear caused by NeedsInitializedMemory should know that it doesn't need to clear the aspect that was set to C)
                 let need_init_beforehand =
                     at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
                 if need_init_beforehand {
@@ -679,16 +696,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                                 kind: MemoryInitKind::ImplicitlyInitialized,
                             });
                     }
-                    // TODO: Record that we need to clear out the discarded channel
+                    // TODO: Record that we need to clear out the discarded channel right after this path!
                 } else if at.depth.store_op == StoreOp::Discard {
-                    // TODO: Discard probably needs to be inserted into command buffer itself
-                    // cmd_buf
-                    //     .texture_memory_init_actions
-                    //     .push(TextureInitTrackerAction {
-                    //         id: source_id.value.0,
-                    //         range: TextureInitRange::from(view.selector.clone()),
-                    //         kind: MemoryInitKind::DiscardMemory,
-                    //     });
+                    // Both are discarded using the regular path.
+                    discarded_surfaces.push(DiscardedTextureSurface {
+                        texture: view.parent_id.value.0,
+                        mip_level: view.selector.levels.start,
+                        layer: view.selector.layers.start,
+                    });
                 }
             }
 
@@ -729,7 +744,12 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 ));
             }
 
-            Self::add_pass_init_actions(&at.channel, cmd_buf, color_view);
+            Self::add_pass_texture_init_actions(
+                &at.channel,
+                cmd_buf,
+                color_view,
+                &mut discarded_surfaces,
+            );
             render_attachments
                 .push(color_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
@@ -817,6 +837,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             context,
             trackers: StatefulTrackerSubset::new(A::VARIANT),
             render_attachments,
+            discarded_surfaces,
             is_ds_read_only,
             extent,
             _phantom: PhantomData,
@@ -924,6 +945,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 "Encoding render pass begin in command buffer {:?}",
                 encoder_id
             );
+
+            // TODO: Insert texture inits for all textures that this pass has reads on but were previously discarded in the same command buffer
 
             let mut info = RenderPassInfo::start(
                 base.label,
@@ -1783,6 +1806,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
             }
+
+            // Record all surfaces that were discarded by this pass. On next read they need to be initialized!
+            cmd_buf
+                .discarded_surfaces
+                .extend_from_slice(&info.discarded_surfaces);
 
             log::trace!("Merging {:?} with the render pass", encoder_id);
             let trackers = info.finish(raw, &*texture_guard).map_pass_err(scope)?;
