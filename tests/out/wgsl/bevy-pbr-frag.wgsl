@@ -99,16 +99,16 @@ var StandardMaterial_emissive_texture: texture_2d<f32>;
 var StandardMaterial_emissive_texture_sampler: sampler;
 var<private> gl_FrontFacing: bool;
 
-fn pow5_(x: f32) -> f32 {
+fn pow5(x: f32) -> f32 {
     var x1: f32;
-    var x2_: f32;
+    var x2: f32;
 
     x1 = x;
     let e42: f32 = x1;
     let e43: f32 = x1;
-    x2_ = (e42 * e43);
-    let e46: f32 = x2_;
-    let e47: f32 = x2_;
+    x2 = (e42 * e43);
+    let e46: f32 = x2;
+    let e47: f32 = x2;
     let e49: f32 = x1;
     return ((e46 * e47) * e49);
 }
@@ -170,7 +170,7 @@ fn V_SmithGGXCorrelated(roughness2: f32, NoV: f32, NoL: f32) -> f32 {
     var roughness3: f32;
     var NoV1: f32;
     var NoL1: f32;
-    var a2_: f32;
+    var a2: f32;
     var lambdaV: f32;
     var lambdaL: f32;
     var v: f32;
@@ -180,30 +180,30 @@ fn V_SmithGGXCorrelated(roughness2: f32, NoV: f32, NoL: f32) -> f32 {
     NoL1 = NoL;
     let e46: f32 = roughness3;
     let e47: f32 = roughness3;
-    a2_ = (e46 * e47);
+    a2 = (e46 * e47);
     let e50: f32 = NoL1;
     let e51: f32 = NoV1;
-    let e52: f32 = a2_;
+    let e52: f32 = a2;
     let e53: f32 = NoV1;
     let e56: f32 = NoV1;
-    let e58: f32 = a2_;
+    let e58: f32 = a2;
     let e60: f32 = NoV1;
-    let e61: f32 = a2_;
+    let e61: f32 = a2;
     let e62: f32 = NoV1;
     let e65: f32 = NoV1;
-    let e67: f32 = a2_;
+    let e67: f32 = a2;
     lambdaV = (e50 * sqrt((((e60 - (e61 * e62)) * e65) + e67)));
     let e72: f32 = NoV1;
     let e73: f32 = NoL1;
-    let e74: f32 = a2_;
+    let e74: f32 = a2;
     let e75: f32 = NoL1;
     let e78: f32 = NoL1;
-    let e80: f32 = a2_;
+    let e80: f32 = a2;
     let e82: f32 = NoL1;
-    let e83: f32 = a2_;
+    let e83: f32 = a2;
     let e84: f32 = NoL1;
     let e87: f32 = NoL1;
-    let e89: f32 = a2_;
+    let e89: f32 = a2;
     lambdaL = (e72 * sqrt((((e82 - (e83 * e84)) * e87) + e89)));
     let e95: f32 = lambdaV;
     let e96: f32 = lambdaL;
@@ -212,17 +212,17 @@ fn V_SmithGGXCorrelated(roughness2: f32, NoV: f32, NoL: f32) -> f32 {
     return e100;
 }
 
-fn F_Schlick(f0_: vec3<f32>, f90_: f32, VoH: f32) -> vec3<f32> {
+fn F_Schlick(f0: vec3<f32>, f90: f32, VoH: f32) -> vec3<f32> {
     var f90_1: f32;
     var VoH1: f32;
 
-    f90_1 = f90_;
+    f90_1 = f90;
     VoH1 = VoH;
     let e45: f32 = f90_1;
     let e49: f32 = VoH1;
     let e52: f32 = VoH1;
-    let e54: f32 = pow5_((1.0 - e52));
-    return (f0_ + ((vec3<f32>(e45) - f0_) * e54));
+    let e54: f32 = pow5((1.0 - e52));
+    return (f0 + ((vec3<f32>(e45) - f0) * e54));
 }
 
 fn F_Schlick1(f0_1: f32, f90_2: f32, VoH2: f32) -> f32 {
@@ -238,7 +238,7 @@ fn F_Schlick1(f0_1: f32, f90_2: f32, VoH2: f32) -> f32 {
     let e48: f32 = f0_2;
     let e51: f32 = VoH3;
     let e54: f32 = VoH3;
-    let e56: f32 = pow5_((1.0 - e54));
+    let e56: f32 = pow5((1.0 - e54));
     return (e46 + ((e47 - e48) * e56));
 }
 
@@ -332,18 +332,18 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV6: f32) -> vec3<
     var f0_8: vec3<f32>;
     var perceptual_roughness1: f32;
     var NoV7: f32;
-    var c0_: vec4<f32> = vec4<f32>(-1.0, -0.027499999850988388, -0.5720000267028809, 0.02199999988079071);
-    var c1_: vec4<f32> = vec4<f32>(1.0, 0.042500000447034836, 1.0399999618530273, -0.03999999910593033);
+    var c0: vec4<f32> = vec4<f32>(-1.0, -0.027499999850988388, -0.5720000267028809, 0.02199999988079071);
+    var c1: vec4<f32> = vec4<f32>(1.0, 0.042500000447034836, 1.0399999618530273, -0.03999999910593033);
     var r: vec4<f32>;
-    var a004_: f32;
+    var a004: f32;
     var AB: vec2<f32>;
 
     f0_8 = f0_7;
     perceptual_roughness1 = perceptual_roughness;
     NoV7 = NoV6;
     let e62: f32 = perceptual_roughness1;
-    let e64: vec4<f32> = c0_;
-    let e66: vec4<f32> = c1_;
+    let e64: vec4<f32> = c0;
+    let e66: vec4<f32> = c1;
     r = ((vec4<f32>(e62) * e64) + e66);
     let e69: vec4<f32> = r;
     let e71: vec4<f32> = r;
@@ -355,8 +355,8 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV6: f32) -> vec3<
     let e94: f32 = NoV7;
     let e98: vec4<f32> = r;
     let e101: vec4<f32> = r;
-    a004_ = ((min((e83.x * e85.x), exp2((-(9.279999732971191) * e94))) * e98.x) + e101.y);
-    let e109: f32 = a004_;
+    a004 = ((min((e83.x * e85.x), exp2((-(9.279999732971191) * e94))) * e98.x) + e101.y);
+    let e109: f32 = a004;
     let e112: vec4<f32> = r;
     AB = ((vec2<f32>(-(1.0399999618530273), 1.0399999618530273) * vec2<f32>(e109)) + e112.zw);
     let e116: vec3<f32> = f0_8;
@@ -471,7 +471,7 @@ fn reinhard_extended_luminance(color6: vec3<f32>, max_white_l: f32) -> vec3<f32>
     return e68;
 }
 
-fn point_light(light: PointLight, roughness8: f32, NdotV: f32, N: vec3<f32>, V1: vec3<f32>, R: vec3<f32>, F0_: vec3<f32>, diffuseColor: vec3<f32>) -> vec3<f32> {
+fn point_light(light: PointLight, roughness8: f32, NdotV: f32, N: vec3<f32>, V1: vec3<f32>, R: vec3<f32>, F0: vec3<f32>, diffuseColor: vec3<f32>) -> vec3<f32> {
     var light1: PointLight;
     var roughness9: f32;
     var NdotV1: f32;
@@ -504,7 +504,7 @@ fn point_light(light: PointLight, roughness8: f32, NdotV: f32, N: vec3<f32>, V1:
     N1 = N;
     V2 = V1;
     R1 = R;
-    F0_1 = F0_;
+    F0_1 = F0;
     diffuseColor1 = diffuseColor;
     let e56: PointLight = light1;
     let e59: vec3<f32> = v_WorldPosition1;

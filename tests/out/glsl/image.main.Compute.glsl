@@ -21,11 +21,11 @@ void main() {
     uvec3 local_id = gl_LocalInvocationID;
     ivec2 dim = imageSize(_group_0_binding_1).xy;
     ivec2 itc = ((dim * ivec2(local_id.xy)) % ivec2(10, 20));
-    uvec4 value1_ = texelFetch(_group_0_binding_0, itc, int(local_id.z));
-    uvec4 value2_ = texelFetch(_group_0_binding_3, itc, int(local_id.z));
-    uvec4 value4_ = imageLoad(_group_0_binding_1, itc);
-    uvec4 value5_ = texelFetch(_group_0_binding_5, ivec3(itc, int(local_id.z)), (int(local_id.z) + 1));
-    imageStore(_group_0_binding_2, ivec2(itc.x, 0.0), (((value1_ + value2_) + value4_) + value5_));
+    uvec4 value1 = texelFetch(_group_0_binding_0, itc, int(local_id.z));
+    uvec4 value2 = texelFetch(_group_0_binding_3, itc, int(local_id.z));
+    uvec4 value4 = imageLoad(_group_0_binding_1, itc);
+    uvec4 value5 = texelFetch(_group_0_binding_5, ivec3(itc, int(local_id.z)), (int(local_id.z) + 1));
+    imageStore(_group_0_binding_2, ivec2(itc.x, 0.0), (((value1 + value2) + value4) + value5));
     return;
 }
 

@@ -29,11 +29,11 @@ void main(uint3 local_id : SV_GroupThreadID)
 {
     int2 dim = NagaRWDimensions2D(image_storage_src);
     int2 itc = ((dim * int2(local_id.xy)) % int2(10, 20));
-    uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
-    uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
-    uint4 value4_ = image_storage_src.Load(itc);
-    uint4 value5_ = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
-    image_dst[itc.x] = (((value1_ + value2_) + value4_) + value5_);
+    uint4 value1 = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
+    uint4 value2 = image_multisampled_src.Load(itc, int(local_id.z));
+    uint4 value4 = image_storage_src.Load(itc);
+    uint4 value5 = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
+    image_dst[itc.x] = (((value1 + value2) + value4) + value5);
     return;
 }
 

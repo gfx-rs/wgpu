@@ -21,12 +21,12 @@ vertex vs_mainOutput vs_main(
   metal::uint vertex_index [[vertex_id]]
 , constant Data& r_data [[buffer(0)]]
 ) {
-    int tmp1_;
-    int tmp2_;
-    tmp1_ = static_cast<int>(vertex_index) / 2;
-    tmp2_ = static_cast<int>(vertex_index) & 1;
-    int _e10 = tmp1_;
-    int _e16 = tmp2_;
+    int tmp1;
+    int tmp2;
+    tmp1 = static_cast<int>(vertex_index) / 2;
+    tmp2 = static_cast<int>(vertex_index) & 1;
+    int _e10 = tmp1;
+    int _e16 = tmp2;
     metal::float4 pos = metal::float4((static_cast<float>(_e10) * 4.0) - 1.0, (static_cast<float>(_e16) * 4.0) - 1.0, 0.0, 1.0);
     metal::float4 _e27 = r_data.view[0];
     metal::float4 _e31 = r_data.view[1];

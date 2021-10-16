@@ -8,15 +8,15 @@ let v_f32_zero: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 let v_f32_half: vec4<f32> = vec4<f32>(0.5, 0.5, 0.5, 0.5);
 let v_i32_one: vec4<i32> = vec4<i32>(1, 1, 1, 1);
 fn builtins() -> vec4<f32> {
-    let s1_: i32 = select(0, 1, true);
-    let s2_: vec4<f32> = select(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), true);
-    let s3_: vec4<f32> = select(vec4<f32>(1.0, 1.0, 1.0, 1.0), vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<bool>(false, false, false, false));
-    let m1_: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), vec4<f32>(0.5, 0.5, 0.5, 0.5));
-    let m2_: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
-    let b1_: f32 = bitcast<f32>(vec4<i32>(1, 1, 1, 1).x);
-    let b2_: vec4<f32> = bitcast<vec4<f32>>(vec4<i32>(1, 1, 1, 1));
+    let s1: i32 = select(0, 1, true);
+    let s2: vec4<f32> = select(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), true);
+    let s3: vec4<f32> = select(vec4<f32>(1.0, 1.0, 1.0, 1.0), vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<bool>(false, false, false, false));
+    let m1: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), vec4<f32>(0.5, 0.5, 0.5, 0.5));
+    let m2: vec4<f32> = mix(vec4<f32>(0.0, 0.0, 0.0, 0.0), vec4<f32>(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
+    let b1: f32 = bitcast<f32>(vec4<i32>(1, 1, 1, 1).x);
+    let b2: vec4<f32> = bitcast<vec4<f32>>(vec4<i32>(1, 1, 1, 1));
     let v_i32_zero: vec4<i32> = vec4<i32>(vec4<f32>(0.0, 0.0, 0.0, 0.0));
-    return (((((vec4<f32>((vec4<i32>(s1_) + v_i32_zero)) + s2_) + m1_) + m2_) + vec4<f32>(b1_)) + b2_);
+    return (((((vec4<f32>((vec4<i32>(s1) + v_i32_zero)) + s2) + m1) + m2) + vec4<f32>(b1)) + b2);
 }
 
 fn splat() -> vec4<f32> {

@@ -17,12 +17,12 @@ layout(location = 0) smooth out vec3 _vs2fs_location0;
 
 void main() {
     uint vertex_index = uint(gl_VertexID);
-    int tmp1_ = 0;
-    int tmp2_ = 0;
-    tmp1_ = (int(vertex_index) / 2);
-    tmp2_ = (int(vertex_index) & 1);
-    int _e10 = tmp1_;
-    int _e16 = tmp2_;
+    int tmp1 = 0;
+    int tmp2 = 0;
+    tmp1 = (int(vertex_index) / 2);
+    tmp2 = (int(vertex_index) & 1);
+    int _e10 = tmp1;
+    int _e16 = tmp2;
     vec4 pos = vec4(((float(_e10) * 4.0) - 1.0), ((float(_e16) * 4.0) - 1.0), 0.0, 1.0);
     vec4 _e27 = _group_0_binding_0.view[0];
     vec4 _e31 = _group_0_binding_0.view[1];

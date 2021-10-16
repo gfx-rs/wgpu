@@ -37,11 +37,11 @@ var image_2d_depth: texture_depth_2d;
 fn main([[builtin(local_invocation_id)]] local_id: vec3<u32>) {
     let dim: vec2<i32> = textureDimensions(image_storage_src);
     let itc: vec2<i32> = ((dim * vec2<i32>(local_id.xy)) % vec2<i32>(10, 20));
-    let value1_: vec4<u32> = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
-    let value2_: vec4<u32> = textureLoad(image_multisampled_src, itc, i32(local_id.z));
-    let value4_: vec4<u32> = textureLoad(image_storage_src, itc);
-    let value5_: vec4<u32> = textureLoad(image_array_src, itc, i32(local_id.z), (i32(local_id.z) + 1));
-    textureStore(image_dst, itc.x, (((value1_ + value2_) + value4_) + value5_));
+    let value1: vec4<u32> = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
+    let value2: vec4<u32> = textureLoad(image_multisampled_src, itc, i32(local_id.z));
+    let value4: vec4<u32> = textureLoad(image_storage_src, itc);
+    let value5: vec4<u32> = textureLoad(image_array_src, itc, i32(local_id.z), (i32(local_id.z) + 1));
+    textureStore(image_dst, itc.x, (((value1 + value2) + value4) + value5));
     return;
 }
 

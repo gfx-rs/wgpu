@@ -1,4 +1,4 @@
-struct Mat4x3_ {
+struct Mat4x3 {
     mx: vec4<f32>;
     my: vec4<f32>;
     mz: vec4<f32>;
@@ -6,22 +6,22 @@ struct Mat4x3_ {
 
 var<private> o_color: vec4<f32>;
 
-fn Fma(d: ptr<function, Mat4x3_>, m: Mat4x3_, s: f32) {
-    var m1: Mat4x3_;
+fn Fma(d: ptr<function, Mat4x3>, m: Mat4x3, s: f32) {
+    var m1: Mat4x3;
     var s1: f32;
 
     m1 = m;
     s1 = s;
-    let e6: Mat4x3_ = (*d);
-    let e8: Mat4x3_ = m1;
+    let e6: Mat4x3 = (*d);
+    let e8: Mat4x3 = m1;
     let e10: f32 = s1;
     (*d).mx = (e6.mx + (e8.mx * e10));
-    let e14: Mat4x3_ = (*d);
-    let e16: Mat4x3_ = m1;
+    let e14: Mat4x3 = (*d);
+    let e16: Mat4x3 = m1;
     let e18: f32 = s1;
     (*d).my = (e14.my + (e16.my * e18));
-    let e22: Mat4x3_ = (*d);
-    let e24: Mat4x3_ = m1;
+    let e22: Mat4x3 = (*d);
+    let e24: Mat4x3 = m1;
     let e26: f32 = s1;
     (*d).mz = (e22.mz + (e24.mz * e26));
     return;

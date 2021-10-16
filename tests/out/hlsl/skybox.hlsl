@@ -38,13 +38,13 @@ VertexOutput ConstructVertexOutput(float4 arg0, float3 arg1) {
 
 VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
 {
-    int tmp1_ = (int)0;
-    int tmp2_ = (int)0;
+    int tmp1 = (int)0;
+    int tmp2 = (int)0;
 
-    tmp1_ = (int((_NagaConstants.base_vertex + vertex_index)) / 2);
-    tmp2_ = (int((_NagaConstants.base_vertex + vertex_index)) & 1);
-    int _expr10 = tmp1_;
-    int _expr16 = tmp2_;
+    tmp1 = (int((_NagaConstants.base_vertex + vertex_index)) / 2);
+    tmp2 = (int((_NagaConstants.base_vertex + vertex_index)) & 1);
+    int _expr10 = tmp1;
+    int _expr16 = tmp2;
     float4 pos = float4(((float(_expr10) * 4.0) - 1.0), ((float(_expr16) * 4.0) - 1.0), 0.0, 1.0);
     float4 _expr27 = r_data.view[0];
     float4 _expr31 = r_data.view[1];

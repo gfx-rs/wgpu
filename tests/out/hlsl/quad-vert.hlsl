@@ -56,7 +56,7 @@ VertexOutput_main main(float2 a_uv : LOC1, float2 a_pos : LOC0)
     float _expr12 = perVertexStruct.gl_PointSize;
     float _expr13[1] = perVertexStruct.gl_ClipDistance;
     float _expr14[1] = perVertexStruct.gl_CullDistance;
-    const type9 type9_ = Constructtype9(_expr10, _expr11, _expr12, _expr13, _expr14);
-    const VertexOutput_main type9_1 = { type9_.member, type9_.gl_Position, type9_.gl_ClipDistance, type9_.gl_CullDistance, type9_.gl_PointSize };
+    const type9 type9 = Constructtype9(_expr10, _expr11, _expr12, _expr13, _expr14);
+    const VertexOutput_main type9_1 = { type9.member, type9.gl_Position, type9.gl_ClipDistance, type9.gl_CullDistance, type9.gl_PointSize };
     return type9_1;
 }

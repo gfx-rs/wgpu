@@ -18,9 +18,9 @@ struct type9 {
     type5 gl_ClipDistance;
     type5 gl_CullDistance;
 };
-constant metal::float4 const_type3_ = {0.0, 0.0, 0.0, 1.0};
-constant type5 const_type5_ = {0.0};
-constant gl_PerVertex const_gl_PerVertex = {const_type3_, 1.0, const_type5_, const_type5_};
+constant metal::float4 const_type3 = {0.0, 0.0, 0.0, 1.0};
+constant type5 const_type5 = {0.0};
+constant gl_PerVertex const_gl_PerVertex = {const_type3, 1.0, const_type5, const_type5};
 
 void main2(
     thread metal::float2& v_uv,
