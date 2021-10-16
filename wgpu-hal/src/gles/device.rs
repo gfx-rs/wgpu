@@ -328,7 +328,14 @@ impl crate::Device<super::Api> for super::Device {
         let is_coherent = desc
             .memory_flags
             .contains(crate::MemoryFlags::PREFER_COHERENT);
+
         let mut map_flags = 0;
+        if desc.usage.contains(crate::BufferUses::MAP_READ) {
+            map_flags |= glow::MAP_READ_BIT;
+        }
+        if desc.usage.contains(crate::BufferUses::MAP_WRITE) {
+            map_flags |= glow::MAP_WRITE_BIT;
+        }
 
         let raw = gl.create_buffer().unwrap();
         gl.bind_buffer(target, Some(raw));
@@ -339,8 +346,8 @@ impl crate::Device<super::Api> for super::Device {
 
         if self
             .shared
-            .downlevel_flags
-            .contains(wgt::DownlevelFlags::VERTEX_STORAGE | wgt::DownlevelFlags::FRAGMENT_STORAGE)
+            .private_caps
+            .contains(super::PrivateCapabilities::BUFFER_ALLOCATION)
         {
             if is_host_visible {
                 map_flags |= glow::MAP_PERSISTENT_BIT;
@@ -348,13 +355,6 @@ impl crate::Device<super::Api> for super::Device {
                     map_flags |= glow::MAP_COHERENT_BIT;
                 }
             }
-            if desc.usage.contains(crate::BufferUses::MAP_READ) {
-                map_flags |= glow::MAP_READ_BIT;
-            }
-            if desc.usage.contains(crate::BufferUses::MAP_WRITE) {
-                map_flags |= glow::MAP_WRITE_BIT;
-            }
-
             gl.buffer_storage(target, raw_size, None, map_flags);
         } else {
             assert!(!is_coherent);
