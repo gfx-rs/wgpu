@@ -289,6 +289,10 @@ impl super::Adapter {
 
         let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
+            super::PrivateCapabilities::BUFFER_ALLOCATION,
+            extensions.contains("GL_EXT_buffer_storage"),
+        );
+        private_caps.set(
             super::PrivateCapabilities::SHADER_BINDING_LAYOUT,
             ver >= (3, 1),
         );
@@ -400,7 +404,6 @@ impl super::Adapter {
                 shared: Arc::new(super::AdapterShared {
                     context,
                     private_caps,
-                    downlevel_flags,
                     workarounds,
                     shading_language_version,
                 }),

@@ -119,19 +119,21 @@ bitflags::bitflags! {
     /// Flags that affect internal code paths but do not
     /// change the exposed feature set.
     struct PrivateCapabilities: u32 {
+        /// Indicates support for `glBufferStorage` allocation.
+        const BUFFER_ALLOCATION = 1 << 0;
         /// Support explicit layouts in shader.
-        const SHADER_BINDING_LAYOUT = 1 << 0;
+        const SHADER_BINDING_LAYOUT = 1 << 1;
         /// Support extended shadow sampling instructions.
-        const SHADER_TEXTURE_SHADOW_LOD = 1 << 1;
+        const SHADER_TEXTURE_SHADOW_LOD = 1 << 2;
         /// Support memory barriers.
-        const MEMORY_BARRIERS = 1 << 2;
+        const MEMORY_BARRIERS = 1 << 3;
         /// Vertex buffer layouts separate from the data.
-        const VERTEX_BUFFER_LAYOUT = 1 << 3;
-        /// Indicates that buffers used as ELEMENT_ARRAY_BUFFER may be created / initialized / used
+        const VERTEX_BUFFER_LAYOUT = 1 << 4;
+        /// Indicates that buffers used as `GL_ELEMENT_ARRAY_BUFFER` may be created / initialized / used
         /// as other targets, if not present they must not be mixed with other targets.
-        const INDEX_BUFFER_ROLE_CHANGE = 1 << 4;
+        const INDEX_BUFFER_ROLE_CHANGE = 1 << 5;
         /// Indicates that the device supports disabling draw buffers
-        const CAN_DISABLE_DRAW_BUFFER = 1 << 5;
+        const CAN_DISABLE_DRAW_BUFFER = 1 << 6;
     }
 }
 
@@ -175,7 +177,6 @@ struct TextureFormatDesc {
 struct AdapterShared {
     context: AdapterContext,
     private_caps: PrivateCapabilities,
-    downlevel_flags: wgt::DownlevelFlags,
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
 }
