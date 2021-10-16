@@ -49,14 +49,11 @@ pub enum BindSamplerTarget {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
 pub struct BindTarget {
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub buffer: Option<Slot>,
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub texture: Option<Slot>,
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub sampler: Option<BindSamplerTarget>,
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub mutable: bool,
 }
 
@@ -66,29 +63,25 @@ pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTar
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
 pub struct PerStageResources {
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub resources: BindingMap,
 
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub push_constant_buffer: Option<Slot>,
 
     /// The slot of a buffer that contains an array of `u32`,
     /// one for the size of each bound buffer that contains a runtime array,
     /// in order of [`crate::GlobalVariable`] declarations.
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub sizes_buffer: Option<Slot>,
 }
 
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
 pub struct PerStageMap {
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub vs: PerStageResources,
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub fs: PerStageResources,
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub cs: PerStageResources,
 }
 
