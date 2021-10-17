@@ -298,7 +298,7 @@ pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
 
         let bytes_per_row = align_to(
             // row is at least one block wide, need to round up
-            (mip_size.width + format_desc.block_dimensions.1 as u32 - 1)
+            (mip_size.width + format_desc.block_dimensions.0 as u32 - 1)
                 / format_desc.block_dimensions.0 as u32
                 * format_desc.block_size as u32,
             bytes_per_row_alignment,
