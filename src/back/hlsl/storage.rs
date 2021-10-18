@@ -129,7 +129,6 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     crate::VectorSize::Tri => 4,
                     columns => columns as u32,
                 };
-
                 let row_stride = width as u32 * padded_columns;
                 let iter = (0..rows as u32).map(|i| {
                     let ty_inner = crate::TypeInner::Vector {
@@ -267,8 +266,15 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 )?;
                 self.write_store_value(module, &value, func_ctx)?;
                 writeln!(self.out, ";")?;
+
+                // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
+                let padded_columns = match columns {
+                    crate::VectorSize::Tri => 4,
+                    columns => columns as u32,
+                };
+                let row_stride = width as u32 * padded_columns;
+
                 // then iterate the stores
-                let row_stride = width as u32 * columns as u32;
                 for i in 0..rows as u32 {
                     self.temp_access_chain
                         .push(SubAccess::Offset(i * row_stride));
