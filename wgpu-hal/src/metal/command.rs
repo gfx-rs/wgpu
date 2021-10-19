@@ -22,14 +22,14 @@ impl Default for super::CommandState {
 
 impl super::CommandEncoder {
     fn enter_blit(&mut self) -> &mtl::BlitCommandEncoderRef {
-        objc::rc::autoreleasepool(move || {
-            if self.state.blit.is_none() {
-                debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
+        if self.state.blit.is_none() {
+            debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
+            objc::rc::autoreleasepool(|| {
                 let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
                 self.state.blit = Some(cmd_buf.new_blit_command_encoder().to_owned());
-            }
-            self.state.blit.as_ref().unwrap()
-        })
+            });
+        }
+        self.state.blit.as_ref().unwrap()
     }
 
     pub(super) fn leave_blit(&mut self) {
