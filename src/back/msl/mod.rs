@@ -23,7 +23,7 @@ For the result type, if it's a structure, we re-compose it with a temporary valu
 holding the result.
 !*/
 
-use crate::{arena::Handle, valid::ModuleInfo};
+use crate::{arena::Handle, proc::index, valid::ModuleInfo};
 use std::{
     fmt::{Error as FmtError, Write},
     ops,
@@ -177,6 +177,9 @@ pub struct Options {
     pub spirv_cross_compatibility: bool,
     /// Don't panic on missing bindings, instead generate invalid MSL.
     pub fake_missing_bindings: bool,
+    /// Bounds checking policies.
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub bounds_check_policies: index::BoundsCheckPolicies,
 }
 
 impl Default for Options {
@@ -187,6 +190,7 @@ impl Default for Options {
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,
             fake_missing_bindings: true,
+            bounds_check_policies: index::BoundsCheckPolicies::default(),
         }
     }
 }

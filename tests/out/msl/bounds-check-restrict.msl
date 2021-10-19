@@ -1,0 +1,163 @@
+// language: metal1.1
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+struct _mslBufferSizes {
+    metal::uint size0;
+};
+
+struct type_1 {
+    float inner[10];
+};
+typedef float type_4[1];
+struct Globals {
+    type_1 a;
+    char _pad1[8];
+    metal::float4 v;
+    metal::float3x4 m;
+    type_4 d;
+};
+
+float index_array(
+    int i,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    float _e4 = globals.a.inner[metal::min(unsigned(i), 9u)];
+    return _e4;
+}
+
+float index_dynamic_array(
+    int i_1,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    float _e4 = globals.d[metal::min(unsigned(i_1), (_buffer_sizes.size0 - 112 - 4) / 4)];
+    return _e4;
+}
+
+float index_vector(
+    int i_2,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    float _e4 = globals.v[metal::min(unsigned(i_2), 3u)];
+    return _e4;
+}
+
+float index_vector_by_value(
+    metal::float4 v,
+    int i_3
+) {
+    return v[metal::min(unsigned(i_3), 3u)];
+}
+
+metal::float4 index_matrix(
+    int i_4,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    metal::float4 _e4 = globals.m[metal::min(unsigned(i_4), 2u)];
+    return _e4;
+}
+
+float index_twice(
+    int i_5,
+    int j,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    float _e6 = globals.m[metal::min(unsigned(i_5), 2u)][metal::min(unsigned(j), 3u)];
+    return _e6;
+}
+
+float index_expensive(
+    int i_6,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    float _e11 = globals.a.inner[metal::min(unsigned(static_cast<int>(metal::sin(static_cast<float>(i_6) / 100.0) * 100.0)), 9u)];
+    return _e11;
+}
+
+float index_in_bounds(
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    float _e4 = globals.a.inner[9];
+    float _e8 = globals.v.w;
+    float _e15 = globals.m[2].w;
+    return (_e4 + _e8) + _e15;
+}
+
+void set_array(
+    int i_7,
+    float v_1,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    globals.a.inner[metal::min(unsigned(i_7), 9u)] = v_1;
+    return;
+}
+
+void set_dynamic_array(
+    int i_8,
+    float v_2,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    globals.d[metal::min(unsigned(i_8), (_buffer_sizes.size0 - 112 - 4) / 4)] = v_2;
+    return;
+}
+
+void set_vector(
+    int i_9,
+    float v_3,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    globals.v[metal::min(unsigned(i_9), 3u)] = v_3;
+    return;
+}
+
+void set_matrix(
+    int i_10,
+    metal::float4 v_4,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    globals.m[metal::min(unsigned(i_10), 2u)] = v_4;
+    return;
+}
+
+void set_index_twice(
+    int i_11,
+    int j_1,
+    float v_5,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    globals.m[metal::min(unsigned(i_11), 2u)][metal::min(unsigned(j_1), 3u)] = v_5;
+    return;
+}
+
+void set_expensive(
+    int i_12,
+    float v_6,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    globals.a.inner[metal::min(unsigned(static_cast<int>(metal::sin(static_cast<float>(i_12) / 100.0) * 100.0)), 9u)] = v_6;
+    return;
+}
+
+void set_in_bounds(
+    float v_7,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    globals.a.inner[9] = v_7;
+    globals.v.w = v_7;
+    globals.m[2].w = v_7;
+    return;
+}

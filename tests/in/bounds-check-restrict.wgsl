@@ -1,4 +1,4 @@
-// Tests for `naga::back::BoundsCheckPolicy::ReadZeroSkipWrite`.
+// Tests for `naga::back::BoundsCheckPolicy::Restrict`.
 
 [[block]]
 struct Globals {

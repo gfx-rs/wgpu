@@ -335,6 +335,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "metal" => {
                 use naga::back::msl;
 
+                let mut options = params.msl.clone();
+                options.bounds_check_policies = params.bounds_check_policies;
+
                 let pipeline_options = msl::PipelineOptions::default();
                 let (msl, _) = msl::write_string(
                     &module,
@@ -342,7 +345,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         "Generating metal output requires validation to \
                         succeed, and it failed in a previous step",
                     ))?,
-                    &params.msl,
+                    &options,
                     &pipeline_options,
                 )
                 .unwrap_pretty();

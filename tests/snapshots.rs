@@ -82,6 +82,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         Ok(string) => ron::de::from_str(&string).expect("Couldn't parse param file"),
         Err(_) => Parameters::default(),
     };
+
     let capabilities = if params.god_mode {
         naga::valid::Capabilities::all()
     } else {
@@ -128,7 +129,14 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     {
         if targets.contains(Targets::METAL) {
-            write_output_msl(module, &info, &dest, name, &params.msl);
+            write_output_msl(
+                module,
+                &info,
+                &dest,
+                name,
+                &params.msl,
+                params.bounds_check_policies,
+            );
         }
     }
     #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
@@ -227,6 +235,7 @@ fn write_output_msl(
     destination: &PathBuf,
     file_name: &str,
     options: &naga::back::msl::Options,
+    bounds_check_policies: naga::proc::BoundsCheckPolicies,
 ) {
     use naga::back::msl;
 
@@ -236,8 +245,10 @@ fn write_output_msl(
         allow_point_size: true,
     };
 
+    let mut options = options.clone();
+    options.bounds_check_policies = bounds_check_policies;
     let (string, tr_info) =
-        msl::write_string(module, info, options, &pipeline_options).expect("Metal write failed");
+        msl::write_string(module, info, &options, &pipeline_options).expect("Metal write failed");
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
         if let Err(error) = result {
@@ -458,10 +469,11 @@ fn convert_wgsl() {
             "globals",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("bounds-check-zero", Targets::SPIRV),
+        ("bounds-check-zero", Targets::SPIRV | Targets::METAL),
+        ("bounds-check-restrict", Targets::SPIRV | Targets::METAL),
         ("bounds-check-image-restrict", Targets::SPIRV),
         ("bounds-check-image-rzsw", Targets::SPIRV),
-        ("policy-mix", Targets::SPIRV),
+        ("policy-mix", Targets::SPIRV | Targets::METAL),
         (
             "texture-arg",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
