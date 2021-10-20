@@ -94,9 +94,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         });
 
         if let Some(label) = label {
-            objc::rc::autoreleasepool(|| {
-                raw.set_label(label);
-            });
+            raw.set_label(label);
         }
         self.raw_cmd_buf = Some(raw);
 
