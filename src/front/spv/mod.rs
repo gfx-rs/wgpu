@@ -37,7 +37,7 @@ use function::*;
 use crate::{
     arena::{Arena, Handle, UniqueArena},
     proc::Layouter,
-    FastHashMap,
+    FastHashMap, FastHashSet,
 };
 
 use num_traits::cast::FromPrimitive;
@@ -549,6 +549,10 @@ pub struct Parser<I> {
         (BodyIndex, Vec<i32>),
         std::hash::BuildHasherDefault<fxhash::FxHasher>,
     >,
+
+    /// Tracks usage of builtins, used to cull unused builtins since they can
+    /// have serious performance implications.
+    builtin_usage: FastHashSet<crate::BuiltIn>,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -582,6 +586,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             index_constants: Vec::new(),
             index_constant_expressions: Vec::new(),
             switch_cases: indexmap::IndexMap::default(),
+            builtin_usage: FastHashSet::default(),
         }
     }
 
@@ -1294,9 +1299,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let type_lookup = self.lookup_type.lookup(acex.type_id)?;
                         acex = match ctx.type_arena[type_lookup.handle].inner {
                             // can only index a struct with a constant
-                            crate::TypeInner::Struct { .. } => {
+                            crate::TypeInner::Struct { ref members, .. } => {
                                 let index = index_maybe
                                     .ok_or_else(|| Error::InvalidAccess(index_expr_data.clone()))?;
+
                                 let lookup_member = self
                                     .lookup_member
                                     .get(&(type_lookup.handle, index))
@@ -1308,6 +1314,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     },
                                     span,
                                 );
+
+                                if let Some(crate::Binding::BuiltIn(builtin)) =
+                                    members[index as usize].binding
+                                {
+                                    self.builtin_usage.insert(builtin);
+                                }
+
                                 AccessExpression {
                                     base_handle,
                                     type_id: lookup_member.type_id,
