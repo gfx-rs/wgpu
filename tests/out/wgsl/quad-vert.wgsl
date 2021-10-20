@@ -26,7 +26,7 @@ fn main([[location(1)]] a_uv: vec2<f32>, [[location(0)]] a_pos: vec2<f32>) -> Ve
     a_uv1 = a_uv;
     a_pos1 = a_pos;
     main1();
-    let e10: vec2<f32> = v_uv;
-    let e11: vec4<f32> = perVertexStruct.gl_Position;
-    return VertexOutput(e10, e11);
+    let e7: vec2<f32> = v_uv;
+    let e8: vec4<f32> = perVertexStruct.gl_Position;
+    return VertexOutput(e7, e8);
 }

@@ -376,9 +376,16 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                             ..
                         } => {
                             for (index, sm) in sub_members.iter().enumerate() {
-                                if sm.binding.is_none() {
+                                match sm.binding {
+                                    Some(crate::Binding::BuiltIn(builtin)) => {
+                                        // Cull unused builtins to preserve performances
+                                        if !self.builtin_usage.contains(&builtin) {
+                                            continue;
+                                        }
+                                    }
                                     // unrecognized binding, skip
-                                    continue;
+                                    None => continue,
+                                    _ => {}
                                 }
                                 members.push(sm.clone());
                                 components.push(function.expressions.append(

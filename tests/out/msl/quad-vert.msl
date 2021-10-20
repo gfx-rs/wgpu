@@ -14,9 +14,6 @@ struct gl_PerVertex {
 struct type9 {
     metal::float2 member;
     metal::float4 gl_Position;
-    float gl_PointSize;
-    type5 gl_ClipDistance;
-    type5 gl_CullDistance;
 };
 constant metal::float4 const_type3 = {0.0, 0.0, 0.0, 1.0};
 constant type5 const_type5 = {0.0};
@@ -42,8 +39,6 @@ struct main1Input {
 struct main1Output {
     metal::float2 member [[user(loc0), center_perspective]];
     metal::float4 gl_Position [[position]];
-    float gl_PointSize [[point_size]];
-    float gl_ClipDistance [[clip_distance]] [1];
 };
 vertex main1Output main1(
   main1Input varyings [[stage_in]]
@@ -57,11 +52,8 @@ vertex main1Output main1(
     a_uv1 = a_uv;
     a_pos1 = a_pos;
     main2(v_uv, a_uv1, perVertexStruct, a_pos1);
-    metal::float2 _e10 = v_uv;
-    metal::float4 _e11 = perVertexStruct.gl_Position;
-    float _e12 = perVertexStruct.gl_PointSize;
-    type5 _e13 = perVertexStruct.gl_ClipDistance;
-    type5 _e14 = perVertexStruct.gl_CullDistance;
-    const auto _tmp = type9 {_e10, _e11, _e12, _e13, _e14};
-    return main1Output { _tmp.member, _tmp.gl_Position, _tmp.gl_PointSize, {_tmp.gl_ClipDistance.inner[0]} };
+    metal::float2 _e7 = v_uv;
+    metal::float4 _e8 = perVertexStruct.gl_Position;
+    const auto _tmp = type9 {_e7, _e8};
+    return main1Output { _tmp.member, _tmp.gl_Position };
 }
