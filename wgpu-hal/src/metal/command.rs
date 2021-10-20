@@ -24,8 +24,10 @@ impl super::CommandEncoder {
     fn enter_blit(&mut self) -> &mtl::BlitCommandEncoderRef {
         if self.state.blit.is_none() {
             debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
-            let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
-            self.state.blit = Some(cmd_buf.new_blit_command_encoder().to_owned());
+            objc::rc::autoreleasepool(|| {
+                let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
+                self.state.blit = Some(cmd_buf.new_blit_command_encoder().to_owned());
+            });
         }
         self.state.blit.as_ref().unwrap()
     }
@@ -389,80 +391,82 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.begin_pass();
         self.state.index = None;
 
-        let descriptor = mtl::RenderPassDescriptor::new();
-        //TODO: set visibility results buffer
+        objc::rc::autoreleasepool(|| {
+            let descriptor = mtl::RenderPassDescriptor::new();
+            //TODO: set visibility results buffer
 
-        for (i, at) in desc.color_attachments.iter().enumerate() {
-            let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
-            at_descriptor.set_texture(Some(&at.target.view.raw));
-            if let Some(ref resolve) = at.resolve_target {
-                //Note: the selection of levels and slices is already handled by `TextureView`
-                at_descriptor.set_resolve_texture(Some(&resolve.view.raw));
-            }
-            let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
-                mtl::MTLLoadAction::Load
-            } else {
-                at_descriptor.set_clear_color(conv::map_clear_color(&at.clear_value));
-                mtl::MTLLoadAction::Clear
-            };
-            let store_action = conv::map_store_action(
-                at.ops.contains(crate::AttachmentOps::STORE),
-                at.resolve_target.is_some(),
-            );
-            at_descriptor.set_load_action(load_action);
-            at_descriptor.set_store_action(store_action);
-        }
-
-        if let Some(ref at) = desc.depth_stencil_attachment {
-            if at.target.view.aspects.contains(crate::FormatAspects::DEPTH) {
-                let at_descriptor = descriptor.depth_attachment().unwrap();
+            for (i, at) in desc.color_attachments.iter().enumerate() {
+                let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
                 at_descriptor.set_texture(Some(&at.target.view.raw));
-
-                let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
+                if let Some(ref resolve) = at.resolve_target {
+                    //Note: the selection of levels and slices is already handled by `TextureView`
+                    at_descriptor.set_resolve_texture(Some(&resolve.view.raw));
+                }
+                let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                     mtl::MTLLoadAction::Load
                 } else {
-                    at_descriptor.set_clear_depth(at.clear_value.0 as f64);
+                    at_descriptor.set_clear_color(conv::map_clear_color(&at.clear_value));
                     mtl::MTLLoadAction::Clear
                 };
-                let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
-                    mtl::MTLStoreAction::Store
-                } else {
-                    mtl::MTLStoreAction::DontCare
-                };
+                let store_action = conv::map_store_action(
+                    at.ops.contains(crate::AttachmentOps::STORE),
+                    at.resolve_target.is_some(),
+                );
                 at_descriptor.set_load_action(load_action);
                 at_descriptor.set_store_action(store_action);
             }
-            if at
-                .target
-                .view
-                .aspects
-                .contains(crate::FormatAspects::STENCIL)
-            {
-                let at_descriptor = descriptor.stencil_attachment().unwrap();
-                at_descriptor.set_texture(Some(&at.target.view.raw));
 
-                let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
-                    mtl::MTLLoadAction::Load
-                } else {
-                    at_descriptor.set_clear_stencil(at.clear_value.1);
-                    mtl::MTLLoadAction::Clear
-                };
-                let store_action = if at.stencil_ops.contains(crate::AttachmentOps::STORE) {
-                    mtl::MTLStoreAction::Store
-                } else {
-                    mtl::MTLStoreAction::DontCare
-                };
-                at_descriptor.set_load_action(load_action);
-                at_descriptor.set_store_action(store_action);
+            if let Some(ref at) = desc.depth_stencil_attachment {
+                if at.target.view.aspects.contains(crate::FormatAspects::DEPTH) {
+                    let at_descriptor = descriptor.depth_attachment().unwrap();
+                    at_descriptor.set_texture(Some(&at.target.view.raw));
+
+                    let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
+                        mtl::MTLLoadAction::Load
+                    } else {
+                        at_descriptor.set_clear_depth(at.clear_value.0 as f64);
+                        mtl::MTLLoadAction::Clear
+                    };
+                    let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
+                        mtl::MTLStoreAction::Store
+                    } else {
+                        mtl::MTLStoreAction::DontCare
+                    };
+                    at_descriptor.set_load_action(load_action);
+                    at_descriptor.set_store_action(store_action);
+                }
+                if at
+                    .target
+                    .view
+                    .aspects
+                    .contains(crate::FormatAspects::STENCIL)
+                {
+                    let at_descriptor = descriptor.stencil_attachment().unwrap();
+                    at_descriptor.set_texture(Some(&at.target.view.raw));
+
+                    let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
+                        mtl::MTLLoadAction::Load
+                    } else {
+                        at_descriptor.set_clear_stencil(at.clear_value.1);
+                        mtl::MTLLoadAction::Clear
+                    };
+                    let store_action = if at.stencil_ops.contains(crate::AttachmentOps::STORE) {
+                        mtl::MTLStoreAction::Store
+                    } else {
+                        mtl::MTLStoreAction::DontCare
+                    };
+                    at_descriptor.set_load_action(load_action);
+                    at_descriptor.set_store_action(store_action);
+                }
             }
-        }
 
-        let raw = self.raw_cmd_buf.as_ref().unwrap();
-        let encoder = raw.new_render_command_encoder(descriptor);
-        if let Some(label) = desc.label {
-            encoder.set_label(label);
-        }
-        self.state.render = Some(encoder.to_owned());
+            let raw = self.raw_cmd_buf.as_ref().unwrap();
+            let encoder = raw.new_render_command_encoder(descriptor);
+            if let Some(label) = desc.label {
+                encoder.set_label(label);
+            }
+            self.state.render = Some(encoder.to_owned());
+        });
     }
 
     unsafe fn end_render_pass(&mut self) {
