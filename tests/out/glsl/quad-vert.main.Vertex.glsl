@@ -6,9 +6,6 @@ precision highp int;
 struct type9 {
     vec2 member;
     vec4 gen_gl_Position;
-    float gen_gl_PointSize;
-    float gen_gl_ClipDistance[1];
-    float gen_gl_CullDistance[1];
 };
 
 vec2 v_uv = vec2(0.0, 0.0);
@@ -42,12 +39,9 @@ void main() {
     a_uv1 = a_uv;
     a_pos1 = a_pos;
     main2();
-    vec2 _e10 = v_uv;
-    vec4 _e11 = perVertexStruct.gen_gl_Position;
-    float _e12 = perVertexStruct.gen_gl_PointSize;
-    float _e13[1] = perVertexStruct.gen_gl_ClipDistance;
-    float _e14[1] = perVertexStruct.gen_gl_CullDistance;
-    type9 _tmp_return = type9(_e10, _e11, _e12, _e13, _e14);
+    vec2 _e7 = v_uv;
+    vec4 _e8 = perVertexStruct.gen_gl_Position;
+    type9 _tmp_return = type9(_e7, _e8);
     _vs2fs_location0 = _tmp_return.member;
     gl_Position = _tmp_return.gen_gl_Position;
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
