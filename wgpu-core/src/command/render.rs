@@ -38,7 +38,7 @@ use serde::Serialize;
 use crate::track::UseExtendError;
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
-use super::DiscardedTextureSurface;
+use super::{CommandBufferTextureMemoryActions, TextureSurfaceDiscard};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
@@ -534,7 +534,6 @@ struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
     trackers: StatefulTrackerSubset,
     render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
-    discarded_surfaces: AttachmentDataVec<DiscardedTextureSurface>,
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
@@ -543,31 +542,35 @@ struct RenderPassInfo<'a, A: hal::Api> {
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     fn add_pass_texture_init_actions<V>(
         channel: &PassChannel<V>,
-        cmd_buf: &mut CommandBuffer<A>,
+        texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view: &TextureView<A>,
-        discarded_surfaces: &mut AttachmentDataVec<DiscardedTextureSurface>,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
         if channel.load_op == LoadOp::Load {
-            cmd_buf
-                .texture_memory_init_actions
-                .push(TextureInitTrackerAction {
+            texture_memory_actions.register_init_requirement(
+                &TextureInitTrackerAction {
                     id: view.parent_id.value.0,
                     range: TextureInitRange::from(view.selector.clone()),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
-                });
+                },
+                texture_guard,
+            );
         } else if channel.store_op == StoreOp::Store {
             // Clear + Store
-            cmd_buf
-                .texture_memory_init_actions
-                .push(TextureInitTrackerAction {
+            texture_memory_actions.register_init_requirement(
+                &TextureInitTrackerAction {
                     id: view.parent_id.value.0,
                     range: TextureInitRange::from(view.selector.clone()),
                     kind: MemoryInitKind::ImplicitlyInitialized,
-                });
+                },
+                texture_guard,
+            );
         }
         if channel.store_op == StoreOp::Discard {
-            discarded_surfaces.push(DiscardedTextureSurface {
+            // the discard happens at the *end* of a pass
+            // but recording the discard right away be alright since the texture can't be used during the pass anyways
+            texture_memory_actions.discards.push(TextureSurfaceDiscard {
                 texture: view.parent_id.value.0,
                 mip_level: view.selector.levels.start,
                 layer: view.selector.layers.start,
@@ -581,6 +584,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
+        texture_guard: &'a Storage<Texture<A>, id::TextureId>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("start", "RenderPassInfo");
 
@@ -640,25 +644,25 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
                 Self::add_pass_texture_init_actions(
                     &at.stencil,
-                    cmd_buf,
+                    &mut cmd_buf.texture_memory_actions,
                     view,
-                    &mut discarded_surfaces,
+                    texture_guard,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::STENCIL) {
                 Self::add_pass_texture_init_actions(
                     &at.depth,
-                    cmd_buf,
+                    &mut cmd_buf.texture_memory_actions,
                     view,
-                    &mut discarded_surfaces,
+                    texture_guard,
                 );
             } else if at.stencil.load_op == at.depth.load_op
                 && at.stencil.store_op == at.depth.store_op
             {
                 Self::add_pass_texture_init_actions(
                     &at.depth,
-                    cmd_buf,
+                    &mut cmd_buf.texture_memory_actions,
                     view,
-                    &mut discarded_surfaces,
+                    texture_guard,
                 );
             } else {
                 // This is the only place (anywhere in wgpu) where Stencil & Depth init state can diverge.
@@ -673,13 +677,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 let need_init_beforehand =
                     at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
                 if need_init_beforehand {
-                    cmd_buf
-                        .texture_memory_init_actions
-                        .push(TextureInitTrackerAction {
+                    cmd_buf.texture_memory_actions.register_init_requirement(
+                        &TextureInitTrackerAction {
                             id: view.parent_id.value.0,
                             range: TextureInitRange::from(view.selector.clone()),
                             kind: MemoryInitKind::NeedsInitializedMemory,
-                        });
+                        },
+                        texture_guard,
+                    );
                 }
 
                 // Diverging Store, i.e. Discard + Store:
@@ -688,18 +693,19 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 // (possible optimization: Delay and potentially drop this zeroing)
                 if at.depth.store_op != at.stencil.store_op {
                     if !need_init_beforehand {
-                        cmd_buf
-                            .texture_memory_init_actions
-                            .push(TextureInitTrackerAction {
+                        cmd_buf.texture_memory_actions.register_init_requirement(
+                            &TextureInitTrackerAction {
                                 id: view.parent_id.value.0,
                                 range: TextureInitRange::from(view.selector.clone()),
                                 kind: MemoryInitKind::ImplicitlyInitialized,
-                            });
+                            },
+                            texture_guard,
+                        );
                     }
                     // TODO: Record that we need to clear out the discarded channel right after this path!
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
-                    discarded_surfaces.push(DiscardedTextureSurface {
+                    discarded_surfaces.push(TextureSurfaceDiscard {
                         texture: view.parent_id.value.0,
                         mip_level: view.selector.levels.start,
                         layer: view.selector.layers.start,
@@ -746,9 +752,9 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             Self::add_pass_texture_init_actions(
                 &at.channel,
-                cmd_buf,
+                &mut cmd_buf.texture_memory_actions,
                 color_view,
-                &mut discarded_surfaces,
+                texture_guard,
             );
             render_attachments
                 .push(color_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
@@ -773,13 +779,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     return Err(RenderPassErrorInner::InvalidResolveTargetSampleCount);
                 }
 
-                cmd_buf
-                    .texture_memory_init_actions
-                    .push(TextureInitTrackerAction {
+                cmd_buf.texture_memory_actions.register_init_requirement(
+                    &TextureInitTrackerAction {
                         id: resolve_view.parent_id.value.0,
                         range: TextureInitRange::from(resolve_view.selector.clone()),
                         kind: MemoryInitKind::ImplicitlyInitialized,
-                    });
+                    },
+                    texture_guard,
+                );
                 render_attachments
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
@@ -837,7 +844,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             context,
             trackers: StatefulTrackerSubset::new(A::VARIANT),
             render_attachments,
-            discarded_surfaces,
             is_ds_read_only,
             extent,
             _phantom: PhantomData,
@@ -954,6 +960,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_stencil_attachment,
                 cmd_buf,
                 &*view_guard,
+                &*texture_guard,
             )
             .map_pass_err(scope)?;
 
@@ -1024,14 +1031,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }),
                         );
-                        cmd_buf.texture_memory_init_actions.extend(
-                            bind_group.used_texture_ranges.iter().filter_map(|action| {
-                                match texture_guard.get(action.id) {
-                                    Ok(buffer) => buffer.initialization_status.check_action(action),
-                                    Err(_) => None,
-                                }
-                            }),
-                        );
+                        for action in bind_group.used_texture_ranges.iter() {
+                            cmd_buf
+                                .texture_memory_actions
+                                .register_init_requirement(action, &texture_guard);
+                        }
 
                         let pipeline_layout_id = state.binder.pipeline_layout_id;
                         let entries = state.binder.assign_group(
@@ -1762,15 +1766,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     Err(_) => None,
                                 }),
                         );
-                        cmd_buf.texture_memory_init_actions.extend(
-                            bundle
-                                .texture_memory_init_actions
-                                .iter()
-                                .filter_map(|action| match texture_guard.get(action.id) {
-                                    Ok(buffer) => buffer.initialization_status.check_action(action),
-                                    Err(_) => None,
-                                }),
-                        );
+                        for action in bundle.texture_memory_init_actions.iter() {
+                            cmd_buf
+                                .texture_memory_actions
+                                .register_init_requirement(action, &texture_guard);
+                        }
 
                         unsafe {
                             bundle.execute(
@@ -1806,11 +1806,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
             }
-
-            // Record all surfaces that were discarded by this pass. On next read they need to be initialized!
-            cmd_buf
-                .discarded_surfaces
-                .extend_from_slice(&info.discarded_surfaces);
 
             log::trace!("Merging {:?} with the render pass", encoder_id);
             let trackers = info.finish(raw, &*texture_guard).map_pass_err(scope)?;

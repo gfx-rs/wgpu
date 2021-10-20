@@ -77,8 +77,7 @@ pub struct BakedCommands<A: hal::Api> {
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
-    texture_memory_init_actions: Vec<TextureInitTrackerAction>,
-    discarded_surfaces: Vec<DiscardedTextureSurface>,
+    texture_memory_actions: CommandBufferTextureMemoryActions,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
@@ -179,7 +178,7 @@ impl<A: hal::Api> BakedCommands<A> {
         device: &Device<A>,
     ) -> Result<(), DestroyedTextureError> {
         let mut ranges: Vec<TextureInitRange> = Vec::new();
-        for texture_use in self.texture_memory_init_actions.drain(..) {
+        for texture_use in self.texture_memory_actions.init_actions.drain(..) {
             let texture = texture_guard
                 .get_mut(texture_use.id)
                 .map_err(|_| DestroyedTextureError(texture_use.id))?;
@@ -261,13 +260,13 @@ impl<A: hal::Api> BakedCommands<A> {
         }
 
         // Now that all buffers/textures have the proper init state for before cmdbuf start, we discard init states for textures it left discarded after its execution.
-        for surface in self.discarded_surfaces.iter() {
+        for surface_discard in self.texture_memory_actions.discards.iter() {
             let texture = texture_guard
-                .get_mut(surface.texture)
-                .map_err(|_| DestroyedTextureError(surface.texture))?;
+                .get_mut(surface_discard.texture)
+                .map_err(|_| DestroyedTextureError(surface_discard.texture))?;
             texture
                 .initialization_status
-                .discard(surface.mip_level, surface.layer);
+                .discard(surface_discard.mip_level, surface_discard.layer);
         }
 
         Ok(())
@@ -277,10 +276,57 @@ impl<A: hal::Api> BakedCommands<A> {
 /// Surface that was discarded by `StoreOp::Discard` of a preceding renderpass.
 /// Any read access to this surface needs to be preceded by a texture initialization.
 #[derive(Clone)]
-pub(crate) struct DiscardedTextureSurface {
+pub(crate) struct TextureSurfaceDiscard {
     pub texture: id::TextureId,
     pub mip_level: u32,
     pub layer: u32,
+}
+
+#[derive(Default)]
+pub(crate) struct CommandBufferTextureMemoryActions {
+    // init actions describe the tracker actions that we need to be executed before the command buffer is executed
+    init_actions: Vec<TextureInitTrackerAction>,
+    // discards describe all the discards that haven't been followed by init again within the command buffer
+    // i.e. everything in this list resets the texture init state *after* the command buffer execution
+    pub(crate) discards: Vec<TextureSurfaceDiscard>,
+}
+
+impl CommandBufferTextureMemoryActions {
+    pub(crate) fn register_init_requirement<A: hal::Api>(
+        &mut self,
+        action: &TextureInitTrackerAction,
+        texture_guard: &Storage<Texture<A>, id::TextureId>,
+    ) {
+        // TODO: Do not add MemoryInitKind::NeedsInitializedMemory to init_actions if a surface is part of the discard list
+        // in that case it doesn't need to be initialized prior to the command buffer execution
+
+        // Note that within a command buffer we may stack arbitrary memory init actions on the same texture
+        // Since we react to them in sequence, they are going to be dropped again at queue submit
+        self.init_actions
+            .extend(match texture_guard.get(action.id) {
+                Ok(texture) => texture.initialization_status.check_action(action),
+                Err(_) => None,
+            });
+
+        // We expect very few discarded surfaces at any point in time which is why a linear search is likely best.
+        self.discards.retain(|discarded_surface| {
+            if discarded_surface.texture == action.id
+                && action.range.layer_range.contains(&discarded_surface.layer)
+                && action
+                    .range
+                    .mip_range
+                    .contains(&discarded_surface.mip_level)
+            {
+                if let MemoryInitKind::NeedsInitializedMemory = action.kind {
+                    todo!("need to immediately initialize surface!");
+                    todo!("mark surface as implicitly initialized (this is relevant because it might have been uninitialized prior to discarding");
+                }
+                false
+            } else {
+                true
+            }
+        });
+    }
 }
 
 pub struct CommandBuffer<A: hal::Api> {
@@ -289,8 +335,7 @@ pub struct CommandBuffer<A: hal::Api> {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
-    texture_memory_init_actions: Vec<TextureInitTrackerAction>,
-    pub(crate) discarded_surfaces: Vec<DiscardedTextureSurface>,
+    texture_memory_actions: CommandBufferTextureMemoryActions,
     limits: wgt::Limits,
     support_clear_buffer_texture: bool,
     #[cfg(feature = "trace")]
@@ -318,8 +363,7 @@ impl<A: HalApi> CommandBuffer<A> {
             device_id,
             trackers: TrackerSet::new(A::VARIANT),
             buffer_memory_init_actions: Default::default(),
-            texture_memory_init_actions: Default::default(),
-            discarded_surfaces: Default::default(),
+            texture_memory_actions: Default::default(),
             limits,
             support_clear_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
             #[cfg(feature = "trace")]
@@ -386,8 +430,7 @@ impl<A: hal::Api> CommandBuffer<A> {
             list: self.encoder.list,
             trackers: self.trackers,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
-            texture_memory_init_actions: self.texture_memory_init_actions,
-            discarded_surfaces: self.discarded_surfaces,
+            texture_memory_actions: self.texture_memory_actions,
         }
     }
 }

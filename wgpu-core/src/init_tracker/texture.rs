@@ -83,14 +83,6 @@ impl TextureInitTracker {
         }
     }
 
-    pub(crate) fn check_layer_range(
-        &self,
-        mip_level: u32,
-        layer_range: Range<u32>,
-    ) -> Option<Range<u32>> {
-        self.mips[mip_level as usize].check(layer_range)
-    }
-
     pub(crate) fn discard(&mut self, mip_level: u32, layer: u32) {
         self.mips[mip_level as usize].discard(layer);
     }

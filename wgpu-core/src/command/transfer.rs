@@ -354,7 +354,7 @@ fn get_copy_dst_texture_init_requirement<A: HalApi>(
     texture: &Texture<A>,
     copy_texture: &wgt::ImageCopyTexture<TextureId>,
     copy_size: &Extent3d,
-) -> Option<TextureInitTrackerAction> {
+) -> TextureInitTrackerAction {
     // Attention: If we don't write full texture subresources, we need to a full clear first since we don't track subrects.
     let dst_init_kind = if copy_size.width == texture.desc.size.width
         && copy_size.height == texture.desc.size.height
@@ -363,20 +363,15 @@ fn get_copy_dst_texture_init_requirement<A: HalApi>(
     } else {
         MemoryInitKind::NeedsInitializedMemory
     };
-    texture
-        .initialization_status
-        .check_layer_range(
-            copy_texture.mip_level,
-            copy_texture.origin.z..(copy_texture.origin.z + copy_size.depth_or_array_layers),
-        )
-        .map(|layer_range| TextureInitTrackerAction {
-            id: copy_texture.texture,
-            range: TextureInitRange {
-                mip_range: copy_texture.mip_level..copy_texture.mip_level + 1,
-                layer_range,
-            },
-            kind: dst_init_kind,
-        })
+    TextureInitTrackerAction {
+        id: copy_texture.texture,
+        range: TextureInitRange {
+            mip_range: copy_texture.mip_level..copy_texture.mip_level + 1,
+            layer_range: copy_texture.origin.z
+                ..(copy_texture.origin.z + copy_size.depth_or_array_layers),
+        },
+        kind: dst_init_kind,
+    }
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -609,13 +604,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
                 MemoryInitKind::NeedsInitializedMemory,
             ));
-        cmd_buf
-            .texture_memory_init_actions
-            .extend(get_copy_dst_texture_init_requirement(
-                dst_texture,
-                destination,
-                copy_size,
-            ));
+        cmd_buf.texture_memory_actions.register_init_requirement(
+            &get_copy_dst_texture_init_requirement(dst_texture, destination, copy_size),
+            &texture_guard,
+        );
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
@@ -730,21 +722,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        cmd_buf.texture_memory_init_actions.extend(
-            src_texture
-                .initialization_status
-                .check_layer_range(
-                    src_base.mip_level,
-                    src_base.origin.z..(src_base.origin.z + copy_size.depth_or_array_layers),
-                )
-                .map(|layer_range| TextureInitTrackerAction {
-                    id: source.texture,
-                    range: TextureInitRange {
-                        mip_range: src_base.mip_level..src_base.mip_level + 1,
-                        layer_range,
-                    },
-                    kind: MemoryInitKind::NeedsInitializedMemory,
-                }),
+        cmd_buf.texture_memory_actions.register_init_requirement(
+            &TextureInitTrackerAction {
+                id: source.texture,
+                range: TextureInitRange {
+                    mip_range: src_base.mip_level..src_base.mip_level + 1,
+                    layer_range: src_base.origin.z
+                        ..(src_base.origin.z + copy_size.depth_or_array_layers),
+                },
+                kind: MemoryInitKind::NeedsInitializedMemory,
+            },
+            &texture_guard,
         );
         cmd_buf
             .buffer_memory_init_actions
@@ -872,30 +860,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        cmd_buf.texture_memory_init_actions.extend(
-            src_texture
-                .initialization_status
-                .check_layer_range(
-                    src_tex_base.mip_level,
-                    src_tex_base.origin.z
+        cmd_buf.texture_memory_actions.register_init_requirement(
+            &TextureInitTrackerAction {
+                id: source.texture,
+                range: TextureInitRange {
+                    mip_range: src_tex_base.mip_level..src_tex_base.mip_level + 1,
+                    layer_range: src_tex_base.origin.z
                         ..(src_tex_base.origin.z + copy_size.depth_or_array_layers),
-                )
-                .map(|layer_range| TextureInitTrackerAction {
-                    id: source.texture,
-                    range: TextureInitRange {
-                        mip_range: src_tex_base.mip_level..src_tex_base.mip_level + 1,
-                        layer_range,
-                    },
-                    kind: MemoryInitKind::NeedsInitializedMemory,
-                }),
+                },
+                kind: MemoryInitKind::NeedsInitializedMemory,
+            },
+            &texture_guard,
         );
-        cmd_buf
-            .texture_memory_init_actions
-            .extend(get_copy_dst_texture_init_requirement(
-                dst_texture,
-                destination,
-                copy_size,
-            ));
+        cmd_buf.texture_memory_actions.register_init_requirement(
+            &get_copy_dst_texture_init_requirement(dst_texture, destination, copy_size),
+            &texture_guard,
+        );
 
         let hal_copy_size = hal::CopyExtent {
             width: src_copy_size.width.min(dst_copy_size.width),
