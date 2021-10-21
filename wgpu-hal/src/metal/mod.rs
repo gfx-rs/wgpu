@@ -141,7 +141,7 @@ impl crate::Instance<Api> for Instance {
 struct PrivateCapabilities {
     family_check: bool,
     msl_version: mtl::MTLLanguageVersion,
-    exposed_queues: usize,
+    fragment_rw_storage: bool,
     read_write_texture_tier: mtl::MTLReadWriteTextureTier,
     resource_heaps: bool,
     argument_buffers: bool,

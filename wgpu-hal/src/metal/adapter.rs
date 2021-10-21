@@ -580,7 +580,8 @@ impl super::PrivateCapabilities {
             } else {
                 MTLLanguageVersion::V1_0
             },
-            exposed_queues: 1,
+            // macOS 10.11 doesn't support read-write resources
+            fragment_rw_storage: !os_is_mac || Self::version_at_least(major, minor, 10, 12),
             read_write_texture_tier: if os_is_mac {
                 if Self::version_at_least(major, minor, 10, 13) {
                     device.read_write_texture_support()
@@ -901,6 +902,10 @@ impl super::PrivateCapabilities {
 
     pub fn capabilities(&self) -> crate::Capabilities {
         let mut downlevel = wgt::DownlevelCapabilities::default();
+        downlevel.flags.set(
+            wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
+            self.fragment_rw_storage,
+        );
         downlevel.flags.set(
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             self.texture_cube_array,
