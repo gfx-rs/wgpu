@@ -38,7 +38,7 @@ use serde::Serialize;
 use crate::track::UseExtendError;
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
-use super::{CommandBufferTextureMemoryActions, TextureSurfaceDiscard};
+use super::{memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
@@ -570,7 +570,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         if channel.store_op == StoreOp::Discard {
             // the discard happens at the *end* of a pass
             // but recording the discard right away be alright since the texture can't be used during the pass anyways
-            texture_memory_actions.discards.push(TextureSurfaceDiscard {
+            texture_memory_actions.discard(TextureSurfaceDiscard {
                 texture: view.parent_id.value.0,
                 mip_level: view.selector.levels.start,
                 layer: view.selector.layers.start,
