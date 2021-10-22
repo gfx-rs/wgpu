@@ -1816,7 +1816,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -1838,7 +1838,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.11.3"
+version = "0.11.4"
 dependencies = [
  "arrayvec",
  "ash",
