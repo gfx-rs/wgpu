@@ -600,7 +600,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         if surface.presentable {
             Some(crate::SurfaceCapabilities {
-                formats: if surface.enable_srgb {
+                formats: if surface.supports_srgb() {
                     vec![
                         wgt::TextureFormat::Rgba8UnormSrgb,
                         #[cfg(not(target_arch = "wasm32"))]
