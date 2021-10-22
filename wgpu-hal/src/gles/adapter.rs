@@ -289,6 +289,10 @@ impl super::Adapter {
 
         let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
+            super::PrivateCapabilities::BUFFER_ALLOCATION,
+            extensions.contains("GL_EXT_buffer_storage"),
+        );
+        private_caps.set(
             super::PrivateCapabilities::SHADER_BINDING_LAYOUT,
             ver >= (3, 1),
         );
@@ -400,7 +404,6 @@ impl super::Adapter {
                 shared: Arc::new(super::AdapterShared {
                     context,
                     private_caps,
-                    downlevel_flags,
                     workarounds,
                     shading_language_version,
                 }),
@@ -431,12 +434,12 @@ impl super::Adapter {
         let vertex = gl
             .create_shader(glow::VERTEX_SHADER)
             .expect("Could not create shader");
-        gl.shader_source(vertex, include_str!("./shader_clear.vert"));
+        gl.shader_source(vertex, include_str!("./shaders/clear.vert"));
         gl.compile_shader(vertex);
         let fragment = gl
             .create_shader(glow::FRAGMENT_SHADER)
             .expect("Could not create shader");
-        gl.shader_source(fragment, include_str!("./shader_clear.frag"));
+        gl.shader_source(fragment, include_str!("./shaders/clear.frag"));
         gl.compile_shader(fragment);
         gl.attach_shader(program, vertex);
         gl.attach_shader(program, fragment);
