@@ -85,7 +85,10 @@ impl ResourceState for BufferState {
         let new = other.port();
         if old == new && BufferUses::ORDERED.contains(new) {
             if output.is_some() && self.first.is_none() {
-                self.first = Some(old);
+                *self = Unit {
+                    first: Some(old),
+                    last: other.last,
+                };
             }
         } else {
             let pending = PendingTransition {
@@ -183,6 +186,50 @@ mod test {
             Unit {
                 first: Some(BufferUses::STORAGE_WRITE),
                 last: BufferUses::STORAGE_WRITE,
+            }
+        );
+    }
+
+    #[test]
+    fn merge_replace() {
+        let mut bs = Unit {
+            first: None,
+            last: BufferUses::empty(),
+        };
+        let other_smooth = Unit {
+            first: Some(BufferUses::empty()),
+            last: BufferUses::COPY_DST,
+        };
+        let id = Id::dummy();
+        let mut list = Vec::new();
+        bs.merge(id, &other_smooth, Some(&mut list)).unwrap();
+        assert!(list.is_empty());
+        assert_eq!(
+            bs,
+            Unit {
+                first: Some(BufferUses::empty()),
+                last: BufferUses::COPY_DST,
+            }
+        );
+
+        let other_rough = Unit {
+            first: Some(BufferUses::empty()),
+            last: BufferUses::UNIFORM,
+        };
+        bs.merge(id, &other_rough, Some(&mut list)).unwrap();
+        assert_eq!(
+            &list,
+            &[PendingTransition {
+                id,
+                selector: (),
+                usage: BufferUses::COPY_DST..BufferUses::empty(),
+            }],
+        );
+        assert_eq!(
+            bs,
+            Unit {
+                first: Some(BufferUses::empty()),
+                last: BufferUses::UNIFORM,
             }
         );
     }
