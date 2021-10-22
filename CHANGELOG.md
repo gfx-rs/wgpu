@@ -1,6 +1,18 @@
 # Change Log
 
-## wgpu-core-0.11.3 (2021-10-16)
+## wgpu-core-0.11.2, wgpu-hal-0.11.4 (2021-10-22)
+  - fix buffer transition barriers
+  - Metal:
+    - disable RW buffers on macOS 10.11
+    - fix memory leaks in render pass descriptor
+  - WebGL:
+    - fix surface reconfiguration
+  - GLES:
+    - fix mapping when persistent mapping isn't supported
+    - allow presentation in Android emulator
+    - fix sRGB attributes on EGL-1.4 contexts
+
+## wgpu-hal-0.11.3 (2021-10-16)
   - GL:
     - fix mapping flags and buffer initialization
     - fix context creation when sRGB is available
