@@ -83,7 +83,6 @@ impl crate::Instance<super::Api> for Instance {
                 swapchain: None,
                 texture: None,
                 presentable: true,
-                enable_srgb: true, // WebGL only supports sRGB
             })
         } else {
             unreachable!()
@@ -107,7 +106,6 @@ pub struct Surface {
     pub(super) swapchain: Option<Swapchain>,
     texture: Option<glow::Texture>,
     pub(super) presentable: bool,
-    pub(super) enable_srgb: bool,
     present_program: Option<glow::Program>,
 }
 
@@ -168,6 +166,10 @@ impl Surface {
         gl.bind_texture(glow::TEXTURE_2D, None);
 
         program
+    }
+
+    pub fn supports_srgb(&self) -> bool {
+        true // WebGL only supports sRGB
     }
 }
 
