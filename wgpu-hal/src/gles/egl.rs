@@ -181,12 +181,13 @@ fn choose_config(
             Ok(Some(config)) => {
                 if tier_max == 1 {
                     log::warn!(
-                        "EGL says it can present to the window but not natively. {}. {}",
+                        "EGL says it can present to the window but not natively. {}.",
                         "This has been confirmed to malfunction on Intel+NV laptops",
-                        "Therefore, we disable presentation entirely for this platform"
                     );
                 }
-                return Ok((config, tier_max >= 2));
+                // Android emulator can't natively present either.
+                let tier_threshold = if cfg!(target_os = "android") { 1 } else { 2 };
+                return Ok((config, tier_max >= tier_threshold));
             }
             Ok(None) => {
                 log::warn!("No config found!");
