@@ -1,9 +1,11 @@
 use crate::{
     binding_model::{BindError, BindGroup, PushConstantUploadError},
     command::{
-        bind::Binder, end_pipeline_statistics_query, BasePass, BasePassRef, CommandBuffer,
-        CommandEncoderError, CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
-        StateChange,
+        bind::Binder,
+        end_pipeline_statistics_query,
+        memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
+        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, CommandEncoderStatus,
+        MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
     device::MissingDownlevelFlags,
     error::{ErrorFormatter, PrettyError},
@@ -328,6 +330,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw.begin_compute_pass(&hal_desc);
         }
 
+        // Immediate texture inits required because of prior discards. Need to be inserted before texture reads.
+        let mut immediate_texture_inits = SurfacesInDiscardState::new();
+
         for command in base.commands {
             match *command {
                 ComputeCommand::SetBindGroup {
@@ -373,9 +378,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
 
                     for action in bind_group.used_texture_ranges.iter() {
-                        cmd_buf
-                            .texture_memory_actions
-                            .register_init_requirement(action, &texture_guard);
+                        immediate_texture_inits.extend(
+                            cmd_buf
+                                .texture_memory_actions
+                                .register_init_action(action, &texture_guard),
+                        );
                     }
 
                     let pipeline_layout_id = state.binder.pipeline_layout_id;
@@ -509,6 +516,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         indirect: false,
                         pipeline: state.pipeline.last_state,
                     };
+
+                    fixup_discarded_surfaces(
+                        immediate_texture_inits.drain(..),
+                        raw,
+                        &texture_guard,
+                        &mut cmd_buf.trackers.textures,
+                        device,
+                    );
 
                     state.is_ready().map_pass_err(scope)?;
                     state
@@ -676,6 +691,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw.end_compute_pass();
         }
         cmd_buf.status = CommandEncoderStatus::Recording;
+
+        // There can be entries left in immediate_texture_inits if a bind group was set, but not used (i.e. no Dispatch occurred)
+        // However, we already altered the discard/init_action state on this cmd_buf, so we need to apply the promised changes.
+        fixup_discarded_surfaces(
+            immediate_texture_inits.drain(..),
+            raw,
+            &texture_guard,
+            &mut cmd_buf.trackers.textures,
+            device,
+        );
 
         Ok(())
     }

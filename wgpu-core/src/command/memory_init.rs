@@ -1,5 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::ops::Range;
+use std::vec::Drain;
 
 use hal::CommandEncoder;
 
@@ -7,10 +8,11 @@ use crate::command::collect_zero_buffer_copies_for_clear_texture;
 use crate::device::Device;
 use crate::hub::Storage;
 use crate::id;
+use crate::id::TextureId;
 use crate::init_tracker::*;
 use crate::resource::{Buffer, Texture};
-use crate::track::TextureSelector;
 use crate::track::TrackerSet;
+use crate::track::{ResourceTracker, TextureSelector, TextureState};
 use crate::FastHashMap;
 
 use super::{BakedCommands, DestroyedBufferError, DestroyedTextureError};
@@ -19,10 +21,12 @@ use super::{BakedCommands, DestroyedBufferError, DestroyedTextureError};
 /// Any read access to this surface needs to be preceded by a texture initialization.
 #[derive(Clone)]
 pub(crate) struct TextureSurfaceDiscard {
-    pub texture: id::TextureId,
+    pub texture: TextureId,
     pub mip_level: u32,
     pub layer: u32,
 }
+
+pub(crate) type SurfacesInDiscardState = Vec<TextureSurfaceDiscard>;
 
 #[derive(Default)]
 pub(crate) struct CommandBufferTextureMemoryActions {
@@ -34,7 +38,7 @@ pub(crate) struct CommandBufferTextureMemoryActions {
 }
 
 impl CommandBufferTextureMemoryActions {
-    pub(crate) fn drain_init_actions(&mut self) -> std::vec::Drain<TextureInitTrackerAction> {
+    pub(crate) fn drain_init_actions(&mut self) -> Drain<TextureInitTrackerAction> {
         self.init_actions.drain(..)
     }
 
@@ -42,11 +46,15 @@ impl CommandBufferTextureMemoryActions {
         self.discards.push(discard);
     }
 
-    pub(crate) fn register_init_requirement<A: hal::Api>(
+    // Registers a TextureInitTrackerAction.
+    // Returns previously discarded surface that need to be initialized *immediately* now.
+    // Only returns a non-empty list if action is MemoryInitKind::NeedsInitializedMemory.
+    #[must_use]
+    pub(crate) fn register_init_action<A: hal::Api>(
         &mut self,
         action: &TextureInitTrackerAction,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
-    ) {
+        texture_guard: &Storage<Texture<A>, TextureId>,
+    ) -> SurfacesInDiscardState {
         // TODO: Do not add MemoryInitKind::NeedsInitializedMemory to init_actions if a surface is part of the discard list
         // in that case it doesn't need to be initialized prior to the command buffer execution
 
@@ -58,7 +66,9 @@ impl CommandBufferTextureMemoryActions {
                 Err(_) => None,
             });
 
-        // We expect very few discarded surfaces at any point in time which is why a linear search is likely best.
+        // We expect very few discarded surfaces at any point in time which is why a simple linear search is likely best.
+        // (i.e. most of the time self.discards is empty!)
+        let mut immediately_necessary_clears = SurfacesInDiscardState::new();
         self.discards.retain(|discarded_surface| {
             if discarded_surface.texture == action.id
                 && action.range.layer_range.contains(&discarded_surface.layer)
@@ -68,14 +78,94 @@ impl CommandBufferTextureMemoryActions {
                     .contains(&discarded_surface.mip_level)
             {
                 if let MemoryInitKind::NeedsInitializedMemory = action.kind {
-                    todo!("need to immediately initialize surface!");
-                    todo!("mark surface as implicitly initialized (this is relevant because it might have been uninitialized prior to discarding");
+                    immediately_necessary_clears.push(discarded_surface.clone());
                 }
                 false
             } else {
                 true
             }
         });
+
+        // Mark surface as implicitly initialized (this is relevant because it might have been uninitialized prior to discarding
+        // Don't do this during self.discards.retain to make borrow checker happy.
+        for discarded_surface in immediately_necessary_clears.iter() {
+            self.init_actions.push(TextureInitTrackerAction {
+                id: discarded_surface.texture,
+                range: TextureInitRange {
+                    mip_range: discarded_surface.mip_level..(discarded_surface.mip_level + 1),
+                    layer_range: discarded_surface.layer..(discarded_surface.layer + 1),
+                },
+                kind: MemoryInitKind::ImplicitlyInitialized,
+            });
+        }
+
+        immediately_necessary_clears
+    }
+
+    // Shortcut for register_init_action when it is known that the action is an implicit init, not requiring any immediate resource init.
+    pub(crate) fn register_implicit_init<A: hal::Api>(
+        &mut self,
+        id: TextureId,
+        range: TextureInitRange,
+        texture_guard: &Storage<Texture<A>, TextureId>,
+    ) {
+        let must_be_empty = self.register_init_action(
+            &TextureInitTrackerAction {
+                id,
+                range,
+                kind: MemoryInitKind::ImplicitlyInitialized,
+            },
+            texture_guard,
+        );
+        assert!(must_be_empty.is_empty());
+    }
+}
+
+// Utility function that takes discarded surfaces from register_init_action and initializes them on the spot.
+// Takes care of barriers as well!
+pub(crate) fn fixup_discarded_surfaces<A: hal::Api>(
+    inits: Drain<TextureSurfaceDiscard>,
+    encoder: &mut A::CommandEncoder,
+    texture_guard: &Storage<Texture<A>, TextureId>,
+    texture_tracker: &mut ResourceTracker<TextureState>,
+    device: &Device<A>,
+) {
+    let mut zero_buffer_copy_regions = Vec::new();
+    for init in inits {
+        let mip_range = init.mip_level..(init.mip_level + 1);
+        let layer_range = init.layer..(init.layer + 1);
+
+        let (texture, pending) = texture_tracker
+            .use_replace(
+                &*texture_guard,
+                init.texture,
+                TextureSelector {
+                    levels: mip_range.clone(),
+                    layers: layer_range.clone(),
+                },
+                hal::TextureUses::COPY_DST,
+            )
+            .unwrap();
+
+        collect_zero_buffer_copies_for_clear_texture(
+            &texture.desc,
+            device.alignments.buffer_copy_pitch.get() as u32,
+            mip_range,
+            layer_range,
+            &mut zero_buffer_copy_regions,
+        );
+
+        let barriers = pending.map(|pending| pending.into_hal(texture));
+        let raw_texture = texture.inner.as_raw().unwrap();
+
+        unsafe {
+            encoder.transition_textures(barriers);
+            encoder.copy_buffer_to_texture(
+                &device.zero_buffer,
+                raw_texture,
+                zero_buffer_copy_regions.drain(..),
+            );
+        }
     }
 }
 
@@ -170,7 +260,7 @@ impl<A: hal::Api> BakedCommands<A> {
     pub(crate) fn initialize_texture_memory(
         &mut self,
         device_tracker: &mut TrackerSet,
-        texture_guard: &mut Storage<Texture<A>, id::TextureId>,
+        texture_guard: &mut Storage<Texture<A>, TextureId>,
         device: &Device<A>,
     ) -> Result<(), DestroyedTextureError> {
         let mut ranges: Vec<TextureInitRange> = Vec::new();
