@@ -647,27 +647,20 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 ));
             }
 
-            if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
-                Self::add_pass_texture_init_actions(
-                    &at.stencil,
-                    &mut cmd_buf.texture_memory_actions,
-                    view,
-                    texture_guard,
-                    &mut pending_discard_init_fixups,
-                );
-            } else if !ds_aspects.contains(hal::FormatAspects::STENCIL) {
-                Self::add_pass_texture_init_actions(
-                    &at.depth,
-                    &mut cmd_buf.texture_memory_actions,
-                    view,
-                    texture_guard,
-                    &mut pending_discard_init_fixups,
-                );
-            } else if at.stencil.load_op == at.depth.load_op
-                && at.stencil.store_op == at.depth.store_op
+            if !ds_aspects.contains(hal::FormatAspects::STENCIL)
+                || (at.stencil.load_op == at.depth.load_op
+                    && at.stencil.store_op == at.depth.store_op)
             {
                 Self::add_pass_texture_init_actions(
                     &at.depth,
+                    &mut cmd_buf.texture_memory_actions,
+                    view,
+                    texture_guard,
+                    &mut pending_discard_init_fixups,
+                );
+            } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
+                Self::add_pass_texture_init_actions(
+                    &at.stencil,
                     &mut cmd_buf.texture_memory_actions,
                     view,
                     texture_guard,

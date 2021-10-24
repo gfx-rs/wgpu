@@ -534,7 +534,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let layers_to_initialize = dst.initialization_status.mips
                 [destination.mip_level as usize]
-                .drain(init_layer_range.clone());
+                .drain(init_layer_range);
 
             let mut zero_buffer_copy_regions = Vec::new();
             if size.width == dst.desc.size.width && size.height == dst.desc.size.height {
@@ -551,7 +551,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
             unsafe {
-                if zero_buffer_copy_regions.len() > 0 {
+                if !zero_buffer_copy_regions.is_empty() {
                     encoder.copy_buffer_to_texture(
                         &device.zero_buffer,
                         dst_raw,
@@ -787,7 +787,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .initialize_buffer_memory(&mut *trackers, &mut *buffer_guard)
                             .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
                         baked
-                            .initialize_texture_memory(&mut *trackers, &mut *texture_guard, &device)
+                            .initialize_texture_memory(&mut *trackers, &mut *texture_guard, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.

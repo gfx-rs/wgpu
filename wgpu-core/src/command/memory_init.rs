@@ -55,20 +55,21 @@ impl CommandBufferTextureMemoryActions {
         action: &TextureInitTrackerAction,
         texture_guard: &Storage<Texture<A>, TextureId>,
     ) -> SurfacesInDiscardState {
-        // TODO: Do not add MemoryInitKind::NeedsInitializedMemory to init_actions if a surface is part of the discard list
-        // in that case it doesn't need to be initialized prior to the command buffer execution
+        let mut immediately_necessary_clears = SurfacesInDiscardState::new();
 
         // Note that within a command buffer we may stack arbitrary memory init actions on the same texture
         // Since we react to them in sequence, they are going to be dropped again at queue submit
+        //
+        // We don't need to add MemoryInitKind::NeedsInitializedMemory to init_actions if a surface is part of the discard list.
+        // But that would mean splitting up the action which is more than we'd win here.
         self.init_actions
             .extend(match texture_guard.get(action.id) {
                 Ok(texture) => texture.initialization_status.check_action(action),
-                Err(_) => None,
+                Err(_) => return immediately_necessary_clears, // texture no longer exists
             });
 
         // We expect very few discarded surfaces at any point in time which is why a simple linear search is likely best.
         // (i.e. most of the time self.discards is empty!)
-        let mut immediately_necessary_clears = SurfacesInDiscardState::new();
         self.discards.retain(|discarded_surface| {
             if discarded_surface.texture == action.id
                 && action.range.layer_range.contains(&discarded_surface.layer)
@@ -335,7 +336,7 @@ impl<A: hal::Api> BakedCommands<A> {
                         }
                     }
 
-                    if zero_buffer_copy_regions.len() > 0 {
+                    if !zero_buffer_copy_regions.is_empty() {
                         unsafe {
                             self.encoder.copy_buffer_to_texture(
                                 &device.zero_buffer,

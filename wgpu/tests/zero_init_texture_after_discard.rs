@@ -265,7 +265,7 @@ fn copy_texture_to_buffer(
 ) {
     encoder.copy_texture_to_buffer(
         wgpu::ImageCopyTexture {
-            texture: &texture,
+            texture,
             mip_level: 0,
             origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
             aspect: wgpu::TextureAspect::All,
