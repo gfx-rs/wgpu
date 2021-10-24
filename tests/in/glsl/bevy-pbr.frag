@@ -115,7 +115,7 @@ float getDistanceAttenuation(float distanceSquare, float inverseRangeSquared) {
     float factor = distanceSquare * inverseRangeSquared;
     float smoothFactor = saturate(1.0 - factor * factor);
     float attenuation = smoothFactor * smoothFactor;
-    return attenuation * 1.0 / max(distanceSquare, 1e-4);
+    return attenuation * 1.0 / max(distanceSquare, 1e-3);
 }
 
 // Normal distribution function (specular D)
@@ -353,7 +353,7 @@ void main() {
     emissive.rgb *= texture(sampler2D(StandardMaterial_emissive_texture, StandardMaterial_emissive_texture_sampler), v_Uv).rgb;
     vec3 V = normalize(CameraPos.xyz - v_WorldPosition.xyz);
     // Neubelt and Pettineo 2013, "Crafting a Next-gen Material Pipeline for The Order: 1886"
-    float NdotV = max(dot(N, V), 1e-4);
+    float NdotV = max(dot(N, V), 1e-3);
 
     // Remapping [0,1] reflectance to F0
     // See https://google.github.io/filament/Filament.html#materialsystem/parameterization/remapping
