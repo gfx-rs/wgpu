@@ -535,11 +535,13 @@ type AttachmentDataVec<T> = ArrayVec<T, MAX_TOTAL_ATTACHMENTS>;
 struct RenderPassInfo<'a, A: hal::Api> {
     context: RenderPassContext,
     trackers: StatefulTrackerSubset,
-    render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
+    render_attachments: AttachmentDataVec<RenderAttachment<'a>>, // All render attachments, including depth/stencil
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
+
     pending_discard_init_fixups: SurfacesInDiscardState,
+    divergent_discarded_depth_stencil_aspect: Option<(wgt::TextureAspect, &'a TextureView<A>)>,
 }
 
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
@@ -562,6 +564,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             ));
         } else if channel.store_op == StoreOp::Store {
             // Clear + Store
+            // TODO: what about extent
             texture_memory_actions.register_implicit_init(
                 view.parent_id.value.0,
                 TextureInitRange::from(view.selector.clone()),
@@ -596,6 +599,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
         let mut discarded_surfaces = AttachmentDataVec::new();
+        let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
+        let mut divergent_discarded_depth_stencil_aspect = None;
 
         let mut attachment_type_name = "";
         let mut extent = None;
@@ -626,9 +631,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
         let mut colors = ArrayVec::<hal::ColorAttachment<A>, { hal::MAX_COLOR_TARGETS }>::new();
         let mut depth_stencil = None;
-
-        // Immediate texture inits required before the pass starts.
-        let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
         if let Some(at) = depth_stencil_attachment {
             let view = cmd_buf
@@ -708,7 +710,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                             texture_guard,
                         );
                     }
-                    // TODO: Record that we need to clear out the discarded channel right after this path!
+                    divergent_discarded_depth_stencil_aspect = Some((
+                        if at.depth.store_op == StoreOp::Discard {
+                            wgt::TextureAspect::DepthOnly
+                        } else {
+                            wgt::TextureAspect::StencilOnly
+                        },
+                        view,
+                    ));
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
@@ -852,6 +861,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             extent,
             _phantom: PhantomData,
             pending_discard_init_fixups,
+            divergent_discarded_depth_stencil_aspect,
         })
     }
 
@@ -882,6 +892,43 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     ra.usage,
                 )
                 .map_err(UsageConflict::from)?;
+        }
+
+        // If either only stencil or depth was discarded, we put in a special clear pass to keep the init status of the aspects in sync.
+        // We do this so we don't need to track init state for depth/stencil aspects individually.
+        // Note that we don't go the usual route of "brute force" initializing the texture when need arises here,
+        // since this path is actually something a user may genuinely want (where as the other cases are more seen along the lines as gracefully handling a user error).
+        if let Some((aspect, view)) = self.divergent_discarded_depth_stencil_aspect {
+            let (depth_ops, stencil_ops) = if aspect == wgt::TextureAspect::DepthOnly {
+                (
+                    hal::AttachmentOps::STORE,                            // clear depth
+                    hal::AttachmentOps::LOAD | hal::AttachmentOps::STORE, // unchanged stencil
+                )
+            } else {
+                (
+                    hal::AttachmentOps::LOAD | hal::AttachmentOps::STORE, // unchanged stencil
+                    hal::AttachmentOps::STORE,                            // clear depth
+                )
+            };
+            let desc = hal::RenderPassDescriptor {
+                label: Some("Zero init discarded depth/stencil aspect"),
+                extent: view.extent,
+                sample_count: view.samples,
+                color_attachments: &[],
+                depth_stencil_attachment: Some(hal::DepthStencilAttachment {
+                    target: hal::Attachment {
+                        view: &view.raw,
+                        usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
+                    },
+                    depth_ops,
+                    stencil_ops,
+                    clear_value: (0.0, 0),
+                }),
+            };
+            unsafe {
+                raw.begin_render_pass(&desc);
+                raw.end_render_pass();
+            }
         }
 
         Ok((self.trackers, self.pending_discard_init_fixups))
