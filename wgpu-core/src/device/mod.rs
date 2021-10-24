@@ -1143,7 +1143,8 @@ impl<A: HalApi> Device<A> {
                 ),
                 Bt::Sampler { .. } => (
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
-                    WritableStorage::No),
+                    WritableStorage::No,
+                ),
                 Bt::Texture { .. } => (
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
                     WritableStorage::No,
@@ -1522,7 +1523,7 @@ impl<A: HalApi> Device<A> {
                             .map_err(|_| Error::InvalidSampler(id))?;
                         hal_samplers.push(&sampler.raw);
                     }
-                    
+
                     (res_index, num_bindings)
                 }
                 Br::TextureView(id) => {

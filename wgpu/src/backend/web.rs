@@ -1377,7 +1377,7 @@ impl crate::Context for Context {
                     crate::BindingResource::Sampler(sampler) => JsValue::from(sampler.id.0.clone()),
                     crate::BindingResource::SamplerArray(..) => {
                         panic!("Web backend does not support arrays of samplers")
-                    },
+                    }
                     crate::BindingResource::TextureView(texture_view) => {
                         JsValue::from(texture_view.id.0.clone())
                     }
