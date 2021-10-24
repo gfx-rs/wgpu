@@ -193,6 +193,7 @@ tree.
     clippy::unneeded_field_pattern,
     clippy::match_like_matches_macro,
     clippy::manual_strip,
+    clippy::if_same_then_else,
     clippy::unknown_clippy_lints,
 )]
 #![warn(
