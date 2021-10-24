@@ -919,7 +919,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (pass_raw, trackers, query_reset_state, mut pending_discard_init_fixups) = {
+        let (pass_raw, trackers, query_reset_state, pending_discard_init_fixups) = {
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
@@ -1843,7 +1843,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let transit = cmd_buf.encoder.open();
 
             fixup_discarded_surfaces(
-                pending_discard_init_fixups.drain(..),
+                pending_discard_init_fixups.into_iter(),
                 transit,
                 &texture_guard,
                 &mut cmd_buf.trackers.textures,

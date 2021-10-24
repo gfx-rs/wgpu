@@ -386,7 +386,7 @@ fn handle_src_texture_init<A: hal::Api>(
     copy_size: &Extent3d,
     texture_guard: &Storage<Texture<A>, TextureId>,
 ) {
-    let mut immediate_src_init = cmd_buf.texture_memory_actions.register_init_action(
+    let immediate_src_init = cmd_buf.texture_memory_actions.register_init_action(
         &TextureInitTrackerAction {
             id: source.texture,
             range: TextureInitRange {
@@ -401,7 +401,7 @@ fn handle_src_texture_init<A: hal::Api>(
     if !immediate_src_init.is_empty() {
         let cmd_buf_raw = cmd_buf.encoder.open();
         fixup_discarded_surfaces(
-            immediate_src_init.drain(..),
+            immediate_src_init.into_iter(),
             cmd_buf_raw,
             texture_guard,
             &mut cmd_buf.trackers.textures,

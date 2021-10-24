@@ -695,7 +695,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // There can be entries left in pending_discard_init_fixups if a bind group was set, but not used (i.e. no Dispatch occurred)
         // However, we already altered the discard/init_action state on this cmd_buf, so we need to apply the promised changes.
         fixup_discarded_surfaces(
-            pending_discard_init_fixups.drain(..),
+            pending_discard_init_fixups.into_iter(),
             raw,
             &texture_guard,
             &mut cmd_buf.trackers.textures,

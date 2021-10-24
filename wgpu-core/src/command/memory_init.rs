@@ -123,8 +123,11 @@ impl CommandBufferTextureMemoryActions {
 
 // Utility function that takes discarded surfaces from register_init_action and initializes them on the spot.
 // Takes care of barriers as well!
-pub(crate) fn fixup_discarded_surfaces<A: hal::Api>(
-    inits: Drain<TextureSurfaceDiscard>,
+pub(crate) fn fixup_discarded_surfaces<
+    A: hal::Api,
+    InitIter: Iterator<Item = TextureSurfaceDiscard>,
+>(
+    inits: InitIter,
     encoder: &mut A::CommandEncoder,
     texture_guard: &Storage<Texture<A>, TextureId>,
     texture_tracker: &mut ResourceTracker<TextureState>,
