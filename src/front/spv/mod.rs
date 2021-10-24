@@ -925,6 +925,81 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    /// A version of the binary op where one or both of the arguments might need to be casted to a
+    /// specific integer kind (unsigned or signed), used for operations like OpINotEqual or
+    /// OpUGreaterThan.
+    #[allow(clippy::too_many_arguments)]
+    fn parse_expr_int_comparison(
+        &mut self,
+        ctx: &mut BlockContext,
+        emitter: &mut super::Emitter,
+        block: &mut crate::Block,
+        block_id: spirv::Word,
+        body_idx: usize,
+        op: crate::BinaryOperator,
+        kind: crate::ScalarKind,
+    ) -> Result<(), Error> {
+        let start = self.data_offset;
+        let result_type_id = self.next()?;
+        let result_id = self.next()?;
+        let p1_id = self.next()?;
+        let p2_id = self.next()?;
+        let span = self.span_from_with_op(start);
+
+        let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+        let left = self.get_expr_handle(p1_id, p1_lexp, ctx, emitter, block, body_idx);
+        let p1_lookup_ty = self.lookup_type.lookup(p1_lexp.type_id)?;
+        let p1_kind = ctx.type_arena[p1_lookup_ty.handle]
+            .inner
+            .scalar_kind()
+            .unwrap();
+        let p2_lexp = self.lookup_expression.lookup(p2_id)?;
+        let right = self.get_expr_handle(p2_id, p2_lexp, ctx, emitter, block, body_idx);
+        let p2_lookup_ty = self.lookup_type.lookup(p2_lexp.type_id)?;
+        let p2_kind = ctx.type_arena[p2_lookup_ty.handle]
+            .inner
+            .scalar_kind()
+            .unwrap();
+
+        let expr = crate::Expression::Binary {
+            op,
+            left: if p1_kind == kind {
+                left
+            } else {
+                ctx.expressions.append(
+                    crate::Expression::As {
+                        expr: left,
+                        kind,
+                        convert: None,
+                    },
+                    span,
+                )
+            },
+            right: if p2_kind == kind {
+                right
+            } else {
+                ctx.expressions.append(
+                    crate::Expression::As {
+                        expr: right,
+                        kind,
+                        convert: None,
+                    },
+                    span,
+                )
+            },
+        };
+
+        self.lookup_expression.insert(
+            result_id,
+            LookupExpression {
+                handle: ctx.expressions.append(expr, span),
+                type_id: result_type_id,
+                block_id,
+            },
+        );
+        Ok(())
+    }
+
     fn parse_expr_shift_op(
         &mut self,
         ctx: &mut BlockContext,
@@ -1110,16 +1185,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 self.parse_expr_binary_op(ctx, &mut emitter, &mut block, block_id, body_idx, $op)
             };
 
-            ($op:expr, BINARY_SIGN_ADJUSTED) => {
-                self.parse_expr_binary_op_sign_adjusted(
-                    ctx,
-                    &mut emitter,
-                    &mut block,
-                    block_id,
-                    body_idx,
-                    $op,
-                )
-            };
             ($op:expr, SHIFT) => {
                 self.parse_expr_shift_op(ctx, &mut emitter, &mut block, block_id, body_idx, $op)
             };
@@ -1777,17 +1842,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     parse_expr_op!(crate::UnaryOperator::Negate, UNARY)?;
                 }
-                Op::IAdd => {
+                Op::IAdd | Op::ISub => {
                     inst.expect(5)?;
-                    parse_expr_op!(crate::BinaryOperator::Add, BINARY_SIGN_ADJUSTED)?;
+                    let operator = map_binary_operator(inst.op)?;
+                    self.parse_expr_binary_op_sign_adjusted(
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                        operator,
+                    )?;
                 }
                 Op::FAdd => {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Add, BINARY)?;
-                }
-                Op::ISub => {
-                    inst.expect(5)?;
-                    parse_expr_op!(crate::BinaryOperator::Subtract, BINARY_SIGN_ADJUSTED)?;
                 }
                 Op::FSub => {
                     inst.expect(5)?;
@@ -2586,15 +2655,34 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::IEqual
                 | Op::INotEqual
-                | Op::UGreaterThan
                 | Op::SGreaterThan
-                | Op::UGreaterThanEqual
                 | Op::SGreaterThanEqual
-                | Op::ULessThan
                 | Op::SLessThan
-                | Op::ULessThanEqual
-                | Op::SLessThanEqual
-                | Op::FOrdEqual
+                | Op::SLessThanEqual => {
+                    inst.expect(5)?;
+                    self.parse_expr_int_comparison(
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                        map_binary_operator(inst.op)?,
+                        crate::ScalarKind::Sint,
+                    )?;
+                }
+                Op::UGreaterThan | Op::UGreaterThanEqual | Op::ULessThan | Op::ULessThanEqual => {
+                    inst.expect(5)?;
+                    self.parse_expr_int_comparison(
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                        map_binary_operator(inst.op)?,
+                        crate::ScalarKind::Uint,
+                    )?;
+                }
+                Op::FOrdEqual
                 | Op::FUnordEqual
                 | Op::FOrdNotEqual
                 | Op::FUnordNotEqual
