@@ -192,7 +192,7 @@ impl framework::Example for Example {
                         comparison: false,
                         filtering: true,
                     },
-                    count: None,
+                    count: NonZeroU32::new(2),
                 },
             ],
         });
@@ -208,7 +208,7 @@ impl framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::SamplerArray(&[&sampler, &sampler]),
                 },
             ],
             layout: &bind_group_layout,
