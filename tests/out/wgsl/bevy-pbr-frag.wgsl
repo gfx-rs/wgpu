@@ -135,7 +135,7 @@ fn getDistanceAttenuation(distanceSquare: f32, inverseRangeSquared: f32) -> f32 
     attenuation = (e64 * e65);
     let e68: f32 = attenuation;
     let e73: f32 = distanceSquare1;
-    return ((e68 * 1.0) / max(e73, 0.00009999999747378752));
+    return ((e68 * 1.0) / max(e73, 0.0010000000474974513));
 }
 
 fn D_GGX(roughness: f32, NoH: f32, h: vec3<f32>) -> f32 {
@@ -791,7 +791,7 @@ fn main1() {
     let e175: vec3<f32> = V3;
     let e180: vec3<f32> = N2;
     let e181: vec3<f32> = V3;
-    NdotV4 = max(dot(e180, e181), 0.00009999999747378752);
+    NdotV4 = max(dot(e180, e181), 0.0010000000474974513);
     let e187: f32 = global6.reflectance;
     let e189: f32 = global6.reflectance;
     let e192: f32 = metallic;
