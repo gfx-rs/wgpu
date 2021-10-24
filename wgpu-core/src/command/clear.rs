@@ -294,13 +294,13 @@ pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
         get_lowest_common_denom(buffer_copy_pitch, format_desc.block_size as u32);
 
     for mip_level in mip_range {
-        let mip_size = texture_desc.mip_level_size(mip_level).unwrap();
+        let mut mip_size = texture_desc.mip_level_size(mip_level).unwrap();
+        // Round to multiple of block size
+        mip_size.width = align_to(mip_size.width, format_desc.block_dimensions.0 as u32);
+        mip_size.height = align_to(mip_size.height, format_desc.block_dimensions.1 as u32);
 
         let bytes_per_row = align_to(
-            // row is at least one block wide, need to round up
-            (mip_size.width + format_desc.block_dimensions.0 as u32 - 1)
-                / format_desc.block_dimensions.0 as u32
-                * format_desc.block_size as u32,
+            mip_size.width / format_desc.block_dimensions.0 as u32 * format_desc.block_size as u32,
             bytes_per_row_alignment,
         );
 

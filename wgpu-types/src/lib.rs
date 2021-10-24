@@ -2750,6 +2750,7 @@ impl Extent3d {
     }
 
     /// Calculates the extent at a given mip level.
+    /// Does *not* account for memory size being a multiple of block size.
     pub fn mip_level_size(&self, level: u32, is_3d_texture: bool) -> Extent3d {
         Extent3d {
             width: u32::max(1, self.width >> level),
