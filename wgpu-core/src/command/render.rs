@@ -539,7 +539,7 @@ struct RenderPassInfo<'a, A: hal::Api> {
     is_ds_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
-    immediate_texture_inits: SurfacesInDiscardState,
+    pending_discard_init_fixups: SurfacesInDiscardState,
 }
 
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
@@ -548,10 +548,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view: &TextureView<A>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-        immediate_texture_inits: &mut SurfacesInDiscardState,
+        pending_discard_init_fixups: &mut SurfacesInDiscardState,
     ) {
         if channel.load_op == LoadOp::Load {
-            immediate_texture_inits.extend(texture_memory_actions.register_init_action(
+            pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
                     id: view.parent_id.value.0,
                     range: TextureInitRange::from(view.selector.clone()),
@@ -628,7 +628,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut depth_stencil = None;
 
         // Immediate texture inits required before the pass starts.
-        let mut immediate_texture_inits = SurfacesInDiscardState::new();
+        let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
         if let Some(at) = depth_stencil_attachment {
             let view = cmd_buf
@@ -651,7 +651,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     &mut cmd_buf.texture_memory_actions,
                     view,
                     texture_guard,
-                    &mut immediate_texture_inits,
+                    &mut pending_discard_init_fixups,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::STENCIL) {
                 Self::add_pass_texture_init_actions(
@@ -659,7 +659,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     &mut cmd_buf.texture_memory_actions,
                     view,
                     texture_guard,
-                    &mut immediate_texture_inits,
+                    &mut pending_discard_init_fixups,
                 );
             } else if at.stencil.load_op == at.depth.load_op
                 && at.stencil.store_op == at.depth.store_op
@@ -669,7 +669,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     &mut cmd_buf.texture_memory_actions,
                     view,
                     texture_guard,
-                    &mut immediate_texture_inits,
+                    &mut pending_discard_init_fixups,
                 );
             } else {
                 // This is the only place (anywhere in wgpu) where Stencil & Depth init state can diverge.
@@ -684,7 +684,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 let need_init_beforehand =
                     at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
                 if need_init_beforehand {
-                    immediate_texture_inits.extend(
+                    pending_discard_init_fixups.extend(
                         cmd_buf.texture_memory_actions.register_init_action(
                             &TextureInitTrackerAction {
                                 id: view.parent_id.value.0,
@@ -761,7 +761,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 &mut cmd_buf.texture_memory_actions,
                 color_view,
                 texture_guard,
-                &mut immediate_texture_inits,
+                &mut pending_discard_init_fixups,
             );
             render_attachments
                 .push(color_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
@@ -851,7 +851,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             is_ds_read_only,
             extent,
             _phantom: PhantomData,
-            immediate_texture_inits,
+            pending_discard_init_fixups,
         })
     }
 
@@ -859,13 +859,11 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         mut self,
         raw: &mut A::CommandEncoder,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-    ) -> Result<StatefulTrackerSubset, RenderPassErrorInner> {
+    ) -> Result<(StatefulTrackerSubset, SurfacesInDiscardState), RenderPassErrorInner> {
         profiling::scope!("finish", "RenderPassInfo");
         unsafe {
             raw.end_render_pass();
         }
-
-        // TODO: HOW DO WE PREPEND immediate_texture_inits
 
         for ra in self.render_attachments {
             if !texture_guard.contains(ra.texture_id.value.0) {
@@ -886,7 +884,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .map_err(UsageConflict::from)?;
         }
 
-        Ok(self.trackers)
+        Ok((self.trackers, self.pending_discard_init_fixups))
     }
 }
 
@@ -921,7 +919,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (pass_raw, trackers, query_reset_state) = {
+        let (pass_raw, trackers, query_reset_state, mut pending_discard_init_fixups) = {
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             let cmd_buf =
@@ -1037,7 +1035,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }),
                         );
                         for action in bind_group.used_texture_ranges.iter() {
-                            info.immediate_texture_inits.extend(
+                            info.pending_discard_init_fixups.extend(
                                 cmd_buf
                                     .texture_memory_actions
                                     .register_init_action(action, &texture_guard),
@@ -1774,7 +1772,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }),
                         );
                         for action in bundle.texture_memory_init_actions.iter() {
-                            info.immediate_texture_inits.extend(
+                            info.pending_discard_init_fixups.extend(
                                 cmd_buf
                                     .texture_memory_actions
                                     .register_init_action(action, &texture_guard),
@@ -1817,7 +1815,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             log::trace!("Merging {:?} with the render pass", encoder_id);
-            let trackers = info.finish(raw, &*texture_guard).map_pass_err(scope)?;
+            let (trackers, pending_discard_init_fixups) =
+                info.finish(raw, &*texture_guard).map_pass_err(scope)?;
 
             let raw_cmd_buf = unsafe {
                 raw.end_encoding()
@@ -1825,7 +1824,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .map_pass_err(scope)?
             };
             cmd_buf.status = CommandEncoderStatus::Recording;
-            (raw_cmd_buf, trackers, query_reset_state)
+            (
+                raw_cmd_buf,
+                trackers,
+                query_reset_state,
+                pending_discard_init_fixups,
+            )
         };
 
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -1837,6 +1841,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
         {
             let transit = cmd_buf.encoder.open();
+
+            fixup_discarded_surfaces(
+                pending_discard_init_fixups.drain(..),
+                transit,
+                &texture_guard,
+                &mut cmd_buf.trackers.textures,
+                &device_guard[cmd_buf.device_id.value],
+            );
+
             query_reset_state
                 .reset_queries(
                     transit,

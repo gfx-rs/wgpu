@@ -331,7 +331,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Immediate texture inits required because of prior discards. Need to be inserted before texture reads.
-        let mut immediate_texture_inits = SurfacesInDiscardState::new();
+        let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
         for command in base.commands {
             match *command {
@@ -378,7 +378,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
 
                     for action in bind_group.used_texture_ranges.iter() {
-                        immediate_texture_inits.extend(
+                        pending_discard_init_fixups.extend(
                             cmd_buf
                                 .texture_memory_actions
                                 .register_init_action(action, &texture_guard),
@@ -518,7 +518,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     fixup_discarded_surfaces(
-                        immediate_texture_inits.drain(..),
+                        pending_discard_init_fixups.drain(..),
                         raw,
                         &texture_guard,
                         &mut cmd_buf.trackers.textures,
@@ -692,10 +692,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         cmd_buf.status = CommandEncoderStatus::Recording;
 
-        // There can be entries left in immediate_texture_inits if a bind group was set, but not used (i.e. no Dispatch occurred)
+        // There can be entries left in pending_discard_init_fixups if a bind group was set, but not used (i.e. no Dispatch occurred)
         // However, we already altered the discard/init_action state on this cmd_buf, so we need to apply the promised changes.
         fixup_discarded_surfaces(
-            immediate_texture_inits.drain(..),
+            pending_discard_init_fixups.drain(..),
             raw,
             &texture_guard,
             &mut cmd_buf.trackers.textures,
