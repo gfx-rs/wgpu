@@ -1,4 +1,4 @@
-use super::conv;
+use super::{conv, RawBuffer};
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
 use std::{convert::TryInto, iter, ptr, sync::Arc};
@@ -314,6 +314,33 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
+        let target = if desc.usage.contains(crate::BufferUses::INDEX) {
+            glow::ELEMENT_ARRAY_BUFFER
+        } else {
+            glow::ARRAY_BUFFER
+        };
+
+        let emulate_map = self
+            .shared
+            .workarounds
+            .contains(super::Workarounds::EMULATE_BUFFER_MAP)
+            || !self
+                .shared
+                .private_caps
+                .contains(super::PrivateCapabilities::BUFFER_ALLOCATION);
+
+        if emulate_map
+            && (desc.usage.contains(crate::BufferUses::MAP_WRITE)
+                || desc.usage.contains(crate::BufferUses::MAP_READ))
+        {
+            return Ok(super::Buffer {
+                raw: RawBuffer::data_with_capacity(desc.size),
+                target: target,
+                size: desc.size,
+                map_flags: 0,
+            });
+        }
+
         let gl = &self.shared.context.lock();
 
         let target = if desc.usage.contains(crate::BufferUses::INDEX) {
@@ -385,16 +412,17 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         Ok(super::Buffer {
-            raw,
+            raw: RawBuffer::Buffer(raw),
             target,
             size: desc.size,
             map_flags,
-            emulate_map_allocation: Default::default(),
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        let gl = &self.shared.context.lock();
-        gl.delete_buffer(buffer.raw);
+        if let RawBuffer::Buffer(raw) = buffer.raw {
+            let gl = &self.shared.context.lock();
+            gl.delete_buffer(raw);
+        }
     }
 
     unsafe fn map_buffer(
@@ -402,66 +430,44 @@ impl crate::Device<super::Api> for super::Device {
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
-        let gl = &self.shared.context.lock();
-
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
-
-        let ptr = if self
-            .shared
-            .workarounds
-            .contains(super::Workarounds::EMULATE_BUFFER_MAP)
-            || !self
-                .shared
-                .private_caps
-                .contains(super::PrivateCapabilities::BUFFER_ALLOCATION)
-        {
-            let mut buf = vec![0; buffer.size as usize];
-            let ptr = buf.as_mut_ptr();
-            *buffer.emulate_map_allocation.lock().unwrap() = Some(buf);
-
-            ptr
-        } else {
-            gl.bind_buffer(buffer.target, Some(buffer.raw));
-            let ptr = gl.map_buffer_range(
-                buffer.target,
-                range.start as i32,
-                (range.end - range.start) as i32,
-                buffer.map_flags,
-            );
-            gl.bind_buffer(buffer.target, None);
-
-            ptr
+        let ptr = match &buffer.raw {
+            RawBuffer::Data(data) => data.lock().unwrap().as_mut_ptr(),
+            RawBuffer::Buffer(raw) => {
+                let gl = &self.shared.context.lock();
+                gl.bind_buffer(buffer.target, Some(*raw));
+                let ptr = gl.map_buffer_range(
+                    buffer.target,
+                    range.start as i32,
+                    (range.end - range.start) as i32,
+                    buffer.map_flags,
+                );
+                gl.bind_buffer(buffer.target, None);
+                ptr
+            }
         };
-
         Ok(crate::BufferMapping {
             ptr: ptr::NonNull::new(ptr).ok_or(crate::DeviceError::Lost)?,
             is_coherent,
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
-        let gl = &self.shared.context.lock();
-        gl.bind_buffer(buffer.target, Some(buffer.raw));
-
-        if let Some(buf) = buffer.emulate_map_allocation.lock().unwrap().take() {
-            gl.buffer_sub_data_u8_slice(buffer.target, 0, &buf);
-            drop(buf);
-        } else {
+        if let RawBuffer::Buffer(raw) = buffer.raw {
+            let gl = &self.shared.context.lock();
+            gl.bind_buffer(buffer.target, Some(raw));
             gl.unmap_buffer(buffer.target);
+            gl.bind_buffer(buffer.target, None);
         }
-
-        gl.bind_buffer(buffer.target, None);
         Ok(())
     }
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        let gl = &self.shared.context.lock();
-        gl.bind_buffer(buffer.target, Some(buffer.raw));
-        for range in ranges {
-            if let Some(buf) = buffer.emulate_map_allocation.lock().unwrap().as_ref() {
-                gl.buffer_sub_data_u8_slice(buffer.target, range.start as i32, buf);
-            } else {
+        if let RawBuffer::Buffer(raw) = buffer.raw {
+            let gl = &self.shared.context.lock();
+            gl.bind_buffer(buffer.target, Some(raw));
+            for range in ranges {
                 gl.flush_mapped_buffer_range(
                     buffer.target,
                     range.start as i32,
@@ -851,7 +857,7 @@ impl crate::Device<super::Api> for super::Device {
                 wgt::BindingType::Buffer { .. } => {
                     let bb = &desc.buffers[entry.resource_index as usize];
                     super::RawBinding::Buffer {
-                        raw: bb.buffer.raw,
+                        raw: bb.buffer.raw.as_buffer().unwrap(),
                         offset: bb.offset as i32,
                         size: match bb.size {
                             Some(s) => s.get() as i32,
