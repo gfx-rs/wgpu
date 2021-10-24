@@ -1008,7 +1008,7 @@ pub enum BindingResource<'a> {
     ///
     /// [`Features::TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
     ///
-    /// Corresponds to [`wgt::BufferBindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set
+    /// Corresponds to [`wgt::BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set
     /// to Some.
     SamplerArray(&'a [&'a Sampler]),
     /// Binding is backed by a texture.
