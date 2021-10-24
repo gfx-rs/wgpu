@@ -7,8 +7,8 @@ layout(location = 1) nonuniformEXT flat in int v_Index;  // dynamically non-unif
 layout(location = 0) out vec4 o_Color;
 
 layout(set = 0, binding = 0) uniform texture2D u_Textures[];
-layout(set = 0, binding = 1) uniform sampler u_Sampler;
+layout(set = 0, binding = 1) uniform sampler u_Sampler[];
 
 void main() {
-    o_Color = vec4(texture(sampler2D(u_Textures[v_Index], u_Sampler), v_TexCoord).rgb, 1.0);
+    o_Color = vec4(texture(sampler2D(u_Textures[v_Index], u_Sampler[v_Index]), v_TexCoord).rgb, 1.0);
 }
