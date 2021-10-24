@@ -19,6 +19,9 @@ OpName %27 "image_2d_array"
 OpName %29 "in_workgroup"
 OpName %31 "in_private"
 OpName %33 "in_function"
+OpName %36 "c"
+OpName %37 "i"
+OpName %38 "l"
 OpName %39 "mock_function"
 OpDecorate %14 ArrayStride 16
 OpDecorate %15 Block

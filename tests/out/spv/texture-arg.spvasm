@@ -10,6 +10,8 @@ OpExecutionMode %28 OriginUpperLeft
 OpSource GLSL 450
 OpName %9 "Texture"
 OpName %11 "Sampler"
+OpName %14 "Passed_Texture"
+OpName %16 "Passed_Sampler"
 OpName %18 "test"
 OpName %28 "main"
 OpDecorate %9 DescriptorSet 0

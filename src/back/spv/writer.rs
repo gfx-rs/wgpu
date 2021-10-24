@@ -368,6 +368,11 @@ impl Writer {
             } else {
                 let argument_id = self.id_gen.next();
                 let instruction = Instruction::function_parameter(argument_type_id, argument_id);
+                if self.flags.contains(WriterFlags::DEBUG) {
+                    if let Some(ref name) = argument.name {
+                        self.debugs.push(Instruction::name(argument_id, name));
+                    }
+                }
                 function.parameters.push(FunctionArgument {
                     instruction,
                     handle_id: if handle_ty {

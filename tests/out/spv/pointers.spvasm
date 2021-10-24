@@ -11,6 +11,9 @@ OpMemberName %8 0 "array"
 OpName %8 "DynamicArray"
 OpName %10 "v"
 OpName %13 "f"
+OpName %20 "p"
+OpName %21 "i"
+OpName %22 "v"
 OpName %23 "index_dynamic_array"
 OpDecorate %7 ArrayStride 4
 OpDecorate %8 Block
