@@ -45,8 +45,8 @@ impl TextureInitTracker {
         &self,
         action: &TextureInitTrackerAction,
     ) -> Option<TextureInitTrackerAction> {
-        let mut mip_range_start = action.range.mip_range.start as usize;
-        let mut mip_range_end = mip_range_start;
+        let mut mip_range_start = std::usize::MAX;
+        let mut mip_range_end = std::usize::MIN;
         let mut layer_range_start = std::u32::MAX;
         let mut layer_range_end = std::u32::MIN;
 
@@ -54,18 +54,16 @@ impl TextureInitTracker {
             .mips
             .iter()
             .enumerate()
+            .take(action.range.mip_range.end as usize)
             .skip(action.range.mip_range.start as usize)
-            .take((action.range.mip_range.end - action.range.mip_range.start) as usize)
         {
-            match mip_tracker.check(action.range.layer_range.clone()) {
-                Some(uninitialized_layer_range) => {
-                    mip_range_end = i + 1;
-                    layer_range_start = layer_range_start.min(uninitialized_layer_range.start);
-                    layer_range_end = layer_range_end.max(uninitialized_layer_range.end);
-                }
-                None => {
-                    mip_range_start += 1;
-                }
+            if let Some(uninitialized_layer_range) =
+                mip_tracker.check(action.range.layer_range.clone())
+            {
+                mip_range_start = mip_range_start.min(i);
+                mip_range_end = i + 1;
+                layer_range_start = layer_range_start.min(uninitialized_layer_range.start);
+                layer_range_end = layer_range_end.max(uninitialized_layer_range.end);
             };
         }
 

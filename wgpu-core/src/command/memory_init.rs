@@ -68,6 +68,7 @@ impl CommandBufferTextureMemoryActions {
 
         // We expect very few discarded surfaces at any point in time which is why a simple linear search is likely best.
         // (i.e. most of the time self.discards is empty!)
+        let init_actions = &mut self.init_actions;
         self.discards.retain(|discarded_surface| {
             if discarded_surface.texture == action.id
                 && action.range.layer_range.contains(&discarded_surface.layer)
@@ -78,25 +79,23 @@ impl CommandBufferTextureMemoryActions {
             {
                 if let MemoryInitKind::NeedsInitializedMemory = action.kind {
                     immediately_necessary_clears.push(discarded_surface.clone());
+
+                    // Mark surface as implicitly initialized (this is relevant because it might have been uninitialized prior to discarding
+                    init_actions.push(TextureInitTrackerAction {
+                        id: discarded_surface.texture,
+                        range: TextureInitRange {
+                            mip_range: discarded_surface.mip_level
+                                ..(discarded_surface.mip_level + 1),
+                            layer_range: discarded_surface.layer..(discarded_surface.layer + 1),
+                        },
+                        kind: MemoryInitKind::ImplicitlyInitialized,
+                    });
                 }
                 false
             } else {
                 true
             }
         });
-
-        // Mark surface as implicitly initialized (this is relevant because it might have been uninitialized prior to discarding
-        // Don't do this during self.discards.retain to make borrow checker happy.
-        for discarded_surface in immediately_necessary_clears.iter() {
-            self.init_actions.push(TextureInitTrackerAction {
-                id: discarded_surface.texture,
-                range: TextureInitRange {
-                    mip_range: discarded_surface.mip_level..(discarded_surface.mip_level + 1),
-                    layer_range: discarded_surface.layer..(discarded_surface.layer + 1),
-                },
-                kind: MemoryInitKind::ImplicitlyInitialized,
-            });
-        }
 
         immediately_necessary_clears
     }
@@ -161,6 +160,7 @@ pub(crate) fn fixup_discarded_surfaces<
         let raw_texture = texture.inner.as_raw().unwrap();
 
         unsafe {
+            // TODO: Should first gather all barriers, do a single transition_textures call, and then send off copy_buffer_to_texture commands.
             encoder.transition_textures(barriers);
             encoder.copy_buffer_to_texture(
                 &device.zero_buffer,
@@ -218,7 +218,7 @@ impl<A: hal::Api> BakedCommands<A> {
 
         for (buffer_id, mut ranges) in uninitialized_ranges_per_buffer {
             // Collapse touching ranges.
-            ranges.sort_by(|a, b| a.start.cmp(&b.start));
+            ranges.sort_by_key(|r| r.start);
             for i in (1..ranges.len()).rev() {
                 assert!(ranges[i - 1].end <= ranges[i].start); // The memory init tracker made sure of this!
                 if ranges[i].start == ranges[i - 1].end {
@@ -307,17 +307,23 @@ impl<A: hal::Api> BakedCommands<A> {
                     debug_assert!(texture.hal_usage.contains(hal::TextureUses::COPY_DST),
                             "Every texture needs to have the COPY_DST flag. Otherwise we can't ensure initialized memory!");
 
+                    let mut texture_barriers = Vec::new();
                     let mut zero_buffer_copy_regions = Vec::new();
                     for range in &ranges {
                         // Don't do use_replace since the texture may already no longer have a ref_count.
                         // However, we *know* that it is currently in use, so the tracker must already know about it.
-                        let transition = device_tracker.textures.change_replace_tracked(
-                            id::Valid(texture_use.id),
-                            TextureSelector {
-                                levels: range.mip_range.clone(),
-                                layers: range.layer_range.clone(),
-                            },
-                            hal::TextureUses::COPY_DST,
+                        texture_barriers.extend(
+                            device_tracker
+                                .textures
+                                .change_replace_tracked(
+                                    id::Valid(texture_use.id),
+                                    TextureSelector {
+                                        levels: range.mip_range.clone(),
+                                        layers: range.layer_range.clone(),
+                                    },
+                                    hal::TextureUses::COPY_DST,
+                                )
+                                .map(|pending| pending.into_hal(texture)),
                         );
 
                         collect_zero_buffer_copies_for_clear_texture(
@@ -327,15 +333,14 @@ impl<A: hal::Api> BakedCommands<A> {
                             range.layer_range.clone(),
                             &mut zero_buffer_copy_regions,
                         );
-                        unsafe {
-                            self.encoder.transition_textures(
-                                transition.map(|pending| pending.into_hal(texture)),
-                            );
-                        }
                     }
 
                     if !zero_buffer_copy_regions.is_empty() {
                         unsafe {
+                            // TODO: Could safe on transition_textures calls by bundling barriers from *all* textures.
+                            // (a bbit more tricky because a naive approach would have to borrow same texture several times then)
+                            self.encoder
+                                .transition_textures(texture_barriers.into_iter());
                             self.encoder.copy_buffer_to_texture(
                                 &device.zero_buffer,
                                 raw_texture,
