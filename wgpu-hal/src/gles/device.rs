@@ -433,7 +433,11 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
         let ptr = match &buffer.inner {
-            BufferInner::Data(data) => data.lock().unwrap().as_mut_ptr(),
+            BufferInner::Data(data) => {
+                let mut vec = data.lock().unwrap();
+                let slice = &mut vec.as_mut_slice()[range.start as usize..range.end as usize];
+                slice.as_mut_ptr()
+            }
             BufferInner::Buffer(raw) => {
                 let gl = &self.shared.context.lock();
                 gl.bind_buffer(buffer.target, Some(*raw));
