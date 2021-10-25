@@ -78,6 +78,14 @@ impl Block {
             .splice(range.clone(), other.span_info.into_iter());
         self.body.splice(range, other.body.into_iter());
     }
+    pub fn span_iter(&self) -> impl Iterator<Item = (&Statement, &Span)> {
+        #[cfg(feature = "span")]
+        let span_iter = self.span_info.iter();
+        #[cfg(not(feature = "span"))]
+        let span_iter = std::iter::repeat_with(|| &Span::UNDEFINED);
+
+        self.body.iter().zip(span_iter)
+    }
 
     pub fn span_iter_mut(&mut self) -> impl Iterator<Item = (&mut Statement, Option<&mut Span>)> {
         #[cfg(feature = "span")]

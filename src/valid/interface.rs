@@ -4,6 +4,7 @@ use super::{
 };
 use crate::arena::{Handle, UniqueArena};
 
+use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
 use bit_set::BitSet;
 
 #[cfg(feature = "validate")]
@@ -70,8 +71,8 @@ pub enum EntryPointError {
     BindingCollision(Handle<crate::GlobalVariable>),
     #[error("Argument {0} varying error")]
     Argument(u32, #[source] VaryingError),
-    #[error("Result varying error")]
-    Result(#[source] VaryingError),
+    #[error(transparent)]
+    Result(#[from] VaryingError),
     #[error("Location {location} onterpolation of an integer has to be flat")]
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
@@ -288,9 +289,12 @@ impl VaryingContext<'_> {
         Ok(())
     }
 
-    fn validate(&mut self, binding: Option<&crate::Binding>) -> Result<(), VaryingError> {
+    fn validate(&mut self, binding: Option<&crate::Binding>) -> Result<(), WithSpan<VaryingError>> {
+        let span_context = self.types.get_span_context(self.ty);
         match binding {
-            Some(binding) => self.validate_impl(binding),
+            Some(binding) => self
+                .validate_impl(binding)
+                .map_err(|e| e.with_span_context(span_context)),
             None => {
                 match self.types[self.ty].inner {
                     //TODO: check the member types
@@ -301,15 +305,20 @@ impl VaryingContext<'_> {
                     } => {
                         for (index, member) in members.iter().enumerate() {
                             self.ty = member.ty;
+                            let span_context = self.types.get_span_context(self.ty);
                             match member.binding {
                                 None => {
-                                    return Err(VaryingError::MemberMissingBinding(index as u32))
+                                    return Err(VaryingError::MemberMissingBinding(index as u32)
+                                        .with_span_context(span_context))
                                 }
-                                Some(ref binding) => self.validate_impl(binding)?,
+                                // TODO: shouldn't this be validate?
+                                Some(ref binding) => self
+                                    .validate_impl(binding)
+                                    .map_err(|e| e.with_span_context(span_context))?,
                             }
                         }
                     }
-                    _ => return Err(VaryingError::MissingBinding),
+                    _ => return Err(VaryingError::MissingBinding.with_span()),
                 }
                 Ok(())
             }
@@ -399,10 +408,10 @@ impl super::Validator {
         ep: &crate::EntryPoint,
         module: &crate::Module,
         mod_info: &ModuleInfo,
-    ) -> Result<FunctionInfo, EntryPointError> {
+    ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
         #[cfg(feature = "validate")]
         if ep.early_depth_test.is_some() && ep.stage != crate::ShaderStage::Fragment {
-            return Err(EntryPointError::UnexpectedEarlyDepthTest);
+            return Err(EntryPointError::UnexpectedEarlyDepthTest.with_span());
         }
 
         #[cfg(feature = "validate")]
@@ -412,13 +421,15 @@ impl super::Validator {
                 .iter()
                 .any(|&s| s == 0 || s > MAX_WORKGROUP_SIZE)
             {
-                return Err(EntryPointError::OutOfRangeWorkgroupSize);
+                return Err(EntryPointError::OutOfRangeWorkgroupSize.with_span());
             }
         } else if ep.workgroup_size != [0; 3] {
-            return Err(EntryPointError::UnexpectedWorkgroupSize);
+            return Err(EntryPointError::UnexpectedWorkgroupSize.with_span());
         }
 
-        let info = self.validate_function(&ep.function, module, mod_info)?;
+        let info = self
+            .validate_function(&ep.function, module, mod_info)
+            .map_err(WithSpan::into_other)?;
 
         #[cfg(feature = "validate")]
         {
@@ -431,12 +442,13 @@ impl super::Validator {
             };
 
             if !info.available_stages.contains(stage_bit) {
-                return Err(EntryPointError::ForbiddenStageOperations);
+                return Err(EntryPointError::ForbiddenStageOperations.with_span());
             }
         }
 
         self.location_mask.clear();
         let mut argument_built_ins = 0;
+        // TODO: add span info to function arguments
         for (index, fa) in ep.function.arguments.iter().enumerate() {
             let mut ctx = VaryingContext {
                 ty: fa.ty,
@@ -448,7 +460,7 @@ impl super::Validator {
                 capabilities: self.capabilities,
             };
             ctx.validate(fa.binding.as_ref())
-                .map_err(|e| EntryPointError::Argument(index as u32, e))?;
+                .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
             argument_built_ins = ctx.built_in_mask;
         }
 
@@ -464,7 +476,7 @@ impl super::Validator {
                 capabilities: self.capabilities,
             };
             ctx.validate(fr.binding.as_ref())
-                .map_err(EntryPointError::Result)?;
+                .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
         }
 
         for bg in self.bind_group_masks.iter_mut() {
@@ -499,7 +511,8 @@ impl super::Validator {
                     allowed_usage,
                     usage
                 );
-                return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage));
+                return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage)
+                    .with_span_handle(var_handle, &module.global_variables));
             }
 
             if let Some(ref bind) = var.binding {
@@ -507,7 +520,8 @@ impl super::Validator {
                     self.bind_group_masks.push(BitSet::new());
                 }
                 if !self.bind_group_masks[bind.group as usize].insert(bind.binding as usize) {
-                    return Err(EntryPointError::BindingCollision(var_handle));
+                    return Err(EntryPointError::BindingCollision(var_handle)
+                        .with_span_handle(var_handle, &module.global_variables));
                 }
             }
         }

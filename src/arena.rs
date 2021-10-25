@@ -31,28 +31,35 @@ impl<T> Clone for Handle<T> {
         }
     }
 }
+
 impl<T> Copy for Handle<T> {}
+
 impl<T> PartialEq for Handle<T> {
     fn eq(&self, other: &Self) -> bool {
         self.index == other.index
     }
 }
+
 impl<T> Eq for Handle<T> {}
+
 impl<T> PartialOrd for Handle<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.index.partial_cmp(&other.index)
     }
 }
+
 impl<T> Ord for Handle<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.index.cmp(&other.index)
     }
 }
+
 impl<T> fmt::Debug for Handle<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "[{}]", self.index)
     }
 }
+
 impl<T> hash::Hash for Handle<T> {
     fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
         self.index.hash(hasher)
@@ -117,11 +124,13 @@ impl<T> Clone for Range<T> {
         }
     }
 }
+
 impl<T> fmt::Debug for Range<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "[{}..{}]", self.inner.start + 1, self.inner.end)
     }
 }
+
 impl<T> Iterator for Range<T> {
     type Item = Handle<T>;
     fn next(&mut self) -> Option<Self::Item> {
@@ -159,6 +168,7 @@ impl<T> Default for Arena<T> {
         Self::new()
     }
 }
+
 impl<T: fmt::Debug> fmt::Debug for Arena<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_map().entries(self.iter()).finish()

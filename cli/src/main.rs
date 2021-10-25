@@ -231,7 +231,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
 
-    let module = match Path::new(&input_path)
+    let (module, input_text) = match Path::new(&input_path)
         .extension()
         .ok_or(CliError("Input filename has no extension"))?
         .to_str()
@@ -246,13 +246,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .map(std::path::PathBuf::from),
             };
             let input = fs::read(input_path)?;
-            naga::front::spv::parse_u8_slice(&input, &options)?
+            naga::front::spv::parse_u8_slice(&input, &options).map(|m| (m, None))?
         }
         "wgsl" => {
             let input = fs::read_to_string(input_path)?;
             let result = naga::front::wgsl::parse_str(&input);
             match result {
-                Ok(v) => v,
+                Ok(v) => (v, Some(input)),
                 Err(ref e) => {
                     e.emit_to_stderr(&input);
                     return Err(CliError("Could not parse WGSL").into());
@@ -263,24 +263,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let input = fs::read_to_string(input_path)?;
             let mut parser = naga::front::glsl::Parser::default();
 
-            parser
-                .parse(
-                    &naga::front::glsl::Options {
-                        stage: match ext {
-                            "vert" => naga::ShaderStage::Vertex,
-                            "frag" => naga::ShaderStage::Fragment,
-                            "comp" => naga::ShaderStage::Compute,
-                            _ => unreachable!(),
+            (
+                parser
+                    .parse(
+                        &naga::front::glsl::Options {
+                            stage: match ext {
+                                "vert" => naga::ShaderStage::Vertex,
+                                "frag" => naga::ShaderStage::Fragment,
+                                "comp" => naga::ShaderStage::Compute,
+                                _ => unreachable!(),
+                            },
+                            defines: Default::default(),
                         },
-                        defines: Default::default(),
-                    },
-                    &input,
-                )
-                .unwrap_or_else(|errors| {
-                    let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                    emit_glsl_parser_error(errors, filename.unwrap_or("glsl"), &input);
-                    std::process::exit(1);
-                })
+                        &input,
+                    )
+                    .unwrap_or_else(|errors| {
+                        let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                        emit_glsl_parser_error(errors, filename.unwrap_or("glsl"), &input);
+                        std::process::exit(1);
+                    }),
+                Some(input),
+            )
         }
         _ => return Err(CliError("Unknown input file extension").into()),
     };
@@ -294,6 +297,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(info) => Some(info),
         Err(error) => {
+            if let Some(input) = input_text {
+                let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                emit_annotated_error(&error, filename.unwrap_or("input"), &input);
+            }
             print_err(&error);
             None
         }
@@ -468,6 +475,7 @@ use codespan_reporting::{
         termcolor::{ColorChoice, StandardStream},
     },
 };
+use naga::WithSpan;
 
 pub fn emit_glsl_parser_error(errors: Vec<naga::front::glsl::Error>, filename: &str, source: &str) {
     let files = SimpleFile::new(filename, source);
@@ -483,4 +491,21 @@ pub fn emit_glsl_parser_error(errors: Vec<naga::front::glsl::Error>, filename: &
 
         term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
     }
+}
+
+pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, source: &str) {
+    let files = SimpleFile::new(filename, source);
+    let config = codespan_reporting::term::Config::default();
+    let writer = StandardStream::stderr(ColorChoice::Auto);
+
+    let diagnostic = Diagnostic::error().with_labels(
+        ann_err
+            .spans()
+            .map(|(span, desc)| {
+                Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
+            })
+            .collect(),
+    );
+
+    term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
 }

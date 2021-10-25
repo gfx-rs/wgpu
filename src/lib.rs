@@ -220,7 +220,7 @@ use std::{
     hash::BuildHasherDefault,
 };
 
-pub use crate::span::Span;
+pub use crate::span::{Span, SpanContext, WithSpan};
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]

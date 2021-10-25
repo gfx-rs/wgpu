@@ -580,6 +580,7 @@ fn validation_error(source: &str) -> Result<naga::valid::ModuleInfo, naga::valid
         naga::valid::Capabilities::empty(),
     )
     .validate(&module)
+    .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
 }
 
 #[test]
