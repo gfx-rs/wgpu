@@ -210,7 +210,6 @@ pub struct Queue {
     current_index_buffer: Option<glow::Buffer>,
 }
 
-
 #[derive(Debug, Clone)]
 pub enum RawBuffer {
     Buffer(glow::Buffer),

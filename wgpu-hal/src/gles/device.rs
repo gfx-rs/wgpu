@@ -330,8 +330,9 @@ impl crate::Device<super::Api> for super::Device {
                 .contains(super::PrivateCapabilities::BUFFER_ALLOCATION);
 
         if emulate_map
-            && (desc.usage.contains(crate::BufferUses::MAP_WRITE)
-                || desc.usage.contains(crate::BufferUses::MAP_READ))
+            && desc
+                .usage
+                .intersects(crate::BufferUses::MAP_WRITE | crate::BufferUses::MAP_READ)
         {
             return Ok(super::Buffer {
                 raw: RawBuffer::data_with_capacity(desc.size),

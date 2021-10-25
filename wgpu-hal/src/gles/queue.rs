@@ -197,29 +197,27 @@ impl super::Queue {
                 ref dst,
                 dst_target,
                 ref range,
-            } => {
-                match dst {
-                    super::RawBuffer::Buffer(buffer) => {
-                        gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
-                        gl.bind_buffer(dst_target, Some(*buffer));
-                        let mut dst_offset = range.start;
-                        while dst_offset < range.end {
-                            let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
-                            gl.copy_buffer_sub_data(
-                                glow::COPY_READ_BUFFER,
-                                dst_target,
-                                0,
-                                dst_offset as i32,
-                                size as i32,
-                            );
-                            dst_offset += size;
-                        }
-                    }
-                    super::RawBuffer::Data(data) => {
-                        (&mut data.lock().unwrap()).fill(0);
+            } => match dst {
+                super::RawBuffer::Buffer(buffer) => {
+                    gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
+                    gl.bind_buffer(dst_target, Some(*buffer));
+                    let mut dst_offset = range.start;
+                    while dst_offset < range.end {
+                        let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
+                        gl.copy_buffer_sub_data(
+                            glow::COPY_READ_BUFFER,
+                            dst_target,
+                            0,
+                            dst_offset as i32,
+                            size as i32,
+                        );
+                        dst_offset += size;
                     }
                 }
-            }
+                super::RawBuffer::Data(data) => {
+                    (&mut data.lock().unwrap()).fill(0);
+                }
+            },
             C::CopyBufferToBuffer {
                 ref src,
                 src_target,
@@ -599,12 +597,12 @@ impl super::Queue {
                     super::RawBuffer::Buffer(buffer) => {
                         gl.bind_buffer(dst_target, Some(*buffer));
                         gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data);
-                    },
+                    }
                     super::RawBuffer::Data(data) => {
                         let data = &mut *data.lock().unwrap();
                         let len = query_data.len().min(data.len());
                         data[..len].copy_from_slice(&query_data[..len]);
-                    },
+                    }
                 }
             }
             C::ResetFramebuffer => {

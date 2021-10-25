@@ -201,9 +201,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if !bar.usage.start.contains(crate::BufferUses::STORAGE_WRITE) {
                 continue;
             }
-            self.cmd_buffer
-                .commands
-                .push(C::BufferBarrier(bar.buffer.raw.as_buffer().unwrap(), bar.usage.end));
+            self.cmd_buffer.commands.push(C::BufferBarrier(
+                bar.buffer.raw.as_buffer().unwrap(),
+                bar.usage.end,
+            ));
         }
     }
 
