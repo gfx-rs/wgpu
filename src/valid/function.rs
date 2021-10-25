@@ -6,7 +6,9 @@ use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
     ExpressionError, FunctionInfo, ModuleInfo,
 };
-use crate::span::{AddSpan as _, MapErrWithSpan as _, WithSpan};
+use crate::span::WithSpan;
+#[cfg(feature = "span")]
+use crate::span::{AddSpan as _, MapErrWithSpan as _};
 
 #[cfg(feature = "validate")]
 use bit_set::BitSet;
