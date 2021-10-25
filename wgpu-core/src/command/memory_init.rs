@@ -1,19 +1,17 @@
-use std::collections::hash_map::Entry;
-use std::ops::Range;
-use std::vec::Drain;
+use std::{collections::hash_map::Entry, ops::Range, vec::Drain};
 
 use hal::CommandEncoder;
 
-use crate::command::collect_zero_buffer_copies_for_clear_texture;
-use crate::device::Device;
-use crate::hub::Storage;
-use crate::id;
-use crate::id::TextureId;
-use crate::init_tracker::*;
-use crate::resource::{Buffer, Texture};
-use crate::track::TrackerSet;
-use crate::track::{ResourceTracker, TextureSelector, TextureState};
-use crate::FastHashMap;
+use crate::{
+    command::collect_zero_buffer_copies_for_clear_texture,
+    device::Device,
+    hub::Storage,
+    id::{self, TextureId},
+    init_tracker::*,
+    resource::{Buffer, Texture},
+    track::{ResourceTracker, TextureSelector, TextureState, TrackerSet},
+    FastHashMap,
+};
 
 use super::{BakedCommands, DestroyedBufferError, DestroyedTextureError};
 

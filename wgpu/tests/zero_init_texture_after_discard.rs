@@ -12,7 +12,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after
             let mut encoder = ctx
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-            drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Color Discard"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
                     view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
@@ -23,7 +23,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after
                     },
                 }],
                 depth_stencil_attachment: None,
-            }));
+            });
             ctx.queue.submit([encoder.finish()]);
         }
         {
@@ -47,7 +47,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
             let mut encoder = ctx
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-            drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Color Discard"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
                     view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
@@ -58,7 +58,7 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
                     },
                 }],
                 depth_stencil_attachment: None,
-            }));
+            });
             copy_texture_to_buffer(&mut encoder, &texture, &readback_buffer);
             ctx.queue.submit([encoder.finish()]);
         }
@@ -79,7 +79,7 @@ fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_sa
                 let mut encoder = ctx
                     .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-                drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Depth Discard"),
                     color_attachments: &[],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -93,7 +93,7 @@ fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_sa
                             store: false, // discard!
                         }),
                     }),
-                }));
+                });
                 copy_texture_to_buffer(&mut encoder, &texture, &readback_buffer);
                 ctx.queue.submit([encoder.finish()]);
             }
@@ -109,12 +109,12 @@ fn discarding_either_depth_or_stencil_aspect() {
             &ctx,
             wgpu::TextureFormat::Depth24PlusStencil8,
         );
-        // TODO: How do we test this other than "doesn't crash"? we can't copy the texture to/from buffers!
+        // TODO: How do we test this other than "doesn't crash"? We can't copy the texture to/from buffers, so we would need to do a copy in a shader
         {
             let mut encoder = ctx
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-            drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Depth Discard, Stencil Load"),
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -128,14 +128,14 @@ fn discarding_either_depth_or_stencil_aspect() {
                         store: true,
                     }),
                 }),
-            }));
+            });
             ctx.queue.submit([encoder.finish()]);
         }
         {
             let mut encoder = ctx
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-            drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Depth Load, Stencil Discard"),
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -149,7 +149,7 @@ fn discarding_either_depth_or_stencil_aspect() {
                         store: false, // discard!
                     }),
                 }),
-            }));
+            });
             ctx.queue.submit([encoder.finish()]);
         }
     });
@@ -174,8 +174,7 @@ fn create_white_texture_and_readback_buffer(
     let format_desc = format.describe();
 
     // Size for tests is chosen so that we don't need to care about buffer alignments.
-    assert_eq!(format_desc.block_dimensions.0, 1);
-    assert_eq!(format_desc.block_dimensions.1, 1);
+    assert_eq!(format_desc.block_dimensions, (1, 1));
     assert_eq!(format_desc.block_size as u32, BYTES_PER_PIXEL);
     assert_eq!(
         (TEXTURE_SIZE.width * format_desc.block_size as u32) % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT,
@@ -209,14 +208,11 @@ fn create_white_texture_and_readback_buffer(
     // This behavior is curious, but does not violate any spec - it is wgpu's job to pass this test no matter what a render target discard does.
 
     // ... but that said, for depth/stencil textures we need to do a clear.
-    if format == wgpu::TextureFormat::Depth32Float
-        || format == wgpu::TextureFormat::Depth24PlusStencil8
-        || format == wgpu::TextureFormat::Depth24Plus
-    {
+    if format_desc.sample_type == wgpu::TextureSampleType::Depth {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Depth/Stencil setup"),
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -230,7 +226,7 @@ fn create_white_texture_and_readback_buffer(
                     store: true,
                 }),
             }),
-        }));
+        });
         ctx.queue.submit([encoder.finish()]);
     } else {
         let data = vec![255; buffer_size as usize];
@@ -267,7 +263,7 @@ fn copy_texture_to_buffer(
         wgpu::ImageCopyTexture {
             texture,
             mip_level: 0,
-            origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
+            origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
         },
         wgpu::ImageCopyBuffer {
@@ -280,15 +276,15 @@ fn copy_texture_to_buffer(
 
 fn assert_buffer_is_zero(readback_buffer: &wgpu::Buffer, device: &wgpu::Device) {
     {
-        let buffer_slice = readback_buffer.slice(..);
-        let _ = buffer_slice.map_async(wgpu::MapMode::Read);
-        device.poll(wgpu::Maintain::Wait);
-        let buffer_view = buffer_slice.get_mapped_range();
+    let buffer_slice = readback_buffer.slice(..);
+    let _ = buffer_slice.map_async(wgpu::MapMode::Read);
+    device.poll(wgpu::Maintain::Wait);
+    let buffer_view = buffer_slice.get_mapped_range();
 
-        assert!(
-            buffer_view.iter().all(|b| *b == 0),
-            "texture was not fully cleared"
-        );
+    assert!(
+        buffer_view.iter().all(|b| *b == 0),
+        "texture was not fully cleared"
+    );
     }
     readback_buffer.unmap();
 }
