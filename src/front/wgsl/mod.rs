@@ -1891,12 +1891,12 @@ impl Parser {
                         match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
                             Some((function, arguments)) => {
                                 let span = NagaSpan::from(self.peek_scope(lexer));
+                                ctx.block.extend(ctx.emitter.finish(ctx.expressions));
                                 let result = ctx.functions[function].result.as_ref().map(|_| {
-                                    ctx.interrupt_emitter(
-                                        crate::Expression::CallResult(function),
-                                        span,
-                                    )
+                                    ctx.expressions
+                                        .append(crate::Expression::CallResult(function), span)
                                 });
+                                ctx.emitter.start(ctx.expressions);
                                 ctx.block.push(
                                     crate::Statement::Call {
                                         function,
