@@ -1112,6 +1112,10 @@ struct ParsedVariable<'a> {
     init: Option<Handle<crate::Constant>>,
 }
 
+struct CalledFunction {
+    result: Option<Handle<crate::Expression>>,
+}
+
 #[derive(Clone, Debug)]
 pub struct ParseError {
     message: String,
@@ -1369,7 +1373,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         name: &'a str,
         mut ctx: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Option<Handle<crate::Expression>>, Error<'a>> {
+    ) -> Result<Option<CalledFunction>, Error<'a>> {
         assert!(self.scopes.last().is_some());
         let expr = if let Some(fun) = conv::map_relational_fun(name) {
             let _ = lexer.next();
@@ -1483,7 +1487,9 @@ impl Parser {
                         crate::AtomicFunction::Add,
                         ctx.reborrow(),
                     )?;
-                    return Ok(Some(handle));
+                    return Ok(Some(CalledFunction {
+                        result: Some(handle),
+                    }));
                 }
                 "atomicSub" => {
                     let _ = lexer.next();
@@ -1492,7 +1498,9 @@ impl Parser {
                         crate::AtomicFunction::Subtract,
                         ctx.reborrow(),
                     )?;
-                    return Ok(Some(handle));
+                    return Ok(Some(CalledFunction {
+                        result: Some(handle),
+                    }));
                 }
                 "atomicAnd" => {
                     let _ = lexer.next();
@@ -1501,7 +1509,9 @@ impl Parser {
                         crate::AtomicFunction::And,
                         ctx.reborrow(),
                     )?;
-                    return Ok(Some(handle));
+                    return Ok(Some(CalledFunction {
+                        result: Some(handle),
+                    }));
                 }
                 "atomicOr" => {
                     let _ = lexer.next();
@@ -1510,7 +1520,9 @@ impl Parser {
                         crate::AtomicFunction::InclusiveOr,
                         ctx.reborrow(),
                     )?;
-                    return Ok(Some(handle));
+                    return Ok(Some(CalledFunction {
+                        result: Some(handle),
+                    }));
                 }
                 "atomicXor" => {
                     let _ = lexer.next();
@@ -1519,19 +1531,25 @@ impl Parser {
                         crate::AtomicFunction::ExclusiveOr,
                         ctx.reborrow(),
                     )?;
-                    return Ok(Some(handle));
+                    return Ok(Some(CalledFunction {
+                        result: Some(handle),
+                    }));
                 }
                 "atomicMin" => {
                     let _ = lexer.next();
                     let handle =
                         self.parse_atomic_helper(lexer, crate::AtomicFunction::Min, ctx)?;
-                    return Ok(Some(handle));
+                    return Ok(Some(CalledFunction {
+                        result: Some(handle),
+                    }));
                 }
                 "atomicMax" => {
                     let _ = lexer.next();
                     let handle =
                         self.parse_atomic_helper(lexer, crate::AtomicFunction::Max, ctx)?;
-                    return Ok(Some(handle));
+                    return Ok(Some(CalledFunction {
+                        result: Some(handle),
+                    }));
                 }
                 "atomicExchange" => {
                     let _ = lexer.next();
@@ -1540,7 +1558,9 @@ impl Parser {
                         crate::AtomicFunction::Exchange { compare: None },
                         ctx,
                     )?;
-                    return Ok(Some(handle));
+                    return Ok(Some(CalledFunction {
+                        result: Some(handle),
+                    }));
                 }
                 "atomicCompareExchangeWeak" => {
                     let _ = lexer.next();
@@ -1576,7 +1596,9 @@ impl Parser {
                         },
                         span,
                     );
-                    return Ok(Some(result));
+                    return Ok(Some(CalledFunction {
+                        result: Some(result),
+                    }));
                 }
                 // texture sampling
                 "textureSample" => {
@@ -1865,14 +1887,16 @@ impl Parser {
                 }
                 // other
                 _ => {
-                    let handle =
+                    let result =
                         match self.parse_local_function_call(lexer, name, ctx.reborrow())? {
                             Some((function, arguments)) => {
                                 let span = NagaSpan::from(self.peek_scope(lexer));
-                                let result = Some(ctx.interrupt_emitter(
-                                    crate::Expression::CallResult(function),
-                                    span,
-                                ));
+                                let result = ctx.functions[function].result.as_ref().map(|_| {
+                                    ctx.interrupt_emitter(
+                                        crate::Expression::CallResult(function),
+                                        span,
+                                    )
+                                });
                                 ctx.block.push(
                                     crate::Statement::Call {
                                         function,
@@ -1883,14 +1907,17 @@ impl Parser {
                                 );
                                 result
                             }
-                            None => None,
+                            None => return Ok(None),
                         };
-                    return Ok(handle);
+                    return Ok(Some(CalledFunction { result }));
                 }
             }
         };
         let span = NagaSpan::from(self.peek_scope(lexer));
-        Ok(Some(ctx.expressions.append(expr, span)))
+        let handle = ctx.expressions.append(expr, span);
+        Ok(Some(CalledFunction {
+            result: Some(handle),
+        }))
     }
 
     /// Expects [`Scope::PrimaryExpr`] scope on top; if returning Some(_), pops it.
@@ -2133,7 +2160,7 @@ impl Parser {
                         handle: definition.handle,
                         is_reference,
                     }
-                } else if let Some(expr) =
+                } else if let Some(CalledFunction { result: Some(expr) }) =
                     self.parse_function_call_inner(lexer, word, ctx.reborrow())?
                 {
                     //TODO: resolve the duplicate call in `parse_singular_expression`
@@ -3154,26 +3181,22 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ident: &'a str,
-        ident_span: Span,
         mut context: ExpressionContext<'a, '_, 'out>,
     ) -> Result<(), Error<'a>> {
-        let span_start = ident_span.start;
+        self.push_scope(Scope::SingularExpr, lexer);
         context.emitter.start(context.expressions);
-        let (function, arguments) = self
-            .parse_local_function_call(lexer, ident, context.reborrow())?
-            .ok_or(Error::UnknownLocalFunction(ident_span))?;
-        let span_end = lexer.current_byte_offset();
+        if self
+            .parse_function_call_inner(lexer, ident, context.reborrow())?
+            .is_none()
+        {
+            let span = lexer.next().1;
+            return Err(Error::UnknownLocalFunction(span));
+        }
         context
             .block
             .extend(context.emitter.finish(context.expressions));
-        context.block.push(
-            crate::Statement::Call {
-                function,
-                arguments,
-                result: None,
-            },
-            NagaSpan::from(span_start..span_end),
-        );
+        self.pop_scope(lexer);
+
         Ok(())
     }
 
@@ -3208,7 +3231,7 @@ impl Parser {
                 block.push(crate::Statement::Block(statements), span);
                 return Ok(());
             }
-            (Token::Word(word), word_span) => {
+            (Token::Word(word), _) => {
                 let mut emitter = super::Emitter::default();
                 let statement = match word {
                     "let" => {
@@ -3609,13 +3632,11 @@ impl Parser {
 
                         let mut continuing = crate::Block::new();
                         if !lexer.skip(Token::Paren(')')) {
-                            let (token, span) = lexer.peek();
-                            match token {
+                            match lexer.peek().0 {
                                 Token::Word(ident) if context.lookup_ident.get(ident).is_none() => {
                                     self.parse_function_statement(
                                         lexer,
                                         ident,
-                                        span,
                                         context.as_expression(&mut continuing, &mut emitter),
                                     )?
                                 }
@@ -3720,7 +3741,6 @@ impl Parser {
                             None => self.parse_function_statement(
                                 lexer,
                                 ident,
-                                word_span,
                                 context.as_expression(block, &mut emitter),
                             )?,
                         }
