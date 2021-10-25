@@ -3339,28 +3339,24 @@ pub struct ImageSubresourceRange {
 impl ImageSubresourceRange {
     /// Returns the mip level range of a subresource range describes for a specific texture.
     pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
-        self.base_mip_level
-            ..self.base_mip_level
-                + match self.mip_level_count {
-                    Some(mip_level_count) => mip_level_count.get(),
-                    None => texture_desc.mip_level_count,
-                }
+        self.base_mip_level..match self.mip_level_count {
+            Some(mip_level_count) => self.base_mip_level + mip_level_count.get(),
+            None => texture_desc.mip_level_count,
+        }
     }
 
     /// Returns the layer range of a subresource range describes for a specific texture.
     pub fn layer_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
-        self.base_array_layer
-            ..self.base_array_layer
-                + match self.array_layer_count {
-                    Some(array_layer_count) => array_layer_count.get(),
-                    None => {
-                        if texture_desc.dimension == TextureDimension::D3 {
-                            1
-                        } else {
-                            texture_desc.size.depth_or_array_layers
-                        }
-                    }
+        self.base_array_layer..match self.array_layer_count {
+            Some(array_layer_count) => self.base_array_layer + array_layer_count.get(),
+            None => {
+                if texture_desc.dimension == TextureDimension::D3 {
+                    self.base_array_layer + 1
+                } else {
+                    texture_desc.size.depth_or_array_layers
                 }
+            }
+        }
     }
 }
 
