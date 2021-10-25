@@ -266,7 +266,11 @@ impl super::Queue {
                         let src_data = &data.as_slice()
                             [copy.src_offset as usize..copy.src_offset as usize + size];
                         gl.bind_buffer(copy_dst_target, Some(*dst));
-                        gl.buffer_sub_data_u8_slice(copy_dst_target, copy.dst_offset as i32, src_data);
+                        gl.buffer_sub_data_u8_slice(
+                            copy_dst_target,
+                            copy.dst_offset as i32,
+                            src_data,
+                        );
                     }
                     (super::BufferInner::Data(_), super::BufferInner::Data(_)) => {
                         todo!()
