@@ -198,7 +198,7 @@ impl super::Queue {
                 dst_target,
                 ref range,
             } => match dst {
-                super::RawBuffer::Buffer(buffer) => {
+                super::BufferInner::Buffer(buffer) => {
                     gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer));
                     gl.bind_buffer(dst_target, Some(*buffer));
                     let mut dst_offset = range.start;
@@ -214,7 +214,7 @@ impl super::Queue {
                         dst_offset += size;
                     }
                 }
-                super::RawBuffer::Data(data) => {
+                super::BufferInner::Data(data) => {
                     (&mut data.lock().unwrap()).fill(0);
                 }
             },
@@ -241,7 +241,7 @@ impl super::Queue {
                 };
 
                 match (src, dst) {
-                    (super::RawBuffer::Buffer(src), super::RawBuffer::Buffer(dst)) => {
+                    (super::BufferInner::Buffer(src), super::BufferInner::Buffer(dst)) => {
                         gl.bind_buffer(copy_src_target, Some(*src));
                         gl.bind_buffer(copy_dst_target, Some(*dst));
                         gl.copy_buffer_sub_data(
@@ -252,7 +252,7 @@ impl super::Queue {
                             copy.size.get() as _,
                         );
                     }
-                    (super::RawBuffer::Buffer(src), super::RawBuffer::Data(data)) => {
+                    (super::BufferInner::Buffer(src), super::BufferInner::Data(data)) => {
                         let mut data = data.lock().unwrap();
                         gl.bind_buffer(copy_src_target, Some(*src));
                         gl.get_buffer_sub_data(
@@ -261,7 +261,7 @@ impl super::Queue {
                             data.as_mut_slice(),
                         );
                     }
-                    (super::RawBuffer::Data(data), super::RawBuffer::Buffer(dst)) => {
+                    (super::BufferInner::Data(data), super::BufferInner::Buffer(dst)) => {
                         let data = data.lock().unwrap();
                         gl.bind_buffer(copy_dst_target, Some(*dst));
                         gl.buffer_sub_data_u8_slice(
@@ -270,7 +270,7 @@ impl super::Queue {
                             data.as_slice(),
                         );
                     }
-                    (super::RawBuffer::Data(_), super::RawBuffer::Data(_)) => {
+                    (super::BufferInner::Data(_), super::BufferInner::Data(_)) => {
                         todo!()
                     }
                 }
@@ -361,11 +361,11 @@ impl super::Queue {
 
                 let buffer_data;
                 let unpack_data = match src {
-                    super::RawBuffer::Buffer(buffer) => {
+                    super::BufferInner::Buffer(buffer) => {
                         gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(*buffer));
                         glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32)
                     }
-                    super::RawBuffer::Data(data) => {
+                    super::BufferInner::Data(data) => {
                         buffer_data = data.lock().unwrap();
                         glow::PixelUnpackData::Slice(buffer_data.as_ref())
                     }
@@ -548,12 +548,12 @@ impl super::Queue {
                 }
                 let mut buffer_data;
                 let unpack_data = match dst {
-                    super::RawBuffer::Buffer(buffer) => {
+                    super::BufferInner::Buffer(buffer) => {
                         gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32);
                         gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(*buffer));
                         glow::PixelPackData::BufferOffset(copy.buffer_layout.offset as u32)
                     }
-                    super::RawBuffer::Data(data) => {
+                    super::BufferInner::Data(data) => {
                         buffer_data = data.lock().unwrap();
                         glow::PixelPackData::Slice(buffer_data.as_mut())
                     }
@@ -594,11 +594,11 @@ impl super::Queue {
                     self.temp_query_results.len() * mem::size_of::<u64>(),
                 );
                 match &dst {
-                    super::RawBuffer::Buffer(buffer) => {
+                    super::BufferInner::Buffer(buffer) => {
                         gl.bind_buffer(dst_target, Some(*buffer));
                         gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data);
                     }
-                    super::RawBuffer::Data(data) => {
+                    super::BufferInner::Data(data) => {
                         let data = &mut *data.lock().unwrap();
                         let len = query_data.len().min(data.len());
                         data[..len].copy_from_slice(&query_data[..len]);

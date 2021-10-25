@@ -1,4 +1,4 @@
-use super::{conv, RawBuffer};
+use super::{conv, BufferInner};
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
 use std::{convert::TryInto, iter, ptr, sync::Arc};
@@ -335,7 +335,7 @@ impl crate::Device<super::Api> for super::Device {
                 .intersects(crate::BufferUses::MAP_WRITE | crate::BufferUses::MAP_READ)
         {
             return Ok(super::Buffer {
-                raw: RawBuffer::data_with_capacity(desc.size),
+                inner: BufferInner::data_with_capacity(desc.size),
                 target: target,
                 size: desc.size,
                 map_flags: 0,
@@ -413,14 +413,14 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         Ok(super::Buffer {
-            raw: RawBuffer::Buffer(raw),
+            inner: BufferInner::Buffer(raw),
             target,
             size: desc.size,
             map_flags,
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        if let RawBuffer::Buffer(raw) = buffer.raw {
+        if let BufferInner::Buffer(raw) = buffer.inner {
             let gl = &self.shared.context.lock();
             gl.delete_buffer(raw);
         }
@@ -432,9 +432,9 @@ impl crate::Device<super::Api> for super::Device {
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
-        let ptr = match &buffer.raw {
-            RawBuffer::Data(data) => data.lock().unwrap().as_mut_ptr(),
-            RawBuffer::Buffer(raw) => {
+        let ptr = match &buffer.inner {
+            BufferInner::Data(data) => data.lock().unwrap().as_mut_ptr(),
+            BufferInner::Buffer(raw) => {
                 let gl = &self.shared.context.lock();
                 gl.bind_buffer(buffer.target, Some(*raw));
                 let ptr = gl.map_buffer_range(
@@ -453,7 +453,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
-        if let RawBuffer::Buffer(raw) = buffer.raw {
+        if let BufferInner::Buffer(raw) = buffer.inner {
             let gl = &self.shared.context.lock();
             gl.bind_buffer(buffer.target, Some(raw));
             gl.unmap_buffer(buffer.target);
@@ -465,7 +465,7 @@ impl crate::Device<super::Api> for super::Device {
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        if let RawBuffer::Buffer(raw) = buffer.raw {
+        if let BufferInner::Buffer(raw) = buffer.inner {
             let gl = &self.shared.context.lock();
             gl.bind_buffer(buffer.target, Some(raw));
             for range in ranges {
@@ -858,7 +858,7 @@ impl crate::Device<super::Api> for super::Device {
                 wgt::BindingType::Buffer { .. } => {
                     let bb = &desc.buffers[entry.resource_index as usize];
                     super::RawBinding::Buffer {
-                        raw: bb.buffer.raw.as_buffer().unwrap(),
+                        raw: bb.buffer.inner.as_native().unwrap(),
                         offset: bb.offset as i32,
                         size: match bb.size {
                             Some(s) => s.get() as i32,

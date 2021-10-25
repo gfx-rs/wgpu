@@ -211,26 +211,26 @@ pub struct Queue {
 }
 
 #[derive(Debug, Clone)]
-pub enum RawBuffer {
+pub enum BufferInner {
     Buffer(glow::Buffer),
     Data(Arc<std::sync::Mutex<Vec<u8>>>),
 }
 
-impl RawBuffer {
-    pub fn data_with_capacity(size: u64) -> RawBuffer {
-        RawBuffer::Data(Arc::new(std::sync::Mutex::new(vec![0; size as usize])))
+impl BufferInner {
+    pub fn data_with_capacity(size: u64) -> BufferInner {
+        BufferInner::Data(Arc::new(std::sync::Mutex::new(vec![0; size as usize])))
     }
-    pub fn as_buffer(&self) -> Option<glow::Buffer> {
+    pub fn as_native(&self) -> Option<glow::Buffer> {
         match self {
-            RawBuffer::Buffer(buffer) => Some(*buffer),
-            RawBuffer::Data(_) => None,
+            BufferInner::Buffer(buffer) => Some(*buffer),
+            BufferInner::Data(_) => None,
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Buffer {
-    raw: RawBuffer,
+    inner: BufferInner,
     target: BindTarget,
     size: wgt::BufferAddress,
     map_flags: u32,
@@ -584,14 +584,14 @@ enum Command {
         indirect_offset: wgt::BufferAddress,
     },
     ClearBuffer {
-        dst: RawBuffer,
+        dst: BufferInner,
         dst_target: BindTarget,
         range: crate::MemoryRange,
     },
     CopyBufferToBuffer {
-        src: RawBuffer,
+        src: BufferInner,
         src_target: BindTarget,
-        dst: RawBuffer,
+        dst: BufferInner,
         dst_target: BindTarget,
         copy: crate::BufferCopy,
     },
@@ -603,7 +603,7 @@ enum Command {
         copy: crate::TextureCopy,
     },
     CopyBufferToTexture {
-        src: RawBuffer,
+        src: BufferInner,
         #[allow(unused)]
         src_target: BindTarget,
         dst: glow::Texture,
@@ -615,7 +615,7 @@ enum Command {
         src: glow::Texture,
         src_target: BindTarget,
         src_format: wgt::TextureFormat,
-        dst: RawBuffer,
+        dst: BufferInner,
         #[allow(unused)]
         dst_target: BindTarget,
         copy: crate::BufferTextureCopy,
@@ -625,7 +625,7 @@ enum Command {
     EndQuery(BindTarget),
     CopyQueryResults {
         query_range: Range<u32>,
-        dst: RawBuffer,
+        dst: BufferInner,
         dst_target: BindTarget,
         dst_offset: wgt::BufferAddress,
     },

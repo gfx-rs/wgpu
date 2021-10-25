@@ -202,7 +202,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 continue;
             }
             self.cmd_buffer.commands.push(C::BufferBarrier(
-                bar.buffer.raw.as_buffer().unwrap(),
+                bar.buffer.inner.as_native().unwrap(),
                 bar.usage.end,
             ));
         }
@@ -239,7 +239,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
         self.cmd_buffer.commands.push(C::ClearBuffer {
-            dst: buffer.raw.clone(),
+            dst: buffer.inner.clone(),
             dst_target: buffer.target,
             range,
         });
@@ -260,9 +260,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
         for copy in regions {
             self.cmd_buffer.commands.push(C::CopyBufferToBuffer {
-                src: src.raw.clone(),
+                src: src.inner.clone(),
                 src_target,
-                dst: dst.raw.clone(),
+                dst: dst.inner.clone(),
                 dst_target,
                 copy,
             })
@@ -305,7 +305,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for mut copy in regions {
             copy.clamp_size_to_virtual(&dst.copy_size);
             self.cmd_buffer.commands.push(C::CopyBufferToTexture {
-                src: src.raw.clone(),
+                src: src.inner.clone(),
                 src_target: src.target,
                 dst: dst_raw,
                 dst_target,
@@ -331,7 +331,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 src: src_raw,
                 src_target,
                 src_format: src.format,
-                dst: dst.raw.clone(),
+                dst: dst.inner.clone(),
                 dst_target: dst.target,
                 copy,
             })
@@ -368,7 +368,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let query_range = start as u32..self.cmd_buffer.queries.len() as u32;
         self.cmd_buffer.commands.push(C::CopyQueryResults {
             query_range,
-            dst: buffer.raw.clone(),
+            dst: buffer.inner.clone(),
             dst_target: buffer.target,
             dst_offset: offset,
         });
@@ -741,7 +741,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.index_format = format;
         self.cmd_buffer
             .commands
-            .push(C::SetIndexBuffer(binding.buffer.raw.as_buffer().unwrap()));
+            .push(C::SetIndexBuffer(binding.buffer.inner.as_native().unwrap()));
     }
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
@@ -751,7 +751,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.dirty_vbuf_mask |= 1 << index;
         let (_, ref mut vb) = self.state.vertex_buffers[index as usize];
         *vb = Some(super::BufferBinding {
-            raw: binding.buffer.raw.as_buffer().unwrap(),
+            raw: binding.buffer.inner.as_native().unwrap(),
             offset: binding.offset,
         });
     }
@@ -833,7 +833,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 offset + draw * mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
             self.cmd_buffer.commands.push(C::DrawIndirect {
                 topology: self.state.topology,
-                indirect_buf: buffer.raw.as_buffer().unwrap(),
+                indirect_buf: buffer.inner.as_native().unwrap(),
                 indirect_offset,
             });
         }
@@ -855,7 +855,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.cmd_buffer.commands.push(C::DrawIndexedIndirect {
                 topology: self.state.topology,
                 index_type,
-                indirect_buf: buffer.raw.as_buffer().unwrap(),
+                indirect_buf: buffer.inner.as_native().unwrap(),
                 indirect_offset,
             });
         }
@@ -906,7 +906,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         self.cmd_buffer.commands.push(C::DispatchIndirect {
-            indirect_buf: buffer.raw.as_buffer().unwrap(),
+            indirect_buf: buffer.inner.as_native().unwrap(),
             indirect_offset: offset,
         });
     }
