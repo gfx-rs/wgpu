@@ -491,7 +491,7 @@ impl crate::Device<super::Api> for super::Device {
             depth: 1,
         };
 
-        let inner = if render_usage.contains(desc.usage)
+        let inner = if render_usage.intersects(desc.usage)
             && desc.dimension == wgt::TextureDimension::D2
             && desc.size.depth_or_array_layers == 1
         {
