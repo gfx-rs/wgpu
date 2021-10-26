@@ -13,7 +13,6 @@ void switch_case_break()
     switch(0) {
         case 0: {
             break;
-            break;
         }
     }
     return;
@@ -25,7 +24,6 @@ void loop_switch_continue(int x)
         switch(x) {
             case 1: {
                 continue;
-                break;
             }
         }
     }
@@ -42,13 +40,13 @@ void main(uint3 global_id : SV_DispatchThreadID)
     switch(1) {
         default: {
             pos = 1;
+            break;
         }
     }
     int _expr4 = pos;
     switch(_expr4) {
         case 1: {
             pos = 0;
-            break;
             break;
         }
         case 2: {
@@ -66,6 +64,7 @@ void main(uint3 global_id : SV_DispatchThreadID)
         }
         default: {
             pos = 3;
+            break;
         }
     }
     switch(0u) {
@@ -78,12 +77,10 @@ void main(uint3 global_id : SV_DispatchThreadID)
         case 1: {
             pos = 0;
             break;
-            break;
         }
         case 2: {
             pos = 1;
             return;
-            break;
         }
         case 3: {
             /* fallthrough */
@@ -93,7 +90,6 @@ void main(uint3 global_id : SV_DispatchThreadID)
         }
         case 4: {
             return;
-            break;
         }
         default: {
             pos = 3;

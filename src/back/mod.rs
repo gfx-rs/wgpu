@@ -311,3 +311,18 @@ impl crate::TypeInner {
         }
     }
 }
+
+impl crate::Statement {
+    /// Returns true if the statement directly terminates the current block
+    ///
+    /// Used to decided wether case blocks require a explicit `break`
+    pub fn is_terminator(&self) -> bool {
+        match *self {
+            crate::Statement::Break
+            | crate::Statement::Continue
+            | crate::Statement::Return { .. }
+            | crate::Statement::Kill => true,
+            _ => false,
+        }
+    }
+}

@@ -1301,6 +1301,16 @@ pub enum Expression {
 
 pub use block::Block;
 
+/// The value of the switch case
+// Clone is used only for error reporting and is not intended for end users
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum SwitchValue {
+    Integer(i32),
+    Default,
+}
+
 /// A case for a switch statement.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug)]
@@ -1308,7 +1318,7 @@ pub use block::Block;
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct SwitchCase {
     /// Value, upon which the case is considered true.
-    pub value: i32,
+    pub value: SwitchValue,
     /// Body of the case.
     pub body: Block,
     /// If true, the control flow continues to the next case in the list,
@@ -1341,7 +1351,6 @@ pub enum Statement {
     Switch {
         selector: Handle<Expression>, //int
         cases: Vec<SwitchCase>,
-        default: Block,
     },
 
     /// Executes a block repeatedly.

@@ -1151,7 +1151,6 @@ impl<'w> BlockContext<'w> {
                 crate::Statement::Switch {
                     selector,
                     ref cases,
-                    ref default,
                 } => {
                     let selector_id = self.cached[selector];
 
@@ -1162,13 +1161,30 @@ impl<'w> BlockContext<'w> {
                     ));
 
                     let default_id = self.gen_id();
-                    let raw_cases = cases
-                        .iter()
-                        .map(|c| super::instructions::Case {
-                            value: c.value as Word,
-                            label_id: self.gen_id(),
-                        })
-                        .collect::<Vec<_>>();
+
+                    let mut reached_default = false;
+                    let mut raw_cases = Vec::with_capacity(cases.len());
+                    let mut case_ids = Vec::with_capacity(cases.len());
+                    for case in cases.iter() {
+                        match case.value {
+                            crate::SwitchValue::Integer(value) => {
+                                let label_id = self.gen_id();
+                                // No cases should be added after the default case is encountered
+                                // since the default case catches all
+                                if !reached_default {
+                                    raw_cases.push(super::instructions::Case {
+                                        value: value as Word,
+                                        label_id,
+                                    });
+                                }
+                                case_ids.push(label_id);
+                            }
+                            crate::SwitchValue::Default => {
+                                case_ids.push(default_id);
+                                reached_default = true;
+                            }
+                        }
+                    }
 
                     self.function.consume(
                         block,
@@ -1180,24 +1196,25 @@ impl<'w> BlockContext<'w> {
                         ..loop_context
                     };
 
-                    for (i, (case, raw_case)) in cases.iter().zip(raw_cases.iter()).enumerate() {
+                    for (i, (case, label_id)) in cases.iter().zip(case_ids.iter()).enumerate() {
                         let case_finish_id = if case.fall_through {
-                            match raw_cases.get(i + 1) {
-                                Some(rc) => rc.label_id,
-                                None => default_id,
-                            }
+                            case_ids[i + 1]
                         } else {
                             merge_id
                         };
                         self.write_block(
-                            raw_case.label_id,
+                            *label_id,
                             &case.body,
                             Some(case_finish_id),
                             inner_context,
                         )?;
                     }
 
-                    self.write_block(default_id, default, Some(merge_id), inner_context)?;
+                    // If no default was encountered write a empty block to satisfy the presence of
+                    // a block the default label
+                    if !reached_default {
+                        self.write_block(default_id, &[], Some(merge_id), inner_context)?;
+                    }
 
                     block = Block::new(merge_id);
                 }

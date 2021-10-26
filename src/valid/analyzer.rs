@@ -694,7 +694,6 @@ impl FunctionInfo {
                 S::Switch {
                     selector,
                     ref cases,
-                    ref default,
                 } => {
                     let selector_nur = self.add_ref(selector);
                     let branch_disruptor =
@@ -715,14 +714,7 @@ impl FunctionInfo {
                         };
                         uniformity = uniformity | case_uniformity;
                     }
-                    // using the disruptor inherited from the last fall-through chain
-                    let default_exit = self.process_block(
-                        default,
-                        other_functions,
-                        case_disruptor,
-                        expression_arena,
-                    )?;
-                    uniformity | default_exit
+                    uniformity
                 }
                 S::Loop {
                     ref body,

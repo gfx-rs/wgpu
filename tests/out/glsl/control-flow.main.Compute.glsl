@@ -39,6 +39,7 @@ void main() {
     switch(1) {
         default:
             pos = 1;
+            break;
     }
     int _e4 = pos;
     switch(_e4) {
@@ -55,6 +56,7 @@ void main() {
             break;
         default:
             pos = 3;
+            break;
     }
     switch(0u) {
         case 0u:

@@ -877,7 +877,6 @@ impl<W: Write> Writer<W> {
             Statement::Switch {
                 selector,
                 ref cases,
-                ref default,
             } => {
                 // Start the switch
                 write!(self.out, "{}", level)?;
@@ -885,11 +884,6 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, selector, func_ctx)?;
                 writeln!(self.out, ") {{")?;
 
-                // Write all cases
-                let mut write_case = true;
-                let all_fall_through = cases
-                    .iter()
-                    .all(|case| case.fall_through && case.body.is_empty());
                 let type_postfix = match *func_ctx.info[selector].ty.inner_with(&module.types) {
                     crate::TypeInner::Scalar {
                         kind: crate::ScalarKind::Uint,
@@ -901,16 +895,13 @@ impl<W: Write> Writer<W> {
                 let l2 = level.next();
                 if !cases.is_empty() {
                     for case in cases {
-                        if write_case {
-                            write!(self.out, "{}case ", l2)?;
-                        }
-                        if !all_fall_through && case.fall_through && case.body.is_empty() {
-                            write_case = false;
-                            write!(self.out, "{}{}, ", case.value, type_postfix)?;
-                            continue;
-                        } else {
-                            write_case = true;
-                            writeln!(self.out, "{}{}: {{", case.value, type_postfix)?;
+                        match case.value {
+                            crate::SwitchValue::Integer(value) => {
+                                writeln!(self.out, "{}case {}{}: {{", l2, value, type_postfix)?;
+                            }
+                            crate::SwitchValue::Default => {
+                                writeln!(self.out, "{}default: {{", l2)?;
+                            }
                         }
 
                         for sta in case.body.iter() {
@@ -923,16 +914,6 @@ impl<W: Write> Writer<W> {
 
                         writeln!(self.out, "{}}}", l2)?;
                     }
-                }
-
-                if !default.is_empty() {
-                    writeln!(self.out, "{}default: {{", l2)?;
-
-                    for sta in default {
-                        self.write_stmt(module, sta, func_ctx, l2.next())?;
-                    }
-
-                    writeln!(self.out, "{}}}", l2)?
                 }
 
                 writeln!(self.out, "{}}}", level)?

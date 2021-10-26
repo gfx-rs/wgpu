@@ -1358,7 +1358,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Statement::Switch {
                 selector,
                 ref cases,
-                ref default,
             } => {
                 // Start the switch
                 write!(self.out, "{}", level)?;
@@ -1378,11 +1377,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let indent_level_2 = indent_level_1.next();
 
                 for case in cases {
-                    writeln!(
-                        self.out,
-                        "{}case {}{}: {{",
-                        indent_level_1, case.value, type_postfix
-                    )?;
+                    match case.value {
+                        crate::SwitchValue::Integer(value) => writeln!(
+                            self.out,
+                            "{}case {}{}: {{",
+                            indent_level_1, value, type_postfix
+                        )?,
+                        crate::SwitchValue::Default => {
+                            writeln!(self.out, "{}default: {{", indent_level_1)?
+                        }
+                    }
 
                     if case.fall_through {
                         // Generate each fallthrough case statement in a new block. This is done to
@@ -1401,20 +1405,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                     if case.fall_through {
                         writeln!(self.out, "{}}}", indent_level_2)?;
-                    } else {
+                    } else if case.body.last().map_or(true, |s| !s.is_terminator()) {
                         writeln!(self.out, "{}break;", indent_level_2)?;
-                    }
-
-                    writeln!(self.out, "{}}}", indent_level_1)?;
-                }
-
-                // Only write the default block if the block isn't empty
-                // Writing default without a block is valid but it's more readable this way
-                if !default.is_empty() {
-                    writeln!(self.out, "{}default: {{", indent_level_1)?;
-
-                    for sta in default {
-                        self.write_stmt(module, sta, func_ctx, indent_level_2)?;
                     }
 
                     writeln!(self.out, "{}}}", indent_level_1)?;

@@ -1468,7 +1468,6 @@ impl<'a, W: Write> Writer<'a, W> {
             Statement::Switch {
                 selector,
                 ref cases,
-                ref default,
             } => {
                 // Start the switch
                 write!(self.out, "{}", level)?;
@@ -1486,7 +1485,12 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Write all cases
                 let l2 = level.next();
                 for case in cases {
-                    writeln!(self.out, "{}case {}{}:", l2, case.value, type_postfix)?;
+                    match case.value {
+                        crate::SwitchValue::Integer(value) => {
+                            writeln!(self.out, "{}case {}{}:", l2, value, type_postfix)?
+                        }
+                        crate::SwitchValue::Default => writeln!(self.out, "{}default:", l2)?,
+                    }
 
                     for sta in case.body.iter() {
                         self.write_stmt(sta, ctx, l2.next())?;
@@ -1497,24 +1501,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     // broken out of at the end of its body.
                     if case.fall_through {
                         writeln!(self.out, "{}/* fallthrough */", l2.next())?;
-                    } else if !matches!(
-                        case.body.last(),
-                        Some(&Statement::Break)
-                            | Some(&Statement::Continue)
-                            | Some(&Statement::Return { .. })
-                            | Some(&Statement::Kill)
-                    ) {
+                    } else if case.body.last().map_or(true, |s| !s.is_terminator()) {
                         writeln!(self.out, "{}break;", l2.next())?;
-                    }
-                }
-
-                // Only write the default block if the block isn't empty
-                // Writing default without a block is valid but it's more readable this way
-                if !default.is_empty() {
-                    writeln!(self.out, "{}default:", level.next())?;
-
-                    for sta in default {
-                        self.write_stmt(sta, ctx, l2.next())?;
                     }
                 }
 

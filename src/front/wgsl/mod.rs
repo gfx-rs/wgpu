@@ -3200,6 +3200,29 @@ impl Parser {
         Ok(())
     }
 
+    fn parse_switch_case_body<'a, 'out>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut context: StatementContext<'a, '_, 'out>,
+    ) -> Result<(bool, crate::Block), Error<'a>> {
+        let mut body = crate::Block::new();
+        lexer.expect(Token::Paren('{'))?;
+        let fall_through = loop {
+            // default statements
+            if lexer.skip(Token::Word("fallthrough")) {
+                lexer.expect(Token::Separator(';'))?;
+                lexer.expect(Token::Paren('}'))?;
+                break true;
+            }
+            if lexer.skip(Token::Paren('}')) {
+                break false;
+            }
+            self.parse_statement(lexer, context.reborrow(), &mut body, false)?;
+        };
+
+        Ok((fall_through, body))
+    }
+
     fn parse_statement<'a, 'out>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -3495,7 +3518,6 @@ impl Parser {
                         block.extend(emitter.finish(context.expressions));
                         lexer.expect(Token::Paren('{'))?;
                         let mut cases = Vec::new();
-                        let mut default = crate::Block::new();
 
                         loop {
                             // cases + default
@@ -3503,7 +3525,6 @@ impl Parser {
                                 (Token::Word("case"), _) => {
                                     // parse a list of values
                                     let value = loop {
-                                        // TODO: Switch statements also allow for floats, bools and unsigned integers. See https://www.w3.org/TR/WGSL/#switch-statement
                                         let value = Self::parse_switch_value(lexer, uint)?;
                                         if lexer.skip(Token::Separator(',')) {
                                             if lexer.skip(Token::Separator(':')) {
@@ -3514,41 +3535,30 @@ impl Parser {
                                             break value;
                                         }
                                         cases.push(crate::SwitchCase {
-                                            value,
+                                            value: crate::SwitchValue::Integer(value),
                                             body: crate::Block::new(),
                                             fall_through: true,
                                         });
                                     };
 
-                                    let mut body = crate::Block::new();
-                                    lexer.expect(Token::Paren('{'))?;
-                                    let fall_through = loop {
-                                        // default statements
-                                        if lexer.skip(Token::Word("fallthrough")) {
-                                            lexer.expect(Token::Separator(';'))?;
-                                            lexer.expect(Token::Paren('}'))?;
-                                            break true;
-                                        }
-                                        if lexer.skip(Token::Paren('}')) {
-                                            break false;
-                                        }
-                                        self.parse_statement(
-                                            lexer,
-                                            context.reborrow(),
-                                            &mut body,
-                                            false,
-                                        )?;
-                                    };
+                                    let (fall_through, body) =
+                                        self.parse_switch_case_body(lexer, context.reborrow())?;
 
                                     cases.push(crate::SwitchCase {
-                                        value,
+                                        value: crate::SwitchValue::Integer(value),
                                         body,
                                         fall_through,
                                     });
                                 }
                                 (Token::Word("default"), _) => {
                                     lexer.expect(Token::Separator(':'))?;
-                                    default = self.parse_block(lexer, context.reborrow(), false)?;
+                                    let (fall_through, body) =
+                                        self.parse_switch_case_body(lexer, context.reborrow())?;
+                                    cases.push(crate::SwitchCase {
+                                        value: crate::SwitchValue::Default,
+                                        body,
+                                        fall_through,
+                                    });
                                 }
                                 (Token::Paren('}'), _) => break,
                                 other => {
@@ -3557,11 +3567,7 @@ impl Parser {
                             }
                         }
 
-                        Some(crate::Statement::Switch {
-                            selector,
-                            cases,
-                            default,
-                        })
+                        Some(crate::Statement::Switch { selector, cases })
                     }
                     "loop" => {
                         let _ = lexer.next();

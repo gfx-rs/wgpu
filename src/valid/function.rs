@@ -106,6 +106,8 @@ pub enum FunctionError {
     InvalidSwitchType(Handle<crate::Expression>),
     #[error("Multiple `switch` cases for {0:?} are present")]
     ConflictingSwitchCase(i32),
+    #[error("Multiple `default` cases are present")]
+    MultipleDefaultCases,
     #[error("The pointer {0:?} doesn't relate to a valid destination for a store")]
     InvalidStorePointer(Handle<crate::Expression>),
     #[error("The value {0:?} can not be stored")]
@@ -421,7 +423,6 @@ impl super::Validator {
                 S::Switch {
                     selector,
                     ref cases,
-                    ref default,
                 } => {
                     match *context.resolve_type(selector, &self.valid_expression_set)? {
                         Ti::Scalar {
@@ -438,16 +439,34 @@ impl super::Validator {
                         }
                     }
                     self.select_cases.clear();
+                    let mut default = false;
                     for case in cases {
-                        if !self.select_cases.insert(case.value) {
-                            return Err(FunctionError::ConflictingSwitchCase(case.value)
-                                .with_span_static(
-                                    case.body
-                                        .span_iter()
-                                        .next()
-                                        .map_or(Default::default(), |(_, s)| *s),
-                                    "conflicting switch arm here",
-                                ));
+                        match case.value {
+                            crate::SwitchValue::Integer(value) => {
+                                if !self.select_cases.insert(value) {
+                                    return Err(FunctionError::ConflictingSwitchCase(value)
+                                        .with_span_static(
+                                            case.body
+                                                .span_iter()
+                                                .next()
+                                                .map_or(Default::default(), |(_, s)| *s),
+                                            "conflicting switch arm here",
+                                        ));
+                                }
+                            }
+                            crate::SwitchValue::Default => {
+                                if default {
+                                    return Err(FunctionError::MultipleDefaultCases
+                                        .with_span_static(
+                                            case.body
+                                                .span_iter()
+                                                .next()
+                                                .map_or(Default::default(), |(_, s)| *s),
+                                            "duplicated switch arm here",
+                                        ));
+                                }
+                                default = true
+                            }
                         }
                     }
                     let pass_through_abilities = context.abilities
@@ -457,7 +476,6 @@ impl super::Validator {
                     for case in cases {
                         stages &= self.validate_block(&case.body, &sub_context)?.stages;
                     }
-                    stages &= self.validate_block(default, &sub_context)?.stages;
                 }
                 S::Loop {
                     ref body,

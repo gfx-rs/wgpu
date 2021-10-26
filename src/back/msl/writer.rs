@@ -1476,7 +1476,6 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Switch {
                     selector,
                     ref cases,
-                    ref default,
                 } => {
                     write!(self.out, "{}switch(", level)?;
                     self.put_expression(selector, &context.expression, true)?;
@@ -1490,16 +1489,22 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, ") {{")?;
                     let lcase = level.next();
                     for case in cases.iter() {
-                        writeln!(self.out, "{}case {}{}: {{", lcase, case.value, type_postfix)?;
+                        match case.value {
+                            crate::SwitchValue::Integer(value) => {
+                                writeln!(self.out, "{}case {}{}: {{", lcase, value, type_postfix)?;
+                            }
+                            crate::SwitchValue::Default => {
+                                writeln!(self.out, "{}default: {{", lcase)?;
+                            }
+                        }
                         self.put_block(lcase.next(), &case.body, context)?;
-                        if !case.fall_through {
+                        if !case.fall_through
+                            && case.body.last().map_or(true, |s| !s.is_terminator())
+                        {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
                         writeln!(self.out, "{}}}", lcase)?;
                     }
-                    writeln!(self.out, "{}default: {{", lcase)?;
-                    self.put_block(lcase.next(), default, context)?;
-                    writeln!(self.out, "{}}}", lcase)?;
                     writeln!(self.out, "{}}}", level)?;
                 }
                 crate::Statement::Loop {

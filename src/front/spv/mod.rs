@@ -3225,12 +3225,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 S::Switch {
                     selector: _,
                     ref mut cases,
-                    ref mut default,
                 } => {
                     for case in cases.iter_mut() {
                         self.patch_statements(&mut case.body, expressions, fun_parameter_sampling)?;
                     }
-                    self.patch_statements(default, expressions, fun_parameter_sampling)?;
                 }
                 S::Loop {
                     ref mut body,

@@ -566,33 +566,31 @@ impl<'function> BlockContext<'function> {
                         ref cases,
                         default,
                     } => {
-                        let default = lower_impl(blocks, bodies, default);
+                        let mut ir_cases: Vec<_> = cases
+                            .iter()
+                            .map(|&(value, body_idx)| {
+                                let body = lower_impl(blocks, bodies, body_idx);
+
+                                // Handle simple cases that would make a fallthrough statement unreachable code
+                                let fall_through = body.last().map_or(true, |s| !s.is_terminator());
+
+                                crate::SwitchCase {
+                                    value: crate::SwitchValue::Integer(value),
+                                    body,
+                                    fall_through,
+                                }
+                            })
+                            .collect();
+                        ir_cases.push(crate::SwitchCase {
+                            value: crate::SwitchValue::Default,
+                            body: lower_impl(blocks, bodies, default),
+                            fall_through: false,
+                        });
 
                         block.push(
                             crate::Statement::Switch {
                                 selector,
-                                cases: cases
-                                    .iter()
-                                    .map(|&(value, body_idx)| {
-                                        let body = lower_impl(blocks, bodies, body_idx);
-
-                                        // Handle simple cases that would make a fallthrough statement unreachable code
-                                        let fall_through = match body.last() {
-                                            Some(&crate::Statement::Break)
-                                            | Some(&crate::Statement::Continue)
-                                            | Some(&crate::Statement::Kill)
-                                            | Some(&crate::Statement::Return { .. }) => false,
-                                            _ => true,
-                                        };
-
-                                        crate::SwitchCase {
-                                            value,
-                                            body,
-                                            fall_through,
-                                        }
-                                    })
-                                    .collect(),
-                                default,
+                                cases: ir_cases,
                             },
                             crate::Span::default(),
                         )

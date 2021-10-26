@@ -169,11 +169,10 @@ impl<'source> ParsingContext<'source> {
                 ctx.emit_start();
 
                 let mut cases = Vec::new();
-                let mut default = Block::new();
 
                 self.expect(parser, TokenValue::LeftBrace)?;
                 loop {
-                    match self.expect_peek(parser)?.value {
+                    let value = match self.expect_peek(parser)?.value {
                         TokenValue::Case => {
                             self.bump(parser)?;
                             let value = {
@@ -204,73 +203,11 @@ impl<'source> ParsingContext<'source> {
                                     }
                                 }
                             };
-
-                            self.expect(parser, TokenValue::Colon)?;
-
-                            let mut body = Block::new();
-
-                            let mut case_terminator = None;
-                            loop {
-                                match self.expect_peek(parser)?.value {
-                                    TokenValue::Case
-                                    | TokenValue::Default
-                                    | TokenValue::RightBrace => break,
-                                    _ => {
-                                        self.parse_statement(
-                                            parser,
-                                            ctx,
-                                            &mut body,
-                                            &mut case_terminator,
-                                        )?;
-                                    }
-                                }
-                            }
-
-                            let mut fall_through = true;
-
-                            if let Some(mut idx) = case_terminator {
-                                if let Statement::Break = body[idx - 1] {
-                                    fall_through = false;
-                                    idx -= 1;
-                                }
-
-                                body.cull(idx..)
-                            }
-
-                            cases.push(SwitchCase {
-                                value,
-                                body,
-                                fall_through,
-                            })
+                            crate::SwitchValue::Integer(value)
                         }
                         TokenValue::Default => {
-                            let Token { meta, .. } = self.bump(parser)?;
-                            self.expect(parser, TokenValue::Colon)?;
-
-                            if !default.is_empty() {
-                                parser.errors.push(Error {
-                                    kind: ErrorKind::SemanticError(
-                                        "Can only have one default case per switch statement"
-                                            .into(),
-                                    ),
-                                    meta,
-                                });
-                            }
-
-                            let mut default_terminator = None;
-                            loop {
-                                match self.expect_peek(parser)?.value {
-                                    TokenValue::Case | TokenValue::RightBrace => break,
-                                    _ => {
-                                        self.parse_statement(
-                                            parser,
-                                            ctx,
-                                            &mut default,
-                                            &mut default_terminator,
-                                        )?;
-                                    }
-                                }
-                            }
+                            self.bump(parser)?;
+                            crate::SwitchValue::Default
                         }
                         TokenValue::RightBrace => {
                             end_meta = self.bump(parser)?.meta;
@@ -290,19 +227,45 @@ impl<'source> ParsingContext<'source> {
                                 meta,
                             });
                         }
+                    };
+
+                    self.expect(parser, TokenValue::Colon)?;
+
+                    let mut body = Block::new();
+
+                    let mut case_terminator = None;
+                    loop {
+                        match self.expect_peek(parser)?.value {
+                            TokenValue::Case | TokenValue::Default | TokenValue::RightBrace => {
+                                break
+                            }
+                            _ => {
+                                self.parse_statement(parser, ctx, &mut body, &mut case_terminator)?;
+                            }
+                        }
                     }
+
+                    let mut fall_through = true;
+
+                    if let Some(mut idx) = case_terminator {
+                        if let Statement::Break = body[idx - 1] {
+                            fall_through = false;
+                            idx -= 1;
+                        }
+
+                        body.cull(idx..)
+                    }
+
+                    cases.push(SwitchCase {
+                        value,
+                        body,
+                        fall_through,
+                    })
                 }
 
                 meta.subsume(end_meta);
 
-                body.push(
-                    Statement::Switch {
-                        selector,
-                        cases,
-                        default,
-                    },
-                    meta,
-                );
+                body.push(Statement::Switch { selector, cases }, meta);
 
                 meta
             }
