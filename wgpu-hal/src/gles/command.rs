@@ -604,12 +604,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.topology = conv::map_primitive_topology(pipeline.primitive.topology);
 
-        for index in self.state.vertex_attributes.len()..pipeline.vertex_attributes.len() {
-            self.cmd_buffer
-                .commands
-                .push(C::UnsetVertexAttribute(index as u32));
-        }
-
         if self
             .private_caps
             .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
@@ -624,6 +618,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 });
             }
         } else {
+            for index in 0..self.state.vertex_attributes.len() {
+                self.cmd_buffer
+                    .commands
+                    .push(C::UnsetVertexAttribute(index as u32));
+            }
+            self.state.vertex_attributes.clear();
+
             self.state.dirty_vbuf_mask = 0;
             // copy vertex attributes
             for vat in pipeline.vertex_attributes.iter() {
