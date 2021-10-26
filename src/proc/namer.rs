@@ -117,7 +117,13 @@ impl Namer {
 
     pub fn call_or(&mut self, label: &Option<String>, fallback: &str) -> String {
         self.call(match *label {
-            Some(ref name) => name,
+            Some(ref name) => {
+                if name.trim().is_empty() {
+                    fallback
+                } else {
+                    name
+                }
+            }
             None => fallback,
         })
     }
