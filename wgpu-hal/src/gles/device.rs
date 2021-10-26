@@ -336,7 +336,7 @@ impl crate::Device<super::Api> for super::Device {
         {
             return Ok(super::Buffer {
                 inner: BufferInner::data_with_capacity(desc.size),
-                target: target,
+                target,
                 size: desc.size,
                 map_flags: 0,
             });
@@ -432,15 +432,15 @@ impl crate::Device<super::Api> for super::Device {
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
-        let ptr = match &buffer.inner {
-            BufferInner::Data(data) => {
+        let ptr = match buffer.inner {
+            BufferInner::Data(ref data) => {
                 let mut vec = data.lock().unwrap();
                 let slice = &mut vec.as_mut_slice()[range.start as usize..range.end as usize];
                 slice.as_mut_ptr()
             }
             BufferInner::Buffer(raw) => {
                 let gl = &self.shared.context.lock();
-                gl.bind_buffer(buffer.target, Some(*raw));
+                gl.bind_buffer(buffer.target, Some(raw));
                 let ptr = gl.map_buffer_range(
                     buffer.target,
                     range.start as i32,

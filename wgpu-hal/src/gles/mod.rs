@@ -221,8 +221,8 @@ impl BufferInner {
         BufferInner::Data(Arc::new(std::sync::Mutex::new(vec![0; size as usize])))
     }
     pub fn as_native(&self) -> Option<glow::Buffer> {
-        match self {
-            BufferInner::Buffer(buffer) => Some(*buffer),
+        match *self {
+            BufferInner::Buffer(ref buffer) => Some(*buffer),
             BufferInner::Data(_) => None,
         }
     }
