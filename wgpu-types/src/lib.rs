@@ -609,7 +609,7 @@ pub struct Limits {
     pub max_storage_textures_per_shader_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
-    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 16384. Higher is "better".
+    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 64 KB. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
     /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MB. Higher is "better".
     pub max_storage_buffer_binding_size: u32,
@@ -658,7 +658,7 @@ impl Default for Limits {
             max_storage_buffers_per_shader_stage: 8,
             max_storage_textures_per_shader_stage: 8,
             max_uniform_buffers_per_shader_stage: 12,
-            max_uniform_buffer_binding_size: 16384,
+            max_uniform_buffer_binding_size: 64 << 10,
             max_storage_buffer_binding_size: 128 << 20,
             max_vertex_buffers: 8,
             max_vertex_attributes: 16,
@@ -671,7 +671,7 @@ impl Default for Limits {
 }
 
 impl Limits {
-    /// These default limits are guarenteed to be compatible with GLES3, and D3D11
+    /// These default limits are guarenteed to be compatible with GLES-3.1, and D3D11
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
@@ -686,7 +686,7 @@ impl Limits {
             max_storage_buffers_per_shader_stage: 4,
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
-            max_uniform_buffer_binding_size: 16384,
+            max_uniform_buffer_binding_size: 16 << 10,
             max_storage_buffer_binding_size: 128 << 20,
             max_vertex_buffers: 8,
             max_vertex_attributes: 16,
@@ -697,7 +697,7 @@ impl Limits {
         }
     }
 
-    /// These default limits are guarenteed to be compatible with GLES3, and D3D11, and WebGL2
+    /// These default limits are guarenteed to be compatible with GLES-3.0, and D3D11, and WebGL2
     pub fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_storage_buffers_per_shader_stage: 0,
