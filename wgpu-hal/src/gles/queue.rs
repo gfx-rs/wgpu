@@ -242,7 +242,10 @@ impl super::Queue {
                 };
                 let size = copy.size.get() as usize;
                 match (src, dst) {
-                    (&super::BufferInner::Buffer(ref src), &super::BufferInner::Buffer(ref dst)) => {
+                    (
+                        &super::BufferInner::Buffer(ref src),
+                        &super::BufferInner::Buffer(ref dst),
+                    ) => {
                         gl.bind_buffer(copy_src_target, Some(*src));
                         gl.bind_buffer(copy_dst_target, Some(*dst));
                         gl.copy_buffer_sub_data(
