@@ -988,3 +988,24 @@ fn select() {
         if name.starts_with("select_")
     }
 }
+
+#[test]
+fn last_case_falltrough() {
+    check_validation_error! {
+        "
+        fn test_falltrough() {
+          switch(0) {
+            case 0: {
+              fallthrough;
+            }
+          }
+        }
+        ":
+        Err(
+            naga::valid::ValidationError::Function {
+                error: naga::valid::FunctionError::LastCaseFallTrough,
+                ..
+            },
+        )
+    }
+}
