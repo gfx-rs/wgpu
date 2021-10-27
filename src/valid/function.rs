@@ -108,6 +108,8 @@ pub enum FunctionError {
     ConflictingSwitchCase(i32),
     #[error("Multiple `default` cases are present")]
     MultipleDefaultCases,
+    #[error("The last `switch` case contains a `falltrough`")]
+    LastCaseFallTrough,
     #[error("The pointer {0:?} doesn't relate to a valid destination for a store")]
     InvalidStorePointer(Handle<crate::Expression>),
     #[error("The value {0:?} can not be stored")]
@@ -467,6 +469,17 @@ impl super::Validator {
                                 }
                                 default = true
                             }
+                        }
+                    }
+                    if let Some(case) = cases.last() {
+                        if case.fall_through {
+                            return Err(FunctionError::LastCaseFallTrough.with_span_static(
+                                case.body
+                                    .span_iter()
+                                    .next()
+                                    .map_or(Default::default(), |(_, s)| *s),
+                                "bad switch arm here",
+                            ));
                         }
                     }
                     let pass_through_abilities = context.abilities
