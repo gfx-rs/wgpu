@@ -210,13 +210,30 @@ pub struct Queue {
     current_index_buffer: Option<glow::Buffer>,
 }
 
+#[derive(Debug, Clone)]
+pub enum BufferInner {
+    Buffer(glow::Buffer),
+    Data(Arc<std::sync::Mutex<Vec<u8>>>),
+}
+
+impl BufferInner {
+    pub fn data_with_capacity(size: u64) -> BufferInner {
+        BufferInner::Data(Arc::new(std::sync::Mutex::new(vec![0; size as usize])))
+    }
+    pub fn as_native(&self) -> Option<glow::Buffer> {
+        match *self {
+            BufferInner::Buffer(ref buffer) => Some(*buffer),
+            BufferInner::Data(_) => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Buffer {
-    raw: glow::Buffer,
+    inner: BufferInner,
     target: BindTarget,
     size: wgt::BufferAddress,
     map_flags: u32,
-    emulate_map_allocation: std::sync::Mutex<Option<Vec<u8>>>,
 }
 
 // Safe: WASM doesn't have threads
@@ -567,14 +584,14 @@ enum Command {
         indirect_offset: wgt::BufferAddress,
     },
     ClearBuffer {
-        dst: glow::Buffer,
+        dst: BufferInner,
         dst_target: BindTarget,
         range: crate::MemoryRange,
     },
     CopyBufferToBuffer {
-        src: glow::Buffer,
+        src: BufferInner,
         src_target: BindTarget,
-        dst: glow::Buffer,
+        dst: BufferInner,
         dst_target: BindTarget,
         copy: crate::BufferCopy,
     },
@@ -586,7 +603,7 @@ enum Command {
         copy: crate::TextureCopy,
     },
     CopyBufferToTexture {
-        src: glow::Buffer,
+        src: BufferInner,
         #[allow(unused)]
         src_target: BindTarget,
         dst: glow::Texture,
@@ -598,7 +615,7 @@ enum Command {
         src: glow::Texture,
         src_target: BindTarget,
         src_format: wgt::TextureFormat,
-        dst: glow::Buffer,
+        dst: BufferInner,
         #[allow(unused)]
         dst_target: BindTarget,
         copy: crate::BufferTextureCopy,
@@ -608,7 +625,7 @@ enum Command {
     EndQuery(BindTarget),
     CopyQueryResults {
         query_range: Range<u32>,
-        dst: glow::Buffer,
+        dst: BufferInner,
         dst_target: BindTarget,
         dst_offset: wgt::BufferAddress,
     },
