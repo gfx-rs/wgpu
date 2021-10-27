@@ -333,7 +333,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
             dst.initialization_status
-                .clear(buffer_offset..(buffer_offset + data_size));
+                .drain(buffer_offset..(buffer_offset + data_size));
         }
 
         Ok(())
@@ -537,9 +537,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .drain(init_layer_range);
 
             let mut zero_buffer_copy_regions = Vec::new();
-            if size.width == dst.desc.size.width && size.height == dst.desc.size.height {
-                layers_to_initialize.for_each(drop);
-            } else {
+            if size.width != dst.desc.size.width || size.height != dst.desc.size.height {
                 for layer in layers_to_initialize {
                     crate::command::collect_zero_buffer_copies_for_clear_texture(
                         &dst.desc,

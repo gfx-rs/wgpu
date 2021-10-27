@@ -109,6 +109,17 @@ where
     }
 }
 
+impl<'a, Idx> Drop for InitTrackerDrain<'a, Idx>
+where
+    Idx: fmt::Debug + Ord + Copy,
+{
+    fn drop(&mut self) {
+        if self.next_index <= self.first_index {
+            while let Some(_) = self.next() {}
+        }
+    }
+}
+
 impl<Idx> InitTracker<Idx>
 where
     Idx: fmt::Debug + Ord + Copy + Default,
@@ -150,7 +161,6 @@ where
     }
 
     // Drains uninitialized ranges in a query range.
-    #[must_use]
     pub(crate) fn drain(&mut self, drain_range: Range<Idx>) -> InitTrackerDrain<Idx> {
         let index = self
             .uninitialized_ranges
@@ -161,11 +171,6 @@ where
             first_index: index,
             next_index: index,
         }
-    }
-
-    // Clears uninitialized ranges in a query range.
-    pub(crate) fn clear(&mut self, range: Range<Idx>) {
-        self.drain(range).for_each(drop);
     }
 }
 

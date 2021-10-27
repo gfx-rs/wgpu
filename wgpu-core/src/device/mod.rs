@@ -2881,8 +2881,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // Zero initialize memory and then mark both staging and buffer as initialized
                 // (it's guaranteed that this is the case by the time the buffer is usable)
                 unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
-                buffer.initialization_status.clear(0..buffer.size);
-                stage.initialization_status.clear(0..buffer.size);
+                buffer.initialization_status.drain(0..buffer.size);
+                stage.initialization_status.drain(0..buffer.size);
 
                 buffer.map_state = resource::BufferMapState::Init {
                     ptr: mapping.ptr,

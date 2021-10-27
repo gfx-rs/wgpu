@@ -198,9 +198,7 @@ impl<A: hal::Api> BakedCommands<A> {
                 .drain(buffer_use.range.start..end);
 
             match buffer_use.kind {
-                MemoryInitKind::ImplicitlyInitialized => {
-                    uninitialized_ranges.for_each(drop);
-                }
+                MemoryInitKind::ImplicitlyInitialized => {}
                 MemoryInitKind::NeedsInitializedMemory => {
                     match uninitialized_ranges_per_buffer.entry(buffer_use.id) {
                         Entry::Vacant(e) => {
@@ -283,9 +281,7 @@ impl<A: hal::Api> BakedCommands<A> {
             match texture_use.kind {
                 MemoryInitKind::ImplicitlyInitialized => {
                     for (_, mip_tracker) in affected_mip_trackers {
-                        mip_tracker
-                            .drain(use_range.layer_range.clone())
-                            .for_each(drop);
+                        mip_tracker.drain(use_range.layer_range.clone());
                     }
                 }
                 MemoryInitKind::NeedsInitializedMemory => {
