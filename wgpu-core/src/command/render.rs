@@ -564,7 +564,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             ));
         } else if channel.store_op == StoreOp::Store {
             // Clear + Store
-            // TODO: what about extent
             texture_memory_actions.register_implicit_init(
                 view.parent_id.value.0,
                 TextureInitRange::from(view.selector.clone()),
