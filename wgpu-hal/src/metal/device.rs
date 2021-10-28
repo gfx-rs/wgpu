@@ -174,6 +174,24 @@ impl super::Device {
                 .set_mutability(mtl::MTLMutability::Immutable);
         }
     }
+
+    pub unsafe fn texture_from_raw(
+        raw: mtl::Texture,
+        raw_format: mtl::MTLPixelFormat,
+        raw_type: mtl::MTLTextureType,
+        array_layers: u32,
+        mip_levels: u32,
+        copy_size: crate::CopyExtent,
+    ) -> super::Texture {
+        super::Texture {
+            raw,
+            raw_format,
+            raw_type,
+            array_layers,
+            mip_levels,
+            copy_size,
+        }
+    }
 }
 
 impl crate::Device<super::Api> for super::Device {
