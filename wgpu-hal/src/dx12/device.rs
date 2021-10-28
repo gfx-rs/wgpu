@@ -280,6 +280,24 @@ impl super::Device {
         );
         result
     }
+
+    pub unsafe fn texture_from_raw(
+        resource: native::Resource,
+        format: wgt::TextureFormat,
+        dimension: wgt::TextureDimension,
+        size: wgt::Extent3d,
+        mip_level_count: u32,
+        sample_count: u32,
+    ) -> super::Texture {
+        super::Texture {
+            resource,
+            format,
+            dimension,
+            size,
+            mip_level_count,
+            sample_count,
+        }
+    }
 }
 
 impl crate::Device<super::Api> for super::Device {
