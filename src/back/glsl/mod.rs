@@ -617,17 +617,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 continue;
             }
 
-            // We also `clone` to satisfy the borrow checker
-            let name = self.names[&NameKey::Function(handle)].clone();
             let fun_info = &self.info[handle];
 
             // Write the function
-            self.write_function(
-                back::FunctionType::Function(handle),
-                function,
-                fun_info,
-                &name,
-            )?;
+            self.write_function(back::FunctionType::Function(handle), function, fun_info)?;
 
             writeln!(self.out)?;
         }
@@ -636,7 +629,6 @@ impl<'a, W: Write> Writer<'a, W> {
             back::FunctionType::EntryPoint(self.entry_point_idx),
             &self.entry_point.function,
             ep_info,
-            "main",
         )?;
 
         // Add newline at the end of file
@@ -882,8 +874,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Finally write the global name and end the global with a `;` and a newline
         // Leading space is important
-        let global_name = self.get_global_name(handle, global);
-        write!(self.out, " {}", global_name)?;
+        write!(self.out, " ")?;
+        self.write_global_name(handle, global)?;
         if let TypeInner::Array { size, .. } = self.module.types[global.ty].inner {
             self.write_array_size(size)?;
         }
@@ -918,6 +910,24 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             None => self.names[&NameKey::GlobalVariable(handle)].clone(),
         }
+    }
+
+    /// Helper method used to write a name for a global without additional heap allocation
+    fn write_global_name(
+        &mut self,
+        handle: Handle<crate::GlobalVariable>,
+        global: &crate::GlobalVariable,
+    ) -> BackendResult {
+        match global.binding {
+            Some(ref br) => write!(self.out, "_group_{}_binding_{}", br.group, br.binding)?,
+            None => write!(
+                self.out,
+                "{}",
+                &self.names[&NameKey::GlobalVariable(handle)]
+            )?,
+        }
+
+        Ok(())
     }
 
     /// Writes the varying declaration.
@@ -1013,7 +1023,6 @@ impl<'a, W: Write> Writer<'a, W> {
         ty: back::FunctionType,
         func: &crate::Function,
         info: &valid::FunctionInfo,
-        name: &str,
     ) -> BackendResult {
         // Create a function context for the function being written
         let ctx = back::FunctionCtx {
@@ -1047,7 +1056,11 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Write the function name and open parentheses for the argument list
-        write!(self.out, " {}(", name)?;
+        let function_name = match ctx.ty {
+            back::FunctionType::Function(handle) => &self.names[&NameKey::Function(handle)],
+            back::FunctionType::EntryPoint(_) => "main",
+        };
+        write!(self.out, " {}(", function_name)?;
 
         // Write the comma separated argument list
         //
@@ -1609,9 +1622,6 @@ impl<'a, W: Write> Writer<'a, W> {
                                             stage: ep.stage,
                                             output: true,
                                         };
-                                        let field_name = self.names
-                                            [&NameKey::StructMember(result.ty, index as u32)]
-                                            .clone();
                                         write!(self.out, "{} = ", varying_name)?;
 
                                         if let Some(struct_name) = temp_struct_name {
@@ -1620,7 +1630,13 @@ impl<'a, W: Write> Writer<'a, W> {
                                             self.write_expr(value, ctx)?;
                                         }
 
-                                        writeln!(self.out, ".{};", field_name)?;
+                                        // Write field name
+                                        writeln!(
+                                            self.out,
+                                            ".{};",
+                                            &self.names
+                                                [&NameKey::StructMember(result.ty, index as u32)]
+                                        )?;
                                         write!(self.out, "{}", level)?;
                                     }
                                 }
@@ -1872,7 +1888,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // `get_global_name` does the work for us
             Expression::GlobalVariable(handle) => {
                 let global = &self.module.global_variables[handle];
-                write!(self.out, "{}", self.get_global_name(handle, global))?
+                self.write_global_name(handle, global)?
             }
             // A local is written as it's name
             Expression::LocalVariable(handle) => {

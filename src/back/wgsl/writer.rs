@@ -1652,7 +1652,6 @@ impl<W: Write> Writer<W> {
         global: &crate::GlobalVariable,
         handle: Handle<crate::GlobalVariable>,
     ) -> BackendResult {
-        let name = self.names[&NameKey::GlobalVariable(handle)].clone();
         // Write group and dinding attributes if present
         if let Some(ref binding) = global.binding {
             self.write_attributes(
@@ -1675,7 +1674,11 @@ impl<W: Write> Writer<W> {
             }
             write!(self.out, ">")?;
         }
-        write!(self.out, " {}: ", name)?;
+        write!(
+            self.out,
+            " {}: ",
+            &self.names[&NameKey::GlobalVariable(handle)]
+        )?;
 
         // Write global type
         self.write_type(module, global.ty)?;
@@ -1765,7 +1768,7 @@ impl<W: Write> Writer<W> {
                 width: _,
                 ref value,
             } => {
-                let name = self.names[&NameKey::Constant(handle)].clone();
+                let name = &self.names[&NameKey::Constant(handle)];
                 // First write only constant name
                 write!(self.out, "let {}: ", name)?;
                 // Next write constant type and value
@@ -1789,7 +1792,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, ";")?;
             }
             crate::ConstantInner::Composite { ty, ref components } => {
-                let name = self.names[&NameKey::Constant(handle)].clone();
+                let name = &self.names[&NameKey::Constant(handle)];
                 // First write only constant name
                 write!(self.out, "let {}: ", name)?;
                 // Next write constant type
