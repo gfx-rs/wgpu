@@ -65,14 +65,12 @@ pub fn map_texture_usage(
     usage: wgt::TextureUsages,
     aspect: hal::FormatAspects,
 ) -> hal::TextureUses {
-    let mut u = hal::TextureUses::empty();
+    // Enforce COPY_DST, otherwise we wouldn't be able to initialize the texture.
+    let mut u = hal::TextureUses::COPY_DST;
+
     u.set(
         hal::TextureUses::COPY_SRC,
         usage.contains(wgt::TextureUsages::COPY_SRC),
-    );
-    u.set(
-        hal::TextureUses::COPY_DST,
-        usage.contains(wgt::TextureUsages::COPY_DST),
     );
     u.set(
         hal::TextureUses::RESOURCE,

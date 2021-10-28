@@ -333,7 +333,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let dst = buffer_guard.get_mut(buffer_id).unwrap();
             dst.initialization_status
-                .clear(buffer_offset..(buffer_offset + data_size));
+                .drain(buffer_offset..(buffer_offset + data_size));
         }
 
         Ok(())
@@ -428,10 +428,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 hal::TextureUses::COPY_DST,
             )
             .unwrap();
-        let dst_raw = dst
-            .inner
-            .as_raw()
-            .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
@@ -514,9 +510,63 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let encoder = device.pending_writes.activate();
         unsafe {
-            encoder.transition_buffers(iter::once(barrier));
             encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
-            encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
+            encoder.transition_buffers(iter::once(barrier));
+        }
+
+        // If the copy does not fully cover the layers, we need to initialize to zero *first* as we don't keep track of partial texture layer inits.
+        // Strictly speaking we only need to clear the areas of a layer untouched, but this would get increasingly messy.
+
+        let init_layer_range =
+            destination.origin.z..destination.origin.z + size.depth_or_array_layers;
+        if dst.initialization_status.mips[destination.mip_level as usize]
+            .check(init_layer_range.clone())
+            .is_some()
+        {
+            // For clear we need write access to the texture!
+            drop(texture_guard);
+            let (mut texture_guard, _) = hub.textures.write(&mut token);
+            let dst = texture_guard.get_mut(destination.texture).unwrap();
+            let dst_raw = dst
+                .inner
+                .as_raw()
+                .ok_or(TransferError::InvalidTexture(destination.texture))?;
+
+            let layers_to_initialize = dst.initialization_status.mips
+                [destination.mip_level as usize]
+                .drain(init_layer_range);
+
+            let mut zero_buffer_copy_regions = Vec::new();
+            if size.width != dst.desc.size.width || size.height != dst.desc.size.height {
+                for layer in layers_to_initialize {
+                    crate::command::collect_zero_buffer_copies_for_clear_texture(
+                        &dst.desc,
+                        device.alignments.buffer_copy_pitch.get() as u32,
+                        destination.mip_level..(destination.mip_level + 1),
+                        layer,
+                        &mut zero_buffer_copy_regions,
+                    );
+                }
+            }
+            unsafe {
+                if !zero_buffer_copy_regions.is_empty() {
+                    encoder.copy_buffer_to_texture(
+                        &device.zero_buffer,
+                        dst_raw,
+                        zero_buffer_copy_regions.into_iter(),
+                    );
+                }
+                encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
+            }
+        } else {
+            let dst_raw = dst
+                .inner
+                .as_raw()
+                .ok_or(TransferError::InvalidTexture(destination.texture))?;
+
+            unsafe {
+                encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
+            }
         }
 
         device.pending_writes.consume(stage);
@@ -734,6 +784,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         baked
                             .initialize_buffer_memory(&mut *trackers, &mut *buffer_guard)
                             .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
+                        baked
+                            .initialize_texture_memory(&mut *trackers, &mut *texture_guard, device)
+                            .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers(

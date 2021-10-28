@@ -1,0 +1,213 @@
+(
+    features: (bits: 0x0),
+    expectations: [
+        (
+            name: "Sampled Texture",
+            buffer: (index: 0, epoch: 1),
+            offset: 0,
+            data: File("zero-16k.bin", 16384),
+        ),
+        (
+            name: "Storage Texture",
+            buffer: (index: 1, epoch: 1),
+            offset: 0,
+            data: File("zero-16k.bin", 16384),
+        ),
+        // MISSING: Texture binding arrays
+        // MISSING: Partial views
+    ],
+    actions: [
+        CreateTexture(Id(0, 1, Empty), (
+            label: Some("Sampled Texture"),
+            size: (
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 1,
+            ),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: D2,
+            format: Rgba8Unorm,
+            usage: (
+                bits: 5, // SAMPLED + COPY_SRC
+            ),
+        )),
+        CreateTextureView(
+            id: Id(0, 1, Empty),
+            parent_id: Id(0, 1, Empty),
+            desc: (),
+        ),
+        CreateBuffer(
+            Id(0, 1, Empty),
+            (
+                label: Some("Sampled Texture Buffer"),
+                size: 16384,
+                usage: (
+                    bits: 9,
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+        CreateTexture(Id(1, 1, Empty), (
+            label: Some("Storage Texture"),
+            size: (
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 1,
+            ),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: D2,
+            format: Rgba8Unorm,
+            usage: (
+                bits: 9, // STORAGE + COPY_SRC
+            ),
+        )),
+        CreateTextureView(
+            id: Id(1, 1, Empty),
+            parent_id: Id(1, 1, Empty),
+            desc: (),
+        ),
+        CreateBuffer(
+            Id(1, 1, Empty),
+            (
+                label: Some("Storage Texture Buffer"),
+                size: 16384,
+                usage: (
+                    bits: 9,
+                ),
+                mapped_at_creation: false,
+            ),
+        ),
+
+
+        CreateBindGroupLayout(Id(0, 1, Empty), (
+            label: None,
+            entries: [
+                (
+                    binding: 0,
+                    visibility: (
+                        bits: 4, // COMPUTE
+                    ),
+                    ty: Texture (
+                        sample_type: Float(filterable: true),
+                        view_dimension: D2,
+                        multisampled: false,
+                    ),
+                    count: None,
+                ),
+                (
+                    binding: 1,
+                    visibility: (
+                        bits: 4, // COMPUTE
+                    ),
+                    ty: StorageTexture (
+                        access: WriteOnly,
+                        format: Rgba8Unorm,
+                        view_dimension: D2,
+                    ),
+                    count: None,
+                ),
+            ],
+        )),
+        CreateBindGroup(Id(0, 1, Empty), (
+            label: None,
+            layout: Id(0, 1, Empty),
+            entries: [
+                (
+                    binding: 0,
+                    resource: TextureView(Id(0, 1, Empty)),
+                ),
+                (
+                    binding: 1,
+                    resource: TextureView(Id(1, 1, Empty)),
+                ),
+            ],
+        )),
+        CreatePipelineLayout(Id(0, 1, Empty), (
+            label: None,
+            bind_group_layouts: [
+                Id(0, 1, Empty),
+            ],
+            push_constant_ranges: [],
+        )),
+        CreateShaderModule(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                flags: (bits: 3),
+            ),
+            data: "zero-init-texture-binding.wgsl",
+        ),
+        CreateComputePipeline(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                layout: Some(Id(0, 1, Empty)),
+                stage: (
+                    module: Id(0, 1, Empty),
+                    entry_point: "main",
+                ),
+            ),
+        ),
+
+        Submit(1, [
+            RunComputePass(
+                base: (
+                    commands: [
+                        SetPipeline(Id(0, 1, Empty)),
+                        SetBindGroup(
+                            index: 0,
+                            num_dynamic_offsets: 0,
+                            bind_group_id: Id(0, 1, Empty),
+                        ),
+                        Dispatch((4, 1, 1)),
+                    ],
+                    dynamic_offsets: [],
+                    string_data: [],
+                    push_constant_data: [],
+                ),
+            ),
+            CopyTextureToBuffer(
+                src: (
+                    texture: Id(0, 1, Empty),
+                    mip_level: 0,
+                    array_layer: 0,
+                ),
+                dst:  (
+                    buffer: Id(0, 1, Empty),
+                    layout: (
+                        offset: 0,
+                        bytes_per_row: Some(256),
+                        rows_per_image: Some(64),
+                    ),
+                ),
+                size: (
+                    width: 64,
+                    height: 64,
+                    depth_or_array_layers: 1,
+                ),
+            ),
+            CopyTextureToBuffer(
+                src: (
+                    texture: Id(1, 1, Empty),
+                    mip_level: 0,
+                    array_layer: 0,
+                ),
+                dst:  (
+                    buffer: Id(1, 1, Empty),
+                    layout: (
+                        offset: 0,
+                        bytes_per_row: Some(256),
+                        rows_per_image: Some(64),
+                    ),
+                ),
+                size: (
+                    width: 64,
+                    height: 64,
+                    depth_or_array_layers: 1,
+                ),
+            ),
+        ]),
+    ],
+)

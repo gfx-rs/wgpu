@@ -47,7 +47,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
-    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::PipelineFlags,
     track::{TrackerSet, UsageConflict},
     validation::check_buffer_usage,
@@ -180,6 +180,7 @@ impl RenderBundleEncoder {
         let mut base = self.base.as_ref();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
         let mut buffer_memory_init_actions = Vec::new();
+        let mut texture_memory_init_actions = Vec::new();
 
         for &command in base.commands {
             match command {
@@ -233,6 +234,7 @@ impl RenderBundleEncoder {
                     }
 
                     buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);
+                    texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges);
 
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                     state
@@ -523,6 +525,7 @@ impl RenderBundleEncoder {
             },
             used: state.trackers,
             buffer_memory_init_actions,
+            texture_memory_init_actions,
             context: self.context,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -587,6 +590,7 @@ pub struct RenderBundle {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     pub(super) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }

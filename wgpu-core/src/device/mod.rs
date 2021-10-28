@@ -3,7 +3,10 @@ use crate::{
     device::life::WaitIdleError,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token},
     id,
-    init_tracker::{BufferInitTracker, BufferInitTrackerAction, MemoryInitKind},
+    init_tracker::{
+        BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
+        TextureInitTracker, TextureInitTrackerAction,
+    },
     instance, pipeline, present, resource,
     track::{BufferState, TextureSelector, TextureState, TrackerSet, UsageConflict},
     validation::{self, check_buffer_usage, check_texture_usage},
@@ -604,6 +607,10 @@ impl<A: HalApi> Device<A> {
             desc: desc.map_label(|_| ()),
             hal_usage,
             format_features,
+            initialization_status: TextureInitTracker::new(
+                desc.mip_level_count,
+                desc.size.depth_or_array_layers,
+            ),
             full_range: TextureSelector {
                 levels: 0..desc.mip_level_count,
                 layers: 0..desc.array_layer_count(),
@@ -619,6 +626,7 @@ impl<A: HalApi> Device<A> {
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
+
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.borrow_option(),
             size: desc.size,
@@ -1388,6 +1396,43 @@ impl<A: HalApi> Device<A> {
         })
     }
 
+    fn create_texture_binding(
+        view: &resource::TextureView<A>,
+        texture_guard: &parking_lot::lock_api::RwLockReadGuard<
+            parking_lot::RawRwLock,
+            Storage<resource::Texture<A>, id::Id<resource::Texture<hal::api::Empty>>>,
+        >,
+        internal_use: hal::TextureUses,
+        pub_usage: wgt::TextureUsages,
+        used: &mut TrackerSet,
+        used_texture_ranges: &mut Vec<TextureInitTrackerAction>,
+    ) -> Result<(), binding_model::CreateBindGroupError> {
+        // Careful here: the texture may no longer have its own ref count,
+        // if it was deleted by the user.
+        let parent_id = view.parent_id.value;
+        let texture = &texture_guard[parent_id];
+        used.textures
+            .change_extend(
+                parent_id,
+                &view.parent_id.ref_count,
+                view.selector.clone(),
+                internal_use,
+            )
+            .map_err(UsageConflict::from)?;
+        check_texture_usage(texture.desc.usage, pub_usage)?;
+
+        used_texture_ranges.push(TextureInitTrackerAction {
+            id: parent_id.0,
+            range: TextureInitRange {
+                mip_range: view.desc.range.mip_range(&texture.desc),
+                layer_range: view.desc.range.layer_range(&texture.desc),
+            },
+            kind: MemoryInitKind::NeedsInitializedMemory,
+        });
+
+        Ok(())
+    }
+
     fn create_bind_group<G: GlobalIdentityHandlerFactory>(
         &self,
         self_id: id::DeviceId,
@@ -1419,6 +1464,7 @@ impl<A: HalApi> Device<A> {
         let (sampler_guard, _) = hub.samplers.read(&mut token);
 
         let mut used_buffer_ranges = Vec::new();
+        let mut used_texture_ranges = Vec::new();
         let mut hal_entries = Vec::with_capacity(desc.entries.len());
         let mut hal_buffers = Vec::new();
         let mut hal_samplers = Vec::new();
@@ -1519,20 +1565,14 @@ impl<A: HalApi> Device<A> {
                         view,
                         "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
                     )?;
-
-                    // Careful here: the texture may no longer have its own ref count,
-                    // if it was deleted by the user.
-                    used.textures
-                        .change_extend(
-                            view.parent_id.value,
-                            &view.parent_id.ref_count,
-                            view.selector.clone(),
-                            internal_use,
-                        )
-                        .map_err(UsageConflict::from)?;
-                    let texture = &texture_guard[view.parent_id.value];
-                    check_texture_usage(texture.desc.usage, pub_usage)?;
-
+                    Self::create_texture_binding(
+                        view,
+                        &texture_guard,
+                        internal_use,
+                        pub_usage,
+                        &mut used,
+                        &mut used_texture_ranges,
+                    )?;
                     let res_index = hal_textures.len();
                     hal_textures.push(hal::TextureBinding {
                         view: &view.raw,
@@ -1550,24 +1590,17 @@ impl<A: HalApi> Device<A> {
                             .views
                             .use_extend(&*texture_view_guard, id, (), ())
                             .map_err(|_| Error::InvalidTextureView(id))?;
-                        let (pub_usage, internal_use) = Self::texture_use_parameters(
-                            binding, decl, view,
-                            "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray"
+                        let (pub_usage, internal_use) =
+                            Self::texture_use_parameters(binding, decl, view,
+                                                         "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray")?;
+                        Self::create_texture_binding(
+                            view,
+                            &texture_guard,
+                            internal_use,
+                            pub_usage,
+                            &mut used,
+                            &mut used_texture_ranges,
                         )?;
-
-                        // Careful here: the texture may no longer have its own ref count,
-                        // if it was deleted by the user.
-                        used.textures
-                            .change_extend(
-                                view.parent_id.value,
-                                &view.parent_id.ref_count,
-                                view.selector.clone(),
-                                internal_use,
-                            )
-                            .map_err(UsageConflict::from)?;
-                        let texture = &texture_guard[view.parent_id.value];
-                        check_texture_usage(texture.desc.usage, pub_usage)?;
-
                         hal_textures.push(hal::TextureBinding {
                             view: &view.raw,
                             usage: internal_use,
@@ -1619,6 +1652,7 @@ impl<A: HalApi> Device<A> {
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
             used,
             used_buffer_ranges,
+            used_texture_ranges,
             dynamic_binding_info,
         })
     }
@@ -2847,8 +2881,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // Zero initialize memory and then mark both staging and buffer as initialized
                 // (it's guaranteed that this is the case by the time the buffer is usable)
                 unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
-                buffer.initialization_status.clear(0..buffer.size);
-                stage.initialization_status.clear(0..buffer.size);
+                buffer.initialization_status.drain(0..buffer.size);
+                stage.initialization_status.drain(0..buffer.size);
 
                 buffer.map_state = resource::BufferMapState::Init {
                     ptr: mapping.ptr,

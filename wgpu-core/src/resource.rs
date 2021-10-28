@@ -2,7 +2,7 @@ use crate::{
     device::{DeviceError, HostMap, MissingFeatures},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
-    init_tracker::BufferInitTracker,
+    init_tracker::{BufferInitTracker, TextureInitTracker},
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
@@ -185,6 +185,7 @@ pub struct Texture<A: hal::Api> {
     pub(crate) desc: wgt::TextureDescriptor<()>,
     pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
+    pub(crate) initialization_status: TextureInitTracker,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }

@@ -17,10 +17,10 @@ use smallvec::SmallVec;
 use std::{fmt, iter, ops::Range};
 
 mod buffer;
-//mod texture;
+mod texture;
 
 pub(crate) use buffer::{BufferInitTracker, BufferInitTrackerAction};
-//pub(crate) use texture::{TextureInitRange, TextureInitTracker, TextureInitTrackerAction};
+pub(crate) use texture::{TextureInitRange, TextureInitTracker, TextureInitTrackerAction};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum MemoryInitKind {
@@ -109,6 +109,17 @@ where
     }
 }
 
+impl<'a, Idx> Drop for InitTrackerDrain<'a, Idx>
+where
+    Idx: fmt::Debug + Ord + Copy,
+{
+    fn drop(&mut self) {
+        if self.next_index <= self.first_index {
+            for _ in self {}
+        }
+    }
+}
+
 impl<Idx> InitTracker<Idx>
 where
     Idx: fmt::Debug + Ord + Copy + Default,
@@ -150,7 +161,6 @@ where
     }
 
     // Drains uninitialized ranges in a query range.
-    #[must_use]
     pub(crate) fn drain(&mut self, drain_range: Range<Idx>) -> InitTrackerDrain<Idx> {
         let index = self
             .uninitialized_ranges
@@ -161,11 +171,6 @@ where
             first_index: index,
             next_index: index,
         }
-    }
-
-    // Clears uninitialized ranges in a query range.
-    pub(crate) fn clear(&mut self, range: Range<Idx>) {
-        self.drain(range).for_each(drop);
     }
 }
 
@@ -218,9 +223,9 @@ mod test {
     }
 
     #[test]
-    fn check_for_cleared_tracker() {
+    fn check_for_drained_tracker() {
         let mut tracker = Tracker::new(10);
-        tracker.clear(0..10);
+        tracker.drain(0..10);
         assert_eq!(tracker.check(0..10), None);
         assert_eq!(tracker.check(0..3), None);
         assert_eq!(tracker.check(3..4), None);
@@ -231,9 +236,9 @@ mod test {
     fn check_for_partially_filled_tracker() {
         let mut tracker = Tracker::new(25);
         // Two regions of uninitialized memory
-        tracker.clear(0..5);
-        tracker.clear(10..15);
-        tracker.clear(20..25);
+        tracker.drain(0..5);
+        tracker.drain(10..15);
+        tracker.drain(20..25);
 
         assert_eq!(tracker.check(0..25), Some(5..25)); // entire range
 
@@ -247,17 +252,17 @@ mod test {
     }
 
     #[test]
-    fn clear_already_cleared() {
+    fn drain_already_drained() {
         let mut tracker = Tracker::new(30);
-        tracker.clear(10..20);
+        tracker.drain(10..20);
 
         // Overlapping with non-cleared
-        tracker.clear(5..15); // Left overlap
-        tracker.clear(15..25); // Right overlap
-        tracker.clear(0..30); // Inner overlap
+        tracker.drain(5..15); // Left overlap
+        tracker.drain(15..25); // Right overlap
+        tracker.drain(0..30); // Inner overlap
 
         // Clear fully cleared
-        tracker.clear(0..30);
+        tracker.drain(0..30);
 
         assert_eq!(tracker.check(0..30), None);
     }
@@ -303,7 +308,7 @@ mod test {
     #[test]
     fn discard_adds_range_on_cleared() {
         let mut tracker = Tracker::new(10);
-        tracker.clear(0..10);
+        tracker.drain(0..10);
         tracker.discard(0);
         tracker.discard(5);
         tracker.discard(9);
@@ -327,7 +332,7 @@ mod test {
     #[test]
     fn discard_extends_ranges() {
         let mut tracker = Tracker::new(10);
-        tracker.clear(3..7);
+        tracker.drain(3..7);
         tracker.discard(2);
         tracker.discard(7);
         assert_eq!(tracker.uninitialized_ranges.len(), 2);
@@ -338,7 +343,7 @@ mod test {
     #[test]
     fn discard_merges_ranges() {
         let mut tracker = Tracker::new(10);
-        tracker.clear(3..4);
+        tracker.drain(3..4);
         tracker.discard(3);
         assert_eq!(tracker.uninitialized_ranges.len(), 1);
         assert_eq!(tracker.uninitialized_ranges[0], 0..10);

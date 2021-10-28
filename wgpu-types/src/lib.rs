@@ -2750,6 +2750,7 @@ impl Extent3d {
     }
 
     /// Calculates the extent at a given mip level.
+    /// Does *not* account for memory size being a multiple of block size.
     pub fn mip_level_size(&self, level: u32, is_3d_texture: bool) -> Extent3d {
         Extent3d {
             width: u32::max(1, self.width >> level),
@@ -3333,6 +3334,30 @@ pub struct ImageSubresourceRange {
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<NonZeroU32>,
+}
+
+impl ImageSubresourceRange {
+    /// Returns the mip level range of a subresource range describes for a specific texture.
+    pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+        self.base_mip_level..match self.mip_level_count {
+            Some(mip_level_count) => self.base_mip_level + mip_level_count.get(),
+            None => texture_desc.mip_level_count,
+        }
+    }
+
+    /// Returns the layer range of a subresource range describes for a specific texture.
+    pub fn layer_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+        self.base_array_layer..match self.array_layer_count {
+            Some(array_layer_count) => self.base_array_layer + array_layer_count.get(),
+            None => {
+                if texture_desc.dimension == TextureDimension::D3 {
+                    self.base_array_layer + 1
+                } else {
+                    texture_desc.size.depth_or_array_layers
+                }
+            }
+        }
+    }
 }
 
 /// Color variation to use when sampler addressing mode is [`AddressMode::ClampToBorder`]
