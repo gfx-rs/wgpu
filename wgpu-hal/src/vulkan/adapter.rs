@@ -591,6 +591,8 @@ impl PhysicalDeviceCapabilities {
             limits.max_per_stage_descriptor_storage_buffers
         };
 
+        let max_compute_workgroup_sizes = limits.max_compute_work_group_size;
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -618,6 +620,10 @@ impl PhysicalDeviceCapabilities {
             max_push_constant_size: limits.max_push_constants_size,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
+            max_compute_workgroup_size_x: max_compute_workgroup_sizes[0],
+            max_compute_workgroup_size_y: max_compute_workgroup_sizes[1],
+            max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
+            max_compute_workgroups_per_dimension: limits.max_compute_work_group_count[0],
         }
     }
 
