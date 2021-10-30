@@ -74,6 +74,7 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     println!("\t\tMax Vertex Buffer Array Stride:                  {}", max_vertex_buffer_array_stride);
     println!("\t\tMax Push Constant Size:                          {}", max_push_constant_size);
     println!("\t\tMin Uniform Buffer Offset Alignment:             {}", min_uniform_buffer_offset_alignment);
+    println!("\t\tMin Storage Buffer Offset Alignment:             {}", min_storage_buffer_offset_alignment);
     println!("\t\tMax Compute Workgroup Size X:                    {}", max_compute_workgroup_size_x);
     println!("\t\tMax Compute Workgroup Size Y:                    {}", max_compute_workgroup_size_y);
     println!("\t\tMax Compute Workgroup Size Z:                    {}", max_compute_workgroup_size_z);

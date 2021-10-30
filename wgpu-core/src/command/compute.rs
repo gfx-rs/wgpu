@@ -121,7 +121,9 @@ pub enum DispatchError {
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
-    #[error("each current dispatch group size dimmension ({current:?}) must be less or equal to {limit}")]
+    #[error(
+        "each current dispatch group size dimension ({current:?}) must be less or equal to {limit}"
+    )]
     InvalidGroupSize { current: [u32; 3], limit: u32 },
 }
 

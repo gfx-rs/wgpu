@@ -642,9 +642,17 @@ pub struct Limits {
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
 
+    /// The maximum value of the workgroup_size X dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
     pub max_compute_workgroup_size_x: u32,
+    /// The maximum value of the workgroup_size Y dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
     pub max_compute_workgroup_size_y: u32,
+    /// The maximum value of the workgroup_size Z dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
     pub max_compute_workgroup_size_z: u32,
+    /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
+    /// Defaults to 65535.
     pub max_compute_workgroups_per_dimension: u32,
 }
 
