@@ -7,7 +7,7 @@ use std::{
     pin::Pin,
     task::{self, Poll},
 };
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::{prelude::*, JsCast};
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
 // implement `Send` and `Sync` to match native.
@@ -1623,10 +1623,27 @@ impl crate::Context for Context {
 
     fn device_on_uncaptured_error(
         &self,
-        _device: &Self::DeviceId,
-        _handler: impl crate::UncapturedErrorHandler,
+        device: &Self::DeviceId,
+        handler: impl crate::UncapturedErrorHandler,
     ) {
-        // TODO:
+        let f = Closure::wrap(Box::new(move |event: web_sys::GpuUncapturedErrorEvent| {
+            // Convert the JS error into a wgpu error.
+            let js_error = event.error();
+            let source = Box::<dyn std::error::Error + Send + Sync>::from("<WebGPU Error>");
+            if let Some(js_error) = js_error.dyn_ref::<web_sys::GpuValidationError>() {
+                handler(crate::Error::ValidationError {
+                    source,
+                    description: js_error.message(),
+                });
+            } else if js_error.has_type::<web_sys::GpuOutOfMemoryError>() {
+                handler(crate::Error::OutOfMemoryError { source });
+            }
+        }) as Box<dyn FnMut(_)>);
+        device
+            .0
+            .set_onuncapturederror(Some(f.as_ref().unchecked_ref()));
+        // TODO: This will leak the memory associated with the error handler by default.
+        f.forget();
     }
 
     fn buffer_map_async(
