@@ -38,33 +38,6 @@ pub struct TestingContext {
     pub queue: Queue,
 }
 
-// A rather arbitrary set of limits which should be lower than all devices wgpu reasonably expects to run on and provides enough resources for most tests to run.
-// Adjust as needed if they are too low/high.
-pub fn lowest_reasonable_limits() -> Limits {
-    Limits {
-        max_texture_dimension_1d: 1024,
-        max_texture_dimension_2d: 1024,
-        max_texture_dimension_3d: 32,
-        max_texture_array_layers: 32,
-        max_bind_groups: 2,
-        max_dynamic_uniform_buffers_per_pipeline_layout: 2,
-        max_dynamic_storage_buffers_per_pipeline_layout: 2,
-        max_sampled_textures_per_shader_stage: 2,
-        max_samplers_per_shader_stage: 2,
-        max_storage_buffers_per_shader_stage: 2,
-        max_storage_textures_per_shader_stage: 2,
-        max_uniform_buffers_per_shader_stage: 2,
-        max_uniform_buffer_binding_size: 256,
-        max_storage_buffer_binding_size: 1 << 16,
-        max_vertex_buffers: 4,
-        max_vertex_attributes: 4,
-        max_vertex_buffer_array_stride: 32,
-        max_push_constant_size: 0,
-        min_uniform_buffer_offset_alignment: 256,
-        min_storage_buffer_offset_alignment: 256,
-    }
-}
-
 fn lowest_downlevel_properties() -> DownlevelCapabilities {
     DownlevelCapabilities {
         flags: wgt::DownlevelFlags::empty(),

@@ -328,6 +328,12 @@ impl super::Adapter {
             gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS)
                 .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS)) as u32;
 
+        let max_compute_workgroups_per_dimension = gl
+            .get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 0)
+            .min(gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 1))
+            .min(gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 2))
+            as u32;
+
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
@@ -367,6 +373,16 @@ impl super::Adapter {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
+            max_compute_workgroup_size_x: gl
+                .get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 0)
+                as u32,
+            max_compute_workgroup_size_y: gl
+                .get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 1)
+                as u32,
+            max_compute_workgroup_size_z: gl
+                .get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 2)
+                as u32,
+            max_compute_workgroups_per_dimension,
         };
 
         let mut workarounds = super::Workarounds::empty();
