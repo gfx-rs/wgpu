@@ -946,6 +946,11 @@ impl super::PrivateCapabilities {
                 max_push_constant_size: 0x1000,
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
+                //TODO: double-check how these match Metal feature set tables
+                max_compute_workgroup_size_x: 256,
+                max_compute_workgroup_size_y: 256,
+                max_compute_workgroup_size_z: 64,
+                max_compute_workgroups_per_dimension: 0xFFFF,
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),
