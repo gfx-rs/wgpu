@@ -300,9 +300,6 @@ impl<A: hal::Api> BakedCommands<A> {
                         .as_raw()
                         .ok_or(DestroyedTextureError(texture_use.id))?;
 
-                    debug_assert!(texture.hal_usage.contains(hal::TextureUses::COPY_DST),
-                            "Every texture needs to have the COPY_DST flag. Otherwise we can't ensure initialized memory!");
-
                     let mut texture_barriers = Vec::new();
                     let mut zero_buffer_copy_regions = Vec::new();
                     for range in &ranges {
@@ -332,6 +329,8 @@ impl<A: hal::Api> BakedCommands<A> {
                     }
 
                     if !zero_buffer_copy_regions.is_empty() {
+                        debug_assert!(texture.hal_usage.contains(hal::TextureUses::COPY_DST),
+                            "Texture needs to have the COPY_DST flag. Otherwise we can't ensure initialized memory!");
                         unsafe {
                             // TODO: Could safe on transition_textures calls by bundling barriers from *all* textures.
                             // (a bbit more tricky because a naive approach would have to borrow same texture several times then)
