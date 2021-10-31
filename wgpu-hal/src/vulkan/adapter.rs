@@ -592,6 +592,9 @@ impl PhysicalDeviceCapabilities {
         };
 
         let max_compute_workgroup_sizes = limits.max_compute_work_group_size;
+        let max_compute_workgroups_per_dimension = limits.max_compute_work_group_count[0]
+            .min(limits.max_compute_work_group_count[1])
+            .min(limits.max_compute_work_group_count[2]);
 
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
@@ -623,7 +626,7 @@ impl PhysicalDeviceCapabilities {
             max_compute_workgroup_size_x: max_compute_workgroup_sizes[0],
             max_compute_workgroup_size_y: max_compute_workgroup_sizes[1],
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
-            max_compute_workgroups_per_dimension: limits.max_compute_work_group_count[0],
+            max_compute_workgroups_per_dimension,
         }
     }
 
