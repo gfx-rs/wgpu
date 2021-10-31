@@ -625,7 +625,9 @@ impl<A: HalApi> Device<A> {
         adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
-        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
+        // Enforce COPY_DST, otherwise we wouldn't be able to initialize the texture.
+        let hal_usage =
+            conv::map_texture_usage(desc.usage, desc.format.into()) | hal::TextureUses::COPY_DST;
 
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.borrow_option(),
@@ -685,7 +687,9 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
-        Ok(self.create_texture_from_hal(raw, self_id, desc, format_features))
+        let mut texture = self.create_texture_from_hal(raw, self_id, desc, format_features);
+        texture.hal_usage = hal_usage;
+        Ok(texture)
     }
 
     fn create_texture_view(
