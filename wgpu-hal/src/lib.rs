@@ -917,6 +917,7 @@ impl fmt::Debug for NagaShader {
 }
 
 /// Shader input.
+#[allow(clippy::large_enum_variant)]
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
     SpirV(&'a [u32]),
