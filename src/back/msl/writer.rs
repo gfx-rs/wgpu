@@ -882,65 +882,7 @@ impl<W: Write> Writer<W> {
                 let name = &self.names[&name_key];
                 write!(self.out, "{}", name)?;
             }
-            crate::Expression::Load { pointer } => {
-                // Because packed vectors such as `packed_float3` cannot be directly multipied by
-                // matrices, we wrap them with `float3` on load.
-                let wrap_packed_vec_scalar_kind = match context.function.expressions[pointer] {
-                    crate::Expression::AccessIndex { base, index } => {
-                        let ty = match *context.resolve_type(base) {
-                            crate::TypeInner::Pointer { base, .. } => {
-                                &context.module.types[base].inner
-                            }
-                            ref ty => ty,
-                        };
-                        match *ty {
-                            crate::TypeInner::Struct {
-                                ref members, span, ..
-                            } => should_pack_struct_member(
-                                members,
-                                span,
-                                index as usize,
-                                context.module,
-                            ),
-                            _ => None,
-                        }
-                    }
-                    _ => None,
-                };
-                let is_atomic = match *context.resolve_type(pointer) {
-                    crate::TypeInner::Pointer { base, .. } => {
-                        match context.module.types[base].inner {
-                            crate::TypeInner::Atomic { .. } => true,
-                            _ => false,
-                        }
-                    }
-                    _ => false,
-                };
-
-                if let Some(scalar_kind) = wrap_packed_vec_scalar_kind {
-                    write!(
-                        self.out,
-                        "{}::{}3(",
-                        NAMESPACE,
-                        scalar_kind_string(scalar_kind)
-                    )?;
-                    self.put_expression(pointer, context, true)?;
-                    write!(self.out, ")")?;
-                } else if is_atomic {
-                    write!(
-                        self.out,
-                        "{}::atomic_load_explicit({}",
-                        NAMESPACE, ATOMIC_REFERENCE
-                    )?;
-                    self.put_expression(pointer, context, true)?;
-                    write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
-                } else {
-                    // We don't do any dereferencing with `*` here as pointer arguments to functions
-                    // are done by `&` references and not `*` pointers. These do not need to be
-                    // dereferenced.
-                    self.put_expression(pointer, context, is_scoped)?;
-                }
-            }
+            crate::Expression::Load { pointer } => self.put_load(pointer, context, is_scoped)?,
             crate::Expression::ImageSample {
                 image,
                 sampler,
@@ -1281,6 +1223,64 @@ impl<W: Write> Writer<W> {
                 self.put_dynamic_array_length(global, context)?;
             }
         }
+        Ok(())
+    }
+
+    fn put_load(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        context: &ExpressionContext,
+        is_scoped: bool,
+    ) -> BackendResult {
+        // Because packed vectors such as `packed_float3` cannot be directly multipied by
+        // matrices, we wrap them with `float3` on load.
+        let wrap_packed_vec_scalar_kind = match context.function.expressions[pointer] {
+            crate::Expression::AccessIndex { base, index } => {
+                let ty = match *context.resolve_type(base) {
+                    crate::TypeInner::Pointer { base, .. } => &context.module.types[base].inner,
+                    ref ty => ty,
+                };
+                match *ty {
+                    crate::TypeInner::Struct {
+                        ref members, span, ..
+                    } => should_pack_struct_member(members, span, index as usize, context.module),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        let is_atomic = match *context.resolve_type(pointer) {
+            crate::TypeInner::Pointer { base, .. } => match context.module.types[base].inner {
+                crate::TypeInner::Atomic { .. } => true,
+                _ => false,
+            },
+            _ => false,
+        };
+
+        if let Some(scalar_kind) = wrap_packed_vec_scalar_kind {
+            write!(
+                self.out,
+                "{}::{}3(",
+                NAMESPACE,
+                scalar_kind_string(scalar_kind)
+            )?;
+            self.put_expression(pointer, context, true)?;
+            write!(self.out, ")")?;
+        } else if is_atomic {
+            write!(
+                self.out,
+                "{}::atomic_load_explicit({}",
+                NAMESPACE, ATOMIC_REFERENCE
+            )?;
+            self.put_expression(pointer, context, true)?;
+            write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
+        } else {
+            // We don't do any dereferencing with `*` here as pointer arguments to functions
+            // are done by `&` references and not `*` pointers. These do not need to be
+            // dereferenced.
+            self.put_expression(pointer, context, is_scoped)?;
+        }
+
         Ok(())
     }
 
