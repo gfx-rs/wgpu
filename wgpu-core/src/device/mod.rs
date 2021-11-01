@@ -967,25 +967,19 @@ impl<A: HalApi> Device<A> {
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
-        let module = match source {
+        let (module, source) = match source {
             pipeline::ShaderModuleSource::Wgsl(code) => {
                 profiling::scope!("naga::wgsl::parse_str");
-                // TODO: refactor the corresponding Naga error to be owned, and then
-                // display it instead of unwrapping
-                match naga::front::wgsl::parse_str(&code) {
-                    Ok(module) => module,
-                    Err(err) => {
-                        log::error!("Failed to parse WGSL code for {:?}: {}", desc.label, err);
-                        return Err(pipeline::CreateShaderModuleError::Parsing(
-                            pipeline::NagaParseError {
-                                shader_source: code.to_string(),
-                                error: err,
-                            },
-                        ));
-                    }
-                }
+                let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
+                    pipeline::CreateShaderModuleError::Parsing(pipeline::ShaderError {
+                        source: code.to_string(),
+                        label: desc.label.as_ref().map(|l| l.to_string()),
+                        inner,
+                    })
+                })?;
+                (module, code.into_owned())
             }
-            pipeline::ShaderModuleSource::Naga(module) => module,
+            pipeline::ShaderModuleSource::Naga(module) => (module, String::new()),
         };
 
         use naga::valid::Capabilities as Caps;
@@ -1006,7 +1000,14 @@ impl<A: HalApi> Device<A> {
                 .contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
         );
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
-            .validate(&module)?;
+            .validate(&module)
+            .map_err(|inner| {
+                pipeline::CreateShaderModuleError::Validation(pipeline::ShaderError {
+                    source,
+                    label: desc.label.as_ref().map(|l| l.to_string()),
+                    inner,
+                })
+            })?;
         let interface = validation::Interface::new(&module, &info, self.features);
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
 

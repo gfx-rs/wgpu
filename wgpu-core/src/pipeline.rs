@@ -5,9 +5,10 @@ use crate::{
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation, Label, LifeGuard, Stored,
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt};
 use thiserror::Error;
 
+#[allow(clippy::large_enum_variant)]
 pub enum ShaderModuleSource<'a> {
     Wgsl(Cow<'a, str>),
     Naga(naga::Module),
@@ -46,30 +47,62 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
 }
 
 #[derive(Clone, Debug, Error)]
-pub struct NagaParseError {
-    pub shader_source: String,
-    pub error: naga::front::wgsl::ParseError,
+pub struct ShaderError<E> {
+    pub source: String,
+    pub label: Option<String>,
+    #[source]
+    pub inner: E,
 }
-impl std::fmt::Display for NagaParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = self.label.as_deref().unwrap_or_default();
+        let string = self.inner.emit_to_string(&self.source);
+        write!(f, "\nShader '{}' parsing {}", label, string)
+    }
+}
+impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use codespan_reporting::{
+            diagnostic::{Diagnostic, Label},
+            files::SimpleFile,
+            term,
+        };
+
+        let label = self.label.as_deref().unwrap_or_default();
+        let files = SimpleFile::new(label, &self.source);
+        let config = term::Config::default();
+        let mut writer = term::termcolor::Ansi::new(Vec::new());
+
+        let diagnostic = Diagnostic::error().with_labels(
+            self.inner
+                .spans()
+                .map(|&(span, ref desc)| {
+                    Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
+                })
+                .collect(),
+        );
+
+        term::emit(&mut writer, &config, &files, &diagnostic).expect("cannot write error");
+
         write!(
             f,
-            "\nShader error:\n{}",
-            self.error.emit_to_string(&self.shader_source)
+            "\nShader validation {}",
+            String::from_utf8_lossy(&writer.into_inner())
         )
     }
 }
 
-#[derive(Clone, Debug, Error)]
+//Note: `Clone` would require `WithSpan: Clone`.
+#[derive(Debug, Error)]
 pub enum CreateShaderModuleError {
-    #[error("Failed to parse a shader")]
-    Parsing(#[from] NagaParseError),
+    #[error(transparent)]
+    Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
     #[error("Failed to generate the backend-specific code")]
     Generation,
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    Validation(#[from] naga::valid::ValidationError),
+    Validation(#[from] ShaderError<naga::WithSpan<naga::valid::ValidationError>>),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
 }

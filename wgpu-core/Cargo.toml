@@ -23,6 +23,7 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 [dependencies]
 arrayvec = "0.7"
 bitflags = "1.0"
+codespan-reporting = "0.11"
 copyless = "0.1"
 fxhash = "0.2"
 log = "0.4"
@@ -35,10 +36,10 @@ smallvec = "1"
 thiserror = "1"
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "9d2b357"
-version = "0.7"
-features = ["validate", "wgsl-in"]
+git = "https://github.com/gfx-rs/naga"
+rev = "323999f"
+#version = "0.7"
+features = ["span", "validate", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
