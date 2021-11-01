@@ -7,7 +7,7 @@ use super::{
     ExpressionError, FunctionInfo, ModuleInfo,
 };
 use crate::span::WithSpan;
-#[cfg(feature = "span")]
+#[cfg(feature = "validate")]
 use crate::span::{AddSpan as _, MapErrWithSpan as _};
 
 #[cfg(feature = "validate")]

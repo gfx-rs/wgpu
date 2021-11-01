@@ -26,6 +26,7 @@ jobs:
         with:
           name: code-coverage-report
           path: cobertura.xml
+
   parse-dota2:
     name: Parse Dota2 shaders
     runs-on: ubuntu-latest
@@ -44,6 +45,7 @@ jobs:
         run: cargo build --release --bin naga
       - name: Convert shaders
         run: for file in data/*.spv ; do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
+
   parse-vulkan-tutorial-shaders:
     name: Parse Sascha Willems Vulkan tutorial shaders
     runs-on: ubuntu-latest
@@ -76,6 +78,7 @@ jobs:
               echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
           done
           cat counter
+
   dneto0_spirv-samples:
     name: Parse dneto0 spirv-samples
     runs-on: ubuntu-latest
@@ -149,8 +152,9 @@ jobs:
                echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
            done
            cat counter
-  check_snapshots_without_validation:
-    name: Check snapshots (without validation)
+
+  check-snapshots-extra:
+    name: Check snapshots (validated or not)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -158,6 +162,11 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+      - uses: actions-rs/cargo@v1
+        name: Test minimal (without span)
+        with:
+          command: test
+          args: --features validate -p naga
       - uses: actions-rs/cargo@v1
         name: Test all (without validation)
         with:
