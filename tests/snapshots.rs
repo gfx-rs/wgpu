@@ -598,6 +598,16 @@ fn convert_spv_inverse_hyperbolic_trig_functions() {
     );
 }
 
+#[cfg(feature = "spv-in")]
+#[test]
+fn convert_spv_empty_global_name() {
+    convert_spv(
+        "empty-global-name",
+        true,
+        Targets::HLSL | Targets::WGSL | Targets::METAL,
+    );
+}
+
 #[cfg(feature = "glsl-in")]
 #[allow(unused_variables)]
 #[test]

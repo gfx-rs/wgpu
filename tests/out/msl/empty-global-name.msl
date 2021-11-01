@@ -1,0 +1,21 @@
+// language: metal1.1
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+struct type1 {
+    int member;
+};
+
+void function(
+    device type1& global
+) {
+    int _e8 = global.member;
+    global.member = _e8 + 1;
+    return;
+}
+
+kernel void main1(
+  device type1& global [[user(fake0)]]
+) {
+    function(global);
+}
