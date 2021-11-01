@@ -20,9 +20,12 @@ fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
     std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
-fn is_3d_target(target: super::BindTarget) -> bool {
+fn is_layered_target(target: super::BindTarget) -> bool {
     match target {
-        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_3D => true,
+        glow::TEXTURE_2D_ARRAY
+        | glow::TEXTURE_3D
+        | glow::TEXTURE_CUBE_MAP
+        | glow::TEXTURE_CUBE_MAP_ARRAY => true,
         _ => false,
     }
 }
@@ -83,7 +86,7 @@ impl super::Queue {
                 gl.framebuffer_renderbuffer(fbo_target, attachment, glow::RENDERBUFFER, Some(raw));
             }
             super::TextureInner::Texture { raw, target } => {
-                if is_3d_target(target) {
+                if is_layered_target(target) {
                     gl.framebuffer_texture_layer(
                         fbo_target,
                         attachment,
@@ -292,10 +295,9 @@ impl super::Queue {
                 dst_target,
                 ref copy,
             } => {
-                //TODO: cubemaps
                 //TODO: handle 3D copies
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
-                if is_3d_target(src_target) {
+                if is_layered_target(src_target) {
                     //TODO: handle GLES without framebuffer_texture_3d
                     gl.framebuffer_texture_layer(
                         glow::READ_FRAMEBUFFER,
@@ -315,7 +317,7 @@ impl super::Queue {
                 }
 
                 gl.bind_texture(dst_target, Some(dst));
-                if is_3d_target(dst_target) {
+                if is_layered_target(dst_target) {
                     gl.copy_tex_sub_image_3d(
                         dst_target,
                         copy.dst_base.mip_level as i32,
@@ -526,7 +528,7 @@ impl super::Queue {
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst));
 
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
-                if is_3d_target(src_target) {
+                if is_layered_target(src_target) {
                     //TODO: handle GLES without framebuffer_texture_3d
                     gl.framebuffer_texture_layer(
                         glow::READ_FRAMEBUFFER,
