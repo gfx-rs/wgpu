@@ -50,6 +50,10 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
         max_push_constant_size,
         min_uniform_buffer_offset_alignment,
         min_storage_buffer_offset_alignment,
+        max_compute_workgroup_size_x,
+        max_compute_workgroup_size_y,
+        max_compute_workgroup_size_z,
+        max_compute_workgroups_per_dimension
     } = limits;
     println!("\t\tMax Texture Dimension 1d:                        {}", max_texture_dimension_1d);
     println!("\t\tMax Texture Dimension 2d:                        {}", max_texture_dimension_2d);
@@ -71,6 +75,10 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     println!("\t\tMax Push Constant Size:                          {}", max_push_constant_size);
     println!("\t\tMin Uniform Buffer Offset Alignment:             {}", min_uniform_buffer_offset_alignment);
     println!("\t\tMin Storage Buffer Offset Alignment:             {}", min_storage_buffer_offset_alignment);
+    println!("\t\tMax Compute Workgroup Size X:                    {}", max_compute_workgroup_size_x);
+    println!("\t\tMax Compute Workgroup Size Y:                    {}", max_compute_workgroup_size_y);
+    println!("\t\tMax Compute Workgroup Size Z:                    {}", max_compute_workgroup_size_z);
+    println!("\t\tMax Compute Workgroups Per Dimmension:           {}", max_compute_workgroups_per_dimension);
     println!("\tDownlevel Properties:");
     let wgpu::DownlevelCapabilities {
         shader_model,

@@ -641,6 +641,19 @@ pub struct Limits {
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
+
+    /// The maximum value of the workgroup_size X dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
+    pub max_compute_workgroup_size_x: u32,
+    /// The maximum value of the workgroup_size Y dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
+    pub max_compute_workgroup_size_y: u32,
+    /// The maximum value of the workgroup_size Z dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
+    pub max_compute_workgroup_size_z: u32,
+    /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
+    /// Defaults to 65535.
+    pub max_compute_workgroups_per_dimension: u32,
 }
 
 impl Default for Limits {
@@ -666,6 +679,10 @@ impl Default for Limits {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
+            max_compute_workgroup_size_x: 256,
+            max_compute_workgroup_size_y: 256,
+            max_compute_workgroup_size_z: 64,
+            max_compute_workgroups_per_dimension: 65535,
         }
     }
 }
@@ -694,6 +711,10 @@ impl Limits {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
+            max_compute_workgroup_size_x: 256,
+            max_compute_workgroup_size_y: 256,
+            max_compute_workgroup_size_z: 64,
+            max_compute_workgroups_per_dimension: 65535,
         }
     }
 

@@ -121,6 +121,10 @@ pub enum DispatchError {
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
+    #[error(
+        "each current dispatch group size dimension ({current:?}) must be less or equal to {limit}"
+    )]
+    InvalidGroupSize { current: [u32; 3], limit: u32 },
 }
 
 /// Error encountered when performing a compute pass.
@@ -535,6 +539,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*texture_guard,
                         )
                         .map_pass_err(scope)?;
+
+                    let groups_size_limit = cmd_buf.limits.max_compute_workgroups_per_dimension;
+
+                    if groups[0] > groups_size_limit
+                        || groups[1] > groups_size_limit
+                        || groups[2] > groups_size_limit
+                    {
+                        return Err(ComputePassErrorInner::Dispatch(
+                            DispatchError::InvalidGroupSize {
+                                current: groups,
+                                limit: groups_size_limit,
+                            },
+                        ))
+                        .map_pass_err(scope);
+                    }
+
                     unsafe {
                         raw.dispatch(groups);
                     }
