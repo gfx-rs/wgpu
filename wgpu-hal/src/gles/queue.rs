@@ -22,10 +22,7 @@ fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
 
 fn is_layered_target(target: super::BindTarget) -> bool {
     match target {
-        glow::TEXTURE_2D_ARRAY
-        | glow::TEXTURE_3D
-        | glow::TEXTURE_CUBE_MAP
-        | glow::TEXTURE_CUBE_MAP_ARRAY => true,
+        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_3D | glow::TEXTURE_CUBE_MAP_ARRAY => true,
         _ => false,
     }
 }
@@ -93,6 +90,14 @@ impl super::Queue {
                         Some(raw),
                         view.mip_levels.start as i32,
                         view.array_layers.start as i32,
+                    );
+                } else if target == glow::TEXTURE_CUBE_MAP {
+                    gl.framebuffer_texture_2d(
+                        fbo_target,
+                        attachment,
+                        CUBEMAP_FACES[view.array_layers.start as usize],
+                        Some(raw),
+                        view.mip_levels.start as i32,
                     );
                 } else {
                     gl.framebuffer_texture_2d(
@@ -296,6 +301,7 @@ impl super::Queue {
                 ref copy,
             } => {
                 //TODO: handle 3D copies
+                //TODO: handle cubemap copies
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
                 if is_layered_target(src_target) {
                     //TODO: handle GLES without framebuffer_texture_3d
@@ -528,6 +534,7 @@ impl super::Queue {
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst));
 
                 gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.copy_fbo));
+                //TODO: handle cubemap copies
                 if is_layered_target(src_target) {
                     //TODO: handle GLES without framebuffer_texture_3d
                     gl.framebuffer_texture_layer(
