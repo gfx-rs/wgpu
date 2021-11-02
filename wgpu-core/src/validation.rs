@@ -106,11 +106,13 @@ struct EntryPoint {
     #[allow(unused)]
     spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
+    workgroup_size: [u32; 3],
 }
 
 #[derive(Debug)]
 pub struct Interface {
     features: wgt::Features,
+    limits: wgt::Limits,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -223,6 +225,10 @@ pub enum InputError {
 pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
+    #[error(
+        "shader entry point current workgroup size {current:?} must be less or equal to {limit:?}"
+    )]
+    InvalidComputeEntryPoint { current: [u32; 3], limit: [u32; 3] },
     #[error("unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("shader global {0:?} is not available in the layout pipeline layout")]
@@ -859,6 +865,7 @@ impl Interface {
         module: &naga::Module,
         info: &naga::valid::ModuleInfo,
         features: wgt::Features,
+        limits: wgt::Limits,
     ) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
@@ -929,11 +936,14 @@ impl Interface {
                 }
             }
 
+            ep.workgroup_size = entry_point.workgroup_size;
+
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
         }
 
         Self {
             features,
+            limits,
             resources,
             entry_points,
         }
@@ -1044,6 +1054,25 @@ impl Interface {
                         error,
                     });
                 }
+            }
+        }
+
+        // check workgroup size limits
+        if shader_stage == naga::ShaderStage::Compute {
+            let max_workgroup_size_limits = [
+                self.limits.max_compute_workgroup_size_x,
+                self.limits.max_compute_workgroup_size_y,
+                self.limits.max_compute_workgroup_size_z,
+            ];
+
+            if entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
+                || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
+                || entry_point.workgroup_size[2] > max_workgroup_size_limits[2]
+            {
+                return Err(StageError::InvalidComputeEntryPoint {
+                    current: entry_point.workgroup_size,
+                    limit: max_workgroup_size_limits,
+                });
             }
         }
 
