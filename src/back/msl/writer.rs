@@ -1587,49 +1587,7 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 crate::Statement::Store { pointer, value } => {
-                    let pointer_info = &context.expression.info[pointer];
-                    let (array_size, is_atomic) =
-                        match *pointer_info.ty.inner_with(&context.expression.module.types) {
-                            crate::TypeInner::Pointer { base, .. } => {
-                                match context.expression.module.types[base].inner {
-                                    crate::TypeInner::Array {
-                                        size: crate::ArraySize::Constant(ch),
-                                        ..
-                                    } => (Some(ch), false),
-                                    crate::TypeInner::Atomic { .. } => (None, true),
-                                    _ => (None, false),
-                                }
-                            }
-                            _ => (None, false),
-                        };
-
-                    // we can't assign fixed-size arrays
-                    if let Some(const_handle) = array_size {
-                        let size = context.expression.module.constants[const_handle]
-                            .to_array_length()
-                            .unwrap();
-                        write!(self.out, "{}for(int _i=0; _i<{}; ++_i) ", level, size)?;
-                        self.put_expression(pointer, &context.expression, true)?;
-                        write!(self.out, ".{}[_i] = ", WRAPPED_ARRAY_FIELD)?;
-                        self.put_expression(value, &context.expression, true)?;
-                        writeln!(self.out, ".{}[_i];", WRAPPED_ARRAY_FIELD)?;
-                    } else if is_atomic {
-                        write!(
-                            self.out,
-                            "{}{}::atomic_store_explicit({}",
-                            level, NAMESPACE, ATOMIC_REFERENCE
-                        )?;
-                        self.put_expression(pointer, &context.expression, true)?;
-                        write!(self.out, ", ")?;
-                        self.put_expression(value, &context.expression, true)?;
-                        writeln!(self.out, ", {}::memory_order_relaxed);", NAMESPACE)?;
-                    } else {
-                        write!(self.out, "{}", level)?;
-                        self.put_expression(pointer, &context.expression, true)?;
-                        write!(self.out, " = ")?;
-                        self.put_expression(value, &context.expression, true)?;
-                        writeln!(self.out, ";")?;
-                    }
+                    self.put_store(pointer, value, level, context)?
                 }
                 crate::Statement::ImageStore {
                     image,
@@ -1763,6 +1721,60 @@ impl<W: Write> Writer<W> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn put_store(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        value: Handle<crate::Expression>,
+        level: back::Level,
+        context: &StatementContext,
+    ) -> BackendResult {
+        let pointer_info = &context.expression.info[pointer];
+        let (array_size, is_atomic) =
+            match *pointer_info.ty.inner_with(&context.expression.module.types) {
+                crate::TypeInner::Pointer { base, .. } => {
+                    match context.expression.module.types[base].inner {
+                        crate::TypeInner::Array {
+                            size: crate::ArraySize::Constant(ch),
+                            ..
+                        } => (Some(ch), false),
+                        crate::TypeInner::Atomic { .. } => (None, true),
+                        _ => (None, false),
+                    }
+                }
+                _ => (None, false),
+            };
+
+        // we can't assign fixed-size arrays
+        if let Some(const_handle) = array_size {
+            let size = context.expression.module.constants[const_handle]
+                .to_array_length()
+                .unwrap();
+            write!(self.out, "{}for(int _i=0; _i<{}; ++_i) ", level, size)?;
+            self.put_expression(pointer, &context.expression, true)?;
+            write!(self.out, ".{}[_i] = ", WRAPPED_ARRAY_FIELD)?;
+            self.put_expression(value, &context.expression, true)?;
+            writeln!(self.out, ".{}[_i];", WRAPPED_ARRAY_FIELD)?;
+        } else if is_atomic {
+            write!(
+                self.out,
+                "{}{}::atomic_store_explicit({}",
+                level, NAMESPACE, ATOMIC_REFERENCE
+            )?;
+            self.put_expression(pointer, &context.expression, true)?;
+            write!(self.out, ", ")?;
+            self.put_expression(value, &context.expression, true)?;
+            writeln!(self.out, ", {}::memory_order_relaxed);", NAMESPACE)?;
+        } else {
+            write!(self.out, "{}", level)?;
+            self.put_expression(pointer, &context.expression, true)?;
+            write!(self.out, " = ")?;
+            self.put_expression(value, &context.expression, true)?;
+            writeln!(self.out, ";")?;
+        }
+
         Ok(())
     }
 
