@@ -96,17 +96,11 @@ impl<'a> ConstantSolver<'a> {
                     }
                 };
 
-                Ok(self.constants.fetch_or_append(
-                    Constant {
-                        name: None,
-                        specialization: None,
-                        inner: ConstantInner::Composite {
-                            ty,
-                            components: vec![value_constant; size as usize],
-                        },
-                    },
-                    span,
-                ))
+                let inner = ConstantInner::Composite {
+                    ty,
+                    components: vec![value_constant; size as usize],
+                };
+                Ok(self.register_constant(inner, span))
             }
             Expression::Swizzle {
                 size,
@@ -146,30 +140,18 @@ impl<'a> ConstantSolver<'a> {
                     .iter()
                     .map(|&sc| src_components[sc as usize])
                     .collect();
+                let inner = ConstantInner::Composite { ty, components };
 
-                Ok(self.constants.fetch_or_append(
-                    Constant {
-                        name: None,
-                        specialization: None,
-                        inner: ConstantInner::Composite { ty, components },
-                    },
-                    span,
-                ))
+                Ok(self.register_constant(inner, span))
             }
             Expression::Compose { ty, ref components } => {
                 let components = components
                     .iter()
                     .map(|c| self.solve(*c))
                     .collect::<Result<_, _>>()?;
+                let inner = ConstantInner::Composite { ty, components };
 
-                Ok(self.constants.fetch_or_append(
-                    Constant {
-                        name: None,
-                        specialization: None,
-                        inner: ConstantInner::Composite { ty, components },
-                    },
-                    span,
-                ))
+                Ok(self.register_constant(inner, span))
             }
             Expression::Unary { expr, op } => {
                 let expr_constant = self.solve(expr)?;
@@ -216,14 +198,8 @@ impl<'a> ConstantSolver<'a> {
                             _ => return Err(ConstantSolvingError::InvalidMathArg),
                         };
 
-                        Ok(self.constants.fetch_or_append(
-                            Constant {
-                                name: None,
-                                specialization: None,
-                                inner: ConstantInner::Scalar { width, value },
-                            },
-                            span,
-                        ))
+                        let inner = ConstantInner::Scalar { width, value };
+                        Ok(self.register_constant(inner, span))
                     }
                     _ => Err(ConstantSolvingError::NotImplemented(format!("{:?}", fun))),
                 }
@@ -357,14 +333,7 @@ impl<'a> ConstantSolver<'a> {
             }
         }
 
-        Ok(self.constants.fetch_or_append(
-            Constant {
-                name: None,
-                specialization: None,
-                inner,
-            },
-            span,
-        ))
+        Ok(self.register_constant(inner, span))
     }
 
     fn unary_op(
@@ -404,14 +373,7 @@ impl<'a> ConstantSolver<'a> {
             }
         }
 
-        Ok(self.constants.fetch_or_append(
-            Constant {
-                name: None,
-                specialization: None,
-                inner,
-            },
-            span,
-        ))
+        Ok(self.register_constant(inner, span))
     }
 
     fn binary_op(
@@ -514,14 +476,18 @@ impl<'a> ConstantSolver<'a> {
             _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
         };
 
-        Ok(self.constants.fetch_or_append(
+        Ok(self.register_constant(inner, span))
+    }
+
+    fn register_constant(&mut self, inner: ConstantInner, span: crate::Span) -> Handle<Constant> {
+        self.constants.fetch_or_append(
             Constant {
                 name: None,
                 specialization: None,
                 inner,
             },
             span,
-        ))
+        )
     }
 }
 
