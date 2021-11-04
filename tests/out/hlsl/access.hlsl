@@ -24,7 +24,7 @@ float4 foo(uint vi : SV_VertexID) : SV_Position
     float4x4 matrix1 = float4x4(asfloat(bar.Load4(0+0)), asfloat(bar.Load4(0+16)), asfloat(bar.Load4(0+32)), asfloat(bar.Load4(0+48)));
     uint2 arr[2] = {asuint(bar.Load2(72+0)), asuint(bar.Load2(72+8))};
     float b = asfloat(bar.Load(0+48+0));
-    int a = asint(bar.Load((((NagaBufferLengthRW(bar) - 88) / 4) - 2u)*4+88));
+    int a = asint(bar.Load((((NagaBufferLengthRW(bar) - 88) / 8) - 2u)*8+88));
     const float _e25 = read_from_private(foo1);
     bar.Store(8+16+0, asuint(1.0));
     {
@@ -39,6 +39,7 @@ float4 foo(uint vi : SV_VertexID) : SV_Position
         bar.Store2(72+0, asuint(_value2[0]));
         bar.Store2(72+8, asuint(_value2[1]));
     }
+    bar.Store(8+88, asuint(1));
     {
         int _result[5]={ a, int(b), 3, 4, 5 };
         for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];
