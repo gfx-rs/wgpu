@@ -367,39 +367,22 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         mut cur_expr: Handle<crate::Expression>,
         func_ctx: &FunctionCtx,
     ) -> Result<Handle<crate::GlobalVariable>, Error> {
+        enum AccessIndex {
+            Expression(Handle<crate::Expression>),
+            Constant(u32),
+        }
+        enum Parent<'a> {
+            Array { stride: u32 },
+            Struct(&'a [crate::StructMember]),
+        }
         self.temp_access_chain.clear();
-        loop {
-            // determine the size of the pointee
-            let stride = match *func_ctx.info[cur_expr].ty.inner_with(&module.types) {
-                crate::TypeInner::Pointer { base, class: _ } => {
-                    module.types[base].inner.span(&module.constants)
-                }
-                crate::TypeInner::ValuePointer { size, width, .. } => {
-                    size.map_or(1, |s| s as u32) * width as u32
-                }
-                _ => 0,
-            };
 
-            let (next_expr, sub) = match func_ctx.expressions[cur_expr] {
+        loop {
+            let (next_expr, access_index) = match func_ctx.expressions[cur_expr] {
                 crate::Expression::GlobalVariable(handle) => return Ok(handle),
-                crate::Expression::Access { base, index } => (
-                    base,
-                    SubAccess::Index {
-                        value: index,
-                        stride,
-                    },
-                ),
+                crate::Expression::Access { base, index } => (base, AccessIndex::Expression(index)),
                 crate::Expression::AccessIndex { base, index } => {
-                    let sub = match *func_ctx.info[base].ty.inner_with(&module.types) {
-                        crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
-                            crate::TypeInner::Struct { ref members, .. } => {
-                                SubAccess::Offset(members[index as usize].offset)
-                            }
-                            _ => SubAccess::Offset(index * stride),
-                        },
-                        _ => SubAccess::Offset(index * stride),
-                    };
-                    (base, sub)
+                    (base, AccessIndex::Constant(index))
                 }
                 ref other => {
                     return Err(Error::Unimplemented(format!(
@@ -408,6 +391,38 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     )))
                 }
             };
+
+            let parent = match *func_ctx.info[next_expr].ty.inner_with(&module.types) {
+                crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
+                    crate::TypeInner::Struct { ref members, .. } => Parent::Struct(members),
+                    crate::TypeInner::Array { stride, .. } => Parent::Array { stride },
+                    crate::TypeInner::Vector { width, .. } => Parent::Array {
+                        stride: width as u32,
+                    },
+                    crate::TypeInner::Matrix { rows, width, .. } => Parent::Array {
+                        stride: width as u32 * if rows > crate::VectorSize::Bi { 4 } else { 2 },
+                    },
+                    _ => unreachable!(),
+                },
+                crate::TypeInner::ValuePointer { width, .. } => Parent::Array {
+                    stride: width as u32,
+                },
+                _ => unreachable!(),
+            };
+
+            let sub = match (parent, access_index) {
+                (Parent::Array { stride }, AccessIndex::Expression(value)) => {
+                    SubAccess::Index { value, stride }
+                }
+                (Parent::Array { stride }, AccessIndex::Constant(index)) => {
+                    SubAccess::Offset(stride * index)
+                }
+                (Parent::Struct(members), AccessIndex::Constant(index)) => {
+                    SubAccess::Offset(members[index as usize].offset)
+                }
+                (Parent::Struct(_), AccessIndex::Expression(_)) => unreachable!(),
+            };
+
             self.temp_access_chain.push(sub);
             cur_expr = next_expr;
         }
