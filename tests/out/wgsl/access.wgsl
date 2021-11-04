@@ -3,7 +3,7 @@ struct Bar {
     matrix: mat4x4<f32>;
     atom: atomic<i32>;
     arr: [[stride(8)]] array<vec2<u32>,2>;
-    data: [[stride(4)]] array<i32>;
+    data: [[stride(8)]] array<i32>;
 };
 
 [[group(0), binding(0)]]
@@ -30,6 +30,7 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
     bar.matrix[1][2] = 1.0;
     bar.matrix = mat4x4<f32>(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(2.0), vec4<f32>(3.0));
     bar.arr = array<vec2<u32>,2>(vec2<u32>(0u), vec2<u32>(1u));
+    bar.data[1] = 1;
     c = array<i32,5>(a, i32(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     let value: i32 = c[vi];
