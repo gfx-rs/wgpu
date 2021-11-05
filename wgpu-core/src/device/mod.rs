@@ -4455,7 +4455,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         use present::ConfigureSurfaceError as E;
         profiling::scope!("surface_configure");
 
-        fn validate_surface_configuraiton(
+        fn validate_surface_configuration(
             config: &mut hal::SurfaceConfiguration,
             caps: &hal::SurfaceCapabilities,
         ) -> Result<(), E> {
@@ -4545,7 +4545,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
             };
 
-            if let Err(error) = validate_surface_configuraiton(&mut hal_config, &caps) {
+            if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
                 break error;
             }
 
