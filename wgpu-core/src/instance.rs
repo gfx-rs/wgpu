@@ -280,6 +280,27 @@ impl<A: HalApi> Adapter<A> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
+        let caps = &self.raw.capabilities;
+        Device::new(
+            open,
+            Stored {
+                value: Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            caps.alignments.clone(),
+            caps.downlevel.clone(),
+            desc,
+            trace_path,
+        )
+        .or(Err(RequestDeviceError::OutOfMemory))
+    }
+
+    fn create_device(
+        &self,
+        self_id: AdapterId,
+        desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
+    ) -> Result<Device<A>, RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -317,26 +338,6 @@ impl<A: HalApi> Adapter<A> {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
-        Device::new(
-            open,
-            Stored {
-                value: Valid(self_id),
-                ref_count: self.life_guard.add_ref(),
-            },
-            caps.alignments.clone(),
-            caps.downlevel.clone(),
-            desc,
-            trace_path,
-        )
-        .or(Err(RequestDeviceError::OutOfMemory))
-    }
-
-    fn create_device(
-        &self,
-        self_id: AdapterId,
-        desc: &DeviceDescriptor,
-        trace_path: Option<&std::path::Path>,
-    ) -> Result<Device<A>, RequestDeviceError> {
         let open = unsafe { self.raw.adapter.open(desc.features, &desc.limits) }.map_err(
             |err| match err {
                 hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
