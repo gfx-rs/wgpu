@@ -1004,7 +1004,7 @@ impl Writer {
                         &solo[..]
                     }
                     8 => {
-                        pair = [(val >> 32) as u32, val as u32];
+                        pair = [val as u32, (val >> 32) as u32];
                         &pair
                     }
                     _ => unreachable!(),
@@ -1018,7 +1018,7 @@ impl Writer {
                         &solo[..]
                     }
                     8 => {
-                        pair = [(val >> 32) as u32, val as u32];
+                        pair = [val as u32, (val >> 32) as u32];
                         &pair
                     }
                     _ => unreachable!(),
@@ -1033,7 +1033,7 @@ impl Writer {
                     }
                     8 => {
                         let bits = f64::to_bits(val);
-                        pair = [(bits >> 32) as u32, bits as u32];
+                        pair = [bits as u32, (bits >> 32) as u32];
                         &pair
                     }
                     _ => unreachable!(),
