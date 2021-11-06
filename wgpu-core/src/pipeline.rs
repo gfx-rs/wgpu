@@ -5,7 +5,7 @@ use crate::{
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation, Label, LifeGuard, Stored,
 };
-use std::{borrow::Cow, fmt};
+use std::{borrow::Cow, error::Error, fmt};
 use thiserror::Error;
 
 #[allow(clippy::large_enum_variant)]
@@ -46,11 +46,10 @@ impl<A: hal::Api> Resource for ShaderModule<A> {
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug)]
 pub struct ShaderError<E> {
     pub source: String,
     pub label: Option<String>,
-    #[source]
     pub inner: E,
 }
 impl fmt::Display for ShaderError<naga::front::wgsl::ParseError> {
@@ -89,6 +88,15 @@ impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> 
             "\nShader validation {}",
             String::from_utf8_lossy(&writer.into_inner())
         )
+    }
+}
+impl<E> Error for ShaderError<E>
+where
+    ShaderError<E>: fmt::Display,
+    E: Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.inner)
     }
 }
 
