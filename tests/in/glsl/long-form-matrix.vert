@@ -5,6 +5,7 @@ void main() {
     // Sane ways to build a matrix
     mat2 splat = mat2(1);
     mat2 normal = mat2(vec2(1), vec2(2));
+    mat2x4 from_matrix = mat2x4(mat3(1.0));
 
     // This is a little bit weirder but still makes some sense
     // Since this matrix has 2 rows we take two numbers to make a column
