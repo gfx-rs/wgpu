@@ -32,16 +32,16 @@ fn main_1() {
     let e11: vec3<f32> = Vertex_Normal_1;
     v_Normal = (e10 * vec4<f32>(e11, 1.0)).xyz;
     let e16: mat4x4<f32> = global_1.Model;
-    let e24: vec3<f32> = Vertex_Normal_1;
-    v_Normal = (mat3x3<f32>(e16[0].xyz, e16[1].xyz, e16[2].xyz) * e24);
-    let e26: mat4x4<f32> = global_1.Model;
-    let e27: vec3<f32> = Vertex_Position_1;
-    v_Position = (e26 * vec4<f32>(e27, 1.0)).xyz;
-    let e32: vec2<f32> = Vertex_Uv_1;
-    v_Uv = e32;
-    let e34: mat4x4<f32> = global.ViewProj;
-    let e35: vec3<f32> = v_Position;
-    gl_Position = (e34 * vec4<f32>(e35, 1.0));
+    let e26: vec3<f32> = Vertex_Normal_1;
+    v_Normal = (mat3x3<f32>(e16[0].xyz, e16[1].xyz, e16[2].xyz) * e26);
+    let e28: mat4x4<f32> = global_1.Model;
+    let e29: vec3<f32> = Vertex_Position_1;
+    v_Position = (e28 * vec4<f32>(e29, 1.0)).xyz;
+    let e34: vec2<f32> = Vertex_Uv_1;
+    v_Uv = e34;
+    let e36: mat4x4<f32> = global.ViewProj;
+    let e37: vec3<f32> = v_Position;
+    gl_Position = (e36 * vec4<f32>(e37, 1.0));
     return;
 }
 
