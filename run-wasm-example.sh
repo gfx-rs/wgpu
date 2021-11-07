@@ -8,8 +8,7 @@ cargo build --example $1 --target wasm32-unknown-unknown --features webgl
 echo "Generating bindings..."
 mkdir -p target/wasm-examples/$1
 wasm-bindgen --target web --out-dir target/wasm-examples/$1 target/wasm32-unknown-unknown/debug/examples/$1.wasm
-cp wasm-resources/index.template.html target/wasm-examples/$1/index.html
-sed -i "" "s/{{example}}/$1/g" target/wasm-examples/$1/index.html
+cat wasm-resources/index.template.html | sed "s/{{example}}/$1/g" > target/wasm-examples/$1/index.html
 
 # Find a serving tool to host the example
 SERVE_CMD=""
