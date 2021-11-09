@@ -44,6 +44,15 @@ impl PhysicalDeviceFeatures {
         if let Some(ref mut feature) = self.imageless_framebuffer {
             info = info.push_next(feature);
         }
+        if let Some(ref mut feature) = self.timeline_semaphore {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.image_robustness {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.robustness2 {
+            info = info.push_next(feature);
+        }
         info
     }
 
