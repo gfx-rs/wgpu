@@ -234,6 +234,7 @@ pub struct Buffer {
     target: BindTarget,
     size: wgt::BufferAddress,
     map_flags: u32,
+    map_read_allocation: Option<std::sync::Mutex<Vec<u8>>>,
 }
 
 // Safe: WASM doesn't have threads

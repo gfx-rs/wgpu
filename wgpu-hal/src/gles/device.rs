@@ -332,13 +332,14 @@ impl crate::Device<super::Api> for super::Device {
         if emulate_map
             && desc
                 .usage
-                .intersects(crate::BufferUses::MAP_WRITE | crate::BufferUses::MAP_READ)
+                .intersects(crate::BufferUses::MAP_WRITE)
         {
             return Ok(super::Buffer {
                 inner: BufferInner::data_with_capacity(desc.size),
                 target,
                 size: desc.size,
                 map_flags: 0,
+                map_read_allocation: None,
             });
         }
 
@@ -412,11 +413,18 @@ impl crate::Device<super::Api> for super::Device {
             }
         }
 
+        let map_read_allocation = if emulate_map && desc.usage.contains(crate::BufferUses::MAP_READ) {
+            Some(std::sync::Mutex::new(vec![0; desc.size as usize]))
+        } else {
+            None
+        };
+
         Ok(super::Buffer {
             inner: BufferInner::Buffer(raw),
             target,
             size: desc.size,
             map_flags,
+            map_read_allocation,
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -441,12 +449,19 @@ impl crate::Device<super::Api> for super::Device {
             BufferInner::Buffer(raw) => {
                 let gl = &self.shared.context.lock();
                 gl.bind_buffer(buffer.target, Some(raw));
-                let ptr = gl.map_buffer_range(
-                    buffer.target,
-                    range.start as i32,
-                    (range.end - range.start) as i32,
-                    buffer.map_flags,
-                );
+                let ptr = if let Some(ref map_read_allocation) = buffer.map_read_allocation {
+                    let mut guard = map_read_allocation.lock().unwrap();
+                    let slice = guard.as_mut_slice();
+                    gl.get_buffer_sub_data(buffer.target, 0, slice);
+                    slice.as_mut_ptr()
+                } else {
+                    gl.map_buffer_range(
+                        buffer.target,
+                        range.start as i32,
+                        (range.end - range.start) as i32,
+                        buffer.map_flags,
+                    )
+                };
                 gl.bind_buffer(buffer.target, None);
                 ptr
             }
@@ -458,10 +473,12 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
         if let BufferInner::Buffer(raw) = buffer.inner {
-            let gl = &self.shared.context.lock();
-            gl.bind_buffer(buffer.target, Some(raw));
-            gl.unmap_buffer(buffer.target);
-            gl.bind_buffer(buffer.target, None);
+            if !self.shared.workarounds.contains(super::Workarounds::EMULATE_BUFFER_MAP) {
+                let gl = &self.shared.context.lock();
+                gl.bind_buffer(buffer.target, Some(raw));
+                gl.unmap_buffer(buffer.target);
+                gl.bind_buffer(buffer.target, None);
+            }
         }
         Ok(())
     }
@@ -1094,15 +1111,25 @@ impl crate::Device<super::Api> for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if cfg!(not(target_arch = "wasm32")) && fence.last_completed < wait_value {
+        if fence.last_completed < wait_value {
             let gl = &self.shared.context.lock();
-            let timeout_ns = (timeout_ms as u64 * 1_000_000).min(!0u32 as u64);
+            let timeout_ns = if cfg!(target_arch = "wasm32") {
+                0 as u64
+            } else {
+                (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
+            };
             let &(_, sync) = fence
                 .pending
                 .iter()
                 .find(|&&(value, _)| value >= wait_value)
                 .unwrap();
             match gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32) {
+                // for some reason firefox returns WAIT_FAILED, to investigate
+                #[cfg(target_arch = "wasm32")]
+                glow::WAIT_FAILED => {
+                    log::warn!("wait failed!");
+                    Ok(false)
+                }
                 glow::TIMEOUT_EXPIRED => Ok(false),
                 glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
                 _ => Err(crate::DeviceError::Lost),
