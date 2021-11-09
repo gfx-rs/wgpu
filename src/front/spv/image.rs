@@ -1,7 +1,4 @@
-use crate::{
-    arena::{Arena, Handle, UniqueArena},
-    FunctionArgument,
-};
+use crate::arena::{Arena, Handle, UniqueArena};
 
 use super::{Error, LookupExpression, LookupHelper as _};
 
@@ -21,16 +18,14 @@ bitflags::bitflags! {
     }
 }
 
-impl Arena<crate::Expression> {
+impl<'function> super::BlockContext<'function> {
     fn get_image_expr_ty(
         &self,
         handle: Handle<crate::Expression>,
-        global_vars: &Arena<crate::GlobalVariable>,
-        arguments: &[FunctionArgument],
     ) -> Result<Handle<crate::Type>, Error> {
-        match self[handle] {
-            crate::Expression::GlobalVariable(handle) => Ok(global_vars[handle].ty),
-            crate::Expression::FunctionArgument(i) => Ok(arguments[i as usize].ty),
+        match self.expressions[handle] {
+            crate::Expression::GlobalVariable(handle) => Ok(self.global_arena[handle].ty),
+            crate::Expression::FunctionArgument(i) => Ok(self.arguments[i as usize].ty),
             ref other => Err(Error::InvalidImageExpression(other.clone())),
         }
     }
@@ -62,10 +57,9 @@ fn extract_image_coordinates(
     extra_coordinate: ExtraCoordinate,
     base: Handle<crate::Expression>,
     coordinate_ty: Handle<crate::Type>,
-    type_arena: &UniqueArena<crate::Type>,
-    expressions: &mut Arena<crate::Expression>,
+    ctx: &mut super::BlockContext,
 ) -> (Handle<crate::Expression>, Option<Handle<crate::Expression>>) {
-    let (given_size, kind) = match type_arena[coordinate_ty].inner {
+    let (given_size, kind) = match ctx.type_arena[coordinate_ty].inner {
         crate::TypeInner::Scalar { kind, .. } => (None, kind),
         crate::TypeInner::Vector { size, kind, .. } => (Some(size), kind),
         ref other => unreachable!("Unexpected texture coordinate {:?}", other),
@@ -73,7 +67,7 @@ fn extract_image_coordinates(
 
     let required_size = image_dim.required_coordinate_size();
     let required_ty = required_size.map(|size| {
-        type_arena
+        ctx.type_arena
             .get(&crate::Type {
                 name: None,
                 inner: crate::TypeInner::Vector {
@@ -89,22 +83,23 @@ fn extract_image_coordinates(
         index: required_size.map_or(1, |size| size as u32),
     };
 
-    let base_span = expressions.get_span(base);
+    let base_span = ctx.expressions.get_span(base);
 
     match extra_coordinate {
         ExtraCoordinate::ArrayLayer => {
             let extracted = match required_size {
-                None => {
-                    expressions.append(crate::Expression::AccessIndex { base, index: 0 }, base_span)
-                }
+                None => ctx
+                    .expressions
+                    .append(crate::Expression::AccessIndex { base, index: 0 }, base_span),
                 Some(size) => {
                     let mut components = Vec::with_capacity(size as usize);
                     for index in 0..size as u32 {
-                        let comp = expressions
+                        let comp = ctx
+                            .expressions
                             .append(crate::Expression::AccessIndex { base, index }, base_span);
                         components.push(comp);
                     }
-                    expressions.append(
+                    ctx.expressions.append(
                         crate::Expression::Compose {
                             ty: required_ty.unwrap(),
                             components,
@@ -113,8 +108,8 @@ fn extract_image_coordinates(
                     )
                 }
             };
-            let array_index_f32 = expressions.append(extra_expr, base_span);
-            let array_index = expressions.append(
+            let array_index_f32 = ctx.expressions.append(extra_expr, base_span);
+            let array_index = ctx.expressions.append(
                 crate::Expression::As {
                     kind: crate::ScalarKind::Sint,
                     expr: array_index_f32,
@@ -125,12 +120,13 @@ fn extract_image_coordinates(
             (extracted, Some(array_index))
         }
         ExtraCoordinate::Projection => {
-            let projection = expressions.append(extra_expr, base_span);
+            let projection = ctx.expressions.append(extra_expr, base_span);
             let divided = match required_size {
                 None => {
-                    let temp = expressions
+                    let temp = ctx
+                        .expressions
                         .append(crate::Expression::AccessIndex { base, index: 0 }, base_span);
-                    expressions.append(
+                    ctx.expressions.append(
                         crate::Expression::Binary {
                             op: crate::BinaryOperator::Divide,
                             left: temp,
@@ -142,9 +138,10 @@ fn extract_image_coordinates(
                 Some(size) => {
                     let mut components = Vec::with_capacity(size as usize);
                     for index in 0..size as u32 {
-                        let temp = expressions
+                        let temp = ctx
+                            .expressions
                             .append(crate::Expression::AccessIndex { base, index }, base_span);
-                        let comp = expressions.append(
+                        let comp = ctx.expressions.append(
                             crate::Expression::Binary {
                                 op: crate::BinaryOperator::Divide,
                                 left: temp,
@@ -154,7 +151,7 @@ fn extract_image_coordinates(
                         );
                         components.push(comp);
                     }
-                    expressions.append(
+                    ctx.expressions.append(
                         crate::Expression::Compose {
                             ty: required_ty.unwrap(),
                             components,
@@ -176,7 +173,7 @@ fn extract_image_coordinates(
                     pattern: [Sc::X, Sc::Y, Sc::Z, Sc::W],
                 },
             };
-            (expressions.append(cut_expr, base_span), None)
+            (ctx.expressions.append(cut_expr, base_span), None)
         }
     }
 }
@@ -257,10 +254,10 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
     pub(super) fn parse_image_write(
         &mut self,
         words_left: u16,
-        type_arena: &UniqueArena<crate::Type>,
-        global_arena: &Arena<crate::GlobalVariable>,
-        arguments: &[FunctionArgument],
-        expressions: &mut Arena<crate::Expression>,
+        ctx: &mut super::BlockContext,
+        emitter: &mut crate::front::Emitter,
+        block: &mut crate::Block,
+        body_idx: usize,
     ) -> Result<crate::Statement, Error> {
         let image_id = self.next()?;
         let coordinate_id = self.next()?;
@@ -277,11 +274,13 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         }
 
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_ty = expressions.get_image_expr_ty(image_lexp.handle, global_arena, arguments)?;
+        let image_ty = ctx.get_image_expr_ty(image_lexp.handle)?;
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
+        let coord_handle =
+            self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let (coordinate, array_index) = match type_arena[image_ty].inner {
+        let (coordinate, array_index) = match ctx.type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -293,21 +292,21 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 } else {
                     ExtraCoordinate::Garbage
                 },
-                coord_lexp.handle,
+                coord_handle,
                 coord_type_handle,
-                type_arena,
-                expressions,
+                ctx,
             ),
             _ => return Err(Error::InvalidImage(image_ty)),
         };
 
         let value_lexp = self.lookup_expression.lookup(value_id)?;
+        let value = self.get_expr_handle(value_id, value_lexp, ctx, emitter, block, body_idx);
 
         Ok(crate::Statement::ImageStore {
             image: image_lexp.handle,
             coordinate,
             array_index,
-            value: value_lexp.handle,
+            value,
         })
     }
 
@@ -339,7 +338,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             match spirv::ImageOperands::from_bits_truncate(bit) {
                 spirv::ImageOperands::LOD => {
                     let lod_expr = self.next()?;
-                    let lod_handle = self.lookup_expression.lookup(lod_expr)?.handle;
+                    let lod_lexp = self.lookup_expression.lookup(lod_expr)?;
+                    let lod_handle =
+                        self.get_expr_handle(lod_expr, lod_lexp, ctx, emitter, block, body_idx);
                     index = Some(lod_handle);
                     words_left -= 1;
                 }
@@ -363,11 +364,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         // No need to call get_expr_handle here since only globals/arguments are
         // allowed as images and they are always in the root scope
         let image_lexp = self.lookup_expression.lookup(image_id)?;
-        let image_ty = ctx.expressions.get_image_expr_ty(
-            image_lexp.handle,
-            ctx.global_arena,
-            ctx.arguments,
-        )?;
+        let image_ty = ctx.get_image_expr_ty(image_lexp.handle)?;
 
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_handle =
@@ -387,8 +384,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 },
                 coord_handle,
                 coord_type_handle,
-                ctx.type_arena,
-                ctx.expressions,
+                ctx,
             ),
             _ => return Err(Error::InvalidImage(image_ty)),
         };
@@ -571,13 +567,14 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     },
                     coord_handle,
                     coord_type_handle,
-                    ctx.type_arena,
-                    ctx.expressions,
+                    ctx,
                 ),
                 {
                     match dref_id {
                         Some(id) => {
-                            let mut expr = self.lookup_expression.lookup(id)?.handle;
+                            let expr_lexp = self.lookup_expression.lookup(id)?;
+                            let mut expr =
+                                self.get_expr_handle(id, expr_lexp, ctx, emitter, block, body_idx);
 
                             if options.project {
                                 let required_size = dim.required_coordinate_size();

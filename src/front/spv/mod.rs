@@ -2144,13 +2144,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::ImageWrite => {
                     let extra = inst.expect_at_least(4)?;
-                    let stmt = self.parse_image_write(
-                        extra,
-                        ctx.type_arena,
-                        ctx.global_arena,
-                        ctx.arguments,
-                        ctx.expressions,
-                    )?;
+                    let stmt =
+                        self.parse_image_write(extra, ctx, &mut emitter, &mut block, body_idx)?;
                     block.extend(emitter.finish(ctx.expressions));
                     block.push(stmt, span);
                     emitter.start(ctx.expressions);
