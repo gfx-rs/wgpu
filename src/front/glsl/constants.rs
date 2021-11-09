@@ -293,16 +293,6 @@ impl<'a> ConstantSolver<'a> {
         target_width: crate::Bytes,
         span: crate::Span,
     ) -> Result<Handle<Constant>, ConstantSolvingError> {
-        fn inner_cast<A: num_traits::FromPrimitive>(value: ScalarValue) -> A {
-            match value {
-                ScalarValue::Sint(v) => A::from_i64(v),
-                ScalarValue::Uint(v) => A::from_u64(v),
-                ScalarValue::Float(v) => A::from_f64(v),
-                ScalarValue::Bool(v) => A::from_u64(v as u64),
-            }
-            .unwrap()
-        }
-
         let mut inner = self.constants[constant].inner.clone();
 
         match inner {
@@ -312,10 +302,30 @@ impl<'a> ConstantSolver<'a> {
             } => {
                 *width = target_width;
                 *value = match kind {
-                    ScalarKind::Sint => ScalarValue::Sint(inner_cast(*value)),
-                    ScalarKind::Uint => ScalarValue::Uint(inner_cast(*value)),
-                    ScalarKind::Float => ScalarValue::Float(inner_cast(*value)),
-                    ScalarKind::Bool => ScalarValue::Bool(inner_cast::<u64>(*value) != 0),
+                    ScalarKind::Sint => ScalarValue::Sint(match *value {
+                        ScalarValue::Sint(v) => v,
+                        ScalarValue::Uint(v) => v as i64,
+                        ScalarValue::Float(v) => v as i64,
+                        ScalarValue::Bool(v) => v as i64,
+                    }),
+                    ScalarKind::Uint => ScalarValue::Uint(match *value {
+                        ScalarValue::Sint(v) => v as u64,
+                        ScalarValue::Uint(v) => v,
+                        ScalarValue::Float(v) => v as u64,
+                        ScalarValue::Bool(v) => v as u64,
+                    }),
+                    ScalarKind::Float => ScalarValue::Float(match *value {
+                        ScalarValue::Sint(v) => v as f64,
+                        ScalarValue::Uint(v) => v as f64,
+                        ScalarValue::Float(v) => v,
+                        ScalarValue::Bool(v) => v as u64 as f64,
+                    }),
+                    ScalarKind::Bool => ScalarValue::Bool(match *value {
+                        ScalarValue::Sint(v) => v != 0,
+                        ScalarValue::Uint(v) => v != 0,
+                        ScalarValue::Float(v) => v != 0.0,
+                        ScalarValue::Bool(v) => v,
+                    }),
                 }
             }
             ConstantInner::Composite {
@@ -408,31 +418,36 @@ impl<'a> ConstantSolver<'a> {
                     _ => match (left_value, right_value) {
                         (ScalarValue::Sint(a), ScalarValue::Sint(b)) => {
                             ScalarValue::Sint(match op {
-                                BinaryOperator::Add => a + b,
-                                BinaryOperator::Subtract => a - b,
-                                BinaryOperator::Multiply => a * b,
-                                BinaryOperator::Divide => a / b,
-                                BinaryOperator::Modulo => a % b,
+                                BinaryOperator::Add => a.wrapping_add(b),
+                                BinaryOperator::Subtract => a.wrapping_sub(b),
+                                BinaryOperator::Multiply => a.wrapping_mul(b),
+                                BinaryOperator::Divide => a.checked_div(b).unwrap_or(0),
+                                BinaryOperator::Modulo => a.checked_rem(b).unwrap_or(0),
                                 BinaryOperator::And => a & b,
                                 BinaryOperator::ExclusiveOr => a ^ b,
                                 BinaryOperator::InclusiveOr => a | b,
-                                BinaryOperator::ShiftLeft => a << b,
-                                BinaryOperator::ShiftRight => a >> b,
+                                _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
+                            })
+                        }
+                        (ScalarValue::Sint(a), ScalarValue::Uint(b)) => {
+                            ScalarValue::Sint(match op {
+                                BinaryOperator::ShiftLeft => a.wrapping_shl(b as u32),
+                                BinaryOperator::ShiftRight => a.wrapping_shr(b as u32),
                                 _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
                             })
                         }
                         (ScalarValue::Uint(a), ScalarValue::Uint(b)) => {
                             ScalarValue::Uint(match op {
-                                BinaryOperator::Add => a + b,
-                                BinaryOperator::Subtract => a - b,
-                                BinaryOperator::Multiply => a * b,
-                                BinaryOperator::Divide => a / b,
-                                BinaryOperator::Modulo => a % b,
+                                BinaryOperator::Add => a.wrapping_add(b),
+                                BinaryOperator::Subtract => a.wrapping_sub(b),
+                                BinaryOperator::Multiply => a.wrapping_mul(b),
+                                BinaryOperator::Divide => a.checked_div(b).unwrap_or(0),
+                                BinaryOperator::Modulo => a.checked_rem(b).unwrap_or(0),
                                 BinaryOperator::And => a & b,
                                 BinaryOperator::ExclusiveOr => a ^ b,
                                 BinaryOperator::InclusiveOr => a | b,
-                                BinaryOperator::ShiftLeft => a << b,
-                                BinaryOperator::ShiftRight => a >> b,
+                                BinaryOperator::ShiftLeft => a.wrapping_shl(b as u32),
+                                BinaryOperator::ShiftRight => a.wrapping_shr(b as u32),
                                 _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
                             })
                         }
