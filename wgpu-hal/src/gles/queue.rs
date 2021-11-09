@@ -371,11 +371,13 @@ impl super::Queue {
                 gl.bind_texture(dst_target, Some(dst));
                 gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, row_texels as i32);
                 gl.pixel_store_i32(glow::UNPACK_IMAGE_HEIGHT, column_texels as i32);
+                let mut unbind_unpack_buffer = false;
                 if format_info.block_dimensions == (1, 1) {
                     let buffer_data;
                     let unpack_data = match *src {
                         super::BufferInner::Buffer(buffer) => {
                             gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer));
+                            unbind_unpack_buffer = true;
                             glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32)
                         }
                         super::BufferInner::Data(ref data) => {
@@ -455,6 +457,7 @@ impl super::Queue {
                     let unpack_data = match *src {
                         super::BufferInner::Buffer(buffer) => {
                             gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer));
+                            unbind_unpack_buffer = true;
                             glow::CompressedPixelUnpackData::BufferRange(
                                 offset..offset + bytes_per_image,
                             )
@@ -522,6 +525,9 @@ impl super::Queue {
                         }
                         _ => unreachable!(),
                     }
+                }
+                if unbind_unpack_buffer {
+                    gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
                 }
             }
             C::CopyTextureToBuffer {
