@@ -503,6 +503,7 @@ impl super::Queue {
                         _ => unreachable!(),
                     }
                 }
+                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             }
             C::CopyTextureToBuffer {
                 src,
