@@ -10,15 +10,15 @@ struct Foo {
 
 float4 builtins()
 {
-    int s1 = (true ? 1 : 0);
-    float4 s2 = (true ? float4(1.0, 1.0, 1.0, 1.0) : float4(0.0, 0.0, 0.0, 0.0));
-    float4 s3 = (bool4(false, false, false, false) ? float4(0.0, 0.0, 0.0, 0.0) : float4(1.0, 1.0, 1.0, 1.0));
-    float4 m1 = lerp(float4(0.0, 0.0, 0.0, 0.0), float4(1.0, 1.0, 1.0, 1.0), float4(0.5, 0.5, 0.5, 0.5));
-    float4 m2 = lerp(float4(0.0, 0.0, 0.0, 0.0), float4(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
-    float b1 = float(int4(1, 1, 1, 1).x);
-    float4 b2 = float4(int4(1, 1, 1, 1));
+    int s1_ = (true ? 1 : 0);
+    float4 s2_ = (true ? float4(1.0, 1.0, 1.0, 1.0) : float4(0.0, 0.0, 0.0, 0.0));
+    float4 s3_ = (bool4(false, false, false, false) ? float4(0.0, 0.0, 0.0, 0.0) : float4(1.0, 1.0, 1.0, 1.0));
+    float4 m1_ = lerp(float4(0.0, 0.0, 0.0, 0.0), float4(1.0, 1.0, 1.0, 1.0), float4(0.5, 0.5, 0.5, 0.5));
+    float4 m2_ = lerp(float4(0.0, 0.0, 0.0, 0.0), float4(1.0, 1.0, 1.0, 1.0), 0.10000000149011612);
+    float b1_ = float(int4(1, 1, 1, 1).x);
+    float4 b2_ = float4(int4(1, 1, 1, 1));
     int4 v_i32_zero = int4(float4(0.0, 0.0, 0.0, 0.0));
-    return (((((float4((int4(s1.xxxx) + v_i32_zero)) + s2) + m1) + m2) + float4(b1.xxxx)) + b2);
+    return (((((float4((int4(s1_.xxxx) + v_i32_zero)) + s2_) + m1_) + m2_) + float4(b1_.xxxx)) + b2_);
 }
 
 float4 splat()
@@ -61,8 +61,8 @@ float constructors()
 
 void modulo()
 {
-    int a1 = (1 % 1);
-    float b1 = (1.0 % 1.0);
+    int a_1 = (1 % 1);
+    float b_1 = (1.0 % 1.0);
     int3 c = (int3(1.xxx) % int3(1.xxx));
     float3 d = (float3(1.0.xxx) % float3(1.0.xxx));
 }

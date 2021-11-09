@@ -36,9 +36,9 @@ void loop_switch_continue(
     return;
 }
 
-struct main1Input {
+struct main_Input {
 };
-kernel void main1(
+kernel void main_(
   metal::uint3 global_id [[thread_position_in_grid]]
 ) {
     int pos;

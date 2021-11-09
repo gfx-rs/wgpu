@@ -13,7 +13,7 @@ struct FragmentInput {
     float perspective_sample;
 };
 
-struct main1Output {
+struct main_Output {
     metal::float4 position [[position]];
     metal::uint flat [[user(loc0), flat]];
     float linear [[user(loc1), center_no_perspective]];
@@ -23,7 +23,7 @@ struct main1Output {
     float perspective_centroid [[user(loc5), centroid_perspective]];
     float perspective_sample [[user(loc6), sample_perspective]];
 };
-vertex main1Output main1(
+vertex main_Output main_(
 ) {
     FragmentInput out;
     out.position = metal::float4(2.0, 4.0, 5.0, 6.0);
@@ -36,11 +36,11 @@ vertex main1Output main1(
     out.perspective_sample = 2744.0;
     FragmentInput _e30 = out;
     const auto _tmp = _e30;
-    return main1Output { _tmp.position, _tmp.flat, _tmp.linear, _tmp.linear_centroid, _tmp.linear_sample, _tmp.perspective, _tmp.perspective_centroid, _tmp.perspective_sample };
+    return main_Output { _tmp.position, _tmp.flat, _tmp.linear, _tmp.linear_centroid, _tmp.linear_sample, _tmp.perspective, _tmp.perspective_centroid, _tmp.perspective_sample };
 }
 
 
-struct main2Input {
+struct main_1Input {
     metal::uint flat [[user(loc0), flat]];
     float linear [[user(loc1), center_no_perspective]];
     metal::float2 linear_centroid [[user(loc2), centroid_no_perspective]];
@@ -49,10 +49,10 @@ struct main2Input {
     float perspective_centroid [[user(loc5), centroid_perspective]];
     float perspective_sample [[user(loc6), sample_perspective]];
 };
-fragment void main2(
-  main2Input varyings1 [[stage_in]]
+fragment void main_1(
+  main_1Input varyings_1 [[stage_in]]
 , metal::float4 position [[position]]
 ) {
-    const FragmentInput val = { position, varyings1.flat, varyings1.linear, varyings1.linear_centroid, varyings1.linear_sample, varyings1.perspective, varyings1.perspective_centroid, varyings1.perspective_sample };
+    const FragmentInput val = { position, varyings_1.flat, varyings_1.linear, varyings_1.linear_centroid, varyings_1.linear_sample, varyings_1.perspective, varyings_1.perspective_centroid, varyings_1.perspective_sample };
     return;
 }

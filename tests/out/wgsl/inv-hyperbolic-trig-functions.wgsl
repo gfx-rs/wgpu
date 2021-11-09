@@ -1,6 +1,6 @@
 var<private> a: f32;
 
-fn main1() {
+fn main_1() {
     var b: f32;
     var c: f32;
     var d: f32;
@@ -16,5 +16,5 @@ fn main1() {
 
 [[stage(vertex)]]
 fn main() {
-    main1();
+    main_1();
 }

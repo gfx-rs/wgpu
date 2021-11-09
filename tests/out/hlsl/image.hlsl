@@ -29,21 +29,21 @@ void main(uint3 local_id : SV_GroupThreadID)
 {
     int2 dim = NagaRWDimensions2D(image_storage_src);
     int2 itc = ((dim * int2(local_id.xy)) % int2(10, 20));
-    uint4 value1 = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
-    uint4 value2 = image_multisampled_src.Load(itc, int(local_id.z));
-    uint4 value4 = image_storage_src.Load(itc);
-    uint4 value5 = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
-    image_dst[itc.x] = (((value1 + value2) + value4) + value5);
+    uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
+    uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
+    uint4 value4_ = image_storage_src.Load(itc);
+    uint4 value5_ = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
+    image_dst[itc.x] = (((value1_ + value2_) + value4_) + value5_);
     return;
 }
 
 [numthreads(16, 1, 1)]
-void depth_load(uint3 local_id1 : SV_GroupThreadID)
+void depth_load(uint3 local_id_1 : SV_GroupThreadID)
 {
-    int2 dim1 = NagaRWDimensions2D(image_storage_src);
-    int2 itc1 = ((dim1 * int2(local_id1.xy)) % int2(10, 20));
-    float val = image_depth_multisampled_src.Load(itc1, int(local_id1.z)).x;
-    image_dst[itc1.x] = uint4(uint(val).xxxx);
+    int2 dim_1 = NagaRWDimensions2D(image_storage_src);
+    int2 itc_1 = ((dim_1 * int2(local_id_1.xy)) % int2(10, 20));
+    float val = image_depth_multisampled_src.Load(itc_1, int(local_id_1.z)).x;
+    image_dst[itc_1.x] = uint4(uint(val).xxxx);
     return;
 }
 
@@ -207,11 +207,11 @@ float4 levels_queries() : SV_Position
     int num_layers_cube = NagaNumLayersCubeArray(image_cube_array);
     int num_levels_3d = NagaNumLevels3D(image_3d);
     int num_samples_aa = NagaMSNumSamples2D(image_aa);
-    int sum1 = (((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
-    return float4(float(sum1).xxxx);
+    int sum_1 = (((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
+    return float4(float(sum_1).xxxx);
 }
 
-float4 sample1() : SV_Target0
+float4 sample_() : SV_Target0
 {
     float2 tc = float2(0.5.xx);
     float4 s1d = image_1d.Sample(sampler_reg, tc.x);
@@ -224,8 +224,8 @@ float4 sample1() : SV_Target0
 
 float sample_comparison() : SV_Target0
 {
-    float2 tc1 = float2(0.5.xx);
-    float s2d_depth = image_2d_depth.SampleCmp(sampler_cmp, tc1, 0.5);
-    float s2d_depth_level = image_2d_depth.SampleCmpLevelZero(sampler_cmp, tc1, 0.5);
+    float2 tc_1 = float2(0.5.xx);
+    float s2d_depth = image_2d_depth.SampleCmp(sampler_cmp, tc_1, 0.5);
+    float s2d_depth_level = image_2d_depth.SampleCmpLevelZero(sampler_cmp, tc_1, 0.5);
     return (s2d_depth + s2d_depth_level);
 }

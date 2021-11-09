@@ -18,13 +18,13 @@ var r_sampler: sampler;
 
 [[stage(vertex)]]
 fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
-    var tmp1: i32;
-    var tmp2: i32;
+    var tmp1_: i32;
+    var tmp2_: i32;
 
-    tmp1 = (i32(vertex_index) / 2);
-    tmp2 = (i32(vertex_index) & 1);
-    let e10: i32 = tmp1;
-    let e16: i32 = tmp2;
+    tmp1_ = (i32(vertex_index) / 2);
+    tmp2_ = (i32(vertex_index) & 1);
+    let e10: i32 = tmp1_;
+    let e16: i32 = tmp2_;
     let pos: vec4<f32> = vec4<f32>(((f32(e10) * 4.0) - 1.0), ((f32(e16) * 4.0) - 1.0), 0.0, 1.0);
     let e27: vec4<f32> = r_data.view[0];
     let e31: vec4<f32> = r_data.view[1];

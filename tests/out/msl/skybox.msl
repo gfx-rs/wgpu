@@ -21,12 +21,12 @@ vertex vs_mainOutput vs_main(
   metal::uint vertex_index [[vertex_id]]
 , constant Data& r_data [[buffer(0)]]
 ) {
-    int tmp1;
-    int tmp2;
-    tmp1 = static_cast<int>(vertex_index) / 2;
-    tmp2 = static_cast<int>(vertex_index) & 1;
-    int _e10 = tmp1;
-    int _e16 = tmp2;
+    int tmp1_;
+    int tmp2_;
+    tmp1_ = static_cast<int>(vertex_index) / 2;
+    tmp2_ = static_cast<int>(vertex_index) & 1;
+    int _e10 = tmp1_;
+    int _e16 = tmp2_;
     metal::float4 pos = metal::float4((static_cast<float>(_e10) * 4.0) - 1.0, (static_cast<float>(_e16) * 4.0) - 1.0, 0.0, 1.0);
     metal::float4 _e27 = r_data.view[0];
     metal::float4 _e31 = r_data.view[1];
@@ -43,10 +43,10 @@ struct fs_mainInput {
     metal::float3 uv [[user(loc0), center_perspective]];
 };
 struct fs_mainOutput {
-    metal::float4 member1 [[color(0)]];
+    metal::float4 member_1 [[color(0)]];
 };
 fragment fs_mainOutput fs_main(
-  fs_mainInput varyings1 [[stage_in]]
+  fs_mainInput varyings_1 [[stage_in]]
 , metal::float4 position [[position]]
 , metal::texturecube<float, metal::access::sample> r_texture [[texture(0)]]
 ) {
@@ -58,7 +58,7 @@ fragment fs_mainOutput fs_main(
         metal::min_filter::linear,
         metal::coord::normalized
     );
-    const VertexOutput in = { position, varyings1.uv };
+    const VertexOutput in = { position, varyings_1.uv };
     metal::float4 _e5 = r_texture.sample(r_sampler, in.uv);
     return fs_mainOutput { _e5 };
 }

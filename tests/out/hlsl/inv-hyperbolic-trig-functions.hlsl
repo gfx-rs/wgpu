@@ -1,7 +1,7 @@
 
 static float a = (float)0;
 
-void main1()
+void main_1()
 {
     float b = (float)0;
     float c = (float)0;
@@ -18,5 +18,5 @@ void main1()
 
 void main()
 {
-    main1();
+    main_1();
 }

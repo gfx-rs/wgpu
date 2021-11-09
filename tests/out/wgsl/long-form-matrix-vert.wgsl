@@ -1,4 +1,4 @@
-fn main1() {
+fn main_1() {
     var splat: mat2x2<f32> = mat2x2<f32>(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0));
     var normal: mat2x2<f32> = mat2x2<f32>(vec2<f32>(1.0, 1.0), vec2<f32>(2.0, 2.0));
     var a: mat2x2<f32> = mat2x2<f32>(vec2<f32>(1.0, 2.0), vec2<f32>(3.0, 4.0));
@@ -25,6 +25,6 @@ fn main1() {
 
 [[stage(vertex)]]
 fn main() {
-    main1();
+    main_1();
     return;
 }

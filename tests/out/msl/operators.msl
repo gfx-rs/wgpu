@@ -13,15 +13,15 @@ constant metal::int4 v_i32_one = {1, 1, 1, 1};
 
 metal::float4 builtins(
 ) {
-    int s1 = true ? 1 : 0;
-    metal::float4 s2 = true ? v_f32_one : v_f32_zero;
-    metal::float4 s3 = metal::select(v_f32_one, v_f32_zero, metal::bool4(false, false, false, false));
-    metal::float4 m1 = metal::mix(v_f32_zero, v_f32_one, v_f32_half);
-    metal::float4 m2 = metal::mix(v_f32_zero, v_f32_one, 0.10000000149011612);
-    float b1 = as_type<float>(v_i32_one.x);
-    metal::float4 b2 = as_type<metal::float4>(v_i32_one);
+    int s1_ = true ? 1 : 0;
+    metal::float4 s2_ = true ? v_f32_one : v_f32_zero;
+    metal::float4 s3_ = metal::select(v_f32_one, v_f32_zero, metal::bool4(false, false, false, false));
+    metal::float4 m1_ = metal::mix(v_f32_zero, v_f32_one, v_f32_half);
+    metal::float4 m2_ = metal::mix(v_f32_zero, v_f32_one, 0.10000000149011612);
+    float b1_ = as_type<float>(v_i32_one.x);
+    metal::float4 b2_ = as_type<metal::float4>(v_i32_one);
     metal::int4 v_i32_zero = static_cast<metal::int4>(v_f32_zero);
-    return ((((static_cast<metal::float4>(metal::int4(s1) + v_i32_zero) + s2) + m1) + m2) + metal::float4(b1)) + b2;
+    return ((((static_cast<metal::float4>(metal::int4(s1_) + v_i32_zero) + s2_) + m1_) + m2_) + metal::float4(b1_)) + b2_;
 }
 
 metal::float4 splat(
@@ -57,13 +57,13 @@ float constructors(
 
 void modulo(
 ) {
-    int a1 = 1 % 1;
-    float b1 = metal::fmod(1.0, 1.0);
+    int a_1 = 1 % 1;
+    float b_1 = metal::fmod(1.0, 1.0);
     metal::int3 c = metal::int3(1) % metal::int3(1);
     metal::float3 d = metal::fmod(metal::float3(1.0), metal::float3(1.0));
 }
 
-kernel void main1(
+kernel void main_(
 ) {
     metal::float4 _e4 = builtins();
     metal::float4 _e5 = splat();

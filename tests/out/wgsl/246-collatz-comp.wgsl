@@ -8,26 +8,26 @@ var<storage, read_write> global: PrimeIndices;
 var<private> gl_GlobalInvocationID: vec3<u32>;
 
 fn collatz_iterations(n: u32) -> u32 {
-    var n1: u32;
+    var n_1: u32;
     var i: u32 = 0u;
 
-    n1 = n;
+    n_1 = n;
     loop {
-        let e7: u32 = n1;
+        let e7: u32 = n_1;
         if (!((e7 != u32(1)))) {
             break;
         }
         {
-            let e14: u32 = n1;
+            let e14: u32 = n_1;
             if (((f32(e14) % f32(2)) == f32(0))) {
                 {
-                    let e22: u32 = n1;
-                    n1 = (e22 / u32(2));
+                    let e22: u32 = n_1;
+                    n_1 = (e22 / u32(2));
                 }
             } else {
                 {
-                    let e27: u32 = n1;
-                    n1 = ((u32(3) * e27) + u32(1));
+                    let e27: u32 = n_1;
+                    n_1 = ((u32(3) * e27) + u32(1));
                 }
             }
             let e33: u32 = i;
@@ -38,7 +38,7 @@ fn collatz_iterations(n: u32) -> u32 {
     return e36;
 }
 
-fn main1() {
+fn main_1() {
     var index: u32;
 
     let e3: vec3<u32> = gl_GlobalInvocationID;
@@ -55,6 +55,6 @@ fn main1() {
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn main([[builtin(global_invocation_id)]] param: vec3<u32>) {
     gl_GlobalInvocationID = param;
-    main1();
+    main_1();
     return;
 }

@@ -2,20 +2,20 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-struct type1 {
+struct type_1 {
     int member;
 };
 
 void function(
-    device type1& global
+    device type_1& unnamed
 ) {
-    int _e8 = global.member;
-    global.member = _e8 + 1;
+    int _e8 = unnamed.member;
+    unnamed.member = _e8 + 1;
     return;
 }
 
-kernel void main1(
-  device type1& global [[user(fake0)]]
+kernel void main_(
+  device type_1& unnamed [[user(fake0)]]
 ) {
-    function(global);
+    function(unnamed);
 }

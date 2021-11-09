@@ -5,12 +5,12 @@ struct PushConstants {
 
 var<push_constant> c: PushConstants;
 
-fn main1() {
+fn main_1() {
     return;
 }
 
 [[stage(vertex)]]
 fn main() {
-    main1();
+    main_1();
     return;
 }

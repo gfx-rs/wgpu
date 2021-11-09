@@ -1,4 +1,4 @@
-fn main1() {
+fn main_1() {
     var x: vec3<f32> = vec3<f32>(2.0, 2.0, 2.0);
 
     let e3: vec3<f32> = x;
@@ -15,6 +15,6 @@ fn main1() {
 
 [[stage(fragment)]]
 fn main() {
-    main1();
+    main_1();
     return;
 }
