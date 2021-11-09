@@ -41,7 +41,7 @@ pub enum ClearError {
         end_offset: BufferAddress,
         buffer_size: BufferAddress,
     },
-    #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
+    #[error("destination buffer is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
     #[error("texture lacks the aspects that were specified in the image subresource range. Texture with format {texture_format:?}, specified was {subresource_range_aspects:?}")]
     MissingTextureAspect {
@@ -246,9 +246,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .inner
             .as_raw()
             .ok_or(ClearError::InvalidTexture(dst))?;
-        if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
-            return Err(ClearError::MissingCopyDstUsageFlag(None, Some(dst)));
-        }
 
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));

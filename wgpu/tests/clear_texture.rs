@@ -131,7 +131,9 @@ fn single_texture_clear_test(
         sample_count: 1, // multisampling is not supported for clear
         dimension,
         format,
-        usage: wgpu::TextureUsages::COPY_DST,
+        // Forces internally the required usages to be able to clear it.
+        // This is not visible on the API level.
+        usage: wgpu::TextureUsages::TEXTURE_BINDING,
     });
     let mut encoder = ctx
         .device
