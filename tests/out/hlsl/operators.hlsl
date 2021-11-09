@@ -61,8 +61,8 @@ float constructors()
 
 void modulo()
 {
-    int a1 = (1 % 1);
-    float b1 = (1.0 % 1.0);
+    int a_1 = (1 % 1);
+    float b_1 = (1.0 % 1.0);
     int3 c = (int3(1.xxx) % int3(1.xxx));
     float3 d = (float3(1.0.xxx) % float3(1.0.xxx));
 }

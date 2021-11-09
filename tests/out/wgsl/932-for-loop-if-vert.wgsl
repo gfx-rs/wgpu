@@ -1,4 +1,4 @@
-fn main1() {
+fn main_1() {
     var i: i32 = 0;
 
     loop {
@@ -18,6 +18,6 @@ fn main1() {
 
 [[stage(vertex)]]
 fn main() {
-    main1();
+    main_1();
     return;
 }

@@ -57,13 +57,13 @@ float constructors(
 
 void modulo(
 ) {
-    int a1 = 1 % 1;
-    float b1 = metal::fmod(1.0, 1.0);
+    int a_1 = 1 % 1;
+    float b_1 = metal::fmod(1.0, 1.0);
     metal::int3 c = metal::int3(1) % metal::int3(1);
     metal::float3 d = metal::fmod(metal::float3(1.0), metal::float3(1.0));
 }
 
-kernel void main1(
+kernel void main_(
 ) {
     metal::float4 _e4 = builtins();
     metal::float4 _e5 = splat();

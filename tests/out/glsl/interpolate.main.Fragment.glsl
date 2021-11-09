@@ -1,7 +1,7 @@
 #version 400 core
 struct FragmentInput {
     vec4 position;
-    uint flat1;
+    uint flat_;
     float linear;
     vec2 linear_centroid;
     vec3 linear_sample;

@@ -24,11 +24,11 @@ struct VertexOutput_vertex {
 };
 
 struct FragmentInput_fragment {
-    float varying1 : LOC1;
-    float4 position1 : SV_Position;
-    bool front_facing1 : SV_IsFrontFace;
-    uint sample_index1 : SV_SampleIndex;
-    uint sample_mask1 : SV_Coverage;
+    float varying_1 : LOC1;
+    float4 position_1 : SV_Position;
+    bool front_facing_1 : SV_IsFrontFace;
+    uint sample_index_1 : SV_SampleIndex;
+    uint sample_mask_1 : SV_Coverage;
 };
 
 VertexOutput ConstructVertexOutput(float4 arg0, float arg1) {
@@ -42,8 +42,8 @@ VertexOutput_vertex vertex(uint vertex_index : SV_VertexID, uint instance_index 
 {
     uint tmp = (((_NagaConstants.base_vertex + vertex_index) + (_NagaConstants.base_instance + instance_index)) + color);
     const VertexOutput vertexoutput = ConstructVertexOutput(float4(1.0.xxxx), float(tmp));
-    const VertexOutput_vertex vertexoutput1 = { vertexoutput.varying, vertexoutput.position };
-    return vertexoutput1;
+    const VertexOutput_vertex vertexoutput_1 = { vertexoutput.varying, vertexoutput.position };
+    return vertexoutput_1;
 }
 
 FragmentOutput ConstructFragmentOutput(float arg0, uint arg1, float arg2) {
@@ -56,13 +56,13 @@ FragmentOutput ConstructFragmentOutput(float arg0, uint arg1, float arg2) {
 
 FragmentOutput fragment(FragmentInput_fragment fragmentinput_fragment)
 {
-    VertexOutput in1 = { fragmentinput_fragment.position1, fragmentinput_fragment.varying1 };
-    bool front_facing = fragmentinput_fragment.front_facing1;
-    uint sample_index = fragmentinput_fragment.sample_index1;
-    uint sample_mask = fragmentinput_fragment.sample_mask1;
+    VertexOutput in_ = { fragmentinput_fragment.position_1, fragmentinput_fragment.varying_1 };
+    bool front_facing = fragmentinput_fragment.front_facing_1;
+    uint sample_index = fragmentinput_fragment.sample_index_1;
+    uint sample_mask = fragmentinput_fragment.sample_mask_1;
     uint mask = (sample_mask & (1u << sample_index));
-    float color1 = (front_facing ? 1.0 : 0.0);
-    const FragmentOutput fragmentoutput = ConstructFragmentOutput(in1.varying, mask, color1);
+    float color_1 = (front_facing ? 1.0 : 0.0);
+    const FragmentOutput fragmentoutput = ConstructFragmentOutput(in_.varying, mask, color_1);
     return fragmentoutput;
 }
 

@@ -43,10 +43,10 @@ struct fs_mainInput {
     metal::float3 uv [[user(loc0), center_perspective]];
 };
 struct fs_mainOutput {
-    metal::float4 member1 [[color(0)]];
+    metal::float4 member_1 [[color(0)]];
 };
 fragment fs_mainOutput fs_main(
-  fs_mainInput varyings1 [[stage_in]]
+  fs_mainInput varyings_1 [[stage_in]]
 , metal::float4 position [[position]]
 , metal::texturecube<float, metal::access::sample> r_texture [[texture(0)]]
 ) {
@@ -58,7 +58,7 @@ fragment fs_mainOutput fs_main(
         metal::min_filter::linear,
         metal::coord::normalized
     );
-    const VertexOutput in = { position, varyings1.uv };
+    const VertexOutput in = { position, varyings_1.uv };
     metal::float4 _e5 = r_texture.sample(r_sampler, in.uv);
     return fs_mainOutput { _e5 };
 }

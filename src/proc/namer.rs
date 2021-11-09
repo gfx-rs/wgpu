@@ -1,7 +1,8 @@
 use crate::{arena::Handle, FastHashMap, FastHashSet};
-use std::collections::hash_map::Entry;
+use std::borrow::Cow;
 
 pub type EntryPointIndex = u16;
+const SEPARATOR: char = '_';
 
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub enum NameKey {
@@ -30,26 +31,40 @@ pub struct Namer {
 impl Namer {
     /// Return a form of `string` suitable for use as the base of an identifier.
     ///
-    /// Retain only alphanumeric and `_` characters. Drop leading digits. Ensure
-    /// that the string does not end with a digit, so we can attach numeric
-    /// suffixes without merging. Avoid prefixes in
-    /// [`Namer::reserved_prefixes`].
-    fn sanitize(&self, string: &str) -> String {
-        let mut base = string
-            .chars()
-            .skip_while(|&c| c.is_numeric() || c == '_')
-            .filter(|&c| c.is_ascii_alphanumeric() || c == '_')
-            .collect::<String>();
-        // close the name by '_' if the re is a number, so that
-        // we can have our own number!
-        match base.chars().next_back() {
-            Some(c) if !c.is_numeric() => {}
-            _ => base.push('_'),
+    /// - Drop leading digits.
+    /// - Retain only alphanumeric and `_` characters.
+    /// - Avoid prefixes in [`Namer::reserved_prefixes`].
+    ///
+    /// The return value is a valid identifier prefix in all of Naga's output languages,
+    /// and it never ends with a `SEPARATOR` character.
+    /// It is used as a key into the unique table.
+    fn sanitize<'s>(&self, string: &'s str) -> Cow<'s, str> {
+        let string = string
+            .trim_start_matches(|c: char| c.is_numeric())
+            .trim_end_matches(SEPARATOR);
+
+        let base = if !string.is_empty()
+            && string
+                .chars()
+                .all(|c: char| c.is_ascii_alphanumeric() || c == '_')
+        {
+            Cow::Borrowed(string)
+        } else {
+            let mut filtered = string
+                .chars()
+                .filter(|&c| c.is_ascii_alphanumeric() || c == '_')
+                .collect::<String>();
+            let stripped_len = filtered.trim_end_matches(SEPARATOR).len();
+            filtered.truncate(stripped_len);
+            if filtered.is_empty() {
+                filtered.push_str("unnamed");
+            }
+            Cow::Owned(filtered)
         };
 
         for prefix in &self.reserved_prefixes {
             if base.starts_with(prefix) {
-                return format!("gen_{}", base);
+                return Cow::Owned(format!("gen_{}", base));
             }
         }
 
@@ -66,36 +81,41 @@ impl Namer {
     ///
     /// Guarantee uniqueness by applying a numeric suffix when necessary.
     pub fn call(&mut self, label_raw: &str) -> String {
+        use std::fmt::Write as _; // for write!-ing to Strings
+
         let base = self.sanitize(label_raw);
-        match self.unique.entry(base) {
-            Entry::Occupied(mut e) => {
-                *e.get_mut() += 1;
-                format!("{}{}", e.key(), e.get())
+        debug_assert!(!base.is_empty() && !base.ends_with(SEPARATOR));
+
+        // This would seem to be a natural place to use `HashMap::entry`. However, `entry`
+        // requires an owned key, and we'd like to avoid heap-allocating strings we're
+        // just going to throw away. The approach below double-hashes only when we create
+        // a new entry, in which case the heap allocation of the owned key was more
+        // expensive anyway.
+        match self.unique.get_mut(base.as_ref()) {
+            Some(count) => {
+                *count += 1;
+                // Add the suffix. This may fit in base's existing allocation.
+                let mut suffixed = base.into_owned();
+                write!(&mut suffixed, "{}{}", SEPARATOR, *count).unwrap();
+                suffixed
             }
-            Entry::Vacant(e) => {
-                let name = e.key();
-                if self.keywords.contains(e.key()) {
-                    let name = format!("{}1", name);
-                    e.insert(1);
-                    name
-                } else {
-                    let name = name.to_string();
-                    e.insert(0);
-                    name
+            None => {
+                let mut suffixed = base.to_string();
+                if base.ends_with(char::is_numeric) || self.keywords.contains(base.as_ref()) {
+                    suffixed.push(SEPARATOR);
                 }
+                debug_assert!(!self.keywords.contains(&suffixed));
+                // `self.unique` wants to own its keys. This allocates only if we haven't
+                // already done so earlier.
+                self.unique.insert(base.into_owned(), 0);
+                suffixed
             }
         }
     }
 
     pub fn call_or(&mut self, label: &Option<String>, fallback: &str) -> String {
         self.call(match *label {
-            Some(ref name) => {
-                if name.trim().is_empty() {
-                    fallback
-                } else {
-                    name
-                }
-            }
+            Some(ref name) => name,
             None => fallback,
         })
     }
@@ -229,4 +249,12 @@ impl Namer {
             output.insert(NameKey::Constant(handle), name);
         }
     }
+}
+
+#[test]
+fn test() {
+    let mut namer = Namer::default();
+    assert_eq!(namer.call("x"), "x");
+    assert_eq!(namer.call("x"), "x_1");
+    assert_eq!(namer.call("x1"), "x1_");
 }

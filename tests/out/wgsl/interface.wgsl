@@ -20,8 +20,8 @@ fn vertex([[builtin(vertex_index)]] vertex_index: u32, [[builtin(instance_index)
 [[stage(fragment)]]
 fn fragment(in: VertexOutput, [[builtin(front_facing)]] front_facing: bool, [[builtin(sample_index)]] sample_index: u32, [[builtin(sample_mask)]] sample_mask: u32) -> FragmentOutput {
     let mask: u32 = (sample_mask & (1u << sample_index));
-    let color1: f32 = select(0.0, 1.0, front_facing);
-    return FragmentOutput(in.varying, mask, color1);
+    let color_1: f32 = select(0.0, 1.0, front_facing);
+    return FragmentOutput(in.varying, mask, color_1);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]

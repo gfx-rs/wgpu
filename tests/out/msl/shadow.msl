@@ -15,9 +15,9 @@ struct Light {
     metal::float4 pos;
     metal::float4 color;
 };
-typedef Light type3[1];
+typedef Light type_3[1];
 struct Lights {
-    type3 data;
+    type_3 data;
 };
 constant metal::float3 c_ambient = {0.05000000074505806, 0.05000000074505806, 0.05000000074505806};
 
