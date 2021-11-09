@@ -6,9 +6,9 @@ struct _mslBufferSizes {
     metal::uint size0;
 };
 
-typedef metal::uint type1[1];
+typedef metal::uint type_1[1];
 struct PrimeIndices {
-    type1 data;
+    type_1 data;
 };
 
 metal::uint collatz_iterations(
@@ -37,9 +37,9 @@ metal::uint collatz_iterations(
     return _e24;
 }
 
-struct main1Input {
+struct main_Input {
 };
-kernel void main1(
+kernel void main_(
   metal::uint3 global_id [[thread_position_in_grid]]
 , device PrimeIndices& v_indices [[user(fake0)]]
 ) {

@@ -1,6 +1,6 @@
 [[block]]
 struct DynamicArray {
-    array1: [[stride(4)]] array<u32>;
+    array_: [[stride(4)]] array<u32>;
 };
 
 fn f() {
@@ -11,9 +11,9 @@ fn f() {
     return;
 }
 
-fn index_dynamic_array(p: ptr<workgroup, DynamicArray>, i: i32, v1: u32) -> u32 {
-    let old: u32 = (*p).array1[i];
-    (*p).array1[i] = v1;
+fn index_dynamic_array(p: ptr<workgroup, DynamicArray>, i: i32, v_1: u32) -> u32 {
+    let old: u32 = (*p).array_[i];
+    (*p).array_[i] = v_1;
     return old;
 }
 

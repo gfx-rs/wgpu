@@ -17,8 +17,8 @@ Texture2DArray<float> t_shadow : register(t2);
 SamplerComparisonState sampler_shadow : register(s3);
 
 struct FragmentInput_fs_main {
-    float3 raw_normal1 : LOC0;
-    float4 position1 : LOC1;
+    float3 raw_normal_1 : LOC0;
+    float4 position_1 : LOC1;
 };
 
 float fetch_shadow(uint light_id, float4 homogeneous_coords)
@@ -34,8 +34,8 @@ float fetch_shadow(uint light_id, float4 homogeneous_coords)
 
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
-    float3 raw_normal = fragmentinput_fs_main.raw_normal1;
-    float4 position = fragmentinput_fs_main.position1;
+    float3 raw_normal = fragmentinput_fs_main.raw_normal_1;
+    float4 position = fragmentinput_fs_main.position_1;
     float3 color = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
     uint i = 0u;
 

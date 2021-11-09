@@ -3,7 +3,7 @@
 #include <simd/simd.h>
 
 
-kernel void main1(
+kernel void main_(
 ) {
     return;
 }

@@ -6,7 +6,7 @@ struct TextureData {
 [[group(1), binding(1)]]
 var<uniform> global: TextureData;
 
-fn main1() {
+fn main_1() {
     var coords: vec2<f32>;
 
     let e2: vec4<f32> = global.material;
@@ -16,6 +16,6 @@ fn main1() {
 
 [[stage(fragment)]]
 fn main() {
-    main1();
+    main_1();
     return;
 }

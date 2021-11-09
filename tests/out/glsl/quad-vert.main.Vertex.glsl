@@ -3,14 +3,14 @@
 precision highp float;
 precision highp int;
 
-struct type9 {
+struct type_9 {
     vec2 member;
     vec4 gen_gl_Position;
 };
 
 vec2 v_uv = vec2(0.0, 0.0);
 
-vec2 a_uv1 = vec2(0.0, 0.0);
+vec2 a_uv_1 = vec2(0.0, 0.0);
 
 struct gen_gl_PerVertex_block_0Vs {
     vec4 gen_gl_Position;
@@ -19,16 +19,16 @@ struct gen_gl_PerVertex_block_0Vs {
     float gen_gl_CullDistance[1];
 } perVertexStruct;
 
-vec2 a_pos1 = vec2(0.0, 0.0);
+vec2 a_pos_1 = vec2(0.0, 0.0);
 
 layout(location = 1) in vec2 _p2vs_location1;
 layout(location = 0) in vec2 _p2vs_location0;
 layout(location = 0) smooth out vec2 _vs2fs_location0;
 
-void main2() {
-    vec2 _e12 = a_uv1;
+void main_1() {
+    vec2 _e12 = a_uv_1;
     v_uv = _e12;
-    vec2 _e13 = a_pos1;
+    vec2 _e13 = a_pos_1;
     perVertexStruct.gen_gl_Position = vec4(_e13.x, _e13.y, 0.0, 1.0);
     return;
 }
@@ -36,12 +36,12 @@ void main2() {
 void main() {
     vec2 a_uv = _p2vs_location1;
     vec2 a_pos = _p2vs_location0;
-    a_uv1 = a_uv;
-    a_pos1 = a_pos;
-    main2();
+    a_uv_1 = a_uv;
+    a_pos_1 = a_pos;
+    main_1();
     vec2 _e7 = v_uv;
     vec4 _e8 = perVertexStruct.gen_gl_Position;
-    type9 _tmp_return = type9(_e7, _e8);
+    type_9 _tmp_return = type_9(_e7, _e8);
     _vs2fs_location0 = _tmp_return.member;
     gl_Position = _tmp_return.gen_gl_Position;
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);

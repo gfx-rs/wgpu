@@ -6,25 +6,25 @@ struct _mslBufferSizes {
     metal::uint size0;
 };
 
-struct type3 {
+struct type_3 {
     metal::uint2 inner[2];
 };
-typedef int type5[1];
+typedef int type_5[1];
 struct Bar {
     metal::float4x4 matrix;
     metal::atomic_int atom;
     char _pad2[4];
-    type3 arr;
-    type5 data;
+    type_3 arr;
+    type_5 data;
 };
-struct type11 {
+struct type_11 {
     int inner[5];
 };
 
 float read_from_private(
-    thread float& foo2
+    thread float& foo_2
 ) {
-    float _e2 = foo2;
+    float _e2 = foo_2;
     return _e2;
 }
 
@@ -38,20 +38,20 @@ vertex fooOutput foo(
 , device Bar& bar [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    float foo1 = 0.0;
-    type11 c;
-    float baz = foo1;
-    foo1 = 1.0;
+    float foo_1 = 0.0;
+    type_11 c;
+    float baz = foo_1;
+    foo_1 = 1.0;
     metal::float4x4 matrix = bar.matrix;
-    type3 arr = bar.arr;
+    type_3 arr = bar.arr;
     float b = bar.matrix[3].x;
     int a = bar.data[(1 + (_buffer_sizes.size0 - 88 - 4) / 8) - 2u];
-    float _e25 = read_from_private(foo1);
+    float _e25 = read_from_private(foo_1);
     bar.matrix[1].z = 1.0;
     bar.matrix = metal::float4x4(metal::float4(0.0), metal::float4(1.0), metal::float4(2.0), metal::float4(3.0));
-    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type3 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
+    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type_3 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
     bar.data[1] = 1;
-    for(int _i=0; _i<5; ++_i) c.inner[_i] = type11 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
+    for(int _i=0; _i<5; ++_i) c.inner[_i] = type_11 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
     c.inner[vi + 1u] = 42;
     int value = c.inner[vi];
     return fooOutput { matrix * static_cast<metal::float4>(metal::int4(value)) };
@@ -63,7 +63,7 @@ kernel void atomics(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     int tmp;
-    int value1 = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
+    int value_1 = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
     int _e6 = metal::atomic_fetch_add_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e6;
     int _e9 = metal::atomic_fetch_sub_explicit(&bar.atom, 5, metal::memory_order_relaxed);
@@ -80,6 +80,6 @@ kernel void atomics(
     tmp = _e24;
     int _e27 = metal::atomic_exchange_explicit(&bar.atom, 5, metal::memory_order_relaxed);
     tmp = _e27;
-    metal::atomic_store_explicit(&bar.atom, value1, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&bar.atom, value_1, metal::memory_order_relaxed);
     return;
 }

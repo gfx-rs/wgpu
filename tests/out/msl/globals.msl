@@ -3,12 +3,12 @@
 #include <simd/simd.h>
 
 constexpr constant bool Foo = true;
-struct type2 {
+struct type_2 {
     float inner[10u];
 };
 
-kernel void main1(
-  threadgroup type2& wg
+kernel void main_(
+  threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at
 ) {
     wg.inner[3] = 1.0;

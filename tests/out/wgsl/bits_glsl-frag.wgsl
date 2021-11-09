@@ -1,4 +1,4 @@
-fn main1() {
+fn main_1() {
     var i: i32 = 0;
     var i2_: vec2<i32> = vec2<i32>(0, 0);
     var i3_: vec3<i32> = vec3<i32>(0, 0, 0);
@@ -75,6 +75,6 @@ fn main1() {
 
 [[stage(fragment)]]
 fn main() {
-    main1();
+    main_1();
     return;
 }

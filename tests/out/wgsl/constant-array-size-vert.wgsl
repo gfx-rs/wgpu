@@ -6,7 +6,7 @@ struct Data {
 [[group(1), binding(0)]]
 var<uniform> global: Data;
 
-fn function1() -> vec4<f32> {
+fn function_() -> vec4<f32> {
     var sum: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     var i: i32 = 0;
 
@@ -30,12 +30,12 @@ fn function1() -> vec4<f32> {
     return e20;
 }
 
-fn main1() {
+fn main_1() {
     return;
 }
 
 [[stage(vertex)]]
 fn main() {
-    main1();
+    main_1();
     return;
 }

@@ -5,27 +5,27 @@
 struct PushConstants {
     metal::uint index;
     char _pad1[12];
-    metal::float2 double1;
+    metal::float2 double_;
 };
 struct FragmentIn {
     metal::float4 color;
     metal::uint primitive_index;
 };
 
-struct main1Input {
+struct main_Input {
     metal::float4 color [[user(loc0), center_perspective]];
 };
-struct main1Output {
+struct main_Output {
     metal::float4 member [[color(0)]];
 };
-fragment main1Output main1(
-  main1Input varyings [[stage_in]]
+fragment main_Output main_(
+  main_Input varyings [[stage_in]]
 , metal::uint primitive_index [[primitive_id]]
 ) {
     const FragmentIn in = { varyings.color, primitive_index };
     if ((in.primitive_index % 2u) == 0u) {
-        return main1Output { in.color };
+        return main_Output { in.color };
     } else {
-        return main1Output { metal::float4(metal::float3(1.0) - in.color.xyz, in.color.w) };
+        return main_Output { metal::float4(metal::float3(1.0) - in.color.xyz, in.color.w) };
     }
 }

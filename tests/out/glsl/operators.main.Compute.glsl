@@ -50,8 +50,8 @@ float constructors() {
 }
 
 void modulo() {
-    int a1 = (1 % 1);
-    float b1 = (1.0 - 1.0 * trunc(1.0 / 1.0));
+    int a_1 = (1 % 1);
+    float b_1 = (1.0 - 1.0 * trunc(1.0 / 1.0));
     ivec3 c = (ivec3(1) % ivec3(1));
     vec3 d = (vec3(1.0) - vec3(1.0) * trunc(vec3(1.0) / vec3(1.0)));
 }

@@ -16,10 +16,10 @@ struct VertexOutput {
     [[builtin(position)]] member: vec4<f32>;
 };
 
-var<private> Vertex_Position1: vec3<f32>;
-var<private> Vertex_Normal1: vec3<f32>;
-var<private> Vertex_Uv1: vec2<f32>;
-var<private> Vertex_Tangent1: vec4<f32>;
+var<private> Vertex_Position_1: vec3<f32>;
+var<private> Vertex_Normal_1: vec3<f32>;
+var<private> Vertex_Uv_1: vec2<f32>;
+var<private> Vertex_Tangent_1: vec4<f32>;
 var<private> v_WorldPosition: vec3<f32>;
 var<private> v_WorldNormal: vec3<f32>;
 var<private> v_Uv: vec2<f32>;
@@ -27,25 +27,25 @@ var<private> v_Uv: vec2<f32>;
 var<uniform> global: CameraViewProj;
 var<private> v_WorldTangent: vec4<f32>;
 [[group(2), binding(0)]]
-var<uniform> global1: Transform;
+var<uniform> global_1: Transform;
 var<private> gl_Position: vec4<f32>;
 
-fn main1() {
+fn main_1() {
     var world_position: vec4<f32>;
 
-    let e12: mat4x4<f32> = global1.Model;
-    let e13: vec3<f32> = Vertex_Position1;
+    let e12: mat4x4<f32> = global_1.Model;
+    let e13: vec3<f32> = Vertex_Position_1;
     world_position = (e12 * vec4<f32>(e13, 1.0));
     let e18: vec4<f32> = world_position;
     v_WorldPosition = e18.xyz;
-    let e20: mat4x4<f32> = global1.Model;
-    let e28: vec3<f32> = Vertex_Normal1;
+    let e20: mat4x4<f32> = global_1.Model;
+    let e28: vec3<f32> = Vertex_Normal_1;
     v_WorldNormal = (mat3x3<f32>(e20[0].xyz, e20[1].xyz, e20[2].xyz) * e28);
-    let e30: vec2<f32> = Vertex_Uv1;
+    let e30: vec2<f32> = Vertex_Uv_1;
     v_Uv = e30;
-    let e31: mat4x4<f32> = global1.Model;
-    let e39: vec4<f32> = Vertex_Tangent1;
-    let e42: vec4<f32> = Vertex_Tangent1;
+    let e31: mat4x4<f32> = global_1.Model;
+    let e39: vec4<f32> = Vertex_Tangent_1;
+    let e42: vec4<f32> = Vertex_Tangent_1;
     v_WorldTangent = vec4<f32>((mat3x3<f32>(e31[0].xyz, e31[1].xyz, e31[2].xyz) * e39.xyz), e42.w);
     let e46: mat4x4<f32> = global.ViewProj;
     let e47: vec4<f32> = world_position;
@@ -55,11 +55,11 @@ fn main1() {
 
 [[stage(vertex)]]
 fn main([[location(0)]] Vertex_Position: vec3<f32>, [[location(1)]] Vertex_Normal: vec3<f32>, [[location(2)]] Vertex_Uv: vec2<f32>, [[location(3)]] Vertex_Tangent: vec4<f32>) -> VertexOutput {
-    Vertex_Position1 = Vertex_Position;
-    Vertex_Normal1 = Vertex_Normal;
-    Vertex_Uv1 = Vertex_Uv;
-    Vertex_Tangent1 = Vertex_Tangent;
-    main1();
+    Vertex_Position_1 = Vertex_Position;
+    Vertex_Normal_1 = Vertex_Normal;
+    Vertex_Uv_1 = Vertex_Uv;
+    Vertex_Tangent_1 = Vertex_Tangent;
+    main_1();
     let e29: vec3<f32> = v_WorldPosition;
     let e31: vec3<f32> = v_WorldNormal;
     let e33: vec2<f32> = v_Uv;

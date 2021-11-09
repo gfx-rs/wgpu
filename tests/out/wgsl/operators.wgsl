@@ -47,8 +47,8 @@ fn constructors() -> f32 {
 }
 
 fn modulo() {
-    let a1: i32 = (1 % 1);
-    let b1: f32 = (1.0 % 1.0);
+    let a_1: i32 = (1 % 1);
+    let b_1: f32 = (1.0 % 1.0);
     let c: vec3<i32> = (vec3<i32>(1) % vec3<i32>(1));
     let d: vec3<f32> = (vec3<f32>(1.0) % vec3<f32>(1.0));
 }

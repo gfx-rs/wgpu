@@ -26,6 +26,6 @@ fn main() -> FragmentInput {
 }
 
 [[stage(fragment)]]
-fn main1(val: FragmentInput) {
+fn main_1(val: FragmentInput) {
     return;
 }

@@ -46,11 +46,11 @@ fn main([[builtin(local_invocation_id)]] local_id: vec3<u32>) {
 }
 
 [[stage(compute), workgroup_size(16, 1, 1)]]
-fn depth_load([[builtin(local_invocation_id)]] local_id1: vec3<u32>) {
-    let dim1: vec2<i32> = textureDimensions(image_storage_src);
-    let itc1: vec2<i32> = ((dim1 * vec2<i32>(local_id1.xy)) % vec2<i32>(10, 20));
-    let val: f32 = textureLoad(image_depth_multisampled_src, itc1, i32(local_id1.z));
-    textureStore(image_dst, itc1.x, vec4<u32>(u32(val)));
+fn depth_load([[builtin(local_invocation_id)]] local_id_1: vec3<u32>) {
+    let dim_1: vec2<i32> = textureDimensions(image_storage_src);
+    let itc_1: vec2<i32> = ((dim_1 * vec2<i32>(local_id_1.xy)) % vec2<i32>(10, 20));
+    let val: f32 = textureLoad(image_depth_multisampled_src, itc_1, i32(local_id_1.z));
+    textureStore(image_dst, itc_1.x, vec4<u32>(u32(val)));
     return;
 }
 
@@ -81,8 +81,8 @@ fn levels_queries() -> [[builtin(position)]] vec4<f32> {
     let num_layers_cube: i32 = textureNumLayers(image_cube_array);
     let num_levels_3d: i32 = textureNumLevels(image_3d);
     let num_samples_aa: i32 = textureNumSamples(image_aa);
-    let sum1: i32 = (((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
-    return vec4<f32>(f32(sum1));
+    let sum_1: i32 = (((((((num_layers_2d + num_layers_cube) + num_samples_aa) + num_levels_2d) + num_levels_2d_array) + num_levels_3d) + num_levels_cube) + num_levels_cube_array);
+    return vec4<f32>(f32(sum_1));
 }
 
 [[stage(fragment)]]
@@ -98,8 +98,8 @@ fn sample() -> [[location(0)]] vec4<f32> {
 
 [[stage(fragment)]]
 fn sample_comparison() -> [[location(0)]] f32 {
-    let tc1: vec2<f32> = vec2<f32>(0.5);
-    let s2d_depth: f32 = textureSampleCompare(image_2d_depth, sampler_cmp, tc1, 0.5);
-    let s2d_depth_level: f32 = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc1, 0.5);
+    let tc_1: vec2<f32> = vec2<f32>(0.5);
+    let s2d_depth: f32 = textureSampleCompare(image_2d_depth, sampler_cmp, tc_1, 0.5);
+    let s2d_depth_level: f32 = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc_1, 0.5);
     return (s2d_depth + s2d_depth_level);
 }
