@@ -519,38 +519,29 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
 
 #[cfg(feature = "spv-in")]
 #[test]
-fn convert_spv_quad_vert() {
+fn convert_spv_all() {
     convert_spv(
         "quad-vert",
         false,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
-}
-
-#[cfg(feature = "spv-in")]
-#[test]
-fn convert_spv_shadow() {
     convert_spv("shadow", true, Targets::IR | Targets::ANALYSIS);
-}
-
-#[cfg(feature = "spv-in")]
-#[test]
-fn convert_spv_inverse_hyperbolic_trig_functions() {
     convert_spv(
         "inv-hyperbolic-trig-functions",
         true,
         Targets::HLSL | Targets::WGSL,
     );
-}
-
-#[cfg(feature = "spv-in")]
-#[test]
-fn convert_spv_empty_global_name() {
     convert_spv(
         "empty-global-name",
         true,
         Targets::HLSL | Targets::WGSL | Targets::METAL,
     );
+    convert_spv(
+        "empty-global-name",
+        true,
+        Targets::HLSL | Targets::WGSL | Targets::METAL,
+    );
+    convert_spv("degrees", false, Targets::empty());
 }
 
 #[cfg(feature = "glsl-in")]

@@ -2539,26 +2539,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             get_expr_handle!(arg_id, lexp)
                         };
 
-                        let constant_handle = ctx.const_arena.fetch_or_append(
+                        // constant expressions need to be excluded from the emitter
+                        block.extend(emitter.finish(ctx.expressions));
+                        let const_value = match gl_op {
+                            Glo::Radians => std::f64::consts::PI / 180.0,
+                            Glo::Degrees => 180.0 / std::f64::consts::PI,
+                            _ => unreachable!(),
+                        };
+                        let const_handle = ctx.const_arena.fetch_or_append(
                             crate::Constant {
                                 name: None,
                                 specialization: None,
                                 inner: crate::ConstantInner::Scalar {
                                     width: 4,
-                                    value: crate::ScalarValue::Float(match gl_op {
-                                        Glo::Radians => std::f64::consts::PI / 180.0,
-                                        Glo::Degrees => 180.0 / std::f64::consts::PI,
-                                        _ => unreachable!(),
-                                    }),
+                                    value: crate::ScalarValue::Float(const_value),
                                 },
                             },
-                            Default::default(),
+                            crate::Span::default(),
                         );
-
                         let expr_handle = ctx.expressions.append(
-                            crate::Expression::Constant(constant_handle),
-                            Default::default(),
+                            crate::Expression::Constant(const_handle),
+                            crate::Span::default(),
                         );
+                        emitter.start(ctx.expressions);
 
                         self.lookup_expression.insert(
                             result_id,
