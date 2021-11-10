@@ -163,10 +163,10 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Default)]
     pub struct Features: u64 {
-        /// By default, polygon depth is clipped to 0-1 range. Anything outside of that range
-        /// is rejected, and respective fragments are not touched.
+        /// By default, polygon depth is clipped to 0-1 range before/during rasterization.
+        /// Anything outside of that range is rejected, and respective fragments are not touched.
         ///
-        /// With this extension, we can force clamping of the polygon depth to 0-1. That allows
+        /// With this extension, we can disabling clipping. That allows
         /// shadow map occluders to be rendered into a tighter depth range.
         ///
         /// Supported platforms:
@@ -174,7 +174,7 @@ bitflags::bitflags! {
         /// - some mobile chips
         ///
         /// This is a web and native feature.
-        const DEPTH_CLAMPING = 1 << 0;
+        const DEPTH_CLIP_CONTROL = 1 << 0;
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
         /// with 8 or 16 bytes per block.
         ///
@@ -1309,11 +1309,11 @@ pub struct PrimitiveState {
     /// The face culling mode.
     #[cfg_attr(feature = "serde", serde(default))]
     pub cull_mode: Option<Face>,
-    /// If set to true, the polygon depth is clamped to 0-1 range instead of being clipped.
+    /// If set to true, the polygon depth is not clipped to 0-1 before rasterization.
     ///
-    /// Enabling this requires `Features::DEPTH_CLAMPING` to be enabled.
+    /// Enabling this requires `Features::DEPTH_CLIP_CONTROL` to be enabled.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub clamp_depth: bool,
+    pub unclipped_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
     /// Setting this to `Line` requires `Features::POLYGON_MODE_LINE` to be enabled.

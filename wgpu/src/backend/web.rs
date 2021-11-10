@@ -604,7 +604,8 @@ fn map_primitive_state(primitive: &wgt::PrimitiveState) -> web_sys::GpuPrimitive
         PrimitiveTopology::TriangleStrip => pt::TriangleStrip,
     });
 
-    //mapped.clamp_depth(primitive.clamp_depth);
+    //TODO:
+    //mapped.unclipped_depth(primitive.unclipped_depth);
 
     mapped
 }
@@ -1026,7 +1027,8 @@ impl crate::Context for Context {
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
 
         let possible_features = [
-            (wgt::Features::DEPTH_CLAMPING, Gfn::DepthClamping),
+            //TODO: update the name
+            (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClamping),
             // TODO (_, Gfn::Depth24unormStencil8),
             // TODO (_, Gfn::Depth32floatStencil8),
             (

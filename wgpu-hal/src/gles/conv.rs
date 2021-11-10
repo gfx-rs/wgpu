@@ -254,7 +254,7 @@ pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::Primiti
             Some(wgt::Face::Back) => glow::BACK,
             None => 0,
         },
-        clamp_depth: state.clamp_depth,
+        unclipped_depth: state.unclipped_depth,
     }
 }
 

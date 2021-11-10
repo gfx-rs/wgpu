@@ -546,7 +546,7 @@ struct StencilState {
 struct PrimitiveState {
     front_face: u32,
     cull_face: u32,
-    clamp_depth: bool,
+    unclipped_depth: bool,
 }
 
 type InvalidatedAttachments = ArrayVec<u32, { crate::MAX_COLOR_TARGETS + 2 }>;

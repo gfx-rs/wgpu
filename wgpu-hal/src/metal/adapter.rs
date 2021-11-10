@@ -861,7 +861,8 @@ impl super::PrivateCapabilities {
                 Self::version_at_least(major, minor, 11, 0)
             },
             //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
-            supports_depth_clamping: device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
+            supports_depth_clip_control: device
+                .supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
                 || os_is_mac,
         }
     }
@@ -877,7 +878,7 @@ impl super::PrivateCapabilities {
             | F::POLYGON_MODE_LINE
             | F::CLEAR_COMMANDS;
 
-        features.set(F::DEPTH_CLAMPING, self.supports_depth_clamping);
+        features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
 
         features.set(
             F::TEXTURE_BINDING_ARRAY

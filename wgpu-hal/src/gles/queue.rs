@@ -66,7 +66,7 @@ impl super::Queue {
         gl.disable(glow::BLEND);
         gl.disable(glow::CULL_FACE);
         gl.disable(glow::POLYGON_OFFSET_FILL);
-        if self.features.contains(wgt::Features::DEPTH_CLAMPING) {
+        if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
             gl.disable(glow::DEPTH_CLAMP);
         }
     }
@@ -927,8 +927,9 @@ impl super::Queue {
                 } else {
                     gl.disable(glow::CULL_FACE);
                 }
-                if self.features.contains(wgt::Features::DEPTH_CLAMPING) {
-                    if state.clamp_depth {
+                if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
+                    //Note: this is a bit tricky, since we are controlling the clip, not the clamp.
+                    if state.unclipped_depth {
                         gl.enable(glow::DEPTH_CLAMP);
                     } else {
                         gl.disable(glow::DEPTH_CLAMP);

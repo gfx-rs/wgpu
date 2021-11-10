@@ -1275,7 +1275,7 @@ impl crate::Device<super::Api> for super::Device {
             DepthBias: bias.constant,
             DepthBiasClamp: bias.clamp,
             SlopeScaledDepthBias: bias.slope_scale,
-            DepthClipEnable: if desc.primitive.clamp_depth { 0 } else { 1 },
+            DepthClipEnable: if desc.primitive.unclipped_depth { 0 } else { 1 },
             MultisampleEnable: if desc.multisample.count > 1 { 1 } else { 0 },
             ForcedSampleCount: 0,
             AntialiasedLineEnable: 0,
