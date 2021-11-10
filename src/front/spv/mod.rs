@@ -3881,7 +3881,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let decor = self.future_decor.remove(&id);
         let base_lookup_ty = self.lookup_type.lookup(type_id)?;
-        let class = if let Some(class) = module.types[base_lookup_ty.handle].inner.pointer_class() {
+        let base_inner = &module.types[base_lookup_ty.handle].inner;
+        let class = if let Some(class) = base_inner.pointer_class() {
             class
         } else if self
             .lookup_storage_buffer_types
@@ -3896,6 +3897,22 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 ExtendedClass::Input | ExtendedClass::Output => crate::StorageClass::Private,
             }
         };
+
+        // We don't support pointers to runtime-sized arrays in the `Uniform`
+        // storage class with the `BufferBlock` decoration. Runtime-sized arrays
+        // should be in the StorageBuffer class.
+        if let crate::TypeInner::Array {
+            size: crate::ArraySize::Dynamic,
+            ..
+        } = *base_inner
+        {
+            match class {
+                crate::StorageClass::Storage { .. } => {}
+                _ => {
+                    return Err(Error::UnsupportedRuntimeArrayStorageClass);
+                }
+            }
+        }
 
         // Don't bother with pointer stuff for `Handle` types.
         let lookup_ty = if class == crate::StorageClass::Handle {

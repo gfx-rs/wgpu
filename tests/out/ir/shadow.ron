@@ -200,21 +200,33 @@
             name: None,
             inner: Pointer(
                 base: 19,
-                class: Uniform,
+                class: Storage(
+                    access: (
+                        bits: 3,
+                    ),
+                ),
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 18,
-                class: Uniform,
+                class: Storage(
+                    access: (
+                        bits: 3,
+                    ),
+                ),
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 17,
-                class: Uniform,
+                class: Storage(
+                    access: (
+                        bits: 3,
+                    ),
+                ),
             ),
         ),
         (
@@ -235,14 +247,22 @@
             name: None,
             inner: Pointer(
                 base: 4,
-                class: Uniform,
+                class: Storage(
+                    access: (
+                        bits: 3,
+                    ),
+                ),
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 1,
-                class: Uniform,
+                class: Storage(
+                    access: (
+                        bits: 3,
+                    ),
+                ),
             ),
         ),
         (

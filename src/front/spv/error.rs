@@ -41,6 +41,8 @@ pub enum Error {
     UnsupportedControlFlow(spirv::Word),
     #[error("unsupported binary operator %{0}")]
     UnsupportedBinaryOperator(spirv::Word),
+    #[error("Naga supports OpTypeRuntimeArray in the StorageBuffer storage class only")]
+    UnsupportedRuntimeArrayStorageClass,
     #[error("unknown binary operator {0:?}")]
     UnknownBinaryOperator(spirv::Op),
     #[error("unknown relational function {0:?}")]
