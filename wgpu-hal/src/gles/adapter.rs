@@ -191,6 +191,8 @@ impl super::Adapter {
         let ver = Self::parse_version(&version).ok()?;
 
         let supports_storage = ver >= (3, 1);
+        let supports_work_group_params = ver >= (3, 1);
+
         let shading_language_version = {
             let sl_version = gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION);
             log::info!("SL version: {}", &sl_version);
@@ -328,11 +330,14 @@ impl super::Adapter {
             gl.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_BLOCKS)
                 .min(gl.get_parameter_i32(glow::MAX_FRAGMENT_UNIFORM_BLOCKS)) as u32;
 
-        let max_compute_workgroups_per_dimension = gl
-            .get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 0)
-            .min(gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 1))
-            .min(gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 2))
-            as u32;
+        let max_compute_workgroups_per_dimension = if supports_work_group_params {
+            gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 0)
+                .min(gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 1))
+                .min(gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, 2))
+                as u32
+        } else {
+            0
+        };
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
@@ -373,15 +378,21 @@ impl super::Adapter {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
-            max_compute_workgroup_size_x: gl
-                .get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 0)
-                as u32,
-            max_compute_workgroup_size_y: gl
-                .get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 1)
-                as u32,
-            max_compute_workgroup_size_z: gl
-                .get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 2)
-                as u32,
+            max_compute_workgroup_size_x: if supports_work_group_params {
+                gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 0) as u32
+            } else {
+                0
+            },
+            max_compute_workgroup_size_y: if supports_work_group_params {
+                gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 1) as u32
+            } else {
+                0
+            },
+            max_compute_workgroup_size_z: if supports_work_group_params {
+                gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 2) as u32
+            } else {
+                0
+            },
             max_compute_workgroups_per_dimension,
         };
 
