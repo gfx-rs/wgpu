@@ -70,6 +70,10 @@ void testStructConstructor() {
     BST tree = BST(1);
 }
 
+void testNonScalarToScalarConstructor() {
+    float f = float(mat2(1.0));
+}
+
 void testArrayConstructor() {
     float tree[1] = float[1](0.0);
 }

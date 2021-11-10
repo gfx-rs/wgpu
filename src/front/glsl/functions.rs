@@ -117,15 +117,42 @@ impl Parser {
 
                 ctx.add_expression(Expression::Splat { size, value }, meta, body)
             }
-            TypeInner::Scalar { kind, width } => ctx.add_expression(
-                Expression::As {
-                    kind,
-                    expr: value,
-                    convert: Some(width),
-                },
-                meta,
-                body,
-            ),
+            TypeInner::Scalar { kind, width } => {
+                let mut expr = value;
+                if let TypeInner::Vector { .. } | TypeInner::Matrix { .. } =
+                    *self.resolve_type(ctx, value, expr_meta)?
+                {
+                    expr = ctx.add_expression(
+                        Expression::AccessIndex {
+                            base: expr,
+                            index: 0,
+                        },
+                        meta,
+                        body,
+                    );
+                }
+
+                if let TypeInner::Matrix { .. } = *self.resolve_type(ctx, value, expr_meta)? {
+                    expr = ctx.add_expression(
+                        Expression::AccessIndex {
+                            base: expr,
+                            index: 0,
+                        },
+                        meta,
+                        body,
+                    );
+                }
+
+                ctx.add_expression(
+                    Expression::As {
+                        kind,
+                        expr,
+                        convert: Some(width),
+                    },
+                    meta,
+                    body,
+                )
+            }
             TypeInner::Vector { size, kind, width } => {
                 if vector_size.map_or(true, |s| s != size) {
                     value = ctx.vector_resize(size, value, expr_meta, body);

@@ -180,6 +180,11 @@ fn testStructConstructor() {
 
 }
 
+fn testNonScalarToScalarConstructor() {
+    var f: f32 = 1.0;
+
+}
+
 fn testArrayConstructor() {
     var tree_1: array<f32,1u> = array<f32,1u>(0.0);
 
