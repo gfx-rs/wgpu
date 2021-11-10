@@ -280,7 +280,7 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_COMMANDS;
         features.set(
-            wgt::Features::DEPTH_CLAMPING,
+            wgt::Features::DEPTH_CLIP_CONTROL,
             extensions.contains("GL_EXT_depth_clamp"),
         );
         features.set(

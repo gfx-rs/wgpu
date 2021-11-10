@@ -22,6 +22,7 @@ pub struct PhysicalDeviceFeatures {
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
     image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
     robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
+    depth_clip_enable: Option<vk::PhysicalDeviceDepthClipEnableFeaturesEXT>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -51,6 +52,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.robustness2 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.depth_clip_enable {
             info = info.push_next(feature);
         }
         info
@@ -102,7 +106,6 @@ impl PhysicalDeviceFeatures {
                 .multi_draw_indirect(
                     requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
                 )
-                .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLAMPING))
                 .fill_mode_non_solid(requested_features.intersects(
                     wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT,
                 ))
@@ -281,6 +284,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            depth_clip_enable: if enabled_extensions.contains(&vk::ExtDepthClipEnableFn::name()) {
+                Some(
+                    vk::PhysicalDeviceDepthClipEnableFeaturesEXT::builder()
+                        .depth_clip_enable(
+                            requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL),
+                        )
+                        .build(),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -307,7 +321,6 @@ impl PhysicalDeviceFeatures {
 
         //if self.core.dual_src_blend != 0
         features.set(F::MULTI_DRAW_INDIRECT, self.core.multi_draw_indirect != 0);
-        features.set(F::DEPTH_CLAMPING, self.core.depth_clamp != 0);
         features.set(F::POLYGON_MODE_LINE, self.core.fill_mode_non_solid != 0);
         features.set(F::POLYGON_MODE_POINT, self.core.fill_mode_non_solid != 0);
         //if self.core.depth_bounds != 0 {
@@ -462,6 +475,10 @@ impl PhysicalDeviceFeatures {
             }
         }
 
+        if let Some(ref feature) = self.depth_clip_enable {
+            features.set(F::DEPTH_CLIP_CONTROL, feature.depth_clip_enable != 0);
+        }
+
         (features, dl_flags)
     }
 
@@ -538,6 +555,10 @@ impl PhysicalDeviceCapabilities {
 
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
             extensions.push(vk::ExtConservativeRasterizationFn::name());
+        }
+
+        if requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
+            extensions.push(vk::ExtDepthClipEnableFn::name());
         }
 
         extensions

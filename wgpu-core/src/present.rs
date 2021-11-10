@@ -1,12 +1,12 @@
 /*! Presentation.
 
-    ## Lifecycle
+## Lifecycle
 
-    Whenever a submission detects the use of any surface texture, it adds it to the device
-    tracker for the duration of the submission (temporarily, while recording).
-    It's added with `UNINITIALIZED` state and transitioned into `empty()` state.
-    When this texture is presented, we remove it from the device tracker as well as
-    extract it from the hub.
+Whenever a submission detects the use of any surface texture, it adds it to the device
+tracker for the duration of the submission (temporarily, while recording).
+It's added with `UNINITIALIZED` state and transitioned into `empty()` state.
+When this texture is presented, we remove it from the device tracker as well as
+extract it from the hub.
 !*/
 
 #[cfg(feature = "trace")]

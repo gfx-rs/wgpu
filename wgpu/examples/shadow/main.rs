@@ -210,7 +210,7 @@ impl Example {
 
 impl framework::Example for Example {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::DEPTH_CLAMPING
+        wgpu::Features::DEPTH_CLIP_CONTROL
     }
 
     fn init(
@@ -510,7 +510,9 @@ impl framework::Example for Example {
                     topology: wgpu::PrimitiveTopology::TriangleList,
                     front_face: wgpu::FrontFace::Ccw,
                     cull_mode: Some(wgpu::Face::Back),
-                    clamp_depth: device.features().contains(wgpu::Features::DEPTH_CLAMPING),
+                    unclipped_depth: device
+                        .features()
+                        .contains(wgpu::Features::DEPTH_CLIP_CONTROL),
                     ..Default::default()
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {

@@ -171,7 +171,7 @@ struct GpuPrimitiveState {
     strip_index_format: Option<wgpu_types::IndexFormat>,
     front_face: wgpu_types::FrontFace,
     cull_mode: GpuCullMode,
-    clamp_depth: bool,
+    unclipped_depth: bool,
 }
 
 impl From<GpuPrimitiveState> for wgpu_types::PrimitiveState {
@@ -181,7 +181,7 @@ impl From<GpuPrimitiveState> for wgpu_types::PrimitiveState {
             strip_index_format: value.strip_index_format,
             front_face: value.front_face,
             cull_mode: value.cull_mode.into(),
-            clamp_depth: value.clamp_depth,
+            unclipped_depth: value.unclipped_depth,
             polygon_mode: Default::default(), // native-only
             conservative: false,              // native-only
         }

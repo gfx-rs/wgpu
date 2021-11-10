@@ -906,8 +906,8 @@ impl crate::Device<super::Api> for super::Device {
             raw_triangle_fill_mode,
             raw_front_winding: conv::map_winding(desc.primitive.front_face),
             raw_cull_mode: conv::map_cull_mode(desc.primitive.cull_mode),
-            raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLAMPING) {
-                Some(if desc.primitive.clamp_depth {
+            raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
+                Some(if desc.primitive.unclipped_depth {
                     mtl::MTLDepthClipMode::Clamp
                 } else {
                     mtl::MTLDepthClipMode::Clip

@@ -2211,8 +2211,8 @@ impl<A: HalApi> Device<A> {
             );
         }
 
-        if desc.primitive.clamp_depth {
-            self.require_features(wgt::Features::DEPTH_CLAMPING)?;
+        if desc.primitive.unclipped_depth {
+            self.require_features(wgt::Features::DEPTH_CLIP_CONTROL)?;
         }
 
         if desc.primitive.polygon_mode == wgt::PolygonMode::Line {

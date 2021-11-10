@@ -1382,7 +1382,6 @@ impl crate::Device<super::Api> for super::Device {
         };
 
         let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::builder()
-            .depth_clamp_enable(desc.primitive.clamp_depth)
             .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
             .front_face(conv::map_front_face(desc.primitive.front_face))
             .line_width(1.0);
@@ -1395,6 +1394,13 @@ impl crate::Device<super::Api> for super::Device {
                 .build();
         if desc.primitive.conservative {
             vk_rasterization = vk_rasterization.push_next(&mut vk_rasterization_conservative_state);
+        }
+        let mut vk_depth_clip_state =
+            vk::PipelineRasterizationDepthClipStateCreateInfoEXT::builder()
+                .depth_clip_enable(false)
+                .build();
+        if desc.primitive.unclipped_depth {
+            vk_rasterization = vk_rasterization.push_next(&mut vk_depth_clip_state);
         }
 
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::builder();
