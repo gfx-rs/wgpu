@@ -75,12 +75,12 @@ js-sys = { version = "0.3" }
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "323999f"
+rev = "eda078d"
 #version = "0.7"
 
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "323999f"
+rev = "eda078d"
 #version = "0.7"
 features = ["wgsl-in"]
 
