@@ -492,10 +492,10 @@ impl Context {
 
                 parser.field_selection(self, ExprPos::Lhs == pos, body, base, field, meta)?
             }
-            HirExprKind::Constant(constant) if pos == ExprPos::Rhs => {
+            HirExprKind::Constant(constant) if pos != ExprPos::Lhs => {
                 self.add_expression(Expression::Constant(constant), meta, body)
             }
-            HirExprKind::Binary { left, op, right } if pos == ExprPos::Rhs => {
+            HirExprKind::Binary { left, op, right } if pos != ExprPos::Lhs => {
                 let (mut left, left_meta) =
                     self.lower_expect_inner(stmt, parser, left, pos, body)?;
                 let (mut right, right_meta) =
@@ -599,7 +599,7 @@ impl Context {
                     _ => self.add_expression(Expression::Binary { left, op, right }, meta, body),
                 }
             }
-            HirExprKind::Unary { op, expr } if pos == ExprPos::Rhs => {
+            HirExprKind::Unary { op, expr } if pos != ExprPos::Lhs => {
                 let expr = self.lower_expect_inner(stmt, parser, expr, pos, body)?.0;
 
                 self.add_expression(Expression::Unary { op, expr }, meta, body)
