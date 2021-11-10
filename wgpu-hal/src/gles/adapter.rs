@@ -191,6 +191,7 @@ impl super::Adapter {
         let ver = Self::parse_version(&version).ok()?;
 
         let supports_storage = ver >= (3, 1);
+
         let shading_language_version = {
             let sl_version = gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION);
             log::info!("SL version: {}", &sl_version);
