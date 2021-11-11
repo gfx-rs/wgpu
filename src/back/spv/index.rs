@@ -65,10 +65,6 @@ impl<'w> BlockContext<'w> {
                     crate::Expression::GlobalVariable(handle) => {
                         (self.writer.global_variables[handle.index()].id, index)
                     }
-                    crate::Expression::FunctionArgument(index) => {
-                        let parameter_id = self.function.parameter_id(index);
-                        (parameter_id, index)
-                    }
                     _ => return Err(Error::Validation("array length expression")),
                 }
             }
