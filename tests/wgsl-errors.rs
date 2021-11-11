@@ -662,7 +662,6 @@ fn invalid_structs() {
 fn invalid_functions() {
     check_validation_error! {
         "fn unacceptable_unsized(arg: array<f32>) { }",
-        "fn unacceptable_unsized(arg: ptr<storage, array<f32>>) { }",
         "
         struct Unsized { data: array<f32>; };
         fn unacceptable_unsized(arg: Unsized) { }
@@ -678,19 +677,39 @@ fn invalid_functions() {
         if function_name == "unacceptable_unsized" && argument_name == "arg"
     }
 
+    // Pointer's storage class cannot hold unsized data.
     check_validation_error! {
+        "fn unacceptable_unsized(arg: ptr<workgroup, array<f32>>) { }",
         "
         struct Unsized { data: array<f32>; };
-        fn acceptable_pointer_to_unsized(arg: ptr<workgroup, Unsized>) { }
+        fn unacceptable_unsized(arg: ptr<workgroup, Unsized>) { }
         ":
-        Ok(_)
+        Err(naga::valid::ValidationError::Type {
+            error: naga::valid::TypeError::InvalidPointerToUnsized {
+                base: _,
+                class: naga::StorageClass::WorkGroup { .. },
+            },
+            ..
+        })
+    }
+
+    // Pointers of these storage classes cannot be passed as arguments.
+    check_validation_error! {
+        "fn unacceptable_ptr_class(arg: ptr<storage, array<f32>>) { }":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            error: naga::valid::FunctionError::InvalidArgumentPointerClass {
+                index: 0,
+                name: argument_name,
+                class: naga::StorageClass::Storage { .. },
+            },
+            ..
+        })
+        if function_name == "unacceptable_ptr_class" && argument_name == "arg"
     }
 
     check_validation_error! {
-        "
-        struct Unsized { data: array<f32>; };
-        fn unacceptable_uniform_class(arg: ptr<uniform, f32>) { }
-        ":
+        "fn unacceptable_ptr_class(arg: ptr<uniform, f32>) { }":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
             error: naga::valid::FunctionError::InvalidArgumentPointerClass {
@@ -700,7 +719,7 @@ fn invalid_functions() {
             },
             ..
         })
-        if function_name == "unacceptable_uniform_class" && argument_name == "arg"
+        if function_name == "unacceptable_ptr_class" && argument_name == "arg"
     }
 }
 

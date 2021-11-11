@@ -843,16 +843,6 @@ impl super::Validator {
 
         #[cfg(feature = "validate")]
         for (index, argument) in fun.arguments.iter().enumerate() {
-            if !self.types[argument.ty.index()]
-                .flags
-                .contains(super::TypeFlags::ARGUMENT)
-            {
-                return Err(FunctionError::InvalidArgumentType {
-                    index,
-                    name: argument.name.clone().unwrap_or_default(),
-                }
-                .with_span_handle(argument.ty, &module.types));
-            }
             match module.types[argument.ty].inner.pointer_class() {
                 Some(crate::StorageClass::Private)
                 | Some(crate::StorageClass::Function)
@@ -866,6 +856,17 @@ impl super::Validator {
                     }
                     .with_span_handle(argument.ty, &module.types))
                 }
+            }
+            // Check for the least informative error last.
+            if !self.types[argument.ty.index()]
+                .flags
+                .contains(super::TypeFlags::ARGUMENT)
+            {
+                return Err(FunctionError::InvalidArgumentType {
+                    index,
+                    name: argument.name.clone().unwrap_or_default(),
+                }
+                .with_span_handle(argument.ty, &module.types));
             }
         }
 
