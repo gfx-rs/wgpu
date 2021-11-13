@@ -226,6 +226,10 @@ impl<'w> BlockContext<'w> {
                     | crate::TypeInner::Matrix { .. }
                     | crate::TypeInner::Array { .. }
                     | crate::TypeInner::Struct { .. } => {
+                        // We never need bounds checks here: dynamically sized arrays can
+                        // only appear behind pointers, and are thus handled by the
+                        // `is_intermediate` case above. Everything else's size is
+                        // statically known and checked in validation.
                         let id = self.gen_id();
                         let base_id = self.cached[base];
                         block.body.push(Instruction::composite_extract(
