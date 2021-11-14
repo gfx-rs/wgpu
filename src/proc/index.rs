@@ -49,10 +49,6 @@ pub enum IndexableLength {
     /// Values of this type always have the given number of elements.
     Known(u32),
 
-    /// The value of the given specializable constant is the number of elements.
-    /// (Non-specializable constants are reported as `Known`.)
-    Specializable(crate::Handle<crate::Constant>),
-
     /// The number of elements is determined at runtime.
     Dynamic,
 }
@@ -65,7 +61,11 @@ impl crate::ArraySize {
                 K {
                     specialization: Some(_),
                     ..
-                } => IndexableLength::Specializable(k),
+                } => {
+                    // Specializable constants are not supported as array lengths.
+                    // See valid::TypeError::UnsupportedSpecializedArrayLength.
+                    return Err(ProcError::InvalidArraySizeConstant(k));
+                }
                 ref unspecialized => {
                     let length = unspecialized
                         .to_array_length()

@@ -109,10 +109,6 @@ impl<'w> BlockContext<'w> {
                 let length_id = self.write_runtime_array_length(sequence, block)?;
                 Ok(MaybeKnown::Computed(length_id))
             }
-            crate::proc::IndexableLength::Specializable(constant) => {
-                let length_id = self.writer.constant_ids[constant.index()];
-                Ok(MaybeKnown::Computed(length_id))
-            }
         }
     }
 
