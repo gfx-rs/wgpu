@@ -87,7 +87,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
-            list.push(TraceCommand::ClearBuffer { dst, offset, size });
+            list.push(TraceCommand::FillBuffer { dst, offset, size });
         }
 
         let (dst_buffer, dst_pending) = cmd_buf
