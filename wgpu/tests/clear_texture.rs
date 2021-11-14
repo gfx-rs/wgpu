@@ -112,7 +112,10 @@ fn single_texture_clear_test(
     size: wgpu::Extent3d,
     dimension: wgpu::TextureDimension,
 ) {
-    println!("clearing texture with {:?}", format);
+    println!(
+        "clearing texture with {:?}, dimension {:?}, size {:?}",
+        format, dimension, size
+    );
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&format!("texture {:?}", format)),
@@ -186,16 +189,18 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat], su
             wgpu::TextureDimension::D2,
         );
         // volume texture
-        single_texture_clear_test(
-            ctx,
-            format,
-            wgpu::Extent3d {
-                width: 16,
-                height: 16,
-                depth_or_array_layers: 16,
-            },
-            wgpu::TextureDimension::D3,
-        );
+        if format.describe().sample_type != wgt::TextureSampleType::Depth {
+            single_texture_clear_test(
+                ctx,
+                format,
+                wgpu::Extent3d {
+                    width: 16,
+                    height: 16,
+                    depth_or_array_layers: 16,
+                },
+                wgpu::TextureDimension::D3,
+            );
+        }
     }
 }
 

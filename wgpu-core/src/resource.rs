@@ -238,7 +238,7 @@ impl<A: hal::Api> Texture<A> {
                         dimension: match self.desc.dimension {
                             wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
                             wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                            wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+                            wgt::TextureDimension::D3 => panic!("Can't create clear view for D3 textures. Use clear via copy instead."),
                         },
                         usage: if self.desc.format.describe().sample_type
                             == wgt::TextureSampleType::Depth
@@ -328,6 +328,8 @@ pub enum TextureDimensionError {
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error("Depth Texture format {0:?} can't be used for volume textures")]
+    CannotCreateDepthVolumeTexture(wgt::TextureFormat),
     #[error("Textures cannot have empty usage flags")]
     EmptyUsage,
     #[error(transparent)]

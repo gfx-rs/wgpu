@@ -220,14 +220,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let clear_usage = if dst_texture
-            .hal_usage
-            .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
+        let is_3d = dst_texture.desc.dimension == wgt::TextureDimension::D3;
+        let clear_usage = if !is_3d
+            && dst_texture
+                .hal_usage
+                .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
         {
             hal::TextureUses::DEPTH_STENCIL_WRITE
-        } else if dst_texture
-            .hal_usage
-            .contains(hal::TextureUses::COLOR_TARGET)
+        } else if !is_3d
+            && dst_texture
+                .hal_usage
+                .contains(hal::TextureUses::COLOR_TARGET)
         {
             hal::TextureUses::COLOR_TARGET
         } else if dst_texture.hal_usage.contains(hal::TextureUses::COPY_DST) {
@@ -289,9 +292,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let dst_texture = texture_guard
                 .get_mut(dst)
                 .map_err(|_| ClearError::InvalidTexture(dst))?;
-            let extent_base = dst_texture.desc.size;
-            let sample_count = dst_texture.desc.sample_count;
             let is_3d_texture = dst_texture.desc.dimension == wgt::TextureDimension::D3;
+            let extent_base = wgt::Extent3d {
+                width: dst_texture.desc.size.width,
+                height: dst_texture.desc.size.height,
+                depth_or_array_layers: 1, // TODO: What about 3d textures? Only one slice a time, sure but how to select it?
+            };
+
+            let sample_count = dst_texture.desc.sample_count;
 
             for mip_level in subresource_range.base_mip_level..subresource_level_end {
                 let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
@@ -320,6 +328,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     stencil_ops: hal::AttachmentOps::STORE,
                                     clear_value: (0.0, 0),
                                 }),
+                                multiview: None,
                             });
                         }
                     } else {
@@ -335,6 +344,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     clear_value: wgt::Color::TRANSPARENT,
                                 }],
                                 depth_stencil_attachment: None,
+                                multiview: None,
                             });
                         }
                     };

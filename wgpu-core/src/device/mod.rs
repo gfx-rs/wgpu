@@ -635,8 +635,16 @@ impl<A: HalApi> Device<A> {
         adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
-        // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
         let format_desc = desc.format.describe();
+
+        // Depth volume textures can't be written to - depth forbids COPY_DST and volume textures can't be rendered to - therefore they aren't allowed.
+        if format_desc.sample_type == wgt::TextureSampleType::Depth
+            && desc.dimension == wgt::TextureDimension::D3
+        {
+            return Err(resource::CreateTextureError::CannotCreateDepthVolumeTexture(desc.format));
+        }
+
+        // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
         let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())
             | if format_desc.sample_type == wgt::TextureSampleType::Depth {
                 hal::TextureUses::DEPTH_STENCIL_WRITE
