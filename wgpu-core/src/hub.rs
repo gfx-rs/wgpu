@@ -644,6 +644,17 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         for element in self.textures.data.write().map.drain(..) {
             if let Element::Occupied(texture, _) = element {
                 let device = &devices[texture.device_id.value];
+
+                for layer_clear_views in texture.clear_views {
+                    for view in layer_clear_views {
+                        if let Some(view) = view {
+                            unsafe {
+                                device.raw.destroy_texture_view(view);
+                            }
+                        }
+                    }
+                }
+
                 if let TextureInner::Native { raw: Some(raw) } = texture.inner {
                     unsafe {
                         device.raw.destroy_texture(raw);

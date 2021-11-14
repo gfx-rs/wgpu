@@ -17,6 +17,7 @@ use crate::{
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
+use smallvec::SmallVec;
 use std::{iter, mem, num::NonZeroU32, ptr};
 use thiserror::Error;
 
@@ -63,7 +64,7 @@ impl<A: hal::Api> StagingData<A> {
 #[derive(Debug)]
 pub enum TempResource<A: hal::Api> {
     Buffer(A::Buffer),
-    Texture(A::Texture),
+    Texture(A::Texture, SmallVec<[A::TextureView; 1]>),
 }
 
 /// A queue execution for a particular command encoder.
@@ -116,7 +117,10 @@ impl<A: hal::Api> PendingWrites<A> {
                 TempResource::Buffer(buffer) => unsafe {
                     device.destroy_buffer(buffer);
                 },
-                TempResource::Texture(texture) => unsafe {
+                TempResource::Texture(texture, views) => unsafe {
+                    for view in views.into_iter() {
+                        device.destroy_texture_view(view);
+                    }
                     device.destroy_texture(texture);
                 },
             }

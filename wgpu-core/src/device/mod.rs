@@ -3396,15 +3396,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             trace.lock().add(trace::Action::FreeTexture(texture_id));
         }
 
+        let last_submit_index = texture.life_guard.life_count();
+
         match texture.inner {
             resource::TextureInner::Native { ref mut raw } => {
                 let raw = raw.take().ok_or(resource::DestroyError::AlreadyDestroyed)?;
-                let temp = queue::TempResource::Texture(raw);
+                let temp = queue::TempResource::Texture(
+                    raw,
+                    texture
+                        .clear_views
+                        .drain(..)
+                        .flat_map(|layers| layers.into_iter().filter_map(|v| v))
+                        .collect(),
+                );
 
                 if device.pending_writes.dst_textures.contains(&texture_id) {
                     device.pending_writes.temp_resources.push(temp);
                 } else {
-                    let last_submit_index = texture.life_guard.life_count();
                     drop(texture_guard);
                     device
                         .lock_life(&mut token)
