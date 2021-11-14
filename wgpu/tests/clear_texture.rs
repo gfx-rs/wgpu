@@ -112,11 +112,6 @@ fn single_texture_clear_test(
     size: wgpu::Extent3d,
     dimension: wgpu::TextureDimension,
 ) {
-    // clear_texture not supported for depth textures.
-    if format.describe().sample_type == wgpu::TextureSampleType::Depth {
-        return;
-    }
-
     println!("clearing texture with {:?}", format);
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {

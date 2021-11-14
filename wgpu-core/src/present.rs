@@ -22,6 +22,7 @@ use crate::{
     LifeGuard, Stored,
 };
 
+use arrayvec::ArrayVec;
 use hal::{Queue as _, Surface as _};
 use thiserror::Error;
 use wgt::SurfaceStatus as Status;
@@ -158,6 +159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         levels: 0..1,
                     },
                     life_guard: LifeGuard::new("<Surface>"),
+                    clear_views: ArrayVec::new(),
                 };
 
                 let ref_count = texture.life_guard.add_ref();

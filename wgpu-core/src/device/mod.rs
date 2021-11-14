@@ -625,6 +625,7 @@ impl<A: HalApi> Device<A> {
                 layers: 0..desc.array_layer_count(),
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            clear_views: ArrayVec::new(),
         }
     }
 
@@ -634,9 +635,16 @@ impl<A: HalApi> Device<A> {
         adapter: &crate::instance::Adapter<A>,
         desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
-        // Enforce COPY_DST, otherwise we wouldn't be able to initialize the texture.
-        let hal_usage =
-            conv::map_texture_usage(desc.usage, desc.format.into()) | hal::TextureUses::COPY_DST;
+        // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
+        let format_desc = desc.format.describe();
+        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())
+            | if format_desc.sample_type == wgt::TextureSampleType::Depth {
+                hal::TextureUses::DEPTH_STENCIL_WRITE
+            } else if desc.sample_count > 1 {
+                hal::TextureUses::COLOR_TARGET
+            } else {
+                hal::TextureUses::COPY_DST
+            };
 
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.borrow_option(),
