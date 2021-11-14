@@ -89,6 +89,8 @@ pub enum TypeError {
     InvalidArrayBaseType(Handle<crate::Type>),
     #[error("The constant {0:?} can not be used for an array size")]
     InvalidArraySizeConstant(Handle<crate::Constant>),
+    #[error("The constant {0:?} is specialized, and cannot be used as an array size")]
+    UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
     #[error("Array type {0:?} must have a length of one or more")]
     NonPositiveArrayLength(Handle<crate::Constant>),
     #[error("Array stride {stride} is smaller than the base element size {base_size}")]
@@ -350,6 +352,19 @@ impl super::Validator {
                 let sized_flag = match size {
                     crate::ArraySize::Constant(const_handle) => {
                         let length_is_positive = match constants.try_get(const_handle) {
+                            Some(&crate::Constant {
+                                specialization: Some(_),
+                                ..
+                            }) => {
+                                // Many of our back ends don't seem to support
+                                // specializable array lengths. If you want to try to make
+                                // this work, be sure to address all uses of
+                                // `Constant::to_array_length`, which ignores
+                                // specialization.
+                                return Err(TypeError::UnsupportedSpecializedArrayLength(
+                                    const_handle,
+                                ));
+                            }
                             Some(&crate::Constant {
                                 inner:
                                     crate::ConstantInner::Scalar {
