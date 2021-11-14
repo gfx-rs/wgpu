@@ -424,7 +424,7 @@ trait Context: Debug + Send + Sized + Sync {
         texture: &Texture,
         subresource_range: &ImageSubresourceRange,
     );
-    fn command_encoder_clear_buffer(
+    fn command_encoder_fill_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
         buffer: &Buffer,
@@ -2357,16 +2357,15 @@ impl CommandEncoder {
     ///
     /// # Panics
     ///
-    /// - `CLEAR_COMMANDS` extension not enabled
     /// - Buffer does not have `COPY_DST` usage.
     /// - Range it out of bounds
-    pub fn clear_buffer(
+    pub fn fill_buffer(
         &mut self,
         buffer: &Buffer,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        Context::command_encoder_clear_buffer(
+        Context::command_encoder_fill_buffer(
             &*self.context,
             self.id.as_ref().unwrap(),
             buffer,
