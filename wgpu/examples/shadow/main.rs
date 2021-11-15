@@ -580,10 +580,7 @@ impl framework::Example for Example {
                         wgpu::BindGroupLayoutEntry {
                             binding: 3,
                             visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler {
-                                comparison: true,
-                                filtering: true,
-                            },
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                             count: None,
                         },
                     ],
