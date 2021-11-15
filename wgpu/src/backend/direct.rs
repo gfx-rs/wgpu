@@ -2008,7 +2008,7 @@ impl crate::Context for Context {
         }
     }
 
-    fn command_encoder_clear_buffer(
+    fn command_encoder_fill_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
         buffer: &crate::Buffer,
@@ -2016,12 +2016,12 @@ impl crate::Context for Context {
         size: Option<wgt::BufferSize>,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_clear_buffer(
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_fill_buffer(
             encoder.id,
             buffer.id.id,
             offset, size
         )) {
-            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::clear_buffer");
+            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::fill_buffer");
         }
     }
 

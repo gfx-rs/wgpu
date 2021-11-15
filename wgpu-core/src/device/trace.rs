@@ -147,7 +147,7 @@ pub enum Command {
         dst: crate::command::ImageCopyTexture,
         size: wgt::Extent3d,
     },
-    ClearBuffer {
+    FillBuffer {
         dst: id::BufferId,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,

@@ -69,14 +69,14 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_clear_buffer<A: HalApi>(
+    pub fn command_encoder_fill_buffer<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), ClearError> {
-        profiling::scope!("CommandEncoder::clear_buffer");
+        profiling::scope!("CommandEncoder::fill_buffer");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -87,11 +87,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
-            list.push(TraceCommand::ClearBuffer { dst, offset, size });
-        }
-
-        if !cmd_buf.support_clear_buffer_texture {
-            return Err(ClearError::MissingClearCommandsFeature);
+            list.push(TraceCommand::FillBuffer { dst, offset, size });
         }
 
         let (dst_buffer, dst_pending) = cmd_buf
@@ -130,7 +126,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => dst_buffer.size,
         };
         if offset == end {
-            log::trace!("Ignoring clear_buffer of size 0");
+            log::trace!("Ignoring fill_buffer of size 0");
             return Ok(());
         }
 

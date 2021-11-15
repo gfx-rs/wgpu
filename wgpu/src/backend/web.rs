@@ -1990,7 +1990,7 @@ impl crate::Context for Context {
     ) {
     }
 
-    fn command_encoder_clear_buffer(
+    fn command_encoder_fill_buffer(
         &self,
         _encoder: &Self::CommandEncoderId,
         _buffer: &crate::Buffer,
