@@ -1835,7 +1835,29 @@ impl Device {
             context: Arc::clone(&self.context),
             id: self
                 .context
-                .create_texture_from_hal::<A>(hal_texture, &self.id, desc),
+                .create_texture_from_hal::<A>(hal_texture, &self.id, desc, false),
+            owned: true,
+        }
+    }
+
+    /// Creates an initialized [`Texture`] from a wgpu-hal Texture.
+    ///
+    /// # Safety
+    ///
+    /// - `hal_texture` must be created from this device internal handle
+    /// - `hal_texture` must be created respecting `desc`
+    /// - `hal_texture` must be initialized
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn create_texture_from_hal_initialized<A: wgc::hub::HalApi>(
+        &self,
+        hal_texture: A::Texture,
+        desc: &TextureDescriptor,
+    ) -> Texture {
+        Texture {
+            context: Arc::clone(&self.context),
+            id: self
+                .context
+                .create_texture_from_hal::<A>(hal_texture, &self.id, desc, true),
             owned: true,
         }
     }
@@ -1871,6 +1893,21 @@ impl Device {
     /// Stops frame capture.
     pub fn stop_capture(&self) {
         Context::device_stop_capture(&*self.context, &self.id)
+    }
+
+    /// Returns the inner hal Device using a callback. The hal device will be `None` if the
+    /// backend type argument does not match with this wgpu Device
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Device must not be manually destroyed
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+        &self,
+        hal_device_callback: F,
+    ) -> R {
+        self.context
+            .device_as_hal::<A, F, R>(&self.id, hal_device_callback)
     }
 }
 

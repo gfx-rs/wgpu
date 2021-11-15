@@ -3205,6 +3205,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
+        initialized: bool,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         profiling::scope!("create_texture", "Device");
 
@@ -3238,8 +3239,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(error) => break error,
             };
 
-            let texture =
+            let mut texture =
                 device.create_texture_from_hal(hal_texture, device_id, desc, format_features);
+            if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
+                texture.hal_usage |= hal::TextureUses::COPY_DST;
+            }
+
+            if initialized {
+                texture.initialization_status = TextureInitTracker::new(desc.mip_level_count, 0);
+            }
+
             let num_levels = texture.full_range.levels.end;
             let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();

@@ -100,6 +100,7 @@ impl Context {
         hal_texture: A::Texture,
         device: &Device,
         desc: &TextureDescriptor,
+        initialized: bool,
     ) -> Texture {
         let global = &self.0;
         let (id, error) = global.create_texture_from_hal::<A>(
@@ -107,6 +108,7 @@ impl Context {
             device.id,
             &desc.map_label(|l| l.map(Borrowed)),
             PhantomData,
+            initialized,
         );
         if let Some(cause) = error {
             self.handle_error(
@@ -121,6 +123,16 @@ impl Context {
             id,
             error_sink: Arc::clone(&device.error_sink),
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+        &self,
+        device: &Device,
+        hal_device_callback: F,
+    ) -> R {
+        self.0
+            .device_as_hal::<A, F, R>(device.id, hal_device_callback)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

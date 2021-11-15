@@ -1,3 +1,4 @@
+use parking_lot::Mutex;
 use std::{
     ptr,
     sync::{atomic, Arc},
@@ -191,6 +192,10 @@ impl super::Device {
             mip_levels,
             copy_size,
         }
+    }
+
+    pub fn raw_device(&self) -> &Mutex<mtl::Device> {
+        &self.shared.device
     }
 }
 
