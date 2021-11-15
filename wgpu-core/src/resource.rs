@@ -210,6 +210,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         hal_texture_callback(hal_texture);
     }
 
+    /// # Safety
+    ///
+    /// - The raw device handle must not be manually destroyed
     pub unsafe fn device_as_hal<A: HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         id: DeviceId,
