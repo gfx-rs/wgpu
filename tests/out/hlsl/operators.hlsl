@@ -67,6 +67,12 @@ void modulo()
     float3 d = (float3(1.0.xxx) % float3(1.0.xxx));
 }
 
+void scalar_times_matrix()
+{
+    float4x4 model = float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
+    float4x4 assertion = mul(model, 2.0);
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
@@ -76,5 +82,6 @@ void main()
     const float3 _e8 = bool_cast(float4(1.0, 1.0, 1.0, 1.0).xyz);
     const float _e9 = constructors();
     modulo();
+    scalar_times_matrix();
     return;
 }

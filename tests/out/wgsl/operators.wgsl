@@ -53,6 +53,11 @@ fn modulo() {
     let d: vec3<f32> = (vec3<f32>(1.0) % vec3<f32>(1.0));
 }
 
+fn scalar_times_matrix() {
+    let model: mat4x4<f32> = mat4x4<f32>(vec4<f32>(1.0, 0.0, 0.0, 0.0), vec4<f32>(0.0, 1.0, 0.0, 0.0), vec4<f32>(0.0, 0.0, 1.0, 0.0), vec4<f32>(0.0, 0.0, 0.0, 1.0));
+    let assertion: mat4x4<f32> = (2.0 * model);
+}
+
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn main() {
     let e4: vec4<f32> = builtins();
@@ -61,5 +66,6 @@ fn main() {
     let e8: vec3<f32> = bool_cast(vec4<f32>(1.0, 1.0, 1.0, 1.0).xyz);
     let e9: f32 = constructors();
     modulo();
+    scalar_times_matrix();
     return;
 }

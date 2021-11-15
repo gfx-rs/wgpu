@@ -63,6 +63,12 @@ void modulo(
     metal::float3 d = metal::fmod(metal::float3(1.0), metal::float3(1.0));
 }
 
+void scalar_times_matrix(
+) {
+    metal::float4x4 model = metal::float4x4(metal::float4(1.0, 0.0, 0.0, 0.0), metal::float4(0.0, 1.0, 0.0, 0.0), metal::float4(0.0, 0.0, 1.0, 0.0), metal::float4(0.0, 0.0, 0.0, 1.0));
+    metal::float4x4 assertion = 2.0 * model;
+}
+
 kernel void main_(
 ) {
     metal::float4 _e4 = builtins();
@@ -71,5 +77,6 @@ kernel void main_(
     metal::float3 _e8 = bool_cast(v_f32_one.xyz);
     float _e9 = constructors();
     modulo();
+    scalar_times_matrix();
     return;
 }

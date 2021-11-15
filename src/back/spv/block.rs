@@ -346,6 +346,10 @@ impl<'w> BlockContext<'w> {
                         (Dimension::Matrix, Dimension::Scalar { .. }) => {
                             spirv::Op::MatrixTimesScalar
                         }
+                        (Dimension::Scalar, Dimension::Matrix { .. }) => {
+                            preserve_order = false;
+                            spirv::Op::MatrixTimesScalar
+                        }
                         (Dimension::Matrix, Dimension::Vector) => spirv::Op::MatrixTimesVector,
                         (Dimension::Matrix, Dimension::Matrix) => spirv::Op::MatrixTimesMatrix,
                         (Dimension::Vector, Dimension::Vector)
@@ -356,7 +360,6 @@ impl<'w> BlockContext<'w> {
                         }
                         (Dimension::Vector, Dimension::Vector)
                         | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
-                        other => unimplemented!("Mul {:?}", other),
                     },
                     crate::BinaryOperator::Divide => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SDiv,

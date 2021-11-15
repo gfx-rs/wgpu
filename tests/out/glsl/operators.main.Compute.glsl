@@ -56,6 +56,11 @@ void modulo() {
     vec3 d = (vec3(1.0) - vec3(1.0) * trunc(vec3(1.0) / vec3(1.0)));
 }
 
+void scalar_times_matrix() {
+    mat4x4 model = mat4x4(vec4(1.0, 0.0, 0.0, 0.0), vec4(0.0, 1.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
+    mat4x4 assertion = (2.0 * model);
+}
+
 void main() {
     vec4 _e4 = builtins();
     vec4 _e5 = splat();
@@ -63,6 +68,7 @@ void main() {
     vec3 _e8 = bool_cast(vec4(1.0, 1.0, 1.0, 1.0).xyz);
     float _e9 = constructors();
     modulo();
+    scalar_times_matrix();
     return;
 }
 
