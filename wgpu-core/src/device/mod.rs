@@ -2211,6 +2211,14 @@ impl<A: HalApi> Device<A> {
             );
         }
 
+        if desc.primitive.strip_index_format.is_none() && desc.primitive.topology.is_strip() {
+            return Err(
+                pipeline::CreateRenderPipelineError::NoStripIndexFormatForStripTopology {
+                    topology: desc.primitive.topology,
+                },
+            );
+        }
+
         if desc.primitive.unclipped_depth {
             self.require_features(wgt::Features::DEPTH_CLIP_CONTROL)?;
         }

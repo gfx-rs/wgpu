@@ -125,6 +125,7 @@ impl framework::Example for Example {
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: Some(wgpu::IndexFormat::Uint16),
                 ..wgpu::PrimitiveState::default()
             },
             depth_stencil: None,
