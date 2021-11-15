@@ -86,9 +86,7 @@ impl SuspectedResources {
 struct NonReferencedResources<A: hal::Api> {
     buffers: Vec<A::Buffer>,
     textures: Vec<A::Texture>,
-    // Note: we keep the associated ID here in order to be able to check
-    // at any point what resources are used in a submission.
-    texture_views: Vec<(id::Valid<id::TextureViewId>, A::TextureView)>,
+    texture_views: Vec<A::TextureView>,
     samplers: Vec<A::Sampler>,
     bind_groups: Vec<A::BindGroup>,
     compute_pipes: Vec<A::ComputePipeline>,
@@ -142,7 +140,7 @@ impl<A: hal::Api> NonReferencedResources<A> {
         }
         if !self.texture_views.is_empty() {
             profiling::scope!("destroy_texture_views");
-            for (_, raw) in self.texture_views.drain(..) {
+            for raw in self.texture_views.drain(..) {
                 device.destroy_texture_view(raw);
             }
         }
@@ -433,7 +431,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .find(|a| a.index == submit_index)
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                             .texture_views
-                            .push((id, res.raw));
+                            .push(res.raw);
                     }
                 }
             }
