@@ -11,6 +11,8 @@ fn switch_case_break() {
         case 0: {
             break;
         }
+        default: {
+        }
     }
     return;
 }
@@ -20,6 +22,8 @@ fn loop_switch_continue(x: i32) {
         switch(x) {
             case 1: {
                 continue;
+            }
+            default: {
             }
         }
     }
@@ -58,6 +62,8 @@ fn main([[builtin(global_invocation_id)]] global_id: vec3<u32>) {
     }
     switch(0u) {
         case 0u: {
+        }
+        default: {
         }
     }
     let e10: i32 = pos;

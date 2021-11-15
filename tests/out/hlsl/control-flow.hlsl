@@ -14,6 +14,9 @@ void switch_case_break()
         case 0: {
             break;
         }
+        default: {
+            break;
+        }
     }
     return;
 }
@@ -24,6 +27,9 @@ void loop_switch_continue(int x)
         switch(x) {
             case 1: {
                 continue;
+            }
+            default: {
+                break;
             }
         }
     }
@@ -69,6 +75,9 @@ void main(uint3 global_id : SV_DispatchThreadID)
     }
     switch(0u) {
         case 0u: {
+            break;
+        }
+        default: {
             break;
         }
     }

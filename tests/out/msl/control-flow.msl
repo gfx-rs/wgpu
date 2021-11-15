@@ -19,6 +19,9 @@ void switch_case_break(
         case 0: {
             break;
         }
+        default: {
+            break;
+        }
     }
     return;
 }
@@ -30,6 +33,9 @@ void loop_switch_continue(
         switch(x) {
             case 1: {
                 continue;
+            }
+            default: {
+                break;
             }
         }
     }
@@ -73,6 +79,9 @@ kernel void main_(
     }
     switch(0u) {
         case 0u: {
+            break;
+        }
+        default: {
             break;
         }
     }

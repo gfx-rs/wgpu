@@ -106,6 +106,8 @@ pub enum FunctionError {
     InvalidSwitchType(Handle<crate::Expression>),
     #[error("Multiple `switch` cases for {0:?} are present")]
     ConflictingSwitchCase(i32),
+    #[error("The `switch` is missing a `default` case")]
+    MissingDefaultCase,
     #[error("Multiple `default` cases are present")]
     MultipleDefaultCases,
     #[error("The last `switch` case contains a `falltrough`")]
@@ -470,6 +472,10 @@ impl super::Validator {
                                 default = true
                             }
                         }
+                    }
+                    if !default {
+                        return Err(FunctionError::MissingDefaultCase
+                            .with_span_static(span, "missing default case"));
                     }
                     if let Some(case) = cases.last() {
                         if case.fall_through {

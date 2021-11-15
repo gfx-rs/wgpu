@@ -995,6 +995,7 @@ fn last_case_falltrough() {
         "
         fn test_falltrough() {
           switch(0) {
+            default: {}
             case 0: {
               fallthrough;
             }
@@ -1004,6 +1005,25 @@ fn last_case_falltrough() {
         Err(
             naga::valid::ValidationError::Function {
                 error: naga::valid::FunctionError::LastCaseFallTrough,
+                ..
+            },
+        )
+    }
+}
+
+#[test]
+fn missing_default_case() {
+    check_validation_error! {
+        "
+        fn test_missing_default_case() {
+          switch(0) {
+            case 0: {}
+          }
+        }
+        ":
+        Err(
+            naga::valid::ValidationError::Function {
+                error: naga::valid::FunctionError::MissingDefaultCase,
                 ..
             },
         )

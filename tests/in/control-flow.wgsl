@@ -36,6 +36,8 @@ fn main([[builtin(global_invocation_id)]] global_id: vec3<u32>) {
 	switch(0u) {
 		case 0u: {
 		}
+        default: {
+        }
 	}
 
     // non-empty switch in last-statement-in-function position
@@ -71,6 +73,7 @@ fn switch_case_break() {
         case 0: {
             break;
         }
+        default: {}
     }
     return;
 }
@@ -81,6 +84,7 @@ fn loop_switch_continue(x: i32) {
             case 1: {
                 continue;
             }
+            default: {}
         }
     }
 }
