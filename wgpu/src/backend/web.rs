@@ -1283,15 +1283,18 @@ impl crate::Context for Context {
                         });
                         mapped_entry.buffer(&buffer);
                     }
-                    wgt::BindingType::Sampler {
-                        comparison,
-                        filtering,
-                    } => {
+                    wgt::BindingType::Sampler(ty) => {
                         let mut sampler = web_sys::GpuSamplerBindingLayout::new();
-                        sampler.type_(match (comparison, filtering) {
-                            (false, false) => web_sys::GpuSamplerBindingType::NonFiltering,
-                            (false, true) => web_sys::GpuSamplerBindingType::Filtering,
-                            (true, _) => web_sys::GpuSamplerBindingType::Comparison,
+                        sampler.type_(match ty {
+                            wgt::SamplerBindingType::NonFiltering => {
+                                web_sys::GpuSamplerBindingType::NonFiltering
+                            }
+                            wgt::SamplerBindingType::Filtering => {
+                                web_sys::GpuSamplerBindingType::Filtering
+                            }
+                            wgt::SamplerBindingType::Comparison => {
+                                web_sys::GpuSamplerBindingType::Comparison
+                            }
                         });
                         mapped_entry.sampler(&sampler);
                     }

@@ -391,11 +391,8 @@ impl Resource {
                 allowed_usage
             }
             ResourceType::Sampler { comparison } => match entry.ty {
-                BindingType::Sampler {
-                    filtering: _,
-                    comparison: cmp,
-                } => {
-                    if cmp == comparison {
+                BindingType::Sampler(ty) => {
+                    if (ty == wgt::SamplerBindingType::Comparison) == comparison {
                         GlobalUse::READ
                     } else {
                         return Err(BindingError::WrongSamplerComparison);
@@ -536,10 +533,11 @@ impl Resource {
                 has_dynamic_offset: false,
                 min_binding_size: Some(size),
             },
-            ResourceType::Sampler { comparison } => BindingType::Sampler {
-                filtering: true,
-                comparison,
-            },
+            ResourceType::Sampler { comparison } => BindingType::Sampler(if comparison {
+                wgt::SamplerBindingType::Comparison
+            } else {
+                wgt::SamplerBindingType::Filtering
+            }),
             ResourceType::Texture {
                 dim,
                 arrayed,
@@ -1031,9 +1029,11 @@ impl Interface {
                         sample_type: wgt::TextureSampleType::Float { filterable },
                         ..
                     } => match sampler_layout.ty {
-                        wgt::BindingType::Sampler {
-                            filtering: true, ..
-                        } if !filterable => Some(FilteringError::NonFilterable),
+                        wgt::BindingType::Sampler(wgt::SamplerBindingType::Filtering)
+                            if !filterable =>
+                        {
+                            Some(FilteringError::NonFilterable)
+                        }
                         _ => None,
                     },
                     wgt::BindingType::Texture {

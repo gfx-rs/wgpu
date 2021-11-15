@@ -3194,6 +3194,25 @@ pub enum StorageTextureAccess {
     ReadWrite,
 }
 
+/// Specific type of a sampler binding.
+///
+/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gpusamplerbindingtype>
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum SamplerBindingType {
+    /// The sampling result is produced based on more than a single color sample from a texture,
+    /// e.g. when bilinear interpolation is enabled.
+    Filtering,
+    /// The sampling result is produced based on a single color sample from a texture.
+    NonFiltering,
+    /// Use as a comparison sampler instead of a normal sampler.
+    /// For more info take a look at the analogous functionality in OpenGL: <https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode>.
+    Comparison,
+}
+
 /// Specific type of a binding.
 ///
 /// WebGPU spec: the enum of
@@ -3227,16 +3246,7 @@ pub enum BindingType {
     /// layout(binding = 0)
     /// uniform sampler s;
     /// ```
-    Sampler {
-        /// The sampling result is produced based on more than a single color sample from a texture,
-        /// e.g. when bilinear interpolation is enabled.
-        ///
-        /// A filtering sampler can only be used with a filterable texture.
-        filtering: bool,
-        /// Use as a comparison sampler instead of a normal sampler.
-        /// For more info take a look at the analogous functionality in OpenGL: <https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode>.
-        comparison: bool,
-    },
+    Sampler(SamplerBindingType),
     /// A texture binding.
     ///
     /// Example GLSL syntax:

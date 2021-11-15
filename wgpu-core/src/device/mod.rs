@@ -1521,29 +1521,34 @@ impl<A: HalApi> Device<A> {
                 }
                 Br::Sampler(id) => {
                     match decl.ty {
-                        wgt::BindingType::Sampler {
-                            filtering,
-                            comparison,
-                        } => {
+                        wgt::BindingType::Sampler(ty) => {
                             let sampler = used
                                 .samplers
                                 .use_extend(&*sampler_guard, id, (), ())
                                 .map_err(|_| Error::InvalidSampler(id))?;
 
-                            // Check the actual sampler to also (not) be a comparison sampler
-                            if sampler.comparison != comparison {
+                            // Allowed sampler values for filtering and comparison
+                            let (allowed_filtering, allowed_comparison) = match ty {
+                                wgt::SamplerBindingType::Filtering => (None, false),
+                                wgt::SamplerBindingType::NonFiltering => (Some(false), false),
+                                wgt::SamplerBindingType::Comparison => (None, true),
+                            };
+
+                            if let Some(allowed_filtering) = allowed_filtering {
+                                if allowed_filtering != sampler.filtering {
+                                    return Err(Error::WrongSamplerFiltering {
+                                        binding,
+                                        layout_flt: allowed_filtering,
+                                        sampler_flt: sampler.filtering,
+                                    });
+                                }
+                            }
+
+                            if allowed_comparison != sampler.comparison {
                                 return Err(Error::WrongSamplerComparison {
                                     binding,
-                                    layout_cmp: comparison,
+                                    layout_cmp: allowed_comparison,
                                     sampler_cmp: sampler.comparison,
-                                });
-                            }
-                            // Check the actual sampler to be non-filtering, if required
-                            if sampler.filtering && !filtering {
-                                return Err(Error::WrongSamplerFiltering {
-                                    binding,
-                                    layout_flt: filtering,
-                                    sampler_flt: sampler.filtering,
                                 });
                             }
 
