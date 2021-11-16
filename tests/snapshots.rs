@@ -125,7 +125,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "serialize")]
     {
         if targets.contains(Targets::IR) {
-            let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
+            let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
             let string = ron::ser::to_string_pretty(module, config).unwrap();
             fs::write(dest.join(format!("ir/{}.ron", name)), string).unwrap();
         }
@@ -138,7 +138,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "serialize")]
     {
         if targets.contains(Targets::ANALYSIS) {
-            let config = ron::ser::PrettyConfig::default().with_new_line("\n".to_string());
+            let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
             let string = ron::ser::to_string_pretty(&info, config).unwrap();
             fs::write(dest.join(format!("analysis/{}.info.ron", name)), string).unwrap();
         }

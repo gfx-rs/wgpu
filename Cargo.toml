@@ -49,11 +49,11 @@ validate = []
 
 [dev-dependencies]
 diff = "0.1"
-ron = "0.6"
+ron = "0.7"
 serde = { version = "1.0", features = ["derive"] }
 spirv = { version = "0.2", features = ["deserialize"] }
-rspirv = "0.10"
-env_logger = "0.8"
+rspirv = "0.11"
+env_logger = "0.9"
 
 [workspace]
 members = [".", "cli"]
