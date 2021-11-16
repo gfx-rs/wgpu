@@ -215,11 +215,6 @@ pub mod valid;
 
 pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 
-use std::{
-    collections::{HashMap, HashSet},
-    hash::BuildHasherDefault,
-};
-
 pub use crate::span::{Span, SpanContext, WithSpan};
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
@@ -230,9 +225,9 @@ use serde::Serialize;
 pub const BOOL_WIDTH: Bytes = 1;
 
 /// Hash map that is faster but not resilient to DoS attacks.
-pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
+pub type FastHashMap<K, T> = rustc_hash::FxHashMap<K, T>;
 /// Hash set that is faster but not resilient to DoS attacks.
-pub type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
+pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
 
 /// Map of expressions that have associated variable names
 pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;

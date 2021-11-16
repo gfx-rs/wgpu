@@ -547,7 +547,7 @@ pub struct Parser<I> {
     switch_cases: indexmap::IndexMap<
         spirv::Word,
         (BodyIndex, Vec<i32>),
-        std::hash::BuildHasherDefault<fxhash::FxHasher>,
+        std::hash::BuildHasherDefault<rustc_hash::FxHasher>,
     >,
 
     /// Tracks usage of builtins, used to cull unused builtins since they can
