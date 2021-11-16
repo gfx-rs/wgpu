@@ -606,10 +606,12 @@ impl super::Validator {
                         }
                         _ => {}
                     }
-                    let good = match *context
+
+                    let pointer_ty = context
                         .resolve_pointer_type(pointer)
-                        .map_err(|e| e.with_span())?
-                    {
+                        .map_err(|e| e.with_span())?;
+
+                    let good = match *pointer_ty {
                         Ti::Pointer { base, class: _ } => match context.types[base].inner {
                             Ti::Atomic { kind, width } => *value_ty == Ti::Scalar { kind, width },
                             ref other => value_ty == other,
@@ -633,6 +635,16 @@ impl super::Validator {
                             .with_span()
                             .with_handle(pointer, context.expressions)
                             .with_handle(value, context.expressions));
+                    }
+
+                    if let Some(class) = pointer_ty.pointer_class() {
+                        if !class.access().contains(crate::StorageAccess::STORE) {
+                            return Err(FunctionError::InvalidStorePointer(pointer)
+                                .with_span_static(
+                                    context.expressions.get_span(pointer),
+                                    "writing to this location is not permitted",
+                                ));
+                        }
                     }
                 }
                 S::ImageStore {

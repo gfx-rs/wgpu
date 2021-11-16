@@ -1029,3 +1029,45 @@ fn missing_default_case() {
         )
     }
 }
+
+#[test]
+fn wrong_access_mode() {
+    // The assignments to `global.i` should be forbidden, because they are in
+    // variables whose access mode is `read`, not `read_write`.
+    check_validation_error! {
+        "
+            [[block]]
+            struct Globals {
+                i: i32;
+            };
+
+            [[group(0), binding(0)]]
+            var<storage> globals: Globals;
+
+            fn store(v: i32) {
+                globals.i = v;
+            }
+        ",
+        "
+            [[block]]
+            struct Globals {
+                i: i32;
+            };
+
+            [[group(0), binding(0)]]
+            var<uniform> globals: Globals;
+
+            fn store(v: i32) {
+                globals.i = v;
+            }
+        ":
+        Err(
+            naga::valid::ValidationError::Function {
+                name,
+                error: naga::valid::FunctionError::InvalidStorePointer(_),
+                ..
+            },
+        )
+            if name == "store"
+    }
+}
