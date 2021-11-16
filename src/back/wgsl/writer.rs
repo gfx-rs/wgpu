@@ -1857,6 +1857,7 @@ fn builtin_str(built_in: crate::BuiltIn) -> Option<&'static str> {
         Bi::SampleIndex => Some("sample_index"),
         Bi::SampleMask => Some("sample_mask"),
         Bi::PrimitiveIndex => Some("primitive_index"),
+        Bi::ViewIndex => Some("view_index"),
         _ => None,
     }
 }
