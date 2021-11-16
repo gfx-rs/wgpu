@@ -1275,6 +1275,7 @@ impl crate::Context for Context {
                 },
                 targets: Borrowed(frag.targets),
             }),
+            multiview: desc.multiview,
         };
 
         let global = &self.0;
@@ -1496,6 +1497,7 @@ impl crate::Context for Context {
             color_formats: Borrowed(desc.color_formats),
             depth_stencil: desc.depth_stencil,
             sample_count: desc.sample_count,
+            multiview: desc.multiview,
         };
         match wgc::command::RenderBundleEncoder::new(&descriptor, device.id, None) {
             Ok(id) => id,

@@ -31,7 +31,7 @@ mod conv;
 mod device;
 mod instance;
 
-use std::{borrow::Borrow, ffi::CStr, sync::Arc};
+use std::{borrow::Borrow, ffi::CStr, num::NonZeroU32, sync::Arc};
 
 use arrayvec::ArrayVec;
 use ash::{
@@ -210,6 +210,7 @@ struct RenderPassKey {
     colors: ArrayVec<ColorAttachmentKey, { crate::MAX_COLOR_TARGETS }>,
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
+    multiview: Option<NonZeroU32>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -373,6 +374,7 @@ impl Texture {
 #[derive(Debug)]
 pub struct TextureView {
     raw: vk::ImageView,
+    layers: NonZeroU32,
     attachment: FramebufferAttachment,
 }
 

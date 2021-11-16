@@ -984,18 +984,18 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.7.1"
-source = "git+https://github.com/gfx-rs/naga?rev=eda078d#eda078d736a906b4267e4803db6b32e3162aac30"
+source = "git+https://github.com/gfx-rs/naga?rev=29571cc#29571cc4cfbb28558948b1b31ad764f55b69f37b"
 dependencies = [
  "bit-set",
  "bitflags",
  "codespan-reporting",
- "fxhash",
  "hexf-parse",
  "indexmap",
  "log",
  "num-traits 0.2.14",
  "petgraph",
  "pp-rs",
+ "rustc-hash",
  "serde",
  "spirv",
  "thiserror",
@@ -1436,6 +1436,12 @@ dependencies = [
  "bitflags",
  "serde",
 ]
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rusttype"

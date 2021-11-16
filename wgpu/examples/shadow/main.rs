@@ -527,6 +527,7 @@ impl framework::Example for Example {
                     },
                 }),
                 multisample: wgpu::MultisampleState::default(),
+                multiview: None,
             });
 
             Pass {
@@ -661,6 +662,7 @@ impl framework::Example for Example {
                     bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
+                multiview: None,
             });
 
             Pass {

@@ -16,6 +16,7 @@ fn indexing_features() -> wgt::Features {
 #[derive(Debug, Default)]
 pub struct PhysicalDeviceFeatures {
     core: vk::PhysicalDeviceFeatures,
+    vulkan_1_1: Option<vk::PhysicalDeviceVulkan11Features>,
     pub(super) vulkan_1_2: Option<vk::PhysicalDeviceVulkan12Features>,
     pub(super) descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
     imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
@@ -23,6 +24,7 @@ pub struct PhysicalDeviceFeatures {
     image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
     robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
     depth_clip_enable: Option<vk::PhysicalDeviceDepthClipEnableFeaturesEXT>,
+    multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -159,6 +161,15 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
+            vulkan_1_1: if api_version >= vk::API_VERSION_1_1 {
+                Some(
+                    vk::PhysicalDeviceVulkan11Features::builder()
+                        .multiview(requested_features.contains(wgt::Features::MULTIVIEW))
+                        .build(),
+                )
+            } else {
+                None
+            },
             vulkan_1_2: if api_version >= vk::API_VERSION_1_2 {
                 Some(
                     vk::PhysicalDeviceVulkan12Features::builder()
@@ -295,6 +306,15 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            multiview: if enabled_extensions.contains(&vk::KhrMultiviewFn::name()) {
+                Some(
+                    vk::PhysicalDeviceMultiviewFeatures::builder()
+                        .multiview(requested_features.contains(wgt::Features::MULTIVIEW))
+                        .build(),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -390,6 +410,10 @@ impl PhysicalDeviceFeatures {
 
         let intel_windows = caps.properties.vendor_id == db::intel::VENDOR && cfg!(windows);
 
+        if let Some(ref vulkan_1_1) = self.vulkan_1_1 {
+            features.set(F::MULTIVIEW, vulkan_1_1.multiview != 0);
+        }
+
         if let Some(ref vulkan_1_2) = self.vulkan_1_2 {
             const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
             if Self::all_features_supported(
@@ -479,6 +503,10 @@ impl PhysicalDeviceFeatures {
             features.set(F::DEPTH_CLIP_CONTROL, feature.depth_clip_enable != 0);
         }
 
+        if let Some(ref multiview) = self.multiview {
+            features.set(F::MULTIVIEW, multiview.multiview != 0);
+        }
+
         (features, dl_flags)
     }
 
@@ -521,6 +549,11 @@ impl PhysicalDeviceCapabilities {
         if self.properties.api_version < vk::API_VERSION_1_1 {
             extensions.push(vk::KhrMaintenance1Fn::name());
             extensions.push(vk::KhrMaintenance2Fn::name());
+
+            // Below Vulkan 1.1 we can get multiview from an extension
+            if requested_features.contains(wgt::Features::MULTIVIEW) {
+                extensions.push(vk::KhrMultiviewFn::name());
+            }
 
             // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside `VK_KHR_maintenance1` or a 1.1+ device.
             if !self.supports_extension(vk::KhrMaintenance1Fn::name()) {
@@ -727,6 +760,13 @@ impl super::InstanceShared {
                 .features(core)
                 .build();
 
+            if capabilities.properties.api_version >= vk::API_VERSION_1_1 {
+                features.vulkan_1_1 = Some(vk::PhysicalDeviceVulkan11Features::builder().build());
+
+                let mut_ref = features.vulkan_1_1.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
             if capabilities.properties.api_version >= vk::API_VERSION_1_2 {
                 features.vulkan_1_2 = Some(vk::PhysicalDeviceVulkan12Features::builder().build());
 
@@ -793,6 +833,7 @@ impl super::InstanceShared {
         }
 
         unsafe {
+            null_p_next(&mut features.vulkan_1_1);
             null_p_next(&mut features.vulkan_1_2);
             null_p_next(&mut features.descriptor_indexing);
             null_p_next(&mut features.imageless_framebuffer);
@@ -998,6 +1039,7 @@ impl super::Adapter {
         raw_device: ash::Device,
         handle_is_owned: bool,
         enabled_extensions: &[&'static CStr],
+        features: wgt::Features,
         uab_types: super::UpdateAfterBindTypes,
         family_index: u32,
         queue_index: u32,
@@ -1044,7 +1086,8 @@ impl super::Adapter {
 
         let naga_options = {
             use naga::back::spv;
-            let capabilities = [
+
+            let mut capabilities = vec![
                 spv::Capability::Shader,
                 spv::Capability::Matrix,
                 spv::Capability::Sampled1D,
@@ -1058,6 +1101,11 @@ impl super::Adapter {
                 spv::Capability::StorageImageExtendedFormats,
                 //TODO: fill out the rest
             ];
+
+            if features.contains(wgt::Features::MULTIVIEW) {
+                capabilities.push(spv::Capability::MultiView);
+            }
+
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,
@@ -1078,17 +1126,17 @@ impl super::Adapter {
                 lang_version: (1, 0),
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
-                bounds_check_policies: naga::back::BoundsCheckPolicies {
-                    index: naga::back::BoundsCheckPolicy::Restrict,
+                bounds_check_policies: naga::proc::BoundsCheckPolicies {
+                    index: naga::proc::BoundsCheckPolicy::Restrict,
                     buffer: if self.private_caps.robust_buffer_access {
-                        naga::back::BoundsCheckPolicy::Unchecked
+                        naga::proc::BoundsCheckPolicy::Unchecked
                     } else {
-                        naga::back::BoundsCheckPolicy::Restrict
+                        naga::proc::BoundsCheckPolicy::Restrict
                     },
                     image: if self.private_caps.robust_image_access {
-                        naga::back::BoundsCheckPolicy::Unchecked
+                        naga::proc::BoundsCheckPolicy::Unchecked
                     } else {
-                        naga::back::BoundsCheckPolicy::Restrict
+                        naga::proc::BoundsCheckPolicy::Restrict
                     },
                 },
             }
@@ -1222,6 +1270,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             raw_device,
             true,
             &enabled_extensions,
+            features,
             uab_types,
             family_info.queue_family_index,
             0,

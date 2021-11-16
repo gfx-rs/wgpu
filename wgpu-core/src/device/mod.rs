@@ -72,6 +72,7 @@ impl<T> AttachmentData<T> {
 pub(crate) struct RenderPassContext {
     pub attachments: AttachmentData<TextureFormat>,
     pub sample_count: u32,
+    pub multiview: Option<NonZeroU32>,
 }
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassCompatibilityError {
@@ -84,6 +85,8 @@ pub enum RenderPassCompatibilityError {
     IncompatibleDepthStencilAttachment(Option<TextureFormat>, Option<TextureFormat>),
     #[error("Incompatible sample count: {0:?} != {1:?}")]
     IncompatibleSampleCount(u32, u32),
+    #[error("Incompatible multiview: {0:?} != {1:?}")]
+    IncompatibleMultiview(Option<NonZeroU32>, Option<NonZeroU32>),
 }
 
 impl RenderPassContext {
@@ -110,6 +113,12 @@ impl RenderPassContext {
             return Err(RenderPassCompatibilityError::IncompatibleSampleCount(
                 self.sample_count,
                 other.sample_count,
+            ));
+        }
+        if self.multiview != other.multiview {
+            return Err(RenderPassCompatibilityError::IncompatibleMultiview(
+                self.multiview,
+                other.multiview,
             ));
         }
         Ok(())
@@ -2449,6 +2458,11 @@ impl<A: HalApi> Device<A> {
             .get(pipeline_layout_id)
             .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
 
+        // Multiview is only supported if the feature is enabled
+        if desc.multiview.is_some() {
+            self.require_features(wgt::Features::MULTIVIEW)?;
+        }
+
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: desc.label.borrow_option(),
             layout: &layout.raw,
@@ -2459,6 +2473,7 @@ impl<A: HalApi> Device<A> {
             multisample: desc.multisample,
             fragment_stage,
             color_targets,
+            multiview: desc.multiview,
         };
         let raw =
             unsafe { self.raw.create_render_pipeline(&pipeline_desc) }.map_err(
@@ -2485,6 +2500,7 @@ impl<A: HalApi> Device<A> {
                 depth_stencil: depth_stencil_state.as_ref().map(|state| state.format),
             },
             sample_count: samples,
+            multiview: desc.multiview,
         };
 
         let mut flags = pipeline::PipelineFlags::empty();

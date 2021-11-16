@@ -5,7 +5,9 @@ use ash::{extensions::khr, vk};
 use inplace_it::inplace_or_alloc_from_iter;
 use parking_lot::Mutex;
 
-use std::{borrow::Cow, collections::hash_map::Entry, ffi::CString, ptr, sync::Arc};
+use std::{
+    borrow::Cow, collections::hash_map::Entry, ffi::CString, num::NonZeroU32, ptr, sync::Arc,
+};
 
 impl super::DeviceShared {
     pub(super) unsafe fn set_object_name(
@@ -140,9 +142,29 @@ impl super::DeviceShared {
                     vk_subpass.build()
                 }];
 
-                let vk_info = vk::RenderPassCreateInfo::builder()
+                let mut vk_info = vk::RenderPassCreateInfo::builder()
                     .attachments(&vk_attachments)
                     .subpasses(&vk_subpasses);
+
+                let mut multiview_info;
+                let mask;
+                if let Some(multiview) = e.key().multiview {
+                    // Sanity checks, better to panic here than cause a driver crash
+                    assert!(multiview.get() <= 8);
+                    assert!(multiview.get() > 1);
+
+                    // Right now we enable all bits on the view masks and correlation masks.
+                    // This means we're rendering to all views in the subpass, and that all views
+                    // can be rendered concurrently.
+                    mask = [(1 << multiview.get()) - 1];
+
+                    // On Vulkan 1.1 or later, this is an alias for core functionality
+                    multiview_info = vk::RenderPassMultiviewCreateInfoKHR::builder()
+                        .view_masks(&mask)
+                        .correlation_masks(&mask)
+                        .build();
+                    vk_info = vk_info.push_next(&mut multiview_info);
+                }
 
                 let raw = unsafe { self.raw.create_render_pass(&vk_info, None)? };
 
@@ -605,10 +627,10 @@ impl super::Device {
                 let temp_options;
                 let options = if !runtime_checks {
                     temp_options = naga::back::spv::Options {
-                        bounds_check_policies: naga::back::BoundsCheckPolicies {
-                            index: naga::back::BoundsCheckPolicy::Unchecked,
-                            buffer: naga::back::BoundsCheckPolicy::Unchecked,
-                            image: naga::back::BoundsCheckPolicy::Unchecked,
+                        bounds_check_policies: naga::proc::BoundsCheckPolicies {
+                            index: naga::proc::BoundsCheckPolicy::Unchecked,
+                            buffer: naga::proc::BoundsCheckPolicy::Unchecked,
+                            image: naga::proc::BoundsCheckPolicy::Unchecked,
                         },
                         ..self.naga_options.clone()
                     };
@@ -843,12 +865,15 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
+        let subresource_range = conv::map_subresource_range(&desc.range, texture.aspects);
         let mut vk_info = vk::ImageViewCreateInfo::builder()
             .flags(vk::ImageViewCreateFlags::empty())
             .image(texture.raw)
             .view_type(conv::map_view_dimension(desc.dimension))
             .format(self.shared.private_caps.map_texture_format(desc.format))
-            .subresource_range(conv::map_subresource_range(&desc.range, texture.aspects));
+            .subresource_range(subresource_range);
+        let layers =
+            NonZeroU32::new(subresource_range.layer_count).expect("Unexpected zero layer count");
 
         let mut image_view_info;
         let view_usage = if self.shared.private_caps.image_view_usage && !desc.usage.is_empty() {
@@ -879,7 +904,11 @@ impl crate::Device<super::Api> for super::Device {
             view_format: desc.format,
         };
 
-        Ok(super::TextureView { raw, attachment })
+        Ok(super::TextureView {
+            raw,
+            layers,
+            attachment,
+        })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
         if !self.shared.private_caps.imageless_framebuffers {
@@ -1286,10 +1315,10 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 let mut naga_options = self.naga_options.clone();
                 if !desc.runtime_checks {
-                    naga_options.bounds_check_policies = naga::back::BoundsCheckPolicies {
-                        index: naga::back::BoundsCheckPolicy::Unchecked,
-                        buffer: naga::back::BoundsCheckPolicy::Unchecked,
-                        image: naga::back::BoundsCheckPolicy::Unchecked,
+                    naga_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
+                        index: naga::proc::BoundsCheckPolicy::Unchecked,
+                        buffer: naga::proc::BoundsCheckPolicy::Unchecked,
+                        image: naga::proc::BoundsCheckPolicy::Unchecked,
                     };
                 }
                 Cow::Owned(
@@ -1335,6 +1364,7 @@ impl crate::Device<super::Api> for super::Device {
         ];
         let mut compatible_rp_key = super::RenderPassKey {
             sample_count: desc.multisample.count,
+            multiview: desc.multiview,
             ..Default::default()
         };
         let mut stages = ArrayVec::<_, 2>::new();

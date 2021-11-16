@@ -54,7 +54,7 @@ use crate::{
     Label, LabelHelpers, LifeGuard, Stored,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, mem, ops::Range};
+use std::{borrow::Cow, mem, num::NonZeroU32, ops::Range};
 use thiserror::Error;
 
 use hal::CommandEncoder as _;
@@ -75,6 +75,8 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the renderpasses it is used in.
     pub sample_count: u32,
+    /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
+    pub multiview: Option<NonZeroU32>,
 }
 
 #[derive(Debug)]
@@ -112,6 +114,7 @@ impl RenderBundleEncoder {
                     }
                     sc
                 },
+                multiview: desc.multiview,
             },
             is_ds_read_only: match desc.depth_stencil {
                 Some(ds) => {
@@ -135,6 +138,7 @@ impl RenderBundleEncoder {
                     depth_stencil: None,
                 },
                 sample_count: 0,
+                multiview: None,
             },
             is_ds_read_only: false,
         }
