@@ -184,6 +184,21 @@ impl super::TypeInner {
     }
 }
 
+impl super::StorageClass {
+    pub fn access(self) -> crate::StorageAccess {
+        use crate::StorageAccess as Sa;
+        match self {
+            crate::StorageClass::Function
+            | crate::StorageClass::Private
+            | crate::StorageClass::WorkGroup => Sa::LOAD | Sa::STORE,
+            crate::StorageClass::Uniform => Sa::LOAD,
+            crate::StorageClass::Storage { access } => access,
+            crate::StorageClass::Handle => Sa::LOAD,
+            crate::StorageClass::PushConstant => Sa::LOAD,
+        }
+    }
+}
+
 impl super::MathFunction {
     pub fn argument_count(&self) -> usize {
         match *self {

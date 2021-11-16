@@ -513,7 +513,10 @@ impl super::Validator {
                         }
                         _ => {}
                     }
-                    let good = match *context.resolve_pointer_type(pointer)? {
+
+                    let pointer_ty = context.resolve_pointer_type(pointer)?;
+
+                    let good = match *pointer_ty {
                         Ti::Pointer { base, class: _ } => match context.types[base].inner {
                             Ti::Atomic { kind, width } => *value_ty == Ti::Scalar { kind, width },
                             ref other => value_ty == other,
@@ -534,6 +537,12 @@ impl super::Validator {
                     };
                     if !good {
                         return Err(FunctionError::InvalidStoreTypes { pointer, value });
+                    }
+
+                    if let Some(class) = pointer_ty.pointer_class() {
+                        if !class.access().contains(crate::StorageAccess::STORE) {
+                            return Err(FunctionError::InvalidStorePointer(pointer));
+                        }
                     }
                 }
                 S::ImageStore {
