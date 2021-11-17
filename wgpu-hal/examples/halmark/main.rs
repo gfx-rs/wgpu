@@ -177,10 +177,7 @@ impl<A: hal::Api> Example<A> {
                 wgt::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgt::ShaderStages::FRAGMENT,
-                    ty: wgt::BindingType::Sampler {
-                        filtering: true,
-                        comparison: false,
-                    },
+                    ty: wgt::BindingType::Sampler(wgt::SamplerBindingType::Filtering),
                     count: None,
                 },
             ],
