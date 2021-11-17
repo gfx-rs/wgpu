@@ -934,6 +934,11 @@ impl Interface {
                 }
             }
 
+            for key in info.sampling_set.iter() {
+                ep.sampling_pairs
+                    .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
+            }
+
             ep.workgroup_size = entry_point.workgroup_size;
 
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
