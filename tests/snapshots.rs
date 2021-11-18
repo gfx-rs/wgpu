@@ -30,7 +30,7 @@ impl Default for BoundsCheckPolicyArg {
     }
 }
 
-impl From<BoundsCheckPolicyArg> for naga::back::BoundsCheckPolicy {
+impl From<BoundsCheckPolicyArg> for naga::proc::BoundsCheckPolicy {
     fn from(arg: BoundsCheckPolicyArg) -> Self {
         match arg {
             BoundsCheckPolicyArg::Restrict => Self::Restrict,
@@ -220,7 +220,7 @@ fn write_output_spv(
             Some(params.spv.capabilities.clone())
         },
 
-        bounds_check_policies: naga::back::BoundsCheckPolicies {
+        bounds_check_policies: naga::proc::BoundsCheckPolicies {
             index: params.index_bounds_check_policy.into(),
             buffer: params.buffer_bounds_check_policy.into(),
             image: params.image_bounds_check_policy.into(),

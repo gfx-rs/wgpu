@@ -13,7 +13,8 @@ mod writer;
 
 pub use spirv::Capability;
 
-use crate::{arena::Handle, back::BoundsCheckPolicies, proc::TypeResolution};
+use crate::arena::Handle;
+use crate::proc::{BoundsCheckPolicies, TypeResolution};
 
 use spirv::Word;
 use std::ops;
@@ -604,7 +605,7 @@ impl Default for Options {
             lang_version: (1, 0),
             flags,
             capabilities: None,
-            bounds_check_policies: super::BoundsCheckPolicies::default(),
+            bounds_check_policies: crate::proc::BoundsCheckPolicies::default(),
         }
     }
 }

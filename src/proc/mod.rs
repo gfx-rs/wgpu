@@ -8,7 +8,7 @@ mod typifier;
 
 use std::cmp::PartialEq;
 
-pub use index::IndexableLength;
+pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength};
 pub use layouter::{Alignment, InvalidBaseType, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;

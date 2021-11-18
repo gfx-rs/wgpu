@@ -1,7 +1,7 @@
 //! Bounds-checking for SPIR-V output.
 
 use super::{selection::Selection, Block, BlockContext, Error, IdGenerator, Instruction, Word};
-use crate::{arena::Handle, back::BoundsCheckPolicy};
+use crate::{arena::Handle, proc::BoundsCheckPolicy};
 
 /// The results of emitting code for a left-hand-side expression.
 ///
@@ -342,22 +342,11 @@ impl<'w> BlockContext<'w> {
         index: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
-        // Should this access be covered by `index_bounds_check_policy` or
-        // `buffer_bounds_check_policy`?
-        let is_buffer = match *self.fun_info[base].ty.inner_with(&self.ir_module.types) {
-            crate::TypeInner::Pointer { class, .. }
-            | crate::TypeInner::ValuePointer { class, .. } => match class {
-                crate::StorageClass::Storage { access: _ } | crate::StorageClass::Uniform => true,
-                _ => false,
-            },
-            _ => false,
-        };
-
-        let policy = if is_buffer {
-            self.writer.bounds_check_policies.buffer
-        } else {
-            self.writer.bounds_check_policies.index
-        };
+        let policy = self.writer.bounds_check_policies.choose_policy(
+            base,
+            &self.ir_module.types,
+            self.fun_info,
+        );
 
         Ok(match policy {
             BoundsCheckPolicy::Restrict => self.write_restricted_index(base, index, block)?,

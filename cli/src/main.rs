@@ -71,13 +71,13 @@ struct Args {
 
 /// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
 #[derive(Debug, Clone, Copy)]
-struct BoundsCheckPolicyArg(naga::back::BoundsCheckPolicy);
+struct BoundsCheckPolicyArg(naga::proc::BoundsCheckPolicy);
 
 impl FromStr for BoundsCheckPolicyArg {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use naga::back::BoundsCheckPolicy;
+        use naga::proc::BoundsCheckPolicy;
         Ok(Self(match s.to_lowercase().as_str() {
             "restrict" => BoundsCheckPolicy::Restrict,
             "readzeroskipwrite" => BoundsCheckPolicy::ReadZeroSkipWrite,
@@ -132,7 +132,7 @@ impl FromStr for GlslProfileArg {
 #[derive(Default)]
 struct Parameters {
     validation_flags: naga::valid::ValidationFlags,
-    bounds_check_policies: naga::back::BoundsCheckPolicies,
+    bounds_check_policies: naga::proc::BoundsCheckPolicies,
     entry_point: Option<String>,
     keep_coordinate_space: bool,
     spv_block_ctx_dump_prefix: Option<String>,

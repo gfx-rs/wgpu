@@ -739,7 +739,7 @@ impl<'w> BlockContext<'w> {
 
         // Perform the access, according to the bounds check policy.
         let access_id = match self.writer.bounds_check_policies.image {
-            crate::back::BoundsCheckPolicy::Restrict => {
+            crate::proc::BoundsCheckPolicy::Restrict => {
                 let (coords, level_id, sample_id) = self.write_restricted_coordinates(
                     image_id,
                     coordinates,
@@ -749,7 +749,7 @@ impl<'w> BlockContext<'w> {
                 )?;
                 access.generate(&mut self.writer.id_gen, coords, level_id, sample_id, block)
             }
-            crate::back::BoundsCheckPolicy::ReadZeroSkipWrite => self
+            crate::proc::BoundsCheckPolicy::ReadZeroSkipWrite => self
                 .write_conditional_image_access(
                     image_id,
                     coordinates,
@@ -758,7 +758,7 @@ impl<'w> BlockContext<'w> {
                     block,
                     &access,
                 )?,
-            crate::back::BoundsCheckPolicy::Unchecked => access.generate(
+            crate::proc::BoundsCheckPolicy::Unchecked => access.generate(
                 &mut self.writer.id_gen,
                 coordinates.value_id,
                 level_id,
@@ -1131,12 +1131,12 @@ impl<'w> BlockContext<'w> {
         let write = Store { image_id, value_id };
 
         match self.writer.bounds_check_policies.image {
-            crate::back::BoundsCheckPolicy::Restrict => {
+            crate::proc::BoundsCheckPolicy::Restrict => {
                 let (coords, _, _) =
                     self.write_restricted_coordinates(image_id, coordinates, None, None, block)?;
                 write.generate(&mut self.writer.id_gen, coords, None, None, block);
             }
-            crate::back::BoundsCheckPolicy::ReadZeroSkipWrite => {
+            crate::proc::BoundsCheckPolicy::ReadZeroSkipWrite => {
                 self.write_conditional_image_access(
                     image_id,
                     coordinates,
@@ -1146,7 +1146,7 @@ impl<'w> BlockContext<'w> {
                     &write,
                 )?;
             }
-            crate::back::BoundsCheckPolicy::Unchecked => {
+            crate::proc::BoundsCheckPolicy::Unchecked => {
                 write.generate(
                     &mut self.writer.id_gen,
                     coordinates.value_id,
