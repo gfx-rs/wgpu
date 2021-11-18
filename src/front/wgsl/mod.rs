@@ -2143,23 +2143,7 @@ impl Parser {
                     let _ = lexer.next();
                     self.pop_scope(lexer);
 
-                    // Not all identifiers constitute references in WGSL.
-                    let is_reference = match ctx.expressions[definition.handle] {
-                        // `let`-bound identifiers don't evaluate to references: `let`
-                        // declarations apply the Load Rule to their values.
-                        crate::Expression::LocalVariable(_) => definition.is_reference,
-                        // Global variables in the `Handle` storage class do not evaluate
-                        // to references.
-                        crate::Expression::GlobalVariable(global) => {
-                            ctx.global_vars[global].class != crate::StorageClass::Handle
-                        }
-                        _ => false,
-                    };
-
-                    TypedExpression {
-                        handle: definition.handle,
-                        is_reference,
-                    }
+                    *definition
                 } else if let Some(CalledFunction { result: Some(expr) }) =
                     self.parse_function_call_inner(lexer, word, ctx.reborrow())?
                 {
