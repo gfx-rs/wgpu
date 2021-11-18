@@ -3204,6 +3204,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ///
     /// - `hal_texture` must be created from `device_id` corresponding raw handle.
     /// - `hal_texture` must be created respecting `desc`
+    /// - `hal_texture` must be initialized
     pub unsafe fn create_texture_from_hal<A: HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -3243,8 +3244,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(error) => break error,
             };
 
-            let texture =
+            let mut texture =
                 device.create_texture_from_hal(hal_texture, device_id, desc, format_features);
+            if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
+                texture.hal_usage |= hal::TextureUses::COPY_DST;
+            }
+
+            texture.initialization_status = TextureInitTracker::new(desc.mip_level_count, 0);
+
             let num_levels = texture.full_range.levels.end;
             let num_layers = texture.full_range.layers.end;
             let ref_count = texture.life_guard.add_ref();

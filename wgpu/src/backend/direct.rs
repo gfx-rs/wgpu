@@ -124,6 +124,16 @@ impl Context {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+        &self,
+        device: &Device,
+        hal_device_callback: F,
+    ) -> R {
+        self.0
+            .device_as_hal::<A, F, R>(device.id, hal_device_callback)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         texture: &Texture,

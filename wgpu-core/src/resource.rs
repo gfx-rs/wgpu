@@ -209,6 +209,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         hal_texture_callback(hal_texture);
     }
+
+    /// # Safety
+    ///
+    /// - The raw device handle must not be manually destroyed
+    pub unsafe fn device_as_hal<A: HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+        &self,
+        id: DeviceId,
+        hal_device_callback: F,
+    ) -> R {
+        profiling::scope!("as_hal", "Device");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (guard, _) = hub.devices.read(&mut token);
+        let device = guard.get(id).ok();
+        let hal_device = device.map(|device| &device.raw);
+
+        hal_device_callback(hal_device)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
