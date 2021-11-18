@@ -3199,13 +3199,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ///
     /// - `hal_texture` must be created from `device_id` corresponding raw handle.
     /// - `hal_texture` must be created respecting `desc`
+    /// - `hal_texture` must be initialized
     pub unsafe fn create_texture_from_hal<A: HalApi>(
         &self,
         hal_texture: A::Texture,
         device_id: id::DeviceId,
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
-        initialized: bool,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         profiling::scope!("create_texture", "Device");
 
@@ -3245,9 +3245,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 texture.hal_usage |= hal::TextureUses::COPY_DST;
             }
 
-            if initialized {
-                texture.initialization_status = TextureInitTracker::new(desc.mip_level_count, 0);
-            }
+            texture.initialization_status = TextureInitTracker::new(desc.mip_level_count, 0);
 
             let num_levels = texture.full_range.levels.end;
             let num_layers = texture.full_range.layers.end;

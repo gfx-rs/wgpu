@@ -1825,6 +1825,7 @@ impl Device {
     ///
     /// - `hal_texture` must be created from this device internal handle
     /// - `hal_texture` must be created respecting `desc`
+    /// - `hal_texture` must be initialized
     #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
@@ -1835,29 +1836,7 @@ impl Device {
             context: Arc::clone(&self.context),
             id: self
                 .context
-                .create_texture_from_hal::<A>(hal_texture, &self.id, desc, false),
-            owned: true,
-        }
-    }
-
-    /// Creates an initialized [`Texture`] from a wgpu-hal Texture.
-    ///
-    /// # Safety
-    ///
-    /// - `hal_texture` must be created from this device internal handle
-    /// - `hal_texture` must be created respecting `desc`
-    /// - `hal_texture` must be initialized
-    #[cfg(not(target_arch = "wasm32"))]
-    pub unsafe fn create_texture_from_hal_initialized<A: wgc::hub::HalApi>(
-        &self,
-        hal_texture: A::Texture,
-        desc: &TextureDescriptor,
-    ) -> Texture {
-        Texture {
-            context: Arc::clone(&self.context),
-            id: self
-                .context
-                .create_texture_from_hal::<A>(hal_texture, &self.id, desc, true),
+                .create_texture_from_hal::<A>(hal_texture, &self.id, desc),
             owned: true,
         }
     }

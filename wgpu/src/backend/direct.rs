@@ -100,7 +100,6 @@ impl Context {
         hal_texture: A::Texture,
         device: &Device,
         desc: &TextureDescriptor,
-        initialized: bool,
     ) -> Texture {
         let global = &self.0;
         let (id, error) = global.create_texture_from_hal::<A>(
@@ -108,7 +107,6 @@ impl Context {
             device.id,
             &desc.map_label(|l| l.map(Borrowed)),
             PhantomData,
-            initialized,
         );
         if let Some(cause) = error {
             self.handle_error(
