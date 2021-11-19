@@ -2,7 +2,7 @@
 !*/
 
 use crate::{
-    binding_model::PushConstantUploadError,
+    binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     error::ErrorFormatter,
     id,
     track::UseExtendError,
@@ -53,6 +53,8 @@ pub enum DrawError {
         pipeline: wgt::IndexFormat,
         buffer: wgt::IndexFormat,
     },
+    #[error(transparent)]
+    BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
 }
 
 /// Error encountered when encoding a render command.

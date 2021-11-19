@@ -1,5 +1,7 @@
 use crate::{
-    binding_model::{BindError, BindGroup, PushConstantUploadError},
+    binding_model::{
+        BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
+    },
     command::{
         bind::Binder,
         end_pipeline_statistics_query,
@@ -125,6 +127,8 @@ pub enum DispatchError {
         "each current dispatch group size dimension ({current:?}) must be less or equal to {limit}"
     )]
     InvalidGroupSize { current: [u32; 3], limit: u32 },
+    #[error(transparent)]
+    BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
 }
 
 /// Error encountered when performing a compute pass.
@@ -225,7 +229,6 @@ struct State {
 
 impl State {
     fn is_ready(&self) -> Result<(), DispatchError> {
-        //TODO: vertex buffers
         let bind_mask = self.binder.invalid_mask();
         if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
@@ -236,6 +239,8 @@ impl State {
         if self.pipeline.is_unset() {
             return Err(DispatchError::MissingPipeline);
         }
+        self.binder.check_late_buffer_bindings()?;
+
         Ok(())
     }
 
@@ -437,6 +442,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let (start_index, entries) = state.binder.change_pipeline_layout(
                             &*pipeline_layout_guard,
                             pipeline.layout_id.value,
+                            &pipeline.late_sized_buffer_groups,
                         );
                         if !entries.is_empty() {
                             for (i, e) in entries.iter().enumerate() {

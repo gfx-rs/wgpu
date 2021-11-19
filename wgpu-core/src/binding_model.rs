@@ -718,6 +718,9 @@ pub struct BindGroup<A: hal::Api> {
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,
     pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction>,
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
+    /// Actual binding sizes for buffers that don't have `min_binding_size`
+    /// specified in BGL. Listed in the order of iteration of `BGL.entries`.
+    pub(crate) late_buffer_binding_sizes: Vec<wgt::BufferSize>,
 }
 
 impl<A: hal::Api> BindGroup<A> {
@@ -782,4 +785,13 @@ pub enum GetBindGroupLayoutError {
     InvalidPipeline,
     #[error("invalid group index {0}")]
     InvalidGroupIndex(u32),
+}
+
+#[derive(Clone, Debug, Error, PartialEq)]
+#[error("Buffer is bound with size {bound_size} where the shader expects {shader_size} in group[{group_index}] compact index {compact_index}")]
+pub struct LateMinBufferBindingSizeMismatch {
+    pub group_index: u32,
+    pub compact_index: usize,
+    pub shader_size: wgt::BufferAddress,
+    pub bound_size: wgt::BufferAddress,
 }

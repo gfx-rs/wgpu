@@ -1,8 +1,9 @@
 use crate::{
-    binding_model::{BindGroup, PipelineLayout},
+    binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
     hub::{HalApi, Storage},
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
+    pipeline::LateSizedBufferGroup,
     Stored,
 };
 
@@ -131,10 +132,29 @@ mod compat {
     }
 }
 
+#[derive(Debug)]
+struct LateBufferBinding {
+    shader_expect_size: wgt::BufferAddress,
+    bound_size: wgt::BufferAddress,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct EntryPayload {
     pub(super) group_id: Option<Stored<BindGroupId>>,
     pub(super) dynamic_offsets: Vec<wgt::DynamicOffset>,
+    late_buffer_bindings: Vec<LateBufferBinding>,
+    /// Since `LateBufferBinding` may contain information about the bindings
+    /// not used by the pipeline, we need to know when to stop validating.
+    pub(super) late_bindings_effective_count: usize,
+}
+
+impl EntryPayload {
+    fn reset(&mut self) {
+        self.group_id = None;
+        self.dynamic_offsets.clear();
+        self.late_buffer_bindings.clear();
+        self.late_bindings_effective_count = 0;
+    }
 }
 
 #[derive(Debug)]
@@ -157,8 +177,7 @@ impl Binder {
         self.pipeline_layout_id = None;
         self.manager = compat::Manager::new();
         for payload in self.payloads.iter_mut() {
-            payload.group_id = None;
-            payload.dynamic_offsets.clear();
+            payload.reset();
         }
     }
 
@@ -166,11 +185,34 @@ impl Binder {
         &'a mut self,
         guard: &Storage<PipelineLayout<A>, PipelineLayoutId>,
         new_id: Valid<PipelineLayoutId>,
+        late_sized_buffer_groups: &[LateSizedBufferGroup],
     ) -> (usize, &'a [EntryPayload]) {
         let old_id_opt = self.pipeline_layout_id.replace(new_id);
         let new = &guard[new_id];
 
         let mut bind_range = self.manager.update_expectations(&new.bind_group_layout_ids);
+
+        // Update the buffer binding sizes that are required by shaders.
+        for (payload, late_group) in self.payloads.iter_mut().zip(late_sized_buffer_groups) {
+            payload.late_bindings_effective_count = late_group.shader_sizes.len();
+            for (late_binding, &shader_expect_size) in payload
+                .late_buffer_bindings
+                .iter_mut()
+                .zip(late_group.shader_sizes.iter())
+            {
+                late_binding.shader_expect_size = shader_expect_size;
+            }
+            if late_group.shader_sizes.len() > payload.late_buffer_bindings.len() {
+                for &shader_expect_size in
+                    late_group.shader_sizes[payload.late_buffer_bindings.len()..].iter()
+                {
+                    payload.late_buffer_bindings.push(LateBufferBinding {
+                        shader_expect_size,
+                        bound_size: 0,
+                    });
+                }
+            }
+        }
 
         if let Some(old_id) = old_id_opt {
             let old = &guard[old_id];
@@ -201,6 +243,26 @@ impl Binder {
         payload.dynamic_offsets.clear();
         payload.dynamic_offsets.extend_from_slice(offsets);
 
+        // Fill out the actual binding sizes for buffers,
+        // whose layout doesn't specify `min_binding_size`.
+        for (late_binding, late_size) in payload
+            .late_buffer_bindings
+            .iter_mut()
+            .zip(bind_group.late_buffer_binding_sizes.iter())
+        {
+            late_binding.bound_size = late_size.get();
+        }
+        if bind_group.late_buffer_binding_sizes.len() > payload.late_buffer_bindings.len() {
+            for late_size in
+                bind_group.late_buffer_binding_sizes[payload.late_buffer_bindings.len()..].iter()
+            {
+                payload.late_buffer_bindings.push(LateBufferBinding {
+                    shader_expect_size: 0,
+                    bound_size: late_size.get(),
+                });
+            }
+        }
+
         let bind_range = self.manager.assign(index, bind_group.layout_id);
         &self.payloads[bind_range]
     }
@@ -214,6 +276,30 @@ impl Binder {
 
     pub(super) fn invalid_mask(&self) -> BindGroupMask {
         self.manager.invalid_mask()
+    }
+
+    /// Scan active buffer bindings corresponding to layouts without `min_binding_size` specified.
+    pub(super) fn check_late_buffer_bindings(
+        &self,
+    ) -> Result<(), LateMinBufferBindingSizeMismatch> {
+        for group_index in self.manager.list_active() {
+            let payload = &self.payloads[group_index];
+            for (compact_index, late_binding) in payload.late_buffer_bindings
+                [..payload.late_bindings_effective_count]
+                .iter()
+                .enumerate()
+            {
+                if late_binding.bound_size < late_binding.shader_expect_size {
+                    return Err(LateMinBufferBindingSizeMismatch {
+                        group_index: group_index as u32,
+                        compact_index,
+                        shader_size: late_binding.shader_expect_size,
+                        bound_size: late_binding.bound_size,
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 }
 

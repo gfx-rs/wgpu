@@ -5,8 +5,18 @@ use crate::{
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation, Label, LifeGuard, Stored,
 };
+use arrayvec::ArrayVec;
 use std::{borrow::Cow, error::Error, fmt, num::NonZeroU32};
 use thiserror::Error;
+
+/// Information about buffer bindings, which
+/// is validated against the shader (and pipeline)
+/// at draw time as opposed to initialization time.
+#[derive(Debug)]
+pub(crate) struct LateSizedBufferGroup {
+    // The order has to match `BindGroup::late_buffer_binding_sizes`.
+    pub(crate) shader_sizes: Vec<wgt::BufferAddress>,
+}
 
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderModuleSource<'a> {
@@ -175,6 +185,7 @@ pub struct ComputePipeline<A: hal::Api> {
     pub(crate) raw: A::ComputePipeline,
     pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) life_guard: LifeGuard,
 }
 
@@ -351,6 +362,7 @@ pub struct RenderPipeline<A: hal::Api> {
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
     pub(crate) vertex_strides: Vec<(wgt::BufferAddress, wgt::VertexStepMode)>,
+    pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) life_guard: LifeGuard,
 }
 
