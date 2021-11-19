@@ -93,7 +93,7 @@ pub use vulkan::UpdateAfterBindTypes;
 use std::{
     borrow::Borrow,
     fmt,
-    num::NonZeroU8,
+    num::{NonZeroU32, NonZeroU8},
     ops::{Range, RangeInclusive},
     ptr::NonNull,
 };
@@ -991,6 +991,9 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     pub fragment_stage: Option<ProgrammableStage<'a, A>>,
     /// The effect of draw calls on the color aspect of the output target.
     pub color_targets: &'a [wgt::ColorTargetState],
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
 }
 
 /// Specifies how the alpha channel of the textures should be handled during (martin mouv i step)
@@ -1144,6 +1147,7 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub sample_count: u32,
     pub color_attachments: &'a [ColorAttachment<'a, A>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
+    pub multiview: Option<NonZeroU32>,
 }
 
 #[derive(Clone, Debug)]

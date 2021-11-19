@@ -9,8 +9,8 @@ use crate::{
         RenderCommandError, StateChange,
     },
     device::{
-        AttachmentData, MissingDownlevelFlags, MissingFeatures, RenderPassCompatibilityError,
-        RenderPassContext,
+        AttachmentData, Device, MissingDownlevelFlags, MissingFeatures,
+        RenderPassCompatibilityError, RenderPassContext,
     },
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
@@ -29,7 +29,8 @@ use arrayvec::ArrayVec;
 use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, BufferUsages, Color, IndexFormat, TextureUsages, VertexStepMode,
+    BufferAddress, BufferSize, BufferUsages, Color, IndexFormat, TextureUsages,
+    TextureViewDimension, VertexStepMode,
 };
 
 #[cfg(any(feature = "serial-pass", feature = "replay"))]
@@ -461,6 +462,12 @@ pub enum RenderPassErrorInner {
     Bind(#[from] BindError),
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
+    #[error("multiview layer count must match")]
+    MultiViewMismatch,
+    #[error(
+        "multiview pass texture views with more than one array layer must have D2Array dimension"
+    )]
+    MultiViewDimensionMismatch,
 }
 
 impl PrettyError for RenderPassErrorInner {
@@ -542,6 +549,7 @@ struct RenderPassInfo<'a, A: hal::Api> {
 
     pending_discard_init_fixups: SurfacesInDiscardState,
     divergent_discarded_depth_stencil_aspect: Option<(wgt::TextureAspect, &'a TextureView<A>)>,
+    multiview: Option<NonZeroU32>,
 }
 
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
@@ -582,6 +590,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     }
 
     fn start(
+        device: &Device<A>,
         label: Option<&str>,
         color_attachments: &[RenderPassColorAttachment],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
@@ -605,6 +614,39 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut extent = None;
         let mut sample_count = 0;
 
+        let mut detected_multiview: Option<Option<NonZeroU32>> = None;
+
+        let mut check_multiview = |view: &TextureView<A>| {
+            // Get the multiview configuration for this texture view
+            let layers = view.selector.layers.end - view.selector.layers.start;
+            let this_multiview = if layers >= 2 {
+                // Trivially proven by the if above
+                Some(unsafe { NonZeroU32::new_unchecked(layers) })
+            } else {
+                None
+            };
+
+            // Make sure that if this view is a multiview, it is set to be an array
+            if this_multiview.is_some() && view.desc.dimension != TextureViewDimension::D2Array {
+                return Err(RenderPassErrorInner::MultiViewDimensionMismatch);
+            }
+
+            // Validate matching first, or store the first one
+            if let Some(multiview) = detected_multiview {
+                if multiview != this_multiview {
+                    return Err(RenderPassErrorInner::MultiViewMismatch);
+                }
+            } else {
+                // Multiview is only supported if the feature is enabled
+                if this_multiview.is_some() {
+                    device.require_features(wgt::Features::MULTIVIEW)?;
+                }
+
+                detected_multiview = Some(this_multiview);
+            }
+
+            Ok(())
+        };
         let mut add_view = |view: &TextureView<A>, type_name| {
             if let Some(ex) = extent {
                 if ex != view.extent {
@@ -637,6 +679,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .views
                 .use_extend(&*view_guard, at.view, (), ())
                 .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+            check_multiview(view)?;
             add_view(view, "depth")?;
 
             let ds_aspects = view.desc.aspects();
@@ -745,6 +788,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .views
                 .use_extend(&*view_guard, at.view, (), ())
                 .map_err(|_| RenderPassErrorInner::InvalidAttachment(at.view))?;
+            check_multiview(color_view)?;
             add_view(color_view, "color")?;
 
             if !color_view
@@ -774,6 +818,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .views
                     .use_extend(&*view_guard, resolve_target, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
+                check_multiview(resolve_view)?;
                 if color_view.extent != resolve_view.extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
                         previous: (attachment_type_name, extent.unwrap_or_default()),
@@ -829,9 +874,12 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             depth_stencil: depth_stencil_attachment.map(|at| view_guard.get(at.view).unwrap()),
         };
         let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
+
+        let multiview = detected_multiview.expect("Multiview was not detected, no attachments");
         let context = RenderPassContext {
             attachments: view_data.map(|view| view.desc.format),
             sample_count,
+            multiview,
         };
 
         let hal_desc = hal::RenderPassDescriptor {
@@ -840,6 +888,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             sample_count,
             color_attachments: &colors,
             depth_stencil_attachment: depth_stencil,
+            multiview,
         };
         unsafe {
             cmd_buf.encoder.raw.begin_render_pass(&hal_desc);
@@ -854,6 +903,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             _phantom: PhantomData,
             pending_discard_init_fixups,
             divergent_discarded_depth_stencil_aspect,
+            multiview,
         })
     }
 
@@ -916,6 +966,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     stencil_ops,
                     clear_value: (0.0, 0),
                 }),
+                multiview: self.multiview,
             };
             unsafe {
                 raw.begin_render_pass(&desc);
@@ -997,6 +1048,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
 
             let mut info = RenderPassInfo::start(
+                device,
                 base.label,
                 color_attachments,
                 depth_stencil_attachment,

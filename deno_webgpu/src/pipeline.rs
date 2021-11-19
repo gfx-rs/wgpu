@@ -358,6 +358,7 @@ pub fn op_webgpu_create_render_pipeline(
         depth_stencil: args.depth_stencil.map(TryInto::try_into).transpose()?,
         multisample: args.multisample.into(),
         fragment,
+        multiview: None,
     };
 
     let implicit_pipelines = match args.layout {

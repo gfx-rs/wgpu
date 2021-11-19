@@ -562,6 +562,7 @@ impl framework::Example for Example {
             }),
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         });
 
         // Same idea as the water pipeline.
@@ -595,6 +596,7 @@ impl framework::Example for Example {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         });
 
         // Done

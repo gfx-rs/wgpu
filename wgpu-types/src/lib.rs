@@ -526,6 +526,13 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_PRIMITIVE_INDEX = 1 << 39;
+        /// Enables multiview render passes and `builtin(view_index)` in vertex shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const MULTIVIEW = 1 << 40;
     }
 }
 

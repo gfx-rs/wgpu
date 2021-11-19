@@ -260,6 +260,7 @@ impl framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         });
 
         let pipeline_wire = if device.features().contains(wgt::Features::POLYGON_MODE_LINE) {
@@ -295,6 +296,7 @@ impl framework::Example for Example {
                 },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
+                multiview: None,
             });
             Some(pipeline_wire)
         } else {

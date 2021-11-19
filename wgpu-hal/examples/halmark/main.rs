@@ -238,6 +238,7 @@ impl<A: hal::Api> Example<A> {
                 blend: Some(wgt::BlendState::ALPHA_BLENDING),
                 write_mask: wgt::ColorWrites::default(),
             }],
+            multiview: None,
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 
@@ -664,6 +665,7 @@ impl<A: hal::Api> Example<A> {
                 },
             }],
             depth_stencil_attachment: None,
+            multiview: None,
         };
         unsafe {
             ctx.encoder.begin_render_pass(&pass_desc);

@@ -5,7 +5,7 @@ use crate::{
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation, Label, LifeGuard, Stored,
 };
-use std::{borrow::Cow, error::Error, fmt};
+use std::{borrow::Cow, error::Error, fmt, num::NonZeroU32};
 use thiserror::Error;
 
 #[allow(clippy::large_enum_variant)]
@@ -243,6 +243,9 @@ pub struct RenderPipelineDescriptor<'a> {
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
     pub fragment: Option<FragmentState<'a>>,
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
 }
 
 #[derive(Clone, Debug, Error)]

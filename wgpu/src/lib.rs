@@ -1294,6 +1294,9 @@ pub struct RenderPipelineDescriptor<'a> {
     pub multisample: MultisampleState,
     /// The compiled fragment stage, its entry point, and the color targets.
     pub fragment: Option<FragmentState<'a>>,
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
 }
 
 /// Describes the attachments of a compute pass.
@@ -1349,6 +1352,8 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the renderpasses it is used in.
     pub sample_count: u32,
+    /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
+    pub multiview: Option<NonZeroU32>,
 }
 
 /// Surface texture that can be rendered to.
