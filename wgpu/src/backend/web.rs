@@ -188,12 +188,20 @@ impl crate::RenderInner<Context> for RenderPass {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        let mapped_size = match size {
-            Some(s) => s.get() as f64,
-            None => 0f64,
+        match size {
+            Some(s) => {
+                self.0.set_vertex_buffer_with_f64_and_f64(
+                    slot,
+                    &buffer.0,
+                    offset as f64,
+                    s.get() as f64,
+                );
+            }
+            None => {
+                self.0
+                    .set_vertex_buffer_with_f64(slot, &buffer.0, offset as f64);
+            }
         };
-        self.0
-            .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, mapped_size);
     }
     fn set_push_constants(&mut self, _stages: wgt::ShaderStages, _offset: u32, _data: &[u8]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
@@ -324,12 +332,20 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        let mapped_size = match size {
-            Some(s) => s.get() as f64,
-            None => 0f64,
+        match size {
+            Some(s) => {
+                self.0.set_vertex_buffer_with_f64_and_f64(
+                    slot,
+                    &buffer.0,
+                    offset as f64,
+                    s.get() as f64,
+                );
+            }
+            None => {
+                self.0
+                    .set_vertex_buffer_with_f64(slot, &buffer.0, offset as f64);
+            }
         };
-        self.0
-            .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, mapped_size);
     }
     fn set_push_constants(&mut self, _stages: wgt::ShaderStages, _offset: u32, _data: &[u8]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
