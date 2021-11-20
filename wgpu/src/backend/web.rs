@@ -163,16 +163,23 @@ impl crate::RenderInner<Context> for RenderPass {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        let mapped_size = match size {
-            Some(s) => s.get() as f64,
-            None => 0f64,
+        match size {
+            Some(s) => {
+                self.0.set_index_buffer_with_f64_and_f64(
+                    &buffer.0,
+                    map_index_format(index_format),
+                    offset as f64,
+                    s.get() as f64,
+                );
+            }
+            None => {
+                self.0.set_index_buffer_with_f64(
+                    &buffer.0,
+                    map_index_format(index_format),
+                    offset as f64,
+                );
+            }
         };
-        self.0.set_index_buffer_with_f64_and_f64(
-            &buffer.0,
-            map_index_format(index_format),
-            offset as f64,
-            mapped_size,
-        );
     }
     fn set_vertex_buffer(
         &mut self,
@@ -292,16 +299,23 @@ impl crate::RenderInner<Context> for RenderBundleEncoder {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        let mapped_size = match size {
-            Some(s) => s.get() as f64,
-            None => 0f64,
+        match size {
+            Some(s) => {
+                self.0.set_index_buffer_with_f64_and_f64(
+                    &buffer.0,
+                    map_index_format(index_format),
+                    offset as f64,
+                    s.get() as f64,
+                );
+            }
+            None => {
+                self.0.set_index_buffer_with_f64(
+                    &buffer.0,
+                    map_index_format(index_format),
+                    offset as f64,
+                );
+            }
         };
-        self.0.set_index_buffer_with_f64_and_f64(
-            &buffer.0,
-            map_index_format(index_format),
-            offset as f64,
-            mapped_size,
-        );
     }
     fn set_vertex_buffer(
         &mut self,
