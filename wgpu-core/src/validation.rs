@@ -956,6 +956,7 @@ impl Interface {
         &self,
         given_layouts: Option<&[&BindEntryMap]>,
         derived_layouts: &mut [BindEntryMap],
+        shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         stage_bit: wgt::ShaderStages,
         inputs: StageIo,
@@ -978,18 +979,31 @@ impl Interface {
         for &(handle, usage) in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = match given_layouts {
-                Some(layouts) => layouts
-                    .get(res.bind.group as usize)
-                    .and_then(|map| map.get(&res.bind.binding))
-                    .ok_or(BindingError::Missing)
-                    .and_then(|entry| {
-                        if entry.visibility.contains(stage_bit) {
-                            Ok(entry)
-                        } else {
-                            Err(BindingError::Invisible)
+                Some(layouts) => {
+                    // update the required binding size for this buffer
+                    if let ResourceType::Buffer { size } = res.ty {
+                        match shader_binding_sizes.entry(res.bind.clone()) {
+                            Entry::Occupied(e) => {
+                                *e.into_mut() = size.max(*e.get());
+                            }
+                            Entry::Vacant(e) => {
+                                e.insert(size);
+                            }
                         }
-                    })
-                    .and_then(|entry| res.check_binding_use(entry, usage)),
+                    }
+                    layouts
+                        .get(res.bind.group as usize)
+                        .and_then(|map| map.get(&res.bind.binding))
+                        .ok_or(BindingError::Missing)
+                        .and_then(|entry| {
+                            if entry.visibility.contains(stage_bit) {
+                                Ok(entry)
+                            } else {
+                                Err(BindingError::Invisible)
+                            }
+                        })
+                        .and_then(|entry| res.check_binding_use(entry, usage))
+                }
                 None => derived_layouts
                     .get_mut(res.bind.group as usize)
                     .ok_or(BindingError::Missing)

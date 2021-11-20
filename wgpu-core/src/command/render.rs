@@ -345,11 +345,11 @@ struct State {
 impl State {
     fn is_ready(&self, indexed: bool) -> Result<(), DrawError> {
         // Determine how many vertex buffers have already been bound
-        let bound_buffers = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
+        let vertex_buffer_count = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
         // Compare with the needed quantity
-        if bound_buffers < self.vertex.buffers_required {
+        if vertex_buffer_count < self.vertex.buffers_required {
             return Err(DrawError::MissingVertexBuffer {
-                index: bound_buffers,
+                index: vertex_buffer_count,
             });
         }
 
@@ -366,6 +366,7 @@ impl State {
         if self.blend_constant == OptionalState::Required {
             return Err(DrawError::MissingBlendConstant);
         }
+
         if indexed {
             // Pipeline expects an index buffer
             if let Some(pipeline_index_format) = self.index.pipeline_format {
@@ -381,6 +382,9 @@ impl State {
                 }
             }
         }
+
+        self.binder.check_late_buffer_bindings()?;
+
         Ok(())
     }
 
@@ -1206,6 +1210,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             let (start_index, entries) = state.binder.change_pipeline_layout(
                                 &*pipeline_layout_guard,
                                 pipeline.layout_id.value,
+                                &pipeline.late_sized_buffer_groups,
                             );
                             if !entries.is_empty() {
                                 for (i, e) in entries.iter().enumerate() {
