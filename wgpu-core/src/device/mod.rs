@@ -600,6 +600,7 @@ impl<A: HalApi> Device<A> {
         self_id: id::DeviceId,
         desc: &resource::TextureDescriptor,
         format_features: wgt::TextureFormatFeatures,
+        clear_mode: resource::TextureClearMode<A>,
     ) -> resource::Texture<A> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
@@ -625,7 +626,7 @@ impl<A: HalApi> Device<A> {
                 layers: 0..desc.array_layer_count(),
             },
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
-            clear_views: ArrayVec::new(),
+            clear_mode,
         }
     }
 
@@ -693,13 +694,60 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateTextureError::InvalidMipLevelCount(mips));
         }
 
-        let raw = unsafe {
+        let raw_texture = unsafe {
             self.raw
                 .create_texture(&hal_desc)
                 .map_err(DeviceError::from)?
         };
 
-        let mut texture = self.create_texture_from_hal(raw, self_id, desc, format_features);
+        let clear_mode = if hal_usage.contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
+            || hal_usage.contains(hal::TextureUses::COLOR_TARGET)
+        {
+            let usage = if desc.format.describe().sample_type == wgt::TextureSampleType::Depth {
+                hal::TextureUses::DEPTH_STENCIL_WRITE
+            } else {
+                hal::TextureUses::COLOR_TARGET
+            };
+            let dimension = match desc.dimension {
+                wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                wgt::TextureDimension::D3 => wgt::TextureViewDimension::D2, // Todo? Is this even specified?
+            };
+
+            let mut clear_views = SmallVec::new();
+            for layer in 0..desc.size.depth_or_array_layers {
+                for mip_level in 0..desc.mip_level_count {
+                    unsafe {
+                        clear_views.push(
+                            self.raw
+                                .create_texture_view(
+                                    &raw_texture,
+                                    &hal::TextureViewDescriptor {
+                                        label: Some("clear texture view"),
+                                        format: desc.format,
+                                        dimension,
+                                        usage,
+                                        range: wgt::ImageSubresourceRange {
+                                            aspect: wgt::TextureAspect::All,
+                                            base_mip_level: mip_level,
+                                            mip_level_count: NonZeroU32::new(1),
+                                            base_array_layer: layer,
+                                            array_layer_count: NonZeroU32::new(1),
+                                        },
+                                    },
+                                )
+                                .map_err(DeviceError::from)?,
+                        )
+                    }
+                }
+            }
+            resource::TextureClearMode::RenderPass(clear_views)
+        } else {
+            resource::TextureClearMode::BufferCopy
+        };
+
+        let mut texture =
+            self.create_texture_from_hal(raw_texture, self_id, desc, format_features, clear_mode);
         texture.hal_usage = hal_usage;
         Ok(texture)
     }
@@ -3339,8 +3387,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(error) => break error,
             };
 
-            let mut texture =
-                device.create_texture_from_hal(hal_texture, device_id, desc, format_features);
+            let mut texture = device.create_texture_from_hal(
+                hal_texture,
+                device_id,
+                desc,
+                format_features,
+                resource::TextureClearMode::None,
+            );
             if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
                 texture.hal_usage |= hal::TextureUses::COPY_DST;
             }
@@ -3401,14 +3454,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match texture.inner {
             resource::TextureInner::Native { ref mut raw } => {
                 let raw = raw.take().ok_or(resource::DestroyError::AlreadyDestroyed)?;
-                let temp = queue::TempResource::Texture(
-                    raw,
-                    texture
-                        .clear_views
-                        .drain(..)
-                        .flat_map(|layers| layers.into_iter().filter_map(|v| v))
-                        .collect(),
-                );
+                let clear_views = match std::mem::replace(
+                    &mut texture.clear_mode,
+                    resource::TextureClearMode::None,
+                ) {
+                    resource::TextureClearMode::BufferCopy => SmallVec::new(),
+                    resource::TextureClearMode::RenderPass(clear_views) => clear_views,
+                    resource::TextureClearMode::None => SmallVec::new(),
+                };
+                let temp = queue::TempResource::Texture(raw, clear_views);
 
                 if device.pending_writes.dst_textures.contains(&texture_id) {
                     device.pending_writes.temp_resources.push(temp);

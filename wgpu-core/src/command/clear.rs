@@ -7,10 +7,10 @@ use crate::{
     command::CommandBuffer,
     device::Device,
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Storage, Token},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id::{self, BufferId, CommandEncoderId, DeviceId, TextureId},
     init_tracker::MemoryInitKind,
-    resource::Texture,
+    resource::{Texture, TextureClearMode},
     track::TextureSelector,
 };
 
@@ -31,6 +31,8 @@ pub enum ClearError {
     InvalidBuffer(BufferId),
     #[error("texture {0:?} is invalid or destroyed")]
     InvalidTexture(TextureId),
+    #[error("texture {0:?} can not be cleared")]
+    NoValidTextureClearMode(TextureId),
     #[error("buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedFillSize(BufferSize),
     #[error("buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
@@ -224,84 +226,80 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst,
             subresource_range.base_mip_level..subresource_level_end,
             subresource_range.base_array_layer..subresource_layer_end,
-            &*device_guard,
+            &device_guard[cmd_buf.device_id.value],
         )
     }
 }
 
 fn clear_texture<A: HalApi>(
-    dst_texture: &mut Texture<A>,
+    dst_texture: &Texture<A>,
     cmd_buf: &mut CommandBuffer<A>,
     dst: TextureId,
     mip_range: Range<u32>,
     layer_range: Range<u32>,
-    device_guard: &Storage<Device<A>, DeviceId>,
+    device: &Device<A>,
 ) -> Result<(), ClearError> {
-    // Determine which way of clearing should be used.
-    let is_3d_texture = dst_texture.desc.dimension == wgt::TextureDimension::D3;
-    let clear_usage = if !is_3d_texture
-        && dst_texture
-            .hal_usage
-            .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
-    {
-        hal::TextureUses::DEPTH_STENCIL_WRITE
-    } else if !is_3d_texture
-        && dst_texture
-            .hal_usage
-            .contains(hal::TextureUses::COLOR_TARGET)
-    {
-        hal::TextureUses::COLOR_TARGET
-    } else if dst_texture.hal_usage.contains(hal::TextureUses::COPY_DST) {
-        hal::TextureUses::COPY_DST
-    } else {
-        panic!("Every texture must at least have one of hal::TextureUses::DEPTH_STENCIL_WRITE/COLOR_TARGET/COPY_DST. 
-                    Otherwise zero initialization is not possible (which in turn is mandated by wgpu specification)");
-    };
-
-    // Issue adequate barrier.
-    let dst_pending = cmd_buf.trackers.textures.change_replace(
-        id::Valid(dst),
-        dst_texture.life_guard().ref_count.as_ref().unwrap(),
-        TextureSelector {
-            levels: mip_range.clone(),
-            layers: layer_range.clone(),
-        },
-        clear_usage,
-    );
+    let encoder = cmd_buf.encoder.open();
     let dst_raw = dst_texture
         .inner
         .as_raw()
         .ok_or(ClearError::InvalidTexture(dst))?;
-    let encoder = cmd_buf.encoder.open();
-    {
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
-        unsafe {
-            encoder.transition_textures(dst_barrier);
-        }
-    }
-    let device = &device_guard[cmd_buf.device_id.value];
 
-    if clear_usage == hal::TextureUses::COPY_DST {
-        clear_texture_via_buffer_copies(
+    // Issue the right barrier.
+    let clear_usage = match dst_texture.clear_mode {
+        TextureClearMode::BufferCopy => hal::TextureUses::COPY_DST,
+        TextureClearMode::RenderPass(_) => {
+            if dst_texture
+                .hal_usage
+                .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
+            {
+                hal::TextureUses::DEPTH_STENCIL_WRITE
+            } else {
+                hal::TextureUses::COLOR_TARGET
+            }
+        }
+        TextureClearMode::None => {
+            return Err(ClearError::NoValidTextureClearMode(dst));
+        }
+    };
+    let dst_barrier = cmd_buf
+        .trackers
+        .textures
+        .change_replace(
+            id::Valid(dst),
+            dst_texture.life_guard().ref_count.as_ref().unwrap(),
+            TextureSelector {
+                levels: mip_range.clone(),
+                layers: layer_range.clone(),
+            },
+            clear_usage,
+        )
+        .map(|pending| pending.into_hal(dst_texture));
+    unsafe {
+        encoder.transition_textures(dst_barrier);
+    }
+
+    // Record actual clearing
+    match dst_texture.clear_mode {
+        TextureClearMode::BufferCopy => clear_texture_via_buffer_copies(
             &dst_texture.desc,
             device,
             mip_range,
             layer_range,
             encoder,
             dst_raw,
-        );
-    } else {
-        clear_texture_via_render_passes(
+        ),
+        TextureClearMode::RenderPass(_) => clear_texture_via_render_passes(
             dst_texture,
-            is_3d_texture,
             mip_range,
             layer_range,
-            device,
             clear_usage,
             encoder,
-        )?;
+        )?,
+        TextureClearMode::None => {
+            return Err(ClearError::NoValidTextureClearMode(dst));
+        }
     }
-
     Ok(())
 }
 
@@ -407,11 +405,9 @@ pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
 }
 
 fn clear_texture_via_render_passes<A: HalApi>(
-    dst_texture: &mut Texture<A>,
-    is_3d_texture: bool,
+    dst_texture: &Texture<A>,
     mip_range: Range<u32>,
     layer_range: Range<u32>,
-    device: &Device<A>,
     clear_usage: hal::TextureUses,
     encoder: &mut A::CommandEncoder,
 ) -> Result<(), ClearError> {
@@ -421,16 +417,12 @@ fn clear_texture_via_render_passes<A: HalApi>(
         depth_or_array_layers: 1, // TODO: What about 3d textures? Only one slice a time, sure but how to select it?
     };
     let sample_count = dst_texture.desc.sample_count;
+    let is_3d_texture = dst_texture.desc.dimension == wgt::TextureDimension::D3;
     for mip_level in mip_range {
         let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
         for layer in layer_range.clone() {
             let target = hal::Attachment {
-                view: dst_texture
-                    .get_or_create_clear_view(&device.raw, mip_level, layer)
-                    .map_err(|_| ClearError::FailedToCreateTextureViewForClear {
-                        mip_level,
-                        layer,
-                    })?,
+                view: dst_texture.get_clear_view(mip_level, layer),
                 usage: clear_usage,
             };
 

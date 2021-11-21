@@ -468,11 +468,14 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources);
 
                         non_referenced_resources.textures.push(raw);
-                        non_referenced_resources.texture_views.extend(
-                            res.clear_views
-                                .into_iter()
-                                .flat_map(|layers| layers.into_iter().filter_map(|v| v)),
-                        );
+                        match res.clear_mode {
+                            resource::TextureClearMode::RenderPass(clear_views) => {
+                                non_referenced_resources
+                                    .texture_views
+                                    .extend(clear_views.into_iter());
+                            }
+                            _ => {}
+                        }
                     }
                 }
             }

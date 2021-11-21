@@ -8,17 +8,10 @@ use crate::{
     Label, LifeGuard, RefCount, Stored,
 };
 
-use arrayvec::ArrayVec;
-use hal::Device;
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::{
-    borrow::Borrow,
-    num::{NonZeroU32, NonZeroU8},
-    ops::Range,
-    ptr::NonNull,
-};
+use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -187,6 +180,16 @@ impl<A: hal::Api> TextureInner<A> {
 }
 
 #[derive(Debug)]
+pub enum TextureClearMode<A: hal::Api> {
+    BufferCopy,
+    // View for clear via RenderPass for every subsurface
+    RenderPass(SmallVec<[A::TextureView; 1]>),
+    // Texture can't be cleared, attempting to do so will cause panic.
+    // (either because it is impossible for the type of texture or it is being destroyed)
+    None,
+}
+
+#[derive(Debug)]
 pub struct Texture<A: hal::Api> {
     pub(crate) inner: TextureInner<A>,
     pub(crate) device_id: Stored<DeviceId>,
@@ -196,70 +199,23 @@ pub struct Texture<A: hal::Api> {
     pub(crate) initialization_status: TextureInitTracker,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) clear_views:
-        ArrayVec<SmallVec<[Option<A::TextureView>; 1]>, { hal::MAX_MIP_LEVELS as usize }>,
+    pub(crate) clear_mode: TextureClearMode<A>,
 }
 
 impl<A: hal::Api> Texture<A> {
-    pub(crate) fn get_or_create_clear_view(
-        &mut self,
-        device: &A::Device,
-        mip_level: u32,
-        layer: u32,
-    ) -> Result<&A::TextureView, DeviceError> {
-        if self.clear_views.len() != self.desc.mip_level_count as usize {
-            self.clear_views.extend(
-                std::iter::repeat_with(|| SmallVec::new()).take(self.desc.mip_level_count as usize),
-            );
+    pub(crate) fn get_clear_view(&self, mip_level: u32, depth_or_layer: u32) -> &A::TextureView {
+        match &self.clear_mode {
+            TextureClearMode::BufferCopy => {
+                panic!("Given texture is cleared with buffer copies, not render passes")
+            }
+            TextureClearMode::None => {
+                panic!("Given texture can't be cleared")
+            }
+            TextureClearMode::RenderPass(clear_views) => {
+                let index = mip_level + depth_or_layer * self.desc.mip_level_count;
+                &clear_views[index as usize]
+            }
         }
-
-        let layers = &mut self.clear_views[mip_level as usize];
-
-        if layers.len() != self.desc.size.depth_or_array_layers as usize {
-            layers.extend(
-                std::iter::repeat_with(|| None).take(self.desc.size.depth_or_array_layers as usize),
-            );
-        }
-
-        let view = &mut layers[layer as usize];
-
-        if view.is_none() {
-            let raw_texture = match self.inner.as_raw() {
-                Some(raw) => raw,
-                None => panic!("can't clear surface texture"),
-            };
-
-            *view = Some(unsafe {
-                device.create_texture_view(
-                    raw_texture,
-                    &hal::TextureViewDescriptor {
-                        label: Some("clear texture view"),
-                        format: self.desc.format,
-                        dimension: match self.desc.dimension {
-                            wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
-                            wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                            wgt::TextureDimension::D3 => panic!("Can't create clear view for D3 textures. Use clear via copy instead."),
-                        },
-                        usage: if self.desc.format.describe().sample_type
-                            == wgt::TextureSampleType::Depth
-                        {
-                            hal::TextureUses::DEPTH_STENCIL_WRITE
-                        } else {
-                            hal::TextureUses::COLOR_TARGET
-                        },
-                        range: wgt::ImageSubresourceRange {
-                            aspect: wgt::TextureAspect::All,
-                            base_mip_level: mip_level,
-                            mip_level_count: NonZeroU32::new(1),
-                            base_array_layer: layer,
-                            array_layer_count: NonZeroU32::new(1),
-                        },
-                    },
-                )?
-            });
-        }
-
-        Ok(view.as_mut().unwrap())
     }
 }
 
