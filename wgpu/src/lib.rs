@@ -748,7 +748,7 @@ pub enum ShaderSource<'a> {
     /// is passed to `gfx-rs` and `spirv_cross` for translation.
     #[cfg(feature = "spirv")]
     SpirV(Cow<'a, [u32]>),
-    /// GSLS module as a string slice.
+    /// GLSL module as a string slice.
     ///
     /// wgpu will attempt to parse and validate it. The module will get
     /// passed to wgpu-core where it will translate it to the required languages.
