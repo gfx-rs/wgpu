@@ -5,10 +5,12 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     align_to,
     command::CommandBuffer,
+    device::Device,
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
-    id::{BufferId, CommandEncoderId, DeviceId, TextureId},
+    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Storage, Token},
+    id::{self, BufferId, CommandEncoderId, DeviceId, TextureId},
     init_tracker::MemoryInitKind,
+    resource::Texture,
     track::TextureSelector,
 };
 
@@ -60,12 +62,8 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
         subresource_base_array_layer: u32,
         subresource_array_layer_count: Option<NonZeroU32>,
     },
-    #[error("failed to create view for clearing texture {texture:?} at mip level {mip_level}, layer {layer}")]
-    FailedToCreateTextureViewForClear {
-        texture: TextureId,
-        mip_level: u32,
-        layer: u32,
-    },
+    #[error("failed to create view for clearing texture at mip level {mip_level}, layer {layer}")]
+    FailedToCreateTextureViewForClear { mip_level: u32, layer: u32 },
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -163,7 +161,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
         let (_, mut token) = hub.buffers.read(&mut token); // skip token
-        let (mut texture_guard, _) = hub.textures.write(&mut token); // todo: take only write access if needed
+        let (mut texture_guard, _) = hub.textures.write(&mut token);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -178,7 +176,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let dst_texture = texture_guard
-            .get(dst)
+            .get_mut(dst) // todo: take only write access if needed
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
         // Check if subresource aspects are valid.
@@ -220,141 +218,117 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let is_3d = dst_texture.desc.dimension == wgt::TextureDimension::D3;
-        let clear_usage = if !is_3d
-            && dst_texture
-                .hal_usage
-                .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
-        {
-            hal::TextureUses::DEPTH_STENCIL_WRITE
-        } else if !is_3d
-            && dst_texture
-                .hal_usage
-                .contains(hal::TextureUses::COLOR_TARGET)
-        {
-            hal::TextureUses::COLOR_TARGET
-        } else if dst_texture.hal_usage.contains(hal::TextureUses::COPY_DST) {
-            hal::TextureUses::COPY_DST
-        } else {
-            panic!("Every texture must at least have one of hal::TextureUses::DEPTH_STENCIL_WRITE/COLOR_TARGET/COPY_DST. 
+        clear_texture(
+            dst_texture,
+            cmd_buf,
+            dst,
+            subresource_range.base_mip_level..subresource_level_end,
+            subresource_range.base_array_layer..subresource_layer_end,
+            &*device_guard,
+        )
+    }
+}
+
+fn clear_texture<A: HalApi>(
+    dst_texture: &mut Texture<A>,
+    cmd_buf: &mut CommandBuffer<A>,
+    dst: TextureId,
+    mip_range: Range<u32>,
+    layer_range: Range<u32>,
+    device_guard: &Storage<Device<A>, DeviceId>,
+) -> Result<(), ClearError> {
+    // Determine which way of clearing should be used.
+    let is_3d_texture = dst_texture.desc.dimension == wgt::TextureDimension::D3;
+    let clear_usage = if !is_3d_texture
+        && dst_texture
+            .hal_usage
+            .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
+    {
+        hal::TextureUses::DEPTH_STENCIL_WRITE
+    } else if !is_3d_texture
+        && dst_texture
+            .hal_usage
+            .contains(hal::TextureUses::COLOR_TARGET)
+    {
+        hal::TextureUses::COLOR_TARGET
+    } else if dst_texture.hal_usage.contains(hal::TextureUses::COPY_DST) {
+        hal::TextureUses::COPY_DST
+    } else {
+        panic!("Every texture must at least have one of hal::TextureUses::DEPTH_STENCIL_WRITE/COLOR_TARGET/COPY_DST. 
                     Otherwise zero initialization is not possible (which in turn is mandated by wgpu specification)");
-        };
+    };
 
-        // query from tracker with usage (and check usage)
-        let (dst_texture, dst_pending) = cmd_buf
-            .trackers
-            .textures
-            .use_replace(
-                &*texture_guard,
-                dst,
-                TextureSelector {
-                    levels: subresource_range.base_mip_level..subresource_level_end,
-                    layers: subresource_range.base_array_layer..subresource_layer_end,
-                },
-                clear_usage,
-            )
-            .map_err(ClearError::InvalidTexture)?;
-        let dst_raw = dst_texture
-            .inner
-            .as_raw()
-            .ok_or(ClearError::InvalidTexture(dst))?;
-
-        let encoder = cmd_buf.encoder.open();
-
-        // actual hal barrier & operation
-        {
-            let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
-            unsafe {
-                encoder.transition_textures(dst_barrier);
-            }
+    // Issue adequate barrier.
+    let dst_pending = cmd_buf.trackers.textures.change_replace(
+        id::Valid(dst),
+        dst_texture.life_guard().ref_count.as_ref().unwrap(),
+        TextureSelector {
+            levels: mip_range.clone(),
+            layers: layer_range.clone(),
+        },
+        clear_usage,
+    );
+    let dst_raw = dst_texture
+        .inner
+        .as_raw()
+        .ok_or(ClearError::InvalidTexture(dst))?;
+    let encoder = cmd_buf.encoder.open();
+    {
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
+        unsafe {
+            encoder.transition_textures(dst_barrier);
         }
+    }
+    let device = &device_guard[cmd_buf.device_id.value];
 
-        let device = &device_guard[cmd_buf.device_id.value];
-        if clear_usage == hal::TextureUses::COPY_DST {
-            let mut zero_buffer_copy_regions = Vec::new();
-            collect_zero_buffer_copies_for_clear_texture(
-                &dst_texture.desc,
-                device.alignments.buffer_copy_pitch.get() as u32,
-                subresource_range.base_mip_level..subresource_level_end,
-                subresource_range.base_array_layer..subresource_layer_end,
-                &mut zero_buffer_copy_regions,
+    if clear_usage == hal::TextureUses::COPY_DST {
+        clear_texture_via_buffer_copies(
+            &dst_texture.desc,
+            device,
+            mip_range,
+            layer_range,
+            encoder,
+            dst_raw,
+        );
+    } else {
+        clear_texture_via_render_passes(
+            dst_texture,
+            is_3d_texture,
+            mip_range,
+            layer_range,
+            device,
+            clear_usage,
+            encoder,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn clear_texture_via_buffer_copies<A: HalApi>(
+    texture_desc: &wgt::TextureDescriptor<()>,
+    device: &Device<A>,
+    mip_range: Range<u32>,
+    layer_range: Range<u32>,
+    encoder: &mut A::CommandEncoder,
+    dst_raw: &A::Texture,
+) {
+    let mut zero_buffer_copy_regions = Vec::new();
+    collect_zero_buffer_copies_for_clear_texture(
+        &texture_desc,
+        device.alignments.buffer_copy_pitch.get() as u32,
+        mip_range,
+        layer_range,
+        &mut zero_buffer_copy_regions,
+    );
+    if !zero_buffer_copy_regions.is_empty() {
+        unsafe {
+            encoder.copy_buffer_to_texture(
+                &device.zero_buffer,
+                dst_raw,
+                zero_buffer_copy_regions.into_iter(),
             );
-            if !zero_buffer_copy_regions.is_empty() {
-                unsafe {
-                    encoder.copy_buffer_to_texture(
-                        &device.zero_buffer,
-                        dst_raw,
-                        zero_buffer_copy_regions.into_iter(),
-                    );
-                }
-            }
-        } else {
-            let dst_texture = texture_guard
-                .get_mut(dst)
-                .map_err(|_| ClearError::InvalidTexture(dst))?;
-            let is_3d_texture = dst_texture.desc.dimension == wgt::TextureDimension::D3;
-            let extent_base = wgt::Extent3d {
-                width: dst_texture.desc.size.width,
-                height: dst_texture.desc.size.height,
-                depth_or_array_layers: 1, // TODO: What about 3d textures? Only one slice a time, sure but how to select it?
-            };
-
-            let sample_count = dst_texture.desc.sample_count;
-
-            for mip_level in subresource_range.base_mip_level..subresource_level_end {
-                let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
-                for layer in subresource_range.base_array_layer..subresource_layer_end {
-                    let target = hal::Attachment {
-                        view: dst_texture
-                            .get_or_create_clear_view(&device.raw, mip_level, layer)
-                            .map_err(|_| ClearError::FailedToCreateTextureViewForClear {
-                                texture: dst,
-                                mip_level,
-                                layer,
-                            })?,
-                        usage: clear_usage,
-                    };
-
-                    if clear_usage == hal::TextureUses::DEPTH_STENCIL_WRITE {
-                        unsafe {
-                            encoder.begin_render_pass(&hal::RenderPassDescriptor {
-                                label: Some("clear_texture clear pass"),
-                                extent,
-                                sample_count,
-                                color_attachments: &[],
-                                depth_stencil_attachment: Some(hal::DepthStencilAttachment {
-                                    target,
-                                    depth_ops: hal::AttachmentOps::STORE,
-                                    stencil_ops: hal::AttachmentOps::STORE,
-                                    clear_value: (0.0, 0),
-                                }),
-                                multiview: None,
-                            });
-                        }
-                    } else {
-                        unsafe {
-                            encoder.begin_render_pass(&hal::RenderPassDescriptor {
-                                label: Some("clear_texture clear pass"),
-                                extent,
-                                sample_count,
-                                color_attachments: &[hal::ColorAttachment {
-                                    target,
-                                    resolve_target: None,
-                                    ops: hal::AttachmentOps::STORE,
-                                    clear_value: wgt::Color::TRANSPARENT,
-                                }],
-                                depth_stencil_attachment: None,
-                                multiview: None,
-                            });
-                        }
-                    };
-                    unsafe {
-                        encoder.end_render_pass();
-                    }
-                }
-            }
         }
-        Ok(())
     }
 }
 
@@ -430,4 +404,73 @@ pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
             }
         }
     }
+}
+
+fn clear_texture_via_render_passes<A: HalApi>(
+    dst_texture: &mut Texture<A>,
+    is_3d_texture: bool,
+    mip_range: Range<u32>,
+    layer_range: Range<u32>,
+    device: &Device<A>,
+    clear_usage: hal::TextureUses,
+    encoder: &mut A::CommandEncoder,
+) -> Result<(), ClearError> {
+    let extent_base = wgt::Extent3d {
+        width: dst_texture.desc.size.width,
+        height: dst_texture.desc.size.height,
+        depth_or_array_layers: 1, // TODO: What about 3d textures? Only one slice a time, sure but how to select it?
+    };
+    let sample_count = dst_texture.desc.sample_count;
+    for mip_level in mip_range {
+        let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
+        for layer in layer_range.clone() {
+            let target = hal::Attachment {
+                view: dst_texture
+                    .get_or_create_clear_view(&device.raw, mip_level, layer)
+                    .map_err(|_| ClearError::FailedToCreateTextureViewForClear {
+                        mip_level,
+                        layer,
+                    })?,
+                usage: clear_usage,
+            };
+
+            if clear_usage == hal::TextureUses::DEPTH_STENCIL_WRITE {
+                unsafe {
+                    encoder.begin_render_pass(&hal::RenderPassDescriptor {
+                        label: Some("clear_texture clear pass"),
+                        extent,
+                        sample_count,
+                        color_attachments: &[],
+                        depth_stencil_attachment: Some(hal::DepthStencilAttachment {
+                            target,
+                            depth_ops: hal::AttachmentOps::STORE,
+                            stencil_ops: hal::AttachmentOps::STORE,
+                            clear_value: (0.0, 0),
+                        }),
+                        multiview: None,
+                    });
+                }
+            } else {
+                unsafe {
+                    encoder.begin_render_pass(&hal::RenderPassDescriptor {
+                        label: Some("clear_texture clear pass"),
+                        extent,
+                        sample_count,
+                        color_attachments: &[hal::ColorAttachment {
+                            target,
+                            resolve_target: None,
+                            ops: hal::AttachmentOps::STORE,
+                            clear_value: wgt::Color::TRANSPARENT,
+                        }],
+                        depth_stencil_attachment: None,
+                        multiview: None,
+                    });
+                }
+            };
+            unsafe {
+                encoder.end_render_pass();
+            }
+        }
+    }
+    Ok(())
 }
