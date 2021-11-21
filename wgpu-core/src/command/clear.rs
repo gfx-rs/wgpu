@@ -11,7 +11,7 @@ use crate::{
     id::{self, BufferId, CommandEncoderId, DeviceId, TextureId},
     init_tracker::MemoryInitKind,
     resource::{Texture, TextureClearMode},
-    track::TextureSelector,
+    track::{ResourceTracker, TextureSelector, TextureState},
 };
 
 use hal::CommandEncoder as _;
@@ -221,29 +221,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         clear_texture(
-            dst_texture,
-            cmd_buf,
             dst,
+            dst_texture,
             subresource_range.base_mip_level..subresource_level_end,
             subresource_range.base_array_layer..subresource_layer_end,
+            cmd_buf.encoder.open(),
+            &mut cmd_buf.trackers.textures,
             &device_guard[cmd_buf.device_id.value],
         )
     }
 }
 
-fn clear_texture<A: HalApi>(
+pub(crate) fn clear_texture<A: hal::Api>(
+    dst_texture_id: TextureId,
     dst_texture: &Texture<A>,
-    cmd_buf: &mut CommandBuffer<A>,
-    dst: TextureId,
     mip_range: Range<u32>,
     layer_range: Range<u32>,
+    encoder: &mut A::CommandEncoder,
+    texture_tracker: &mut ResourceTracker<TextureState>,
     device: &Device<A>,
 ) -> Result<(), ClearError> {
-    let encoder = cmd_buf.encoder.open();
     let dst_raw = dst_texture
         .inner
         .as_raw()
-        .ok_or(ClearError::InvalidTexture(dst))?;
+        .ok_or(ClearError::InvalidTexture(dst_texture_id))?;
 
     // Issue the right barrier.
     let clear_usage = match dst_texture.clear_mode {
@@ -259,14 +260,12 @@ fn clear_texture<A: HalApi>(
             }
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst));
+            return Err(ClearError::NoValidTextureClearMode(dst_texture_id));
         }
     };
-    let dst_barrier = cmd_buf
-        .trackers
-        .textures
+    let dst_barrier = texture_tracker
         .change_replace(
-            id::Valid(dst),
+            id::Valid(dst_texture_id),
             dst_texture.life_guard().ref_count.as_ref().unwrap(),
             TextureSelector {
                 levels: mip_range.clone(),
@@ -297,13 +296,13 @@ fn clear_texture<A: HalApi>(
             encoder,
         )?,
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst));
+            return Err(ClearError::NoValidTextureClearMode(dst_texture_id));
         }
     }
     Ok(())
 }
 
-fn clear_texture_via_buffer_copies<A: HalApi>(
+fn clear_texture_via_buffer_copies<A: hal::Api>(
     texture_desc: &wgt::TextureDescriptor<()>,
     device: &Device<A>,
     mip_range: Range<u32>,
@@ -404,7 +403,7 @@ pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
     }
 }
 
-fn clear_texture_via_render_passes<A: HalApi>(
+fn clear_texture_via_render_passes<A: hal::Api>(
     dst_texture: &Texture<A>,
     mip_range: Range<u32>,
     layer_range: Range<u32>,

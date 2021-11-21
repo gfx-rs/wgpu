@@ -13,7 +13,7 @@ use crate::{
     FastHashMap,
 };
 
-use super::{BakedCommands, DestroyedBufferError, DestroyedTextureError};
+use super::{clear::clear_texture, BakedCommands, DestroyedBufferError, DestroyedTextureError};
 
 /// Surface that was discarded by `StoreOp::Discard` of a preceding renderpass.
 /// Any read access to this surface needs to be preceded by a texture initialization.
@@ -131,43 +131,20 @@ pub(crate) fn fixup_discarded_surfaces<
     texture_tracker: &mut ResourceTracker<TextureState>,
     device: &Device<A>,
 ) {
-    let mut zero_buffer_copy_regions = Vec::new();
     for init in inits {
         let mip_range = init.mip_level..(init.mip_level + 1);
         let layer_range = init.layer..(init.layer + 1);
 
-        let (texture, pending) = texture_tracker
-            .use_replace(
-                &*texture_guard,
-                init.texture,
-                TextureSelector {
-                    levels: mip_range.clone(),
-                    layers: layer_range.clone(),
-                },
-                hal::TextureUses::COPY_DST,
-            )
-            .unwrap();
-
-        collect_zero_buffer_copies_for_clear_texture(
-            &texture.desc,
-            device.alignments.buffer_copy_pitch.get() as u32,
+        clear_texture(
+            init.texture,
+            texture_guard.get(init.texture).unwrap(),
             mip_range,
             layer_range,
-            &mut zero_buffer_copy_regions,
-        );
-
-        let barriers = pending.map(|pending| pending.into_hal(texture));
-        let raw_texture = texture.inner.as_raw().unwrap();
-
-        unsafe {
-            // TODO: Should first gather all barriers, do a single transition_textures call, and then send off copy_buffer_to_texture commands.
-            encoder.transition_textures(barriers);
-            encoder.copy_buffer_to_texture(
-                &device.zero_buffer,
-                raw_texture,
-                zero_buffer_copy_regions.drain(..),
-            );
-        }
+            encoder,
+            texture_tracker,
+            device,
+        )
+        .unwrap();
     }
 }
 
