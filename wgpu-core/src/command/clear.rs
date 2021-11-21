@@ -19,8 +19,8 @@ use wgt::{BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, Textur
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
 pub enum ClearError {
-    #[error("to use clear_buffer/texture the CLEAR_COMMANDS feature needs to be enabled")]
-    MissingClearCommandsFeature,
+    #[error("to use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
+    MissingClearTextureFeature,
     #[error("command encoder {0:?} is invalid")]
     InvalidCommandEncoder(CommandEncoderId),
     #[error("device {0:?} is invalid")]
@@ -173,8 +173,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        if !cmd_buf.support_clear_buffer_texture {
-            return Err(ClearError::MissingClearCommandsFeature);
+        if !cmd_buf.support_clear_texture {
+            return Err(ClearError::MissingClearTextureFeature);
         }
 
         let dst_texture = texture_guard

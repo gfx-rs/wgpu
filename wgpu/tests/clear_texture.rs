@@ -207,7 +207,7 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat], su
 #[test]
 fn clear_texture_2d_uncompressed() {
     initialize_test(
-        TestParameters::default().features(wgpu::Features::CLEAR_COMMANDS),
+        TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED, true);
         },
@@ -218,7 +218,7 @@ fn clear_texture_2d_uncompressed() {
 fn clear_texture_2d_bc() {
     initialize_test(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_COMMANDS | wgpu::Features::TEXTURE_COMPRESSION_BC),
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_BC, false);
         },
@@ -228,9 +228,8 @@ fn clear_texture_2d_bc() {
 #[test]
 fn clear_texture_2d_astc() {
     initialize_test(
-        TestParameters::default().features(
-            wgpu::Features::CLEAR_COMMANDS | wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-        ),
+        TestParameters::default()
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC, false);
         },
@@ -241,7 +240,7 @@ fn clear_texture_2d_astc() {
 fn clear_texture_2d_etc2() {
     initialize_test(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_COMMANDS | wgpu::Features::TEXTURE_COMPRESSION_ETC2),
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ETC2),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2, false);
         },
