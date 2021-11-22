@@ -45,10 +45,6 @@ impl IdentityManager {
 
     pub fn free<I: id::TypedId + Debug>(&mut self, id: I) {
         let (index, epoch, _backend) = id.unzip();
-        // avoid doing this check in release
-        if cfg!(debug_assertions) {
-            assert!(!self.free.contains(&index));
-        }
         let pe = &mut self.epochs[index as usize];
         assert_eq!(*pe, epoch);
         *pe += 1;
