@@ -157,6 +157,7 @@ impl framework::Example for Example {
                     primitive: wgpu::PrimitiveState {
                         polygon_mode: wgpu::PolygonMode::Line,
                         topology: wgpu::PrimitiveTopology::LineStrip,
+                        strip_index_format: Some(wgpu::IndexFormat::Uint32),
                         ..Default::default()
                     },
                     depth_stencil: None,
