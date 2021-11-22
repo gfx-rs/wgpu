@@ -1114,15 +1114,20 @@ impl crate::Context for Context {
         use wgc::binding_model as bm;
 
         let mut arrayed_texture_views = Vec::new();
+        let mut arrayed_samplers = Vec::new();
         if device.features.contains(Features::TEXTURE_BINDING_ARRAY) {
             // gather all the array view IDs first
             for entry in desc.entries.iter() {
                 if let BindingResource::TextureViewArray(array) = entry.resource {
                     arrayed_texture_views.extend(array.iter().map(|view| view.id));
                 }
+                if let BindingResource::SamplerArray(array) = entry.resource {
+                    arrayed_samplers.extend(array.iter().map(|sampler| sampler.id));
+                }
             }
         }
         let mut remaining_arrayed_texture_views = &arrayed_texture_views[..];
+        let mut remaining_arrayed_samplers = &arrayed_samplers[..];
 
         let mut arrayed_buffer_bindings = Vec::new();
         if device.features.contains(Features::BUFFER_BINDING_ARRAY) {
@@ -1161,6 +1166,11 @@ impl crate::Context for Context {
                         bm::BindingResource::BufferArray(Borrowed(slice))
                     }
                     BindingResource::Sampler(sampler) => bm::BindingResource::Sampler(sampler.id),
+                    BindingResource::SamplerArray(array) => {
+                        let slice = &remaining_arrayed_samplers[..array.len()];
+                        remaining_arrayed_samplers = &remaining_arrayed_samplers[array.len()..];
+                        bm::BindingResource::SamplerArray(Borrowed(slice))
+                    }
                     BindingResource::TextureView(texture_view) => {
                         bm::BindingResource::TextureView(texture_view.id)
                     }

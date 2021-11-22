@@ -1202,7 +1202,10 @@ impl<A: HalApi> Device<A> {
                         false => WritableStorage::Yes,
                     },
                 ),
-                Bt::Sampler { .. } => (None, WritableStorage::No),
+                Bt::Sampler { .. } => (
+                    Some(wgt::Features::TEXTURE_BINDING_ARRAY),
+                    WritableStorage::No,
+                ),
                 Bt::Texture { .. } => (
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
                     WritableStorage::No,
@@ -1617,6 +1620,21 @@ impl<A: HalApi> Device<A> {
                             })
                         }
                     }
+                }
+                Br::SamplerArray(ref bindings_array) => {
+                    let num_bindings = bindings_array.len();
+                    Self::check_array_binding(self.features, decl.count, num_bindings)?;
+
+                    let res_index = hal_samplers.len();
+                    for &id in bindings_array.iter() {
+                        let sampler = used
+                            .samplers
+                            .use_extend(&*sampler_guard, id, (), ())
+                            .map_err(|_| Error::InvalidSampler(id))?;
+                        hal_samplers.push(&sampler.raw);
+                    }
+
+                    (res_index, num_bindings)
                 }
                 Br::TextureView(id) => {
                     let view = used

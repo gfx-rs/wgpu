@@ -189,7 +189,7 @@ impl framework::Example for Example {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
+                    count: NonZeroU32::new(2),
                 },
             ],
         });
@@ -205,7 +205,7 @@ impl framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::SamplerArray(&[&sampler, &sampler]),
                 },
             ],
             layout: &bind_group_layout,

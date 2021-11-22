@@ -1005,6 +1005,13 @@ pub enum BindingResource<'a> {
     ///
     /// Corresponds to [`wgt::BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set to None.
     Sampler(&'a Sampler),
+    /// Binding is backed by an array of samplers.
+    ///
+    /// [`Features::TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
+    ///
+    /// Corresponds to [`wgt::BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set
+    /// to Some.
+    SamplerArray(&'a [&'a Sampler]),
     /// Binding is backed by a texture.
     ///
     /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
