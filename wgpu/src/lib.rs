@@ -32,13 +32,14 @@ pub use wgt::{
     DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
     ImageSubresourceRange, IndexFormat, Limits, MultisampleState, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBorderColor,
-    ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceConfiguration, SurfaceStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType,
+    SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages, StencilFaceState,
+    StencilOperation, StencilState, StorageTextureAccess, SurfaceConfiguration, SurfaceStatus,
+    TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
+    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
+    VertexFormat, VertexStepMode, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
+    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 use backend::{BufferMappedRange, Context as C};
@@ -424,7 +425,7 @@ trait Context: Debug + Send + Sized + Sync {
         texture: &Texture,
         subresource_range: &ImageSubresourceRange,
     );
-    fn command_encoder_clear_buffer(
+    fn command_encoder_fill_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
         buffer: &Buffer,
@@ -747,7 +748,7 @@ pub enum ShaderSource<'a> {
     /// is passed to `gfx-rs` and `spirv_cross` for translation.
     #[cfg(feature = "spirv")]
     SpirV(Cow<'a, [u32]>),
-    /// GSLS module as a string slice.
+    /// GLSL module as a string slice.
     ///
     /// wgpu will attempt to parse and validate it. The module will get
     /// passed to wgpu-core where it will translate it to the required languages.
@@ -1300,6 +1301,9 @@ pub struct RenderPipelineDescriptor<'a> {
     pub multisample: MultisampleState,
     /// The compiled fragment stage, its entry point, and the color targets.
     pub fragment: Option<FragmentState<'a>>,
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
 }
 
 /// Describes the attachments of a compute pass.
@@ -1355,6 +1359,8 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the renderpasses it is used in.
     pub sample_count: u32,
+    /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
+    pub multiview: Option<NonZeroU32>,
 }
 
 /// Surface texture that can be rendered to.
@@ -1832,6 +1838,7 @@ impl Device {
     ///
     /// - `hal_texture` must be created from this device internal handle
     /// - `hal_texture` must be created respecting `desc`
+    /// - `hal_texture` must be initialized
     #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
@@ -1878,6 +1885,21 @@ impl Device {
     /// Stops frame capture.
     pub fn stop_capture(&self) {
         Context::device_stop_capture(&*self.context, &self.id)
+    }
+
+    /// Returns the inner hal Device using a callback. The hal device will be `None` if the
+    /// backend type argument does not match with this wgpu Device
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Device must not be manually destroyed
+    #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+        &self,
+        hal_device_callback: F,
+    ) -> R {
+        self.context
+            .device_as_hal::<A, F, R>(&self.id, hal_device_callback)
     }
 }
 
@@ -2364,16 +2386,15 @@ impl CommandEncoder {
     ///
     /// # Panics
     ///
-    /// - `CLEAR_COMMANDS` extension not enabled
     /// - Buffer does not have `COPY_DST` usage.
     /// - Range it out of bounds
-    pub fn clear_buffer(
+    pub fn fill_buffer(
         &mut self,
         buffer: &Buffer,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        Context::command_encoder_clear_buffer(
+        Context::command_encoder_fill_buffer(
             &*self.context,
             self.id.as_ref().unwrap(),
             buffer,

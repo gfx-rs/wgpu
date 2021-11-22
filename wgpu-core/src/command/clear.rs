@@ -69,14 +69,14 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_clear_buffer<A: HalApi>(
+    pub fn command_encoder_fill_buffer<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), ClearError> {
-        profiling::scope!("CommandEncoder::clear_buffer");
+        profiling::scope!("CommandEncoder::fill_buffer");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -87,11 +87,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
-            list.push(TraceCommand::ClearBuffer { dst, offset, size });
-        }
-
-        if !cmd_buf.support_clear_buffer_texture {
-            return Err(ClearError::MissingClearCommandsFeature);
+            list.push(TraceCommand::FillBuffer { dst, offset, size });
         }
 
         let (dst_buffer, dst_pending) = cmd_buf
@@ -130,7 +126,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => dst_buffer.size,
         };
         if offset == end {
-            log::trace!("Ignoring clear_buffer of size 0");
+            log::trace!("Ignoring fill_buffer of size 0");
             return Ok(());
         }
 
@@ -294,13 +290,13 @@ pub(crate) fn collect_zero_buffer_copies_for_clear_texture(
         get_lowest_common_denom(buffer_copy_pitch, format_desc.block_size as u32);
 
     for mip_level in mip_range {
-        let mip_size = texture_desc.mip_level_size(mip_level).unwrap();
+        let mut mip_size = texture_desc.mip_level_size(mip_level).unwrap();
+        // Round to multiple of block size
+        mip_size.width = align_to(mip_size.width, format_desc.block_dimensions.0 as u32);
+        mip_size.height = align_to(mip_size.height, format_desc.block_dimensions.1 as u32);
 
         let bytes_per_row = align_to(
-            // row is at least one block wide, need to round up
-            (mip_size.width + format_desc.block_dimensions.0 as u32 - 1)
-                / format_desc.block_dimensions.0 as u32
-                * format_desc.block_size as u32,
+            mip_size.width / format_desc.block_dimensions.0 as u32 * format_desc.block_size as u32,
             bytes_per_row_alignment,
         );
 

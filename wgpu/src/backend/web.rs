@@ -7,7 +7,7 @@ use std::{
     pin::Pin,
     task::{self, Poll},
 };
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::{prelude::*, JsCast};
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
 // implement `Send` and `Sync` to match native.
@@ -604,7 +604,8 @@ fn map_primitive_state(primitive: &wgt::PrimitiveState) -> web_sys::GpuPrimitive
         PrimitiveTopology::TriangleStrip => pt::TriangleStrip,
     });
 
-    //mapped.clamp_depth(primitive.clamp_depth);
+    //TODO:
+    //mapped.unclipped_depth(primitive.unclipped_depth);
 
     mapped
 }
@@ -1026,7 +1027,8 @@ impl crate::Context for Context {
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
 
         let possible_features = [
-            (wgt::Features::DEPTH_CLAMPING, Gfn::DepthClamping),
+            //TODO: update the name
+            (wgt::Features::DEPTH_CLIP_CONTROL, Gfn::DepthClamping),
             // TODO (_, Gfn::Depth24unormStencil8),
             // TODO (_, Gfn::Depth32floatStencil8),
             (
@@ -1281,15 +1283,18 @@ impl crate::Context for Context {
                         });
                         mapped_entry.buffer(&buffer);
                     }
-                    wgt::BindingType::Sampler {
-                        comparison,
-                        filtering,
-                    } => {
+                    wgt::BindingType::Sampler(ty) => {
                         let mut sampler = web_sys::GpuSamplerBindingLayout::new();
-                        sampler.type_(match (comparison, filtering) {
-                            (false, false) => web_sys::GpuSamplerBindingType::NonFiltering,
-                            (false, true) => web_sys::GpuSamplerBindingType::Filtering,
-                            (true, _) => web_sys::GpuSamplerBindingType::Comparison,
+                        sampler.type_(match ty {
+                            wgt::SamplerBindingType::NonFiltering => {
+                                web_sys::GpuSamplerBindingType::NonFiltering
+                            }
+                            wgt::SamplerBindingType::Filtering => {
+                                web_sys::GpuSamplerBindingType::Filtering
+                            }
+                            wgt::SamplerBindingType::Comparison => {
+                                web_sys::GpuSamplerBindingType::Comparison
+                            }
                         });
                         mapped_entry.sampler(&sampler);
                     }
@@ -1626,10 +1631,27 @@ impl crate::Context for Context {
 
     fn device_on_uncaptured_error(
         &self,
-        _device: &Self::DeviceId,
-        _handler: impl crate::UncapturedErrorHandler,
+        device: &Self::DeviceId,
+        handler: impl crate::UncapturedErrorHandler,
     ) {
-        // TODO:
+        let f = Closure::wrap(Box::new(move |event: web_sys::GpuUncapturedErrorEvent| {
+            // Convert the JS error into a wgpu error.
+            let js_error = event.error();
+            let source = Box::<dyn std::error::Error + Send + Sync>::from("<WebGPU Error>");
+            if let Some(js_error) = js_error.dyn_ref::<web_sys::GpuValidationError>() {
+                handler(crate::Error::ValidationError {
+                    source,
+                    description: js_error.message(),
+                });
+            } else if js_error.has_type::<web_sys::GpuOutOfMemoryError>() {
+                handler(crate::Error::OutOfMemoryError { source });
+            }
+        }) as Box<dyn FnMut(_)>);
+        device
+            .0
+            .set_onuncapturederror(Some(f.as_ref().unchecked_ref()));
+        // TODO: This will leak the memory associated with the error handler by default.
+        f.forget();
     }
 
     fn buffer_map_async(
@@ -1974,7 +1996,7 @@ impl crate::Context for Context {
     ) {
     }
 
-    fn command_encoder_clear_buffer(
+    fn command_encoder_fill_buffer(
         &self,
         _encoder: &Self::CommandEncoderId,
         _buffer: &crate::Buffer,

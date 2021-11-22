@@ -280,6 +280,24 @@ impl super::Device {
         );
         result
     }
+
+    pub unsafe fn texture_from_raw(
+        resource: native::Resource,
+        format: wgt::TextureFormat,
+        dimension: wgt::TextureDimension,
+        size: wgt::Extent3d,
+        mip_level_count: u32,
+        sample_count: u32,
+    ) -> super::Texture {
+        super::Texture {
+            resource,
+            format,
+            dimension,
+            size,
+            mip_level_count,
+            sample_count,
+        }
+    }
 }
 
 impl crate::Device<super::Api> for super::Device {
@@ -1257,7 +1275,7 @@ impl crate::Device<super::Api> for super::Device {
             DepthBias: bias.constant,
             DepthBiasClamp: bias.clamp,
             SlopeScaledDepthBias: bias.slope_scale,
-            DepthClipEnable: if desc.primitive.clamp_depth { 0 } else { 1 },
+            DepthClipEnable: if desc.primitive.unclipped_depth { 0 } else { 1 },
             MultisampleEnable: if desc.multisample.count > 1 { 1 } else { 0 },
             ForcedSampleCount: 0,
             AntialiasedLineEnable: 0,

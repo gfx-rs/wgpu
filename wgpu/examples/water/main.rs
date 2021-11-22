@@ -391,10 +391,7 @@ impl framework::Example for Example {
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler {
-                            comparison: false,
-                            filtering: true,
-                        },
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -565,6 +562,7 @@ impl framework::Example for Example {
             }),
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         });
 
         // Same idea as the water pipeline.
@@ -598,6 +596,7 @@ impl framework::Example for Example {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         });
 
         // Done

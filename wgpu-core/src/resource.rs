@@ -2,7 +2,7 @@ use crate::{
     device::{DeviceError, HostMap, MissingFeatures},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
-    init_tracker::BufferInitTracker,
+    init_tracker::{BufferInitTracker, TextureInitTracker},
     track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
@@ -185,6 +185,7 @@ pub struct Texture<A: hal::Api> {
     pub(crate) desc: wgt::TextureDescriptor<()>,
     pub(crate) hal_usage: hal::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
+    pub(crate) initialization_status: TextureInitTracker,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
@@ -207,6 +208,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hal_texture = texture.map(|tex| tex.inner.as_raw().unwrap());
 
         hal_texture_callback(hal_texture);
+    }
+
+    /// # Safety
+    ///
+    /// - The raw device handle must not be manually destroyed
+    pub unsafe fn device_as_hal<A: HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+        &self,
+        id: DeviceId,
+        hal_device_callback: F,
+    ) -> R {
+        profiling::scope!("as_hal", "Device");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (guard, _) = hub.devices.read(&mut token);
+        let device = guard.get(id).ok();
+        let hal_device = device.map(|device| &device.raw);
+
+        hal_device_callback(hal_device)
     }
 }
 

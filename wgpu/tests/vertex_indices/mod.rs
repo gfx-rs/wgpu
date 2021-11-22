@@ -77,6 +77,7 @@ fn pulling_common(
                     write_mask: wgpu::ColorWrites::ALL,
                 }],
             }),
+            multiview: None,
         });
 
     let dummy = ctx

@@ -137,7 +137,7 @@ impl framework::Example for Example {
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &draw_shader,
-                entry_point: "main",
+                entry_point: "main_vs",
                 buffers: &[
                     wgpu::VertexBufferLayout {
                         array_stride: 4 * 4,
@@ -153,12 +153,13 @@ impl framework::Example for Example {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &draw_shader,
-                entry_point: "main",
+                entry_point: "main_fs",
                 targets: &[config.format.into()],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         });
 
         // create compute pipeline

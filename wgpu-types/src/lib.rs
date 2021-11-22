@@ -163,10 +163,10 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Default)]
     pub struct Features: u64 {
-        /// By default, polygon depth is clipped to 0-1 range. Anything outside of that range
-        /// is rejected, and respective fragments are not touched.
+        /// By default, polygon depth is clipped to 0-1 range before/during rasterization.
+        /// Anything outside of that range is rejected, and respective fragments are not touched.
         ///
-        /// With this extension, we can force clamping of the polygon depth to 0-1. That allows
+        /// With this extension, we can disabling clipping. That allows
         /// shadow map occluders to be rendered into a tighter depth range.
         ///
         /// Supported platforms:
@@ -174,7 +174,7 @@ bitflags::bitflags! {
         /// - some mobile chips
         ///
         /// This is a web and native feature.
-        const DEPTH_CLAMPING = 1 << 0;
+        const DEPTH_CLIP_CONTROL = 1 << 0;
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
         /// with 8 or 16 bytes per block.
         ///
@@ -526,6 +526,13 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_PRIMITIVE_INDEX = 1 << 39;
+        /// Enables multiview render passes and `builtin(view_index)` in vertex shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const MULTIVIEW = 1 << 40;
     }
 }
 
@@ -609,7 +616,7 @@ pub struct Limits {
     pub max_storage_textures_per_shader_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
-    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 16384. Higher is "better".
+    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 64 KB. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
     /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MB. Higher is "better".
     pub max_storage_buffer_binding_size: u32,
@@ -641,6 +648,19 @@ pub struct Limits {
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
+
+    /// The maximum value of the workgroup_size X dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
+    pub max_compute_workgroup_size_x: u32,
+    /// The maximum value of the workgroup_size Y dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
+    pub max_compute_workgroup_size_y: u32,
+    /// The maximum value of the workgroup_size Z dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256.
+    pub max_compute_workgroup_size_z: u32,
+    /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
+    /// Defaults to 65535.
+    pub max_compute_workgroups_per_dimension: u32,
 }
 
 impl Default for Limits {
@@ -658,7 +678,7 @@ impl Default for Limits {
             max_storage_buffers_per_shader_stage: 8,
             max_storage_textures_per_shader_stage: 8,
             max_uniform_buffers_per_shader_stage: 12,
-            max_uniform_buffer_binding_size: 16384,
+            max_uniform_buffer_binding_size: 64 << 10,
             max_storage_buffer_binding_size: 128 << 20,
             max_vertex_buffers: 8,
             max_vertex_attributes: 16,
@@ -666,12 +686,16 @@ impl Default for Limits {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
+            max_compute_workgroup_size_x: 256,
+            max_compute_workgroup_size_y: 256,
+            max_compute_workgroup_size_z: 64,
+            max_compute_workgroups_per_dimension: 65535,
         }
     }
 }
 
 impl Limits {
-    /// These default limits are guarenteed to be compatible with GLES3, and D3D11
+    /// These default limits are guarenteed to be compatible with GLES-3.1, and D3D11
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
@@ -686,7 +710,7 @@ impl Limits {
             max_storage_buffers_per_shader_stage: 4,
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
-            max_uniform_buffer_binding_size: 16384,
+            max_uniform_buffer_binding_size: 16 << 10,
             max_storage_buffer_binding_size: 128 << 20,
             max_vertex_buffers: 8,
             max_vertex_attributes: 16,
@@ -694,10 +718,14 @@ impl Limits {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
+            max_compute_workgroup_size_x: 256,
+            max_compute_workgroup_size_y: 256,
+            max_compute_workgroup_size_z: 64,
+            max_compute_workgroups_per_dimension: 65535,
         }
     }
 
-    /// These default limits are guarenteed to be compatible with GLES3, and D3D11, and WebGL2
+    /// These default limits are guarenteed to be compatible with GLES-3.0, and D3D11, and WebGL2
     pub fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_storage_buffers_per_shader_stage: 0,
@@ -1288,11 +1316,11 @@ pub struct PrimitiveState {
     /// The face culling mode.
     #[cfg_attr(feature = "serde", serde(default))]
     pub cull_mode: Option<Face>,
-    /// If set to true, the polygon depth is clamped to 0-1 range instead of being clipped.
+    /// If set to true, the polygon depth is not clipped to 0-1 before rasterization.
     ///
-    /// Enabling this requires `Features::DEPTH_CLAMPING` to be enabled.
+    /// Enabling this requires `Features::DEPTH_CLIP_CONTROL` to be enabled.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub clamp_depth: bool,
+    pub unclipped_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
     /// Setting this to `Line` requires `Features::POLYGON_MODE_LINE` to be enabled.
@@ -2750,6 +2778,7 @@ impl Extent3d {
     }
 
     /// Calculates the extent at a given mip level.
+    /// Does *not* account for memory size being a multiple of block size.
     pub fn mip_level_size(&self, level: u32, is_3d_texture: bool) -> Extent3d {
         Extent3d {
             width: u32::max(1, self.width >> level),
@@ -3172,6 +3201,25 @@ pub enum StorageTextureAccess {
     ReadWrite,
 }
 
+/// Specific type of a sampler binding.
+///
+/// WebGPU spec: <https://gpuweb.github.io/gpuweb/#enumdef-gpusamplerbindingtype>
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum SamplerBindingType {
+    /// The sampling result is produced based on more than a single color sample from a texture,
+    /// e.g. when bilinear interpolation is enabled.
+    Filtering,
+    /// The sampling result is produced based on a single color sample from a texture.
+    NonFiltering,
+    /// Use as a comparison sampler instead of a normal sampler.
+    /// For more info take a look at the analogous functionality in OpenGL: <https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode>.
+    Comparison,
+}
+
 /// Specific type of a binding.
 ///
 /// WebGPU spec: the enum of
@@ -3205,16 +3253,7 @@ pub enum BindingType {
     /// layout(binding = 0)
     /// uniform sampler s;
     /// ```
-    Sampler {
-        /// The sampling result is produced based on more than a single color sample from a texture,
-        /// e.g. when bilinear interpolation is enabled.
-        ///
-        /// A filtering sampler can only be used with a filterable texture.
-        filtering: bool,
-        /// Use as a comparison sampler instead of a normal sampler.
-        /// For more info take a look at the analogous functionality in OpenGL: <https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode>.
-        comparison: bool,
-    },
+    Sampler(SamplerBindingType),
     /// A texture binding.
     ///
     /// Example GLSL syntax:
@@ -3333,6 +3372,30 @@ pub struct ImageSubresourceRange {
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<NonZeroU32>,
+}
+
+impl ImageSubresourceRange {
+    /// Returns the mip level range of a subresource range describes for a specific texture.
+    pub fn mip_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+        self.base_mip_level..match self.mip_level_count {
+            Some(mip_level_count) => self.base_mip_level + mip_level_count.get(),
+            None => texture_desc.mip_level_count,
+        }
+    }
+
+    /// Returns the layer range of a subresource range describes for a specific texture.
+    pub fn layer_range<L>(&self, texture_desc: &TextureDescriptor<L>) -> Range<u32> {
+        self.base_array_layer..match self.array_layer_count {
+            Some(array_layer_count) => self.base_array_layer + array_layer_count.get(),
+            None => {
+                if texture_desc.dimension == TextureDimension::D3 {
+                    self.base_array_layer + 1
+                } else {
+                    texture_desc.size.depth_or_array_layers
+                }
+            }
+        }
+    }
 }
 
 /// Color variation to use when sampler addressing mode is [`AddressMode::ClampToBorder`]

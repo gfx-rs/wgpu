@@ -23,22 +23,23 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 [dependencies]
 arrayvec = "0.7"
 bitflags = "1.0"
+codespan-reporting = "0.11"
 copyless = "0.1"
 fxhash = "0.2"
 log = "0.4"
 parking_lot = "0.11"
 profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.3", optional = true }
-ron = { version = "0.6", optional = true }
+ron = { version = "0.7", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 thiserror = "1"
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#rev = "2e7d629"
-version = "0.7"
-features = ["validate", "wgsl-in"]
+git = "https://github.com/gfx-rs/naga"
+rev = "29571cc"
+#version = "0.7"
+features = ["span", "validate", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"

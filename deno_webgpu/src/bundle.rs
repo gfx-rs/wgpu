@@ -68,6 +68,7 @@ pub fn op_webgpu_create_render_bundle_encoder(
         color_formats: Cow::from(color_formats),
         sample_count: args.sample_count,
         depth_stencil,
+        multiview: None,
     };
 
     let res = wgpu_core::command::RenderBundleEncoder::new(&descriptor, device, None);

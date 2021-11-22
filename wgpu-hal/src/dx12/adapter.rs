@@ -169,7 +169,7 @@ impl super::Adapter {
         };
 
         let mut features = wgt::Features::empty()
-            | wgt::Features::DEPTH_CLAMPING
+            | wgt::Features::DEPTH_CLIP_CONTROL
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
             //TODO: Naga part
             //| wgt::Features::TEXTURE_BINDING_ARRAY
@@ -245,7 +245,13 @@ impl super::Adapter {
                     max_push_constant_size: 0,
                     min_uniform_buffer_offset_alignment:
                         d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
-                    min_storage_buffer_offset_alignment: 4, // TODO?
+                    min_storage_buffer_offset_alignment: 4,
+                    max_compute_workgroup_size_x: d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
+                    max_compute_workgroup_size_y: d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
+                    max_compute_workgroup_size_z: d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
+                    max_compute_workgroups_per_dimension:
+                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    // TODO?
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

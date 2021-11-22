@@ -1,5 +1,5 @@
 [[stage(vertex)]]
-fn main(
+fn main_vs(
     [[location(0)]] particle_pos: vec2<f32>,
     [[location(1)]] particle_vel: vec2<f32>,
     [[location(2)]] position: vec2<f32>,
@@ -13,6 +13,6 @@ fn main(
 }
 
 [[stage(fragment)]]
-fn main() -> [[location(0)]] vec4<f32> {
+fn main_fs() -> [[location(0)]] vec4<f32> {
     return vec4<f32>(1.0, 1.0, 1.0, 1.0);
 }

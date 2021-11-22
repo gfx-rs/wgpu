@@ -1,12 +1,12 @@
 /*! Presentation.
 
-    ## Lifecycle
+## Lifecycle
 
-    Whenever a submission detects the use of any surface texture, it adds it to the device
-    tracker for the duration of the submission (temporarily, while recording).
-    It's added with `UNINITIALIZED` state and transitioned into `empty()` state.
-    When this texture is presented, we remove it from the device tracker as well as
-    extract it from the hub.
+Whenever a submission detects the use of any surface texture, it adds it to the device
+tracker for the duration of the submission (temporarily, while recording).
+It's added with `UNINITIALIZED` state and transitioned into `empty()` state.
+When this texture is presented, we remove it from the device tracker as well as
+extract it from the hub.
 !*/
 
 #[cfg(feature = "trace")]
@@ -16,6 +16,7 @@ use crate::{
     device::DeviceError,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
+    init_tracker::TextureInitTracker,
     resource,
     track::TextureSelector,
     LifeGuard, Stored,
@@ -151,6 +152,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         flags: wgt::TextureFormatFeatureFlags::empty(),
                         filterable: false,
                     },
+                    initialization_status: TextureInitTracker::new(1, 1),
                     full_range: TextureSelector {
                         layers: 0..1,
                         levels: 0..1,

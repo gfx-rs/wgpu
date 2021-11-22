@@ -27,6 +27,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
             }
         }),
         sample_count: context.sample_count,
+        multiview: context.multiview,
     }
 }
 
@@ -147,7 +148,7 @@ pub enum Command {
         dst: crate::command::ImageCopyTexture,
         size: wgt::Extent3d,
     },
-    ClearBuffer {
+    FillBuffer {
         dst: id::BufferId,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,

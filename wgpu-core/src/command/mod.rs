@@ -3,26 +3,25 @@ mod bundle;
 mod clear;
 mod compute;
 mod draw;
+mod memory_init;
 mod query;
 mod render;
 mod transfer;
 
-use std::collections::hash_map::Entry;
-use std::ops::Range;
-
 pub use self::bundle::*;
+pub(crate) use self::clear::collect_zero_buffer_copies_for_clear_texture;
 pub use self::compute::*;
 pub use self::draw::*;
+use self::memory_init::CommandBufferTextureMemoryActions;
 pub use self::query::*;
 pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::error::{ErrorFormatter, PrettyError};
-use crate::FastHashMap;
+use crate::init_tracker::BufferInitTrackerAction;
 use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
-    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     resource::{Buffer, Texture},
     track::{BufferState, ResourceTracker, TextureState, TrackerSet},
     Label, Stored,
@@ -72,96 +71,11 @@ pub struct BakedCommands<A: hal::Api> {
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    texture_memory_actions: CommandBufferTextureMemoryActions,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
-
-impl<A: hal::Api> BakedCommands<A> {
-    pub(crate) fn initialize_buffer_memory(
-        &mut self,
-        device_tracker: &mut TrackerSet,
-        buffer_guard: &mut Storage<Buffer<A>, id::BufferId>,
-    ) -> Result<(), DestroyedBufferError> {
-        // Gather init ranges for each buffer so we can collapse them.
-        // It is not possible to do this at an earlier point since previously executed command buffer change the resource init state.
-        let mut uninitialized_ranges_per_buffer = FastHashMap::default();
-        for buffer_use in self.buffer_memory_init_actions.drain(..) {
-            let buffer = buffer_guard
-                .get_mut(buffer_use.id)
-                .map_err(|_| DestroyedBufferError(buffer_use.id))?;
-
-            // align the end to 4
-            let end_remainder = buffer_use.range.end % wgt::COPY_BUFFER_ALIGNMENT;
-            let end = if end_remainder == 0 {
-                buffer_use.range.end
-            } else {
-                buffer_use.range.end + wgt::COPY_BUFFER_ALIGNMENT - end_remainder
-            };
-            let uninitialized_ranges = buffer
-                .initialization_status
-                .drain(buffer_use.range.start..end);
-
-            match buffer_use.kind {
-                MemoryInitKind::ImplicitlyInitialized => {
-                    uninitialized_ranges.for_each(drop);
-                }
-                MemoryInitKind::NeedsInitializedMemory => {
-                    match uninitialized_ranges_per_buffer.entry(buffer_use.id) {
-                        Entry::Vacant(e) => {
-                            e.insert(
-                                uninitialized_ranges.collect::<Vec<Range<wgt::BufferAddress>>>(),
-                            );
-                        }
-                        Entry::Occupied(mut e) => {
-                            e.get_mut().extend(uninitialized_ranges);
-                        }
-                    }
-                }
-            }
-        }
-
-        for (buffer_id, mut ranges) in uninitialized_ranges_per_buffer {
-            // Collapse touching ranges.
-            ranges.sort_by(|a, b| a.start.cmp(&b.start));
-            for i in (1..ranges.len()).rev() {
-                assert!(ranges[i - 1].end <= ranges[i].start); // The memory init tracker made sure of this!
-                if ranges[i].start == ranges[i - 1].end {
-                    ranges[i - 1].end = ranges[i].end;
-                    ranges.swap_remove(i); // Ordering not important at this point
-                }
-            }
-
-            // Don't do use_replace since the buffer may already no longer have a ref_count.
-            // However, we *know* that it is currently in use, so the tracker must already know about it.
-            let transition = device_tracker.buffers.change_replace_tracked(
-                id::Valid(buffer_id),
-                (),
-                hal::BufferUses::COPY_DST,
-            );
-
-            let buffer = buffer_guard
-                .get_mut(buffer_id)
-                .map_err(|_| DestroyedBufferError(buffer_id))?;
-            let raw_buf = buffer.raw.as_ref().ok_or(DestroyedBufferError(buffer_id))?;
-
-            unsafe {
-                self.encoder
-                    .transition_buffers(transition.map(|pending| pending.into_hal(buffer)));
-            }
-
-            for range in ranges.iter() {
-                assert!(range.start % wgt::COPY_BUFFER_ALIGNMENT == 0, "Buffer {:?} has an uninitialized range with a start not aligned to 4 (start was {})", raw_buf, range.start);
-                assert!(range.end % wgt::COPY_BUFFER_ALIGNMENT == 0, "Buffer {:?} has an uninitialized range with an end not aligned to 4 (end was {})", raw_buf, range.end);
-
-                unsafe {
-                    self.encoder.clear_buffer(raw_buf, range.clone());
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
+pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
 pub struct CommandBuffer<A: hal::Api> {
     encoder: CommandEncoder<A>,
@@ -169,6 +83,7 @@ pub struct CommandBuffer<A: hal::Api> {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: TrackerSet,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    texture_memory_actions: CommandBufferTextureMemoryActions,
     limits: wgt::Limits,
     support_clear_buffer_texture: bool,
     #[cfg(feature = "trace")]
@@ -196,6 +111,7 @@ impl<A: HalApi> CommandBuffer<A> {
             device_id,
             trackers: TrackerSet::new(A::VARIANT),
             buffer_memory_init_actions: Default::default(),
+            texture_memory_actions: Default::default(),
             limits,
             support_clear_buffer_texture: features.contains(wgt::Features::CLEAR_COMMANDS),
             #[cfg(feature = "trace")]
@@ -262,6 +178,7 @@ impl<A: hal::Api> CommandBuffer<A> {
             list: self.encoder.list,
             trackers: self.trackers,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
+            texture_memory_actions: self.texture_memory_actions,
         }
     }
 }

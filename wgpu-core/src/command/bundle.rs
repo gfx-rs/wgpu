@@ -1,35 +1,35 @@
 /*! Render Bundles
 
-    ## Software implementation
+## Software implementation
 
-    The path from nothing to using a render bundle consists of 3 phases.
+The path from nothing to using a render bundle consists of 3 phases.
 
-    ### Initial command encoding
+### Initial command encoding
 
-    User creates a `RenderBundleEncoder` and populates it by issuing commands
-    from `bundle_ffi` module, just like with `RenderPass`, except that the
-    set of available commands is reduced. Everything is written into a `RawPass`.
+User creates a `RenderBundleEncoder` and populates it by issuing commands
+from `bundle_ffi` module, just like with `RenderPass`, except that the
+set of available commands is reduced. Everything is written into a `RawPass`.
 
-    ### Bundle baking
+### Bundle baking
 
-    Once the commands are encoded, user calls `render_bundle_encoder_finish`.
-    This is perhaps the most complex part of the logic. It consumes the
-    commands stored in `RawPass`, while validating everything, tracking the state,
-    and re-recording the commands into a separate `Vec<RenderCommand>`. It
-    doesn't actually execute any commands.
+Once the commands are encoded, user calls `render_bundle_encoder_finish`.
+This is perhaps the most complex part of the logic. It consumes the
+commands stored in `RawPass`, while validating everything, tracking the state,
+and re-recording the commands into a separate `Vec<RenderCommand>`. It
+doesn't actually execute any commands.
 
-    What's more important, is that the produced vector of commands is "normalized",
-    which means it can be executed verbatim without any state tracking. More
-    formally, "normalized" command stream guarantees that any state required by
-    a draw call is set explicitly by one of the commands between the draw call
-    and the last changing of the pipeline.
+What's more important, is that the produced vector of commands is "normalized",
+which means it can be executed verbatim without any state tracking. More
+formally, "normalized" command stream guarantees that any state required by
+a draw call is set explicitly by one of the commands between the draw call
+and the last changing of the pipeline.
 
-    ### Execution
+### Execution
 
-    When the bundle is used in an actual render pass, `RenderBundle::execute` is
-    called. It goes through the commands and issues them into the native command
-    buffer. Thanks to the "normalized" property, it doesn't track any bind group
-    invalidations or index format changes.
+When the bundle is used in an actual render pass, `RenderBundle::execute` is
+called. It goes through the commands and issues them into the native command
+buffer. Thanks to the "normalized" property, it doesn't track any bind group
+invalidations or index format changes.
 !*/
 #![allow(clippy::reversed_empty_ranges)]
 
@@ -47,14 +47,14 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
     id,
-    init_tracker::{BufferInitTrackerAction, MemoryInitKind},
+    init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::PipelineFlags,
     track::{TrackerSet, UsageConflict},
     validation::check_buffer_usage,
     Label, LabelHelpers, LifeGuard, Stored,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, mem, ops::Range};
+use std::{borrow::Cow, mem, num::NonZeroU32, ops::Range};
 use thiserror::Error;
 
 use hal::CommandEncoder as _;
@@ -75,6 +75,8 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
     /// the renderpasses it is used in.
     pub sample_count: u32,
+    /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
+    pub multiview: Option<NonZeroU32>,
 }
 
 #[derive(Debug)]
@@ -112,6 +114,7 @@ impl RenderBundleEncoder {
                     }
                     sc
                 },
+                multiview: desc.multiview,
             },
             is_ds_read_only: match desc.depth_stencil {
                 Some(ds) => {
@@ -135,6 +138,7 @@ impl RenderBundleEncoder {
                     depth_stencil: None,
                 },
                 sample_count: 0,
+                multiview: None,
             },
             is_ds_read_only: false,
         }
@@ -180,6 +184,7 @@ impl RenderBundleEncoder {
         let mut base = self.base.as_ref();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
         let mut buffer_memory_init_actions = Vec::new();
+        let mut texture_memory_init_actions = Vec::new();
 
         for &command in base.commands {
             match command {
@@ -233,6 +238,7 @@ impl RenderBundleEncoder {
                     }
 
                     buffer_memory_init_actions.extend_from_slice(&bind_group.used_buffer_ranges);
+                    texture_memory_init_actions.extend_from_slice(&bind_group.used_texture_ranges);
 
                     state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                     state
@@ -523,6 +529,7 @@ impl RenderBundleEncoder {
             },
             used: state.trackers,
             buffer_memory_init_actions,
+            texture_memory_init_actions,
             context: self.context,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
         })
@@ -587,6 +594,7 @@ pub struct RenderBundle {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     pub(super) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
 }

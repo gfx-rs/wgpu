@@ -106,11 +106,13 @@ struct EntryPoint {
     #[allow(unused)]
     spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
+    workgroup_size: [u32; 3],
 }
 
 #[derive(Debug)]
 pub struct Interface {
     features: wgt::Features,
+    limits: wgt::Limits,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -223,6 +225,10 @@ pub enum InputError {
 pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
+    #[error(
+        "shader entry point current workgroup size {current:?} must be less or equal to {limit:?}"
+    )]
+    InvalidComputeEntryPoint { current: [u32; 3], limit: [u32; 3] },
     #[error("unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("shader global {0:?} is not available in the layout pipeline layout")]
@@ -385,11 +391,8 @@ impl Resource {
                 allowed_usage
             }
             ResourceType::Sampler { comparison } => match entry.ty {
-                BindingType::Sampler {
-                    filtering: _,
-                    comparison: cmp,
-                } => {
-                    if cmp == comparison {
+                BindingType::Sampler(ty) => {
+                    if (ty == wgt::SamplerBindingType::Comparison) == comparison {
                         GlobalUse::READ
                     } else {
                         return Err(BindingError::WrongSamplerComparison);
@@ -530,10 +533,11 @@ impl Resource {
                 has_dynamic_offset: false,
                 min_binding_size: Some(size),
             },
-            ResourceType::Sampler { comparison } => BindingType::Sampler {
-                filtering: true,
-                comparison,
-            },
+            ResourceType::Sampler { comparison } => BindingType::Sampler(if comparison {
+                wgt::SamplerBindingType::Comparison
+            } else {
+                wgt::SamplerBindingType::Filtering
+            }),
             ResourceType::Texture {
                 dim,
                 arrayed,
@@ -859,6 +863,7 @@ impl Interface {
         module: &naga::Module,
         info: &naga::valid::ModuleInfo,
         features: wgt::Features,
+        limits: wgt::Limits,
     ) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
@@ -929,11 +934,19 @@ impl Interface {
                 }
             }
 
+            for key in info.sampling_set.iter() {
+                ep.sampling_pairs
+                    .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
+            }
+
+            ep.workgroup_size = entry_point.workgroup_size;
+
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
         }
 
         Self {
             features,
+            limits,
             resources,
             entry_points,
         }
@@ -943,6 +956,7 @@ impl Interface {
         &self,
         given_layouts: Option<&[&BindEntryMap]>,
         derived_layouts: &mut [BindEntryMap],
+        shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
         stage_bit: wgt::ShaderStages,
         inputs: StageIo,
@@ -965,18 +979,31 @@ impl Interface {
         for &(handle, usage) in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = match given_layouts {
-                Some(layouts) => layouts
-                    .get(res.bind.group as usize)
-                    .and_then(|map| map.get(&res.bind.binding))
-                    .ok_or(BindingError::Missing)
-                    .and_then(|entry| {
-                        if entry.visibility.contains(stage_bit) {
-                            Ok(entry)
-                        } else {
-                            Err(BindingError::Invisible)
+                Some(layouts) => {
+                    // update the required binding size for this buffer
+                    if let ResourceType::Buffer { size } = res.ty {
+                        match shader_binding_sizes.entry(res.bind.clone()) {
+                            Entry::Occupied(e) => {
+                                *e.into_mut() = size.max(*e.get());
+                            }
+                            Entry::Vacant(e) => {
+                                e.insert(size);
+                            }
                         }
-                    })
-                    .and_then(|entry| res.check_binding_use(entry, usage)),
+                    }
+                    layouts
+                        .get(res.bind.group as usize)
+                        .and_then(|map| map.get(&res.bind.binding))
+                        .ok_or(BindingError::Missing)
+                        .and_then(|entry| {
+                            if entry.visibility.contains(stage_bit) {
+                                Ok(entry)
+                            } else {
+                                Err(BindingError::Invisible)
+                            }
+                        })
+                        .and_then(|entry| res.check_binding_use(entry, usage))
+                }
                 None => derived_layouts
                     .get_mut(res.bind.group as usize)
                     .ok_or(BindingError::Missing)
@@ -1021,9 +1048,11 @@ impl Interface {
                         sample_type: wgt::TextureSampleType::Float { filterable },
                         ..
                     } => match sampler_layout.ty {
-                        wgt::BindingType::Sampler {
-                            filtering: true, ..
-                        } if !filterable => Some(FilteringError::NonFilterable),
+                        wgt::BindingType::Sampler(wgt::SamplerBindingType::Filtering)
+                            if !filterable =>
+                        {
+                            Some(FilteringError::NonFilterable)
+                        }
                         _ => None,
                     },
                     wgt::BindingType::Texture {
@@ -1044,6 +1073,25 @@ impl Interface {
                         error,
                     });
                 }
+            }
+        }
+
+        // check workgroup size limits
+        if shader_stage == naga::ShaderStage::Compute {
+            let max_workgroup_size_limits = [
+                self.limits.max_compute_workgroup_size_x,
+                self.limits.max_compute_workgroup_size_y,
+                self.limits.max_compute_workgroup_size_z,
+            ];
+
+            if entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
+                || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
+                || entry_point.workgroup_size[2] > max_workgroup_size_limits[2]
+            {
+                return Err(StageError::InvalidComputeEntryPoint {
+                    current: entry_point.workgroup_size,
+                    limit: max_workgroup_size_limits,
+                });
             }
         }
 

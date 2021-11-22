@@ -983,20 +983,19 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "032288733590c094012e5f1dec15848be90015bb9b3fd16743d84ea582c4154a"
+version = "0.7.1"
+source = "git+https://github.com/gfx-rs/naga?rev=29571cc#29571cc4cfbb28558948b1b31ad764f55b69f37b"
 dependencies = [
  "bit-set",
  "bitflags",
  "codespan-reporting",
- "fxhash",
  "hexf-parse",
  "indexmap",
  "log",
  "num-traits 0.2.14",
  "petgraph",
  "pp-rs",
+ "rustc-hash",
  "serde",
  "spirv",
  "thiserror",
@@ -1429,14 +1428,20 @@ checksum = "f1382d1f0a252c4bf97dc20d979a2fdd05b024acd7c2ed0f7595d7817666a157"
 
 [[package]]
 name = "ron"
-version = "0.6.5"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45005aa836116903a49cf3461474da697cfe66221762c6e95871092009ec86d6"
+checksum = "1b861ecaade43ac97886a512b360d01d66be9f41f3c61088b42cedf92e03d678"
 dependencies = [
  "base64",
  "bitflags",
  "serde",
 ]
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rusttype"
@@ -1831,6 +1836,7 @@ dependencies = [
  "arrayvec",
  "bitflags",
  "cfg_aliases",
+ "codespan-reporting",
  "copyless",
  "fxhash",
  "log",

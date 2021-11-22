@@ -124,6 +124,16 @@ impl Context {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+        &self,
+        device: &Device,
+        hal_device_callback: F,
+    ) -> R {
+        self.0
+            .device_as_hal::<A, F, R>(device.id, hal_device_callback)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         texture: &Texture,
@@ -1285,6 +1295,7 @@ impl crate::Context for Context {
                 },
                 targets: Borrowed(frag.targets),
             }),
+            multiview: desc.multiview,
         };
 
         let global = &self.0;
@@ -1506,6 +1517,7 @@ impl crate::Context for Context {
             color_formats: Borrowed(desc.color_formats),
             depth_stencil: desc.depth_stencil,
             sample_count: desc.sample_count,
+            multiview: desc.multiview,
         };
         match wgc::command::RenderBundleEncoder::new(&descriptor, device.id, None) {
             Ok(id) => id,
@@ -2018,7 +2030,7 @@ impl crate::Context for Context {
         }
     }
 
-    fn command_encoder_clear_buffer(
+    fn command_encoder_fill_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
         buffer: &crate::Buffer,
@@ -2026,12 +2038,12 @@ impl crate::Context for Context {
         size: Option<wgt::BufferSize>,
     ) {
         let global = &self.0;
-        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_clear_buffer(
+        if let Err(cause) = wgc::gfx_select!(encoder.id => global.command_encoder_fill_buffer(
             encoder.id,
             buffer.id.id,
             offset, size
         )) {
-            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::clear_buffer");
+            self.handle_error_nolabel(&encoder.error_sink, cause, "CommandEncoder::fill_buffer");
         }
     }
 

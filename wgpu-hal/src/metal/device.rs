@@ -1,3 +1,4 @@
+use parking_lot::Mutex;
 use std::{
     ptr,
     sync::{atomic, Arc},
@@ -173,6 +174,28 @@ impl super::Device {
                 .unwrap()
                 .set_mutability(mtl::MTLMutability::Immutable);
         }
+    }
+
+    pub unsafe fn texture_from_raw(
+        raw: mtl::Texture,
+        raw_format: mtl::MTLPixelFormat,
+        raw_type: mtl::MTLTextureType,
+        array_layers: u32,
+        mip_levels: u32,
+        copy_size: crate::CopyExtent,
+    ) -> super::Texture {
+        super::Texture {
+            raw,
+            raw_format,
+            raw_type,
+            array_layers,
+            mip_levels,
+            copy_size,
+        }
+    }
+
+    pub fn raw_device(&self) -> &Mutex<mtl::Device> {
+        &self.shared.device
     }
 }
 
@@ -888,8 +911,8 @@ impl crate::Device<super::Api> for super::Device {
             raw_triangle_fill_mode,
             raw_front_winding: conv::map_winding(desc.primitive.front_face),
             raw_cull_mode: conv::map_cull_mode(desc.primitive.cull_mode),
-            raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLAMPING) {
-                Some(if desc.primitive.clamp_depth {
+            raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
+                Some(if desc.primitive.unclipped_depth {
                     mtl::MTLDepthClipMode::Clamp
                 } else {
                     mtl::MTLDepthClipMode::Clip

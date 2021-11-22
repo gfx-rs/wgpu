@@ -113,6 +113,7 @@ impl framework::Example for Example {
                 },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
+                multiview: None,
             });
 
         let pipeline_triangle_regular =
@@ -132,6 +133,7 @@ impl framework::Example for Example {
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
+                multiview: None,
             });
 
         let pipeline_lines = if device
@@ -159,6 +161,7 @@ impl framework::Example for Example {
                     },
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
                 }),
             )
         } else {
@@ -183,10 +186,7 @@ impl framework::Example for Example {
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
                             visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler {
-                                filtering: false,
-                                comparison: false,
-                            },
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                             count: None,
                         },
                     ],
@@ -218,6 +218,7 @@ impl framework::Example for Example {
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
                 }),
                 bind_group_layout,
             )

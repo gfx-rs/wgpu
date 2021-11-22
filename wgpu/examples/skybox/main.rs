@@ -166,10 +166,7 @@ impl framework::Example for Skybox {
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler {
-                        comparison: false,
-                        filtering: true,
-                    },
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
             ],
@@ -226,6 +223,7 @@ impl framework::Example for Skybox {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         });
         let entity_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Entity"),
@@ -256,6 +254,7 @@ impl framework::Example for Skybox {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
