@@ -872,6 +872,7 @@ impl super::PrivateCapabilities {
 
         let mut features = F::empty()
             | F::TEXTURE_COMPRESSION_BC
+            | F::INDIRECT_FIRST_INSTANCE
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES

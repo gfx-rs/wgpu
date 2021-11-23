@@ -189,6 +189,15 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_BC = 1 << 1;
+        /// Allows non-zero value for the "first instance" in indirect draw calls.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan (mostly)
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const INDIRECT_FIRST_INSTANCE = 1 << 2;
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
         /// all work before the query is finished. Call [`CommandEncoder::write_timestamp`],
         /// [`RenderPassEncoder::write_timestamp`], or [`ComputePassEncoder::write_timestamp`] to
@@ -206,7 +215,7 @@ bitflags::bitflags! {
         /// - DX12 (works)
         ///
         /// This is a web and native feature.
-        const TIMESTAMP_QUERY = 1 << 2;
+        const TIMESTAMP_QUERY = 1 << 3;
         /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
         /// performed between the start and stop call. Call [`RenderPassEncoder::begin_pipeline_statistics_query`] to start
         /// a query, then call [`RenderPassEncoder::end_pipeline_statistics_query`] to stop one.
@@ -221,7 +230,7 @@ bitflags::bitflags! {
         /// - DX12 (works)
         ///
         /// This is a web and native feature.
-        const PIPELINE_STATISTICS_QUERY = 1 << 3;
+        const PIPELINE_STATISTICS_QUERY = 1 << 4;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///

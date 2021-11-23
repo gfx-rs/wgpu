@@ -2591,8 +2591,9 @@ impl<'a> RenderPass<'a> {
     /// struct DrawIndirect {
     ///     vertex_count: u32, // The number of vertices to draw.
     ///     instance_count: u32, // The number of instances to draw.
-    ///     base_vertex: u32, // The Index of the first vertex to draw.
-    ///     base_instance: u32, // The instance ID of the first instance to draw.
+    ///     first_vertex: u32, // The Index of the first vertex to draw.
+    ///     first_instance: u32, // The instance ID of the first instance to draw.
+    ///     // has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`] is enabled.
     /// }
     /// ```
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
@@ -2612,9 +2613,10 @@ impl<'a> RenderPass<'a> {
     /// struct DrawIndexedIndirect {
     ///     vertex_count: u32, // The number of vertices to draw.
     ///     instance_count: u32, // The number of instances to draw.
-    ///     base_index: u32, // The base index within the index buffer.
+    ///     first_index: u32, // The base index within the index buffer.
     ///     vertex_offset: i32, // The value added to the vertex index before indexing into the vertex buffer.
-    ///     base_instance: u32, // The instance ID of the first instance to draw.
+    ///     first_instance: u32, // The instance ID of the first instance to draw.
+    ///     // has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`] is enabled.
     /// }
     /// ```
     pub fn draw_indexed_indirect(
