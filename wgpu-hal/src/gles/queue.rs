@@ -223,7 +223,8 @@ impl super::Queue {
                     }
                 }
                 None => {
-                    dst.data.as_ref().unwrap().lock().unwrap().as_mut_slice()[range.start as usize..range.end as usize]
+                    dst.data.as_ref().unwrap().lock().unwrap().as_mut_slice()
+                        [range.start as usize..range.end as usize]
                         .fill(0);
                 }
             },
@@ -250,10 +251,7 @@ impl super::Queue {
                 };
                 let size = copy.size.get() as usize;
                 match (src.raw, dst.raw) {
-                    (
-                        Some(ref src),
-                        Some(ref dst),
-                    ) => {
+                    (Some(ref src), Some(ref dst)) => {
                         gl.bind_buffer(copy_src_target, Some(*src));
                         gl.bind_buffer(copy_dst_target, Some(*dst));
                         gl.copy_buffer_sub_data(

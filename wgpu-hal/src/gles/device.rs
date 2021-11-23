@@ -1,7 +1,11 @@
 use super::conv;
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
-use std::{convert::TryInto, iter, ptr, sync::{Arc, Mutex}};
+use std::{
+    convert::TryInto,
+    iter, ptr,
+    sync::{Arc, Mutex},
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::mem;
@@ -329,11 +333,7 @@ impl crate::Device<super::Api> for super::Device {
                 .private_caps
                 .contains(super::PrivateCapabilities::BUFFER_ALLOCATION);
 
-        if emulate_map
-            && desc
-                .usage
-                .intersects(crate::BufferUses::MAP_WRITE)
-        {
+        if emulate_map && desc.usage.intersects(crate::BufferUses::MAP_WRITE) {
             return Ok(super::Buffer {
                 raw: None,
                 target,
@@ -473,7 +473,11 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
         if let Some(raw) = buffer.raw {
-            if !self.shared.workarounds.contains(super::Workarounds::EMULATE_BUFFER_MAP) {
+            if !self
+                .shared
+                .workarounds
+                .contains(super::Workarounds::EMULATE_BUFFER_MAP)
+            {
                 let gl = &self.shared.context.lock();
                 gl.bind_buffer(buffer.target, Some(raw));
                 gl.unmap_buffer(buffer.target);
@@ -1114,7 +1118,7 @@ impl crate::Device<super::Api> for super::Device {
         if fence.last_completed < wait_value {
             let gl = &self.shared.context.lock();
             let timeout_ns = if cfg!(target_arch = "wasm32") {
-                0 as u64
+                0
             } else {
                 (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
             };

@@ -210,7 +210,6 @@ pub struct Queue {
     current_index_buffer: Option<glow::Buffer>,
 }
 
-
 #[derive(Clone, Debug)]
 pub struct Buffer {
     raw: Option<glow::Buffer>,
