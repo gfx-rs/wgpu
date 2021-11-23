@@ -85,12 +85,12 @@ impl crate::Instance<Api> for Instance {
     ) -> Result<Surface, crate::InstanceError> {
         match has_handle.raw_window_handle() {
             #[cfg(target_os = "ios")]
-            raw_window_handle::RawWindowHandle::IOS(handle) => {
+            raw_window_handle::RawWindowHandle::UiKit(handle) => {
                 let _ = &self.managed_metal_layer_delegate;
                 Ok(Surface::from_uiview(handle.ui_view))
             }
             #[cfg(target_os = "macos")]
-            raw_window_handle::RawWindowHandle::MacOS(handle) => Ok(Surface::from_nsview(
+            raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(Surface::from_nsview(
                 handle.ns_view,
                 &self.managed_metal_layer_delegate,
             )),

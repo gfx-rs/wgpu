@@ -23,7 +23,7 @@ renderdoc = ["libloading", "renderdoc-sys"]
 bitflags = "1.0"
 parking_lot = "0.11"
 profiling = { version = "1", default-features = false }
-raw-window-handle = "0.3"
+raw-window-handle = "0.4"
 thiserror = "1"
 
 # backends common
@@ -86,4 +86,4 @@ features = ["wgsl-in"]
 
 [dev-dependencies]
 env_logger = "0.8"
-winit = "0.25"
+winit = "0.26"
