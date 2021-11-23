@@ -104,6 +104,9 @@ impl PhysicalDeviceFeatures {
                 .image_cube_array(
                     downlevel_flags.contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
                 )
+                .draw_indirect_first_instance(
+                    requested_features.contains(wgt::Features::INDIRECT_FIRST_INSTANCE),
+                )
                 //.dual_src_blend(requested_features.contains(wgt::Features::DUAL_SRC_BLENDING))
                 .multi_draw_indirect(
                     requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
@@ -339,6 +342,10 @@ impl PhysicalDeviceFeatures {
             self.core.fragment_stores_and_atomics != 0,
         );
 
+        features.set(
+            F::INDIRECT_FIRST_INSTANCE,
+            self.core.draw_indirect_first_instance != 0,
+        );
         //if self.core.dual_src_blend != 0
         features.set(F::MULTI_DRAW_INDIRECT, self.core.multi_draw_indirect != 0);
         features.set(F::POLYGON_MODE_LINE, self.core.fill_mode_non_solid != 0);

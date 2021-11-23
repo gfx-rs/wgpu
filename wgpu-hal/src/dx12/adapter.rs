@@ -170,6 +170,7 @@ impl super::Adapter {
 
         let mut features = wgt::Features::empty()
             | wgt::Features::DEPTH_CLIP_CONTROL
+            | wgt::Features::INDIRECT_FIRST_INSTANCE
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
             //TODO: Naga part
             //| wgt::Features::TEXTURE_BINDING_ARRAY
