@@ -1007,17 +1007,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
     ) -> Result<(), RenderPassError> {
         profiling::scope!("run_render_pass", "CommandEncoder");
-        let scope = PassErrorScope::Pass(encoder_id);
+        let init_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (pass_raw, trackers, query_reset_state, pending_discard_init_fixups) = {
+        let (trackers, query_reset_state, pending_discard_init_fixups) = {
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
-            let cmd_buf =
-                CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
+            let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id)
+                .map_pass_err(init_scope)?;
             // close everything while the new command encoder is filled
             cmd_buf.encoder.close();
             // will be reset to true if recording is done without errors
@@ -1033,9 +1033,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let device = &device_guard[cmd_buf.device_id.value];
-            unsafe {
-                cmd_buf.encoder.raw.begin_encoding(base.label).unwrap() //TODO: handle this better
-            };
+            cmd_buf.encoder.open_pass(base.label);
 
             let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
@@ -1060,7 +1058,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*view_guard,
                 &*texture_guard,
             )
-            .map_pass_err(scope)?;
+            .map_pass_err(init_scope)?;
 
             let raw = &mut cmd_buf.encoder.raw;
 
@@ -1912,20 +1910,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Merging {:?} with the render pass", encoder_id);
             let (trackers, pending_discard_init_fixups) =
-                info.finish(raw, &*texture_guard).map_pass_err(scope)?;
+                info.finish(raw, &*texture_guard).map_pass_err(init_scope)?;
 
-            let raw_cmd_buf = unsafe {
-                raw.end_encoding()
-                    .map_err(|_| RenderPassErrorInner::OutOfMemory)
-                    .map_pass_err(scope)?
-            };
-            cmd_buf.status = CommandEncoderStatus::Recording;
-            (
-                raw_cmd_buf,
-                trackers,
-                query_reset_state,
-                pending_discard_init_fixups,
-            )
+            cmd_buf.encoder.close();
+            (trackers, query_reset_state, pending_discard_init_fixups)
         };
 
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -1933,8 +1921,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
 
-        let cmd_buf =
-            CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id).map_pass_err(scope)?;
+        let cmd_buf = cmb_guard.get_mut(encoder_id).unwrap();
         {
             let transit = cmd_buf.encoder.open();
 
@@ -1964,8 +1951,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &*texture_guard,
             );
         }
+
+        // Before we finish the auxiliary encoder, let's
+        // get our pass back and place it after.
+        //Note: we could just hold onto this raw pass while recording the
+        // auxiliary encoder, but then handling errors and cleaning up
+        // would be more complicated, so we re-use `open()`/`close()`.
+        let pass_raw = cmd_buf.encoder.list.pop().unwrap();
         cmd_buf.encoder.close();
         cmd_buf.encoder.list.push(pass_raw);
+        cmd_buf.status = CommandEncoderStatus::Recording;
 
         Ok(())
     }

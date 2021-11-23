@@ -100,16 +100,29 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         Ok(())
     }
+
     unsafe fn discard_encoding(&mut self) {
         self.leave_blit();
+        // when discarding, we don't have a guarantee that
+        // everything is in a good state, so check carefully
+        if let Some(encoder) = self.state.render.take() {
+            encoder.end_encoding();
+        }
+        if let Some(encoder) = self.state.compute.take() {
+            encoder.end_encoding();
+        }
         self.raw_cmd_buf = None;
     }
+
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         self.leave_blit();
+        assert!(self.state.render.is_none());
+        assert!(self.state.compute.is_none());
         Ok(super::CommandBuffer {
             raw: self.raw_cmd_buf.take().unwrap(),
         })
     }
+
     unsafe fn reset_all<I>(&mut self, _cmd_bufs: I)
     where
         I: Iterator<Item = super::CommandBuffer>,
