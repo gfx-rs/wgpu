@@ -7,8 +7,8 @@ struct type_1 {
 var<storage, read_write> unnamed: type_1;
 
 fn function_() {
-    let e8: i32 = unnamed.member;
-    unnamed.member = (e8 + 1);
+    let _e8: i32 = unnamed.member;
+    unnamed.member = (_e8 + 1);
     return;
 }
 

@@ -18,6 +18,20 @@ fn check(input: &str, snapshot: &str) {
 }
 
 #[test]
+fn reserved_identifier_prefix() {
+    check(
+        "var __bad;",
+        r###"error: Identifier starts with a reserved prefix: '__bad'
+  ┌─ wgsl:1:5
+  │
+1 │ var __bad;
+  │     ^^^^^ invalid identifier
+
+"###,
+    );
+}
+
+#[test]
 fn function_without_identifier() {
     check(
         "fn () {}",

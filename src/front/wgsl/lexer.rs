@@ -336,7 +336,7 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
             }
         }
         '0'..='9' => consume_number(input),
-        'a'..='z' | 'A'..='Z' => {
+        '_' | 'a'..='z' | 'A'..='Z' => {
             let (word, rest) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
             (Token::Word(word), rest)
         }
@@ -514,16 +514,16 @@ impl<'a> Lexer<'a> {
 
     pub(super) fn next_ident_with_span(&mut self) -> Result<(&'a str, Span), Error<'a>> {
         match self.next() {
+            (Token::Word(word), span) if word.starts_with("__") => {
+                Err(Error::ReservedIdentifierPrefix(span))
+            }
             (Token::Word(word), span) => Ok((word, span)),
             other => Err(Error::Unexpected(other, ExpectedToken::Identifier)),
         }
     }
 
     pub(super) fn next_ident(&mut self) -> Result<&'a str, Error<'a>> {
-        match self.next() {
-            (Token::Word(word), _) => Ok(word),
-            other => Err(Error::Unexpected(other, ExpectedToken::Identifier)),
-        }
+        self.next_ident_with_span().map(|(word, _)| word)
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
@@ -655,7 +655,7 @@ fn test_tokens() {
     );
     sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
     sub_test("No好", &[Token::Word("No"), Token::Unknown('好')]);
-    sub_test("_No", &[Token::Unknown('_'), Token::Word("No")]);
+    sub_test("_No", &[Token::Word("_No")]);
     sub_test("\"\u{2}ПЀ\u{0}\"", &[Token::String("\u{2}ПЀ\u{0}")]); // https://github.com/gfx-rs/naga/issues/90
 }
 

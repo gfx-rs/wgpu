@@ -42,8 +42,8 @@ fn constructors() -> f32 {
     var foo: Foo;
 
     foo = Foo(vec4<f32>(1.0), 1);
-    let e11: f32 = foo.a.x;
-    return e11;
+    let _e11: f32 = foo.a.x;
+    return _e11;
 }
 
 fn modulo() {
@@ -60,11 +60,11 @@ fn scalar_times_matrix() {
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn main() {
-    let e4: vec4<f32> = builtins();
-    let e5: vec4<f32> = splat();
-    let e6: i32 = unary();
-    let e8: vec3<f32> = bool_cast(vec4<f32>(1.0, 1.0, 1.0, 1.0).xyz);
-    let e9: f32 = constructors();
+    let _e4: vec4<f32> = builtins();
+    let _e5: vec4<f32> = splat();
+    let _e6: i32 = unary();
+    let _e8: vec3<f32> = bool_cast(vec4<f32>(1.0, 1.0, 1.0, 1.0).xyz);
+    let _e9: f32 = constructors();
     modulo();
     scalar_times_matrix();
     return;

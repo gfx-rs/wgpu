@@ -32,8 +32,8 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     }
     let flip_correction: vec2<f32> = vec2<f32>(0.5, -0.5);
     let light_local: vec2<f32> = (((homogeneous_coords.xy * flip_correction) / vec2<f32>(homogeneous_coords.w)) + vec2<f32>(0.5, 0.5));
-    let e26: f32 = textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), (homogeneous_coords.z / homogeneous_coords.w));
-    return e26;
+    let _e26: f32 = textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), (homogeneous_coords.z / homogeneous_coords.w));
+    return _e26;
 }
 
 [[stage(fragment)]]
@@ -43,24 +43,24 @@ fn fs_main([[location(0)]] raw_normal: vec3<f32>, [[location(1)]] position: vec4
 
     let normal: vec3<f32> = normalize(raw_normal);
     loop {
-        let e12: u32 = i;
-        let e15: u32 = u_globals.num_lights.x;
-        if ((e12 >= min(e15, c_max_lights))) {
+        let _e12: u32 = i;
+        let _e15: u32 = u_globals.num_lights.x;
+        if ((_e12 >= min(_e15, c_max_lights))) {
             break;
         }
-        let e19: u32 = i;
-        let light: Light = s_lights.data[e19];
-        let e22: u32 = i;
-        let e25: f32 = fetch_shadow(e22, (light.proj * position));
+        let _e19: u32 = i;
+        let light: Light = s_lights.data[_e19];
+        let _e22: u32 = i;
+        let _e25: f32 = fetch_shadow(_e22, (light.proj * position));
         let light_dir: vec3<f32> = normalize((light.pos.xyz - position.xyz));
         let diffuse: f32 = max(0.0, dot(normal, light_dir));
-        let e34: vec3<f32> = color;
-        color = (e34 + ((e25 * diffuse) * light.color.xyz));
+        let _e34: vec3<f32> = color;
+        color = (_e34 + ((_e25 * diffuse) * light.color.xyz));
         continuing {
-            let e40: u32 = i;
-            i = (e40 + 1u);
+            let _e40: u32 = i;
+            i = (_e40 + 1u);
         }
     }
-    let e43: vec3<f32> = color;
-    return vec4<f32>(e43, 1.0);
+    let _e43: vec3<f32> = color;
+    return vec4<f32>(_e43, 1.0);
 }

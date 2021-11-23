@@ -148,6 +148,7 @@ pub enum Error<'a> {
     },
     InvalidResolve(ResolveError),
     InvalidForInitializer(Span),
+    ReservedIdentifierPrefix(Span),
     UnknownStorageClass(Span),
     UnknownAttribute(Span),
     UnknownBuiltin(Span),
@@ -335,6 +336,11 @@ impl<'a> Error<'a> {
             Error::InvalidForInitializer(ref bad_span) => ParseError {
                 message: format!("for(;;) initializer is not an assignment or a function call: '{}'", &source[bad_span.clone()]),
                 labels: vec![(bad_span.clone(), "not an assignment or function call".into())],
+                notes: vec![],
+            },
+            Error::ReservedIdentifierPrefix(ref bad_span) => ParseError {
+                message: format!("Identifier starts with a reserved prefix: '{}'", &source[bad_span.clone()]),
+                labels: vec![(bad_span.clone(), "invalid identifier".into())],
                 notes: vec![],
             },
             Error::UnknownStorageClass(ref bad_span) => ParseError {
