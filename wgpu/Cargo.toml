@@ -110,7 +110,7 @@ version = "0.11"
 arrayvec = "0.7"
 log = "0.4"
 parking_lot = "0.11"
-raw-window-handle = "0.3"
+raw-window-handle = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
 
@@ -126,7 +126,7 @@ noise = { version = "0.7", default-features = false }
 obj = "0.10"
 png = "0.16"
 rand = "0.7.2"
-winit = "0.25"
+winit = "0.26"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor = "1.0"
@@ -289,4 +289,3 @@ console_log = "0.1.2"
 # We need the Location feature in the framework examples
 web-sys = { version = "0.3.53", features = ["Location"] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }
-winit = { version = "0.25", features = ["web-sys"] }

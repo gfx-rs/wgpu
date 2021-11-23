@@ -151,7 +151,7 @@ impl crate::Instance<super::Api> for super::Instance {
         has_handle: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Result<super::Surface, crate::InstanceError> {
         match has_handle.raw_window_handle() {
-            raw_window_handle::RawWindowHandle::Windows(handle) => Ok(super::Surface {
+            raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
                 factory: self.factory,
                 wnd_handle: handle.hwnd as *mut _,
                 swap_chain: None,

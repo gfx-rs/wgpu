@@ -23,14 +23,12 @@ type WlDisplayConnectFun =
 
 type WlDisplayDisconnectFun = unsafe extern "system" fn(display: *const raw::c_void);
 
-#[cfg(not(any(target_os = "android", target_os = "macos")))]
 type WlEglWindowCreateFun = unsafe extern "system" fn(
     surface: *const raw::c_void,
     width: raw::c_int,
     height: raw::c_int,
 ) -> *mut raw::c_void;
 
-#[cfg(not(any(target_os = "android", target_os = "macos")))]
 type WlEglWindowResizeFun = unsafe extern "system" fn(
     window: *const raw::c_void,
     width: raw::c_int,
@@ -597,12 +595,10 @@ impl crate::Instance<super::Api> for Instance {
         let mut inner = self.inner.lock();
 
         match raw_window_handle {
-            #[cfg(not(any(target_os = "android", target_os = "macos")))]
             Rwh::Xlib(_) => {}
-            #[cfg(not(any(target_os = "android", target_os = "macos")))]
             Rwh::Xcb(_) => {}
             #[cfg(target_os = "android")]
-            Rwh::Android(handle) => {
+            Rwh::AndroidNdk(handle) => {
                 let format = inner
                     .egl
                     .get_config_attrib(inner.display, inner.config, egl::NATIVE_VISUAL_ID)
@@ -615,7 +611,6 @@ impl crate::Instance<super::Api> for Instance {
                     return Err(crate::InstanceError);
                 }
             }
-            #[cfg(not(any(target_os = "android", target_os = "macos", target_os = "solaris")))]
             Rwh::Wayland(handle) => {
                 /* Wayland displays are not sharable between surfaces so if the
                  * surface we receive from this handle is from a different
@@ -849,29 +844,19 @@ impl crate::Surface<super::Api> for Surface {
         let (surface, wl_window) = match self.unconfigure_impl(device) {
             Some(pair) => pair,
             None => {
-                #[cfg_attr(any(target_os = "android", target_os = "macos"), allow(unused_mut))]
                 let mut wl_window = None;
-                #[cfg(not(any(target_os = "android", target_os = "macos")))]
                 let (mut temp_xlib_handle, mut temp_xcb_handle);
                 #[allow(trivial_casts)]
                 let native_window_ptr = match self.raw_window_handle {
-                    #[cfg(not(any(target_os = "android", target_os = "macos")))]
                     Rwh::Xlib(handle) => {
                         temp_xlib_handle = handle.window;
                         &mut temp_xlib_handle as *mut _ as *mut std::ffi::c_void
                     }
-                    #[cfg(not(any(target_os = "android", target_os = "macos")))]
                     Rwh::Xcb(handle) => {
                         temp_xcb_handle = handle.window;
                         &mut temp_xcb_handle as *mut _ as *mut std::ffi::c_void
                     }
-                    #[cfg(target_os = "android")]
-                    Rwh::Android(handle) => handle.a_native_window,
-                    #[cfg(not(any(
-                        target_os = "android",
-                        target_os = "macos",
-                        target_os = "solaris"
-                    )))]
+                    Rwh::AndroidNdk(handle) => handle.a_native_window,
                     Rwh::Wayland(handle) => {
                         let library = self.wsi_library.as_ref().expect("unsupported window");
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
