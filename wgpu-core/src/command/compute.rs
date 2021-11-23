@@ -287,7 +287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         base: BasePassRef<ComputeCommand>,
     ) -> Result<(), ComputePassError> {
         profiling::scope!("run_compute_pass", "CommandEncoder");
-        let scope = PassErrorScope::Pass(encoder_id);
+        let init_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -295,8 +295,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf =
-            CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id).map_pass_err(scope)?;
+        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)
+            .map_pass_err(init_scope)?;
         // will be reset to true if recording is done without errors
         cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.encoder.open();

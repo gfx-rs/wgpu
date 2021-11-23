@@ -56,6 +56,13 @@ impl<A: hal::Api> CommandEncoder<A> {
         }
     }
 
+    fn discard(&mut self) {
+        if self.is_open {
+            self.is_open = false;
+            unsafe { self.raw.discard_encoding() };
+        }
+    }
+
     fn open(&mut self) -> &mut A::CommandEncoder {
         if !self.is_open {
             self.is_open = true;
@@ -63,6 +70,11 @@ impl<A: hal::Api> CommandEncoder<A> {
             unsafe { self.raw.begin_encoding(label).unwrap() };
         }
         &mut self.raw
+    }
+
+    fn open_pass(&mut self, label: Option<&str>) {
+        self.is_open = true;
+        unsafe { self.raw.begin_encoding(label).unwrap() };
     }
 }
 
@@ -287,7 +299,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 CommandEncoderStatus::Finished => Some(CommandEncoderError::NotRecording),
                 CommandEncoderStatus::Error => {
-                    cmd_buf.encoder.close();
+                    cmd_buf.encoder.discard();
                     Some(CommandEncoderError::Invalid)
                 }
             },
