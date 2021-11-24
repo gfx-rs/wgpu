@@ -114,18 +114,18 @@ fn negative_index() {
 fn bad_texture() {
     check(
         r#"
-            [[group(0), binding(0)]] var sampler : sampler;
+            [[group(0), binding(0)]] var sampler1 : sampler;
 
             [[stage(fragment)]]
             fn main() -> [[location(0)]] vec4<f32> {
                 let a = 3;
-                return textureSample(a, sampler, vec2<f32>(0.0));
+                return textureSample(a, sampler1, vec2<f32>(0.0));
             }
         "#,
         r#"error: expected an image, but found 'a' which is not an image
   ┌─ wgsl:7:38
   │
-7 │                 return textureSample(a, sampler, vec2<f32>(0.0));
+7 │                 return textureSample(a, sampler1, vec2<f32>(0.0));
   │                                      ^ not an image
 
 "#,
@@ -154,12 +154,12 @@ fn bad_type_cast() {
 fn bad_texture_sample_type() {
     check(
         r#"
-            [[group(0), binding(0)]] var sampler : sampler;
+            [[group(0), binding(0)]] var sampler1 : sampler;
             [[group(0), binding(1)]] var texture : texture_2d<bool>;
 
             [[stage(fragment)]]
             fn main() -> [[location(0)]] vec4<f32> {
-                return textureSample(texture, sampler, vec2<f32>(0.0));
+                return textureSample(texture, sampler1, vec2<f32>(0.0));
             }
         "#,
         r#"error: texture sample type must be one of f32, i32 or u32, but found bool
@@ -327,13 +327,13 @@ fn unknown_type() {
 fn unknown_storage_format() {
     check(
         r#"
-            let storage: texture_storage_1d<rgba>;
+            let storage1: texture_storage_1d<rgba>;
         "#,
         r#"error: unknown storage format: 'rgba'
-  ┌─ wgsl:2:45
+  ┌─ wgsl:2:46
   │
-2 │             let storage: texture_storage_1d<rgba>;
-  │                                             ^^^^ unknown storage format
+2 │             let storage1: texture_storage_1d<rgba>;
+  │                                              ^^^^ unknown storage format
 
 "#,
     );
@@ -528,6 +528,114 @@ fn postfix_pointers() {
   │                          ^^ expression is a pointer
 
 "#,
+    );
+}
+
+#[test]
+fn reserved_keyword() {
+    // global var
+    check(
+        r#"
+            var bool: bool = true;
+        "#,
+        r###"error: Name ` bool: bool = true;` is a reserved keyword
+  ┌─ wgsl:2:16
+  │
+2 │             var bool: bool = true;
+  │                ^^^^^^^^^^^^^^^^^^^ definition of ` bool: bool = true;`
+
+"###,
+    );
+
+    // global constant
+    check(
+        r#"
+            let break: bool = true;
+            fn foo() {
+                var foo = break;
+            }
+        "#,
+        r###"error: Name `break` is a reserved keyword
+  ┌─ wgsl:2:17
+  │
+2 │             let break: bool = true;
+  │                 ^^^^^ definition of `break`
+
+"###,
+    );
+
+    // local let
+    check(
+        r#"
+            fn foo() {
+                let atomic: f32 = 1.0;
+            }
+        "#,
+        r###"error: Name `atomic` is a reserved keyword
+  ┌─ wgsl:3:21
+  │
+3 │                 let atomic: f32 = 1.0;
+  │                     ^^^^^^ definition of `atomic`
+
+"###,
+    );
+
+    // local var
+    check(
+        r#"
+            fn foo() {
+                var sampler: f32 = 1.0;
+            }
+        "#,
+        r###"error: Name `sampler` is a reserved keyword
+  ┌─ wgsl:3:21
+  │
+3 │                 var sampler: f32 = 1.0;
+  │                     ^^^^^^^ definition of `sampler`
+
+"###,
+    );
+
+    // fn name
+    check(
+        r#"
+            fn break() {}
+        "#,
+        r###"error: Name `break` is a reserved keyword
+  ┌─ wgsl:2:16
+  │
+2 │             fn break() {}
+  │                ^^^^^ definition of `break`
+
+"###,
+    );
+
+    // struct
+    check(
+        r#"
+            struct array {};
+        "#,
+        r###"error: Name `array` is a reserved keyword
+  ┌─ wgsl:2:20
+  │
+2 │             struct array {};
+  │                    ^^^^^ definition of `array`
+
+"###,
+    );
+
+    // struct member
+    check(
+        r#"
+            struct Foo { sampler: f32; };
+        "#,
+        r###"error: Name `sampler` is a reserved keyword
+  ┌─ wgsl:2:26
+  │
+2 │             struct Foo { sampler: f32; };
+  │                          ^^^^^^^ definition of `sampler`
+
+"###,
     );
 }
 

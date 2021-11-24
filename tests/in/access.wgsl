@@ -30,7 +30,7 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 	let a = bar.data[arrayLength(&bar.data) - 2u];
 
 	// test pointer types
-	let pointer: ptr<storage, i32, read_write> = &bar.data[0];
+	let data_pointer: ptr<storage, i32, read_write> = &bar.data[0];
 	let foo_value = read_from_private(&foo);
 
 	// test storage stores

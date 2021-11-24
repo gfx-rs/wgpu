@@ -72,8 +72,12 @@ impl<W: Write> Writer<W> {
 
     fn reset(&mut self, module: &Module) {
         self.names.clear();
-        self.namer
-            .reset(module, crate::keywords::wgsl::RESERVED, &[], &mut self.names);
+        self.namer.reset(
+            module,
+            crate::keywords::wgsl::RESERVED,
+            &[],
+            &mut self.names,
+        );
         self.named_expressions.clear();
         self.ep_results.clear();
     }

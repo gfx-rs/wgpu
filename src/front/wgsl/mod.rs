@@ -169,6 +169,7 @@ pub enum Error<'a> {
     Pointer(&'static str, Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
+    ReservedKeyword(Span),
     Other,
 }
 
@@ -429,6 +430,11 @@ impl<'a> Error<'a> {
             Error::Pointer(what, ref span) => ParseError {
                 message: format!("{} must not be a pointer", what),
                 labels: vec![(span.clone(), "expression is a pointer".into())],
+                notes: vec![],
+            },
+            Error::ReservedKeyword(ref name_span) => ParseError {
+                message: format!("Name `{}` is a reserved keyword", &source[name_span.clone()]),
+                labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
                 notes: vec![],
             },
             Error::Other => ParseError {
@@ -2079,15 +2085,18 @@ impl Parser {
 
         // Only set span if it's a named constant. Otherwise, the enclosing Expression should have
         // the span.
-        let span = NagaSpan::from(self.pop_scope(lexer));
+        let span = self.pop_scope(lexer);
         let handle = if let Some(name) = register_name {
+            if crate::keywords::wgsl::RESERVED.contains(&name) {
+                return Err(Error::ReservedKeyword(span));
+            }
             const_arena.append(
                 crate::Constant {
                     name: Some(name.to_string()),
                     specialization: None,
                     inner,
                 },
-                span,
+                NagaSpan::from(span),
             )
         } else {
             const_arena.fetch_or_append(
@@ -2701,15 +2710,17 @@ impl Parser {
             }
 
             let bind_span = self.pop_scope(lexer);
-
-            let name = match lexer.next() {
-                (Token::Word(word), _) => word,
+            let (name, span) = match lexer.next() {
+                (Token::Word(word), span) => (word, span),
                 (Token::Paren('}'), _) => {
                     let span = Layouter::round_up(alignment, offset);
                     return Ok((members, span));
                 }
                 other => return Err(Error::Unexpected(other, ExpectedToken::FieldName)),
             };
+            if crate::keywords::wgsl::RESERVED.contains(&name) {
+                return Err(Error::ReservedKeyword(span));
+            }
             lexer.expect(Token::Separator(':'))?;
             let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
             lexer.expect(Token::Separator(';'))?;
@@ -3245,6 +3256,9 @@ impl Parser {
                         let _ = lexer.next();
                         emitter.start(context.expressions);
                         let (name, name_span) = lexer.next_ident_with_span()?;
+                        if crate::keywords::wgsl::RESERVED.contains(&name) {
+                            return Err(Error::ReservedKeyword(name_span));
+                        }
                         let given_ty = if lexer.skip(Token::Separator(':')) {
                             let (ty, _access) = self.parse_type_decl(
                                 lexer,
@@ -3300,6 +3314,9 @@ impl Parser {
                         }
 
                         let (name, name_span) = lexer.next_ident_with_span()?;
+                        if crate::keywords::wgsl::RESERVED.contains(&name) {
+                            return Err(Error::ReservedKeyword(name_span));
+                        }
                         let given_ty = if lexer.skip(Token::Separator(':')) {
                             let (ty, _access) = self.parse_type_decl(
                                 lexer,
@@ -3810,7 +3827,10 @@ impl Parser {
         self.push_scope(Scope::FunctionDecl, lexer);
         // read function name
         let mut lookup_ident = FastHashMap::default();
-        let fun_name = lexer.next_ident()?;
+        let (fun_name, span) = lexer.next_ident_with_span()?;
+        if crate::keywords::wgsl::RESERVED.contains(&fun_name) {
+            return Err(Error::ReservedKeyword(span));
+        }
         // populate initial expressions
         let mut expressions = Arena::new();
         for (&name, expression) in lookup_global_expression.iter() {
@@ -3845,6 +3865,9 @@ impl Parser {
             let mut binding = self.parse_varying_binding(lexer)?;
             let (param_name, param_name_span, param_type, _access) =
                 self.parse_variable_ident_decl(lexer, &mut module.types, &mut module.constants)?;
+            if crate::keywords::wgsl::RESERVED.contains(&param_name) {
+                return Err(Error::ReservedKeyword(param_name_span));
+            }
             let param_index = arguments.len() as u32;
             let expression = expressions.append(
                 crate::Expression::FunctionArgument(param_index),
@@ -4016,7 +4039,10 @@ impl Parser {
         match lexer.next() {
             (Token::Separator(';'), _) => {}
             (Token::Word("struct"), _) => {
-                let name = lexer.next_ident()?;
+                let (name, span) = lexer.next_ident_with_span()?;
+                if crate::keywords::wgsl::RESERVED.contains(&name) {
+                    return Err(Error::ReservedKeyword(span));
+                }
                 let (members, span) =
                     self.parse_struct_body(lexer, &mut module.types, &mut module.constants)?;
                 let type_span = NagaSpan::from(lexer.span_from(start));
@@ -4048,6 +4074,9 @@ impl Parser {
             }
             (Token::Word("let"), _) => {
                 let (name, name_span) = lexer.next_ident_with_span()?;
+                if crate::keywords::wgsl::RESERVED.contains(&name) {
+                    return Err(Error::ReservedKeyword(name_span));
+                }
                 let given_ty = if lexer.skip(Token::Separator(':')) {
                     let (ty, _access) = self.parse_type_decl(
                         lexer,
@@ -4093,6 +4122,9 @@ impl Parser {
             (Token::Word("var"), _) => {
                 let pvar =
                     self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
+                if crate::keywords::wgsl::RESERVED.contains(&pvar.name) {
+                    return Err(Error::ReservedKeyword(pvar.name_span));
+                }
                 let var_handle = module.global_variables.append(
                     crate::GlobalVariable {
                         name: Some(pvar.name.to_owned()),
