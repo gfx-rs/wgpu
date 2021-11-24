@@ -1,4 +1,3 @@
-mod keywords;
 mod writer;
 
 use thiserror::Error;
