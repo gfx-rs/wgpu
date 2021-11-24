@@ -1624,11 +1624,10 @@ impl<W: Write> Writer<W> {
 
                 let fun_name = match fun {
                     Rf::IsFinite => "isFinite",
-                    Rf::IsInf => "isInf",
-                    Rf::IsNan => "isNan",
                     Rf::IsNormal => "isNormal",
                     Rf::All => "all",
                     Rf::Any => "any",
+                    _ => return Err(Error::UnsupportedRelationalFunction(fun)),
                 };
                 write!(self.out, "{}(", fun_name)?;
 

@@ -17,6 +17,8 @@ pub enum Error {
     Unimplemented(String), // TODO: Error used only during development
     #[error("Unsupported math function: {0:?}")]
     UnsupportedMathFunction(crate::MathFunction),
+    #[error("Unsupported relational function: {0:?}")]
+    UnsupportedRelationalFunction(crate::RelationalFunction),
 }
 
 pub fn write_string(
