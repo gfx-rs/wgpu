@@ -9,4 +9,8 @@ var<workgroup> at: atomic<u32>;
 fn main() {
 	wg[3] = 1.0;
 	atomicStore(&at, 2u);
+
+    // Valid, Foo and at is in function scope
+    var Foo: f32 = 1.0;
+    var at: bool = true;
 }

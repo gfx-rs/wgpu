@@ -171,6 +171,10 @@ pub enum Error<'a> {
     NotPointer(Span),
     NotReference(&'static str, Span),
     ReservedKeyword(Span),
+    Redefinition {
+        previous: Span,
+        current: Span,
+    },
     Other,
 }
 
@@ -188,7 +192,7 @@ impl<'a> Error<'a> {
                                 Token::Number { value, .. } => {
                                     format!("number ({})", value)
                                 }
-                                Token::String(s) => format!("string literal ('{}')", s.to_string()),
+                                Token::String(s) => format!("string literal ('{}')", s),
                                 Token::Word(s) => s.to_string(),
                                 Token::Operation(c) => format!("operation ('{}')", c),
                                 Token::LogicalOperation(c) => format!("logical operation ('{}')", c),
@@ -439,8 +443,15 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::ReservedKeyword(ref name_span) => ParseError {
-                message: format!("Name `{}` is a reserved keyword", &source[name_span.clone()]),
+                message: format!("name `{}` is a reserved keyword", &source[name_span.clone()]),
                 labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                notes: vec![],
+            },
+            Error::Redefinition { ref previous, ref current } => ParseError {
+                message: format!("redefinition of `{}`", &source[current.clone()]),
+                labels: vec![(current.clone(), format!("redefinition of `{}`", &source[current.clone()]).into()),
+                             (previous.clone(), format!("previous definition of `{}`", &source[previous.clone()]).into())
+                ],
                 notes: vec![],
             },
             Error::Other => ParseError {
@@ -1204,6 +1215,7 @@ impl std::error::Error for ParseError {
 
 pub struct Parser {
     scopes: Vec<(Scope, usize)>,
+    module_scope_identifiers: FastHashMap<String, Span>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
     layouter: Layouter,
 }
@@ -1212,6 +1224,7 @@ impl Parser {
     pub fn new() -> Self {
         Parser {
             scopes: Vec::new(),
+            module_scope_identifiers: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             layouter: Default::default(),
         }
@@ -3837,6 +3850,15 @@ impl Parser {
         if crate::keywords::wgsl::RESERVED.contains(&fun_name) {
             return Err(Error::ReservedKeyword(span));
         }
+        if let Some(entry) = self
+            .module_scope_identifiers
+            .insert(String::from(fun_name), span.clone())
+        {
+            return Err(Error::Redefinition {
+                previous: entry,
+                current: span,
+            });
+        }
         // populate initial expressions
         let mut expressions = Arena::new();
         for (&name, expression) in lookup_global_expression.iter() {
@@ -4083,6 +4105,15 @@ impl Parser {
                 if crate::keywords::wgsl::RESERVED.contains(&name) {
                     return Err(Error::ReservedKeyword(name_span));
                 }
+                if let Some(entry) = self
+                    .module_scope_identifiers
+                    .insert(String::from(name), name_span.clone())
+                {
+                    return Err(Error::Redefinition {
+                        previous: entry,
+                        current: name_span,
+                    });
+                }
                 let given_ty = if lexer.skip(Token::Separator(':')) {
                     let (ty, _access) = self.parse_type_decl(
                         lexer,
@@ -4130,6 +4161,15 @@ impl Parser {
                     self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
                 if crate::keywords::wgsl::RESERVED.contains(&pvar.name) {
                     return Err(Error::ReservedKeyword(pvar.name_span));
+                }
+                if let Some(entry) = self
+                    .module_scope_identifiers
+                    .insert(String::from(pvar.name), pvar.name_span.clone())
+                {
+                    return Err(Error::Redefinition {
+                        previous: entry,
+                        current: pvar.name_span,
+                    });
                 }
                 let var_handle = module.global_variables.append(
                     crate::GlobalVariable {

@@ -552,7 +552,7 @@ fn reserved_keyword() {
         r#"
             var bool: bool = true;
         "#,
-        r###"error: Name ` bool: bool = true;` is a reserved keyword
+        r###"error: name ` bool: bool = true;` is a reserved keyword
   ┌─ wgsl:2:16
   │
 2 │             var bool: bool = true;
@@ -569,7 +569,7 @@ fn reserved_keyword() {
                 var foo = break;
             }
         "#,
-        r###"error: Name `break` is a reserved keyword
+        r###"error: name `break` is a reserved keyword
   ┌─ wgsl:2:17
   │
 2 │             let break: bool = true;
@@ -585,7 +585,7 @@ fn reserved_keyword() {
                 let atomic: f32 = 1.0;
             }
         "#,
-        r###"error: Name `atomic` is a reserved keyword
+        r###"error: name `atomic` is a reserved keyword
   ┌─ wgsl:3:21
   │
 3 │                 let atomic: f32 = 1.0;
@@ -601,7 +601,7 @@ fn reserved_keyword() {
                 var sampler: f32 = 1.0;
             }
         "#,
-        r###"error: Name `sampler` is a reserved keyword
+        r###"error: name `sampler` is a reserved keyword
   ┌─ wgsl:3:21
   │
 3 │                 var sampler: f32 = 1.0;
@@ -615,7 +615,7 @@ fn reserved_keyword() {
         r#"
             fn break() {}
         "#,
-        r###"error: Name `break` is a reserved keyword
+        r###"error: name `break` is a reserved keyword
   ┌─ wgsl:2:16
   │
 2 │             fn break() {}
@@ -629,7 +629,7 @@ fn reserved_keyword() {
         r#"
             struct array {};
         "#,
-        r###"error: Name `array` is a reserved keyword
+        r###"error: name `array` is a reserved keyword
   ┌─ wgsl:2:20
   │
 2 │             struct array {};
@@ -643,11 +643,98 @@ fn reserved_keyword() {
         r#"
             struct Foo { sampler: f32; };
         "#,
-        r###"error: Name `sampler` is a reserved keyword
+        r###"error: name `sampler` is a reserved keyword
   ┌─ wgsl:2:26
   │
 2 │             struct Foo { sampler: f32; };
   │                          ^^^^^^^ definition of `sampler`
+
+"###,
+    );
+}
+
+#[test]
+fn module_scope_identifier_redefinition() {
+    // let
+    check(
+        r#"
+            let foo: bool = true;
+            let foo: bool = true;
+        "#,
+        r###"error: redefinition of `foo`
+  ┌─ wgsl:2:17
+  │
+2 │             let foo: bool = true;
+  │                 ^^^ previous definition of `foo`
+3 │             let foo: bool = true;
+  │                 ^^^ redefinition of `foo`
+
+"###,
+    );
+    // var
+    check(
+        r#"
+            var foo: bool = true;
+            var foo: bool = true;
+        "#,
+        r###"error: redefinition of ` foo: bool = true;`
+  ┌─ wgsl:2:16
+  │
+2 │             var foo: bool = true;
+  │                ^^^^^^^^^^^^^^^^^^ previous definition of ` foo: bool = true;`
+3 │             var foo: bool = true;
+  │                ^^^^^^^^^^^^^^^^^^ redefinition of ` foo: bool = true;`
+
+"###,
+    );
+
+    // let and var
+    check(
+        r#"
+            var foo: bool = true;
+            let foo: bool = true;
+        "#,
+        r###"error: redefinition of `foo`
+  ┌─ wgsl:2:16
+  │
+2 │             var foo: bool = true;
+  │                ^^^^^^^^^^^^^^^^^^ previous definition of ` foo: bool = true;`
+3 │             let foo: bool = true;
+  │                 ^^^ redefinition of `foo`
+
+"###,
+    );
+
+    // function
+    check(
+        r#"fn foo() {}
+                fn bar() {}
+                fn foo() {}"#,
+        r###"error: redefinition of `foo`
+  ┌─ wgsl:1:4
+  │
+1 │ fn foo() {}
+  │    ^^^ previous definition of `foo`
+2 │                 fn bar() {}
+3 │                 fn foo() {}
+  │                    ^^^ redefinition of `foo`
+
+"###,
+    );
+
+    // let and function
+    check(
+        r#"
+            let foo: bool = true;
+            fn foo() {}
+        "#,
+        r###"error: redefinition of `foo`
+  ┌─ wgsl:2:17
+  │
+2 │             let foo: bool = true;
+  │                 ^^^ previous definition of `foo`
+3 │             fn foo() {}
+  │                ^^^ redefinition of `foo`
 
 "###,
     );

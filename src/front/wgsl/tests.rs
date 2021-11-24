@@ -408,7 +408,7 @@ fn parse_array_length() {
         [[group(0), binding(1)]]
         var<storage> bar: array<u32>;
 
-        fn foo() {
+        fn baz() {
             var x: u32 = arrayLength(foo.data);
             var y: u32 = arrayLength(bar);
         }
