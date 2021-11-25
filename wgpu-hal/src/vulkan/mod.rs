@@ -336,12 +336,13 @@ pub struct Queue {
     swapchain_fn: khr::Swapchain,
     device: Arc<DeviceShared>,
     family_index: u32,
-    /// This special semaphore is used to synchronize GPU work of
-    /// everything on a queue with... itself. Yikes!
-    /// It's required by the confusing portion of the spec to be signalled
-    /// by last submission and waited by the present.
-    relay_semaphore: vk::Semaphore,
-    relay_active: bool,
+    /// We use a redundant chain of semaphores to pass on the signal
+    /// from submissions to the last present, since it's required by the
+    /// specification.
+    /// It would be correct to use a single semaphore there, but
+    /// https://gitlab.freedesktop.org/mesa/mesa/-/issues/5508
+    relay_semaphores: [vk::Semaphore; 2],
+    relay_index: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -567,7 +568,7 @@ impl crate::Queue<Api> for Queue {
 
         let mut fence_raw = vk::Fence::null();
         let mut vk_timeline_info;
-        let mut semaphores = [self.relay_semaphore, vk::Semaphore::null()];
+        let mut signal_semaphores = [vk::Semaphore::null(), vk::Semaphore::null()];
         let signal_values;
 
         if let Some((fence, value)) = signal_fence {
@@ -575,7 +576,7 @@ impl crate::Queue<Api> for Queue {
             match *fence {
                 Fence::TimelineSemaphore(raw) => {
                     signal_values = [!0, value];
-                    semaphores[1] = raw;
+                    signal_semaphores[1] = raw;
                     vk_timeline_info = vk::TimelineSemaphoreSubmitInfo::builder()
                         .signal_semaphore_values(&signal_values);
                     vk_info = vk_info.push_next(&mut vk_timeline_info);
@@ -598,18 +599,24 @@ impl crate::Queue<Api> for Queue {
         }
 
         let wait_stage_mask = [vk::PipelineStageFlags::TOP_OF_PIPE];
-        if self.relay_active {
-            vk_info = vk_info
-                .wait_semaphores(&semaphores[..1])
-                .wait_dst_stage_mask(&wait_stage_mask);
-        }
-        self.relay_active = true;
-        let signal_count = if semaphores[1] == vk::Semaphore::null() {
+        let sem_index = match self.relay_index {
+            Some(old_index) => {
+                vk_info = vk_info
+                    .wait_semaphores(&self.relay_semaphores[old_index..old_index + 1])
+                    .wait_dst_stage_mask(&wait_stage_mask);
+                (old_index + 1) % self.relay_semaphores.len()
+            }
+            None => 0,
+        };
+        self.relay_index = Some(sem_index);
+        signal_semaphores[0] = self.relay_semaphores[sem_index];
+
+        let signal_count = if signal_semaphores[1] == vk::Semaphore::null() {
             1
         } else {
             2
         };
-        vk_info = vk_info.signal_semaphores(&semaphores[..signal_count]);
+        vk_info = vk_info.signal_semaphores(&signal_semaphores[..signal_count]);
 
         profiling::scope!("vkQueueSubmit");
         self.device
@@ -627,14 +634,12 @@ impl crate::Queue<Api> for Queue {
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];
-        let semaphores = [self.relay_semaphore];
         let mut vk_info = vk::PresentInfoKHR::builder()
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 
-        if self.relay_active {
-            vk_info = vk_info.wait_semaphores(&semaphores);
-            self.relay_active = false;
+        if let Some(old_index) = self.relay_index.take() {
+            vk_info = vk_info.wait_semaphores(&self.relay_semaphores[old_index..old_index + 1]);
         }
 
         let suboptimal = {
