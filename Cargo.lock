@@ -1877,7 +1877,6 @@ dependencies = [
  "metal",
  "naga",
  "objc",
- "once_cell",
  "parking_lot",
  "profiling",
  "range-alloc",

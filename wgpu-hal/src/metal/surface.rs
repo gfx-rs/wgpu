@@ -1,4 +1,4 @@
-use std::{mem, os::raw::c_void, ptr::NonNull, thread};
+use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
 
 use core_graphics_types::{
     base::CGFloat,
@@ -12,7 +12,6 @@ use objc::{
     runtime::{Class, Object, Sel, BOOL, YES},
     sel, sel_impl,
 };
-use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 
 #[cfg(target_os = "macos")]
@@ -32,20 +31,18 @@ extern "C" fn layer_should_inherit_contents_scale_from_window(
     YES
 }
 
-static CAML_DELEGATE_REGISTER: OnceCell<&'static Class> = OnceCell::new();
+static CAML_DELEGATE_REGISTER: Once = Once::new();
 
 #[derive(Debug)]
 pub struct HalManagedMetalLayerDelegate(&'static Class);
 
 impl HalManagedMetalLayerDelegate {
     pub fn new() -> Self {
-        Self(CAML_DELEGATE_REGISTER.get_or_init(|| {
+        let class_name = format!("HalManagedMetalLayerDelegate@{:p}", &CAML_DELEGATE_REGISTER);
+
+        CAML_DELEGATE_REGISTER.call_once(|| {
             type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
-            let mut decl = ClassDecl::new(
-                &format!("HalManagedMetalLayerDelegate@{:p}", &CAML_DELEGATE_REGISTER),
-                class!(NSObject),
-            )
-            .unwrap();
+            let mut decl = ClassDecl::new(&class_name, class!(NSObject)).unwrap();
             #[allow(trivial_casts)] // false positive
             unsafe {
                 decl.add_class_method(
@@ -53,8 +50,9 @@ impl HalManagedMetalLayerDelegate {
                     layer_should_inherit_contents_scale_from_window as Fun,
                 );
             }
-            decl.register()
-        }))
+            decl.register();
+        });
+        Self(Class::get(&class_name).unwrap())
     }
 }
 
