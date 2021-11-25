@@ -31,7 +31,6 @@ extern "C" fn layer_should_inherit_contents_scale_from_window(
     YES
 }
 
-const CAML_DELEGATE_CLASS: &str = "HalManagedMetalLayerDelegate";
 static CAML_DELEGATE_REGISTER: Once = Once::new();
 
 #[derive(Debug)]
@@ -39,9 +38,11 @@ pub struct HalManagedMetalLayerDelegate(&'static Class);
 
 impl HalManagedMetalLayerDelegate {
     pub fn new() -> Self {
+        let class_name = format!("HalManagedMetalLayerDelegate@{:p}", &CAML_DELEGATE_REGISTER);
+
         CAML_DELEGATE_REGISTER.call_once(|| {
             type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
-            let mut decl = ClassDecl::new(CAML_DELEGATE_CLASS, class!(NSObject)).unwrap();
+            let mut decl = ClassDecl::new(&class_name, class!(NSObject)).unwrap();
             #[allow(trivial_casts)] // false positive
             unsafe {
                 decl.add_class_method(
@@ -51,7 +52,7 @@ impl HalManagedMetalLayerDelegate {
             }
             decl.register();
         });
-        Self(Class::get(CAML_DELEGATE_CLASS).unwrap())
+        Self(Class::get(&class_name).unwrap())
     }
 }
 
