@@ -1172,15 +1172,19 @@ impl super::Adapter {
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
         });
+        let mut relay_semaphores = [vk::Semaphore::null(); 2];
+        for sem in relay_semaphores.iter_mut() {
+            *sem = shared
+                .raw
+                .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?;
+        }
         let queue = super::Queue {
             raw: raw_queue,
             swapchain_fn,
             device: Arc::clone(&shared),
             family_index,
-            relay_semaphore: shared
-                .raw
-                .create_semaphore(&vk::SemaphoreCreateInfo::builder(), None)?,
-            relay_active: false,
+            relay_semaphores,
+            relay_index: None,
         };
 
         let mem_allocator = {
