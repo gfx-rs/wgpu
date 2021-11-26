@@ -5,7 +5,7 @@ digraph Module {
 		g1 [ shape=hexagon label="[2] Handle/'u_sampler'" ]
 	}
 	subgraph cluster_ep0 {
-		label="Vertex/'main'"
+		label="Vertex/'vert_main'"
 		node [ style=filled ]
 		ep0_e0 [ fillcolor="#ffffb3" label="[1] Constant" ]
 		ep0_e1 [ color="#8dd3c7" label="[2] Argument[0]" ]
@@ -32,7 +32,7 @@ digraph Module {
 		ep0_s2 -> ep0_e7 [ style=dotted ]
 	}
 	subgraph cluster_ep1 {
-		label="Fragment/'main'"
+		label="Fragment/'frag_main'"
 		node [ style=filled ]
 		ep1_e0 [ fillcolor="#ffffb3" label="[1] Constant" ]
 		ep1_e1 [ color="#ffffb3" label="[2] Global" ]

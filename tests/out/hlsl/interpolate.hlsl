@@ -10,7 +10,7 @@ struct FragmentInput {
     linear sample float perspective_sample : LOC6;
 };
 
-struct VertexOutput_main {
+struct VertexOutput_vert_main {
     uint flat : LOC0;
     float linear_ : LOC1;
     float2 linear_centroid : LOC2;
@@ -21,7 +21,7 @@ struct VertexOutput_main {
     float4 position : SV_Position;
 };
 
-struct FragmentInput_main {
+struct FragmentInput_frag_main {
     uint flat_1 : LOC0;
     float linear_1 : LOC1;
     float2 linear_centroid_1 : LOC2;
@@ -32,7 +32,7 @@ struct FragmentInput_main {
     float4 position_1 : SV_Position;
 };
 
-VertexOutput_main main()
+VertexOutput_vert_main vert_main()
 {
     FragmentInput out_ = (FragmentInput)0;
 
@@ -46,12 +46,12 @@ VertexOutput_main main()
     out_.perspective_sample = 2744.0;
     FragmentInput _expr30 = out_;
     const FragmentInput fragmentinput = _expr30;
-    const VertexOutput_main fragmentinput_1 = { fragmentinput.flat, fragmentinput.linear_, fragmentinput.linear_centroid, fragmentinput.linear_sample, fragmentinput.perspective, fragmentinput.perspective_centroid, fragmentinput.perspective_sample, fragmentinput.position };
+    const VertexOutput_vert_main fragmentinput_1 = { fragmentinput.flat, fragmentinput.linear_, fragmentinput.linear_centroid, fragmentinput.linear_sample, fragmentinput.perspective, fragmentinput.perspective_centroid, fragmentinput.perspective_sample, fragmentinput.position };
     return fragmentinput_1;
 }
 
-void main_1(FragmentInput_main fragmentinput_main)
+void frag_main(FragmentInput_frag_main fragmentinput_frag_main)
 {
-    FragmentInput val = { fragmentinput_main.position_1, fragmentinput_main.flat_1, fragmentinput_main.linear_1, fragmentinput_main.linear_centroid_1, fragmentinput_main.linear_sample_1, fragmentinput_main.perspective_1, fragmentinput_main.perspective_centroid_1, fragmentinput_main.perspective_sample_1 };
+    FragmentInput val = { fragmentinput_frag_main.position_1, fragmentinput_frag_main.flat_1, fragmentinput_frag_main.linear_1, fragmentinput_frag_main.linear_centroid_1, fragmentinput_frag_main.linear_sample_1, fragmentinput_frag_main.perspective_1, fragmentinput_frag_main.perspective_centroid_1, fragmentinput_frag_main.perspective_sample_1 };
     return;
 }

@@ -12,7 +12,7 @@ struct FragmentInput {
 };
 
 [[stage(vertex)]]
-fn main() -> FragmentInput {
+fn vert_main() -> FragmentInput {
    var out: FragmentInput;
 
    out.position = vec4<f32>(2.0, 4.0, 5.0, 6.0);
@@ -28,4 +28,4 @@ fn main() -> FragmentInput {
 }
 
 [[stage(fragment)]]
-fn main(val : FragmentInput) { }
+fn frag_main(val : FragmentInput) { }

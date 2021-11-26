@@ -7,7 +7,7 @@ struct VertexOutput {
 };
 
 [[stage(vertex)]]
-fn main(
+fn vert_main(
   [[location(0)]] pos : vec2<f32>,
   [[location(1)]] uv : vec2<f32>,
 ) -> VertexOutput {
@@ -19,7 +19,7 @@ fn main(
 [[group(0), binding(1)]] var u_sampler : sampler;
 
 [[stage(fragment)]]
-fn main([[location(0)]] uv : vec2<f32>) -> [[location(0)]] vec4<f32> {
+fn frag_main([[location(0)]] uv : vec2<f32>) -> [[location(0)]] vec4<f32> {
   let color = textureSample(u_texture, u_sampler, uv);
   if (color.a == 0.0) {
     discard;

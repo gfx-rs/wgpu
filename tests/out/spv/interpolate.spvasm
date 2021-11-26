@@ -6,8 +6,8 @@ OpCapability Shader
 OpCapability SampleRateShading
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %45 "main" %29 %31 %33 %35 %37 %39 %40 %41 %42
-OpEntryPoint Fragment %108 "main" %87 %90 %93 %96 %99 %102 %104 %106
+OpEntryPoint Vertex %45 "vert_main" %29 %31 %33 %35 %37 %39 %40 %41 %42
+OpEntryPoint Fragment %108 "frag_main" %87 %90 %93 %96 %99 %102 %104 %106
 OpExecutionMode %108 OriginUpperLeft
 OpSource GLSL 450
 OpMemberName %25 0 "position"
@@ -28,7 +28,7 @@ OpName %37 "linear_sample"
 OpName %39 "perspective"
 OpName %40 "perspective_centroid"
 OpName %41 "perspective_sample"
-OpName %45 "main"
+OpName %45 "vert_main"
 OpName %87 "position"
 OpName %90 "flat"
 OpName %93 "linear"
@@ -37,7 +37,7 @@ OpName %99 "linear_sample"
 OpName %102 "perspective"
 OpName %104 "perspective_centroid"
 OpName %106 "perspective_sample"
-OpName %108 "main"
+OpName %108 "frag_main"
 OpMemberDecorate %25 0 Offset 0
 OpMemberDecorate %25 1 Offset 16
 OpMemberDecorate %25 2 Offset 20

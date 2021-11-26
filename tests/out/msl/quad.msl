@@ -8,32 +8,32 @@ struct VertexOutput {
     metal::float4 position;
 };
 
-struct main_Input {
+struct vert_mainInput {
     metal::float2 pos [[attribute(0)]];
     metal::float2 uv [[attribute(1)]];
 };
-struct main_Output {
+struct vert_mainOutput {
     metal::float2 uv [[user(loc0), center_perspective]];
     metal::float4 position [[position]];
 };
-vertex main_Output main_(
-  main_Input varyings [[stage_in]]
+vertex vert_mainOutput vert_main(
+  vert_mainInput varyings [[stage_in]]
 ) {
     const auto pos = varyings.pos;
     const auto uv = varyings.uv;
     const auto _tmp = VertexOutput {uv, metal::float4(c_scale * pos, 0.0, 1.0)};
-    return main_Output { _tmp.uv, _tmp.position };
+    return vert_mainOutput { _tmp.uv, _tmp.position };
 }
 
 
-struct main_1Input {
+struct frag_mainInput {
     metal::float2 uv_1 [[user(loc0), center_perspective]];
 };
-struct main_1Output {
+struct frag_mainOutput {
     metal::float4 member_1 [[color(0)]];
 };
-fragment main_1Output main_1(
-  main_1Input varyings_1 [[stage_in]]
+fragment frag_mainOutput frag_main(
+  frag_mainInput varyings_1 [[stage_in]]
 , metal::texture2d<float, metal::access::sample> u_texture [[user(fake0)]]
 , metal::sampler u_sampler [[user(fake0)]]
 ) {
@@ -43,7 +43,7 @@ fragment main_1Output main_1(
         metal::discard_fragment();
     }
     metal::float4 premultiplied = color.w * color;
-    return main_1Output { premultiplied };
+    return frag_mainOutput { premultiplied };
 }
 
 
