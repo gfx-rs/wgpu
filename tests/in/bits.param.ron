@@ -1,5 +1,4 @@
 (
-	msl_custom: true,
 	msl: (
 		lang_version: (1, 2),
 		per_stage_map: (

@@ -4,7 +4,6 @@
 		debug: true,
 		adjust_coordinate_space: true,
 	),
-	glsl_custom: true,
 	glsl: (
 		version: Embedded(300),
 		writer_flags: (bits: 0),

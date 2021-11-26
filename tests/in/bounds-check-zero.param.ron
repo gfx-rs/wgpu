@@ -1,4 +1,6 @@
 (
-	index_bounds_check_policy: ReadZeroSkipWrite,
-	buffer_bounds_check_policy: ReadZeroSkipWrite,
+	bounds_check_policies: (
+		index: ReadZeroSkipWrite,
+		buffer: ReadZeroSkipWrite,
+	),
 )

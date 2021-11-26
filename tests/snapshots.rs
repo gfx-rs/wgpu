@@ -16,30 +16,6 @@ bitflags::bitflags! {
     }
 }
 
-/// Twin of `naga::back::BoundsCheckPolicy`, always serializable.
-#[derive(Clone, Copy, serde::Deserialize)]
-enum BoundsCheckPolicyArg {
-    Restrict,
-    ReadZeroSkipWrite,
-    Unchecked,
-}
-
-impl Default for BoundsCheckPolicyArg {
-    fn default() -> Self {
-        BoundsCheckPolicyArg::Unchecked
-    }
-}
-
-impl From<BoundsCheckPolicyArg> for naga::proc::BoundsCheckPolicy {
-    fn from(arg: BoundsCheckPolicyArg) -> Self {
-        match arg {
-            BoundsCheckPolicyArg::Restrict => Self::Restrict,
-            BoundsCheckPolicyArg::ReadZeroSkipWrite => Self::ReadZeroSkipWrite,
-            BoundsCheckPolicyArg::Unchecked => Self::Unchecked,
-        }
-    }
-}
-
 #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
 #[derive(serde::Deserialize)]
 struct SpvOutVersion(u8, u8);
@@ -67,44 +43,36 @@ struct SpirvOutParameters {
     separate_entry_points: bool,
 }
 
+#[cfg_attr(not(feature = "wgsl-out"), allow(dead_code))]
+#[derive(Default, serde::Deserialize)]
+struct WgslOutParameters {
+    #[serde(default)]
+    explicit_types: bool,
+}
+
+#[allow(dead_code)]
 #[derive(Default, serde::Deserialize)]
 struct Parameters {
     #[serde(default)]
     god_mode: bool,
-
-    #[allow(dead_code)]
+    #[cfg(feature = "deserialize")]
     #[serde(default)]
-    index_bounds_check_policy: BoundsCheckPolicyArg,
-    #[allow(dead_code)]
-    #[serde(default)]
-    buffer_bounds_check_policy: BoundsCheckPolicyArg,
-    #[allow(dead_code)]
-    #[serde(default)]
-    image_bounds_check_policy: BoundsCheckPolicyArg,
-    #[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
+    bounds_check_policies: naga::proc::BoundsCheckPolicies,
     #[serde(default)]
     spv: SpirvOutParameters,
     #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     #[serde(default)]
     msl: naga::back::msl::Options,
-    #[cfg(all(not(feature = "deserialize"), feature = "msl-out"))]
-    #[serde(default)]
-    msl_custom: bool,
     #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
     #[serde(default)]
     glsl: naga::back::glsl::Options,
-    #[cfg(all(not(feature = "deserialize"), feature = "glsl-out"))]
     #[serde(default)]
-    glsl_custom: bool,
-    #[cfg_attr(not(feature = "glsl-out"), allow(dead_code))]
-    #[serde(default)]
-    glsl_blacklist: naga::FastHashSet<String>,
+    glsl_exclude_list: naga::FastHashSet<String>,
     #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
     #[serde(default)]
     hlsl: naga::back::hlsl::Options,
-    #[cfg(all(not(feature = "deserialize"), feature = "hlsl-out"))]
     #[serde(default)]
-    hlsl_custom: bool,
+    wgsl: WgslOutParameters,
 }
 
 #[allow(dead_code, unused_variables)]
@@ -144,23 +112,41 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         }
     }
 
+    if !cfg!(feature = "deserialize") {
+        println!(
+            "No access to parameters, skipping {} for {:?}",
+            name, targets
+        );
+        return;
+    }
+
     #[cfg(feature = "spv-out")]
     {
         if targets.contains(Targets::SPIRV) {
-            write_output_spv(module, &info, &dest, name, &params);
+            write_output_spv(
+                module,
+                &info,
+                &dest,
+                name,
+                &params.spv,
+                params.bounds_check_policies,
+            );
         }
     }
     #[cfg(feature = "msl-out")]
     {
         if targets.contains(Targets::METAL) {
-            write_output_msl(module, &info, &dest, name, &params);
+            write_output_msl(module, &info, &dest, name, &params.msl);
         }
     }
     #[cfg(feature = "glsl-out")]
     {
         if targets.contains(Targets::GLSL) {
             for ep in module.entry_points.iter() {
-                write_output_glsl(module, &info, &dest, name, ep.stage, &ep.name, &params);
+                if params.glsl_exclude_list.contains(&ep.name) {
+                    return;
+                }
+                write_output_glsl(module, &info, &dest, name, ep.stage, &ep.name, &params.glsl);
             }
         }
     }
@@ -174,13 +160,13 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     #[cfg(feature = "hlsl-out")]
     {
         if targets.contains(Targets::HLSL) {
-            write_output_hlsl(module, &info, &dest, name, &params);
+            write_output_hlsl(module, &info, &dest, name, &params.hlsl);
         }
     }
     #[cfg(feature = "wgsl-out")]
     {
         if targets.contains(Targets::WGSL) {
-            write_output_wgsl(module, &info, &dest, name);
+            write_output_wgsl(module, &info, &dest, name, &params.wgsl);
         }
     }
 }
@@ -191,45 +177,36 @@ fn write_output_spv(
     info: &naga::valid::ModuleInfo,
     destination: &PathBuf,
     file_name: &str,
-    params: &Parameters,
+    params: &SpirvOutParameters,
+    bounds_check_policies: naga::proc::BoundsCheckPolicies,
 ) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
 
     println!("writing SPIR-V");
+
     let mut flags = spv::WriterFlags::LABEL_VARYINGS;
-    flags.set(spv::WriterFlags::DEBUG, params.spv.debug);
+    flags.set(spv::WriterFlags::DEBUG, params.debug);
     flags.set(
         spv::WriterFlags::ADJUST_COORDINATE_SPACE,
-        params.spv.adjust_coordinate_space,
+        params.adjust_coordinate_space,
     );
-    flags.set(
-        spv::WriterFlags::FORCE_POINT_SIZE,
-        params.spv.force_point_size,
-    );
-    flags.set(
-        spv::WriterFlags::CLAMP_FRAG_DEPTH,
-        params.spv.clamp_frag_depth,
-    );
+    flags.set(spv::WriterFlags::FORCE_POINT_SIZE, params.force_point_size);
+    flags.set(spv::WriterFlags::CLAMP_FRAG_DEPTH, params.clamp_frag_depth);
+
     let options = spv::Options {
-        lang_version: (params.spv.version.0, params.spv.version.1),
+        lang_version: (params.version.0, params.version.1),
         flags,
-        capabilities: if params.spv.capabilities.is_empty() {
+        capabilities: if params.capabilities.is_empty() {
             None
         } else {
-            Some(params.spv.capabilities.clone())
+            Some(params.capabilities.clone())
         },
-
-        bounds_check_policies: naga::proc::BoundsCheckPolicies {
-            index: params.index_bounds_check_policy.into(),
-            buffer: params.buffer_bounds_check_policy.into(),
-            image: params.image_bounds_check_policy.into(),
-        },
-
+        bounds_check_policies,
         ..spv::Options::default()
     };
 
-    if params.spv.separate_entry_points {
+    if params.separate_entry_points {
         for ep in module.entry_points.iter() {
             let pipeline_options = spv::PipelineOptions {
                 entry_point: ep.name.clone(),
@@ -257,23 +234,11 @@ fn write_output_msl(
     info: &naga::valid::ModuleInfo,
     destination: &PathBuf,
     file_name: &str,
-    params: &Parameters,
+    options: &naga::back::msl::Options,
 ) {
     use naga::back::msl;
 
     println!("writing MSL");
-
-    #[cfg_attr(feature = "deserialize", allow(unused_variables))]
-    let default_options = msl::Options::default();
-    #[cfg(feature = "deserialize")]
-    let options = &params.msl;
-    #[cfg(not(feature = "deserialize"))]
-    let options = if params.msl_custom {
-        println!("Skipping {}", destination.display());
-        return;
-    } else {
-        &default_options
-    };
 
     let pipeline_options = msl::PipelineOptions {
         allow_point_size: true,
@@ -299,27 +264,11 @@ fn write_output_glsl(
     file_name: &str,
     stage: naga::ShaderStage,
     ep_name: &str,
-    params: &Parameters,
+    options: &naga::back::glsl::Options,
 ) {
     use naga::back::glsl;
 
     println!("writing GLSL");
-
-    #[cfg_attr(feature = "deserialize", allow(unused_variables))]
-    let default_options = glsl::Options::default();
-    #[cfg(feature = "deserialize")]
-    let options = &params.glsl;
-    #[cfg(not(feature = "deserialize"))]
-    let options = if params.glsl_custom {
-        println!("Skipping {}", destination.display());
-        return;
-    } else {
-        &default_options
-    };
-
-    if params.glsl_blacklist.contains(ep_name) {
-        return;
-    }
 
     let pipeline_options = glsl::PipelineOptions {
         shader_stage: stage,
@@ -344,24 +293,12 @@ fn write_output_hlsl(
     info: &naga::valid::ModuleInfo,
     destination: &PathBuf,
     file_name: &str,
-    params: &Parameters,
+    options: &naga::back::hlsl::Options,
 ) {
     use naga::back::hlsl;
-    use std::fmt::Write;
+    use std::fmt::Write as _;
 
     println!("writing HLSL");
-
-    #[cfg_attr(feature = "deserialize", allow(unused_variables))]
-    let default_options = hlsl::Options::default();
-    #[cfg(feature = "deserialize")]
-    let options = &params.hlsl;
-    #[cfg(not(feature = "deserialize"))]
-    let options = if params.hlsl_custom {
-        println!("Skipping {}", destination.display());
-        return;
-    } else {
-        &default_options
-    };
 
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
@@ -435,12 +372,19 @@ fn write_output_wgsl(
     info: &naga::valid::ModuleInfo,
     destination: &PathBuf,
     file_name: &str,
+    params: &WgslOutParameters,
 ) {
     use naga::back::wgsl;
 
     println!("writing WGSL");
 
-    let string = wgsl::write_string(module, info).expect("WGSL write failed");
+    let mut flags = wgsl::WriterFlags::empty();
+    flags.set(
+        wgsl::WriterFlags::EXPLICIT_TYPES,
+        params.explicit_types | true,
+    );
+
+    let string = wgsl::write_string(module, info, flags).expect("WGSL write failed");
 
     fs::write(destination.join(format!("wgsl/{}.wgsl", file_name)), string).unwrap();
 }
@@ -652,7 +596,13 @@ fn convert_glsl_folder() {
         #[cfg(feature = "wgsl-out")]
         {
             let dest = PathBuf::from(root).join(BASE_DIR_OUT);
-            write_output_wgsl(&module, &info, &dest, &file_name.replace(".", "-"));
+            write_output_wgsl(
+                &module,
+                &info,
+                &dest,
+                &file_name.replace(".", "-"),
+                &WgslOutParameters::default(),
+            );
         }
     }
 }

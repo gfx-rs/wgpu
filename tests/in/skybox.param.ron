@@ -5,7 +5,6 @@
 		debug: false,
 		adjust_coordinate_space: false,
 	),
-	msl_custom: true,
 	msl: (
 		lang_version: (2, 1),
 		per_stage_map: (
@@ -37,7 +36,6 @@
 		spirv_cross_compatibility: false,
 		fake_missing_bindings: false,
 	),
-	glsl_custom: true,
 	glsl: (
 		version: Embedded(320),
 		writer_flags: (bits: 0),
@@ -46,7 +44,6 @@
 			(group: 0, binding: 1): 0,
 		},
 	),
-	hlsl_custom: true,
 	hlsl: (
 		shader_model: V5_1,
 		binding_map: {

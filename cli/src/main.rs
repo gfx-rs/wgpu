@@ -454,6 +454,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         "Generating wgsl output requires validation to \
                         succeed, and it failed in a previous step",
                     ))?,
+                    wgsl::WriterFlags::empty(),
                 )
                 .unwrap_pretty();
                 fs::write(output_path, wgsl)?;

@@ -7,7 +7,6 @@
 		clamp_frag_depth: true,
 		separate_entry_points: true,
 	),
-	hlsl_custom: true,
 	hlsl: (
 		shader_model: V5_1,
 		binding_map: {},

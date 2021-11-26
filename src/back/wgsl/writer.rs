@@ -51,8 +51,18 @@ enum Indirection {
     Reference,
 }
 
+bitflags::bitflags! {
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    pub struct WriterFlags: u32 {
+        /// Always annotate the type information instead of inferring.
+        const EXPLICIT_TYPES = 0x1;
+    }
+}
+
 pub struct Writer<W> {
     out: W,
+    flags: WriterFlags,
     names: crate::FastHashMap<NameKey, String>,
     namer: proc::Namer,
     named_expressions: crate::NamedExpressions,
@@ -60,9 +70,10 @@ pub struct Writer<W> {
 }
 
 impl<W: Write> Writer<W> {
-    pub fn new(out: W) -> Self {
+    pub fn new(out: W, flags: WriterFlags) -> Self {
         Writer {
             out,
+            flags,
             names: crate::FastHashMap::default(),
             namer: proc::Namer::default(),
             named_expressions: crate::NamedExpressions::default(),
@@ -1032,15 +1043,18 @@ impl<W: Write> Writer<W> {
         name: &str,
     ) -> BackendResult {
         // Write variable name
-        write!(self.out, "let {}: ", name)?;
-        let ty = &func_ctx.info[handle].ty;
-        // Write variable type
-        match *ty {
-            proc::TypeResolution::Handle(handle) => {
-                self.write_type(module, handle)?;
-            }
-            proc::TypeResolution::Value(ref inner) => {
-                self.write_value_type(module, inner)?;
+        write!(self.out, "let {}", name)?;
+        if self.flags.contains(WriterFlags::EXPLICIT_TYPES) {
+            write!(self.out, ": ")?;
+            let ty = &func_ctx.info[handle].ty;
+            // Write variable type
+            match *ty {
+                proc::TypeResolution::Handle(handle) => {
+                    self.write_type(module, handle)?;
+                }
+                proc::TypeResolution::Value(ref inner) => {
+                    self.write_value_type(module, inner)?;
+                }
             }
         }
 

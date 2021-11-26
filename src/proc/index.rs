@@ -34,6 +34,7 @@ use crate::{Handle, UniqueArena};
 /// checks as well would be redundant, and the `Unchecked` policy is
 /// appropriate.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum BoundsCheckPolicy {
     /// Replace out-of-bounds indexes with some arbitrary in-bounds index.
     ///
@@ -53,10 +54,12 @@ pub enum BoundsCheckPolicy {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 /// Policies for injecting bounds checks during code generation.
 pub struct BoundsCheckPolicies {
     /// How should the generated code handle array, vector, or matrix indices
     /// that are out of range?
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub index: BoundsCheckPolicy,
 
     /// How should the generated code handle array, vector, or matrix indices
@@ -92,6 +95,7 @@ pub struct BoundsCheckPolicies {
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     /// [`Storage`]: crate::StorageClass::Storage
     /// [`Uniform`]: crate::StorageClass::Uniform
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub buffer: BoundsCheckPolicy,
 
     /// How should the generated code handle image texel references that are out
@@ -103,6 +107,7 @@ pub struct BoundsCheckPolicies {
     ///
     /// [`ImageLoad`]: crate::Expression::ImageLoad
     /// [`ImageStore`]: crate::Statement::ImageStore
+    #[cfg_attr(feature = "deserialize", serde(default))]
     pub image: BoundsCheckPolicy,
 }
 

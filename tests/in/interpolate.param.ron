@@ -11,5 +11,4 @@
 		writer_flags: (bits: 0),
 		binding_map: {},
 	),
-	glsl_custom: true,
 )
