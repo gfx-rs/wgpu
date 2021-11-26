@@ -379,10 +379,7 @@ fn write_output_wgsl(
     println!("writing WGSL");
 
     let mut flags = wgsl::WriterFlags::empty();
-    flags.set(
-        wgsl::WriterFlags::EXPLICIT_TYPES,
-        params.explicit_types | true,
-    );
+    flags.set(wgsl::WriterFlags::EXPLICIT_TYPES, params.explicit_types);
 
     let string = wgsl::write_string(module, info, flags).expect("WGSL write failed");
 

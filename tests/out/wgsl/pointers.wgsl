@@ -9,20 +9,20 @@ var<storage, read_write> dynamic_array: DynamicArray;
 fn f() {
     var v: vec2<i32>;
 
-    let px: ptr<function, i32> = (&v.x);
+    let px = (&v.x);
     (*px) = 10;
     return;
 }
 
 fn index_unsized(i: i32, v_1: u32) {
-    let val: u32 = dynamic_array.arr[i];
+    let val = dynamic_array.arr[i];
     dynamic_array.arr[i] = (val + v_1);
     return;
 }
 
 fn index_dynamic_array(i_1: i32, v_2: u32) {
-    let p: ptr<storage, array<u32>, read_write> = (&dynamic_array.arr);
-    let val_1: u32 = (*p)[i_1];
+    let p = (&dynamic_array.arr);
+    let val_1 = (*p)[i_1];
     (*p)[i_1] = (val_1 + v_2);
     return;
 }

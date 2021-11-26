@@ -17,11 +17,11 @@ fn main([[location(0)]] pos: vec2<f32>, [[location(1)]] uv: vec2<f32>) -> Vertex
 
 [[stage(fragment)]]
 fn main_1([[location(0)]] uv_1: vec2<f32>) -> [[location(0)]] vec4<f32> {
-    let color: vec4<f32> = textureSample(u_texture, u_sampler, uv_1);
+    let color = textureSample(u_texture, u_sampler, uv_1);
     if ((color.w == 0.0)) {
         discard;
     }
-    let premultiplied: vec4<f32> = (color.w * color);
+    let premultiplied = (color.w * color);
     return premultiplied;
 }
 

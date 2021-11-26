@@ -14,6 +14,6 @@ fn main_1() {
 fn main([[location(0)]] v_uv: vec2<f32>) -> FragmentOutput {
     v_uv_1 = v_uv;
     main_1();
-    let _e7: vec4<f32> = o_color;
+    let _e7 = o_color;
     return FragmentOutput(_e7);
 }

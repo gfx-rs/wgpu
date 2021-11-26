@@ -14,9 +14,9 @@ var<private> perVertexStruct: gl_PerVertex = gl_PerVertex(vec4<f32>(0.0, 0.0, 0.
 var<private> a_pos_1: vec2<f32>;
 
 fn main_1() {
-    let _e12: vec2<f32> = a_uv_1;
+    let _e12 = a_uv_1;
     v_uv = _e12;
-    let _e13: vec2<f32> = a_pos_1;
+    let _e13 = a_pos_1;
     perVertexStruct.gl_Position = vec4<f32>(_e13.x, _e13.y, 0.0, 1.0);
     return;
 }
@@ -26,7 +26,7 @@ fn main([[location(1)]] a_uv: vec2<f32>, [[location(0)]] a_pos: vec2<f32>) -> Ve
     a_uv_1 = a_uv;
     a_pos_1 = a_pos;
     main_1();
-    let _e7: vec2<f32> = v_uv;
-    let _e8: vec4<f32> = perVertexStruct.gl_Position;
+    let _e7 = v_uv;
+    let _e8 = perVertexStruct.gl_Position;
     return VertexOutput(_e7, _e8);
 }
