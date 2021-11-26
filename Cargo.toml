@@ -8,9 +8,9 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
-    "deno_webgpu",
 ]
 exclude = [
+    "deno_webgpu",
     "cts_runner",
 ]
 default-members = ["wgpu", "wgpu-hal", "wgpu-info"]
