@@ -139,6 +139,12 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::TIMESTAMP_QUERY) {
         return_features.push("timestamp-query");
     }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2) {
+        return_features.push("texture-compression-etc2");
+    }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
+        return_features.push("texture-compression-astc");
+    }
 
     // extended from spec
     if features.contains(wgpu_types::Features::MAPPABLE_PRIMARY_BUFFERS) {
@@ -177,12 +183,6 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     }
     if features.contains(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER) {
         return_features.push("address-mode-clamp-to-border");
-    }
-    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2) {
-        return_features.push("texture-compression-etc2");
-    }
-    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
-        return_features.push("texture-compression-astc-ldr");
     }
     if features.contains(wgpu_types::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES) {
         return_features.push("texture-adapter-specific-format-features");
@@ -313,6 +313,8 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             features.set(wgpu_types::Features::PIPELINE_STATISTICS_QUERY, required_features.0.contains("pipeline-statistics-query"));
             features.set(wgpu_types::Features::TEXTURE_COMPRESSION_BC, required_features.0.contains("texture-compression-bc"));
             features.set(wgpu_types::Features::TIMESTAMP_QUERY, required_features.0.contains("timestamp-query"));
+            features.set(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2, required_features.0.contains("texture-compression-etc2"));
+            features.set(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_LDR, required_features.0.contains("texture-compression-astc"));
 
         // extended from spec
             features.set(wgpu_types::Features::MAPPABLE_PRIMARY_BUFFERS, required_features.0.contains("mappable-primary-buffers"));
@@ -338,8 +340,6 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             features.set(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT, required_features.0.contains("multi-draw-indirect-count"));
             features.set(wgpu_types::Features::PUSH_CONSTANTS, required_features.0.contains("push-constants"));
             features.set(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER, required_features.0.contains("address-mode-clamp-to-border"));
-            features.set(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2, required_features.0.contains("texture-compression-etc2"));
-            features.set(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_LDR, required_features.0.contains("texture-compression-astc-ldr"));
             features.set(
                 wgpu_types::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                 required_features
@@ -705,6 +705,22 @@ fn declare_webgpu_ops() -> Vec<(&'static str, Box<OpFn>)> {
         (
             "op_webgpu_compute_pass_dispatch_indirect",
             op_sync(compute_pass::op_webgpu_compute_pass_dispatch_indirect),
+        ),
+        (
+            "op_webgpu_compute_pass_begin_pipeline_statistics_query",
+            op_sync(
+                compute_pass::op_webgpu_compute_pass_begin_pipeline_statistics_query,
+            ),
+        ),
+        (
+            "op_webgpu_compute_pass_end_pipeline_statistics_query",
+            op_sync(
+                compute_pass::op_webgpu_compute_pass_end_pipeline_statistics_query,
+            ),
+        ),
+        (
+            "op_webgpu_compute_pass_write_timestamp",
+            op_sync(compute_pass::op_webgpu_compute_pass_write_timestamp),
         ),
         (
             "op_webgpu_compute_pass_end_pass",
