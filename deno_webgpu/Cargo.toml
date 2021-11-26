@@ -11,7 +11,7 @@ repository = "https://github.com/gfx-rs/wgpu"
 description = "WebGPU implementation for Deno"
 
 [dependencies]
-deno_core = { git = "https://github.com/denoland/deno", rev = "1d3f734e1815bf1649e0cac445be9eacb4cd296d" }
+deno_core = { git = "https://github.com/denoland/deno", rev = "ca75752e5a9499a0a997809f02b18c2ba1ecd58d" }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.10", features = ["full"] }
 wgpu-core = { path = "../wgpu-core", features = ["trace", "replay", "serde"] }

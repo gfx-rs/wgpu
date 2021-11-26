@@ -136,14 +136,17 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_BC) {
         return_features.push("texture-compression-bc");
     }
-    if features.contains(wgpu_types::Features::TIMESTAMP_QUERY) {
-        return_features.push("timestamp-query");
-    }
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2) {
         return_features.push("texture-compression-etc2");
     }
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
         return_features.push("texture-compression-astc");
+    }
+    if features.contains(wgpu_types::Features::TIMESTAMP_QUERY) {
+        return_features.push("timestamp-query");
+    }
+    if features.contains(wgpu_types::Features::INDIRECT_FIRST_INSTANCE) {
+        return_features.push("indirect-first-instance");
     }
 
     // extended from spec
@@ -312,9 +315,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             features.set(wgpu_types::Features::DEPTH_CLIP_CONTROL, required_features.0.contains("depth-clip-control"));
             features.set(wgpu_types::Features::PIPELINE_STATISTICS_QUERY, required_features.0.contains("pipeline-statistics-query"));
             features.set(wgpu_types::Features::TEXTURE_COMPRESSION_BC, required_features.0.contains("texture-compression-bc"));
-            features.set(wgpu_types::Features::TIMESTAMP_QUERY, required_features.0.contains("timestamp-query"));
             features.set(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2, required_features.0.contains("texture-compression-etc2"));
             features.set(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_LDR, required_features.0.contains("texture-compression-astc"));
+            features.set(wgpu_types::Features::TIMESTAMP_QUERY, required_features.0.contains("timestamp-query"));
+            features.set(wgpu_types::Features::INDIRECT_FIRST_INSTANCE, required_features.0.contains("indirect-first-instance"));
 
         // extended from spec
             features.set(wgpu_types::Features::MAPPABLE_PRIMARY_BUFFERS, required_features.0.contains("mappable-primary-buffers"));

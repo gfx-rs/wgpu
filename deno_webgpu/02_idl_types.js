@@ -111,14 +111,15 @@
   webidl.converters["GPUFeatureName"] = webidl.createEnumConverter(
     "GPUFeatureName",
     [
-      "depth-clamping",
+      "depth-clip-control",
       "depth24unorm-stencil8",
       "depth32float-stencil8",
       "pipeline-statistics-query",
       "texture-compression-bc",
-      "timestamp-query",
       "texture-compression-etc2",
       "texture-compression-astc",
+      "timestamp-query",
+      "indirect-first-instance",
       // extended from spec
       "mappable-primary-buffers",
       "texture-binding-array",
