@@ -1,3 +1,7 @@
+// A lot of the code can be unused based on configuration flags,
+// the corresponding warnings aren't helpful.
+#![allow(dead_code)]
+
 use std::{fs, path::PathBuf};
 
 const BASE_DIR_IN: &str = "tests/in";
@@ -16,7 +20,6 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
 #[derive(serde::Deserialize)]
 struct SpvOutVersion(u8, u8);
 impl Default for SpvOutVersion {
@@ -25,7 +28,6 @@ impl Default for SpvOutVersion {
     }
 }
 
-#[cfg_attr(not(feature = "spv-out"), allow(dead_code))]
 #[derive(Default, serde::Deserialize)]
 struct SpirvOutParameters {
     version: SpvOutVersion,
@@ -43,14 +45,12 @@ struct SpirvOutParameters {
     separate_entry_points: bool,
 }
 
-#[cfg_attr(not(feature = "wgsl-out"), allow(dead_code))]
 #[derive(Default, serde::Deserialize)]
 struct WgslOutParameters {
     #[serde(default)]
     explicit_types: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Default, serde::Deserialize)]
 struct Parameters {
     #[serde(default)]
@@ -75,7 +75,7 @@ struct Parameters {
     wgsl: WgslOutParameters,
 }
 
-#[allow(dead_code, unused_variables)]
+#[allow(unused_variables)]
 fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
     let root = env!("CARGO_MANIFEST_DIR");
     let params = match fs::read_to_string(format!("{}/{}/{}.param.ron", root, BASE_DIR_IN, name)) {
@@ -112,15 +112,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         }
     }
 
-    if !cfg!(feature = "deserialize") {
-        println!(
-            "No access to parameters, skipping {} for {:?}",
-            name, targets
-        );
-        return;
-    }
-
-    #[cfg(feature = "spv-out")]
+    #[cfg(all(feature = "deserialize", feature = "spv-out"))]
     {
         if targets.contains(Targets::SPIRV) {
             write_output_spv(
@@ -133,13 +125,13 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
             );
         }
     }
-    #[cfg(feature = "msl-out")]
+    #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     {
         if targets.contains(Targets::METAL) {
             write_output_msl(module, &info, &dest, name, &params.msl);
         }
     }
-    #[cfg(feature = "glsl-out")]
+    #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
     {
         if targets.contains(Targets::GLSL) {
             for ep in module.entry_points.iter() {
@@ -157,13 +149,13 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
             fs::write(dest.join(format!("dot/{}.dot", name)), string).unwrap();
         }
     }
-    #[cfg(feature = "hlsl-out")]
+    #[cfg(all(feature = "deserialize", feature = "hlsl-out"))]
     {
         if targets.contains(Targets::HLSL) {
             write_output_hlsl(module, &info, &dest, name, &params.hlsl);
         }
     }
-    #[cfg(feature = "wgsl-out")]
+    #[cfg(all(feature = "deserialize", feature = "wgsl-out"))]
     {
         if targets.contains(Targets::WGSL) {
             write_output_wgsl(module, &info, &dest, name, &params.wgsl);
