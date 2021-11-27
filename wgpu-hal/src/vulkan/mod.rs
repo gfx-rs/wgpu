@@ -83,6 +83,7 @@ struct InstanceShared {
     raw: ash::Instance,
     drop_guard: Option<DropGuard>,
     flags: crate::InstanceFlags,
+    version: u32,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
     entry: ash::Entry,

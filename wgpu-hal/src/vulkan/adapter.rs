@@ -12,7 +12,7 @@ fn indexing_features() -> wgt::Features {
         | wgt::Features::UNSIZED_BINDING_ARRAY
 }
 
-/// Aggregate of the `vk::PhysicalDevice*Features` structs used by `gfx`.
+/// Aggregate of the `vk::PhysicalDevice*Features` structs used by the backend.
 #[derive(Debug, Default)]
 pub struct PhysicalDeviceFeatures {
     core: vk::PhysicalDeviceFeatures,
@@ -66,7 +66,7 @@ impl PhysicalDeviceFeatures {
     ///
     /// `requested_features` should be the same as what was used to generate `enabled_extensions`.
     fn from_extensions_and_requested_features(
-        api_version: u32,
+        instance_version: u32,
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
@@ -164,7 +164,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .build(),
-            vulkan_1_1: if api_version >= vk::API_VERSION_1_1 {
+            vulkan_1_1: if instance_version >= vk::API_VERSION_1_1 {
                 Some(
                     vk::PhysicalDeviceVulkan11Features::builder()
                         .multiview(requested_features.contains(wgt::Features::MULTIVIEW))
@@ -173,7 +173,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            vulkan_1_2: if api_version >= vk::API_VERSION_1_2 {
+            vulkan_1_2: if instance_version >= vk::API_VERSION_1_2 {
                 Some(
                     vk::PhysicalDeviceVulkan12Features::builder()
                         //.sampler_mirror_clamp_to_edge(requested_features.contains(wgt::Features::SAMPLER_MIRROR_CLAMP_EDGE))
@@ -260,7 +260,7 @@ impl PhysicalDeviceFeatures {
             {
                 Some(
                     vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder()
-                        .imageless_framebuffer(true)
+                        .imageless_framebuffer(private_caps.imageless_framebuffers)
                         .build(),
                 )
             } else {
@@ -270,7 +270,7 @@ impl PhysicalDeviceFeatures {
             {
                 Some(
                     vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder()
-                        .timeline_semaphore(true)
+                        .timeline_semaphore(private_caps.timeline_semaphores)
                         .build(),
                 )
             } else {
@@ -729,7 +729,9 @@ impl super::InstanceShared {
                     .properties(core)
                     .build();
 
-                if capabilities.properties.api_version >= vk::API_VERSION_1_2 {
+                // Careful with this version: we are specifically using
+                // the instance version instead of the device version.
+                if self.version >= vk::API_VERSION_1_2 {
                     capabilities.vulkan_1_2 =
                         Some(vk::PhysicalDeviceVulkan12Properties::builder().build());
 
@@ -767,14 +769,14 @@ impl super::InstanceShared {
                 .features(core)
                 .build();
 
-            if capabilities.properties.api_version >= vk::API_VERSION_1_1 {
+            if self.version >= vk::API_VERSION_1_1 {
                 features.vulkan_1_1 = Some(vk::PhysicalDeviceVulkan11Features::builder().build());
 
                 let mut_ref = features.vulkan_1_1.as_mut().unwrap();
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
-            if capabilities.properties.api_version >= vk::API_VERSION_1_2 {
+            if self.version >= vk::API_VERSION_1_2 {
                 features.vulkan_1_2 = Some(vk::PhysicalDeviceVulkan12Features::builder().build());
 
                 let mut_ref = features.vulkan_1_2.as_mut().unwrap();
@@ -1026,7 +1028,7 @@ impl super::Adapter {
         uab_types: super::UpdateAfterBindTypes,
     ) -> PhysicalDeviceFeatures {
         PhysicalDeviceFeatures::from_extensions_and_requested_features(
-            self.phd_capabilities.properties.api_version,
+            self.instance.version,
             enabled_extensions,
             features,
             self.downlevel_flags,

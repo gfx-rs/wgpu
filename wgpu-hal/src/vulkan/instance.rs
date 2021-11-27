@@ -121,7 +121,7 @@ impl super::Swapchain {
 impl super::Instance {
     pub fn required_extensions(
         entry: &ash::Entry,
-        driver_api_version: u32,
+        instance_version: u32,
         flags: crate::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
         let instance_extensions = entry
@@ -162,7 +162,7 @@ impl super::Instance {
         extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
 
         // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
-        if driver_api_version == vk::API_VERSION_1_0 {
+        if instance_version == vk::API_VERSION_1_0 {
             extensions.push(vk::KhrStorageBufferStorageClassFn::name());
         }
 
@@ -184,19 +184,19 @@ impl super::Instance {
     /// # Safety
     ///
     /// - `raw_instance` must be created from `entry`
-    /// - `raw_instance` must be created respecting `driver_api_version`, `extensions` and `flags`
+    /// - `raw_instance` must be created respecting `instance_version`, `extensions` and `flags`
     /// - `extensions` must be a superset of `required_extensions()` and must be created from the
-    ///   same entry, driver_api_version and flags.
+    ///   same entry, instance_version and flags.
     pub unsafe fn from_raw(
         entry: ash::Entry,
         raw_instance: ash::Instance,
-        driver_api_version: u32,
+        instance_version: u32,
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
         has_nv_optimus: bool,
         drop_guard: Option<super::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
-        if driver_api_version == vk::API_VERSION_1_0
+        if instance_version == vk::API_VERSION_1_0
             && !extensions.contains(&vk::KhrStorageBufferStorageClassFn::name())
         {
             log::warn!("Required VK_KHR_storage_buffer_storage_class extension is not supported");
@@ -237,6 +237,7 @@ impl super::Instance {
                 raw: raw_instance,
                 drop_guard,
                 flags,
+                version: instance_version,
                 debug_utils,
                 get_physical_device_properties,
                 entry,
@@ -442,7 +443,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 return Err(crate::InstanceError);
             }
         };
-        let driver_api_version = match entry.try_enumerate_instance_version() {
+        let instance_version = match entry.try_enumerate_instance_version() {
             // Vulkan 1.1+
             Ok(Some(version)) => version,
             Ok(None) => vk::API_VERSION_1_0,
@@ -459,8 +460,8 @@ impl crate::Instance<super::Api> for super::Instance {
             .engine_name(CStr::from_bytes_with_nul(b"wgpu-hal\0").unwrap())
             .engine_version(2)
             .api_version({
-                // Pick the latest API version available, but don't go later than the SDK version used by `gfx_backend_vulkan`.
-                cmp::min(driver_api_version, {
+                // Pick the latest API version available, but don't go later than the known SDK version
+                cmp::min(instance_version, {
                     // This is the max Vulkan API version supported by `wgpu-hal`.
                     //
                     // If we want to increment this, there are some things that must be done first:
@@ -473,7 +474,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 })
             });
 
-        let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
+        let extensions = Self::required_extensions(&entry, instance_version, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
@@ -532,7 +533,7 @@ impl crate::Instance<super::Api> for super::Instance {
         Self::from_raw(
             entry,
             vk_instance,
-            driver_api_version,
+            instance_version,
             extensions,
             desc.flags,
             has_nv_optimus,
