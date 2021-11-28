@@ -633,6 +633,7 @@ impl crate::Device<super::Api> for super::Device {
                 }
             }
 
+            gl.bind_texture(target, None);
             match desc.format.describe().sample_type {
                 wgt::TextureSampleType::Float { filterable: false }
                 | wgt::TextureSampleType::Uint
@@ -645,7 +646,6 @@ impl crate::Device<super::Api> for super::Device {
                 | wgt::TextureSampleType::Depth => {}
             }
 
-            gl.bind_texture(target, None);
             super::TextureInner::Texture { raw, target }
         };
 
