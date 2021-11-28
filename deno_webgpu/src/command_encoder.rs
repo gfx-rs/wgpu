@@ -445,12 +445,12 @@ pub fn op_webgpu_command_encoder_fill_buffer(
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
-      .resource_table
-      .get::<WebGpuCommandEncoder>(args.command_encoder_rid)?;
+        .resource_table
+        .get::<WebGpuCommandEncoder>(args.command_encoder_rid)?;
     let command_encoder = command_encoder_resource.0;
     let destination_resource = state
-      .resource_table
-      .get::<super::buffer::WebGpuBuffer>(args.destination_rid)?;
+        .resource_table
+        .get::<super::buffer::WebGpuBuffer>(args.destination_rid)?;
 
     gfx_ok!(command_encoder => instance.command_encoder_fill_buffer(
       command_encoder,
