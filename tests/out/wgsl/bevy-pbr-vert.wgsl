@@ -35,21 +35,22 @@ fn main_1() {
 
     let _e12 = global_1.Model;
     let _e13 = Vertex_Position_1;
-    world_position = (_e12 * vec4<f32>(_e13, 1.0));
-    let _e18 = world_position;
-    v_WorldPosition = _e18.xyz;
-    let _e20 = global_1.Model;
-    let _e30 = Vertex_Normal_1;
-    v_WorldNormal = (mat3x3<f32>(_e20[0].xyz, _e20[1].xyz, _e20[2].xyz) * _e30);
-    let _e32 = Vertex_Uv_1;
-    v_Uv = _e32;
-    let _e33 = global_1.Model;
-    let _e43 = Vertex_Tangent_1;
+    world_position = (_e12 * vec4<f32>(_e13.x, _e13.y, _e13.z, 1.0));
+    let _e21 = world_position;
+    v_WorldPosition = _e21.xyz;
+    let _e23 = global_1.Model;
+    let _e33 = Vertex_Normal_1;
+    v_WorldNormal = (mat3x3<f32>(_e23[0].xyz, _e23[1].xyz, _e23[2].xyz) * _e33);
+    let _e35 = Vertex_Uv_1;
+    v_Uv = _e35;
+    let _e36 = global_1.Model;
     let _e46 = Vertex_Tangent_1;
-    v_WorldTangent = vec4<f32>((mat3x3<f32>(_e33[0].xyz, _e33[1].xyz, _e33[2].xyz) * _e43.xyz), _e46.w);
-    let _e50 = global.ViewProj;
-    let _e51 = world_position;
-    gl_Position = (_e50 * _e51);
+    let _e48 = (mat3x3<f32>(_e36[0].xyz, _e36[1].xyz, _e36[2].xyz) * _e46.xyz);
+    let _e49 = Vertex_Tangent_1;
+    v_WorldTangent = vec4<f32>(_e48.x, _e48.y, _e48.z, _e49.w);
+    let _e56 = global.ViewProj;
+    let _e57 = world_position;
+    gl_Position = (_e56 * _e57);
     return;
 }
 

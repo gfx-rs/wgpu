@@ -12,7 +12,8 @@ fn main_1() {
     let _e4 = a_uv_1;
     v_uv = _e4;
     let _e6 = a_pos_1;
-    gl_Position = vec4<f32>((1.2000000476837158 * _e6), 0.0, 1.0);
+    let _e7 = (1.2000000476837158 * _e6);
+    gl_Position = vec4<f32>(_e7.x, _e7.y, 0.0, 1.0);
     return;
 }
 

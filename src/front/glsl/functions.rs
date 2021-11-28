@@ -115,7 +115,20 @@ impl Parser {
             TypeInner::Vector { size, kind, width } if vector_size.is_none() => {
                 ctx.implicit_conversion(self, &mut value, meta, kind, width)?;
 
-                ctx.add_expression(Expression::Splat { size, value }, meta, body)
+                if let TypeInner::Scalar { .. } = *self.resolve_type(ctx, value, expr_meta)? {
+                    ctx.add_expression(Expression::Splat { size, value }, meta, body)
+                } else {
+                    self.vector_constructor(
+                        ctx,
+                        body,
+                        ty,
+                        size,
+                        kind,
+                        width,
+                        &[(value, expr_meta)],
+                        meta,
+                    )?
+                }
             }
             TypeInner::Scalar { kind, width } => {
                 let mut expr = value;
@@ -393,6 +406,68 @@ impl Parser {
         Ok(ctx.add_expression(Expression::Compose { ty, components }, meta, body))
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn vector_constructor(
+        &mut self,
+        ctx: &mut Context,
+        body: &mut Block,
+        ty: Handle<Type>,
+        size: crate::VectorSize,
+        kind: ScalarKind,
+        width: crate::Bytes,
+        args: &[(Handle<Expression>, Span)],
+        meta: Span,
+    ) -> Result<Handle<Expression>> {
+        let mut components = Vec::with_capacity(size as usize);
+
+        for (mut arg, expr_meta) in args.iter().copied() {
+            ctx.implicit_conversion(self, &mut arg, expr_meta, kind, width)?;
+
+            if components.len() >= size as usize {
+                break;
+            }
+
+            match *self.resolve_type(ctx, arg, expr_meta)? {
+                TypeInner::Scalar { .. } => components.push(arg),
+                TypeInner::Matrix { rows, columns, .. } => {
+                    components.reserve(rows as usize * columns as usize);
+                    for c in 0..(columns as u32) {
+                        let base = ctx.add_expression(
+                            Expression::AccessIndex {
+                                base: arg,
+                                index: c,
+                            },
+                            expr_meta,
+                            body,
+                        );
+                        for r in 0..(rows as u32) {
+                            components.push(ctx.add_expression(
+                                Expression::AccessIndex { base, index: r },
+                                expr_meta,
+                                body,
+                            ))
+                        }
+                    }
+                }
+                TypeInner::Vector { size: ori_size, .. } => {
+                    components.reserve(ori_size as usize);
+                    for index in 0..(ori_size as u32) {
+                        components.push(ctx.add_expression(
+                            Expression::AccessIndex { base: arg, index },
+                            expr_meta,
+                            body,
+                        ))
+                    }
+                }
+                _ => components.push(arg),
+            }
+        }
+
+        components.truncate(size as usize);
+
+        Ok(ctx.add_expression(Expression::Compose { ty, components }, meta, body))
+    }
+
     fn constructor_many(
         &mut self,
         ctx: &mut Context,
@@ -457,15 +532,14 @@ impl Parser {
                     ))
                 }
             }
+            TypeInner::Vector { size, kind, width } => {
+                return self.vector_constructor(ctx, body, ty, size, kind, width, &args, meta)
+            }
             _ => {
-                for (mut arg, meta) in args.iter().copied() {
-                    let scalar_components = scalar_components(&self.module.types[ty].inner);
-                    if let Some((kind, width)) = scalar_components {
-                        ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
-                    }
-
-                    components.push(arg)
-                }
+                return Err(Error {
+                    kind: ErrorKind::SemanticError("Constructor: Too many arguments".into()),
+                    meta,
+                })
             }
         }
 

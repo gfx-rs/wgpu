@@ -37,11 +37,11 @@ fn main_1() {
     v_Uv = _e10;
     let _e11 = Vertex_Position_1;
     let _e12 = global_2.size;
-    position = (_e11 * vec3<f32>(_e12, 1.0));
-    let _e18 = global.ViewProj;
-    let _e19 = global_1.Model;
-    let _e21 = position;
-    gl_Position = ((_e18 * _e19) * vec4<f32>(_e21, 1.0));
+    position = (_e11 * vec3<f32>(_e12.x, _e12.y, 1.0));
+    let _e20 = global.ViewProj;
+    let _e21 = global_1.Model;
+    let _e23 = position;
+    gl_Position = ((_e20 * _e21) * vec4<f32>(_e23.x, _e23.y, _e23.z, 1.0));
     return;
 }
 
