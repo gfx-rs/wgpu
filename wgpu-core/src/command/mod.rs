@@ -9,6 +9,7 @@ mod render;
 mod transfer;
 
 pub use self::bundle::*;
+pub use self::clear::ClearError;
 pub(crate) use self::clear::collect_zero_buffer_copies_for_clear_texture;
 pub use self::compute::*;
 pub use self::draw::*;
