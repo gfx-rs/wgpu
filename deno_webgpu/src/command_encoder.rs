@@ -431,6 +431,37 @@ pub fn op_webgpu_command_encoder_copy_texture_to_texture(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CommandEncoderFillBufferArgs {
+    command_encoder_rid: u32,
+    destination_rid: u32,
+    destination_offset: u64,
+    size: u64,
+}
+
+pub fn op_webgpu_command_encoder_fill_buffer(
+    state: &mut OpState,
+    args: CommandEncoderFillBufferArgs,
+    _: (),
+) -> Result<WebGpuResult, AnyError> {
+    let instance = state.borrow::<super::Instance>();
+    let command_encoder_resource = state
+      .resource_table
+      .get::<WebGpuCommandEncoder>(args.command_encoder_rid)?;
+    let command_encoder = command_encoder_resource.0;
+    let destination_resource = state
+      .resource_table
+      .get::<super::buffer::WebGpuBuffer>(args.destination_rid)?;
+
+    gfx_ok!(command_encoder => instance.command_encoder_fill_buffer(
+      command_encoder,
+      destination_resource.0,
+      args.destination_offset,
+      Some(args.size)
+    ))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommandEncoderPushDebugGroupArgs {
     command_encoder_rid: ResourceId,
     group_label: String,

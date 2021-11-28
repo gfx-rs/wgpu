@@ -82,7 +82,7 @@ dictionary GPUDeviceDescriptor : GPUObjectDescriptorBase {
 };
 
 enum GPUFeatureName {
-    "depth-clamping",
+    "depth-clip-control",
     "depth24unorm-stencil8",
     "depth32float-stencil8",
     "pipeline-statistics-query",
@@ -90,6 +90,7 @@ enum GPUFeatureName {
     "texture-compression-etc2",
     "texture-compression-astc",
     "timestamp-query",
+    "indirect-first-instance",
 };
 
 [Exposed=(Window, DedicatedWorker), SecureContext]
@@ -577,8 +578,8 @@ dictionary GPUPrimitiveState {
     GPUFrontFace frontFace = "ccw";
     GPUCullMode cullMode = "none";
 
-    // Enable depth clamping (requires "depth-clamping" feature)
-    boolean clampDepth = false;
+    // Requires "depth-clip-control" feature.
+    boolean unclippedDepth = false;
 };
 
 enum GPUFrontFace {
@@ -783,6 +784,11 @@ interface GPUCommandEncoder {
         GPUImageCopyTexture source,
         GPUImageCopyTexture destination,
         GPUExtent3D copySize);
+
+    undefined fillBuffer(
+        GPUBuffer destination,
+        GPUSize64 destinationOffset,
+        GPUSize64 size);
 
     undefined pushDebugGroup(USVString groupLabel);
     undefined popDebugGroup();

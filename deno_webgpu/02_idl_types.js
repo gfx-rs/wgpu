@@ -1176,7 +1176,7 @@
       defaultValue: "none",
     },
     {
-      key: "clampDepth",
+      key: "unclippedDepth",
       converter: webidl.converters["boolean"],
       defaultValue: false,
     },

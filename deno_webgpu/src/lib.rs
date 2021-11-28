@@ -593,6 +593,10 @@ fn declare_webgpu_ops() -> Vec<(&'static str, Box<OpFn>)> {
             op_sync(command_encoder::op_webgpu_command_encoder_copy_texture_to_texture),
         ),
         (
+            "op_webgpu_command_encoder_fill_buffer",
+            op_sync(command_encoder::op_webgpu_command_encoder_fill_buffer),
+        ),
+        (
             "op_webgpu_command_encoder_push_debug_group",
             op_sync(command_encoder::op_webgpu_command_encoder_push_debug_group),
         ),
