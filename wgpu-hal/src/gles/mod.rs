@@ -56,9 +56,9 @@ To address this, we invalidate the vertex buffers based on:
 
 */
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 mod egl;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 mod web;
 
 mod adapter;
@@ -67,10 +67,10 @@ mod conv;
 mod device;
 mod queue;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 use self::egl::{AdapterContext, Instance, Surface};
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 use self::web::{AdapterContext, Instance, Surface};
 
 use arrayvec::ArrayVec;

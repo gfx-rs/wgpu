@@ -84,13 +84,13 @@ replay = ["serde", "wgc/replay"]
 angle = ["wgc/angle"]
 webgl = ["wgc"]
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
+[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
 version = "0.11"
 features = ["raw-window-handle"]
 
-[target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
 version = "0.11"
@@ -102,7 +102,7 @@ package = "wgpu-types"
 path = "../wgpu-types"
 version = "0.11"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.hal]
+[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
 version = "0.11"
@@ -127,9 +127,11 @@ noise = { version = "0.7", default-features = false }
 obj = "0.10"
 png = "0.16"
 rand = "0.7.2"
+
+[target.'cfg(not(target_os = "emscripten"))'.dev-dependencies]
 winit = "0.26"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dev-dependencies]
 async-executor = "1.0"
 pollster = "0.2"
 env_logger = "0.8"
@@ -153,7 +155,7 @@ rev = "c69f676"
 #version = "0.7"
 features = ["wgsl-out"]
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = "0.2.76" # remember to change version in wiki as well
 web-sys = { version = "0.3.53", features = [
     "Document",
@@ -284,7 +286,7 @@ wasm-bindgen-futures = "0.4.23"
 # enable parking_lot's wasm-bindgen feature so that it, in turn, enables that of crate `instant`
 parking_lot = { version = "0.11", features = ["wasm-bindgen"] }
 
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dev-dependencies]
 console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 # We need the Location feature in the framework examples

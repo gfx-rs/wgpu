@@ -94,6 +94,14 @@ jobs:
             tool: clippy
             kind: web
 
+          # Emscripten WebGL
+          - name: WebAssembly emscripten
+            os: ubuntu-20.04
+            channel: stable
+            target: wasm32-unknown-emscripten
+            tool: clippy
+            kind: webgl-em
+
     name: Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
@@ -163,6 +171,15 @@ jobs:
 
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
+
+      - name: check web-em
+        if: matrix.kind == 'webgl-em'
+        run: |
+          # check with no features
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core
+
+          # build docs
+          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core --no-deps
 
       - name: check native
         if: matrix.kind == 'local' || matrix.kind == 'other'

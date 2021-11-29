@@ -1096,6 +1096,8 @@ impl crate::Device<super::Api> for super::Device {
         #[cfg_attr(target_arch = "wasm32", allow(clippy::needless_borrow))]
         Ok(fence.get_latest(&self.shared.context.lock()))
     }
+
+    #[cfg_attr(target_os = "emscripten", allow(unreachable_code, unused_variables))]
     unsafe fn wait(
         &self,
         fence: &super::Fence,
@@ -1114,6 +1116,12 @@ impl crate::Device<super::Api> for super::Device {
                 .iter()
                 .find(|&&(value, _)| value >= wait_value)
                 .unwrap();
+
+            // for some reason signature of glow's client_wait_sync didn't match to emscripten's client_wait_sync
+            // however it should be noop in emscripten
+            #[cfg(target_os = "emscripten")]
+            return Ok(true);
+
             match gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32) {
                 // for some reason firefox returns WAIT_FAILED, to investigate
                 #[cfg(target_arch = "wasm32")]

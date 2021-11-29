@@ -10,10 +10,15 @@ const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
 const EGL_CONTEXT_FLAGS_KHR: i32 = 0x30FC;
 const EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR: i32 = 0x0001;
 const EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT: i32 = 0x30BF;
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 const EGL_PLATFORM_WAYLAND_KHR: u32 = 0x31D8;
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 const EGL_PLATFORM_ANGLE_ANGLE: u32 = 0x3202;
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 const EGL_PLATFORM_ANGLE_NATIVE_PLATFORM_TYPE_ANGLE: u32 = 0x348F;
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 const EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED: u32 = 0x3451;
 const EGL_GL_COLORSPACE_KHR: u32 = 0x309D;
 const EGL_GL_COLORSPACE_SRGB_KHR: u32 = 0x3089;
@@ -26,12 +31,20 @@ type WlDisplayConnectFun =
 
 type WlDisplayDisconnectFun = unsafe extern "system" fn(display: *const raw::c_void);
 
+#[cfg(not(target_os = "emscripten"))]
+type EglInstance = egl::DynamicInstance<egl::EGL1_4>;
+
+#[cfg(target_os = "emscripten")]
+type EglInstance = egl::Instance<egl::Static>;
+
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 type WlEglWindowCreateFun = unsafe extern "system" fn(
     surface: *const raw::c_void,
     width: raw::c_int,
     height: raw::c_int,
 ) -> *mut raw::c_void;
 
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 type WlEglWindowResizeFun = unsafe extern "system" fn(
     window: *const raw::c_void,
     width: raw::c_int,
@@ -144,7 +157,7 @@ enum SrgbFrameBufferKind {
 
 /// Choose GLES framebuffer configuration.
 fn choose_config(
-    egl: &egl::DynamicInstance<egl::EGL1_4>,
+    egl: &EglInstance,
     display: egl::Display,
     srgb_kind: SrgbFrameBufferKind,
 ) -> Result<(egl::Config, bool), crate::InstanceError> {
@@ -255,7 +268,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
 /// exclusive access when shared with multiple threads.
 pub struct AdapterContext {
     glow_context: Mutex<glow::Context>,
-    egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
+    egl: Arc<EglInstance>,
     egl_display: egl::Display,
     pub(super) egl_context: egl::Context,
     egl_pbuffer: Option<egl::Surface>,
@@ -267,7 +280,7 @@ unsafe impl Send for AdapterContext {}
 /// A guard containing a lock to an [`AdapterContext`]
 pub struct AdapterContextLock<'a> {
     glow_context: MutexGuard<'a, glow::Context>,
-    egl: &'a Arc<egl::DynamicInstance<egl::EGL1_4>>,
+    egl: &'a Arc<EglInstance>,
     egl_display: egl::Display,
 }
 
@@ -337,7 +350,7 @@ impl AdapterContext {
 
 #[derive(Debug)]
 struct Inner {
-    egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
+    egl: Arc<EglInstance>,
     #[allow(unused)]
     version: (i32, i32),
     supports_native_window: bool,
@@ -347,6 +360,7 @@ struct Inner {
     /// Dummy pbuffer (1x1).
     /// Required for `eglMakeCurrent` on platforms that doesn't supports `EGL_KHR_surfaceless_context`.
     pbuffer: Option<egl::Surface>,
+    #[cfg_attr(target_os = "emscripten", allow(dead_code))]
     wl_display: Option<*mut raw::c_void>,
     /// Method by which the framebuffer should support srgb
     srgb_kind: SrgbFrameBufferKind,
@@ -355,7 +369,7 @@ struct Inner {
 impl Inner {
     fn create(
         flags: crate::InstanceFlags,
-        egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
+        egl: Arc<EglInstance>,
         display: egl::Display,
     ) -> Result<Self, crate::InstanceError> {
         let version = egl.initialize(display).map_err(|_| crate::InstanceError)?;
@@ -454,8 +468,12 @@ impl Inner {
             }
         };
 
+        #[cfg(target_os = "emscripten")]
+        let pbuffer = None;
+
         // Testing if context can be binded without surface
         // and creating dummy pbuffer surface if not.
+        #[cfg(not(target_os = "emscripten"))]
         let pbuffer =
             if version >= (1, 5) || display_extensions.contains("EGL_KHR_surfaceless_context") {
                 log::info!("\tEGL context: +surfaceless");
@@ -495,6 +513,7 @@ impl Drop for Inner {
     }
 }
 
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum WindowKind {
     Wayland,
@@ -519,15 +538,13 @@ unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
+    #[cfg_attr(target_os = "emscripten", allow(unused_variables, unused_mut))]
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let egl_result = if cfg!(windows) {
-            egl::DynamicInstance::<egl::EGL1_4>::load_required_from_filename("libEGL.dll")
-        } else if cfg!(any(target_os = "macos", target_os = "ios")) {
-            egl::DynamicInstance::<egl::EGL1_4>::load_required_from_filename("libEGL.dylib")
-        } else {
-            egl::DynamicInstance::<egl::EGL1_4>::load_required()
-        };
-        let egl = match egl_result {
+        #[cfg(target_os = "emscripten")]
+        let egl = Arc::new(egl::Instance::new(egl::Static));
+
+        #[cfg(not(target_os = "emscripten"))]
+        let egl = match egl::DynamicInstance::<egl::EGL1_4>::load_required() {
             Ok(egl) => Arc::new(egl),
             Err(e) => {
                 log::info!("Unable to open libEGL: {:?}", e);
@@ -562,6 +579,13 @@ impl crate::Instance<super::Api> for Instance {
             None
         };
 
+        #[cfg(target_os = "emscripten")]
+        let wsi_library = None;
+
+        #[cfg(target_os = "emscripten")]
+        let wsi_kind = WindowKind::Unknown;
+
+        #[cfg(not(target_os = "emscripten"))]
         let (display, wsi_library, wsi_kind) = if let (Some(library), Some(egl)) =
             (wayland_library, egl.upcast::<egl::EGL1_5>())
         {
@@ -613,6 +637,9 @@ impl crate::Instance<super::Api> for Instance {
             (display, None, WindowKind::Unknown)
         };
 
+        #[cfg(target_os = "emscripten")]
+        let display = egl.get_display(egl::DEFAULT_DISPLAY).unwrap();
+
         if desc.flags.contains(crate::InstanceFlags::VALIDATION)
             && client_ext_str.contains(&"EGL_KHR_debug")
         {
@@ -645,7 +672,10 @@ impl crate::Instance<super::Api> for Instance {
         })
     }
 
-    #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
+    #[cfg_attr(
+        any(target_os = "macos", target_os = "emscripten"),
+        allow(unused, unused_mut, unreachable_code)
+    )]
     unsafe fn create_surface(
         &self,
         has_handle: &impl HasRawWindowHandle,
@@ -676,6 +706,7 @@ impl crate::Instance<super::Api> for Instance {
                     return Err(crate::InstanceError);
                 }
             }
+            #[cfg(not(target_os = "emscripten"))]
             Rwh::Wayland(handle) => {
                 /* Wayland displays are not sharable between surfaces so if the
                  * surface we receive from this handle is from a different
@@ -710,6 +741,8 @@ impl crate::Instance<super::Api> for Instance {
                     drop(old_inner);
                 }
             }
+            #[cfg(target_os = "emscripten")]
+            Rwh::Web(_) => {}
             other => {
                 log::error!("Unsupported window: {:?}", other);
                 return Err(crate::InstanceError);
@@ -801,7 +834,7 @@ pub struct Swapchain {
 
 #[derive(Debug)]
 pub struct Surface {
-    egl: Arc<egl::DynamicInstance<egl::EGL1_4>>,
+    egl: Arc<EglInstance>,
     wsi: WindowSystemInterface,
     config: egl::Config,
     display: egl::Display,
@@ -946,6 +979,8 @@ impl crate::Surface<super::Api> for Surface {
                         wl_window = Some(window);
                         window
                     }
+                    #[cfg(target_os = "emscripten")]
+                    (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut std::ffi::c_void,
                     (WindowKind::Unknown, Rwh::Win32(handle)) => handle.hwnd,
                     (WindowKind::Unknown, Rwh::AppKit(handle)) => handle.ns_view,
                     _ => {
@@ -986,26 +1021,34 @@ impl crate::Surface<super::Api> for Surface {
                 attributes.push(egl::ATTRIB_NONE as i32);
 
                 // Careful, we can still be in 1.4 version even if `upcast` succeeds
-                let raw_result = match self.egl.upcast::<egl::EGL1_5>() {
-                    Some(egl) if self.wsi.kind != WindowKind::Unknown => {
-                        let attributes_usize = attributes
-                            .into_iter()
-                            .map(|v| v as usize)
-                            .collect::<Vec<_>>();
-                        egl.create_platform_window_surface(
-                            self.display,
-                            self.config,
-                            native_window_ptr,
-                            &attributes_usize,
-                        )
-                    }
-                    _ => self.egl.create_window_surface(
+                #[cfg(not(target_os = "emscripten"))]
+                let raw_result = if let Some(egl) = self.egl.upcast::<egl::EGL1_5>() {
+                    let attributes_usize = attributes
+                        .into_iter()
+                        .map(|v| v as usize)
+                        .collect::<Vec<_>>();
+                    egl.create_platform_window_surface(
+                        self.display,
+                        self.config,
+                        native_window_ptr,
+                        &attributes_usize,
+                    )
+                } else {
+                    self.egl.create_window_surface(
                         self.display,
                         self.config,
                         native_window_ptr,
                         Some(&attributes),
-                    ),
+                    )
                 };
+
+                #[cfg(target_os = "emscripten")]
+                let raw_result = self.egl.create_window_surface(
+                    self.display,
+                    self.config,
+                    native_window_ptr,
+                    Some(&attributes),
+                );
 
                 match raw_result {
                     Ok(raw) => (raw, wl_window),

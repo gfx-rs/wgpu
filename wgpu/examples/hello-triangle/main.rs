@@ -1,11 +1,40 @@
+#[cfg(target_os = "emscripten")]
+use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::borrow::Cow;
+#[cfg(not(target_os = "emscripten"))]
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
 
-async fn run(event_loop: EventLoop<()>, window: Window) {
+#[cfg(target_os = "emscripten")]
+struct Window {}
+
+#[cfg(target_os = "emscripten")]
+struct Size {
+    width: u32,
+    height: u32,
+}
+
+#[cfg(target_os = "emscripten")]
+impl Window {
+    fn inner_size(self: &Window) -> Size {
+        Size {
+            width: 640,
+            height: 400,
+        }
+    }
+}
+
+#[cfg(target_os = "emscripten")]
+unsafe impl HasRawWindowHandle for Window {
+    fn raw_window_handle(&self) -> RawWindowHandle {
+        RawWindowHandle::Web(raw_window_handle::WebHandle::empty())
+    }
+}
+
+async fn run(#[cfg(not(target_os = "emscripten"))] event_loop: EventLoop<()>, window: Window) {
     let size = window.inner_size();
     let instance = wgpu::Instance::new(wgpu::Backends::all());
     let surface = unsafe { instance.create_surface(&window) };
@@ -67,6 +96,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         multiview: None,
     });
 
+    #[cfg_attr(target_os = "emscripten", allow(unused_mut))]
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: swapchain_format,
@@ -77,6 +107,45 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     surface.configure(&device, &config);
 
+    fn redraw(
+        surface: &wgpu::Surface,
+        device: &wgpu::Device,
+        render_pipeline: &wgpu::RenderPipeline,
+        queue: &wgpu::Queue,
+    ) {
+        let frame = surface
+            .get_current_texture()
+            .expect("Failed to acquire next swap chain texture");
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                        store: true,
+                    },
+                }],
+                depth_stencil_attachment: None,
+            });
+            rpass.set_pipeline(render_pipeline);
+            rpass.draw(0..3, 0..1);
+        }
+
+        queue.submit(Some(encoder.finish()));
+        frame.present();
+    }
+
+    #[cfg(target_os = "emscripten")]
+    redraw(&surface, &device, &render_pipeline, &queue);
+
+    #[cfg(not(target_os = "emscripten"))]
     event_loop.run(move |event, _, control_flow| {
         // Have the closure take ownership of the resources.
         // `event_loop.run` never returns, therefore we must do this to ensure
@@ -94,35 +163,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 config.height = size.height;
                 surface.configure(&device, &config);
             }
-            Event::RedrawRequested(_) => {
-                let frame = surface
-                    .get_current_texture()
-                    .expect("Failed to acquire next swap chain texture");
-                let view = frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-                let mut encoder =
-                    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-                {
-                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: None,
-                        color_attachments: &[wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                                store: true,
-                            },
-                        }],
-                        depth_stencil_attachment: None,
-                    });
-                    rpass.set_pipeline(&render_pipeline);
-                    rpass.draw(0..3, 0..1);
-                }
-
-                queue.submit(Some(encoder.finish()));
-                frame.present();
-            }
+            Event::RedrawRequested(_) => redraw(&surface, &device, &render_pipeline, &queue),
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
@@ -133,16 +174,18 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 }
 
 fn main() {
-    let event_loop = EventLoop::new();
-    let window = winit::window::Window::new(&event_loop).unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
+        let event_loop = EventLoop::new();
+        let window = winit::window::Window::new(&event_loop).unwrap();
         env_logger::init();
         // Temporarily avoid srgb formats for the swapchain on the web
         pollster::block_on(run(event_loop, window));
     }
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     {
+        let event_loop = EventLoop::new();
+        let window = winit::window::Window::new(&event_loop).unwrap();
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init().expect("could not initialize logger");
         use winit::platform::web::WindowExtWebSys;
@@ -156,5 +199,22 @@ fn main() {
             })
             .expect("couldn't append canvas to document body");
         wasm_bindgen_futures::spawn_local(run(event_loop, window));
+    }
+    #[cfg(target_os = "emscripten")]
+    {
+        use env_logger::Builder;
+        use log::LevelFilter;
+
+        let window = Window {};
+        Builder::new()
+            .format(|_buf, record| {
+                let message = format!("{}: {}", record.level(), record.args());
+                println!("{}", &message);
+                Ok(())
+            })
+            .filter(None, LevelFilter::Info)
+            .init();
+
+        pollster::block_on(run(window));
     }
 }
