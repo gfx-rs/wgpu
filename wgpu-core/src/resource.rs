@@ -235,8 +235,6 @@ pub enum TextureDimensionError {
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("D24Plus textures cannot be copied")]
-    CannotCopyD24Plus,
     #[error("Textures cannot have empty usage flags")]
     EmptyUsage,
     #[error(transparent)]

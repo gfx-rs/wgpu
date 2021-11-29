@@ -597,19 +597,6 @@ impl<A: HalApi> Device<A> {
             .describe_format_features(adapter, desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
 
-        // Ensure `D24Plus` textures cannot be copied
-        match desc.format {
-            TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
-                if desc
-                    .usage
-                    .intersects(wgt::TextureUsages::COPY_SRC | wgt::TextureUsages::COPY_DST)
-                {
-                    return Err(resource::CreateTextureError::CannotCopyD24Plus);
-                }
-            }
-            _ => {}
-        }
-
         if desc.usage.is_empty() {
             return Err(resource::CreateTextureError::EmptyUsage);
         }

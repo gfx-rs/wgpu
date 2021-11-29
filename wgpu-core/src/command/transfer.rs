@@ -91,6 +91,8 @@ pub enum TransferError {
     CopyFromForbiddenTextureFormat(wgt::TextureFormat),
     #[error("copying to textures with format {0:?} is forbidden")]
     CopyToForbiddenTextureFormat(wgt::TextureFormat),
+    #[error("the entire texture must be copied when copiying from depth texture")]
+    InvalidDepthTextureExtent,
 }
 
 impl PrettyError for TransferError {
@@ -290,6 +292,17 @@ pub(crate) fn validate_texture_copy_range(
     )?;
     // physical size can be larger than the virtual
     let extent = extent_virtual.physical_size(desc.format);
+
+    match desc.format {
+        wgt::TextureFormat::Depth32Float
+        | wgt::TextureFormat::Depth24Plus
+        | wgt::TextureFormat::Depth24PlusStencil8 => {
+            if *copy_size != extent {
+                return Err(TransferError::InvalidDepthTextureExtent);
+            }
+        }
+        _ => {}
+    }
 
     let x_copy_max = texture_copy_view.origin.x + copy_size.width;
     if x_copy_max > extent.width {
