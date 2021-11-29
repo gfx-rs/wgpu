@@ -3,7 +3,7 @@ use super::conv;
 use ash::{extensions::khr, vk};
 use parking_lot::Mutex;
 
-use std::{ffi::CStr, mem, ptr, sync::Arc};
+use std::{ffi::CStr, sync::Arc};
 
 //TODO: const fn?
 fn indexing_features() -> wgt::Features {
@@ -657,29 +657,28 @@ impl super::InstanceShared {
             capabilities.properties = if let Some(ref get_device_properties) =
                 self.get_physical_device_properties
             {
+                // Get this now to avoid borrowing conflicts later
+                let supports_descriptor_indexing =
+                    capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
+
                 let core = vk::PhysicalDeviceProperties::builder().build();
-                let mut properites2 = vk::PhysicalDeviceProperties2::builder()
-                    .properties(core)
-                    .build();
+                let mut builder = vk::PhysicalDeviceProperties2::builder().properties(core);
 
                 if capabilities.properties.api_version >= vk::API_VERSION_1_2 {
-                    capabilities.vulkan_1_2 =
-                        Some(vk::PhysicalDeviceVulkan12Properties::builder().build());
-
-                    let mut_ref = capabilities.vulkan_1_2.as_mut().unwrap();
-                    mut_ref.p_next =
-                        mem::replace(&mut properites2.p_next, mut_ref as *mut _ as *mut _);
+                    let next = capabilities
+                        .vulkan_1_2
+                        .insert(vk::PhysicalDeviceVulkan12Properties::builder().build());
+                    builder = builder.push_next(next);
                 }
 
-                if capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name()) {
-                    capabilities.descriptor_indexing =
-                        Some(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::builder().build());
-
-                    let mut_ref = capabilities.descriptor_indexing.as_mut().unwrap();
-                    mut_ref.p_next =
-                        mem::replace(&mut properites2.p_next, mut_ref as *mut _ as *mut _);
+                if supports_descriptor_indexing {
+                    let next = capabilities.descriptor_indexing.insert(
+                        vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::builder().build(),
+                    );
+                    builder = builder.push_next(next);
                 }
 
+                let mut properites2 = builder.build();
                 unsafe {
                     get_device_properties.get_physical_device_properties2(phd, &mut properites2);
                 }
@@ -695,58 +694,52 @@ impl super::InstanceShared {
         features.core = if let Some(ref get_device_properties) = self.get_physical_device_properties
         {
             let core = vk::PhysicalDeviceFeatures::builder().build();
-            let mut features2 = vk::PhysicalDeviceFeatures2KHR::builder()
-                .features(core)
-                .build();
+            let mut builder = vk::PhysicalDeviceFeatures2KHR::builder().features(core);
 
             if capabilities.properties.api_version >= vk::API_VERSION_1_2 {
-                features.vulkan_1_2 = Some(vk::PhysicalDeviceVulkan12Features::builder().build());
-
-                let mut_ref = features.vulkan_1_2.as_mut().unwrap();
-                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+                let next = features
+                    .vulkan_1_2
+                    .insert(vk::PhysicalDeviceVulkan12Features::builder().build());
+                builder = builder.push_next(next);
             }
 
             if capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name()) {
-                features.descriptor_indexing =
-                    Some(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
-
-                let mut_ref = features.descriptor_indexing.as_mut().unwrap();
-                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+                let next = features
+                    .descriptor_indexing
+                    .insert(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
+                builder = builder.push_next(next);
             }
 
             // `VK_KHR_imageless_framebuffer` is promoted to 1.2, but has no changes, so we can keep using the extension unconditionally.
             if capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
-                features.imageless_framebuffer =
-                    Some(vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder().build());
-
-                let mut_ref = features.imageless_framebuffer.as_mut().unwrap();
-                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+                let next = features
+                    .imageless_framebuffer
+                    .insert(vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder().build());
+                builder = builder.push_next(next);
             }
 
             // `VK_KHR_timeline_semaphore` is promoted to 1.2, but has no changes, so we can keep using the extension unconditionally.
             if capabilities.supports_extension(vk::KhrTimelineSemaphoreFn::name()) {
-                features.timeline_semaphore =
-                    Some(vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder().build());
-
-                let mut_ref = features.timeline_semaphore.as_mut().unwrap();
-                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+                let next = features
+                    .timeline_semaphore
+                    .insert(vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder().build());
+                builder = builder.push_next(next);
             }
 
             if capabilities.supports_extension(vk::ExtImageRobustnessFn::name()) {
-                features.image_robustness =
-                    Some(vk::PhysicalDeviceImageRobustnessFeaturesEXT::builder().build());
-
-                let mut_ref = features.image_robustness.as_mut().unwrap();
-                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+                let next = features
+                    .image_robustness
+                    .insert(vk::PhysicalDeviceImageRobustnessFeaturesEXT::builder().build());
+                builder = builder.push_next(next);
             }
             if capabilities.supports_extension(vk::ExtRobustness2Fn::name()) {
-                features.robustness2 =
-                    Some(vk::PhysicalDeviceRobustness2FeaturesEXT::builder().build());
-
-                let mut_ref = features.robustness2.as_mut().unwrap();
-                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+                let next = features
+                    .robustness2
+                    .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::builder().build());
+                builder = builder.push_next(next);
             }
 
+            let mut features2 = builder.build();
             unsafe {
                 get_device_properties.get_physical_device_features2(phd, &mut features2);
             }
@@ -754,24 +747,6 @@ impl super::InstanceShared {
         } else {
             unsafe { self.raw.get_physical_device_features(phd) }
         };
-
-        /// # Safety
-        /// `T` must be a struct bigger than `vk::BaseOutStructure`.
-        unsafe fn null_p_next<T>(features: &mut Option<T>) {
-            if let Some(ref mut features) = *features {
-                // This is technically invalid since `vk::BaseOutStructure` and `T` will probably never have the same size.
-                (*(features as *mut T as *mut vk::BaseOutStructure)).p_next = ptr::null_mut();
-            }
-        }
-
-        unsafe {
-            null_p_next(&mut features.vulkan_1_2);
-            null_p_next(&mut features.descriptor_indexing);
-            null_p_next(&mut features.imageless_framebuffer);
-            null_p_next(&mut features.timeline_semaphore);
-            null_p_next(&mut features.image_robustness);
-            null_p_next(&mut features.robustness2);
-        }
 
         (capabilities, features)
     }
