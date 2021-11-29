@@ -84,7 +84,7 @@ struct InstanceShared {
     drop_guard: Option<DropGuard>,
     flags: crate::InstanceFlags,
     debug_utils: Option<DebugUtils>,
-    get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
+    get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
     entry: ash::Entry,
     has_nv_optimus: bool,
 }
