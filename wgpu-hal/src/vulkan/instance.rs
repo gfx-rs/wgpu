@@ -590,6 +590,8 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
+        use crate::auxil::db;
+
         let raw_devices = match self.shared.raw.enumerate_physical_devices() {
             Ok(devices) => devices,
             Err(err) => {
@@ -604,8 +606,11 @@ impl crate::Instance<super::Api> for super::Instance {
             .collect::<Vec<_>>();
 
         // Detect if it's an Intel + NVidia configuration with Optimus
-        if cfg!(target_os = "linux") && self.shared.has_nv_optimus {
-            use crate::auxil::db;
+        let has_nvidia_dgpu = exposed_adapters.iter().any(|exposed| {
+            exposed.info.device_type == wgt::DeviceType::DiscreteGpu
+                && exposed.info.vendor == db::nvidia::VENDOR as usize
+        });
+        if cfg!(target_os = "linux") && has_nvidia_dgpu && self.shared.has_nv_optimus {
             for exposed in exposed_adapters.iter_mut() {
                 if exposed.info.device_type == wgt::DeviceType::IntegratedGpu
                     && exposed.info.vendor == db::intel::VENDOR as usize
