@@ -751,8 +751,7 @@ impl super::InstanceShared {
                 }
 
                 unsafe {
-                    get_device_properties
-                        .get_physical_device_properties2_khr(phd, &mut properites2);
+                    get_device_properties.get_physical_device_properties2(phd, &mut properites2);
                 }
                 properites2.properties
             } else {
@@ -833,7 +832,7 @@ impl super::InstanceShared {
             }
 
             unsafe {
-                get_device_properties.get_physical_device_features2_khr(phd, &mut features2);
+                get_device_properties.get_physical_device_features2(phd, &mut features2);
             }
             features2.features
         } else {
