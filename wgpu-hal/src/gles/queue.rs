@@ -1012,7 +1012,7 @@ impl super::Queue {
                 gl.bind_buffer_range(target, slot, Some(buffer), offset, size);
             }
             C::BindSampler(texture_index, sampler) => {
-                gl.bind_sampler(texture_index, Some(sampler));
+                gl.bind_sampler(texture_index, sampler);
             }
             C::BindTexture {
                 slot,
