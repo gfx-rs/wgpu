@@ -119,16 +119,17 @@ impl super::CommandEncoder {
 
     fn rebind_sampler_states(&mut self, dirty_textures: u32, dirty_samplers: u32) {
         for (texture_index, slot) in self.state.texture_slots.iter().enumerate() {
-            if let Some(sampler_index) = slot.sampler_index {
-                if dirty_textures & (1 << texture_index) != 0
-                    || dirty_samplers & (1 << sampler_index) != 0
-                {
-                    if let Some(sampler) = self.state.samplers[sampler_index as usize] {
-                        self.cmd_buffer
-                            .commands
-                            .push(C::BindSampler(texture_index as u32, sampler));
-                    }
-                }
+            if dirty_textures & (1 << texture_index) != 0
+                || slot
+                    .sampler_index
+                    .map_or(false, |si| dirty_samplers & (1 << si) != 0)
+            {
+                let sampler = slot
+                    .sampler_index
+                    .and_then(|si| self.state.samplers[si as usize]);
+                self.cmd_buffer
+                    .commands
+                    .push(C::BindSampler(texture_index as u32, sampler));
             }
         }
     }

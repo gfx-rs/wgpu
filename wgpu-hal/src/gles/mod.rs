@@ -679,7 +679,7 @@ enum Command {
         offset: i32,
         size: i32,
     },
-    BindSampler(u32, glow::Sampler),
+    BindSampler(u32, Option<glow::Sampler>),
     BindTexture {
         slot: u32,
         texture: glow::Texture,
