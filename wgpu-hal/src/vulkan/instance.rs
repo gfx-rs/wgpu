@@ -1,7 +1,7 @@
 use std::{
     cmp,
     ffi::{c_void, CStr, CString},
-    mem, slice,
+    slice,
     sync::Arc,
     thread,
 };
@@ -207,16 +207,15 @@ impl super::Instance {
             None
         };
 
-        let get_physical_device_properties = extensions
-            .iter()
-            .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
-            .map(|_| {
-                vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| {
-                    mem::transmute(
-                        entry.get_instance_proc_addr(raw_instance.handle(), name.as_ptr()),
-                    )
-                })
-            });
+        let get_physical_device_properties =
+            if extensions.contains(&khr::GetPhysicalDeviceProperties2::name()) {
+                Some(khr::GetPhysicalDeviceProperties2::new(
+                    &entry,
+                    &raw_instance,
+                ))
+            } else {
+                None
+            };
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
