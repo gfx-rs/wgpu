@@ -505,6 +505,9 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::KhrMaintenance1Fn::name());
             extensions.push(vk::KhrMaintenance2Fn::name());
 
+            // `VK_KHR_storage_buffer_storage_class` required for Naga on Vulkan 1.0 devices
+            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+
             // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside `VK_KHR_maintenance1` or a 1.1+ device.
             if !self.supports_extension(vk::KhrMaintenance1Fn::name()) {
                 extensions.push(vk::AmdNegativeViewportHeightFn::name());
@@ -818,9 +821,18 @@ impl super::Instance {
             workarounds |= super::Workarounds::SEPARATE_ENTRY_POINTS;
         };
 
+        if phd_capabilities.properties.api_version == vk::API_VERSION_1_0
+            && !phd_capabilities.supports_extension(vk::KhrStorageBufferStorageClassFn::name())
+        {
+            log::warn!(
+                "SPIR-V storage buffer class is not supported, hiding adapter: {}",
+                info.name
+            );
+            return None;
+        }
         if phd_features.core.sample_rate_shading == 0 {
-            log::error!(
-                "sample_rate_shading feature is not supported, hiding the adapter: {}",
+            log::warn!(
+                "sample_rate_shading feature is not supported, hiding adapter: {}",
                 info.name
             );
             return None;
@@ -829,8 +841,8 @@ impl super::Instance {
             && !phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name())
             && phd_capabilities.properties.api_version < vk::API_VERSION_1_2
         {
-            log::error!(
-                "viewport Y-flip is not supported, hiding the adapter: {}",
+            log::warn!(
+                "viewport Y-flip is not supported, hiding adapter: {}",
                 info.name
             );
             return None;
