@@ -525,82 +525,34 @@ impl crate::Device<super::Api> for super::Device {
             super::TextureInner::Renderbuffer { raw }
         } else {
             let raw = gl.create_texture().unwrap();
-            //HACK: detect a cube map
-            let cube_count = if desc.size.width == desc.size.height
-                && desc.size.depth_or_array_layers % 6 == 0
-            {
-                Some(desc.size.depth_or_array_layers / 6)
-            } else {
-                None
-            };
-            let target = match desc.dimension {
+            let (target, is_3d) = match desc.dimension {
                 wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                    if desc.sample_count > 1 {
-                        let target = glow::TEXTURE_2D;
-                        gl.bind_texture(target, Some(raw));
-                        gl.tex_storage_2d_multisample(
-                            target,
-                            desc.sample_count as i32,
-                            format_desc.internal,
-                            desc.size.width as i32,
-                            desc.size.height as i32,
-                            true,
-                        );
-                        target
-                    } else if desc.size.depth_or_array_layers > 1 && cube_count != Some(1) {
-                        let target = match cube_count {
-                            Some(_) => glow::TEXTURE_CUBE_MAP_ARRAY,
-                            None => glow::TEXTURE_2D_ARRAY,
+                    if desc.size.depth_or_array_layers > 1 {
+                        //HACK: detect a cube map
+                        let cube_count = if desc.size.width == desc.size.height
+                            && desc.size.depth_or_array_layers % 6 == 0
+                        {
+                            Some(desc.size.depth_or_array_layers / 6)
+                        } else {
+                            None
                         };
-                        gl.bind_texture(target, Some(raw));
-                        gl.tex_storage_3d(
-                            target,
-                            desc.mip_level_count as i32,
-                            format_desc.internal,
-                            desc.size.width as i32,
-                            desc.size.height as i32,
-                            desc.size.depth_or_array_layers as i32,
-                        );
-                        target
+                        match cube_count {
+                            None => (glow::TEXTURE_2D_ARRAY, true),
+                            Some(1) => (glow::TEXTURE_CUBE_MAP, false),
+                            Some(_) => (glow::TEXTURE_CUBE_MAP_ARRAY, true),
+                        }
                     } else {
-                        let target = match cube_count {
-                            Some(_) => glow::TEXTURE_CUBE_MAP,
-                            None => glow::TEXTURE_2D,
-                        };
-                        gl.bind_texture(target, Some(raw));
-                        gl.tex_storage_2d(
-                            target,
-                            desc.mip_level_count as i32,
-                            format_desc.internal,
-                            desc.size.width as i32,
-                            desc.size.height as i32,
-                        );
-                        target
+                        (glow::TEXTURE_2D, false)
                     }
                 }
                 wgt::TextureDimension::D3 => {
                     copy_size.depth = desc.size.depth_or_array_layers;
-                    let target = glow::TEXTURE_3D;
-                    gl.bind_texture(target, Some(raw));
-                    gl.tex_storage_3d(
-                        target,
-                        desc.mip_level_count as i32,
-                        format_desc.internal,
-                        desc.size.width as i32,
-                        desc.size.height as i32,
-                        desc.size.depth_or_array_layers as i32,
-                    );
-                    target
+                    (glow::TEXTURE_3D, true)
                 }
             };
 
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(label) = desc.label {
-                if gl.supports_debug() {
-                    gl.object_label(glow::TEXTURE, mem::transmute(raw), Some(label));
-                }
-            }
-
+            gl.bind_texture(target, Some(raw));
+            //Note: this has to be done before defining the storage!
             match desc.format.describe().sample_type {
                 wgt::TextureSampleType::Float { filterable: false }
                 | wgt::TextureSampleType::Uint
@@ -611,6 +563,41 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 wgt::TextureSampleType::Float { filterable: true }
                 | wgt::TextureSampleType::Depth => {}
+            }
+
+            if is_3d {
+                gl.tex_storage_3d(
+                    target,
+                    desc.mip_level_count as i32,
+                    format_desc.internal,
+                    desc.size.width as i32,
+                    desc.size.height as i32,
+                    desc.size.depth_or_array_layers as i32,
+                );
+            } else if desc.sample_count > 1 {
+                gl.tex_storage_2d_multisample(
+                    target,
+                    desc.sample_count as i32,
+                    format_desc.internal,
+                    desc.size.width as i32,
+                    desc.size.height as i32,
+                    true,
+                );
+            } else {
+                gl.tex_storage_2d(
+                    target,
+                    desc.mip_level_count as i32,
+                    format_desc.internal,
+                    desc.size.width as i32,
+                    desc.size.height as i32,
+                );
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(label) = desc.label {
+                if gl.supports_debug() {
+                    gl.object_label(glow::TEXTURE, mem::transmute(raw), Some(label));
+                }
             }
 
             gl.bind_texture(target, None);
