@@ -6,7 +6,7 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     track::{TrackerSet, UsageConflict, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
+    Label, LifeGuard, MultiRefCount, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -419,7 +419,11 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
 }
 
-pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
+pub(crate) type BindEntryMap = indexmap::IndexMap<
+    u32,
+    wgt::BindGroupLayoutEntry,
+    std::hash::BuildHasherDefault<fxhash::FxHasher>,
+>;
 
 /// Bind group layout.
 ///

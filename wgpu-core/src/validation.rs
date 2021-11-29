@@ -1010,13 +1010,13 @@ impl Interface {
                     .and_then(|set| {
                         let ty = res.derive_binding_type(usage, self.features)?;
                         match set.entry(res.bind.binding) {
-                            Entry::Occupied(e) if e.get().ty != ty => {
+                            indexmap::map::Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)
                             }
-                            Entry::Occupied(e) => {
+                            indexmap::map::Entry::Occupied(e) => {
                                 e.into_mut().visibility |= stage_bit;
                             }
-                            Entry::Vacant(e) => {
+                            indexmap::map::Entry::Vacant(e) => {
                                 e.insert(BindGroupLayoutEntry {
                                     binding: res.bind.binding,
                                     ty,

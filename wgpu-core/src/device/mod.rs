@@ -3669,7 +3669,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
             }
 
-            let mut entry_map = FastHashMap::default();
+            let mut entry_map = binding_model::BindEntryMap::default();
             for entry in desc.entries.iter() {
                 if entry_map.insert(entry.binding, *entry).is_some() {
                     break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(

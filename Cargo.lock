@@ -1839,6 +1839,7 @@ dependencies = [
  "codespan-reporting",
  "copyless",
  "fxhash",
+ "indexmap",
  "log",
  "naga",
  "parking_lot",
