@@ -660,16 +660,17 @@ impl super::InstanceShared {
                 // Get this now to avoid borrowing conflicts later
                 let supports_descriptor_indexing =
                     capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
+                // Always add Vk1.2 structure. Will be skipped if unknown.
+                //Note: we can't check if conditional on Vulkan version here, because
+                // we only have the `VkInstance` version but not `VkPhysicalDevice` one.
+                let vk12_next = capabilities
+                    .vulkan_1_2
+                    .insert(vk::PhysicalDeviceVulkan12Properties::builder().build());
 
                 let core = vk::PhysicalDeviceProperties::builder().build();
-                let mut builder = vk::PhysicalDeviceProperties2::builder().properties(core);
-
-                if capabilities.properties.api_version >= vk::API_VERSION_1_2 {
-                    let next = capabilities
-                        .vulkan_1_2
-                        .insert(vk::PhysicalDeviceVulkan12Properties::builder().build());
-                    builder = builder.push_next(next);
-                }
+                let mut builder = vk::PhysicalDeviceProperties2::builder()
+                    .properties(core)
+                    .push_next(vk12_next);
 
                 if supports_descriptor_indexing {
                     let next = capabilities.descriptor_indexing.insert(
@@ -681,6 +682,10 @@ impl super::InstanceShared {
                 let mut properites2 = builder.build();
                 unsafe {
                     get_device_properties.get_physical_device_properties2(phd, &mut properites2);
+                }
+                // clean up Vk1.2 stuff if not supported
+                if capabilities.properties.api_version < vk::API_VERSION_1_2 {
+                    capabilities.vulkan_1_2 = None;
                 }
                 properites2.properties
             } else {
@@ -838,13 +843,19 @@ impl super::Instance {
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
             imageless_framebuffers: match phd_features.vulkan_1_2 {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
-                None => phd_features.imageless_framebuffer.is_some(),
+                None => match phd_features.imageless_framebuffer {
+                    Some(ref ext) => ext.imageless_framebuffer != 0,
+                    None => false,
+                },
             },
             image_view_usage: phd_capabilities.properties.api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance2Fn::name()),
             timeline_semaphores: match phd_features.vulkan_1_2 {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
-                None => phd_features.timeline_semaphore.is_some(),
+                None => match phd_features.timeline_semaphore {
+                    Some(ref ext) => ext.timeline_semaphore != 0,
+                    None => false,
+                },
             },
             texture_d24: unsafe {
                 self.shared
