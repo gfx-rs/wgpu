@@ -121,7 +121,6 @@ impl super::Swapchain {
 impl super::Instance {
     pub fn required_extensions(
         entry: &ash::Entry,
-        driver_api_version: u32,
         flags: crate::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
         let instance_extensions = entry
@@ -161,11 +160,6 @@ impl super::Instance {
 
         extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
 
-        // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
-        if driver_api_version == vk::API_VERSION_1_0 {
-            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
-        }
-
         // Only keep available extensions.
         extensions.retain(|&ext| {
             if instance_extensions
@@ -190,19 +184,11 @@ impl super::Instance {
     pub unsafe fn from_raw(
         entry: ash::Entry,
         raw_instance: ash::Instance,
-        driver_api_version: u32,
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
         has_nv_optimus: bool,
         drop_guard: Option<super::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
-        if driver_api_version == vk::API_VERSION_1_0
-            && !extensions.contains(&vk::KhrStorageBufferStorageClassFn::name())
-        {
-            log::warn!("Required VK_KHR_storage_buffer_storage_class extension is not supported");
-            return Err(crate::InstanceError);
-        }
-
         let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
             let extension = ext::DebugUtils::new(&entry, &raw_instance);
             let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
@@ -473,7 +459,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 })
             });
 
-        let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
+        let extensions = Self::required_extensions(&entry, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
@@ -532,7 +518,6 @@ impl crate::Instance<super::Api> for super::Instance {
         Self::from_raw(
             entry,
             vk_instance,
-            driver_api_version,
             extensions,
             desc.flags,
             has_nv_optimus,

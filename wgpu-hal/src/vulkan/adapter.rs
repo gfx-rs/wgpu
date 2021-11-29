@@ -557,6 +557,9 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::KhrMaintenance1Fn::name());
             extensions.push(vk::KhrMaintenance2Fn::name());
 
+            // `VK_KHR_storage_buffer_storage_class` required for Naga on Vulkan 1.0 devices
+            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+
             // Below Vulkan 1.1 we can get multiview from an extension
             if requested_features.contains(wgt::Features::MULTIVIEW) {
                 extensions.push(vk::KhrMultiviewFn::name());
@@ -904,9 +907,18 @@ impl super::Instance {
             workarounds |= super::Workarounds::SEPARATE_ENTRY_POINTS;
         };
 
+        if phd_capabilities.properties.api_version == vk::API_VERSION_1_0
+            && !phd_capabilities.supports_extension(vk::KhrStorageBufferStorageClassFn::name())
+        {
+            log::warn!(
+                "SPIR-V storage buffer class is not supported, hiding adapter: {}",
+                info.name
+            );
+            return None;
+        }
         if phd_features.core.sample_rate_shading == 0 {
-            log::error!(
-                "sample_rate_shading feature is not supported, hiding the adapter: {}",
+            log::warn!(
+                "sample_rate_shading feature is not supported, hiding adapter: {}",
                 info.name
             );
             return None;
@@ -915,8 +927,8 @@ impl super::Instance {
             && !phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name())
             && phd_capabilities.properties.api_version < vk::API_VERSION_1_2
         {
-            log::error!(
-                "viewport Y-flip is not supported, hiding the adapter: {}",
+            log::warn!(
+                "viewport Y-flip is not supported, hiding adapter: {}",
                 info.name
             );
             return None;
