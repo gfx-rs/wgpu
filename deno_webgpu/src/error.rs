@@ -8,6 +8,7 @@ use wgpu_core::binding_model::CreateBindGroupError;
 use wgpu_core::binding_model::CreateBindGroupLayoutError;
 use wgpu_core::binding_model::CreatePipelineLayoutError;
 use wgpu_core::binding_model::GetBindGroupLayoutError;
+use wgpu_core::command::ClearError;
 use wgpu_core::command::CommandEncoderError;
 use wgpu_core::command::ComputePassError;
 use wgpu_core::command::CopyError;
@@ -252,6 +253,12 @@ impl From<QueueWriteError> for WebGpuError {
             QueueWriteError::Queue(err) => err.into(),
             err => WebGpuError::Validation(err.to_string()),
         }
+    }
+}
+
+impl From<ClearError> for WebGpuError {
+    fn from(err: ClearError) -> Self {
+        WebGpuError::Validation(err.to_string())
     }
 }
 
