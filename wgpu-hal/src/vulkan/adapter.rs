@@ -821,6 +821,13 @@ impl super::InstanceShared {
                 let mut_ref = features.robustness2.as_mut().unwrap();
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
+            if capabilities.supports_extension(vk::ExtDepthClipEnableFn::name()) {
+                features.depth_clip_enable =
+                    Some(vk::PhysicalDeviceDepthClipEnableFeaturesEXT::builder().build());
+
+                let mut_ref = features.depth_clip_enable.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
 
             unsafe {
                 get_device_properties.get_physical_device_features2_khr(phd, &mut features2);
@@ -847,6 +854,7 @@ impl super::InstanceShared {
             null_p_next(&mut features.timeline_semaphore);
             null_p_next(&mut features.image_robustness);
             null_p_next(&mut features.robustness2);
+            null_p_next(&mut features.depth_clip_enable);
         }
 
         (capabilities, features)
