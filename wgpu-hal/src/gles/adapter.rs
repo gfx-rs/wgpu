@@ -279,6 +279,7 @@ impl super::Adapter {
         downlevel_flags.set(
             wgt::DownlevelFlags::VERTEX_STORAGE,
             max_storage_block_size != 0
+                && max_storage_buffers_per_shader_stage != 0
                 && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
         );
         downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, supports_storage);
