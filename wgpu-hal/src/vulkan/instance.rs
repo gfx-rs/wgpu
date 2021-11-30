@@ -1,5 +1,4 @@
 use std::{
-    cmp,
     ffi::{c_void, CStr, CString},
     slice,
     sync::Arc,
@@ -184,12 +183,16 @@ impl super::Instance {
     pub unsafe fn from_raw(
         entry: ash::Entry,
         raw_instance: ash::Instance,
+        driver_api_version: u32,
         extensions: Vec<&'static CStr>,
         flags: crate::InstanceFlags,
         has_nv_optimus: bool,
         drop_guard: Option<super::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
+        log::info!("Instance version: 0x{:x}", driver_api_version);
+
         let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
+            log::info!("Enabling debug utils");
             let extension = ext::DebugUtils::new(&entry, &raw_instance);
             let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                 .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
@@ -207,15 +210,19 @@ impl super::Instance {
             None
         };
 
-        let get_physical_device_properties =
-            if extensions.contains(&khr::GetPhysicalDeviceProperties2::name()) {
-                Some(khr::GetPhysicalDeviceProperties2::new(
-                    &entry,
-                    &raw_instance,
-                ))
-            } else {
-                None
-            };
+        // We can't use any of Vulkan-1.1+ abilities on Vk 1.0 instance,
+        // so disabling this query helps.
+        let get_physical_device_properties = if driver_api_version >= vk::API_VERSION_1_1
+            && extensions.contains(&khr::GetPhysicalDeviceProperties2::name())
+        {
+            log::info!("Enabling device properties2");
+            Some(khr::GetPhysicalDeviceProperties2::new(
+                &entry,
+                &raw_instance,
+            ))
+        } else {
+            None
+        };
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
@@ -443,9 +450,11 @@ impl crate::Instance<super::Api> for super::Instance {
             .application_version(1)
             .engine_name(CStr::from_bytes_with_nul(b"wgpu-hal\0").unwrap())
             .engine_version(2)
-            .api_version({
-                // Pick the latest API version available, but don't go later than the SDK version used by `gfx_backend_vulkan`.
-                cmp::min(driver_api_version, {
+            .api_version(
+                // Vulkan 1.0 doesn't like anything but 1.0 passed in here...
+                if driver_api_version < vk::API_VERSION_1_1 {
+                    vk::API_VERSION_1_0
+                } else {
                     // This is the max Vulkan API version supported by `wgpu-hal`.
                     //
                     // If we want to increment this, there are some things that must be done first:
@@ -455,8 +464,8 @@ impl crate::Instance<super::Api> for super::Instance {
                     //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
                     //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
                     vk::HEADER_VERSION_COMPLETE
-                })
-            });
+                },
+            );
 
         let extensions = Self::required_extensions(&entry, desc.flags)?;
 
@@ -517,6 +526,7 @@ impl crate::Instance<super::Api> for super::Instance {
         Self::from_raw(
             entry,
             vk_instance,
+            driver_api_version,
             extensions,
             desc.flags,
             has_nv_optimus,
