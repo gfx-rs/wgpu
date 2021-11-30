@@ -737,6 +737,7 @@ impl Limits {
     /// These default limits are guarenteed to be compatible with GLES-3.0, and D3D11, and WebGL2
     pub fn downlevel_webgl2_defaults() -> Self {
         Self {
+            max_uniform_buffers_per_shader_stage: 11,
             max_storage_buffers_per_shader_stage: 0,
             max_storage_textures_per_shader_stage: 0,
             max_dynamic_storage_buffers_per_pipeline_layout: 0,
