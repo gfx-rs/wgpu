@@ -665,17 +665,17 @@ impl super::InstanceShared {
                 // we only have the `VkInstance` version but not `VkPhysicalDevice` one.
                 let vk12_next = capabilities
                     .vulkan_1_2
-                    .insert(vk::PhysicalDeviceVulkan12Properties::builder().build());
+                    .insert(vk::PhysicalDeviceVulkan12Properties::default());
 
-                let core = vk::PhysicalDeviceProperties::builder().build();
+                let core = vk::PhysicalDeviceProperties::default();
                 let mut builder = vk::PhysicalDeviceProperties2::builder()
                     .properties(core)
                     .push_next(vk12_next);
 
                 if supports_descriptor_indexing {
-                    let next = capabilities.descriptor_indexing.insert(
-                        vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::builder().build(),
-                    );
+                    let next = capabilities
+                        .descriptor_indexing
+                        .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
                     builder = builder.push_next(next);
                 }
 
@@ -684,7 +684,7 @@ impl super::InstanceShared {
                     get_device_properties.get_physical_device_properties2(phd, &mut properites2);
                 }
                 // clean up Vk1.2 stuff if not supported
-                if capabilities.properties.api_version < vk::API_VERSION_1_2 {
+                if properites2.properties.api_version < vk::API_VERSION_1_2 {
                     capabilities.vulkan_1_2 = None;
                 }
                 properites2.properties
@@ -698,20 +698,20 @@ impl super::InstanceShared {
         let mut features = PhysicalDeviceFeatures::default();
         features.core = if let Some(ref get_device_properties) = self.get_physical_device_properties
         {
-            let core = vk::PhysicalDeviceFeatures::builder().build();
+            let core = vk::PhysicalDeviceFeatures::default();
             let mut builder = vk::PhysicalDeviceFeatures2KHR::builder().features(core);
 
             if capabilities.properties.api_version >= vk::API_VERSION_1_2 {
                 let next = features
                     .vulkan_1_2
-                    .insert(vk::PhysicalDeviceVulkan12Features::builder().build());
+                    .insert(vk::PhysicalDeviceVulkan12Features::default());
                 builder = builder.push_next(next);
             }
 
             if capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name()) {
                 let next = features
                     .descriptor_indexing
-                    .insert(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
+                    .insert(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default());
                 builder = builder.push_next(next);
             }
 
@@ -719,7 +719,7 @@ impl super::InstanceShared {
             if capabilities.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
                 let next = features
                     .imageless_framebuffer
-                    .insert(vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder().build());
+                    .insert(vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::default());
                 builder = builder.push_next(next);
             }
 
@@ -727,20 +727,20 @@ impl super::InstanceShared {
             if capabilities.supports_extension(vk::KhrTimelineSemaphoreFn::name()) {
                 let next = features
                     .timeline_semaphore
-                    .insert(vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::builder().build());
+                    .insert(vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::default());
                 builder = builder.push_next(next);
             }
 
             if capabilities.supports_extension(vk::ExtImageRobustnessFn::name()) {
                 let next = features
                     .image_robustness
-                    .insert(vk::PhysicalDeviceImageRobustnessFeaturesEXT::builder().build());
+                    .insert(vk::PhysicalDeviceImageRobustnessFeaturesEXT::default());
                 builder = builder.push_next(next);
             }
             if capabilities.supports_extension(vk::ExtRobustness2Fn::name()) {
                 let next = features
                     .robustness2
-                    .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::builder().build());
+                    .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::default());
                 builder = builder.push_next(next);
             }
 
