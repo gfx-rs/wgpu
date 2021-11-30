@@ -189,6 +189,14 @@ impl super::Adapter {
         log::debug!("Extensions: {:#?}", extensions);
 
         let ver = Self::parse_version(&version).ok()?;
+        if ver < (3, 0) {
+            log::warn!(
+                "Returned GLES context is {}.{}, when 3.0+ was requested",
+                ver.0,
+                ver.1
+            );
+            return None;
+        }
 
         let supports_storage = ver >= (3, 1);
 
