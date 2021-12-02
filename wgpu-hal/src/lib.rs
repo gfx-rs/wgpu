@@ -649,7 +649,7 @@ bitflags::bitflags! {
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits | Self::MAP_WRITE.bits | Self::COPY_DST.bits;
+        const ORDERED = Self::INCLUSIVE.bits | Self::MAP_WRITE.bits;
     }
 }
 
@@ -672,7 +672,7 @@ bitflags::bitflags! {
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits | Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits;
+        const ORDERED = Self::INCLUSIVE.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits;
         //TODO: remove this
         const UNINITIALIZED = 0xFFFF;
     }
