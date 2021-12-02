@@ -1324,7 +1324,7 @@ impl<A: HalApi> Device<A> {
         decl: &wgt::BindGroupLayoutEntry,
         used_buffer_ranges: &mut Vec<BufferInitTrackerAction>,
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
-        late_buffer_binding_sizes: &mut Vec<wgt::BufferSize>,
+        late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut TrackerSet,
         storage: &'a Storage<resource::Buffer<A>, id::BufferId>,
         limits: &wgt::Limits,
@@ -1425,7 +1425,7 @@ impl<A: HalApi> Device<A> {
         } else {
             let late_size =
                 wgt::BufferSize::new(bind_size).ok_or(Error::BindingZeroSize(bb.buffer_id))?;
-            late_buffer_binding_sizes.push(late_size);
+            late_buffer_binding_sizes.insert(binding, late_size);
         }
 
         assert_eq!(bb.offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
@@ -1498,10 +1498,13 @@ impl<A: HalApi> Device<A> {
             }
         }
 
-        // TODO: arrayvec/smallvec
+        // TODO: arrayvec/smallvec, or re-use allocations
         // Record binding info for dynamic offset validation
         let mut dynamic_binding_info = Vec::new();
-        let mut late_buffer_binding_sizes = Vec::new();
+        // Map of binding -> shader reflected size
+        //Note: we can't collect into a vector right away because
+        // it needs to be in BGL iteration order, not BG entry order.
+        let mut late_buffer_binding_sizes = FastHashMap::default();
         // fill out the descriptors
         let mut used = TrackerSet::new(A::VARIANT);
 
@@ -1723,7 +1726,12 @@ impl<A: HalApi> Device<A> {
             used_buffer_ranges,
             used_texture_ranges,
             dynamic_binding_info,
-            late_buffer_binding_sizes,
+            // collect in the order of BGL iteration
+            late_buffer_binding_sizes: layout
+                .entries
+                .keys()
+                .flat_map(|binding| late_buffer_binding_sizes.get(binding).cloned())
+                .collect(),
         })
     }
 
