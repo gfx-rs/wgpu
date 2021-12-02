@@ -3066,10 +3066,10 @@
      * @param {GPUSize64} destinationOffset
      * @param {GPUSize64} size
      */
-    fillBuffer(destination, destinationOffset, size) {
+    clearBuffer(destination, destinationOffset, size) {
       webidl.assertBranded(this, GPUCommandEncoder);
       const prefix =
-        "Failed to execute 'fillBuffer' on 'GPUCommandEncoder'";
+        "Failed to execute 'clearBuffer' on 'GPUCommandEncoder'";
       webidl.requiredArguments(arguments.length, 3, { prefix });
       destination = webidl.converters.GPUBuffer(destination, {
         prefix,
@@ -3093,7 +3093,7 @@
         context: "Argument 1",
       });
       const { err } = core.opSync(
-        "op_webgpu_command_encoder_fill_buffer",
+        "op_webgpu_command_encoder_clear_buffer",
         {
           commandEncoderRid,
           destinationRid,
