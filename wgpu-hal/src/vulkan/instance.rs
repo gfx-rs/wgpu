@@ -24,10 +24,10 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     let level = match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::Level::Error,
-        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::Level::Warn,
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Debug,
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Info,
-        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Trace,
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::Level::Warn,
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::Level::Error,
         _ => log::Level::Warn,
     };
 
@@ -194,9 +194,22 @@ impl super::Instance {
         let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
             log::info!("Enabling debug utils");
             let extension = ext::DebugUtils::new(&entry, &raw_instance);
+            let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::empty();
+            if log::max_level() >= log::LevelFilter::Debug {
+                severity |= vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE;
+            }
+            if log::max_level() >= log::LevelFilter::Info {
+                severity |= vk::DebugUtilsMessageSeverityFlagsEXT::INFO;
+            }
+            if log::max_level() >= log::LevelFilter::Warn {
+                severity |= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING;
+            }
+            if log::max_level() >= log::LevelFilter::Error {
+                severity |= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
+            }
             let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                 .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
-                .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
+                .message_severity(severity)
                 .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
                 .pfn_user_callback(Some(debug_utils_messenger_callback));
             let messenger = extension
