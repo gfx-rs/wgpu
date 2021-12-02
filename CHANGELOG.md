@@ -1,5 +1,21 @@
 # Change Log
 
+## v0.7.2 (2021-12-01)
+  - validator:
+    - check stores for proper pointer class
+  - HLSL-out:
+    - fix stores into `mat3`
+    - respect array strides
+  - SPV-out:
+    - fix multi-word constants
+  - WGSL-in:
+    - permit names starting with underscores
+  - SPV-in:
+    - cull unused builtins
+    - support empty debug labels
+  - GLSL-in:
+    - don't panic on invalid integer operations
+
 ## v0.7.1 (2021-10-12)
   - implement casts from and to booleans in the backends
 
