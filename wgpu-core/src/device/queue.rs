@@ -553,8 +553,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     encoder.copy_buffer_to_texture(
                         &device.zero_buffer,
                         dst_raw,
-                        zero_buffer_copy_regions.into_iter(),
+                        zero_buffer_copy_regions.iter().cloned(),
                     );
+                    encoder.transition_textures(zero_buffer_copy_regions.iter().map(|copy| {
+                        hal::TextureBarrier {
+                            texture: dst_raw,
+                            range: wgt::ImageSubresourceRange {
+                                aspect: wgt::TextureAspect::All,
+                                base_mip_level: copy.texture_base.mip_level,
+                                mip_level_count: NonZeroU32::new(1),
+                                base_array_layer: copy.texture_base.array_layer,
+                                array_layer_count: NonZeroU32::new(1),
+                            },
+                            usage: hal::TextureUses::COPY_DST..hal::TextureUses::COPY_DST,
+                        }
+                    }));
                 }
                 encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
             }
