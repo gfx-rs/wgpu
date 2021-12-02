@@ -2024,15 +2024,17 @@ impl crate::Context for Context {
         _texture: &crate::Texture,
         _subresource_range: &wgt::ImageSubresourceRange,
     ) {
+        //TODO
     }
 
-    fn command_encoder_fill_buffer(
+    fn command_encoder_clear_buffer(
         &self,
         _encoder: &Self::CommandEncoderId,
         _buffer: &crate::Buffer,
         _offset: wgt::BufferAddress,
         _size: Option<wgt::BufferSize>,
     ) {
+        //TODO
     }
 
     fn command_encoder_insert_debug_marker(&self, _encoder: &Self::CommandEncoderId, _label: &str) {

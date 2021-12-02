@@ -69,7 +69,7 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn command_encoder_fill_buffer<A: HalApi>(
+    pub fn command_encoder_clear_buffer<A: HalApi>(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
@@ -87,7 +87,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
-            list.push(TraceCommand::FillBuffer { dst, offset, size });
+            list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
         let (dst_buffer, dst_pending) = cmd_buf

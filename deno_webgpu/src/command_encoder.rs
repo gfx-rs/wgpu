@@ -438,7 +438,7 @@ pub struct CommandEncoderFillBufferArgs {
     size: u64,
 }
 
-pub fn op_webgpu_command_encoder_fill_buffer(
+pub fn op_webgpu_command_encoder_clear_buffer(
     state: &mut OpState,
     args: CommandEncoderFillBufferArgs,
     _: (),
@@ -452,7 +452,7 @@ pub fn op_webgpu_command_encoder_fill_buffer(
         .resource_table
         .get::<super::buffer::WebGpuBuffer>(args.destination_rid)?;
 
-    gfx_ok!(command_encoder => instance.command_encoder_fill_buffer(
+    gfx_ok!(command_encoder => instance.command_encoder_clear_buffer(
       command_encoder,
       destination_resource.0,
       args.destination_offset,
