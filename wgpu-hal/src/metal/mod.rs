@@ -137,6 +137,7 @@ impl crate::Instance<Api> for Instance {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
     family_check: bool,
@@ -230,6 +231,7 @@ struct PrivateDisabilities {
     /// Near depth is not respected properly on some Intel GPUs.
     broken_viewport_near_depth: bool,
     /// Multi-target clears don't appear to work properly on Intel GPUs.
+    #[allow(dead_code)]
     broken_layered_clear_image: bool,
 }
 
@@ -391,7 +393,6 @@ impl crate::Queue<Api> for Queue {
 pub struct Buffer {
     raw: mtl::Buffer,
     size: wgt::BufferAddress,
-    options: mtl::MTLResourceOptions,
 }
 
 unsafe impl Send for Buffer {}

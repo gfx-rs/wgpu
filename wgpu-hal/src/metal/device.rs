@@ -227,7 +227,6 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::Buffer {
             raw,
             size: desc.size,
-            options,
         })
     }
     unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {}
