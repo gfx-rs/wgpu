@@ -983,9 +983,9 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "0.7.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "032288733590c094012e5f1dec15848be90015bb9b3fd16743d84ea582c4154a"
+checksum = "63765d243f5d32ece09b2ff95c1f50ec7353266024a2ce89619a09e1b6aa4cce"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -1782,7 +1782,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "arrayvec",
  "async-executor",
@@ -1816,7 +1816,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.11.2"
+version = "0.11.3"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -1838,7 +1838,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.11.4"
+version = "0.11.5"
 dependencies = [
  "arrayvec",
  "ash",

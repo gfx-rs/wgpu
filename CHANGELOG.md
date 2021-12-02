@@ -1,5 +1,30 @@
 # Change Log
 
+## wgpu-core-0.11.3, wgpu-hal-0.11.5, wgpu-0.11.1 (2021-12-01)
+  - Core:
+    - validate device descriptor before actually creating it
+    - fix validation of texture-sampler pairs
+  - Vulkan:
+    - fix running on Vulkan-1.1 instance
+    - improve detection of workaround for Intel+Nvidia on Linux
+    - fix resource limits on Vulkan-1.2
+    - fix the check for storage buffer requirement
+    - change internal semaphore logic to work around Linux+Intel bugs
+    - fix enabling extension-provided features
+  - GLES:
+    - fix running on old and bogus drivers
+    - fix stale samplers on bindings change
+    - fix integer textures
+    - fix querying work group parameters
+    - fix stale PBO bindings caused by resource copies
+    - fix rendering to cubemap faces
+    - fix `Rgba16Float` format
+    - fix stale vertex attributes when changing the pipeline
+  - Metal:
+    - fix window resizing for running in multiple processes
+  - Web:
+    - fix `set_index_buffer` and `set_vertex_buffer` to have optional sizes
+
 ## wgpu-core-0.11.2, wgpu-hal-0.11.4 (2021-10-22)
   - fix buffer transition barriers
   - Metal:
