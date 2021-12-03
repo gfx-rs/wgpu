@@ -10,6 +10,11 @@ env:
   RUST_BACKTRACE: 1
   RUST_VERSION: 1.53
 
+# We distinguish the following kinds of builds:
+# - local: build for the same target as we compile on, and do local tests
+# - other: build without testing, e.g. cross-build
+# - web: build for the Web
+
 jobs:
   build:
     strategy:
@@ -21,31 +26,29 @@ jobs:
             os: windows-2019
             target: x86_64-pc-windows-msvc
             tool: clippy
-            kind: test
+            kind: local
             backends: dx12 # dx11
 
           - name: Windows Nightly x86_64
             os: windows-2019
             target: x86_64-pc-windows-msvc
             tool: check
-            kind: compile
+            kind: other
           
           # MacOS
-
-          # Mac has no software runners, so don't run tests
           - name: MacOS x86_64
             os: macos-10.15
             target: x86_64-apple-darwin
             tool: clippy
-            kind: compile
-
+            # Mac has no software runners, so don't run tests
+            kind: other
           
           # IOS
           - name: IOS aarch64
             os: macos-10.15
             target: aarch64-apple-ios
             tool: clippy
-            kind: compile
+            kind: other
 
 
           # Linux
@@ -53,14 +56,14 @@ jobs:
             os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
             tool: clippy
-            kind: test
+            kind: local
             backends: vulkan # gl
 
           - name: Linux Nightly x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
             tool: check
-            kind: compile
+            kind: other
 
           
           # Android
@@ -68,7 +71,7 @@ jobs:
             os: ubuntu-20.04
             target: aarch64-linux-android
             tool: clippy
-            kind: compile
+            kind: other
 
           
           # WebGPU/WebGL
@@ -76,7 +79,7 @@ jobs:
             os: ubuntu-20.04
             target: wasm32-unknown-unknown
             tool: clippy
-            kind: wasm
+            kind: web
 
     name: Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -122,7 +125,7 @@ jobs:
           echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: install llvmpipe and lavapipe
-        if: matrix.os == 'ubuntu-20.04' && matrix.target != 'aarch64-linux-android' && matrix.kind == 'test'
+        if: matrix.os == 'ubuntu-20.04' && matrix.target != 'aarch64-linux-android' && matrix.kind == 'local'
         run: |
           sudo apt-get update -y -qq
           sudo add-apt-repository ppa:oibaf/graphics-drivers -y
@@ -138,7 +141,7 @@ jobs:
           debug = 1" > .cargo/config.toml
 
       - name: check web
-        if: matrix.kind == 'wasm'
+        if: matrix.kind == 'web'
         run: |
           cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu
 
@@ -149,7 +152,7 @@ jobs:
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
 
       - name: check native
-        if: matrix.kind == 'compile' || matrix.kind == 'test'
+        if: matrix.kind == 'local' || matrix.kind == 'other'
         run: |
           # check with no features
           cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player
@@ -162,21 +165,18 @@ jobs:
           cargo doc --target ${{ matrix.target }} --no-deps
           cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --all-features --no-deps
 
-      - name: tests
-        if: matrix.kind == 'test'
+      - name: local tests
+        if: matrix.kind == 'local'
         shell: bash
         run: |
           # run wgpu-info
           cargo run --bin wgpu-info
-          # run player tests
-          cargo test -p player
-
+          # run unit and player tests
+          cargo test -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast
+          # run native tests
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            # run player tests
-            WGPU_BACKEND=$backend cargo test --target ${{ matrix.target }} -p wgpu-types -p wgpu-hal -p wgpu-core --no-fail-fast -- --nocapture --test-threads=1
-            # run coretests
-            WGPU_BACKEND=$backend cargo test --target ${{ matrix.target }} -p wgpu --no-fail-fast -- --nocapture --test-threads=1
+            WGPU_BACKEND=$backend cargo test -p wgpu --no-fail-fast -- --nocapture --test-threads=1
           done
 
   fmt:
