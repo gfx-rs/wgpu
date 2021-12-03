@@ -19,15 +19,15 @@ jobs:
           # Windows
           - name: Windows x86_64
             os: windows-2019
-            channel: ${{ env.RUST_VERSION }}
             target: x86_64-pc-windows-msvc
+            tool: clippy
             kind: test
             backends: dx12 # dx11
 
           - name: Windows Nightly x86_64
             os: windows-2019
-            channel: nightly
             target: x86_64-pc-windows-msvc
+            tool: check
             kind: compile
           
           # MacOS
@@ -35,48 +35,48 @@ jobs:
           # Mac has no software runners, so don't run tests
           - name: MacOS x86_64
             os: macos-10.15
-            channel: ${{ env.RUST_VERSION }}
             target: x86_64-apple-darwin
+            tool: clippy
             kind: compile
 
           
           # IOS
           - name: IOS aarch64
             os: macos-10.15
-            channel: ${{ env.RUST_VERSION }}
             target: aarch64-apple-ios
+            tool: clippy
             kind: compile
 
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-20.04
-            channel: ${{ env.RUST_VERSION }}
             target: x86_64-unknown-linux-gnu
+            tool: clippy
             kind: test
             backends: vulkan # gl
 
           - name: Linux Nightly x86_64
             os: ubuntu-20.04
-            channel: nightly
             target: x86_64-unknown-linux-gnu
+            tool: check
             kind: compile
 
           
           # Android
           - name: Android aarch64
             os: ubuntu-20.04
-            channel: ${{ env.RUST_VERSION }}
             target: aarch64-linux-android
+            tool: clippy
             kind: compile
 
           
           # WebGPU/WebGL
           - name: WebAssembly
             os: ubuntu-20.04
-            channel: ${{ env.RUST_VERSION }}
             target: wasm32-unknown-unknown
-            kind: webgl
+            tool: clippy
+            kind: wasm
 
     name: Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -90,14 +90,26 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v2
 
-      - name: install rust
+      # Only run clippy on MSRV
+      - name: install rust stable
+        if: matrix.tool == 'clippy'
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.channel }}
+          toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.target }}
-          override: true
           profile: minimal
+          override: true
           components: clippy
+
+      # Other builds can use nightly
+      - name: install rust nightly
+        if: matrix.tool != 'clippy'
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          target: ${{ matrix.target }}
+          profile: minimal
+          override: true
 
       - name: caching
         uses: Swatinem/rust-cache@v1
@@ -125,14 +137,13 @@ jobs:
           echo """[profile.dev]
           debug = 1" > .cargo/config.toml
 
-      # This is separate for now because webgl isn't hooked up so we can't compile wgpu-core for wasm
       - name: check web
-        if: matrix.kind == 'webgl'
+        if: matrix.kind == 'wasm'
         run: |
-          cargo clippy --target ${{ matrix.target }} -p wgpu
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu
 
           # Build for WebGL
-          cargo clippy --target ${{ matrix.target }} -p wgpu --features webgl -- -D warnings
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --features webgl -- -D warnings
 
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
@@ -141,11 +152,11 @@ jobs:
         if: matrix.kind == 'compile' || matrix.kind == 'test'
         run: |
           # check with no features
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player
 
           # check with all features
           # explicitly don't mention wgpu-hal so that --all-features don't apply to it
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features 
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features 
 
           # build docs
           cargo doc --target ${{ matrix.target }} --no-deps
