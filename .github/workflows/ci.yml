@@ -8,6 +8,7 @@ on:
 
 env:
   RUST_BACKTRACE: 1
+  RUST_VERSION: 1.53
 
 jobs:
   build:
@@ -18,7 +19,7 @@ jobs:
           # Windows
           - name: Windows x86_64
             os: windows-2019
-            channel: stable
+            channel: ${{ env.RUST_VERSION }}
             target: x86_64-pc-windows-msvc
             kind: test
             backends: dx12 # dx11
@@ -34,7 +35,7 @@ jobs:
           # Mac has no software runners, so don't run tests
           - name: MacOS x86_64
             os: macos-10.15
-            channel: stable
+            channel: ${{ env.RUST_VERSION }}
             target: x86_64-apple-darwin
             kind: compile
 
@@ -42,7 +43,7 @@ jobs:
           # IOS
           - name: IOS aarch64
             os: macos-10.15
-            channel: stable
+            channel: ${{ env.RUST_VERSION }}
             target: aarch64-apple-ios
             kind: compile
 
@@ -50,7 +51,7 @@ jobs:
           # Linux
           - name: Linux x86_64
             os: ubuntu-20.04
-            channel: stable
+            channel: ${{ env.RUST_VERSION }}
             target: x86_64-unknown-linux-gnu
             kind: test
             backends: vulkan # gl
@@ -65,7 +66,7 @@ jobs:
           # Android
           - name: Android aarch64
             os: ubuntu-20.04
-            channel: stable
+            channel: ${{ env.RUST_VERSION }}
             target: aarch64-linux-android
             kind: compile
 
@@ -73,7 +74,7 @@ jobs:
           # WebGPU/WebGL
           - name: WebAssembly
             os: ubuntu-20.04
-            channel: stable
+            channel: ${{ env.RUST_VERSION }}
             target: wasm32-unknown-unknown
             kind: webgl
 
