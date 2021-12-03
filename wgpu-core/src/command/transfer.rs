@@ -95,8 +95,15 @@ pub enum TransferError {
     CopyFromForbiddenTextureFormat(wgt::TextureFormat),
     #[error("copying to textures with format {0:?} is forbidden")]
     CopyToForbiddenTextureFormat(wgt::TextureFormat),
-    #[error("the entire texture must be copied when copiying from depth texture")]
+    #[error("the entire texture must be copied when copying from depth texture")]
     InvalidDepthTextureExtent,
+    #[error(
+        "source format ({src_format:?}) and destination format ({dst_format:?}) are different"
+    )]
+    MismatchedTextureFormats {
+        src_format: wgt::TextureFormat,
+        dst_format: wgt::TextureFormat,
+    },
 }
 
 impl PrettyError for TransferError {
@@ -907,6 +914,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
+
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers = src_pending
@@ -932,6 +940,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
+
+        // src and dst texture format must be the same.
+        let src_format = src_texture.desc.format;
+        let dst_format = dst_texture.desc.format;
+
+        if src_format != dst_format {
+            return Err(TransferError::MismatchedTextureFormats {
+                src_format,
+                dst_format,
+            }
+            .into());
+        }
+
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
         let (src_copy_size, array_layer_count) =
