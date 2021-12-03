@@ -42,6 +42,13 @@ jobs:
             tool: clippy
             # Mac has no software runners, so don't run tests
             kind: other
+
+          - name: MacOS aarch64
+            os: macos-11
+            target: aarch64-apple-darwin
+            tool: check
+            # Mac has no software runners, so don't run tests
+            kind: other
           
           # IOS
           - name: IOS aarch64
@@ -58,6 +65,12 @@ jobs:
             tool: clippy
             kind: local
             backends: vulkan # gl
+
+          - name: Linux aarch64
+            os: ubuntu-20.04
+            target: aarch64-unknown-linux-gnu
+            tool: check
+            kind: other
 
           - name: Linux Nightly x86_64
             os: ubuntu-20.04
