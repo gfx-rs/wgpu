@@ -431,7 +431,7 @@ pub fn op_webgpu_command_encoder_copy_texture_to_texture(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CommandEncoderFillBufferArgs {
+pub struct CommandEncoderClearBufferArgs {
     command_encoder_rid: u32,
     destination_rid: u32,
     destination_offset: u64,
@@ -440,7 +440,7 @@ pub struct CommandEncoderFillBufferArgs {
 
 pub fn op_webgpu_command_encoder_clear_buffer(
     state: &mut OpState,
-    args: CommandEncoderFillBufferArgs,
+    args: CommandEncoderClearBufferArgs,
     _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();

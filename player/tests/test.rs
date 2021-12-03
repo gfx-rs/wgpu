@@ -89,7 +89,7 @@ impl Test<'_> {
             adapter,
             &wgt::DeviceDescriptor {
                 label: None,
-                features: self.features | wgt::Features::MAPPABLE_PRIMARY_BUFFERS,
+                features: self.features,
                 limits: wgt::Limits::default(),
             },
             None,

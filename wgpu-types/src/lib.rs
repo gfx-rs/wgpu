@@ -2755,7 +2755,13 @@ pub struct Extent3d {
     ///
     pub height: u32,
     ///
+    #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
     pub depth_or_array_layers: u32,
+}
+
+#[cfg(feature = "serde")]
+fn default_depth() -> u32 {
+    1
 }
 
 impl Default for Extent3d {

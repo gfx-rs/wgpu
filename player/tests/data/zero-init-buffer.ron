@@ -1,5 +1,5 @@
 (
-    features: (bits: 0x0),
+    features: 0x0,
     expectations: [
         // Ensuring that mapping zero-inits buffers.
         (
@@ -43,9 +43,7 @@
             (
                 label: Some("mapped_at_creation: false, with MAP_WRITE"),
                 size: 16,
-                usage: (
-                    bits: 131, // STORAGE + MAP_READ + MAP_WRITE
-                ),
+                usage: 131, // STORAGE + MAP_READ + MAP_WRITE
                 mapped_at_creation: false,
             ),
         ),
@@ -54,9 +52,7 @@
             (
                 label: Some("mapped_at_creation: false, without MAP_WRITE"),
                 size: 16,
-                usage: (
-                    bits: 129, // STORAGE + MAP_READ
-                ),
+                usage: 129, // STORAGE + MAP_READ
                 mapped_at_creation: false,
             ),
         ),
@@ -65,9 +61,7 @@
             (
                 label: Some("partially written"),
                 size: 24,
-                usage: (
-                    bits: 9, // MAP_READ + COPY_DST
-                ),
+                usage: 9, // MAP_READ + COPY_DST
                 mapped_at_creation: false,
             ),
         ),
@@ -91,9 +85,7 @@
         CreateBuffer(Id(3, 1, Empty), (
             label: Some("used in binding"),
             size: 16,
-            usage: (
-                bits: 129, // STORAGE + MAP_READ
-            ),
+            usage: 129, // STORAGE + MAP_READ
             mapped_at_creation: false,
         )),
         CreateBindGroupLayout(Id(0, 1, Empty), (
@@ -101,9 +93,7 @@
             entries: [
                 (
                     binding: 0,
-                    visibility: (
-                        bits: 4,
-                    ),
+                    visibility: 4,
                     ty: Buffer(
                         ty: Storage(
                             read_only: false,
