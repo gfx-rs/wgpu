@@ -1,5 +1,5 @@
 (
-    features: (bits: 0x0),
+    features: 0x0,
     expectations: [], //not crash!
     actions: [
         CreatePipelineLayout(Id(0, 1, Empty), (
@@ -29,9 +29,7 @@
         CreateBuffer(Id(0, 1, Empty), (
             label: None,
             size: 16,
-            usage: (
-                bits: 64,
-            ),
+            usage: 64,
             mapped_at_creation: false,
         )),
         CreateBindGroupLayout(Id(0, 1, Empty), (
@@ -39,7 +37,7 @@
             entries: [
                 (
                     binding: 0,
-                    visibility: (bits: 0x3),
+                    visibility: 0x3,
                     ty: Buffer(
                         ty: Uniform,
                     ),

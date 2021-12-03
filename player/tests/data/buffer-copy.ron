@@ -1,5 +1,5 @@
 (
-    features: (bits: 0x0),
+    features: 0x0,
     expectations: [
         (
             name: "basic",
@@ -14,9 +14,7 @@
             (
                 label: Some("dummy"),
                 size: 16,
-                usage: (
-                    bits: 41,
-                ),
+                usage: 41,
                 mapped_at_creation: false,
             ),
         ),

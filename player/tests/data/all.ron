@@ -1,5 +1,5 @@
 (
-	backends: (bits: 0xF),
+	backends: 0x3E,
 	tests: [
 		"bind-group.ron",
 		"buffer-copy.ron",

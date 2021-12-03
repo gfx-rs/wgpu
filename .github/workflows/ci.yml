@@ -156,7 +156,7 @@ jobs:
 
           # check with all features
           # explicitly don't mention wgpu-hal so that --all-features don't apply to it
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features 
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --examples --tests --all-features
 
           # build docs
           cargo doc --target ${{ matrix.target }} --no-deps
@@ -167,7 +167,10 @@ jobs:
         shell: bash
         run: |
           # run wgpu-info
-          cargo run --target ${{ matrix.target }} --bin wgpu-info
+          cargo run --bin wgpu-info
+          # run player tests
+          cargo test -p player
+
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
             # run player tests
