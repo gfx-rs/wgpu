@@ -10,6 +10,10 @@ fn main_1() {
     let _e18 = (_e15.xy * 5.0);
     x.x = _e18.x;
     x.y = _e18.y;
+    let _e23 = x;
+    let _e27 = (_e23.zy + vec2<f32>(1.0));
+    x.z = _e27.x;
+    x.y = _e27.y;
     return;
 }
 
