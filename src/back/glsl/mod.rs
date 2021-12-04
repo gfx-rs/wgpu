@@ -2714,13 +2714,13 @@ impl<'a, W: Write> Writer<'a, W> {
     fn collect_reflection_info(&self) -> Result<ReflectionInfo, Error> {
         use std::collections::hash_map::Entry;
         let info = self.info.get_entry_point(self.entry_point_idx as usize);
-        let mut mappings = crate::FastHashMap::default();
+        let mut texture_mapping = crate::FastHashMap::default();
         let mut uniforms = crate::FastHashMap::default();
 
         for sampling in info.sampling_set.iter() {
             let tex_name = self.reflection_names_globals[&sampling.image].clone();
 
-            match mappings.entry(tex_name) {
+            match texture_mapping.entry(tex_name) {
                 Entry::Vacant(v) => {
                     v.insert(TextureMapping {
                         texture: sampling.image,
@@ -2748,12 +2748,26 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     _ => (),
                 },
-                _ => continue,
+                crate::TypeInner::Image { .. } => {
+                    let tex_name = self.reflection_names_globals[&handle].clone();
+                    match texture_mapping.entry(tex_name) {
+                        Entry::Vacant(v) => {
+                            v.insert(TextureMapping {
+                                texture: handle,
+                                sampler: None,
+                            });
+                        }
+                        Entry::Occupied(_) => {
+                            // already used with a sampler, do nothing
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
         Ok(ReflectionInfo {
-            texture_mapping: mappings,
+            texture_mapping,
             uniforms,
         })
     }
