@@ -13,6 +13,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = []
+angle = ["hal/gles"]
 # Enable API tracing
 trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
 # Enable API replaying

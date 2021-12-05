@@ -13,7 +13,8 @@ fn main() {
         dx11: { all(false, not(wasm), windows) },
         gl: {
             any(
-                all(not(wasm), unix_wo_apple),
+                unix_wo_apple,
+                feature = "angle",
                 wasm
             )
         },

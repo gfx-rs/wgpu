@@ -51,19 +51,15 @@
 compile_error!("Metal API enabled on non-Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 #[cfg(all(feature = "dx12", not(windows)))]
 compile_error!("DX12 API enabled on non-Windows OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
+#[cfg(all(feature = "gles", any(target_os = "macos", target_os = "ios")))]
+compile_error!("Gles API enabled on Apple OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 
 #[cfg(all(feature = "dx12", windows))]
 mod dx12;
 mod empty;
-#[cfg(all(
-    feature = "gles",
-    any(
-        target_arch = "wasm32",
-        all(unix, not(target_os = "ios"), not(target_os = "macos"))
-    )
-))]
+#[cfg(all(feature = "gles"))]
 mod gles;
-#[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+#[cfg(all(feature = "metal"))]
 mod metal;
 #[cfg(feature = "vulkan")]
 mod vulkan;
@@ -73,13 +69,7 @@ pub mod api {
     #[cfg(feature = "dx12")]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
-    #[cfg(all(
-        feature = "gles",
-        any(
-            target_arch = "wasm32",
-            all(unix, not(target_os = "ios"), not(target_os = "macos"))
-        )
-    ))]
+    #[cfg(feature = "gles")]
     pub use super::gles::Api as Gles;
     #[cfg(feature = "metal")]
     pub use super::metal::Api as Metal;

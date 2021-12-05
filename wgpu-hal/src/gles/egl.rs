@@ -181,13 +181,16 @@ fn choose_config(
         match egl.choose_first_config(display, &attributes) {
             Ok(Some(config)) => {
                 if tier_max == 1 {
-                    log::warn!(
-                        "EGL says it can present to the window but not natively. {}.",
-                        "This has been confirmed to malfunction on Intel+NV laptops",
-                    );
+                    //Note: this has been confirmed to malfunction on Intel+NV laptops,
+                    // but also on Angle.
+                    log::warn!("EGL says it can present to the window but not natively",);
                 }
                 // Android emulator can't natively present either.
-                let tier_threshold = if cfg!(target_os = "android") { 1 } else { 2 };
+                let tier_threshold = if cfg!(target_os = "android") || cfg!(windows) {
+                    1
+                } else {
+                    2
+                };
                 return Ok((config, tier_max >= tier_threshold));
             }
             Ok(None) => {
@@ -517,10 +520,15 @@ unsafe impl Sync for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let egl = match egl::DynamicInstance::<egl::EGL1_4>::load_required() {
+        let egl_result = if cfg!(windows) {
+            egl::DynamicInstance::<egl::EGL1_4>::load_required_from_filename("libEGL.dll")
+        } else {
+            egl::DynamicInstance::<egl::EGL1_4>::load_required()
+        };
+        let egl = match egl_result {
             Ok(egl) => Arc::new(egl),
             Err(e) => {
-                log::warn!("Unable to open libEGL.so: {:?}", e);
+                log::info!("Unable to open libEGL: {:?}", e);
                 return Err(crate::InstanceError);
             }
         };
@@ -665,6 +673,7 @@ impl crate::Instance<super::Api> for Instance {
         match raw_window_handle {
             Rwh::Xlib(_) => {}
             Rwh::Xcb(_) => {}
+            Rwh::Win32(_) => {}
             #[cfg(target_os = "android")]
             Rwh::AndroidNdk(handle) => {
                 let format = inner
@@ -950,6 +959,7 @@ impl crate::Surface<super::Api> for Surface {
                         wl_window = Some(window);
                         window
                     }
+                    (None, Rwh::Win32(handle)) => handle.hwnd,
                     _ => {
                         log::warn!(
                             "Initialized platform {:?} doesn't work with window {:?}",
@@ -965,7 +975,10 @@ impl crate::Surface<super::Api> for Surface {
                     // We don't want any of the buffering done by the driver, because we
                     // manage a swapchain on our side.
                     // Some drivers just fail on surface creation seeing `EGL_SINGLE_BUFFER`.
-                    if cfg!(target_os = "android") || wsi_kind == Some(WindowKind::AngleX11) {
+                    if cfg!(target_os = "android")
+                        || cfg!(windows)
+                        || wsi_kind == Some(WindowKind::AngleX11)
+                    {
                         egl::BACK_BUFFER
                     } else {
                         egl::SINGLE_BUFFER
