@@ -81,6 +81,7 @@ spirv = ["naga/spv-in"]
 glsl = ["naga/glsl-in"]
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
+angle = ["wgc/angle"]
 webgl = ["wgc"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]

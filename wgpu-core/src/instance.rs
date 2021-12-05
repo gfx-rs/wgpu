@@ -94,7 +94,7 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(name: &str, backends: Backends) -> Self {
-        fn init<A: HalApi>(mask: Backends) -> Option<A::Instance> {
+        fn init<A: HalApi>(_: A, mask: Backends) -> Option<A::Instance> {
             if mask.contains(A::VARIANT.into()) {
                 let mut flags = hal::InstanceFlags::empty();
                 if cfg!(debug_assertions) {
@@ -114,39 +114,40 @@ impl Instance {
         Self {
             name: name.to_string(),
             #[cfg(vulkan)]
-            vulkan: init::<hal::api::Vulkan>(backends),
+            vulkan: init(hal::api::Vulkan, backends),
             #[cfg(metal)]
-            metal: init::<hal::api::Metal>(backends),
+            metal: init(hal::api::Metal, backends),
             #[cfg(dx12)]
-            dx12: init::<hal::api::Dx12>(backends),
+            dx12: init(hal::api::Dx12, backends),
             #[cfg(dx11)]
-            dx11: init::<hal::api::Dx11>(backends),
+            dx11: init(hal::api::Dx11, backends),
             #[cfg(gl)]
-            gl: init::<hal::api::Gles>(backends),
+            gl: init(hal::api::Gles, backends),
         }
     }
 
     pub(crate) fn destroy_surface(&self, surface: Surface) {
-        backends_map! {
-            let map = |(surface_backend, self_backend)| {
-                unsafe {
-                    if let Some(suf) = surface_backend {
-                        self_backend.as_ref().unwrap().destroy_surface(suf.raw);
-                    }
+        fn destroy<A: HalApi>(
+            _: A,
+            instance: &Option<A::Instance>,
+            surface: Option<HalSurface<A>>,
+        ) {
+            unsafe {
+                if let Some(suf) = surface {
+                    instance.as_ref().unwrap().destroy_surface(suf.raw);
                 }
-            };
-
-            #[cfg(vulkan)]
-            map((surface.vulkan, &self.vulkan)),
-            #[cfg(metal)]
-            map((surface.metal, &self.metal)),
-            #[cfg(dx12)]
-            map((surface.dx12, &self.dx12)),
-            #[cfg(dx11)]
-            map((surface.dx11, &self.dx11)),
-            #[cfg(gl)]
-            map((surface.gl, &self.gl)),
+            }
         }
+        #[cfg(vulkan)]
+        destroy(hal::api::Vulkan, &self.vulkan, surface.vulkan);
+        #[cfg(metal)]
+        destroy(hal::api::Metal, &self.metal, surface.metal);
+        #[cfg(dx12)]
+        destroy(hal::api::Dx12, &self.dx12, surface.dx12);
+        #[cfg(dx11)]
+        destroy(hal::api::Dx11, &self.dx11, surface.dx11);
+        #[cfg(gl)]
+        destroy(hal::api::Gles, &self.gl, surface.gl);
     }
 }
 
@@ -437,7 +438,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> SurfaceId {
         profiling::scope!("create_surface", "Instance");
 
-        //Note: using adummy argument to work around the following error:
+        //Note: using a dummy argument to work around the following error:
         //> cannot provide explicit generic arguments when `impl Trait` is used in argument position
         fn init<A: hal::Api>(
             _: A,
@@ -509,44 +510,89 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.instance.destroy_surface(surface.unwrap());
     }
 
+    fn enumerate<A: HalApi>(
+        &self,
+        _: A,
+        instance: &Option<A::Instance>,
+        inputs: &AdapterInputs<Input<G, AdapterId>>,
+        list: &mut Vec<AdapterId>,
+    ) {
+        let inst = match *instance {
+            Some(ref inst) => inst,
+            None => return,
+        };
+        let id_backend = match inputs.find(A::VARIANT) {
+            Some(id) => id,
+            None => return,
+        };
+
+        profiling::scope!("enumerating", format!("{:?}", A::VARIANT));
+        let hub = HalApi::hub(self);
+        let mut token = Token::root();
+
+        let hal_adapters = unsafe { inst.enumerate_adapters() };
+        for raw in hal_adapters {
+            let adapter = Adapter::new(raw);
+            log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
+            let id = hub
+                .adapters
+                .prepare(id_backend.clone())
+                .assign(adapter, &mut token);
+            list.push(id.0);
+        }
+    }
+
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         profiling::scope!("enumerate_adapters", "Instance");
 
-        let instance = &self.instance;
-        let mut token = Token::root();
         let mut adapters = Vec::new();
 
-        backends_map! {
-            let map = |(instance_field, backend, backend_info)| {
-                if let Some(ref inst) = *instance_field {
-                    let hub = HalApi::hub(self);
-                    if let Some(id_backend) = inputs.find(backend) {
-                        profiling::scope!("enumerating", backend_info);
-                        for raw in unsafe {inst.enumerate_adapters()} {
-                            let adapter = Adapter::new(raw);
-                            log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
-                            let id = hub.adapters
-                                .prepare(id_backend.clone())
-                                .assign(adapter, &mut token);
-                            adapters.push(id.0);
-                        }
-                    }
-                }
-            };
-
-            #[cfg(vulkan)]
-            map((&instance.vulkan, Backend::Vulkan, "Vulkan")),
-            #[cfg(metal)]
-            map((&instance.metal, Backend::Metal, "Metal")),
-            #[cfg(dx12)]
-            map((&instance.dx12, Backend::Dx12, "Dx12")),
-            #[cfg(dx11)]
-            map((&instance.dx11, Backend::Dx11, "Dx11")),
-            #[cfg(gl)]
-            map((&instance.gl, Backend::Gl, "GL")),
-        }
+        #[cfg(vulkan)]
+        self.enumerate(
+            hal::api::Vulkan,
+            &self.instance.vulkan,
+            &inputs,
+            &mut adapters,
+        );
+        #[cfg(metal)]
+        self.enumerate(
+            hal::api::Metal,
+            &self.instance.metal,
+            &inputs,
+            &mut adapters,
+        );
+        #[cfg(dx12)]
+        self.enumerate(hal::api::Dx12, &self.instance.dx12, &inputs, &mut adapters);
+        #[cfg(dx11)]
+        self.enumerate(hal::api::Dx11, &self.instance.dx11, &inputs, &mut adapters);
+        #[cfg(gl)]
+        self.enumerate(hal::api::Gles, &self.instance.gl, &inputs, &mut adapters);
 
         adapters
+    }
+
+    fn select<A: HalApi>(
+        &self,
+        selected: &mut usize,
+        new_id: Option<Input<G, AdapterId>>,
+        mut list: Vec<hal::ExposedAdapter<A>>,
+    ) -> Option<AdapterId> {
+        match selected.checked_sub(list.len()) {
+            Some(left) => {
+                *selected = left;
+                None
+            }
+            None => {
+                let mut token = Token::root();
+                let adapter = Adapter::new(list.swap_remove(*selected));
+                log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
+                let id = HalApi::hub(self)
+                    .adapters
+                    .prepare(new_id.unwrap())
+                    .assign(adapter, &mut token);
+                Some(id.0)
+            }
+        }
     }
 
     pub fn request_adapter(
@@ -585,7 +631,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let mut token = Token::root();
-        let (surface_guard, mut token) = self.surfaces.read(&mut token);
+        let (surface_guard, _) = self.surfaces.read(&mut token);
         let compatible_surface = desc
             .compatible_surface
             .map(|id| {
@@ -597,7 +643,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut device_types = Vec::new();
 
         #[cfg(vulkan)]
-        let (mut id_vulkan, adapters_vk) = gather(
+        let (id_vulkan, adapters_vk) = gather(
             hal::api::Vulkan,
             self.instance.vulkan.as_ref(),
             &inputs,
@@ -606,7 +652,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut device_types,
         );
         #[cfg(metal)]
-        let (mut id_metal, adapters_metal) = gather(
+        let (id_metal, adapters_metal) = gather(
             hal::api::Metal,
             self.instance.metal.as_ref(),
             &inputs,
@@ -615,7 +661,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut device_types,
         );
         #[cfg(dx12)]
-        let (mut id_dx12, adapters_dx12) = gather(
+        let (id_dx12, adapters_dx12) = gather(
             hal::api::Dx12,
             self.instance.dx12.as_ref(),
             &inputs,
@@ -624,7 +670,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut device_types,
         );
         #[cfg(dx11)]
-        let (mut id_dx11, adapters_dx11) = gather(
+        let (id_dx11, adapters_dx11) = gather(
             hal::api::Dx11,
             self.instance.dx11.as_ref(),
             &inputs,
@@ -633,7 +679,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut device_types,
         );
         #[cfg(gl)]
-        let (mut id_gl, adapters_gl) = gather(
+        let (id_gl, adapters_gl) = gather(
             hal::api::Gles,
             self.instance.gl.as_ref(),
             &inputs,
@@ -642,6 +688,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &mut device_types,
         );
 
+        // need to free the token to be used by `select`
+        drop(surface_guard);
+        drop(token);
         if device_types.is_empty() {
             return Err(RequestAdapterError::NotFound);
         }
@@ -675,33 +724,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);
-
-        backends_map! {
-            let map = |(info_adapter, id_backend, mut adapters_backend)| {
-                if selected < adapters_backend.len() {
-                    let adapter = Adapter::new(adapters_backend.swap_remove(selected));
-                    log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
-                    let id = HalApi::hub(self).adapters
-                        .prepare(id_backend.take().unwrap())
-                        .assign(adapter, &mut token);
-                    return Ok(id.0);
-                }
-                selected -= adapters_backend.len();
-            };
-
-            #[cfg(vulkan)]
-            map(("Vulkan", &mut id_vulkan, adapters_vk)),
-            #[cfg(metal)]
-            map(("Metal", &mut id_metal, adapters_metal)),
-            #[cfg(dx12)]
-            map(("Dx12", &mut id_dx12, adapters_dx12)),
-            #[cfg(dx11)]
-            map(("Dx11", &mut id_dx11, adapters_dx11)),
-            #[cfg(gl)]
-            map(("GL", &mut id_gl, adapters_gl)),
+        #[cfg(vulkan)]
+        if let Some(id) = self.select(&mut selected, id_vulkan, adapters_vk) {
+            return Ok(id);
         }
-
+        #[cfg(metal)]
+        if let Some(id) = self.select(&mut selected, id_metal, adapters_metal) {
+            return Ok(id);
+        }
+        #[cfg(dx12)]
+        if let Some(id) = self.select(&mut selected, id_dx12, adapters_dx12) {
+            return Ok(id);
+        }
+        #[cfg(dx11)]
+        if let Some(id) = self.select(&mut selected, id_dx11, adapters_dx11) {
+            return Ok(id);
+        }
+        #[cfg(gl)]
+        if let Some(id) = self.select(&mut selected, id_gl, adapters_gl) {
+            return Ok(id);
+        }
         let _ = selected;
+
         log::warn!("Some adapters are present, but enumerating them failed!");
         Err(RequestAdapterError::NotFound)
     }

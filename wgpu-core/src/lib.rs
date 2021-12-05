@@ -27,9 +27,6 @@
     clippy::pattern_type_mismatch,
 )]
 
-#[macro_use]
-mod macros;
-
 pub mod binding_model;
 pub mod command;
 mod conv;
@@ -213,6 +210,7 @@ macro_rules! gfx_select {
             //wgt::Backend::Dx11 => $global.$method::<$crate::api::Dx11>( $($param),* ),
             #[cfg(any(
                 all(unix, not(target_os = "macos"), not(target_os = "ios")),
+                feature = "angle",
                 target_arch = "wasm32"
             ))]
             wgt::Backend::Gl => $global.$method::<$crate::api::Gles>( $($param),+ ),
