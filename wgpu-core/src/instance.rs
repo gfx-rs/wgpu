@@ -496,6 +496,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 //acquired_texture: None,
             }),
+            #[cfg(gl)]
+            gl: None,
         };
 
         let mut token = Token::root();

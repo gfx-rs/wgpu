@@ -14,6 +14,8 @@
     clippy::needless_lifetimes,
     // No need for defaults in the internal types.
     clippy::new_without_default,
+    // Needless updates are more scaleable, easier to play with features.
+    clippy::needless_update,
     // For some reason `rustc` can warn about these in const generics even
     // though they are required.
     unused_braces,

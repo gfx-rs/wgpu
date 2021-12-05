@@ -66,19 +66,20 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ## Supported Platforms
 
-   API   |    Windows                    |  Linux & Android          |    macOS & iOS     |
-  -----  | ----------------------------- | ------------------------- | ------------------ |
-  Vulkan | :white_check_mark:            | :white_check_mark:        |                    |
-  Metal  |                               |                           | :white_check_mark: |
-  DX12   | :white_check_mark: (W10 only) |                           |                    |
-  DX11   | :hammer_and_wrench:           |                           |                    |
-  GLES3  | :triangular_ruler:            | :ok: + :triangular_ruler: |                    |
+   API   |    Windows                    |  Linux & Android          |    macOS & iOS      |
+  -----  | ----------------------------- | ------------------------- | ------------------- |
+  Vulkan | :white_check_mark:            | :white_check_mark:        |                     |
+  Metal  |                               |                           | :white_check_mark:  |
+  DX12   | :white_check_mark: (W10 only) |                           |                     |
+  DX11   | :hammer_and_wrench:           |                           |                     |
+  GLES3  |                               | :ok:                      |                     |
+  Angle  | :ok:                          | :ok:                      | :hammer_and_wrench: |
 
-:white_check_mark: = First Class Support — :ok: = Best Effort Support — :triangular_ruler: = via [Angle](angleproject.org) — :hammer_and_wrench: = Unsupported, but support in progress
+:white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
 
 ### Angle
 
-Angle is a translation layer from GLES to other backends, developed by Google.
+[Angle](angleproject.org) is a translation layer from GLES to other backends, developed by Google.
 We support running our GLES3 backend over it in order to reach platforms with GLES2 or DX11 support, which aren't accessible otherwise.
 In order to run with Angle, "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
 These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts.
