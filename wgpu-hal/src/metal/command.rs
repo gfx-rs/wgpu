@@ -592,7 +592,27 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         _offset: u32,
         _data: &[u32],
     ) {
-        //TODO
+        if _stages.contains(wgt::ShaderStages::COMPUTE) {
+            self.state.compute.as_ref().unwrap().set_bytes(
+                _offset as _,
+                (_data.len() * WORD_SIZE) as u64,
+                _data.as_ptr() as _,
+            )
+        }
+        if _stages.contains(wgt::ShaderStages::VERTEX) {
+            self.state.render.as_ref().unwrap().set_vertex_bytes(
+                _offset as _,
+                (_data.len() * WORD_SIZE) as u64,
+                _data.as_ptr() as _,
+            )
+        }
+        if _stages.contains(wgt::ShaderStages::FRAGMENT) {
+            self.state.render.as_ref().unwrap().set_fragment_bytes(
+                _offset as _,
+                (_data.len() * WORD_SIZE) as u64,
+                _data.as_ptr() as _,
+            )
+        }
     }
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {
