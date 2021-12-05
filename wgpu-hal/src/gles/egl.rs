@@ -416,15 +416,21 @@ impl Inner {
             }
         }
         if needs_robustness {
-            if version >= (1, 5) {
-                log::info!("\tEGL context: +robust access");
-                context_attributes.push(egl::CONTEXT_OPENGL_ROBUST_ACCESS);
-                context_attributes.push(egl::TRUE as _);
-            } else if display_extensions.contains("EGL_EXT_create_context_robustness") {
+            //Note: we specifically check the extension first, and then the core.
+            // This is because the core version can fail if robustness is not supported
+            // (regardless of whether the extension is supported!).
+            // In fact, Angle does precisely that awful behavior.
+            if display_extensions.contains("EGL_EXT_create_context_robustness") {
                 log::info!("\tEGL context: +robust access EXT");
                 context_attributes.push(EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT);
                 context_attributes.push(egl::TRUE as _);
+            } else if version >= (1, 5) {
+                log::info!("\tEGL context: +robust access");
+                context_attributes.push(egl::CONTEXT_OPENGL_ROBUST_ACCESS);
+                context_attributes.push(egl::TRUE as _);
             } else {
+                //Note: we aren't trying `EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR`
+                // because it's for desktop GL only, not GLES.
                 log::warn!("\tEGL context: -robust access");
             }
 
