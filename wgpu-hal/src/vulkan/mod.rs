@@ -172,6 +172,9 @@ bitflags::bitflags!(
     pub struct Workarounds: u32 {
         /// Only generate SPIR-V for one entry point at a time.
         const SEPARATE_ENTRY_POINTS = 0x1;
+        /// Qualcomm OOMs when there are zero color attachments but a non-null pointer
+        /// to a subpass resolve attachment array. This nulls out that pointer in that case.
+        const EMPTY_RESOLVE_ATTACHMENT_LISTS = 0x2;
     }
 );
 

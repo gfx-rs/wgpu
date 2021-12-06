@@ -136,6 +136,15 @@ impl super::DeviceShared {
                         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
                         .color_attachments(&color_refs)
                         .resolve_attachments(&resolve_refs);
+
+                    if self
+                        .workarounds
+                        .contains(super::Workarounds::EMPTY_RESOLVE_ATTACHMENT_LISTS)
+                        && resolve_refs.is_empty()
+                    {
+                        vk_subpass.p_resolve_attachments = ptr::null();
+                    }
+
                     if let Some(ref reference) = ds_ref {
                         vk_subpass = vk_subpass.depth_stencil_attachment(reference)
                     }
