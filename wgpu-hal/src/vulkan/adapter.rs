@@ -881,6 +881,10 @@ impl super::Instance {
                         == db::intel::DEVICE_SKY_LAKE_MASK);
             // TODO: only enable for particular devices
             workarounds |= super::Workarounds::SEPARATE_ENTRY_POINTS;
+            workarounds.set(
+                super::Workarounds::EMPTY_RESOLVE_ATTACHMENT_LISTS,
+                phd_capabilities.properties.vendor_id == db::qualcomm::VENDOR,
+            );
         };
 
         if phd_capabilities.properties.api_version == vk::API_VERSION_1_0
