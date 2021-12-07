@@ -324,8 +324,6 @@ pub enum CreateRenderPipelineError {
         strip_index_format: Option<wgt::IndexFormat>,
         topology: wgt::PrimitiveTopology,
     },
-    #[error("strip index format is None while using the strip topology {topology:?}")]
-    NoStripIndexFormatForStripTopology { topology: wgt::PrimitiveTopology },
     #[error("Conservative Rasterization is only supported for wgt::PolygonMode::Fill")]
     ConservativeRasterizationNonFillPolygonMode,
     #[error(transparent)]
