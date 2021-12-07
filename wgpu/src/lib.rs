@@ -2469,7 +2469,7 @@ impl<'a> RenderPass<'a> {
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
     ///
-    /// If the bind group have dynamic offsets, provide them in order of their declaration.
+    /// If the bind group have dynamic offsets, provide them in binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
     pub fn set_bind_group(
@@ -2876,7 +2876,7 @@ impl<'a> ComputePass<'a> {
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when the `dispatch()` function is called must match the layout of this bind group.
     ///
-    /// If the bind group have dynamic offsets, provide them in order of their declaration.
+    /// If the bind group have dynamic offsets, provide them in the binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
     pub fn set_bind_group(
@@ -3003,7 +3003,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// Sets the active bind group for a given bind group index. The bind group layout
     /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
     ///
-    /// If the bind group have dynamic offsets, provide them in order of their declaration.
+    /// If the bind group have dynamic offsets, provide them in the binding order.
     pub fn set_bind_group(
         &mut self,
         index: u32,
