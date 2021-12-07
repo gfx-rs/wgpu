@@ -78,7 +78,7 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     println!("\t\tMax Compute Workgroup Size X:                    {}", max_compute_workgroup_size_x);
     println!("\t\tMax Compute Workgroup Size Y:                    {}", max_compute_workgroup_size_y);
     println!("\t\tMax Compute Workgroup Size Z:                    {}", max_compute_workgroup_size_z);
-    println!("\t\tMax Compute Workgroups Per Dimmension:           {}", max_compute_workgroups_per_dimension);
+    println!("\t\tMax Compute Workgroups Per Dimension:           {}", max_compute_workgroups_per_dimension);
     println!("\tDownlevel Properties:");
     let wgpu::DownlevelCapabilities {
         shader_model,
