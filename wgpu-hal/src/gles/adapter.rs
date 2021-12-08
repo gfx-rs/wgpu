@@ -387,6 +387,18 @@ impl super::Adapter {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
+            max_inter_stage_shader_components: gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS)
+                as u32,
+            max_compute_workgroup_storage_size: if supports_work_group_params {
+                gl.get_parameter_i32(glow::MAX_COMPUTE_SHARED_MEMORY_SIZE) as u32
+            } else {
+                0
+            },
+            max_compute_invocations_per_workgroup: if supports_work_group_params {
+                gl.get_parameter_i32(glow::MAX_COMPUTE_WORK_GROUP_INVOCATIONS) as u32
+            } else {
+                0
+            },
             max_compute_workgroup_size_x: if supports_work_group_params {
                 gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, 0) as u32
             } else {

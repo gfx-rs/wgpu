@@ -64,6 +64,13 @@ fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLim
     compare!(max_push_constant_size, Less);
     compare!(min_uniform_buffer_offset_alignment, Greater);
     compare!(min_storage_buffer_offset_alignment, Greater);
+    compare!(max_inter_stage_shader_components, Less);
+    compare!(max_compute_workgroup_storage_size, Less);
+    compare!(max_compute_invocations_per_workgroup, Less);
+    compare!(max_compute_workgroup_size_x, Less);
+    compare!(max_compute_workgroup_size_y, Less);
+    compare!(max_compute_workgroup_size_z, Less);
+    compare!(max_compute_workgroups_per_dimension, Less);
     failed
 }
 

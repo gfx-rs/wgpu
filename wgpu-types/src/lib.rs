@@ -657,7 +657,13 @@ pub struct Limits {
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
-
+    /// Maximum allowed number of components (scalars) of input or output locations for
+    /// inter-stage communication (vertex outputs to fragment inputs).
+    pub max_inter_stage_shader_components: u32,
+    /// Maximum number of bytes used for workgroup memory in a compute entry point.
+    pub max_compute_workgroup_storage_size: u32,
+    /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
+    pub max_compute_invocations_per_workgroup: u32,
     /// The maximum value of the workgroup_size X dimension for a compute stage `ShaderModule` entry-point.
     /// Defaults to 256.
     pub max_compute_workgroup_size_x: u32,
@@ -695,6 +701,9 @@ impl Default for Limits {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
+            max_inter_stage_shader_components: 60,
+            max_compute_workgroup_storage_size: 16352,
+            max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
@@ -727,6 +736,9 @@ impl Limits {
             max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
+            max_inter_stage_shader_components: 60,
+            max_compute_workgroup_storage_size: 16352,
+            max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
@@ -743,6 +755,12 @@ impl Limits {
             max_dynamic_storage_buffers_per_pipeline_layout: 0,
             max_storage_buffer_binding_size: 0,
             max_vertex_buffer_array_stride: 255,
+            max_compute_workgroup_storage_size: 0,
+            max_compute_invocations_per_workgroup: 0,
+            max_compute_workgroup_size_x: 0,
+            max_compute_workgroup_size_y: 0,
+            max_compute_workgroup_size_z: 0,
+            max_compute_workgroups_per_dimension: 0,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()

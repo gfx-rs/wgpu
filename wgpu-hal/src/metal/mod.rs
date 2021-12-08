@@ -212,6 +212,8 @@ struct PrivateCapabilities {
     max_texture_layers: u64,
     max_fragment_input_components: u64,
     max_color_render_targets: u8,
+    max_varying_components: u32,
+    max_threads_per_group: u32,
     max_total_threadgroup_memory: u32,
     sample_count_mask: u8,
     supports_debug_markers: bool,
