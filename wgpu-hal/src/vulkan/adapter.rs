@@ -696,6 +696,11 @@ impl PhysicalDeviceCapabilities {
             max_push_constant_size: limits.max_push_constants_size,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
+            max_inter_stage_shader_components: limits
+                .max_vertex_output_components
+                .min(limits.max_fragment_input_components),
+            max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
+            max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
             max_compute_workgroup_size_x: max_compute_workgroup_sizes[0],
             max_compute_workgroup_size_y: max_compute_workgroup_sizes[1],
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],

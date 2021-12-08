@@ -45,6 +45,16 @@ impl fmt::Display for NumericDimension {
     }
 }
 
+impl NumericDimension {
+    fn num_components(&self) -> u32 {
+        match *self {
+            Self::Scalar => 1,
+            Self::Vector(size) => size as u32,
+            Self::Matrix(w, h) => w as u32 * h as u32,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct NumericType {
     dim: NumericDimension,
@@ -226,9 +236,15 @@ pub enum StageError {
     #[error("shader module is invalid")]
     InvalidModule,
     #[error(
-        "shader entry point current workgroup size {current:?} must be less or equal to {limit:?}"
+        "shader entry point current workgroup size {current:?} must be less or equal to {limit:?} of total {total}"
     )]
-    InvalidComputeEntryPoint { current: [u32; 3], limit: [u32; 3] },
+    InvalidWorkgroupSize {
+        current: [u32; 3],
+        limit: [u32; 3],
+        total: u32,
+    },
+    #[error("shader uses {used} inter-stage components above the limit of {limit}")]
+    TooManyVaryings { used: u32, limit: u32 },
     #[error("unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("shader global {0:?} is not available in the layout pipeline layout")]
@@ -1083,17 +1099,23 @@ impl Interface {
                 self.limits.max_compute_workgroup_size_y,
                 self.limits.max_compute_workgroup_size_z,
             ];
+            let total_invocations = entry_point.workgroup_size.iter().product::<u32>();
 
-            if entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
+            if entry_point.workgroup_size.iter().any(|&s| s == 0)
+                || total_invocations > self.limits.max_compute_invocations_per_workgroup
+                || entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
                 || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
                 || entry_point.workgroup_size[2] > max_workgroup_size_limits[2]
             {
-                return Err(StageError::InvalidComputeEntryPoint {
+                return Err(StageError::InvalidWorkgroupSize {
                     current: entry_point.workgroup_size,
                     limit: max_workgroup_size_limits,
+                    total: self.limits.max_compute_invocations_per_workgroup,
                 });
             }
         }
+
+        let mut inter_stage_components = 0;
 
         // check inputs compatibility
         for input in entry_point.inputs.iter() {
@@ -1104,11 +1126,12 @@ impl Interface {
                             .get(&location)
                             .ok_or(InputError::Missing)
                             .and_then(|provided| {
-                                let compatible = match shader_stage {
+                                let (compatible, num_components) = match shader_stage {
                                     // For vertex attributes, there are defaults filled out
                                     // by the driver if data is not provided.
                                     naga::ShaderStage::Vertex => {
-                                        iv.ty.is_compatible_with(&provided.ty)
+                                        // vertex inputs don't count towards inter-stage
+                                        (iv.ty.is_compatible_with(&provided.ty), 0)
                                     }
                                     naga::ShaderStage::Fragment => {
                                         if iv.interpolation != provided.interpolation {
@@ -1121,26 +1144,51 @@ impl Interface {
                                                 provided.sampling,
                                             ));
                                         }
-                                        iv.ty.is_subtype_of(&provided.ty)
+                                        (
+                                            iv.ty.is_subtype_of(&provided.ty),
+                                            iv.ty.dim.num_components(),
+                                        )
                                     }
-                                    naga::ShaderStage::Compute => false,
+                                    naga::ShaderStage::Compute => (false, 0),
                                 };
                                 if compatible {
-                                    Ok(())
+                                    Ok(num_components)
                                 } else {
                                     Err(InputError::WrongType(provided.ty))
                                 }
                             });
-                    if let Err(error) = result {
-                        return Err(StageError::Input {
-                            location,
-                            var: iv.clone(),
-                            error,
-                        });
+                    match result {
+                        Ok(num_components) => {
+                            inter_stage_components += num_components;
+                        }
+                        Err(error) => {
+                            return Err(StageError::Input {
+                                location,
+                                var: iv.clone(),
+                                error,
+                            })
+                        }
                     }
                 }
                 Varying::BuiltIn(_) => {}
             }
+        }
+
+        if shader_stage == naga::ShaderStage::Vertex {
+            for output in entry_point.outputs.iter() {
+                //TODO: count builtins towards the limit?
+                inter_stage_components += match *output {
+                    Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
+                    Varying::BuiltIn(_) => 0,
+                };
+            }
+        }
+
+        if inter_stage_components > self.limits.max_inter_stage_shader_components {
+            return Err(StageError::TooManyVaryings {
+                used: inter_stage_components,
+                limit: self.limits.max_inter_stage_shader_components,
+            });
         }
 
         let outputs = entry_point
