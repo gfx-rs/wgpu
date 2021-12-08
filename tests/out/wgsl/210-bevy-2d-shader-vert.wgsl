@@ -1,14 +1,11 @@
-[[block]]
 struct Camera {
     ViewProj: mat4x4<f32>;
 };
 
-[[block]]
 struct Transform {
     Model: mat4x4<f32>;
 };
 
-[[block]]
 struct Sprite_size {
     size: vec2<f32>;
 };

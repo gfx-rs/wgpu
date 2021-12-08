@@ -20,10 +20,10 @@ OpName %33 "i"
 OpName %34 "v"
 OpName %35 "index_dynamic_array"
 OpDecorate %7 ArrayStride 4
-OpDecorate %8 Block
 OpMemberDecorate %8 0 Offset 0
 OpDecorate %11 DescriptorSet 0
 OpDecorate %11 Binding 0
+OpDecorate %8 Block
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 1
 %3 = OpConstant  %4  10

@@ -43,9 +43,10 @@ impl<'w> BlockContext<'w> {
         let (structure_id, last_member_index) = match self.ir_function.expressions[array] {
             crate::Expression::AccessIndex { base, index } => {
                 match self.ir_function.expressions[base] {
-                    crate::Expression::GlobalVariable(handle) => {
-                        (self.writer.global_variables[handle.index()].id, index)
-                    }
+                    crate::Expression::GlobalVariable(handle) => (
+                        self.writer.global_variables[handle.index()].access_id,
+                        index,
+                    ),
                     _ => return Err(Error::Validation("array length expression")),
                 }
             }

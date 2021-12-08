@@ -18,7 +18,6 @@
         (
             name: Some("PrimeIndices"),
             inner: Struct(
-                top_level: true,
                 members: [
                     (
                         name: Some("data"),

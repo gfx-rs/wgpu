@@ -247,7 +247,7 @@ impl<'w> BlockContext<'w> {
                 }
             }
             crate::Expression::GlobalVariable(handle) => {
-                self.writer.global_variables[handle.index()].id
+                self.writer.global_variables[handle.index()].access_id
             }
             crate::Expression::Constant(handle) => self.writer.constant_ids[handle.index()],
             crate::Expression::Splat { size, value } => {
@@ -1065,7 +1065,7 @@ impl<'w> BlockContext<'w> {
                 }
                 crate::Expression::GlobalVariable(handle) => {
                     let gv = &self.writer.global_variables[handle.index()];
-                    break gv.id;
+                    break gv.access_id;
                 }
                 crate::Expression::LocalVariable(variable) => {
                     let local_var = &self.function.variables[&variable];

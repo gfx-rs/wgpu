@@ -1,4 +1,3 @@
-[[block]]
 struct PrimeIndices {
     data: [[stride(4)]] array<u32>;
 };

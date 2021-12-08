@@ -9,8 +9,7 @@ struct Particle {
     vec2 pos;
     vec2 vel;
 };
-
-uniform SimParams_block_0Cs {
+struct SimParams {
     float deltaT;
     float rule1Distance;
     float rule2Distance;
@@ -18,13 +17,14 @@ uniform SimParams_block_0Cs {
     float rule1Scale;
     float rule2Scale;
     float rule3Scale;
-} _group_0_binding_0;
+};
+uniform SimParams_block_0Compute { SimParams _group_0_binding_0; };
 
-layout(std430) readonly buffer Particles_block_1Cs {
+layout(std430) readonly buffer Particles_block_1Compute {
     Particle particles[];
 } _group_0_binding_1;
 
-layout(std430) buffer Particles_block_2Cs {
+layout(std430) buffer Particles_block_2Compute {
     Particle particles[];
 } _group_0_binding_2;
 

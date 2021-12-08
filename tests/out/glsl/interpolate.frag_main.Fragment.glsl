@@ -9,7 +9,6 @@ struct FragmentInput {
     float perspective_centroid;
     float perspective_sample;
 };
-
 flat in uint _vs2fs_location0;
 noperspective in float _vs2fs_location1;
 noperspective centroid in vec2 _vs2fs_location2;

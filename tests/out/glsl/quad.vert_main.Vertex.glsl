@@ -7,7 +7,6 @@ struct VertexOutput {
     vec2 uv;
     vec4 position;
 };
-
 layout(location = 0) in vec2 _p2vs_location0;
 layout(location = 1) in vec2 _p2vs_location1;
 smooth out vec2 _vs2fs_location0;

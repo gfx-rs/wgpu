@@ -12,7 +12,6 @@ type BackendResult = Result<(), Error>;
 /// WGSL [attribute](https://gpuweb.github.io/gpuweb/wgsl/#attributes)
 enum Attribute {
     Binding(u32),
-    Block,
     BuiltIn(crate::BuiltIn),
     Group(u32),
     Interpolate(Option<crate::Interpolation>, Option<crate::Sampling>),
@@ -107,12 +106,11 @@ impl<W: Write> Writer<W> {
         // Write all structs
         for (handle, ty) in module.types.iter() {
             if let TypeInner::Struct {
-                top_level,
                 ref members,
-                ..
+                span: _,
             } = ty.inner
             {
-                self.write_struct(module, handle, top_level, members)?;
+                self.write_struct(module, handle, members)?;
                 writeln!(self.out)?;
             }
         }
@@ -358,7 +356,6 @@ impl<W: Write> Writer<W> {
 
         for (index, attribute) in attributes.iter().enumerate() {
             match *attribute {
-                Attribute::Block => write!(self.out, "block")?,
                 Attribute::Location(id) => write!(self.out, "location({})", id)?,
                 Attribute::BuiltIn(builtin_attrib) => {
                     if let Some(builtin) = builtin_str(builtin_attrib) {
@@ -432,14 +429,8 @@ impl<W: Write> Writer<W> {
         &mut self,
         module: &Module,
         handle: Handle<crate::Type>,
-        block: bool,
         members: &[crate::StructMember],
     ) -> BackendResult {
-        if block {
-            self.write_attributes(&[Attribute::Block], false)?;
-            writeln!(self.out)?;
-        }
-
         write!(self.out, "struct ")?;
         self.write_struct_name(module, handle)?;
         write!(self.out, " {{")?;

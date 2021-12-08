@@ -430,30 +430,49 @@ impl recyclable::Recyclable for CachedExpressions {
     }
 }
 
+#[derive(Clone)]
 struct GlobalVariable {
-    /// Actual ID of the variable.
-    id: Word,
+    /// ID of the variable. Not really used.
+    var_id: Word,
     /// For `StorageClass::Handle` variables, this ID is recorded in the function
     /// prelude block (and reset before every function) as `OpLoad` of the variable.
     /// It is then used for all the global ops, such as `OpImageSample`.
     handle_id: Word,
+    /// Actual ID used to access this variable.
+    /// For wrapped buffer variables, this ID is `OpAccessChain` into the
+    /// wrapper. Otherwise, the same as `var_id`.
+    ///
+    /// Vulkan requires that globals in the `StorageBuffer` and `Uniform` storage
+    /// classes must be structs with the `Block` decoration, but WGSL and Naga IR
+    /// make no such requirement. So for such variables, we generate a wrapper struct
+    /// type with a single element of the type given by Naga, generate an
+    /// `OpAccessChain` for that member in the function prelude, and use that pointer
+    /// to refer to the global in the function body. This is the id of that access,
+    /// updated for each function in `write_function`.
+    access_id: Word,
 }
 
 impl GlobalVariable {
     fn dummy() -> Self {
         Self {
-            id: 0,
+            var_id: 0,
             handle_id: 0,
+            access_id: 0,
         }
     }
 
     fn new(id: Word) -> Self {
-        Self { id, handle_id: 0 }
+        Self {
+            var_id: id,
+            handle_id: 0,
+            access_id: 0,
+        }
     }
 
     /// Prepare `self` for use within a single function.
     fn reset_for_function(&mut self) {
         self.handle_id = 0;
+        self.access_id = 0;
     }
 }
 

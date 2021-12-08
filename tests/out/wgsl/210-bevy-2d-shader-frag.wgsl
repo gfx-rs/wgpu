@@ -1,4 +1,3 @@
-[[block]]
 struct ColorMaterial_color {
     Color: vec4<f32>;
 };

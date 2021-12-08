@@ -9,7 +9,6 @@ OpExtension "SPV_KHR_storage_buffer_storage_class"
 OpMemoryModel Logical GLSL450
 OpDecorate %10 ArrayStride 4
 OpDecorate %13 ArrayStride 4
-OpDecorate %14 Block
 OpMemberDecorate %14 0 Offset 0
 OpMemberDecorate %14 1 Offset 48
 OpMemberDecorate %14 2 Offset 64
@@ -18,6 +17,7 @@ OpMemberDecorate %14 2 MatrixStride 16
 OpMemberDecorate %14 3 Offset 112
 OpDecorate %15 DescriptorSet 0
 OpDecorate %15 Binding 0
+OpDecorate %14 Block
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 1
 %3 = OpConstant  %4  10

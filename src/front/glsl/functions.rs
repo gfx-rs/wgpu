@@ -1141,11 +1141,7 @@ impl Parser {
             let ty = self.module.types.insert(
                 Type {
                     name: None,
-                    inner: TypeInner::Struct {
-                        top_level: false,
-                        members,
-                        span,
-                    },
+                    inner: TypeInner::Struct { members, span },
                 },
                 Default::default(),
             );

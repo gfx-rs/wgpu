@@ -7,11 +7,11 @@ struct VertexOutput {
     vec4 position;
     vec3 uv;
 };
-
-layout(std140, binding = 0) uniform Data_block_0Vs {
+struct Data {
     mat4x4 proj_inv;
     mat4x4 view;
-} _group_0_binding_0;
+};
+layout(std140, binding = 0) uniform Data_block_0Vertex { Data _group_0_binding_0; };
 
 layout(location = 0) smooth out vec3 _vs2fs_location0;
 

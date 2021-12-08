@@ -5,7 +5,6 @@ struct Particle {
   vel : vec2<f32>;
 };
 
-[[block]]
 struct SimParams {
   deltaT : f32;
   rule1Distance : f32;
@@ -16,7 +15,6 @@ struct SimParams {
   rule3Scale : f32;
 };
 
-[[block]]
 struct Particles {
   particles : [[stride(16)]] array<Particle>;
 };

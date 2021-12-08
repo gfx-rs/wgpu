@@ -1,4 +1,3 @@
-[[block]]
 struct type_1 {
     member: i32;
 };

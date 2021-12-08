@@ -2,13 +2,11 @@
 // implemented separately.
 
 // Storage and Uniform storage classes
-[[block]]
 struct InStorage {
   a: array<vec4<f32>, 10>;
 };
 [[group(0), binding(0)]] var<storage> in_storage: InStorage;
 
-[[block]]
 struct InUniform {
   a: array<vec4<f32>, 20>;
 };

@@ -1,6 +1,5 @@
 // Tests for `naga::back::BoundsCheckPolicy::Restrict`.
 
-[[block]]
 struct Globals {
     a: array<f32, 10>;
     v: vec4<f32>;

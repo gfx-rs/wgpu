@@ -4,7 +4,6 @@ fn f() {
    *px = 10;
 }
 
-[[block]]
 struct DynamicArray {
     arr: array<u32>;
 };

@@ -501,7 +501,6 @@ impl<'source> ParsingContext<'source> {
             Type {
                 name: Some(ty_name),
                 inner: TypeInner::Struct {
-                    top_level: true,
                     members: members.clone(),
                     span,
                 },

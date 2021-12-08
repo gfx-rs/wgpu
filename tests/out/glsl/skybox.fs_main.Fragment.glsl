@@ -7,7 +7,10 @@ struct VertexOutput {
     vec4 position;
     vec3 uv;
 };
-
+struct Data {
+    mat4x4 proj_inv;
+    mat4x4 view;
+};
 layout(binding = 0) uniform highp samplerCube _group_0_binding_1;
 
 layout(location = 0) smooth in vec3 _vs2fs_location0;

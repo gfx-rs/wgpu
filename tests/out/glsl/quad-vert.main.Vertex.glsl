@@ -3,21 +3,21 @@
 precision highp float;
 precision highp int;
 
-struct type_9 {
-    vec2 member;
-    vec4 gen_gl_Position;
-};
-
-vec2 v_uv = vec2(0.0, 0.0);
-
-vec2 a_uv_1 = vec2(0.0, 0.0);
-
-struct gen_gl_PerVertex_block_0Vs {
+struct gen_gl_PerVertex {
     vec4 gen_gl_Position;
     float gen_gl_PointSize;
     float gen_gl_ClipDistance[1];
     float gen_gl_CullDistance[1];
-} perVertexStruct;
+};
+struct type_9 {
+    vec2 member;
+    vec4 gen_gl_Position;
+};
+vec2 v_uv = vec2(0.0, 0.0);
+
+vec2 a_uv_1 = vec2(0.0, 0.0);
+
+gen_gl_PerVertex perVertexStruct;
 
 vec2 a_pos_1 = vec2(0.0, 0.0);
 

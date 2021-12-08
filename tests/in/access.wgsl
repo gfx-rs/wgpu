@@ -1,6 +1,5 @@
 // This snapshot tests accessing various containers, dereferencing pointers.
 
-[[block]]
 struct Bar {
 	matrix: mat4x4<f32>;
 	atom: atomic<i32>;

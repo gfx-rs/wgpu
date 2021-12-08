@@ -47,9 +47,6 @@ bitflags::bitflags! {
         /// Can be used for host-shareable structures.
         const HOST_SHARED = 0x10;
 
-        /// This is a top-level host-shareable type.
-        const TOP_LEVEL = 0x20;
-
         /// This type can be passed as a function argument.
         const ARGUMENT = 0x40;
     }
@@ -113,8 +110,6 @@ pub enum TypeError {
         size: u32,
         span: u32,
     },
-    #[error("The composite type contains a top-level structure")]
-    NestedTopLevel,
 }
 
 // Only makes sense if `flags.contains(HOST_SHARED)`
@@ -330,9 +325,6 @@ impl super::Validator {
                 if !base_info.flags.contains(TypeFlags::DATA | TypeFlags::SIZED) {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
-                if base_info.flags.contains(TypeFlags::TOP_LEVEL) {
-                    return Err(TypeError::NestedTopLevel);
-                }
 
                 let base_size = types[base].inner.span(constants);
                 if stride < base_size {
@@ -443,11 +435,7 @@ impl super::Validator {
                     storage_layout,
                 }
             }
-            Ti::Struct {
-                top_level,
-                ref members,
-                span,
-            } => {
+            Ti::Struct { ref members, span } => {
                 let mut ti = TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -466,9 +454,6 @@ impl super::Validator {
                     let base_info = &self.types[member.ty.index()];
                     if !base_info.flags.contains(TypeFlags::DATA) {
                         return Err(TypeError::InvalidData(member.ty));
-                    }
-                    if base_info.flags.contains(TypeFlags::TOP_LEVEL) {
-                        return Err(TypeError::NestedTopLevel);
                     }
                     if !base_info.flags.contains(TypeFlags::HOST_SHARED) {
                         if ti.uniform_layout.is_ok() {
@@ -534,9 +519,6 @@ impl super::Validator {
                                 Err((handle, Disalignment::UnsizedMember { index: i as u32 }));
                         }
                     }
-                }
-                if top_level {
-                    ti.flags |= TypeFlags::TOP_LEVEL;
                 }
 
                 let alignment = self.layouter[handle].alignment.get();

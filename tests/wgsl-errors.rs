@@ -806,17 +806,6 @@ fn invalid_arrays() {
 
     check_validation_error! {
         r#"
-            [[block]] struct Block { value: f32; };
-            type Bad = array<Block, 4>;
-        "#:
-        Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::NestedTopLevel,
-            ..
-        })
-    }
-
-    check_validation_error! {
-        r#"
             type Bad = [[stride(2)]] array<f32, 4>;
         "#:
         Err(naga::valid::ValidationError::Type {
@@ -1154,7 +1143,6 @@ fn invalid_runtime_sized_arrays() {
             arr: array<f32>;
         };
 
-        [[block]]
         struct Outer {
             legit: i32;
             unsized: Unsized;
@@ -1264,7 +1252,6 @@ fn wrong_access_mode() {
     // variables whose access mode is `read`, not `read_write`.
     check_validation_error! {
         "
-            [[block]]
             struct Globals {
                 i: i32;
             };
@@ -1277,7 +1264,6 @@ fn wrong_access_mode() {
             }
         ",
         "
-            [[block]]
             struct Globals {
                 i: i32;
             };

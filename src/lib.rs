@@ -627,11 +627,10 @@ pub enum TypeInner {
     /// An `Array` is [`SIZED`] unless its `size` is [`Dynamic`].
     /// Dynamically-sized arrays may only appear in a few situations:
     ///
-    /// -   They may appear as the last member of a [`Struct`] whose `top_level`
-    ///     flag is set.
+    /// -   They may appear as the last member of a [`Struct`].
     ///
     /// -   They may appear as the base type of a [`Pointer`]. An
-    ///     [`AccessIndex`] expression referring to a top-level struct's final
+    ///     [`AccessIndex`] expression referring to a struct's final
     ///     unsized array member would have such a pointer type. However, such
     ///     pointer types may only appear as the types of such intermediate
     ///     expressions. They are not [`DATA`], and cannot be stored in
@@ -655,20 +654,13 @@ pub enum TypeInner {
     /// `DATA` as well.
     ///
     /// Member types must be [`SIZED`], except for the final member of a
-    /// top-level struct, which may be a dynamically sized [`Array`]. The
+    /// struct, which may be a dynamically sized [`Array`]. The
     /// `Struct` type itself is `SIZED` when all its members are `SIZED`.
-    ///
-    /// When `top_level` is true, this `Struct` represents the contents of a
-    /// buffer resource occupying a single binding slot in a shader's resource
-    /// interface. Top-level `Struct`s may not be used as members of any other
-    /// struct, or as array elements.
     ///
     /// [`DATA`]: crate::valid::TypeFlags::DATA
     /// [`SIZED`]: crate::valid::TypeFlags::SIZED
     /// [`Array`]: TypeInner::Array
     Struct {
-        /// This struct serves as the type of a binding slot in a shader's resource interface.
-        top_level: bool,
         members: Vec<StructMember>,
         //TODO: should this be unaligned?
         span: u32,

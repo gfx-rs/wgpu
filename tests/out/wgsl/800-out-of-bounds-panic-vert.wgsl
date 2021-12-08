@@ -1,9 +1,7 @@
-[[block]]
 struct Globals {
     view_matrix: mat4x4<f32>;
 };
 
-[[block]]
 struct VertexPushConstants {
     world_matrix: mat4x4<f32>;
 };

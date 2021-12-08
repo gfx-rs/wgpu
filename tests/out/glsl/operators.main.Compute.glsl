@@ -10,7 +10,6 @@ struct Foo {
     int b;
 };
 
-
 vec4 builtins() {
     int s1_ = (true ? 1 : 0);
     vec4 s2_ = (true ? vec4(1.0, 1.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.0, 0.0));

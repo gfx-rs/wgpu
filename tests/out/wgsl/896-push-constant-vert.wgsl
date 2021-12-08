@@ -1,4 +1,3 @@
-[[block]]
 struct PushConstants {
     example: f32;
 };

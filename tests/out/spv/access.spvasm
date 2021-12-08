@@ -26,7 +26,6 @@ OpName %90 "tmp"
 OpName %92 "atomics"
 OpDecorate %24 ArrayStride 8
 OpDecorate %25 ArrayStride 8
-OpDecorate %26 Block
 OpMemberDecorate %26 0 Offset 0
 OpMemberDecorate %26 0 ColMajor
 OpMemberDecorate %26 0 MatrixStride 16
@@ -36,6 +35,7 @@ OpMemberDecorate %26 3 Offset 88
 OpDecorate %29 ArrayStride 4
 OpDecorate %30 DescriptorSet 0
 OpDecorate %30 Binding 0
+OpDecorate %26 Block
 OpDecorate %42 BuiltIn VertexIndex
 OpDecorate %45 BuiltIn Position
 %2 = OpTypeVoid

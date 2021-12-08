@@ -3,17 +3,17 @@
 precision highp float;
 precision highp int;
 
+struct Globals {
+    uvec4 num_lights;
+};
 struct Light {
     mat4x4 proj;
     vec4 pos;
     vec4 color;
 };
+uniform Globals_block_0Fragment { Globals _group_0_binding_0; };
 
-uniform Globals_block_0Fs {
-    uvec4 num_lights;
-} _group_0_binding_0;
-
-layout(std430) readonly buffer Lights_block_1Fs {
+layout(std430) readonly buffer Lights_block_1Fragment {
     Light data[];
 } _group_0_binding_1;
 

@@ -3,7 +3,7 @@
 precision highp float;
 precision highp int;
 
-layout(std430) buffer Bar_block_0Vs {
+layout(std430) buffer Bar_block_0Vertex {
     mat4x4 matrix;
     int atom;
     uvec2 arr[2];

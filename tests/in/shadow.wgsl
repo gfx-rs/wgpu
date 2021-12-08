@@ -1,4 +1,3 @@
-[[block]]
 struct Globals {
     num_lights: vec4<u32>;
 };
@@ -12,7 +11,6 @@ struct Light {
     color: vec4<f32>;
 };
 
-[[block]]
 struct Lights {
     data: [[stride(96)]] array<Light>;
 };

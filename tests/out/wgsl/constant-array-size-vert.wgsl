@@ -1,4 +1,3 @@
-[[block]]
 struct Data {
     vecs: [[stride(16)]] array<vec4<f32>,42u>;
 };

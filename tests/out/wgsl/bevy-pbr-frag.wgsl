@@ -9,17 +9,14 @@ struct DirectionalLight {
     color: vec4<f32>;
 };
 
-[[block]]
 struct CameraViewProj {
     ViewProj: mat4x4<f32>;
 };
 
-[[block]]
 struct CameraPosition {
     CameraPos: vec4<f32>;
 };
 
-[[block]]
 struct Lights {
     AmbientColor: vec4<f32>;
     NumLights: vec4<u32>;
@@ -27,27 +24,22 @@ struct Lights {
     DirectionalLights: [[stride(32)]] array<DirectionalLight,1u>;
 };
 
-[[block]]
 struct StandardMaterial_base_color {
     base_color: vec4<f32>;
 };
 
-[[block]]
 struct StandardMaterial_roughness {
     perceptual_roughness: f32;
 };
 
-[[block]]
 struct StandardMaterial_metallic {
     metallic: f32;
 };
 
-[[block]]
 struct StandardMaterial_reflectance {
     reflectance: f32;
 };
 
-[[block]]
 struct StandardMaterial_emissive {
     emissive: vec4<f32>;
 };

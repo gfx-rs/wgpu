@@ -1,4 +1,3 @@
-[[block]]
 struct gl_PerVertex {
     [[builtin(position)]] gl_Position: vec4<f32>;
 };

@@ -1,5 +1,5 @@
 use super::{
-    helpers::{contains_builtin, map_storage_class},
+    helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
     make_local, Block, BlockContext, CachedExpressions, EntryPointContext, Error, Function,
     FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
     LogicalLayout, LookupFunctionType, LookupType, LoopContext, Options, PhysicalLayout,
@@ -485,22 +485,46 @@ impl Writer {
             function.entry_point_context = Some(ep_context);
         }
 
-        // fill up the `GlobalVariable::handle_id`
+        // fill up the `GlobalVariable::access_id`
         for gv in self.global_variables.iter_mut() {
             gv.reset_for_function();
         }
         for (handle, var) in ir_module.global_variables.iter() {
-            // Handle globals are pre-emitted and should be loaded automatically.
-            if info[handle].is_empty() || var.class != crate::StorageClass::Handle {
+            if info[handle].is_empty() {
                 continue;
             }
-            let id = self.id_gen.next();
-            let result_type_id = self.get_type_id(LookupType::Handle(var.ty));
-            let gv = &mut self.global_variables[handle.index()];
-            prelude
-                .body
-                .push(Instruction::load(result_type_id, id, gv.id, None));
-            gv.handle_id = id;
+
+            let mut gv = self.global_variables[handle.index()].clone();
+
+            // Handle globals are pre-emitted and should be loaded automatically.
+            if var.class == crate::StorageClass::Handle {
+                let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
+                let id = self.id_gen.next();
+                prelude
+                    .body
+                    .push(Instruction::load(var_type_id, id, gv.var_id, None));
+                gv.access_id = gv.var_id;
+                gv.handle_id = id;
+            } else if global_needs_wrapper(ir_module, var) {
+                let class = map_storage_class(var.class);
+                let pointer_type_id = self.get_pointer_id(&ir_module.types, var.ty, class)?;
+                let index_id = self.get_index_constant(0);
+
+                let id = self.id_gen.next();
+                prelude.body.push(Instruction::access_chain(
+                    pointer_type_id,
+                    id,
+                    gv.var_id,
+                    &[index_id],
+                ));
+                gv.access_id = id;
+            } else {
+                // by default, the variable ID is accessed as is
+                gv.access_id = gv.var_id;
+            };
+
+            // work around borrow checking in the presense of `self.xxx()` calls
+            self.global_variables[handle.index()] = gv;
         }
 
         // Create a `BlockContext` for generating SPIR-V for the function's
@@ -818,14 +842,9 @@ impl Writer {
                     }
                 }
                 crate::TypeInner::Struct {
-                    top_level,
                     ref members,
                     span: _,
                 } => {
-                    if top_level {
-                        self.decorate(id, Decoration::Block, &[]);
-                    }
-
                     let mut member_ids = Vec::with_capacity(members.len());
                     for (index, member) in members.iter().enumerate() {
                         if decorate_layout {
@@ -1215,25 +1234,19 @@ impl Writer {
         &mut self,
         ir_module: &crate::Module,
         global_variable: &crate::GlobalVariable,
-    ) -> Result<(Instruction, Word), Error> {
+    ) -> Result<Word, Error> {
+        use spirv::Decoration;
+
         let id = self.id_gen.next();
-
         let class = map_storage_class(global_variable.class);
-        //self.check(class.required_capabilities())?;
 
-        let init_word = global_variable
-            .init
-            .map(|constant| self.constant_ids[constant.index()]);
-        let pointer_type_id = self.get_pointer_id(&ir_module.types, global_variable.ty, class)?;
-        let instruction = Instruction::variable(pointer_type_id, id, class, init_word);
+        //self.check(class.required_capabilities())?;
 
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(ref name) = global_variable.name {
                 self.debugs.push(Instruction::name(id, name));
             }
         }
-
-        use spirv::Decoration;
 
         let storage_access = match global_variable.class {
             crate::StorageClass::Storage { access } => Some(access),
@@ -1259,8 +1272,43 @@ impl Writer {
             self.decorate(id, Decoration::Binding, &[res_binding.binding]);
         }
 
-        // TODO Initializer is optional and not (yet) included in the IR
-        Ok((instruction, id))
+        let init_word = global_variable
+            .init
+            .map(|constant| self.constant_ids[constant.index()]);
+        let inner_type_id = self.get_type_id(LookupType::Handle(global_variable.ty));
+
+        // generate the wrapping structure if needed
+        let pointer_type_id = if global_needs_wrapper(ir_module, global_variable) {
+            let wrapper_type_id = self.id_gen.next();
+
+            self.decorate(wrapper_type_id, Decoration::Block, &[]);
+            self.annotations.push(Instruction::member_decorate(
+                wrapper_type_id,
+                0,
+                Decoration::Offset,
+                &[0],
+            ));
+            Instruction::type_struct(wrapper_type_id, &[inner_type_id])
+                .to_words(&mut self.logical_layout.declarations);
+
+            let pointer_type_id = self.id_gen.next();
+            Instruction::type_pointer(pointer_type_id, class, wrapper_type_id)
+                .to_words(&mut self.logical_layout.declarations);
+
+            pointer_type_id
+        } else {
+            // This is a global variable in a Storage class. The only way it could
+            // have `global_needs_wrapper() == false` is if it has a runtime-sized array.
+            // In this case, we need to decorate it with Block.
+            if let crate::StorageClass::Storage { .. } = global_variable.class {
+                self.decorate(inner_type_id, Decoration::Block, &[]);
+            }
+            self.get_pointer_id(&ir_module.types, global_variable.ty, class)?
+        };
+
+        Instruction::variable(pointer_type_id, id, class, init_word)
+            .to_words(&mut self.logical_layout.declarations);
+        Ok(id)
     }
 
     fn get_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
@@ -1389,8 +1437,7 @@ impl Writer {
                     GlobalVariable::dummy()
                 }
                 _ => {
-                    let (instruction, id) = self.write_global_variable(ir_module, var)?;
-                    instruction.to_words(&mut self.logical_layout.declarations);
+                    let id = self.write_global_variable(ir_module, var)?;
                     GlobalVariable::new(id)
                 }
             };

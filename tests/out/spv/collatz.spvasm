@@ -19,10 +19,10 @@ OpName %18 "collatz_iterations"
 OpName %45 "global_id"
 OpName %48 "main"
 OpDecorate %8 ArrayStride 4
-OpDecorate %9 Block
 OpMemberDecorate %9 0 Offset 0
 OpDecorate %11 DescriptorSet 0
 OpDecorate %11 Binding 0
+OpDecorate %9 Block
 OpDecorate %45 BuiltIn GlobalInvocationId
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 0

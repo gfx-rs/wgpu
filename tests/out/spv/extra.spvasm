@@ -9,7 +9,6 @@ OpCapability Geometry
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %25 "main" %17 %20 %23
 OpExecutionMode %25 OriginUpperLeft
-OpDecorate %10 Block
 OpMemberDecorate %10 0 Offset 0
 OpMemberDecorate %10 1 Offset 16
 OpMemberDecorate %12 0 Offset 0

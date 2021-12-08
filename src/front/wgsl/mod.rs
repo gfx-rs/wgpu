@@ -629,7 +629,6 @@ mod type_inner_tests {
             crate::Type {
                 name: Some("MyType1".to_string()),
                 inner: crate::TypeInner::Struct {
-                    top_level: true,
                     members: vec![],
                     span: 0,
                 },
@@ -640,7 +639,6 @@ mod type_inner_tests {
             crate::Type {
                 name: Some("MyType2".to_string()),
                 inner: crate::TypeInner::Struct {
-                    top_level: true,
                     members: vec![],
                     span: 0,
                 },
@@ -3981,7 +3979,6 @@ impl Parser {
         let mut binding = None;
         // Perspective is the default qualifier.
         let mut stage = None;
-        let mut is_block = false;
         let mut workgroup_size = [0u32; 3];
         let mut early_depth_test = None;
 
@@ -3994,9 +3991,6 @@ impl Parser {
                         lexer.expect(Token::Paren('('))?;
                         bind_index = Some(parse_non_negative_sint_literal(lexer, 4)?);
                         lexer.expect(Token::Paren(')'))?;
-                    }
-                    ("block", _) => {
-                        is_block = true;
                     }
                     ("group", _) => {
                         lexer.expect(Token::Paren('('))?;
@@ -4077,11 +4071,7 @@ impl Parser {
                 let ty = module.types.insert(
                     crate::Type {
                         name: Some(name.to_string()),
-                        inner: crate::TypeInner::Struct {
-                            top_level: is_block,
-                            members,
-                            span,
-                        },
+                        inner: crate::TypeInner::Struct { members, span },
                     },
                     type_span,
                 );

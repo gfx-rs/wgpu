@@ -1,6 +1,10 @@
 # Change Log
 
-## v0.7.1 (2021-10-12)
+## v0.8 (TBD)
+  - WGSL-in:
+    - remove `[[block]]` attribute
+
+### v0.7.1 (2021-10-12)
   - implement casts from and to booleans in the backends
 
 ## v0.7 (2021-10-07)

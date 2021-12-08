@@ -1,9 +1,7 @@
-[[block]]
 struct CameraViewProj {
     ViewProj: mat4x4<f32>;
 };
 
-[[block]]
 struct Transform {
     Model: mat4x4<f32>;
 };

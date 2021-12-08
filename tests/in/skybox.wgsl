@@ -3,7 +3,6 @@ struct VertexOutput {
     [[location(0)]] uv: vec3<f32>;
 };
 
-[[block]]
 struct Data {
     proj_inv: mat4x4<f32>;
     view: mat4x4<f32>;

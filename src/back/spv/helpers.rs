@@ -61,3 +61,29 @@ impl crate::StorageClass {
         }
     }
 }
+
+/// Return true if the global requires a type decorated with "Block".
+// See `back::spv::GlobalVariable::access_id` for details.
+pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariable) -> bool {
+    match var.class {
+        crate::StorageClass::Uniform | crate::StorageClass::Storage { .. } => {}
+        _ => return false,
+    };
+    match ir_module.types[var.ty].inner {
+        crate::TypeInner::Struct {
+            ref members,
+            span: _,
+        } => match members.last() {
+            Some(member) => match ir_module.types[member.ty].inner {
+                // Structs with dynamically sized arrays can't be copied and can't be wrapped.
+                crate::TypeInner::Array {
+                    size: crate::ArraySize::Dynamic,
+                    ..
+                } => false,
+                _ => true,
+            },
+            None => false,
+        },
+        _ => false,
+    }
+}

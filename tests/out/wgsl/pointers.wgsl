@@ -1,4 +1,3 @@
-[[block]]
 struct DynamicArray {
     arr: [[stride(4)]] array<u32>;
 };
