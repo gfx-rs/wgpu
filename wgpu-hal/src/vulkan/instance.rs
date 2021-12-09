@@ -194,7 +194,8 @@ impl super::Instance {
         let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
             log::info!("Enabling debug utils");
             let extension = ext::DebugUtils::new(&entry, &raw_instance);
-            let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::empty();
+            // having ERROR unconditionally because Vk doesn't like empty flags
+            let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
             if log::max_level() >= log::LevelFilter::Debug {
                 severity |= vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE;
             }
@@ -203,9 +204,6 @@ impl super::Instance {
             }
             if log::max_level() >= log::LevelFilter::Warn {
                 severity |= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING;
-            }
-            if log::max_level() >= log::LevelFilter::Error {
-                severity |= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
             }
             let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                 .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
