@@ -79,7 +79,7 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ### Angle
 
-[Angle](angleproject.org) is a translation layer from GLES to other backends, developed by Google.
+[Angle](http://angleproject.org) is a translation layer from GLES to other backends, developed by Google.
 We support running our GLES3 backend over it in order to reach platforms with GLES2 or DX11 support, which aren't accessible otherwise.
 In order to run with Angle, "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
 These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts.
