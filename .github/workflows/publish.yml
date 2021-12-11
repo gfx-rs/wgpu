@@ -10,8 +10,19 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: WebGPU
+            features:
+            dir: examples-gpu
 
+          - name: WebGL
+            features: webgl
+            dir: examples-gl
+
+    name: Publish ${{ matrix.name }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout the code
         uses: actions/checkout@v2
@@ -25,7 +36,7 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: Build the examples
-        run: cargo build --release --target wasm32-unknown-unknown --examples
+        run: cargo build --release --target wasm32-unknown-unknown --examples --features ${{ matrix.features }}
 
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli
@@ -44,4 +55,4 @@ jobs:
           FOLDER: target/generated
           REPOSITORY_NAME: gfx-rs/wgpu-rs.github.io
           BRANCH: master
-          TARGET_FOLDER: examples/wasm
+          TARGET_FOLDER: ${{ matrix.dir }}/wasm
