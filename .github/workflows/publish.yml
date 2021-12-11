@@ -9,9 +9,8 @@ env:
   RUSTFLAGS: --cfg=web_sys_unstable_apis
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout the code
         uses: actions/checkout@v2
@@ -24,24 +23,46 @@ jobs:
           toolchain: stable
           target: wasm32-unknown-unknown
 
-      - name: Build the examples
-        run: cargo build --release --target wasm32-unknown-unknown --examples
-
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli
 
-      - name: Generate JS bindings for the examples
+      - name: Build WebGPU examples
+        run: cargo build --release --target wasm32-unknown-unknown --examples
+
+      - name: Generate JS bindings for WebGPU examples
         run: |
           for i in target/wasm32-unknown-unknown/release/examples/*.wasm;
           do
-            wasm-bindgen --no-typescript --out-dir target/generated --web "$i";
+            wasm-bindgen --no-typescript --out-dir target/generated-gpu --web "$i";
           done
 
-      - name: Deploy the examples
+      - name: Deploy WebGPU examples
         uses: JamesIves/github-pages-deploy-action@releases/v3
         with:
           ACCESS_TOKEN: ${{ secrets.WEB_DEPLOY }}
-          FOLDER: target/generated
+          FOLDER: target/generated-gpu
           REPOSITORY_NAME: gfx-rs/wgpu-rs.github.io
           BRANCH: master
-          TARGET_FOLDER: examples/wasm
+          TARGET_FOLDER: examples-gpu/wasm
+
+      - name: Clean the build
+        run: cargo clean
+
+      - name: Build WebGL examples
+        run: cargo build --release --target wasm32-unknown-unknown --examples --features webgl
+
+      - name: Generate JS bindings for WebGL examples
+        run: |
+          for i in target/wasm32-unknown-unknown/release/examples/*.wasm;
+          do
+            wasm-bindgen --no-typescript --out-dir target/generated-gl --web "$i";
+          done
+
+      - name: Deploy WebGL examples
+        uses: JamesIves/github-pages-deploy-action@releases/v3
+        with:
+          ACCESS_TOKEN: ${{ secrets.WEB_DEPLOY }}
+          FOLDER: target/generated-gl
+          REPOSITORY_NAME: gfx-rs/wgpu-rs.github.io
+          BRANCH: master
+          TARGET_FOLDER: examples-gl/wasm
