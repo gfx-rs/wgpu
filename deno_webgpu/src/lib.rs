@@ -68,6 +68,8 @@ pub mod render_pass;
 pub mod sampler;
 pub mod shader;
 pub mod texture;
+pub mod surface;
+pub use surface::init_surface_ext;
 
 pub struct Unstable(pub bool);
 
@@ -82,7 +84,7 @@ fn check_unstable(state: &OpState, api_name: &str) {
     }
 }
 
-type Instance = wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>;
+pub type Instance = wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>;
 
 struct WebGpuAdapter(wgpu_core::id::AdapterId);
 impl Resource for WebGpuAdapter {
