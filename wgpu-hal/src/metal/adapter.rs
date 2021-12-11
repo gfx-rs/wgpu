@@ -79,6 +79,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     | Tfc::COLOR_ATTACHMENT
                     | Tfc::COLOR_ATTACHMENT_BLEND
             }
+            Tf::R16Unorm | Tf::R16Snorm => {
+                Tfc::SAMPLED_LINEAR
+                    | Tfc::STORAGE
+                    | Tfc::COLOR_ATTACHMENT
+                    | Tfc::COLOR_ATTACHMENT_BLEND
+            }
             Tf::Rg8Unorm | Tf::Rg8Snorm => {
                 Tfc::SAMPLED_LINEAR
                     | Tfc::STORAGE
@@ -104,6 +110,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
             Tf::Rg16Uint | Tf::Rg16Sint => {
                 read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT
+            }
+            Tf::Rg16Unorm | Tf::Rg16Snorm => {
+                Tfc::SAMPLED_LINEAR
+                    | Tfc::STORAGE
+                    | Tfc::COLOR_ATTACHMENT
+                    | Tfc::COLOR_ATTACHMENT_BLEND
             }
             Tf::Rg16Float => {
                 read_write_tier2_if
@@ -158,6 +170,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
             }
             Tf::Rgba16Uint | Tf::Rgba16Sint => {
                 read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT
+            }
+            Tf::Rgba16Unorm | Tf::Rgba16Snorm => {
+                Tfc::SAMPLED_LINEAR
+                    | Tfc::STORAGE
+                    | Tfc::COLOR_ATTACHMENT
+                    | Tfc::COLOR_ATTACHMENT_BLEND
             }
             Tf::Rgba16Float => {
                 read_write_tier2_if
@@ -901,7 +919,8 @@ impl super::PrivateCapabilities {
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::POLYGON_MODE_LINE
-            | F::CLEAR_COMMANDS;
+            | F::CLEAR_COMMANDS
+            | F::TEXTURE_FORMAT_16BIT_NORM;
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
 
@@ -1000,11 +1019,15 @@ impl super::PrivateCapabilities {
             Tf::R8Sint => R8Sint,
             Tf::R16Uint => R16Uint,
             Tf::R16Sint => R16Sint,
+            Tf::R16Unorm => R16Unorm,
+            Tf::R16Snorm => R16Snorm,
             Tf::R16Float => R16Float,
             Tf::Rg8Unorm => RG8Unorm,
             Tf::Rg8Snorm => RG8Snorm,
             Tf::Rg8Uint => RG8Uint,
             Tf::Rg8Sint => RG8Sint,
+            Tf::Rg16Unorm => RG16Unorm,
+            Tf::Rg16Snorm => RG16Snorm,
             Tf::R32Uint => R32Uint,
             Tf::R32Sint => R32Sint,
             Tf::R32Float => R32Float,
@@ -1025,6 +1048,8 @@ impl super::PrivateCapabilities {
             Tf::Rg32Float => RG32Float,
             Tf::Rgba16Uint => RGBA16Uint,
             Tf::Rgba16Sint => RGBA16Sint,
+            Tf::Rgba16Unorm => RGBA16Unorm,
+            Tf::Rgba16Snorm => RGBA16Snorm,
             Tf::Rgba16Float => RGBA16Float,
             Tf::Rgba32Uint => RGBA32Uint,
             Tf::Rgba32Sint => RGBA32Sint,

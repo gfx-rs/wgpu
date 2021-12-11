@@ -684,6 +684,9 @@ impl NumericType {
             Tf::Rg8Sint | Tf::Rg16Sint | Tf::Rg32Sint => {
                 (NumericDimension::Vector(Vs::Bi), Sk::Sint)
             }
+            Tf::R16Snorm | Tf::R16Unorm => (NumericDimension::Scalar, Sk::Float),
+            Tf::Rg16Snorm | Tf::Rg16Unorm => (NumericDimension::Vector(Vs::Bi), Sk::Float),
+            Tf::Rgba16Snorm | Tf::Rgba16Unorm => (NumericDimension::Vector(Vs::Quad), Sk::Float),
             Tf::Rgba8Unorm
             | Tf::Rgba8UnormSrgb
             | Tf::Rgba8Snorm
