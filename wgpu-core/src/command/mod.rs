@@ -9,8 +9,9 @@ mod render;
 mod transfer;
 
 pub use self::bundle::*;
+pub(crate) use self::clear::clear_texture_no_device;
 pub(crate) use self::clear::collect_zero_buffer_copies_for_clear_texture;
-pub use self::clear::ClearError;
+pub(crate) use self::clear::ClearError;
 pub use self::compute::*;
 pub use self::draw::*;
 use self::memory_init::CommandBufferTextureMemoryActions;

@@ -245,6 +245,28 @@ pub(crate) fn clear_texture<A: hal::Api>(
     texture_tracker: &mut ResourceTracker<TextureState>,
     device: &Device<A>,
 ) -> Result<(), ClearError> {
+    clear_texture_no_device(
+        dst_texture_id,
+        dst_texture,
+        mip_range,
+        layer_range,
+        encoder,
+        texture_tracker,
+        &device.alignments,
+        &device.zero_buffer,
+    )
+}
+
+pub(crate) fn clear_texture_no_device<A: hal::Api>(
+    dst_texture_id: &Stored<TextureId>,
+    dst_texture: &Texture<A>,
+    mip_range: Range<u32>,
+    layer_range: Range<u32>,
+    encoder: &mut A::CommandEncoder,
+    texture_tracker: &mut ResourceTracker<TextureState>,
+    alignments: &hal::Alignments,
+    zero_buffer: &A::Buffer,
+) -> Result<(), ClearError> {
     let dst_raw = dst_texture
         .inner
         .as_raw()
@@ -285,9 +307,10 @@ pub(crate) fn clear_texture<A: hal::Api>(
 
     // Record actual clearing
     match dst_texture.clear_mode {
-        TextureClearMode::BufferCopy => clear_texture_via_buffer_copies(
+        TextureClearMode::BufferCopy => clear_texture_via_buffer_copies::<A>(
             &dst_texture.desc,
-            device,
+            alignments,
+            zero_buffer,
             mip_range,
             layer_range,
             encoder,
@@ -309,7 +332,8 @@ pub(crate) fn clear_texture<A: hal::Api>(
 
 fn clear_texture_via_buffer_copies<A: hal::Api>(
     texture_desc: &wgt::TextureDescriptor<()>,
-    device: &Device<A>,
+    alignments: &hal::Alignments,
+    zero_buffer: &A::Buffer,
     mip_range: Range<u32>,
     layer_range: Range<u32>,
     encoder: &mut A::CommandEncoder,
@@ -318,7 +342,7 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
     let mut zero_buffer_copy_regions = Vec::new();
     collect_zero_buffer_copies_for_clear_texture(
         &texture_desc,
-        device.alignments.buffer_copy_pitch.get() as u32,
+        alignments.buffer_copy_pitch.get() as u32,
         mip_range,
         layer_range,
         &mut zero_buffer_copy_regions,
@@ -326,7 +350,7 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
     if !zero_buffer_copy_regions.is_empty() {
         unsafe {
             encoder.copy_buffer_to_texture(
-                &device.zero_buffer,
+                zero_buffer,
                 dst_raw,
                 zero_buffer_copy_regions.into_iter(),
             );
