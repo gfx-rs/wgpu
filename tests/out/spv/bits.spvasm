@@ -75,7 +75,7 @@ OpStore %27 %54
 %56 = OpExtInst  %6  %1 PackSnorm2x16 %55
 OpStore %27 %56
 %57 = OpLoad  %17  %35
-%58 = OpExtInst  %6  %1 PackSnorm2x16 %57
+%58 = OpExtInst  %6  %1 PackUnorm2x16 %57
 OpStore %27 %58
 %59 = OpLoad  %17  %35
 %60 = OpExtInst  %6  %1 PackHalf2x16 %59
@@ -90,7 +90,7 @@ OpStore %37 %64
 %66 = OpExtInst  %17  %1 UnpackSnorm2x16 %65
 OpStore %35 %66
 %67 = OpLoad  %6  %27
-%68 = OpExtInst  %17  %1 UnpackSnorm2x16 %67
+%68 = OpExtInst  %17  %1 UnpackUnorm2x16 %67
 OpStore %35 %68
 %69 = OpLoad  %6  %27
 %70 = OpExtInst  %17  %1 UnpackHalf2x16 %69
