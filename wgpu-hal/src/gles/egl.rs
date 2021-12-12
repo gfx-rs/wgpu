@@ -934,15 +934,6 @@ impl crate::Surface<super::Api> for Surface {
                             library.get(b"wl_egl_window_create").unwrap();
                         let window = wl_egl_window_create(handle.surface, 640, 480) as *mut _
                             as *mut std::ffi::c_void;
-                        let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
-                            library.get(b"wl_egl_window_resize").unwrap();
-                        wl_egl_window_resize(
-                            window,
-                            config.extent.width as i32,
-                            config.extent.height as i32,
-                            0,
-                            0,
-                        );
                         wl_window = Some(window);
                         window
                     }
@@ -1016,6 +1007,19 @@ impl crate::Surface<super::Api> for Surface {
                 }
             }
         };
+
+        if let Some(window) = wl_window {
+            let library = self.wsi.library.as_ref().unwrap();
+            let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
+                library.get(b"wl_egl_window_resize").unwrap();
+            wl_egl_window_resize(
+                window,
+                config.extent.width as i32,
+                config.extent.height as i32,
+                0,
+                0,
+            );
+        }
 
         let format_desc = device.shared.describe_texture_format(config.format);
         let gl = &device.shared.context.lock();
