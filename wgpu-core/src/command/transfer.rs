@@ -9,10 +9,11 @@ use crate::{
     device::Device,
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
-    id::{BufferId, CommandEncoderId, TextureId},
+    id::{self, BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     resource::{Texture, TextureErrorDimension},
     track::TextureSelector,
+    Stored,
 };
 
 use hal::CommandEncoder as _;
@@ -388,7 +389,10 @@ fn get_copy_dst_texture_init_requirement<A: HalApi>(
         MemoryInitKind::NeedsInitializedMemory
     };
     TextureInitTrackerAction {
-        id: copy_texture.texture,
+        id: Stored {
+            value: id::Valid(copy_texture.texture),
+            ref_count: texture.life_guard.ref_count.as_ref().unwrap().clone(), // For copies the texture object isn't discarded yet!
+        },
         range: TextureInitRange {
             mip_range: copy_texture.mip_level..copy_texture.mip_level + 1,
             layer_range: copy_texture.origin.z
@@ -406,9 +410,18 @@ fn handle_src_texture_init<A: hal::Api>(
     copy_size: &Extent3d,
     texture_guard: &Storage<Texture<A>, TextureId>,
 ) {
+    let id = id::Valid(source.texture);
     let immediate_src_init = cmd_buf.texture_memory_actions.register_init_action(
         &TextureInitTrackerAction {
-            id: source.texture,
+            id: Stored {
+                value: id,
+                ref_count: texture_guard[id]
+                    .life_guard
+                    .ref_count
+                    .as_ref()
+                    .unwrap()
+                    .clone(), // For transfers the texture object isn't discarded yet!
+            },
             range: TextureInitRange {
                 mip_range: src_base.mip_level..src_base.mip_level + 1,
                 layer_range: src_base.origin.z

@@ -12,6 +12,7 @@ use crate::{
     init_tracker::MemoryInitKind,
     resource::{Texture, TextureClearMode},
     track::{ResourceTracker, TextureSelector, TextureState},
+    Stored,
 };
 
 use hal::CommandEncoder as _;
@@ -221,7 +222,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         clear_texture(
-            dst,
+            &Stored {
+                value: id::Valid(dst),
+                ref_count: dst_texture.life_guard().ref_count.as_ref().unwrap().clone(),
+            },
             dst_texture,
             subresource_range.base_mip_level..subresource_level_end,
             subresource_range.base_array_layer..subresource_layer_end,
@@ -233,7 +237,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub(crate) fn clear_texture<A: hal::Api>(
-    dst_texture_id: TextureId,
+    dst_texture_id: &Stored<TextureId>,
     dst_texture: &Texture<A>,
     mip_range: Range<u32>,
     layer_range: Range<u32>,
@@ -244,7 +248,7 @@ pub(crate) fn clear_texture<A: hal::Api>(
     let dst_raw = dst_texture
         .inner
         .as_raw()
-        .ok_or(ClearError::InvalidTexture(dst_texture_id))?;
+        .ok_or(ClearError::InvalidTexture(dst_texture_id.value.0))?;
 
     // Issue the right barrier.
     let clear_usage = match dst_texture.clear_mode {
@@ -260,13 +264,14 @@ pub(crate) fn clear_texture<A: hal::Api>(
             }
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture_id));
+            return Err(ClearError::NoValidTextureClearMode(dst_texture_id.value.0));
         }
     };
+
     let dst_barrier = texture_tracker
         .change_replace(
-            id::Valid(dst_texture_id),
-            dst_texture.life_guard().ref_count.as_ref().unwrap(),
+            dst_texture_id.value,
+            &dst_texture_id.ref_count,
             TextureSelector {
                 levels: mip_range.clone(),
                 layers: layer_range.clone(),
@@ -296,7 +301,7 @@ pub(crate) fn clear_texture<A: hal::Api>(
             encoder,
         )?,
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture_id));
+            return Err(ClearError::NoValidTextureClearMode(dst_texture_id.value.0));
         }
     }
     Ok(())

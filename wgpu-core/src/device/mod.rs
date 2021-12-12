@@ -1519,11 +1519,10 @@ impl<A: HalApi> Device<A> {
     ) -> Result<(), binding_model::CreateBindGroupError> {
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
-        let parent_id = view.parent_id.value;
-        let texture = &texture_guard[parent_id];
+        let texture = &texture_guard[view.parent_id.value];
         used.textures
             .change_extend(
-                parent_id,
+                view.parent_id.value,
                 &view.parent_id.ref_count,
                 view.selector.clone(),
                 internal_use,
@@ -1532,7 +1531,7 @@ impl<A: HalApi> Device<A> {
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
-            id: parent_id.0,
+            id: view.parent_id.clone(),
             range: TextureInitRange {
                 mip_range: view.desc.range.mip_range(&texture.desc),
                 layer_range: view.desc.range.layer_range(&texture.desc),
