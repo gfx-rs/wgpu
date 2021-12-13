@@ -566,7 +566,7 @@ impl PhysicalDeviceCapabilities {
                 vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
                 _ => false,
             })
-            .unwrap_or(false)
+            .unwrap()
     }
 
     /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
