@@ -1330,9 +1330,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use crate::TextureFormatCapabilities as Tfc;
         let vk_format = self.private_caps.map_texture_format(format);
         let properties = self
-            .instance
-            .raw
-            .get_physical_device_format_properties(self.raw, vk_format);
+            .phd_capabilities
+            .formats
+            .get(vk_format.as_raw() as usize)
+            .unwrap();
         let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();
