@@ -2470,6 +2470,12 @@ impl<W: Write> Writer<W> {
     ) -> Result<TranslationInfo, Error> {
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
+            log::trace!(
+                "function {:?}, handle {:?}",
+                fun.name.as_deref().unwrap_or("(anonymous)"),
+                fun_handle
+            );
+
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
             let mut supports_array_length = false;
@@ -2600,6 +2606,12 @@ impl<W: Write> Writer<W> {
             let fun_info = mod_info.get_entry_point(ep_index);
             let mut ep_error = None;
             let mut supports_array_length = false;
+
+            log::trace!(
+                "entry point {:?}, index {:?}",
+                fun.name.as_deref().unwrap_or("(anonymous)"),
+                ep_index
+            );
 
             // skip this entry point if any global bindings are missing,
             // or their types are incompatible.
