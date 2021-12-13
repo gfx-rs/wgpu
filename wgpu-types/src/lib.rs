@@ -2117,12 +2117,12 @@ impl TextureFormat {
             Self::Astc12x12RgbaUnormSrgb => (astc_ldr, float, srgb, (12, 12), 16, basic, 4),
 
             // Optional normalized 16-bit-per-channel formats
-            Self::R16Unorm => (norm16bit, float, linear, (1, 1), 2, basic, 1),
-            Self::R16Snorm => (norm16bit, float, linear, (1, 1), 2, basic, 1),
-            Self::Rg16Unorm => (norm16bit, float, linear, (1, 1), 4, basic, 2),
-            Self::Rg16Snorm => (norm16bit, float, linear, (1, 1), 4, basic, 2),
-            Self::Rgba16Unorm => (norm16bit, float, linear, (1, 1), 8, basic, 4),
-            Self::Rgba16Snorm => (norm16bit, float, linear, (1, 1), 8, basic, 4),
+            Self::R16Unorm => (norm16bit, float, linear, (1, 1), 2, storage, 1),
+            Self::R16Snorm => (norm16bit, float, linear, (1, 1), 2, storage, 1),
+            Self::Rg16Unorm => (norm16bit, float, linear, (1, 1), 4, storage, 2),
+            Self::Rg16Snorm => (norm16bit, float, linear, (1, 1), 4, storage, 2),
+            Self::Rgba16Unorm => (norm16bit, float, linear, (1, 1), 8, storage, 4),
+            Self::Rgba16Snorm => (norm16bit, float, linear, (1, 1), 8, storage, 4),
         };
 
         TextureFormatInfo {
