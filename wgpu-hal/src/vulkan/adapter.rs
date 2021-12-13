@@ -1538,7 +1538,10 @@ fn query_format_properties(
 
 fn is_format_16bit_norm_supported(caps: &PhysicalDeviceCapabilities) -> bool {
     let tiling = vk::ImageTiling::OPTIMAL;
-    let features = vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::STORAGE_IMAGE;
+    let features = vk::FormatFeatureFlags::SAMPLED_IMAGE
+        | vk::FormatFeatureFlags::STORAGE_IMAGE
+        | vk::FormatFeatureFlags::TRANSFER_SRC
+        | vk::FormatFeatureFlags::TRANSFER_DST;
     let r16unorm = caps.supports_format(vk::Format::R16_UNORM, tiling, features);
     let r16snorm = caps.supports_format(vk::Format::R16_SNORM, tiling, features);
     let rg16unorm = caps.supports_format(vk::Format::R16G16_UNORM, tiling, features);
