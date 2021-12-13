@@ -542,6 +542,15 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const MULTIVIEW = 1 << 40;
+        /// Enables normalized `16-bit` texture formats.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const TEXTURE_FORMAT_16BIT_NORM = 1 << 41;
     }
 }
 
@@ -1473,6 +1482,16 @@ pub enum TextureFormat {
     /// Red channel only. 16 bit integer per channel. Signed in shader.
     #[cfg_attr(feature = "serde", serde(rename = "r16sint"))]
     R16Sint,
+    /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "r16unorm"))]
+    R16Unorm,
+    /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "r16snorm"))]
+    R16Snorm,
     /// Red channel only. 16 bit float per channel. Float in shader.
     #[cfg_attr(feature = "serde", serde(rename = "r16float"))]
     R16Float,
@@ -1505,6 +1524,16 @@ pub enum TextureFormat {
     /// Red and green channels. 16 bit integer per channel. Signed in shader.
     #[cfg_attr(feature = "serde", serde(rename = "rg16sint"))]
     Rg16Sint,
+    /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "rg16unorm"))]
+    Rg16Unorm,
+    /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "rg16snorm"))]
+    Rg16Snorm,
     /// Red and green channels. 16 bit float per channel. Float in shader.
     #[cfg_attr(feature = "serde", serde(rename = "rg16float"))]
     Rg16Float,
@@ -1554,6 +1583,16 @@ pub enum TextureFormat {
     /// Red, green, blue, and alpha channels. 16 bit integer per channel. Signed in shader.
     #[cfg_attr(feature = "serde", serde(rename = "rgba16sint"))]
     Rgba16Sint,
+    /// Red, green, blue, and alpha channels. 16 bit integer per channel. [0, 65535] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba16unorm"))]
+    Rgba16Unorm,
+    /// Red, green, blue, and alpha. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "rgba16snorm"))]
+    Rgba16Snorm,
     /// Red, green, blue, and alpha channels. 16 bit float per channel. Float in shader.
     #[cfg_attr(feature = "serde", serde(rename = "rgba16float"))]
     Rgba16Float,
@@ -1934,6 +1973,7 @@ impl TextureFormat {
         let bc = Features::TEXTURE_COMPRESSION_BC;
         let etc2 = Features::TEXTURE_COMPRESSION_ETC2;
         let astc_ldr = Features::TEXTURE_COMPRESSION_ASTC_LDR;
+        let norm16bit = Features::TEXTURE_FORMAT_16BIT_NORM;
 
         // Sample Types
         let uint = TextureSampleType::Uint;
@@ -2075,6 +2115,14 @@ impl TextureFormat {
             Self::Astc12x10RgbaUnormSrgb => (astc_ldr, float, srgb, (12, 10), 16, basic, 4),
             Self::Astc12x12RgbaUnorm => (astc_ldr, float, linear, (12, 12), 16, basic, 4),
             Self::Astc12x12RgbaUnormSrgb => (astc_ldr, float, srgb, (12, 12), 16, basic, 4),
+
+            // Optional normalized 16-bit-per-channel formats
+            Self::R16Unorm => (norm16bit, float, linear, (1, 1), 2, storage, 1),
+            Self::R16Snorm => (norm16bit, float, linear, (1, 1), 2, storage, 1),
+            Self::Rg16Unorm => (norm16bit, float, linear, (1, 1), 4, storage, 2),
+            Self::Rg16Snorm => (norm16bit, float, linear, (1, 1), 4, storage, 2),
+            Self::Rgba16Unorm => (norm16bit, float, linear, (1, 1), 8, storage, 4),
+            Self::Rgba16Snorm => (norm16bit, float, linear, (1, 1), 8, storage, 4),
         };
 
         TextureFormatInfo {

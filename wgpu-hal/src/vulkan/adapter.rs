@@ -514,6 +514,11 @@ impl PhysicalDeviceFeatures {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
         }
 
+        features.set(
+            F::TEXTURE_FORMAT_16BIT_NORM,
+            is_format_16bit_norm_supported(caps),
+        );
+
         (features, dl_flags)
     }
 
@@ -534,6 +539,7 @@ pub struct PhysicalDeviceCapabilities {
     properties: vk::PhysicalDeviceProperties,
     vulkan_1_2: Option<vk::PhysicalDeviceVulkan12Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
+    formats: Vec<vk::FormatProperties>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -545,6 +551,22 @@ impl PhysicalDeviceCapabilities {
         self.supported_extensions
             .iter()
             .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
+    }
+
+    fn supports_format(
+        &self,
+        format: vk::Format,
+        tiling: vk::ImageTiling,
+        features: vk::FormatFeatureFlags,
+    ) -> bool {
+        self.formats
+            .get(format.as_raw() as usize)
+            .map(|properties| match tiling {
+                vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
+                vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
+                _ => false,
+            })
+            .unwrap()
     }
 
     /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
@@ -766,6 +788,7 @@ impl super::InstanceShared {
             } else {
                 unsafe { self.raw.get_physical_device_properties(phd) }
             };
+            capabilities.formats = query_format_properties(&self.raw, phd);
 
             capabilities
         };
@@ -1307,9 +1330,10 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use crate::TextureFormatCapabilities as Tfc;
         let vk_format = self.private_caps.map_texture_format(format);
         let properties = self
-            .instance
-            .raw
-            .get_physical_device_format_properties(self.raw, vk_format);
+            .phd_capabilities
+            .formats
+            .get(vk_format.as_raw() as usize)
+            .unwrap();
         let features = properties.optimal_tiling_features;
 
         let mut flags = Tfc::empty();
@@ -1488,4 +1512,42 @@ impl crate::Adapter<super::Api> for super::Adapter {
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
         })
     }
+}
+
+/// Querys properties of all known image formats. The raw value of `vk::Format` corresponds
+/// to the index of the returned Vec.
+fn query_format_properties(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+) -> Vec<vk::FormatProperties> {
+    // vk::Format::UNDEFINED
+    const FORMAT_MIN: i32 = 0;
+
+    // vk::Format::ASTC_12X12_SRGB_BLOCK
+    const FORMAT_MAX: i32 = 184;
+
+    debug_assert_eq!(FORMAT_MAX, vk::Format::ASTC_12X12_SRGB_BLOCK.as_raw());
+
+    (FORMAT_MIN..(FORMAT_MAX + 1))
+        .map(|raw| {
+            let image_format = vk::Format::from_raw(raw);
+            unsafe { instance.get_physical_device_format_properties(physical_device, image_format) }
+        })
+        .collect::<Vec<_>>()
+}
+
+fn is_format_16bit_norm_supported(caps: &PhysicalDeviceCapabilities) -> bool {
+    let tiling = vk::ImageTiling::OPTIMAL;
+    let features = vk::FormatFeatureFlags::SAMPLED_IMAGE
+        | vk::FormatFeatureFlags::STORAGE_IMAGE
+        | vk::FormatFeatureFlags::TRANSFER_SRC
+        | vk::FormatFeatureFlags::TRANSFER_DST;
+    let r16unorm = caps.supports_format(vk::Format::R16_UNORM, tiling, features);
+    let r16snorm = caps.supports_format(vk::Format::R16_SNORM, tiling, features);
+    let rg16unorm = caps.supports_format(vk::Format::R16G16_UNORM, tiling, features);
+    let rg16snorm = caps.supports_format(vk::Format::R16G16_SNORM, tiling, features);
+    let rgba16unorm = caps.supports_format(vk::Format::R16G16B16A16_UNORM, tiling, features);
+    let rgba16snorm = caps.supports_format(vk::Format::R16G16B16A16_SNORM, tiling, features);
+
+    r16unorm && r16snorm && rg16unorm && rg16snorm && rgba16unorm && rgba16snorm
 }

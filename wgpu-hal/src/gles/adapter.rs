@@ -575,6 +575,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rg8Uint | Tf::Rg8Sint | Tf::R32Uint | Tf::R32Sint => {
                 unfiltered_color | Tfc::STORAGE
             }
+            Tf::R16Unorm | Tf::Rg16Unorm | Tf::Rgba16Unorm => filtered_color,
+            Tf::R16Snorm | Tf::Rg16Snorm | Tf::Rgba16Snorm => filtered_color,
             Tf::R32Float => unfiltered_color,
             Tf::Rg16Uint | Tf::Rg16Sint => unfiltered_color,
             Tf::Rg16Float | Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => filtered_color | Tfc::STORAGE,
