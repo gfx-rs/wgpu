@@ -1,5 +1,13 @@
 # Change Log
 
+## v0.7.3 (2021-12-14)
+  - API:
+    - `view_index` builtin
+  - GLSL-out:
+    - reflect textures without samplers
+  - SPV-out:
+    - fix incorrect pack/unpack
+
 ## v0.7.2 (2021-12-01)
   - validator:
     - check stores for proper pointer class
@@ -25,7 +33,6 @@
     - bit extraction and packing functions
     - hyperbolic trigonometry functionss
     - validation is gated by a cargo feature
-    - `view_index` builtin
     - separate bounds checking policies for locals/buffers/textures
   - IR:
     - types and constants are guaranteed to be unique
