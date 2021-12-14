@@ -285,7 +285,6 @@ impl super::Adapter {
         downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, supports_storage);
 
         let mut features = wgt::Features::empty()
-            | wgt::Features::TEXTURE_COMPRESSION_ETC2
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_COMMANDS;
         features.set(
@@ -300,6 +299,18 @@ impl super::Adapter {
             wgt::Features::VERTEX_WRITABLE_STORAGE,
             downlevel_flags.contains(wgt::DownlevelFlags::VERTEX_STORAGE)
                 && vertex_shader_storage_textures != 0,
+        );
+        features.set(
+            wgt::Features::TEXTURE_COMPRESSION_ETC2,
+            // This is a part of GLES-3 but not WebGL2 core
+            !cfg!(target_arch = "wasm32") || extensions.contains("WEBGL_compressed_texture_etc"),
+        );
+        //Note: `wgt::Features::TEXTURE_COMPRESSION_BC` can't be fully supported, but there are
+        // "WEBGL_compressed_texture_s3tc" and "WEBGL_compressed_texture_s3tc_srgb" which could partially cover it
+        features.set(
+            wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+            extensions.contains("GL_KHR_texture_compression_astc_ldr")
+                || extensions.contains("WEBGL_compressed_texture_astc"),
         );
 
         let mut private_caps = super::PrivateCapabilities::empty();
@@ -322,11 +333,11 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
-            cfg!(not(target_arch = "wasm32")),
+            !cfg!(target_arch = "wasm32"),
         );
         private_caps.set(
             super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER,
-            cfg!(not(target_arch = "wasm32")),
+            !cfg!(target_arch = "wasm32"),
         );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
