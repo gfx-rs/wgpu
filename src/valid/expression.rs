@@ -739,7 +739,17 @@ impl super::Validator {
                             false
                         }
                     },
-                    Bo::And | Bo::ExclusiveOr | Bo::InclusiveOr => match *left_inner {
+                    Bo::And | Bo::InclusiveOr => match *left_inner {
+                        Ti::Scalar { kind, .. } | Ti::Vector { kind, .. } => match kind {
+                            Sk::Bool | Sk::Sint | Sk::Uint => left_inner == right_inner,
+                            Sk::Float => false,
+                        },
+                        ref other => {
+                            log::error!("Op {:?} left type {:?}", op, other);
+                            false
+                        }
+                    },
+                    Bo::ExclusiveOr => match *left_inner {
                         Ti::Scalar { kind, .. } | Ti::Vector { kind, .. } => match kind {
                             Sk::Sint | Sk::Uint => left_inner == right_inner,
                             Sk::Bool | Sk::Float => false,

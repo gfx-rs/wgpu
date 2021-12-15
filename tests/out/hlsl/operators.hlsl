@@ -73,6 +73,11 @@ void scalar_times_matrix()
     float4x4 assertion = mul(model, 2.0);
 }
 
+void binary()
+{
+    bool a_2 = (true | false);
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
@@ -83,5 +88,6 @@ void main()
     const float _e9 = constructors();
     modulo();
     scalar_times_matrix();
+    binary();
     return;
 }

@@ -2239,7 +2239,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // comparison operations on vectors as they are implemented with
             // builtin functions.
             // Once again we wrap everything in parentheses to avoid precedence issues
-            Expression::Binary { op, left, right } => {
+            Expression::Binary {
+                mut op,
+                left,
+                right,
+            } => {
                 // Holds `Some(function_name)` if the binary operation is
                 // implemented as a function call
                 use crate::{BinaryOperator as Bo, ScalarKind as Sk, TypeInner as Ti};
@@ -2274,6 +2278,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     _ => match (left_inner.scalar_kind(), right_inner.scalar_kind()) {
                         (Some(Sk::Float), _) | (_, Some(Sk::Float)) => match op {
                             Bo::Modulo => BinaryOperation::Modulo,
+                            _ => BinaryOperation::Other,
+                        },
+                        (Some(Sk::Bool), Some(Sk::Bool)) => match op {
+                            Bo::InclusiveOr => {
+                                op = crate::BinaryOperator::LogicalOr;
+                                BinaryOperation::Other
+                            }
                             _ => BinaryOperation::Other,
                         },
                         _ => BinaryOperation::Other,

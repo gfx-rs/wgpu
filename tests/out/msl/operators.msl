@@ -69,6 +69,11 @@ void scalar_times_matrix(
     metal::float4x4 assertion = 2.0 * model;
 }
 
+void binary(
+) {
+    bool a_2 = true | false;
+}
+
 kernel void main_(
 ) {
     metal::float4 _e4 = builtins();
@@ -78,5 +83,6 @@ kernel void main_(
     float _e9 = constructors();
     modulo();
     scalar_times_matrix();
+    binary();
     return;
 }

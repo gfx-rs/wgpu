@@ -60,6 +60,10 @@ void scalar_times_matrix() {
     mat4x4 assertion = (2.0 * model);
 }
 
+void binary() {
+    bool a_2 = (true || false);
+}
+
 void main() {
     vec4 _e4 = builtins();
     vec4 _e5 = splat();
@@ -68,6 +72,7 @@ void main() {
     float _e9 = constructors();
     modulo();
     scalar_times_matrix();
+    binary();
     return;
 }
 

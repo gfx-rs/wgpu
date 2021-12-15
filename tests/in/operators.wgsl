@@ -68,6 +68,10 @@ fn scalar_times_matrix() {
     let assertion: mat4x4<f32> = 2.0 * model;
 }
 
+fn binary() {
+    let a = true | false;
+}
+
 [[stage(compute), workgroup_size(1)]]
 fn main() {
     let a = builtins();
@@ -77,4 +81,5 @@ fn main() {
     let e = constructors();
     modulo();
     scalar_times_matrix();
+    binary();
 }
