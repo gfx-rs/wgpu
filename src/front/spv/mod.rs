@@ -2769,8 +2769,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         get_expr_handle!(condition_id, lexp)
                     };
 
+                    block.extend(emitter.finish(ctx.expressions));
+                    ctx.blocks.insert(block_id, block);
+                    let body = &mut ctx.bodies[body_idx];
+                    body.data.push(BodyFragment::BlockId(block_id));
+
                     let true_id = self.next()?;
                     let false_id = self.next()?;
+
+                    let same_target = true_id == false_id;
 
                     // Start a body block for the `accept` branch.
                     let accept = ctx.bodies.len();
@@ -2780,11 +2787,27 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     // merge or continue block, then put a `Break` or `Continue`
                     // statement in this new body block.
                     if let Some(info) = ctx.mergers.get(&true_id) {
-                        merger(&mut accept_block, info)
+                        merger(
+                            match same_target {
+                                true => &mut ctx.bodies[body_idx],
+                                false => &mut accept_block,
+                            },
+                            info,
+                        )
                     } else {
                         // Note the body index for the block we're branching to.
-                        let prev = ctx.body_for_label.insert(true_id, accept);
+                        let prev = ctx.body_for_label.insert(
+                            true_id,
+                            match same_target {
+                                true => body_idx,
+                                false => accept,
+                            },
+                        );
                         debug_assert!(prev.is_none());
+                    }
+
+                    if same_target {
+                        return Ok(());
                     }
 
                     ctx.bodies.push(accept_block);
@@ -2802,12 +2825,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     ctx.bodies.push(reject_block);
 
-                    block.extend(emitter.finish(ctx.expressions));
-                    ctx.blocks.insert(block_id, block);
                     let body = &mut ctx.bodies[body_idx];
-                    // Make sure the vector has space for at least two more allocations
-                    body.data.reserve(2);
-                    body.data.push(BodyFragment::BlockId(block_id));
                     body.data.push(BodyFragment::If {
                         condition,
                         accept,
