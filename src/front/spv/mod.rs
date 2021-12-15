@@ -2832,6 +2832,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         reject,
                     });
 
+                    // Consume branch weights
+                    for _ in 4..inst.wc {
+                        let _ = self.next()?;
+                    }
+
                     return Ok(());
                 }
                 Op::Switch => {
