@@ -2,6 +2,12 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+struct DefaultConstructible {
+    template<typename T>
+    operator T() && {
+        return T {};
+    }
+};
 struct type_1 {
     metal::float4 inner[10];
 };

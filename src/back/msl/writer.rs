@@ -822,7 +822,7 @@ impl<W: Write> Writer<W> {
                 {
                     write!(self.out, " ? ")?;
                     self.put_access_chain(expr_handle, policy, context)?;
-                    write!(self.out, " : 0")?;
+                    write!(self.out, " : DefaultConstructible()")?;
 
                     if !is_scoped {
                         write!(self.out, ")")?;
@@ -1529,7 +1529,7 @@ impl<W: Write> Writer<W> {
         {
             write!(self.out, " ? ")?;
             self.put_unchecked_load(pointer, policy, context)?;
-            write!(self.out, " : 0")?;
+            write!(self.out, " : DefaultConstructible()")?;
 
             if !is_scoped {
                 write!(self.out, ")")?;
@@ -2154,6 +2154,13 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
 
+        if options
+            .bounds_check_policies
+            .contains(index::BoundsCheckPolicy::ReadZeroSkipWrite)
+        {
+            self.put_default_constructible()?;
+        }
+
         {
             let mut indices = vec![];
             for (handle, var) in module.global_variables.iter() {
@@ -2179,6 +2186,28 @@ impl<W: Write> Writer<W> {
         self.write_type_defs(module)?;
         self.write_composite_constants(module)?;
         self.write_functions(module, info, options, pipeline_options)
+    }
+
+    /// Write the definition for the `DefaultConstructible` class.
+    ///
+    /// The [`ReadZeroSkipWrite`] bounds check policy requires us to be able to
+    /// produce 'zero' values for any type, including structs, arrays, and so
+    /// on. We could do this by emitting default constructor applications, but
+    /// that would entail printing the name of the type, which is more trouble
+    /// than you'd think. Instead, we just construct this magic C++14 class that
+    /// can be converted to any type that can be default constructed, using
+    /// template parameter inference to detect which type is needed, so we don't
+    /// have to figure out the name.
+    ///
+    /// [`ReadZeroSkipWrite`]: index::BoundsCheckPolicy::ReadZeroSkipWrite
+    fn put_default_constructible(&mut self) -> BackendResult {
+        writeln!(self.out, "struct DefaultConstructible {{")?;
+        writeln!(self.out, "    template<typename T>")?;
+        writeln!(self.out, "    operator T() && {{")?;
+        writeln!(self.out, "        return T {{}};")?;
+        writeln!(self.out, "    }}")?;
+        writeln!(self.out, "}};")?;
+        Ok(())
     }
 
     fn write_type_defs(&mut self, module: &crate::Module) -> BackendResult {

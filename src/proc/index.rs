@@ -148,6 +148,11 @@ impl BoundsCheckPolicies {
             _ => self.index,
         }
     }
+
+    /// Return `true` if any of `self`'s policies are `policy`.
+    pub fn contains(&self, policy: BoundsCheckPolicy) -> bool {
+        self.index == policy || self.buffer == policy || self.image == policy
+    }
 }
 
 /// An index that may be statically known, or may need to be computed at runtime.
@@ -204,9 +209,7 @@ pub fn find_checked_indexes(
     let mut guarded_indices = BitSet::new();
 
     // Don't bother scanning if we never need `ReadZeroSkipWrite`.
-    if policies.index == BoundsCheckPolicy::ReadZeroSkipWrite
-        || policies.buffer == BoundsCheckPolicy::ReadZeroSkipWrite
-    {
+    if policies.contains(BoundsCheckPolicy::ReadZeroSkipWrite) {
         for (_handle, expr) in function.expressions.iter() {
             // There's no need to handle `AccessIndex` expressions, as their
             // indices never need to be cached.

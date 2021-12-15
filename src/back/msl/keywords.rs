@@ -210,4 +210,6 @@ pub const RESERVED: &[&str] = &[
     "M_2_SQRTPI",
     "M_SQRT2",
     "M_SQRT1_2",
+    // Naga utilities
+    "DefaultConstructible",
 ];
