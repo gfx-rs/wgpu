@@ -3,7 +3,6 @@ struct VertexOutput {
     [[builtin(position)]] position: vec4<f32>;
 };
 
-[[block]]
 struct Locals {
     transform: mat4x4<f32>;
 };

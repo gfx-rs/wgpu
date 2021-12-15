@@ -1,4 +1,3 @@
-[[block]]
 struct Globals {
     view_proj: mat4x4<f32>;
     num_lights: vec4<u32>;
@@ -7,7 +6,6 @@ struct Globals {
 [[group(0), binding(0)]]
 var<uniform> u_globals: Globals;
 
-[[block]]
 struct Entity {
     world: mat4x4<f32>;
     color: vec4<f32>;
@@ -49,13 +47,11 @@ struct Light {
     color: vec4<f32>;
 };
 
-[[block]]
 struct Lights {
     data: [[stride(96)]] array<Light>;
 };
 
 // Used when storage types are not supported
-[[block]]
 struct LightsWithoutStorage {
     data: array<Light, 10>;
 };
