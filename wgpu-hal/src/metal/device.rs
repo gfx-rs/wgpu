@@ -635,6 +635,11 @@ impl crate::Device<super::Api> for super::Device {
                         ..per_stage_map.cs
                     },
                 },
+                bounds_check_policies: naga::proc::BoundsCheckPolicies {
+                    index: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
+                    buffer: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
+                    image: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
+                },
             },
         })
     }
