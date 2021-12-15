@@ -472,6 +472,24 @@ impl<'a> ResolveContext<'a> {
                     return Err(ResolveError::InvalidPointer(pointer));
                 }
             },
+            crate::Expression::ImageSample {
+                image,
+                gather: Some(_),
+                ..
+            } => match *past(image).inner_with(types) {
+                Ti::Image { class, .. } => TypeResolution::Value(Ti::Vector {
+                    kind: match class {
+                        crate::ImageClass::Sampled { kind, multi: _ } => kind,
+                        _ => crate::ScalarKind::Float,
+                    },
+                    width: 4,
+                    size: crate::VectorSize::Quad,
+                }),
+                ref other => {
+                    log::error!("Image type {:?}", other);
+                    return Err(ResolveError::InvalidImage(image));
+                }
+            },
             crate::Expression::ImageSample { image, .. }
             | crate::Expression::ImageLoad { image, .. } => match *past(image).inner_with(types) {
                 Ti::Image { class, .. } => TypeResolution::Value(match class {

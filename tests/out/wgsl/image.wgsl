@@ -103,3 +103,21 @@ fn sample_comparison() -> [[location(0)]] f32 {
     let s2d_depth_level = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc_1, 0.5);
     return (s2d_depth + s2d_depth_level);
 }
+
+[[stage(fragment)]]
+fn gather() -> [[location(0)]] vec4<f32> {
+    let tc_2 = vec2<f32>(0.5);
+    let s2d_1 = textureGather(1, image_2d, sampler_reg, tc_2);
+    let s2d_offset_1 = textureGather(3, image_2d, sampler_reg, tc_2, vec2<i32>(3, 1));
+    let s2d_depth_1 = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5);
+    let s2d_depth_offset = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5, vec2<i32>(3, 1));
+    return (((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset);
+}
+
+[[stage(fragment)]]
+fn depth_no_comparison() -> [[location(0)]] vec4<f32> {
+    let tc_3 = vec2<f32>(0.5);
+    let s2d_2 = textureSample(image_2d_depth, sampler_reg, tc_3);
+    let s2d_gather = textureGather(image_2d_depth, sampler_reg, tc_3);
+    return (vec4<f32>(s2d_2) + s2d_gather);
+}

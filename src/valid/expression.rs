@@ -99,6 +99,12 @@ pub enum ExpressionError {
     InvalidDepthReference(Handle<crate::Expression>),
     #[error("Depth sample level can only be Auto or Zero")]
     InvalidDepthSampleLevel,
+    #[error("Gather level can only be Zero")]
+    InvalidGatherLevel,
+    #[error("Gather component {0:?} doesn't exist in the image")]
+    InvalidGatherComponent(crate::SwizzleComponent),
+    #[error("Gather can't be done for image dimension {0:?}")]
+    InvalidGatherDimension(crate::ImageDimension),
     #[error("Sample level (exact) type {0:?} is not a scalar float")]
     InvalidSampleLevelExactType(Handle<crate::Expression>),
     #[error("Sample level (bias) type {0:?} is not a scalar float")]
@@ -343,6 +349,7 @@ impl super::Validator {
             E::ImageSample {
                 image,
                 sampler,
+                gather,
                 coordinate,
                 array_index,
                 offset,
@@ -463,6 +470,26 @@ impl super::Validator {
                     match level {
                         crate::SampleLevel::Auto | crate::SampleLevel::Zero => {}
                         _ => return Err(ExpressionError::InvalidDepthSampleLevel),
+                    }
+                }
+
+                if let Some(component) = gather {
+                    match dim {
+                        crate::ImageDimension::D2 | crate::ImageDimension::Cube => {}
+                        crate::ImageDimension::D1 | crate::ImageDimension::D3 => {
+                            return Err(ExpressionError::InvalidGatherDimension(dim))
+                        }
+                    };
+                    let max_component = match class {
+                        crate::ImageClass::Depth { .. } => crate::SwizzleComponent::X,
+                        _ => crate::SwizzleComponent::W,
+                    };
+                    if component > max_component {
+                        return Err(ExpressionError::InvalidGatherComponent(component));
+                    }
+                    match level {
+                        crate::SampleLevel::Zero => {}
+                        _ => return Err(ExpressionError::InvalidGatherLevel),
                     }
                 }
 

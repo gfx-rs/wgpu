@@ -1594,6 +1594,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::ImageSample {
                 image,
                 sampler,
+                gather,
                 coordinate,
                 array_index,
                 offset,
@@ -1601,23 +1602,30 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 depth_ref,
             } => {
                 use crate::SampleLevel as Sl;
+                const COMPONENTS: [&str; 4] = ["", "Green", "Blue", "Alpha"];
 
-                let texture_func = match level {
-                    Sl::Auto => {
-                        if depth_ref.is_some() {
-                            "SampleCmp"
-                        } else {
-                            "Sample"
-                        }
-                    }
-                    Sl::Zero => "SampleCmpLevelZero",
-                    Sl::Exact(_) => "SampleLevel",
-                    Sl::Bias(_) => "SampleBias",
-                    Sl::Gradient { .. } => "SampleGrad",
+                let (base_str, component_str) = match gather {
+                    Some(component) => ("Gather", COMPONENTS[component as usize]),
+                    None => ("Sample", ""),
+                };
+                let cmp_str = match depth_ref {
+                    Some(_) => "Cmp",
+                    None => "",
+                };
+                let level_str = match level {
+                    Sl::Zero if gather.is_none() => "LevelZero",
+                    Sl::Auto | Sl::Zero => "",
+                    Sl::Exact(_) => "Level",
+                    Sl::Bias(_) => "Bias",
+                    Sl::Gradient { .. } => "Grad",
                 };
 
                 self.write_expr(module, image, func_ctx)?;
-                write!(self.out, ".{}(", texture_func)?;
+                write!(
+                    self.out,
+                    ".{}{}{}{}(",
+                    base_str, cmp_str, component_str, level_str
+                )?;
                 self.write_expr(module, sampler, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_texture_coordinates(

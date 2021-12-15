@@ -122,3 +122,35 @@ fragment sample_comparisonOutput sample_comparison(
     float s2d_depth_level = image_2d_depth.sample_compare(sampler_cmp, tc_1, 0.5);
     return sample_comparisonOutput { s2d_depth + s2d_depth_level };
 }
+
+
+struct gatherOutput {
+    metal::float4 member_6 [[color(0)]];
+};
+fragment gatherOutput gather(
+  metal::texture2d<float, metal::access::sample> image_2d [[user(fake0)]]
+, metal::sampler sampler_reg [[user(fake0)]]
+, metal::sampler sampler_cmp [[user(fake0)]]
+, metal::depth2d<float, metal::access::sample> image_2d_depth [[user(fake0)]]
+) {
+    metal::float2 tc_2 = metal::float2(0.5);
+    metal::float4 s2d_1 = image_2d.gather(sampler_reg, tc_2, int2(0), metal::component::y);
+    metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_type_8_, metal::component::w);
+    metal::float4 s2d_depth_1 = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5);
+    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_type_8_);
+    return gatherOutput { ((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset };
+}
+
+
+struct depth_no_comparisonOutput {
+    metal::float4 member_7 [[color(0)]];
+};
+fragment depth_no_comparisonOutput depth_no_comparison(
+  metal::sampler sampler_reg [[user(fake0)]]
+, metal::depth2d<float, metal::access::sample> image_2d_depth [[user(fake0)]]
+) {
+    metal::float2 tc_3 = metal::float2(0.5);
+    float s2d_2 = image_2d_depth.sample(sampler_reg, tc_3);
+    metal::float4 s2d_gather = image_2d_depth.gather(sampler_reg, tc_3);
+    return depth_no_comparisonOutput { metal::float4(s2d_2) + s2d_gather };
+}

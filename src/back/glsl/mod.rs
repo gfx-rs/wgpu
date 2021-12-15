@@ -1928,6 +1928,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::ImageSample {
                 image,
                 sampler: _, //TODO?
+                gather,
                 coordinate,
                 array_index,
                 offset,
@@ -1962,6 +1963,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 let workaround_lod_array_shadow_as_grad = (array_index.is_some()
                     || dim == crate::ImageDimension::Cube)
                     && depth_ref.is_some()
+                    && gather.is_none()
                     && !self
                         .options
                         .writer_flags
@@ -1969,6 +1971,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 //Write the function to be used depending on the sample level
                 let fun_name = match level {
+                    crate::SampleLevel::Zero if gather.is_some() => "textureGather",
                     crate::SampleLevel::Auto | crate::SampleLevel::Bias(_) => "texture",
                     crate::SampleLevel::Zero | crate::SampleLevel::Exact(_) => {
                         if workaround_lod_array_shadow_as_grad {
@@ -2002,8 +2005,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 if array_index.is_some() {
                     coord_dim += 1;
                 }
-                let cube_array_shadow = coord_dim == 4;
-                if depth_ref.is_some() && !cube_array_shadow {
+                let merge_depth_ref = depth_ref.is_some() && gather.is_none() && coord_dim < 4;
+                if merge_depth_ref {
                     coord_dim += 1;
                 }
 
@@ -2021,21 +2024,17 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, ", ")?;
                     self.write_expr(expr, ctx)?;
                 }
-                if !cube_array_shadow {
-                    if let Some(expr) = depth_ref {
-                        write!(self.out, ", ")?;
-                        self.write_expr(expr, ctx)?;
-                    }
+                if merge_depth_ref {
+                    write!(self.out, ", ")?;
+                    self.write_expr(depth_ref.unwrap(), ctx)?;
                 }
                 if is_vec {
                     write!(self.out, ")")?;
                 }
 
-                if cube_array_shadow {
-                    if let Some(expr) = depth_ref {
-                        write!(self.out, ", ")?;
-                        self.write_expr(expr, ctx)?;
-                    }
+                if let (Some(expr), false) = (depth_ref, merge_depth_ref) {
+                    write!(self.out, ", ")?;
+                    self.write_expr(expr, ctx)?;
                 }
 
                 match level {
@@ -2045,7 +2044,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::SampleLevel::Zero => {
                         if workaround_lod_array_shadow_as_grad {
                             write!(self.out, ", vec2(0,0), vec2(0,0)")?;
-                        } else {
+                        } else if gather.is_none() {
                             write!(self.out, ", 0.0")?;
                         }
                     }
@@ -2080,6 +2079,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     if tex_1d_hack {
                         write!(self.out, ", 0)")?;
                     }
+                }
+
+                if let (Some(component), None) = (gather, depth_ref) {
+                    write!(self.out, ", {}", component as usize)?;
                 }
 
                 // End the function

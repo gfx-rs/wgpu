@@ -462,6 +462,7 @@ impl FunctionInfo {
             E::ImageSample {
                 image,
                 sampler,
+                gather: _,
                 coordinate,
                 array_index,
                 offset: _,

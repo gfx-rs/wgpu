@@ -3,5 +3,5 @@
 		version: (1, 1),
 		debug: true,
 	),
-	glsl_exclude_list: ["depth_load", "levels_queries"]
+	glsl_exclude_list: ["depth_load", "depth_no_comparison", "levels_queries"]
 )

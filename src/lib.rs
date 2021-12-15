@@ -975,7 +975,7 @@ pub enum ImageQuery {
 
 /// Component selection for a vector swizzle.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum SwizzleComponent {
@@ -1128,6 +1128,9 @@ pub enum Expression {
     ImageSample {
         image: Handle<Expression>,
         sampler: Handle<Expression>,
+        /// If Some(), this operation is a gather operation
+        /// on the selected component.
+        gather: Option<SwizzleComponent>,
         coordinate: Handle<Expression>,
         array_index: Option<Handle<Expression>>,
         offset: Option<Handle<Constant>>,

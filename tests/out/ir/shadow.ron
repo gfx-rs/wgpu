@@ -870,6 +870,7 @@
                 ImageSample(
                     image: 4,
                     sampler: 5,
+                    gather: None,
                     coordinate: 72,
                     array_index: Some(74),
                     offset: None,

@@ -229,3 +229,21 @@ float sample_comparison() : SV_Target0
     float s2d_depth_level = image_2d_depth.SampleCmpLevelZero(sampler_cmp, tc_1, 0.5);
     return (s2d_depth + s2d_depth_level);
 }
+
+float4 gather() : SV_Target0
+{
+    float2 tc_2 = float2(0.5.xx);
+    float4 s2d_1 = image_2d.GatherGreen(sampler_reg, tc_2);
+    float4 s2d_offset_1 = image_2d.GatherAlpha(sampler_reg, tc_2, int2(3, 1));
+    float4 s2d_depth_1 = image_2d_depth.GatherCmp(sampler_cmp, tc_2, 0.5);
+    float4 s2d_depth_offset = image_2d_depth.GatherCmp(sampler_cmp, tc_2, 0.5, int2(3, 1));
+    return (((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset);
+}
+
+float4 depth_no_comparison() : SV_Target0
+{
+    float2 tc_3 = float2(0.5.xx);
+    float s2d_2 = image_2d_depth.Sample(sampler_reg, tc_3);
+    float4 s2d_gather = image_2d_depth.Gather(sampler_reg, tc_3);
+    return (float4(s2d_2.xxxx) + s2d_gather);
+}

@@ -896,18 +896,23 @@ impl<W: Write> Writer<W> {
             crate::Expression::ImageSample {
                 image,
                 sampler,
+                gather,
                 coordinate,
                 array_index,
                 offset,
                 level,
                 depth_ref,
             } => {
-                let op = match depth_ref {
-                    Some(_) => "sample_compare",
+                let main_op = match gather {
+                    Some(_) => "gather",
                     None => "sample",
                 };
+                let comparison_op = match depth_ref {
+                    Some(_) => "_compare",
+                    None => "",
+                };
                 self.put_expression(image, context, false)?;
-                write!(self.out, ".{}(", op)?;
+                write!(self.out, ".{}{}(", main_op, comparison_op)?;
                 self.put_expression(sampler, context, true)?;
                 write!(self.out, ", ")?;
                 self.put_expression(coordinate, context, true)?;
@@ -930,6 +935,25 @@ impl<W: Write> Writer<W> {
                         first_time: false,
                     };
                     write!(self.out, ", {}", coco)?;
+                }
+                match gather {
+                    None | Some(crate::SwizzleComponent::X) => {}
+                    Some(component) => {
+                        let is_cube_map = match *context.resolve_type(image) {
+                            crate::TypeInner::Image {
+                                dim: crate::ImageDimension::Cube,
+                                ..
+                            } => true,
+                            _ => false,
+                        };
+                        // Offset always comes before the gather, except
+                        // in cube maps where it's not applicable
+                        if offset.is_none() && !is_cube_map {
+                            write!(self.out, ", int2(0)")?;
+                        }
+                        let letter = ['x', 'y', 'z', 'w'][component as usize];
+                        write!(self.out, ", {}::component::{}", NAMESPACE, letter)?;
+                    }
                 }
                 write!(self.out, ")")?;
             }

@@ -1930,6 +1930,7 @@ fn texture_call(
             Expression::ImageSample {
                 image,
                 sampler,
+                gather: None, //TODO
                 coordinate: comps.coordinate,
                 array_index,
                 offset,

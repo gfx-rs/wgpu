@@ -148,6 +148,7 @@ pub enum Error<'a> {
     },
     InvalidResolve(ResolveError),
     InvalidForInitializer(Span),
+    InvalidGatherComponent(Span, i32),
     ReservedIdentifierPrefix(Span),
     UnknownStorageClass(Span),
     UnknownAttribute(Span),
@@ -340,6 +341,11 @@ impl<'a> Error<'a> {
             Error::InvalidForInitializer(ref bad_span) => ParseError {
                 message: format!("for(;;) initializer is not an assignment or a function call: '{}'", &source[bad_span.clone()]),
                 labels: vec![(bad_span.clone(), "not an assignment or function call".into())],
+                notes: vec![],
+            },
+            Error::InvalidGatherComponent(ref bad_span, component) => ParseError {
+                message: format!("textureGather component {} doesn't exist, must be 0, 1, 2, or 3", component),
+                labels: vec![(bad_span.clone(), "invalid component".into())],
                 notes: vec![],
             },
             Error::ReservedIdentifierPrefix(ref bad_span) => ParseError {
@@ -1648,6 +1654,7 @@ impl Parser {
                     crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
+                        gather: None,
                         coordinate,
                         array_index,
                         offset,
@@ -1681,6 +1688,7 @@ impl Parser {
                     crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
+                        gather: None,
                         coordinate,
                         array_index,
                         offset,
@@ -1714,6 +1722,7 @@ impl Parser {
                     crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
+                        gather: None,
                         coordinate,
                         array_index,
                         offset,
@@ -1749,6 +1758,7 @@ impl Parser {
                     crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
+                        gather: None,
                         coordinate,
                         array_index,
                         offset,
@@ -1782,6 +1792,7 @@ impl Parser {
                     crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
+                        gather: None,
                         coordinate,
                         array_index,
                         offset,
@@ -1815,6 +1826,91 @@ impl Parser {
                     crate::Expression::ImageSample {
                         image: sc.image,
                         sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
+                        gather: None,
+                        coordinate,
+                        array_index,
+                        offset,
+                        level: crate::SampleLevel::Zero,
+                        depth_ref: Some(reference),
+                    }
+                }
+                "textureGather" => {
+                    let _ = lexer.next();
+                    lexer.open_arguments()?;
+                    let component = if let (
+                        Token::Number {
+                            value,
+                            ty: NumberType::Sint,
+                            width: None,
+                        },
+                        span,
+                    ) = lexer.peek()
+                    {
+                        let _ = lexer.next();
+                        lexer.expect(Token::Separator(','))?;
+                        let index = get_i32_literal(value, span.clone())?;
+                        *crate::SwizzleComponent::XYZW
+                            .get(index as usize)
+                            .ok_or(Error::InvalidGatherComponent(span, index))?
+                    } else {
+                        crate::SwizzleComponent::X
+                    };
+                    let (image_name, image_span) = lexer.next_ident_with_span()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let sc = ctx.prepare_sampling(image_name, image_span)?;
+                    let array_index = if sc.arrayed {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    let offset = if lexer.skip(Token::Separator(',')) {
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
+                    } else {
+                        None
+                    };
+                    lexer.close_arguments()?;
+                    crate::Expression::ImageSample {
+                        image: sc.image,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
+                        gather: Some(component),
+                        coordinate,
+                        array_index,
+                        offset,
+                        level: crate::SampleLevel::Zero,
+                        depth_ref: None,
+                    }
+                }
+                "textureGatherCompare" => {
+                    let _ = lexer.next();
+                    lexer.open_arguments()?;
+                    let (image_name, image_span) = lexer.next_ident_with_span()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let (sampler_name, sampler_span) = lexer.next_ident_with_span()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let coordinate = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let sc = ctx.prepare_sampling(image_name, image_span)?;
+                    let array_index = if sc.arrayed {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    lexer.expect(Token::Separator(','))?;
+                    let reference = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    let offset = if lexer.skip(Token::Separator(',')) {
+                        Some(self.parse_const_expression(lexer, ctx.types, ctx.constants)?)
+                    } else {
+                        None
+                    };
+                    lexer.close_arguments()?;
+                    crate::Expression::ImageSample {
+                        image: sc.image,
+                        sampler: ctx.lookup_ident.lookup(sampler_name, sampler_span)?.handle,
+                        gather: Some(crate::SwizzleComponent::X),
                         coordinate,
                         array_index,
                         offset,

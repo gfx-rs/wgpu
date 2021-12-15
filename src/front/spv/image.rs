@@ -606,6 +606,7 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
         let expr = crate::Expression::ImageSample {
             image: si_lexp.image,
             sampler: si_lexp.sampler,
+            gather: None, //TODO
             coordinate,
             array_index,
             offset,

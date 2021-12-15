@@ -891,6 +891,7 @@ impl<'w> BlockContext<'w> {
             crate::Expression::ImageSample {
                 image,
                 sampler,
+                gather,
                 coordinate,
                 array_index,
                 offset,
@@ -900,6 +901,7 @@ impl<'w> BlockContext<'w> {
                 result_type_id,
                 image,
                 sampler,
+                gather,
                 coordinate,
                 array_index,
                 offset,

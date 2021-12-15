@@ -569,6 +569,33 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn image_gather(
+        result_type_id: Word,
+        id: Word,
+        sampled_image: Word,
+        coordinates: Word,
+        component_id: Word,
+        depth_ref: Option<Word>,
+    ) -> Self {
+        let op = match depth_ref {
+            None => Op::ImageGather,
+            Some(_) => Op::ImageDrefGather,
+        };
+
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(sampled_image);
+        instruction.add_operand(coordinates);
+        if let Some(dref) = depth_ref {
+            instruction.add_operand(dref);
+        } else {
+            instruction.add_operand(component_id);
+        }
+
+        instruction
+    }
+
     pub(super) fn image_fetch_or_read(
         op: Op,
         result_type_id: Word,
