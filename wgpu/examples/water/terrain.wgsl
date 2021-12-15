@@ -1,4 +1,3 @@
-[[block]]
 struct Uniforms {
     projection_view: mat4x4<f32>;
     clipping_plane: vec4<f32>;

@@ -1,4 +1,3 @@
-[[block]]
 struct Uniforms {
     view: mat4x4<f32>;
     projection: mat4x4<f32>;

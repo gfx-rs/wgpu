@@ -3,7 +3,6 @@ struct SkyOutput {
     [[location(0)]] uv: vec3<f32>;
 };
 
-[[block]]
 struct Data {
     // from camera to screen
     proj: mat4x4<f32>;

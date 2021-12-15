@@ -892,11 +892,7 @@ impl Interface {
                 _ => continue,
             };
             let ty = match module.types[var.ty].inner {
-                naga::TypeInner::Struct {
-                    top_level: true,
-                    members: _,
-                    span,
-                } => ResourceType::Buffer {
+                naga::TypeInner::Struct { members: _, span } => ResourceType::Buffer {
                     size: wgt::BufferSize::new(span as u64).unwrap(),
                 },
                 naga::TypeInner::Image {

@@ -1,4 +1,3 @@
-[[block]]
 struct Indices {
     arr: array<u32>;
 }; // this is used as both input and output for convenience

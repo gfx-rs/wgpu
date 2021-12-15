@@ -1,4 +1,3 @@
-[[block]]
 struct InOutBuffer {
     data: [[stride(4)]] array<u32>;
 };

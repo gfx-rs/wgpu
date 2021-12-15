@@ -3,7 +3,6 @@ struct VertexOutput {
     [[location(0)]] tex_coords: vec2<f32>;
 };
 
-[[block]]
 struct Locals {
     transform: mat4x4<f32>;
 };

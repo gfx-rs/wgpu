@@ -1,10 +1,8 @@
-[[block]]
 struct Globals {
     mvp: mat4x4<f32>;
     size: vec2<f32>;
 };
 
-[[block]]
 struct Locals {
     position: vec2<f32>;
     velocity: vec2<f32>;
