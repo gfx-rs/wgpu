@@ -433,7 +433,10 @@ impl<'w> BlockContext<'w> {
                         Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThanEqual,
                         _ => unimplemented!(),
                     },
-                    crate::BinaryOperator::And => spirv::Op::BitwiseAnd,
+                    crate::BinaryOperator::And => match left_ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalAnd,
+                        _ => spirv::Op::BitwiseAnd,
+                    },
                     crate::BinaryOperator::ExclusiveOr => spirv::Op::BitwiseXor,
                     crate::BinaryOperator::InclusiveOr => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Bool) => spirv::Op::LogicalOr,

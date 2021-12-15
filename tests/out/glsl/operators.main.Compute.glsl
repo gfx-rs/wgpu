@@ -62,6 +62,7 @@ void scalar_times_matrix() {
 
 void binary() {
     bool a_2 = (true || false);
+    bool b_2 = (true && false);
 }
 
 void main() {

@@ -2285,6 +2285,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                 op = crate::BinaryOperator::LogicalOr;
                                 BinaryOperation::Other
                             }
+                            Bo::And => {
+                                op = crate::BinaryOperator::LogicalAnd;
+                                BinaryOperation::Other
+                            }
                             _ => BinaryOperation::Other,
                         },
                         _ => BinaryOperation::Other,

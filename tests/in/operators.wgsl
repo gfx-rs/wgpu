@@ -70,6 +70,7 @@ fn scalar_times_matrix() {
 
 fn binary() {
     let a = true | false;
+    let b = true & false;
 }
 
 [[stage(compute), workgroup_size(1)]]
