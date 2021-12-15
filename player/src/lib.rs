@@ -108,6 +108,15 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                         destination_offset,
                     )
                     .unwrap(),
+                trace::Command::PushDebugGroup(marker) => self
+                    .command_encoder_push_debug_group::<A>(encoder, &marker)
+                    .unwrap(),
+                trace::Command::PopDebugGroup => {
+                    self.command_encoder_pop_debug_group::<A>(encoder).unwrap()
+                }
+                trace::Command::InsertDebugMarker(marker) => self
+                    .command_encoder_insert_debug_marker::<A>(encoder, &marker)
+                    .unwrap(),
                 trace::Command::RunComputePass { base } => {
                     self.command_encoder_run_compute_pass_impl::<A>(encoder, base.as_ref())
                         .unwrap();

@@ -168,6 +168,9 @@ pub enum Command {
         destination: id::BufferId,
         destination_offset: wgt::BufferAddress,
     },
+    PushDebugGroup(String),
+    PopDebugGroup,
+    InsertDebugMarker(String),
     RunComputePass {
         base: crate::command::BasePass<crate::command::ComputeCommand>,
     },
