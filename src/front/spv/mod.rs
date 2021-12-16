@@ -499,6 +499,11 @@ struct BlockContext<'function> {
     parameter_sampling: &'function mut [image::SamplingFlags],
 }
 
+enum SignAnchor {
+    Result,
+    Operand,
+}
+
 pub struct Parser<I> {
     data: I,
     data_offset: usize,
@@ -852,6 +857,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     /// A more complicated version of the binary op,
     /// where we force the operand to have the same type as the result.
     /// This is mostly needed for "i++" and "i--" coming from GLSL.
+    #[allow(clippy::too_many_arguments)]
     fn parse_expr_binary_op_sign_adjusted(
         &mut self,
         ctx: &mut BlockContext,
@@ -860,6 +866,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         block_id: spirv::Word,
         body_idx: usize,
         op: crate::BinaryOperator,
+        // For arithmetic operations, we need the sign of operands to match the result.
+        // For boolean operations, however, the operands need to match the signs, but
+        // result is always different - a boolean.
+        anchor: SignAnchor,
     ) -> Result<(), Error> {
         let start = self.data_offset;
         let result_type_id = self.next()?;
@@ -872,15 +882,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let left = self.get_expr_handle(p1_id, p1_lexp, ctx, emitter, block, body_idx);
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
         let right = self.get_expr_handle(p2_id, p2_lexp, ctx, emitter, block, body_idx);
-        let result_lookup_ty = self.lookup_type.lookup(result_type_id)?;
-        let kind = ctx.type_arena[result_lookup_ty.handle]
+
+        let expected_type_id = match anchor {
+            SignAnchor::Result => result_type_id,
+            SignAnchor::Operand => p1_lexp.type_id,
+        };
+        let expected_lookup_ty = self.lookup_type.lookup(expected_type_id)?;
+        let kind = ctx.type_arena[expected_lookup_ty.handle]
             .inner
             .scalar_kind()
             .unwrap();
 
         let expr = crate::Expression::Binary {
             op,
-            left: if p1_lexp.type_id == result_type_id {
+            left: if p1_lexp.type_id == expected_type_id {
                 left
             } else {
                 ctx.expressions.append(
@@ -892,7 +907,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     span,
                 )
             },
-            right: if p2_lexp.type_id == result_type_id {
+            right: if p2_lexp.type_id == expected_type_id {
                 right
             } else {
                 ctx.expressions.append(
@@ -1834,7 +1849,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     parse_expr_op!(crate::UnaryOperator::Negate, UNARY)?;
                 }
-                Op::IAdd | Op::ISub | Op::IMul | Op::IEqual | Op::INotEqual => {
+                Op::IAdd | Op::ISub | Op::IMul => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
                     self.parse_expr_binary_op_sign_adjusted(
@@ -1844,6 +1859,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         block_id,
                         body_idx,
                         operator,
+                        SignAnchor::Result,
+                    )?;
+                }
+                Op::IEqual | Op::INotEqual => {
+                    inst.expect(5)?;
+                    let operator = map_binary_operator(inst.op)?;
+                    self.parse_expr_binary_op_sign_adjusted(
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                        operator,
+                        SignAnchor::Operand,
                     )?;
                 }
                 Op::FAdd => {
@@ -2400,7 +2429,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let expr = crate::Expression::As {
                         expr: get_expr_handle!(value_id, value_lexp),
                         kind,
-                        convert: if inst.op == Op::Bitcast {
+                        convert: if kind == crate::ScalarKind::Bool {
+                            Some(crate::BOOL_WIDTH)
+                        } else if inst.op == Op::Bitcast {
                             None
                         } else {
                             Some(width)

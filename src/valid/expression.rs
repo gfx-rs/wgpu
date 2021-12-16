@@ -1331,12 +1331,20 @@ impl super::Validator {
                 }
                 ShaderStages::all()
             }
-            E::As { kind, convert, .. } => {
-                match convert {
-                    Some(width) if !self.check_width(kind, width) => {
-                        return Err(ExpressionError::InvalidCastArgument)
-                    }
-                    _ => {}
+            E::As {
+                expr,
+                kind,
+                convert,
+            } => {
+                let base_width = match *resolver.resolve(expr)? {
+                    crate::TypeInner::Scalar { width, .. }
+                    | crate::TypeInner::Vector { width, .. }
+                    | crate::TypeInner::Matrix { width, .. } => width,
+                    _ => return Err(ExpressionError::InvalidCastArgument),
+                };
+                let width = convert.unwrap_or(base_width);
+                if !self.check_width(kind, width) {
+                    return Err(ExpressionError::InvalidCastArgument);
                 }
                 ShaderStages::all()
             }

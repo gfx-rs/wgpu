@@ -813,6 +813,7 @@ impl Writer {
                 Entry::Vacant(e) => {
                     let id = self.id_gen.next();
                     e.insert(id);
+
                     self.write_type_declaration_local(id, local);
 
                     // If it's an image type, request SPIR-V capabilities here, so
