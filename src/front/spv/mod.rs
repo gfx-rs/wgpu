@@ -3124,6 +3124,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         log::warn!("Unsupported barrier execution scope: {}", exec_scope);
                     }
                 }
+                Op::CopyObject => {
+                    inst.expect(4)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let operand_id = self.next()?;
+
+                    let lookup = self.lookup_expression.lookup(operand_id)?;
+                    let handle = get_expr_handle!(operand_id, lookup);
+
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+                }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
         };
