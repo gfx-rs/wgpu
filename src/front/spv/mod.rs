@@ -1091,6 +1091,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         selections: &[spirv::Word],
         type_arena: &UniqueArena<crate::Type>,
         expressions: &mut Arena<crate::Expression>,
+        constants: &Arena<crate::Constant>,
         span: crate::Span,
     ) -> Result<Handle<crate::Expression>, Error> {
         let selection = match selections.first() {
@@ -1107,7 +1108,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     .ok_or(Error::InvalidAccessType(root_type_id))?;
                 (members.len(), child_member.type_id)
             }
-            // crate::TypeInner::Array //TODO?
+            crate::TypeInner::Array { size, .. } => {
+                let size = match size {
+                    crate::ArraySize::Constant(handle) => match constants[handle] {
+                        crate::Constant {
+                            specialization: Some(_),
+                            ..
+                        } => return Err(Error::UnsupportedType(root_lookup.handle)),
+                        ref unspecialized => unspecialized
+                            .to_array_length()
+                            .ok_or(Error::InvalidArraySize(handle))?,
+                    },
+                    // A runtime sized array is not a composite type
+                    crate::ArraySize::Dynamic => {
+                        return Err(Error::InvalidAccessType(root_type_id))
+                    }
+                };
+
+                let child_type_id = root_lookup
+                    .base_id
+                    .ok_or(Error::InvalidAccessType(root_type_id))?;
+
+                (size as usize, child_type_id)
+            }
             crate::TypeInner::Vector { size, .. }
             | crate::TypeInner::Matrix { columns: size, .. } => {
                 let child_type_id = root_lookup
@@ -1136,6 +1159,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             &selections[1..],
             type_arena,
             expressions,
+            constants,
             span,
         )?;
 
@@ -1735,6 +1759,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         &selections,
                         ctx.type_arena,
                         ctx.expressions,
+                        ctx.const_arena,
                         span,
                     )?;
 
