@@ -11,6 +11,7 @@ const BUNNY_SIZE: f32 = 0.15 * 256.0;
 const GRAVITY: f32 = -9.8 * 100.0;
 const MAX_VELOCITY: f32 = 750.0;
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
+const DESIRED_FRAMES: u32 = 3;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -96,12 +97,12 @@ impl<A: hal::Api> Example<A> {
                 return Err(hal::InstanceError);
             }
             let exposed = adapters.swap_remove(0);
-            println!(
-                "Surface caps: {:?}",
-                exposed.adapter.surface_capabilities(&surface)
-            );
             (exposed.adapter, exposed.capabilities)
         };
+        let surface_caps =
+            unsafe { adapter.surface_capabilities(&surface) }.ok_or(hal::InstanceError)?;
+        log::info!("Surface caps: {:#?}", surface_caps);
+
         let hal::OpenDevice { device, mut queue } = unsafe {
             adapter
                 .open(wgt::Features::empty(), &wgt::Limits::default())
@@ -110,7 +111,9 @@ impl<A: hal::Api> Example<A> {
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
-            swap_chain_size: 3,
+            swap_chain_size: DESIRED_FRAMES
+                .max(*surface_caps.swap_chain_sizes.start())
+                .min(*surface_caps.swap_chain_sizes.end()),
             present_mode: wgt::PresentMode::Fifo,
             composite_alpha_mode: hal::CompositeAlphaMode::Opaque,
             format: wgt::TextureFormat::Bgra8UnormSrgb,
