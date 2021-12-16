@@ -1834,7 +1834,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     parse_expr_op!(crate::UnaryOperator::Negate, UNARY)?;
                 }
-                Op::IAdd | Op::ISub => {
+                Op::IAdd | Op::ISub | Op::IMul | Op::IEqual | Op::INotEqual => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
                     self.parse_expr_binary_op_sign_adjusted(
@@ -1854,7 +1854,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Subtract, BINARY)?;
                 }
-                Op::IMul | Op::FMul => {
+                Op::FMul => {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Multiply, BINARY)?;
                 }
@@ -2640,12 +2640,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::LogicalAnd, BINARY)?;
                 }
-                Op::IEqual
-                | Op::INotEqual
-                | Op::SGreaterThan
-                | Op::SGreaterThanEqual
-                | Op::SLessThan
-                | Op::SLessThanEqual => {
+                Op::SGreaterThan | Op::SGreaterThanEqual | Op::SLessThan | Op::SLessThanEqual => {
                     inst.expect(5)?;
                     self.parse_expr_int_comparison(
                         ctx,
