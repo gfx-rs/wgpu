@@ -1,8 +1,42 @@
 # Change Log
 
-## v0.8 (TBD)
+## v0.8 (2021-12-18)
+  - development release for wgpu-0.12
+  - lots of fixes in all parts
+  - validator:
+    - now gated by `validate` feature
+    - nicely detailed error messages with spans
+  - API:
+    - image gather operations
   - WGSL-in:
     - remove `[[block]]` attribute
+    - `elseif` is removed in favor of `else if`
+  - MSL-out:
+    - full out-of-bounds checking
+
+### v0.7.3 (2021-12-14)
+  - API:
+    - `view_index` builtin
+  - GLSL-out:
+    - reflect textures without samplers
+  - SPV-out:
+    - fix incorrect pack/unpack
+
+### v0.7.2 (2021-12-01)
+  - validator:
+    - check stores for proper pointer class
+  - HLSL-out:
+    - fix stores into `mat3`
+    - respect array strides
+  - SPV-out:
+    - fix multi-word constants
+  - WGSL-in:
+    - permit names starting with underscores
+  - SPV-in:
+    - cull unused builtins
+    - support empty debug labels
+  - GLSL-in:
+    - don't panic on invalid integer operations
 
 ### v0.7.1 (2021-10-12)
   - implement casts from and to booleans in the backends
