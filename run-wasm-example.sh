@@ -3,7 +3,8 @@
 set -e
 
 echo "Compiling..."
-cargo build --example $1 --target wasm32-unknown-unknown --features webgl
+RUSTFLAGS=--cfg=web_sys_unstable_apis
+cargo build --example $1 --target wasm32-unknown-unknown --features "$2"
 
 echo "Generating bindings..."
 mkdir -p target/wasm-examples/$1
