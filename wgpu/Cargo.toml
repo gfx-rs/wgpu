@@ -1,11 +1,11 @@
 [package]
 name = "wgpu"
-version = "0.11.0"
+version = "0.12.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
 homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu/tree/v0.10"
+repository = "https://github.com/gfx-rs/wgpu/tree/v0.12"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 exclude = [
@@ -87,25 +87,25 @@ webgl = ["wgc"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
-version = "0.11"
+version = "0.12"
 features = ["raw-window-handle"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.wgc]
 package = "wgpu-core"
 path = "../wgpu-core"
-version = "0.11"
+version = "0.12"
 features = ["raw-window-handle"]
 optional = true
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.11"
+version = "0.12"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.11"
+version = "0.12"
 
 [dependencies]
 arrayvec = "0.7"
@@ -135,22 +135,22 @@ pollster = "0.2"
 env_logger = "0.8"
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "8ffd6ba"
-#version = "0.7"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "8ffd6ba"
+version = "0.8"
 optional = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "8ffd6ba"
-#version = "0.7"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "8ffd6ba"
+version = "0.8"
 features = ["wgsl-in"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "8ffd6ba"
-#version = "0.7"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "8ffd6ba"
+version = "0.8"
 features = ["wgsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

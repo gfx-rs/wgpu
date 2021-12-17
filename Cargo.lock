@@ -601,7 +601,8 @@ dependencies = [
 [[package]]
 name = "glow"
 version = "0.11.1"
-source = "git+https://github.com/grovesNL/glow?rev=5851ca6#5851ca65e6b6f4f2c59683245c07de1843c85452"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c07210904884e8e2e6a2d7f36f39040a9cefe3b379b721969b5275e9f5b464a"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -870,8 +871,9 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "0.7.1"
-source = "git+https://github.com/gfx-rs/naga?rev=8ffd6ba#8ffd6ba929b4b93c9564f08fe8bb34b23fa72a6f"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7216bec6be822a562dda435236539c7fb5aa5e5ceecc8c565e81139ed1d4b0"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -1620,7 +1622,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "arrayvec",
  "async-executor",
@@ -1654,7 +1656,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "arrayvec",
  "bitflags",
@@ -1677,7 +1679,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.11.2"
+version = "0.12.0"
 dependencies = [
  "arrayvec",
  "ash",
@@ -1715,7 +1717,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "env_logger",
  "wgpu",
@@ -1723,7 +1725,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bitflags",
  "bitflags_serde_shim",
