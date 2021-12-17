@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.11.0"
+version = "0.12.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU core logic on wgpu-hal"
@@ -37,33 +37,33 @@ smallvec = "1"
 thiserror = "1"
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "8ffd6ba"
-#version = "0.7"
+#git = "https://github.com/gfx-rs/naga"
+#rev = "8ffd6ba"
+version = "0.8"
 features = ["span", "validate", "wgsl-in"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.11"
+version = "0.12"
 
 [dependencies.hal]
 path = "../wgpu-hal"
 package = "wgpu-hal"
-version = "0.11"
+version = "0.12"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.11", features = ["gles"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["gles"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.11", features = ["metal"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["metal"] }
 #Note: could also enable "vulkan" for Vulkan Portability
 
 [target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.11", features = ["vulkan", "gles", "renderdoc"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["vulkan", "gles", "renderdoc"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.11", features = ["vulkan", "dx12", "renderdoc"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["vulkan", "dx12", "renderdoc"] }
 
 [build-dependencies]
 cfg_aliases = "0.1"

@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-info"
-version = "0.11.0"
+version = "0.12.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "Adapter information and per-adapter test program"
@@ -11,4 +11,4 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 env_logger = "0.8"
-wgpu = { version = "0.11", path = "../wgpu" }
+wgpu = { version = "0.12", path = "../wgpu" }

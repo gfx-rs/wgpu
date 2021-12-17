@@ -1,10 +1,79 @@
 # Change Log
 
-## wgpu-hal-0.11.2 (2021-10-12)
+## wgpu-0.12 (2021-12-18)
+  - API:
+    - `MULTIVIEW` feature
+    - `DEPTH_CLIP_CONTROL` feature to replace the old `DEPTH_CLAMP`
+    - `TEXTURE_FORMAT_16BIT_NORM` feature
+    - push/pop error scopes on the device
+    - more limits for compute shaders
+    - `SamplerBindingType` instead of booleans
+    - sampler arrays are supported by `TEXTURE_BINDING_ARRAY` feature
+    - "glsl" cargo feature for accepting GLSL shader code
+    - enforced MSRV-1.53
+  - correctness:
+    - textures are zero-initialized
+    - lots and lots of fixes
+  - validation:
+    - match texture-sampler pairs
+    - check `min_binding_size` late at draw
+    - check formats to match in `copy_texture_to_texture`
+    - allow `strip_index_format` to be none if unused
+    - check workgroup sizes and counts
+  - shaders:
+    - please refer to [naga-0.8 changelog](https://github.com/gfx-rs/naga/pull/1610/files)
+    - nice error messages
+
+### wgpu-core-0.11.3, wgpu-hal-0.11.5, wgpu-0.11.1 (2021-12-01)
+  - Core:
+    - validate device descriptor before actually creating it
+    - fix validation of texture-sampler pairs
+  - Vulkan:
+    - fix running on Vulkan-1.1 instance
+    - improve detection of workaround for Intel+Nvidia on Linux
+    - fix resource limits on Vulkan-1.2
+    - fix the check for storage buffer requirement
+    - change internal semaphore logic to work around Linux+Intel bugs
+    - fix enabling extension-provided features
+  - GLES:
+    - fix running on old and bogus drivers
+    - fix stale samplers on bindings change
+    - fix integer textures
+    - fix querying work group parameters
+    - fix stale PBO bindings caused by resource copies
+    - fix rendering to cubemap faces
+    - fix `Rgba16Float` format
+    - fix stale vertex attributes when changing the pipeline
+  - Metal:
+    - fix window resizing for running in multiple processes
+  - Web:
+    - fix `set_index_buffer` and `set_vertex_buffer` to have optional sizes
+
+### wgpu-core-0.11.2, wgpu-hal-0.11.4 (2021-10-22)
+  - fix buffer transition barriers
+  - Metal:
+    - disable RW buffers on macOS 10.11
+    - fix memory leaks in render pass descriptor
+  - WebGL:
+    - fix surface reconfiguration
+  - GLES:
+    - fix mapping when persistent mapping isn't supported
+    - allow presentation in Android emulator
+    - fix sRGB attributes on EGL-1.4 contexts
+
+### wgpu-hal-0.11.3 (2021-10-16)
+  - GL:
+    - fix mapping flags and buffer initialization
+    - fix context creation when sRGB is available
+
+### wgpu-core-0.11.1 (2021-10-15)
+  - fix bind group layout lifetime with regard to bind groups
+
+### wgpu-hal-0.11.2 (2021-10-12)
   - GL/WebGL: fix vertex buffer bindings with non-zero first instance
   - DX12: fix cube array view construction
 
-## wgpu-hal-0.11.1 (2021-10-09)
+### wgpu-hal-0.11.1 (2021-10-09)
   - Vulkan: fix NV optimus detection on Linux
   - GL:
     - fix indirect dispatch buffers
