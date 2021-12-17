@@ -2,7 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, future::Future, mem, pin::Pin, task};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -81,6 +81,23 @@ fn create_texels(size: usize) -> Vec<u8> {
             count
         })
         .collect()
+}
+
+// This can be done simpler with `FutureExt`, but we don't want to add
+// a dependency just for this small case.
+struct ErrorFuture<F> {
+    inner: F,
+}
+impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<()> {
+        let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
+        inner.poll(cx).map(|error| {
+            if let Some(e) = error {
+                panic!("Rendering {}", e);
+            }
+        })
+    }
 }
 
 struct Example {
@@ -335,8 +352,9 @@ impl framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &framework::Spawner,
+        spawner: &framework::Spawner,
     ) {
+        device.push_error_scope(wgpu::ErrorFilter::Validation);
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -372,6 +390,9 @@ impl framework::Example for Example {
         }
 
         queue.submit(Some(encoder.finish()));
+        spawner.spawn_local(ErrorFuture {
+            inner: device.pop_error_scope(),
+        });
     }
 }
 

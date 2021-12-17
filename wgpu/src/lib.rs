@@ -44,6 +44,15 @@ pub use wgt::{
 
 use backend::{BufferMappedRange, Context as C};
 
+/// Filter for error scopes.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub enum ErrorFilter {
+    /// Catch only out-of-memory errors.
+    OutOfMemory,
+    /// Catch only validation errors.
+    Validation,
+}
+
 trait ComputePassInner<Ctx: Context> {
     fn set_pipeline(&mut self, pipeline: &Ctx::ComputePipelineId);
     fn set_bind_group(
@@ -183,6 +192,7 @@ trait Context: Debug + Send + Sized + Sync {
         + Send;
     type MapAsyncFuture: Future<Output = Result<(), BufferAsyncError>> + Send;
     type OnSubmittedWorkDoneFuture: Future<Output = ()> + Send;
+    type PopErrorScopeFuture: Future<Output = Option<Error>> + Send;
 
     fn init(backends: Backends) -> Self;
     fn instance_create_surface(
@@ -317,6 +327,8 @@ trait Context: Debug + Send + Sized + Sync {
         device: &Self::DeviceId,
         handler: impl UncapturedErrorHandler,
     );
+    fn device_push_error_scope(&self, device: &Self::DeviceId, filter: ErrorFilter);
+    fn device_pop_error_scope(&self, device: &Self::DeviceId) -> Self::PopErrorScopeFuture;
 
     fn buffer_map_async(
         &self,
@@ -1877,6 +1889,16 @@ impl Device {
         self.context.device_on_uncaptured_error(&self.id, handler);
     }
 
+    /// Push an error scope.
+    pub fn push_error_scope(&self, filter: ErrorFilter) {
+        self.context.device_push_error_scope(&self.id, filter);
+    }
+
+    /// Pop an error scope.
+    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + Send {
+        self.context.device_pop_error_scope(&self.id)
+    }
+
     /// Starts frame capture.
     pub fn start_capture(&self) {
         Context::device_start_capture(&*self.context, &self.id)
@@ -3288,12 +3310,12 @@ impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
 #[derive(Debug)]
 pub enum Error {
     /// Out of memory error
-    OutOfMemoryError {
+    OutOfMemory {
         ///
         source: Box<dyn error::Error + Send + 'static>,
     },
     /// Validation error, signifying a bug in code or data
-    ValidationError {
+    Validation {
         ///
         source: Box<dyn error::Error + Send + 'static>,
         ///
@@ -3304,8 +3326,8 @@ pub enum Error {
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            Error::OutOfMemoryError { source } => Some(source.as_ref()),
-            Error::ValidationError { source, .. } => Some(source.as_ref()),
+            Error::OutOfMemory { source } => Some(source.as_ref()),
+            Error::Validation { source, .. } => Some(source.as_ref()),
         }
     }
 }
@@ -3313,8 +3335,8 @@ impl error::Error for Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::OutOfMemoryError { .. } => f.write_str("Out of Memory"),
-            Error::ValidationError { description, .. } => f.write_str(description),
+            Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
+            Error::Validation { description, .. } => f.write_str(description),
         }
     }
 }

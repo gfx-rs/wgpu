@@ -32,6 +32,22 @@ impl fmt::Debug for Context {
     }
 }
 
+impl crate::Error {
+    fn from_js(js_error: js_sys::Object) -> Self {
+        let source = Box::<dyn std::error::Error + Send + Sync>::from("<WebGPU Error>");
+        if let Some(js_error) = js_error.dyn_ref::<web_sys::GpuValidationError>() {
+            crate::Error::Validation {
+                source,
+                description: js_error.message(),
+            }
+        } else if js_error.has_type::<web_sys::GpuOutOfMemoryError>() {
+            crate::Error::OutOfMemory { source }
+        } else {
+            panic!("Unexpected error");
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ComputePass(web_sys::GpuComputePassEncoder);
 #[derive(Debug)]
@@ -901,6 +917,7 @@ fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<web_sys::Gp
         Err(_) => None,
     }
 }
+
 fn future_request_device(
     result: JsFutureResult,
 ) -> Result<(Sendable<web_sys::GpuDevice>, Sendable<web_sys::GpuQueue>), crate::RequestDeviceError>
@@ -916,6 +933,16 @@ fn future_request_device(
 
 fn future_map_async(result: JsFutureResult) -> Result<(), crate::BufferAsyncError> {
     result.map(|_| ()).map_err(|_| crate::BufferAsyncError)
+}
+
+fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
+    match result {
+        Ok(js_value) if js_value.is_object() => {
+            let js_error = wasm_bindgen::JsCast::dyn_into(js_value).unwrap();
+            Some(crate::Error::from_js(js_error))
+        }
+        _ => None,
+    }
 }
 
 impl Context {
@@ -981,6 +1008,8 @@ impl crate::Context for Context {
     >;
     type OnSubmittedWorkDoneFuture =
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> ()>;
+    type PopErrorScopeFuture =
+        MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
 
     fn init(_backends: wgt::Backends) -> Self {
         Context(web_sys::window().unwrap().navigator().gpu())
@@ -1665,23 +1694,29 @@ impl crate::Context for Context {
         handler: impl crate::UncapturedErrorHandler,
     ) {
         let f = Closure::wrap(Box::new(move |event: web_sys::GpuUncapturedErrorEvent| {
-            // Convert the JS error into a wgpu error.
-            let js_error = event.error();
-            let source = Box::<dyn std::error::Error + Send + Sync>::from("<WebGPU Error>");
-            if let Some(js_error) = js_error.dyn_ref::<web_sys::GpuValidationError>() {
-                handler(crate::Error::ValidationError {
-                    source,
-                    description: js_error.message(),
-                });
-            } else if js_error.has_type::<web_sys::GpuOutOfMemoryError>() {
-                handler(crate::Error::OutOfMemoryError { source });
-            }
+            let error = crate::Error::from_js(event.error());
+            handler(error);
         }) as Box<dyn FnMut(_)>);
         device
             .0
             .set_onuncapturederror(Some(f.as_ref().unchecked_ref()));
         // TODO: This will leak the memory associated with the error handler by default.
         f.forget();
+    }
+
+    fn device_push_error_scope(&self, device: &Self::DeviceId, filter: crate::ErrorFilter) {
+        device.0.push_error_scope(match filter {
+            crate::ErrorFilter::OutOfMemory => web_sys::GpuErrorFilter::OutOfMemory,
+            crate::ErrorFilter::Validation => web_sys::GpuErrorFilter::Validation,
+        });
+    }
+
+    fn device_pop_error_scope(&self, device: &Self::DeviceId) -> Self::PopErrorScopeFuture {
+        let error_promise = device.0.pop_error_scope();
+        MakeSendFuture::new(
+            wasm_bindgen_futures::JsFuture::from(error_promise),
+            future_pop_error_scope,
+        )
     }
 
     fn buffer_map_async(

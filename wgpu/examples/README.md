@@ -34,6 +34,7 @@ All framework-based examples render to the window and are reftested against the 
 | blending                     |        | :star:    | :star: |        |           |        |        |                | :star: |                     |
 | render bundles               |        |           |        |        | :star:    |        |        |                | :star: |                     |
 | compute passes               | :star: |           |        |        |           |        |        |                |        |                     |
+| error scopes                 |        |           | :star: |        |           |        |        |                |        |                     |
 | *optional extensions*        |        |           |        |        |           |        |        | :star:         |        |                     |
 | - SPIR-V shaders             |        |           |        |        |           |        |        | :star:         |        |                     |
 | - binding indexing           |        |           |        |        |           |        |        | :star:         |        |                     |

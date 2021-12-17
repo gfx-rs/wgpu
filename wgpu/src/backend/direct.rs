@@ -177,13 +177,13 @@ impl Context {
             label: label.unwrap_or_default().to_string(),
             label_key,
         };
-        let sink = sink_mutex.lock();
+        let mut sink = sink_mutex.lock();
         let mut source_opt: Option<&(dyn Error + 'static)> = Some(&error);
         while let Some(source) = source_opt {
             if let Some(wgc::device::DeviceError::OutOfMemory) =
                 source.downcast_ref::<wgc::device::DeviceError>()
             {
-                return sink.handle_error(crate::Error::OutOfMemoryError {
+                return sink.handle_error(crate::Error::OutOfMemory {
                     source: Box::new(error),
                 });
             }
@@ -191,7 +191,7 @@ impl Context {
         }
 
         // Otherwise, it is a validation error
-        sink.handle_error(crate::Error::ValidationError {
+        sink.handle_error(crate::Error::Validation {
             description: self.format_error(&error),
             source: Box::new(error),
         });
@@ -768,6 +768,7 @@ impl crate::Context for Context {
         Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
     type MapAsyncFuture = native_gpu_future::GpuFuture<Result<(), crate::BufferAsyncError>>;
     type OnSubmittedWorkDoneFuture = native_gpu_future::GpuFuture<()>;
+    type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
     fn init(backends: wgt::Backends) -> Self {
         Self(wgc::hub::Global::new(
@@ -1567,6 +1568,20 @@ impl crate::Context for Context {
         error_sink.uncaptured_handler = Box::new(handler);
     }
 
+    fn device_push_error_scope(&self, device: &Self::DeviceId, filter: crate::ErrorFilter) {
+        let mut error_sink = device.error_sink.lock();
+        error_sink.scopes.push(ErrorScope {
+            error: None,
+            filter,
+        });
+    }
+
+    fn device_pop_error_scope(&self, device: &Self::DeviceId) -> Self::PopErrorScopeFuture {
+        let mut error_sink = device.error_sink.lock();
+        let scope = error_sink.scopes.pop().unwrap();
+        ready(scope.error)
+    }
+
     fn buffer_map_async(
         &self,
         buffer: &Self::BufferId,
@@ -2206,19 +2221,44 @@ pub(crate) struct SurfaceOutputDetail {
 
 type ErrorSink = Arc<Mutex<ErrorSinkRaw>>;
 
+struct ErrorScope {
+    error: Option<crate::Error>,
+    filter: crate::ErrorFilter,
+}
+
 struct ErrorSinkRaw {
+    scopes: Vec<ErrorScope>,
     uncaptured_handler: Box<dyn crate::UncapturedErrorHandler>,
 }
 
 impl ErrorSinkRaw {
     fn new() -> ErrorSinkRaw {
         ErrorSinkRaw {
+            scopes: Vec::new(),
             uncaptured_handler: Box::from(default_error_handler),
         }
     }
 
-    fn handle_error(&self, err: crate::Error) {
-        (self.uncaptured_handler)(err);
+    fn handle_error(&mut self, err: crate::Error) {
+        let filter = match err {
+            crate::Error::OutOfMemory { .. } => crate::ErrorFilter::OutOfMemory,
+            crate::Error::Validation { .. } => crate::ErrorFilter::Validation,
+        };
+        match self
+            .scopes
+            .iter_mut()
+            .rev()
+            .find(|scope| scope.filter == filter)
+        {
+            Some(scope) => {
+                if scope.error.is_none() {
+                    scope.error = Some(err);
+                }
+            }
+            None => {
+                (self.uncaptured_handler)(err);
+            }
+        }
     }
 }
 
