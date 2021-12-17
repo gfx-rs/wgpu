@@ -3516,9 +3516,20 @@ impl Parser {
                         lexer.expect(Token::Paren(')'))?;
 
                         let accept = self.parse_block(lexer, context.reborrow(), false)?;
+
                         let mut elsif_stack = Vec::new();
                         let mut elseif_span_start = lexer.current_byte_offset();
-                        while lexer.skip(Token::Word("elseif")) {
+                        let mut reject = loop {
+                            if !lexer.skip(Token::Word("else")) {
+                                break crate::Block::new();
+                            }
+
+                            if !lexer.skip(Token::Word("if")) {
+                                // ... else { ... }
+                                break self.parse_block(lexer, context.reborrow(), false)?;
+                            }
+
+                            // ... else if (...) { ... }
                             let mut sub_emitter = super::Emitter::default();
 
                             lexer.expect(Token::Paren('('))?;
@@ -3537,12 +3548,8 @@ impl Parser {
                                 other_block,
                             ));
                             elseif_span_start = lexer.current_byte_offset();
-                        }
-                        let mut reject = if lexer.skip(Token::Word("else")) {
-                            self.parse_block(lexer, context.reborrow(), false)?
-                        } else {
-                            crate::Block::new()
                         };
+
                         let span_end = lexer.current_byte_offset();
                         // reverse-fold the else-if blocks
                         //Note: we may consider uplifting this to the IR

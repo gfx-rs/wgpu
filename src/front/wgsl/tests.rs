@@ -215,7 +215,7 @@ fn parse_if() {
             if (0 != 1) {}
             if (false) {
                 return;
-            } elseif (true) {
+            } else if (true) {
                 return;
             } else {}
         }
