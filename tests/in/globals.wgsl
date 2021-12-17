@@ -7,8 +7,8 @@ var<workgroup> at: atomic<u32>;
 
 [[stage(compute), workgroup_size(1)]]
 fn main() {
-	wg[3] = 1.0;
-	atomicStore(&at, 2u);
+    wg[3] = 1.0;
+    atomicStore(&at, 2u);
 
     // Valid, Foo and at is in function scope
     var Foo: f32 = 1.0;
