@@ -55,8 +55,10 @@ float constructors()
     Foo foo = (Foo)0;
 
     foo = ConstructFoo(float4(1.0.xxxx), 1);
-    float _expr11 = foo.a.x;
-    return _expr11;
+    float2x2 mat2comp = float2x2(float2(1.0, 0.0), float2(0.0, 1.0));
+    float4x4 mat4comp = float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
+    float _expr39 = foo.a.x;
+    return _expr39;
 }
 
 void modulo()

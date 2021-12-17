@@ -46,6 +46,18 @@ struct Foo {
 fn constructors() -> f32 {
     var foo: Foo;
     foo = Foo(vec4<f32>(1.0), 1);
+
+    let mat2comp = mat2x2<f32>(
+        1.0, 0.0,
+        0.0, 1.0,
+    );
+    let mat4comp = mat4x4<f32>(
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    );
+
     return foo.a.x;
 }
 

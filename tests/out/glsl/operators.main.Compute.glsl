@@ -44,8 +44,10 @@ vec3 bool_cast(vec3 x) {
 float constructors() {
     Foo foo;
     foo = Foo(vec4(1.0), 1);
-    float _e11 = foo.a.x;
-    return _e11;
+    mat2x2 mat2comp = mat2x2(vec2(1.0, 0.0), vec2(0.0, 1.0));
+    mat4x4 mat4comp = mat4x4(vec4(1.0, 0.0, 0.0, 0.0), vec4(0.0, 1.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
+    float _e39 = foo.a.x;
+    return _e39;
 }
 
 void modulo() {

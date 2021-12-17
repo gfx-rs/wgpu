@@ -1981,15 +1981,15 @@ impl Parser {
             Ok(last_component)
         })?;
 
+        // We can't use the `TypeInner` returned by this because
+        // `resolve_type` borrows context mutably.
+        // Use it to insert into the right maps,
+        // and then grab it again immutably.
+        ctx.resolve_type(last_component)?;
+
         let expr = if components.is_empty()
             && ty_resolution.inner_with(ctx.types).scalar_kind().is_some()
         {
-            // We can't use the `TypeInner` returned by this because
-            // `resolve_type` borrows context mutably.
-            // Use it to insert into the right maps,
-            // and then grab it again immutably.
-            ctx.resolve_type(last_component)?;
-
             match (
                 ty_resolution.inner_with(ctx.types),
                 ctx.typifier.get(last_component, ctx.types),
@@ -2035,14 +2035,60 @@ impl Parser {
                 }
             }
         } else {
+            components.push(last_component);
+            let mut compose_components = Vec::new();
+
+            if let (
+                &crate::TypeInner::Matrix {
+                    rows,
+                    width,
+                    columns,
+                },
+                &crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    ..
+                },
+            ) = (
+                ty_resolution.inner_with(ctx.types),
+                ctx.typifier.get(last_component, ctx.types),
+            ) {
+                let vec_ty = ctx.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Vector {
+                            width,
+                            kind: crate::ScalarKind::Float,
+                            size: rows,
+                        },
+                    },
+                    Default::default(),
+                );
+
+                compose_components.reserve(columns as usize);
+                for vec_components in components.chunks(rows as usize) {
+                    let handle = ctx.expressions.append(
+                        crate::Expression::Compose {
+                            ty: vec_ty,
+                            components: Vec::from(vec_components),
+                        },
+                        crate::Span::default(),
+                    );
+                    compose_components.push(handle);
+                }
+            } else {
+                compose_components = components;
+            }
+
             let ty = match ty_resolution {
                 TypeResolution::Handle(handle) => handle,
                 TypeResolution::Value(inner) => ctx
                     .types
                     .insert(crate::Type { name: None, inner }, Default::default()),
             };
-            components.push(last_component);
-            crate::Expression::Compose { ty, components }
+            crate::Expression::Compose {
+                ty,
+                components: compose_components,
+            }
         };
 
         let span = NagaSpan::from(self.pop_scope(lexer));
