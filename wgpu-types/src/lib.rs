@@ -628,9 +628,9 @@ pub struct Limits {
     pub max_sampled_textures_per_shader_stage: u32,
     /// Amount of samplers visible in a single shader stage. Defaults to 16. Higher is "better".
     pub max_samplers_per_shader_stage: u32,
-    /// Amount of storage buffers visible in a single shader stage. Defaults to 4. Higher is "better".
+    /// Amount of storage buffers visible in a single shader stage. Defaults to 8. Higher is "better".
     pub max_storage_buffers_per_shader_stage: u32,
-    /// Amount of storage textures visible in a single shader stage. Defaults to 4. Higher is "better".
+    /// Amount of storage textures visible in a single shader stage. Defaults to 8. Higher is "better".
     pub max_storage_textures_per_shader_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
@@ -667,11 +667,13 @@ pub struct Limits {
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
     /// Maximum allowed number of components (scalars) of input or output locations for
-    /// inter-stage communication (vertex outputs to fragment inputs).
+    /// inter-stage communication (vertex outputs to fragment inputs). Defaults to 60.
     pub max_inter_stage_shader_components: u32,
-    /// Maximum number of bytes used for workgroup memory in a compute entry point.
+    /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
+    /// 16352.
     pub max_compute_workgroup_storage_size: u32,
     /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
+    /// Defaults to 256.
     pub max_compute_invocations_per_workgroup: u32,
     /// The maximum value of the workgroup_size X dimension for a compute stage `ShaderModule` entry-point.
     /// Defaults to 256.
@@ -680,7 +682,7 @@ pub struct Limits {
     /// Defaults to 256.
     pub max_compute_workgroup_size_y: u32,
     /// The maximum value of the workgroup_size Z dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 256.
+    /// Defaults to 64.
     pub max_compute_workgroup_size_z: u32,
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
     /// Defaults to 65535.
