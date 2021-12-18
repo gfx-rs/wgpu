@@ -144,7 +144,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
         if targets.contains(Targets::GLSL) {
             for ep in module.entry_points.iter() {
                 if params.glsl_exclude_list.contains(&ep.name) {
-                    return;
+                    continue;
                 }
                 write_output_glsl(module, &info, &dest, name, ep.stage, &ep.name, &params.glsl);
             }
