@@ -217,7 +217,7 @@ pub enum QueueWriteError {
     #[error(transparent)]
     Transfer(#[from] TransferError),
     #[error(transparent)]
-    Clear(#[from] ClearError),
+    MemoryInitFailure(#[from] ClearError),
 }
 
 #[derive(Clone, Debug, Error)]

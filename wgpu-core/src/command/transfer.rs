@@ -1,10 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
-    command::{
-        collect_zero_buffer_copies_for_clear_texture, memory_init::fixup_discarded_surfaces,
-        CommandBuffer, CommandEncoderError,
-    },
+    command::{memory_init::fixup_discarded_surfaces, CommandBuffer, CommandEncoderError},
     conv,
     device::Device,
     error::{ErrorFormatter, PrettyError},
@@ -105,6 +102,8 @@ pub enum TransferError {
         src_format: wgt::TextureFormat,
         dst_format: wgt::TextureFormat,
     },
+    #[error(transparent)]
+    MemoryInitFailure(#[from] super::ClearError),
 }
 
 impl PrettyError for TransferError {
@@ -375,12 +374,85 @@ pub(crate) fn validate_texture_copy_range(
     Ok((copy_extent, array_layer_count))
 }
 
-fn get_copy_dst_texture_init_requirement<A: HalApi>(
-    texture: &Texture<A>,
-    copy_texture: &wgt::ImageCopyTexture<TextureId>,
+fn handle_texture_init<A: hal::Api>(
+    init_kind: MemoryInitKind,
+    cmd_buf: &mut CommandBuffer<A>,
+    device: &Device<A>,
+    copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-) -> TextureInitTrackerAction {
+    texture_guard: &Storage<Texture<A>, id::Id<Texture<hal::api::Empty>>>,
+    texture: &Texture<A>,
+) {
+    let init_action = TextureInitTrackerAction {
+        id: Stored {
+            value: id::Valid(copy_texture.texture),
+            // For copies the texture object isn't discarded yet (somebody just passed it in!), so it should be safe to access the ref_count
+            ref_count: texture.life_guard.ref_count.as_ref().unwrap().clone(),
+        },
+        range: TextureInitRange {
+            mip_range: copy_texture.mip_level..copy_texture.mip_level + 1,
+            layer_range: copy_texture.origin.z
+                ..(copy_texture.origin.z + copy_size.depth_or_array_layers),
+        },
+        kind: init_kind,
+    };
+
+    // Register the init action.
+    let immediate_inits = cmd_buf
+        .texture_memory_actions
+        .register_init_action(&{ init_action }, texture_guard);
+
+    // In rare cases we may need to insert an init operation immediately onto the command buffer.
+    if !immediate_inits.is_empty() {
+        let cmd_buf_raw = cmd_buf.encoder.open();
+        fixup_discarded_surfaces(
+            immediate_inits.into_iter(),
+            cmd_buf_raw,
+            texture_guard,
+            &mut cmd_buf.trackers.textures,
+            device,
+        );
+    }
+}
+
+// Ensures the source texture of a transfer is in the right initialization state and records the state for after the transfer operation.
+fn handle_src_texture_init<A: hal::Api>(
+    cmd_buf: &mut CommandBuffer<A>,
+    device: &Device<A>,
+    source: &ImageCopyTexture,
+    copy_size: &Extent3d,
+    texture_guard: &Storage<Texture<A>, TextureId>,
+) -> Result<(), TransferError> {
+    let texture = texture_guard
+        .get(source.texture)
+        .map_err(|_| TransferError::InvalidTexture(source.texture))?;
+
+    handle_texture_init(
+        MemoryInitKind::NeedsInitializedMemory,
+        cmd_buf,
+        device,
+        source,
+        copy_size,
+        texture_guard,
+        texture,
+    );
+    Ok(())
+}
+
+// Ensures the destination texture of a transfer is in the right initialization state and records the state for after the transfer operation.
+fn handle_dst_texture_init<A: hal::Api>(
+    cmd_buf: &mut CommandBuffer<A>,
+    device: &Device<A>,
+    destination: &ImageCopyTexture,
+    copy_size: &Extent3d,
+    texture_guard: &Storage<Texture<A>, TextureId>,
+) -> Result<(), TransferError> {
+    let texture = texture_guard
+        .get(destination.texture)
+        .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
+
     // Attention: If we don't write full texture subresources, we need to a full clear first since we don't track subrects.
+    // This means that in rare cases even a *destination* texture of a transfer may need an immediate texture init.
     let dst_init_kind = if copy_size.width == texture.desc.size.width
         && copy_size.height == texture.desc.size.height
     {
@@ -388,59 +460,17 @@ fn get_copy_dst_texture_init_requirement<A: HalApi>(
     } else {
         MemoryInitKind::NeedsInitializedMemory
     };
-    TextureInitTrackerAction {
-        id: Stored {
-            value: id::Valid(copy_texture.texture),
-            ref_count: texture.life_guard.ref_count.as_ref().unwrap().clone(), // For copies the texture object isn't discarded yet!
-        },
-        range: TextureInitRange {
-            mip_range: copy_texture.mip_level..copy_texture.mip_level + 1,
-            layer_range: copy_texture.origin.z
-                ..(copy_texture.origin.z + copy_size.depth_or_array_layers),
-        },
-        kind: dst_init_kind,
-    }
-}
 
-fn handle_src_texture_init<A: hal::Api>(
-    cmd_buf: &mut CommandBuffer<A>,
-    device: &Device<A>,
-    source: &ImageCopyTexture,
-    src_base: &hal::TextureCopyBase,
-    copy_size: &Extent3d,
-    texture_guard: &Storage<Texture<A>, TextureId>,
-) {
-    let id = id::Valid(source.texture);
-    let immediate_src_init = cmd_buf.texture_memory_actions.register_init_action(
-        &TextureInitTrackerAction {
-            id: Stored {
-                value: id,
-                ref_count: texture_guard[id]
-                    .life_guard
-                    .ref_count
-                    .as_ref()
-                    .unwrap()
-                    .clone(), // For transfers the texture object isn't discarded yet!
-            },
-            range: TextureInitRange {
-                mip_range: src_base.mip_level..src_base.mip_level + 1,
-                layer_range: src_base.origin.z
-                    ..(src_base.origin.z + copy_size.depth_or_array_layers),
-            },
-            kind: MemoryInitKind::NeedsInitializedMemory,
-        },
+    handle_texture_init(
+        dst_init_kind,
+        cmd_buf,
+        device,
+        destination,
+        copy_size,
         texture_guard,
+        texture,
     );
-    if !immediate_src_init.is_empty() {
-        let cmd_buf_raw = cmd_buf.encoder.open();
-        fixup_discarded_surfaces(
-            immediate_src_init.into_iter(),
-            cmd_buf_raw,
-            texture_guard,
-            &mut cmd_buf.trackers.textures,
-            device,
-        );
-    }
+    Ok(())
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -611,6 +641,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_range, dst_base, _) =
             extract_texture_selector(destination, copy_size, &*texture_guard)?;
 
+        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
+
         let (src_buffer, src_pending) = cmd_buf
             .trackers
             .buffers
@@ -676,19 +709,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
                 MemoryInitKind::NeedsInitializedMemory,
             ));
-        let mut dst_zero_buffer_copy_regions = Vec::new();
-        for immediate_init in cmd_buf.texture_memory_actions.register_init_action(
-            &get_copy_dst_texture_init_requirement(dst_texture, destination, copy_size),
-            &texture_guard,
-        ) {
-            collect_zero_buffer_copies_for_clear_texture(
-                &dst_texture.desc,
-                device.alignments.buffer_copy_pitch.get() as u32,
-                immediate_init.mip_level..(immediate_init.mip_level + 1),
-                immediate_init.layer..(immediate_init.layer + 1),
-                &mut dst_zero_buffer_copy_regions,
-            );
-        }
 
         let regions = (0..array_layer_count).map(|rel_array_layer| {
             let mut texture_base = dst_base.clone();
@@ -701,17 +721,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: hal_copy_size,
             }
         });
+
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(dst_barriers);
-            // potential dst buffer init (for previously discarded dst_texture + partial copy)
-            if !dst_zero_buffer_copy_regions.is_empty() {
-                cmd_buf_raw.copy_buffer_to_texture(
-                    &device.zero_buffer,
-                    dst_raw,
-                    dst_zero_buffer_copy_regions.into_iter(),
-                );
-            }
             cmd_buf_raw.transition_buffers(src_barriers);
             cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, regions);
         }
@@ -755,15 +768,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_range, src_base, _) =
             extract_texture_selector(source, copy_size, &*texture_guard)?;
 
-        // Handle src texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
-        handle_src_texture_init(
-            cmd_buf,
-            device,
-            source,
-            &src_base,
-            copy_size,
-            &texture_guard,
-        );
+        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
 
         let (src_texture, src_pending) = cmd_buf
             .trackers
@@ -900,15 +906,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(TransferError::MismatchedAspects.into());
         }
 
-        // Handle src texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
-        handle_src_texture_init(
-            cmd_buf,
-            device,
-            source,
-            &src_tex_base,
-            copy_size,
-            &texture_guard,
-        );
+        // Handle texture init *before* dealing with barrier transitions so we have an easier time inserting "immediate-inits" that may be required by prior discards in rare cases.
+        handle_src_texture_init(cmd_buf, device, source, copy_size, &texture_guard)?;
+        handle_dst_texture_init(cmd_buf, device, destination, copy_size, &texture_guard)?;
 
         let (src_texture, src_pending) = cmd_buf
             .trackers
@@ -977,20 +977,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             copy_size,
         )?;
 
-        let mut dst_zero_buffer_copy_regions = Vec::new();
-        for immediate_init in cmd_buf.texture_memory_actions.register_init_action(
-            &get_copy_dst_texture_init_requirement(dst_texture, destination, copy_size),
-            &texture_guard,
-        ) {
-            collect_zero_buffer_copies_for_clear_texture(
-                &dst_texture.desc,
-                device.alignments.buffer_copy_pitch.get() as u32,
-                immediate_init.mip_level..(immediate_init.mip_level + 1),
-                immediate_init.layer..(immediate_init.layer + 1),
-                &mut dst_zero_buffer_copy_regions,
-            );
-        }
-
         let hal_copy_size = hal::CopyExtent {
             width: src_copy_size.width.min(dst_copy_size.width),
             height: src_copy_size.height.min(dst_copy_size.height),
@@ -1010,16 +996,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_raw = cmd_buf.encoder.open();
         unsafe {
             cmd_buf_raw.transition_textures(barriers.into_iter());
-
-            // potential dst buffer init (for previously discarded dst_texture + partial copy)
-            if !dst_zero_buffer_copy_regions.is_empty() {
-                cmd_buf_raw.copy_buffer_to_texture(
-                    &device.zero_buffer,
-                    dst_raw,
-                    dst_zero_buffer_copy_regions.into_iter(),
-                );
-            }
-
             cmd_buf_raw.copy_texture_to_texture(
                 src_raw,
                 hal::TextureUses::COPY_SRC,
