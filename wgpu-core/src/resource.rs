@@ -204,14 +204,14 @@ pub struct Texture<A: hal::Api> {
 
 impl<A: hal::Api> Texture<A> {
     pub(crate) fn get_clear_view(&self, mip_level: u32, depth_or_layer: u32) -> &A::TextureView {
-        match &self.clear_mode {
+        match self.clear_mode {
             TextureClearMode::BufferCopy => {
                 panic!("Given texture is cleared with buffer copies, not render passes")
             }
             TextureClearMode::None => {
                 panic!("Given texture can't be cleared")
             }
-            TextureClearMode::RenderPass(clear_views) => {
+            TextureClearMode::RenderPass(ref clear_views) => {
                 let index = mip_level + depth_or_layer * self.desc.mip_level_count;
                 &clear_views[index as usize]
             }

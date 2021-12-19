@@ -334,7 +334,6 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
 ) {
     // Gather list of zero_buffer copies and issue a single command then to perform them
     let mut zero_buffer_copy_regions = Vec::new();
-    let texture_desc: &wgt::TextureDescriptor<()> = &texture_desc;
     let buffer_copy_pitch = alignments.buffer_copy_pitch.get() as u32;
     let format_desc = texture_desc.format.describe();
 
