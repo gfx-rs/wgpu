@@ -1,3 +1,5 @@
+use crate::FormatAspects;
+
 use super::{conv, HResult as _};
 use std::{mem, ops::Range, ptr};
 use winapi::um::d3d12;
@@ -319,15 +321,29 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     // Only one barrier if it affects the whole image.
                     self.temp.barriers.push(raw);
                 } else {
-                    // Generate barrier for each layer/level combination.
+                    let has_stencil = FormatAspects::from(barrier.texture.format)
+                        .contains(FormatAspects::STENCIL);
+                    let planes = if has_stencil {
+                        match barrier.range.aspect {
+                            wgt::TextureAspect::All => 0..2,
+                            wgt::TextureAspect::StencilOnly => 1..2,
+                            wgt::TextureAspect::DepthOnly => 0..1,
+                        }
+                    } else {
+                        0..1
+                    };
+
                     for rel_mip_level in 0..mip_level_count {
                         for rel_array_layer in 0..array_layer_count {
-                            raw.u.Transition_mut().Subresource = barrier.texture.calc_subresource(
-                                barrier.range.base_mip_level + rel_mip_level,
-                                barrier.range.base_array_layer + rel_array_layer,
-                                0,
-                            );
-                            self.temp.barriers.push(raw);
+                            for plane in planes.clone() {
+                                raw.u.Transition_mut().Subresource =
+                                    barrier.texture.calc_subresource(
+                                        barrier.range.base_mip_level + rel_mip_level,
+                                        barrier.range.base_array_layer + rel_array_layer,
+                                        plane,
+                                    );
+                                self.temp.barriers.push(raw);
+                            }
                         }
                     }
                 }
@@ -610,7 +626,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if !ds.depth_ops.contains(crate::AttachmentOps::LOAD) {
                 flags |= native::ClearFlags::DEPTH;
             }
-            if !ds.stencil_ops.contains(crate::AttachmentOps::LOAD) {
+            if !ds.stencil_ops.contains(crate::AttachmentOps::LOAD)
+                && ds.target.view.has_stencil_aspect
+            {
                 flags |= native::ClearFlags::STENCIL;
             }
 
