@@ -164,7 +164,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
         let (_, mut token) = hub.buffers.read(&mut token); // skip token
-        let (mut texture_guard, _) = hub.textures.write(&mut token);
+        let (texture_guard, _) = hub.textures.read(&mut token);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -179,7 +179,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let dst_texture = texture_guard
-            .get_mut(dst) // todo: take only write access if needed
+            .get(dst)
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
         // Check if subresource aspects are valid.
