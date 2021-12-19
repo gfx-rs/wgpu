@@ -649,7 +649,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                         device.raw.destroy_texture(raw);
                     }
                 }
-                if let TextureClearMode::RenderPass(clear_views) = texture.clear_mode {
+                if let TextureClearMode::RenderPass { clear_views, .. } = texture.clear_mode {
                     for view in clear_views {
                         unsafe {
                             device.raw.destroy_texture_view(view);

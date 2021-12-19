@@ -183,7 +183,10 @@ impl<A: hal::Api> TextureInner<A> {
 pub enum TextureClearMode<A: hal::Api> {
     BufferCopy,
     // View for clear via RenderPass for every subsurface
-    RenderPass(SmallVec<[A::TextureView; 1]>),
+    RenderPass {
+        clear_views: SmallVec<[A::TextureView; 1]>,
+        is_color: bool,
+    },
     // Texture can't be cleared, attempting to do so will cause panic.
     // (either because it is impossible for the type of texture or it is being destroyed)
     None,
@@ -211,7 +214,7 @@ impl<A: hal::Api> Texture<A> {
             TextureClearMode::None => {
                 panic!("Given texture can't be cleared")
             }
-            TextureClearMode::RenderPass(ref clear_views) => {
+            TextureClearMode::RenderPass{ ref clear_views, .. } => {
                 let index = mip_level + depth_or_layer * self.desc.mip_level_count;
                 &clear_views[index as usize]
             }

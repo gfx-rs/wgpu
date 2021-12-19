@@ -703,11 +703,12 @@ impl<A: HalApi> Device<A> {
         let clear_mode = if hal_usage.contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
             || hal_usage.contains(hal::TextureUses::COLOR_TARGET)
         {
-            let usage = if desc.format.describe().sample_type == wgt::TextureSampleType::Depth {
-                hal::TextureUses::DEPTH_STENCIL_WRITE
-            } else {
-                hal::TextureUses::COLOR_TARGET
-            };
+            let (is_color, usage) =
+                if desc.format.describe().sample_type == wgt::TextureSampleType::Depth {
+                    (false, hal::TextureUses::DEPTH_STENCIL_WRITE)
+                } else {
+                    (true, hal::TextureUses::COLOR_TARGET)
+                };
             let dimension = match desc.dimension {
                 wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
                 wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
@@ -741,7 +742,10 @@ impl<A: HalApi> Device<A> {
                     }
                 }
             }
-            resource::TextureClearMode::RenderPass(clear_views)
+            resource::TextureClearMode::RenderPass {
+                clear_views,
+                is_color,
+            }
         } else {
             resource::TextureClearMode::BufferCopy
         };
@@ -3458,7 +3462,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     resource::TextureClearMode::None,
                 ) {
                     resource::TextureClearMode::BufferCopy => SmallVec::new(),
-                    resource::TextureClearMode::RenderPass(clear_views) => clear_views,
+                    resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
                     resource::TextureClearMode::None => SmallVec::new(),
                 };
                 let temp = queue::TempResource::Texture(raw, clear_views);

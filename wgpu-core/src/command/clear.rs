@@ -274,16 +274,10 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
     // Issue the right barrier.
     let clear_usage = match dst_texture.clear_mode {
         TextureClearMode::BufferCopy => hal::TextureUses::COPY_DST,
-        TextureClearMode::RenderPass(_) => {
-            if dst_texture
-                .hal_usage
-                .contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
-            {
-                hal::TextureUses::DEPTH_STENCIL_WRITE
-            } else {
-                hal::TextureUses::COLOR_TARGET
-            }
-        }
+        TextureClearMode::RenderPass {
+            is_color: false, ..
+        } => hal::TextureUses::DEPTH_STENCIL_WRITE,
+        TextureClearMode::RenderPass { is_color: true, .. } => hal::TextureUses::COLOR_TARGET,
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(dst_texture_id.value.0));
         }
@@ -314,8 +308,8 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
             encoder,
             dst_raw,
         ),
-        TextureClearMode::RenderPass(_) => {
-            clear_texture_via_render_passes(dst_texture, range, clear_usage, encoder)?
+        TextureClearMode::RenderPass { is_color, .. } => {
+            clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
         }
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(dst_texture_id.value.0));
@@ -409,7 +403,7 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
 fn clear_texture_via_render_passes<A: hal::Api>(
     dst_texture: &Texture<A>,
     range: TextureInitRange,
-    clear_usage: hal::TextureUses,
+    is_color: bool,
     encoder: &mut A::CommandEncoder,
 ) -> Result<(), ClearError> {
     let extent_base = wgt::Extent3d {
@@ -424,26 +418,14 @@ fn clear_texture_via_render_passes<A: hal::Api>(
         for layer in range.layer_range.clone() {
             let target = hal::Attachment {
                 view: dst_texture.get_clear_view(mip_level, layer),
-                usage: clear_usage,
+                usage: if is_color {
+                    hal::TextureUses::COLOR_TARGET
+                } else {
+                    hal::TextureUses::DEPTH_STENCIL_WRITE
+                },
             };
 
-            if clear_usage == hal::TextureUses::DEPTH_STENCIL_WRITE {
-                unsafe {
-                    encoder.begin_render_pass(&hal::RenderPassDescriptor {
-                        label: Some("clear_texture clear pass"),
-                        extent,
-                        sample_count,
-                        color_attachments: &[],
-                        depth_stencil_attachment: Some(hal::DepthStencilAttachment {
-                            target,
-                            depth_ops: hal::AttachmentOps::STORE,
-                            stencil_ops: hal::AttachmentOps::STORE,
-                            clear_value: (0.0, 0),
-                        }),
-                        multiview: None,
-                    });
-                }
-            } else {
+            if is_color {
                 unsafe {
                     encoder.begin_render_pass(&hal::RenderPassDescriptor {
                         label: Some("clear_texture clear pass"),
@@ -456,6 +438,22 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                             clear_value: wgt::Color::TRANSPARENT,
                         }],
                         depth_stencil_attachment: None,
+                        multiview: None,
+                    });
+                }
+            } else {
+                unsafe {
+                    encoder.begin_render_pass(&hal::RenderPassDescriptor {
+                        label: Some("clear_texture clear pass"),
+                        extent,
+                        sample_count,
+                        color_attachments: &[],
+                        depth_stencil_attachment: Some(hal::DepthStencilAttachment {
+                            target,
+                            depth_ops: hal::AttachmentOps::STORE,
+                            stencil_ops: hal::AttachmentOps::STORE,
+                            clear_value: (0.0, 0),
+                        }),
                         multiview: None,
                     });
                 }

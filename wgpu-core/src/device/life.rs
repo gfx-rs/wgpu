@@ -468,7 +468,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources);
 
                         non_referenced_resources.textures.push(raw);
-                        if let resource::TextureClearMode::RenderPass(clear_views) = res.clear_mode
+                        if let resource::TextureClearMode::RenderPass { clear_views, .. } =
+                            res.clear_mode
                         {
                             non_referenced_resources
                                 .texture_views
