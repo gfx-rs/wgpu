@@ -8,7 +8,7 @@ use crate::{
     device::Device,
     get_lowest_common_denom,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
-    id::{self, BufferId, CommandEncoderId, DeviceId, TextureId},
+    id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
     track::{ResourceTracker, TextureSelector, TextureState},
@@ -65,8 +65,6 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
         subresource_base_array_layer: u32,
         subresource_array_layer_count: Option<NonZeroU32>,
     },
-    #[error("failed to create view for clearing texture at mip level {mip_level}, layer {layer}")]
-    FailedToCreateTextureViewForClear { mip_level: u32, layer: u32 },
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -223,7 +221,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         clear_texture(
             &Stored {
-                value: id::Valid(dst),
+                value: Valid(dst),
                 ref_count: dst_texture.life_guard().ref_count.as_ref().unwrap().clone(),
             },
             dst_texture,
@@ -350,7 +348,7 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
         let max_rows_per_copy = max_rows_per_copy / format_desc.block_dimensions.1 as u32
             * format_desc.block_dimensions.1 as u32;
         assert!(max_rows_per_copy > 0, "Zero buffer size is too small to fill a single row of a texture with format {:?} and desc {:?}",
-                            texture_desc.format, texture_desc.size);
+                texture_desc.format, texture_desc.size);
 
         let z_range = 0..(if texture_desc.dimension == wgt::TextureDimension::D3 {
             mip_size.depth_or_array_layers
@@ -416,15 +414,7 @@ fn clear_texture_via_render_passes<A: hal::Api>(
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
         for layer in range.layer_range.clone() {
-            let target = hal::Attachment {
-                view: dst_texture.get_clear_view(mip_level, layer),
-                usage: if is_color {
-                    hal::TextureUses::COLOR_TARGET
-                } else {
-                    hal::TextureUses::DEPTH_STENCIL_WRITE
-                },
-            };
-
+            let view = dst_texture.get_clear_view(mip_level, layer);
             if is_color {
                 unsafe {
                     encoder.begin_render_pass(&hal::RenderPassDescriptor {
@@ -432,7 +422,10 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                         extent,
                         sample_count,
                         color_attachments: &[hal::ColorAttachment {
-                            target,
+                            target: hal::Attachment {
+                                view,
+                                usage: hal::TextureUses::COLOR_TARGET,
+                            },
                             resolve_target: None,
                             ops: hal::AttachmentOps::STORE,
                             clear_value: wgt::Color::TRANSPARENT,
@@ -449,7 +442,10 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                         sample_count,
                         color_attachments: &[],
                         depth_stencil_attachment: Some(hal::DepthStencilAttachment {
-                            target,
+                            target: hal::Attachment {
+                                view,
+                                usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
+                            },
                             depth_ops: hal::AttachmentOps::STORE,
                             stencil_ops: hal::AttachmentOps::STORE,
                             clear_value: (0.0, 0),

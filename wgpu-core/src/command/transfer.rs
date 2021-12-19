@@ -6,7 +6,7 @@ use crate::{
     device::Device,
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
-    id::{self, BufferId, CommandEncoderId, TextureId},
+    id::{BufferId, CommandEncoderId, Id, TextureId, Valid},
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     resource::{Texture, TextureErrorDimension},
     track::TextureSelector,
@@ -382,12 +382,12 @@ fn handle_texture_init<A: hal::Api>(
     device: &Device<A>,
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture_guard: &Storage<Texture<A>, id::Id<Texture<hal::api::Empty>>>,
+    texture_guard: &Storage<Texture<A>, Id<Texture<hal::api::Empty>>>,
     texture: &Texture<A>,
 ) {
     let init_action = TextureInitTrackerAction {
         id: Stored {
-            value: id::Valid(copy_texture.texture),
+            value: Valid(copy_texture.texture),
             // For copies the texture object isn't discarded yet (somebody just passed it in!), so it should be safe to access the ref_count
             ref_count: texture.life_guard.ref_count.as_ref().unwrap().clone(),
         },
