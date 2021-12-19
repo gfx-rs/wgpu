@@ -98,7 +98,7 @@ impl super::Adapter {
             device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
                 workarounds.avoid_cpu_descriptor_overwrites = true;
                 wgt::DeviceType::Cpu
-            } else if features_architecture.CacheCoherentUMA != 0 {
+            } else if features_architecture.UMA != 0 {
                 wgt::DeviceType::IntegratedGpu
             } else {
                 wgt::DeviceType::DiscreteGpu
