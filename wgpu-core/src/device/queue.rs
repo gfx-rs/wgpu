@@ -11,6 +11,7 @@ use crate::{
     get_lowest_common_denom,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id,
+    init_tracker::TextureInitRange,
     resource::{BufferAccessError, BufferMapState, TextureInner},
     track, FastHashSet, Stored,
 };
@@ -454,8 +455,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ref_count: dst.life_guard.ref_count.as_ref().unwrap().clone(),
                         },
                         &*dst,
-                        destination.mip_level..(destination.mip_level + 1),
-                        layer_range,
+                        TextureInitRange {
+                            mip_range: destination.mip_level..(destination.mip_level + 1),
+                            layer_range,
+                        },
                         encoder,
                         &mut trackers.textures,
                         &device.alignments,

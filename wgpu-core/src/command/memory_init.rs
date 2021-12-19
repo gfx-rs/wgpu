@@ -119,7 +119,7 @@ impl CommandBufferTextureMemoryActions {
     }
 }
 
-// Utility function that takes discarded surfaces from register_init_action and initializes them on the spot.
+// Utility function that takes discarded surfaces from (several calls to) register_init_action and initializes them on the spot.
 // Takes care of barriers as well!
 pub(crate) fn fixup_discarded_surfaces<
     A: hal::Api,
@@ -132,14 +132,13 @@ pub(crate) fn fixup_discarded_surfaces<
     device: &Device<A>,
 ) {
     for init in inits {
-        let mip_range = init.mip_level..(init.mip_level + 1);
-        let layer_range = init.layer..(init.layer + 1);
-
         clear_texture(
             &init.texture,
             texture_guard.get(init.texture.value.0).unwrap(),
-            mip_range,
-            layer_range,
+            TextureInitRange {
+                mip_range: init.mip_level..(init.mip_level + 1),
+                layer_range: init.layer..(init.layer + 1),
+            },
             encoder,
             texture_tracker,
             device,
@@ -278,8 +277,7 @@ impl<A: hal::Api> BakedCommands<A> {
                 clear_texture(
                     &texture_use.id,
                     &*texture,
-                    range.mip_range,
-                    range.layer_range,
+                    range,
                     &mut self.encoder,
                     &mut device_tracker.textures,
                     device,

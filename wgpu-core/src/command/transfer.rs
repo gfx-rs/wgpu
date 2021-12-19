@@ -1,7 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
-    command::{memory_init::fixup_discarded_surfaces, CommandBuffer, CommandEncoderError},
+    command::{CommandBuffer, CommandEncoderError},
     conv,
     device::Device,
     error::{ErrorFormatter, PrettyError},
@@ -18,6 +18,8 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
 
 use std::iter;
+
+use super::clear::clear_texture;
 
 pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
 pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
@@ -405,13 +407,20 @@ fn handle_texture_init<A: hal::Api>(
     // In rare cases we may need to insert an init operation immediately onto the command buffer.
     if !immediate_inits.is_empty() {
         let cmd_buf_raw = cmd_buf.encoder.open();
-        fixup_discarded_surfaces(
-            immediate_inits.into_iter(),
-            cmd_buf_raw,
-            texture_guard,
-            &mut cmd_buf.trackers.textures,
-            device,
-        );
+        for init in immediate_inits {
+            clear_texture(
+                &init.texture,
+                texture,
+                TextureInitRange {
+                    mip_range: init.mip_level..(init.mip_level + 1),
+                    layer_range: init.layer..(init.layer + 1),
+                },
+                cmd_buf_raw,
+                &mut cmd_buf.trackers.textures,
+                device,
+            )
+            .unwrap();
+        }
     }
 }
 
