@@ -630,12 +630,15 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                 ))
             }
         }
-        "bitCount" | "bitfieldReverse" | "bitfieldExtract" | "bitfieldInsert" => {
+        "bitCount" | "bitfieldReverse" | "bitfieldExtract" | "bitfieldInsert" | "findLSB"
+        | "findMSB" => {
             let fun = match name {
                 "bitCount" => MathFunction::CountOneBits,
                 "bitfieldReverse" => MathFunction::ReverseBits,
                 "bitfieldExtract" => MathFunction::ExtractBits,
                 "bitfieldInsert" => MathFunction::InsertBits,
+                "findLSB" => MathFunction::FindLsb,
+                "findMSB" => MathFunction::FindMsb,
                 _ => unreachable!(),
             };
 

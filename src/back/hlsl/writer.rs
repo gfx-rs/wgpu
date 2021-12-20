@@ -1874,6 +1874,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // bits
                     Mf::CountOneBits => Function::Regular("countbits"),
                     Mf::ReverseBits => Function::Regular("reversebits"),
+                    Mf::FindLsb => Function::Regular("firstbitlow"),
+                    Mf::FindMsb => Function::Regular("firstbithigh"),
                     _ => return Err(Error::Unimplemented(format!("write_expr_math {:?}", fun))),
                 };
 

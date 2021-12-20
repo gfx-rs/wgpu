@@ -662,6 +662,12 @@ impl<'w> BlockContext<'w> {
                         arg2_id,
                         arg3_id,
                     )),
+                    Mf::FindLsb => MathOp::Ext(spirv::GLOp::FindILsb),
+                    Mf::FindMsb => MathOp::Ext(match arg_scalar_kind {
+                        Some(crate::ScalarKind::Uint) => spirv::GLOp::FindUMsb,
+                        Some(crate::ScalarKind::Sint) => spirv::GLOp::FindSMsb,
+                        other => unimplemented!("Unexpected findMSB({:?})", other),
+                    }),
                     Mf::Pack4x8unorm => MathOp::Ext(spirv::GLOp::PackUnorm4x8),
                     Mf::Pack4x8snorm => MathOp::Ext(spirv::GLOp::PackSnorm4x8),
                     Mf::Pack2x16float => MathOp::Ext(spirv::GLOp::PackHalf2x16),

@@ -37,4 +37,20 @@ void main() {
     u2 = bitfieldExtract(u2, 5, 10);
     u3 = bitfieldExtract(u3, 5, 10);
     u4 = bitfieldExtract(u4, 5, 10);
+    i = findLSB(i);
+    i2 = findLSB(i2);
+    i3 = findLSB(i3);
+    i4 = findLSB(i4);
+    i = findLSB(u);
+    i2 = findLSB(u2);
+    i3 = findLSB(u3);
+    i4 = findLSB(u4);
+    i = findMSB(i);
+    i2 = findMSB(i2);
+    i3 = findMSB(i3);
+    i4 = findMSB(i4);
+    i = findMSB(u);
+    i2 = findMSB(u2);
+    i3 = findMSB(u3);
+    i4 = findMSB(u4);
 }

@@ -803,6 +803,16 @@ impl<'a> ResolveContext<'a> {
                     Mf::ReverseBits |
                     Mf::ExtractBits |
                     Mf::InsertBits => res_arg.clone(),
+                    Mf::FindLsb |
+                    Mf::FindMsb => match *res_arg.inner_with(types)  {
+                        Ti::Scalar { kind: _, width } =>
+                            TypeResolution::Value(Ti::Scalar { kind: crate::ScalarKind::Sint, width }),
+                        Ti::Vector { size, kind: _, width } =>
+                            TypeResolution::Value(Ti::Vector { size, kind: crate::ScalarKind::Sint, width }),
+                        ref other => return Err(ResolveError::IncompatibleOperands(
+                                format!("{:?}({:?})", fun, other)
+                            )),
+                    },
                     // data packing
                     Mf::Pack4x8snorm |
                     Mf::Pack4x8unorm |

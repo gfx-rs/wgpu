@@ -83,5 +83,13 @@ kernel void main_(
     u3_ = metal::extract_bits(_e112, 5u, 10u);
     metal::uint4 _e116 = u4_;
     u4_ = metal::extract_bits(_e116, 5u, 10u);
+    int _e120 = i;
+    i = (((1 + int(metal::ctz(_e120))) % 33) - 1);
+    metal::uint2 _e122 = u2_;
+    i2_ = (((1 + int2(metal::ctz(_e122))) % 33) - 1);
+    metal::int3 _e124 = i3_;
+    i3_ = (((1 + int3(metal::clz(_e124))) % 33) - 1);
+    metal::uint _e126 = u;
+    i = (((1 + int(metal::clz(_e126))) % 33) - 1);
     return;
 }

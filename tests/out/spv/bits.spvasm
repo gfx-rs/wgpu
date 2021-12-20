@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 111
+; Bound: 119
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -151,5 +151,17 @@ OpStore %31 %108
 %109 = OpLoad  %16  %33
 %110 = OpBitFieldUExtract  %16  %109 %9 %10
 OpStore %33 %110
+%111 = OpLoad  %4  %19
+%112 = OpExtInst  %4  %1 FindILsb %111
+OpStore %19 %112
+%113 = OpLoad  %14  %29
+%114 = OpExtInst  %11  %1 FindILsb %113
+OpStore %21 %114
+%115 = OpLoad  %12  %23
+%116 = OpExtInst  %12  %1 FindSMsb %115
+OpStore %23 %116
+%117 = OpLoad  %6  %27
+%118 = OpExtInst  %4  %1 FindUMsb %117
+OpStore %19 %118
 OpReturn
 OpFunctionEnd

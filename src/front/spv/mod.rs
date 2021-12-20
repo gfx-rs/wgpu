@@ -2637,6 +2637,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             Glo::UnpackHalf2x16 => Mf::Unpack2x16float,
                             Glo::UnpackUnorm2x16 => Mf::Unpack2x16unorm,
                             Glo::UnpackSnorm2x16 => Mf::Unpack2x16snorm,
+                            Glo::FindILsb => Mf::FindLsb,
+                            Glo::FindUMsb | Glo::FindSMsb => Mf::FindMsb,
                             _ => return Err(Error::UnsupportedExtInst(inst_id)),
                         };
 

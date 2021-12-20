@@ -2485,6 +2485,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::ReverseBits => "bitfieldReverse",
                     Mf::ExtractBits => "bitfieldExtract",
                     Mf::InsertBits => "bitfieldInsert",
+                    Mf::FindLsb => "findLSB",
+                    Mf::FindMsb => "findMSB",
                     // data packing
                     Mf::Pack4x8snorm => "packSnorm4x8",
                     Mf::Pack4x8unorm => "packUnorm4x8",

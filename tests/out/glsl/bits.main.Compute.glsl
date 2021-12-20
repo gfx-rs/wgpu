@@ -85,6 +85,14 @@ void main() {
     u3_ = bitfieldExtract(_e112, int(5u), int(10u));
     uvec4 _e116 = u4_;
     u4_ = bitfieldExtract(_e116, int(5u), int(10u));
+    int _e120 = i;
+    i = findLSB(_e120);
+    uvec2 _e122 = u2_;
+    i2_ = findLSB(_e122);
+    ivec3 _e124 = i3_;
+    i3_ = findMSB(_e124);
+    uint _e126 = u;
+    i = findMSB(_e126);
     return;
 }
 
