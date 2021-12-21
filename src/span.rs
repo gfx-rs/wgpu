@@ -73,7 +73,7 @@ impl From<Range<usize>> for Span {
 pub type SpanContext = (Span, String);
 
 /// Wrapper class for [`Error`], augmenting it with a list of [`SpanContext`]s.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WithSpan<E> {
     inner: E,
     #[cfg(feature = "span")]
