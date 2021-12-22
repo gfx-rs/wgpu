@@ -444,6 +444,11 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
+            "functions",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        ("functions-webgl", Targets::GLSL),
+        (
             "interpolate",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
