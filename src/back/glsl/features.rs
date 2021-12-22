@@ -1,7 +1,7 @@
 use super::{BackendResult, Error, Version, Writer};
 use crate::{
-    Binding, Bytes, Handle, ImageClass, ImageDimension, Interpolation, Sampling, ScalarKind,
-    ShaderStage, StorageClass, StorageFormat, Type, TypeInner,
+    Binding, Bytes, Expression, Handle, ImageClass, ImageDimension, Interpolation, MathFunction,
+    Sampling, ScalarKind, ShaderStage, StorageClass, StorageFormat, Type, TypeInner,
 };
 use std::fmt::Write;
 
@@ -33,6 +33,8 @@ bitflags::bitflags! {
         /// Arrays with a dynamic length
         const DYNAMIC_ARRAY_SIZE = 1 << 16;
         const MULTI_VIEW = 1 << 17;
+        /// Adds support for fused multiply-add
+        const FMA = 1 << 18;
     }
 }
 
@@ -98,6 +100,7 @@ impl FeaturesManager {
         check_feature!(SAMPLE_VARIABLES, 400, 300);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         check_feature!(MULTI_VIEW, 140, 310);
+        check_feature!(FMA, 400, 310);
 
         // Return an error if there are missing features
         if missing.is_empty() {
@@ -199,6 +202,11 @@ impl FeaturesManager {
         if self.0.contains(Features::MULTI_VIEW) {
             // https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GL_EXT_multiview.txt
             writeln!(out, "#extension GL_EXT_multiview : require")?;
+        }
+
+        if self.0.contains(Features::FMA) && version.is_es() {
+            // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_gpu_shader5.txt
+            writeln!(out, "#extension GL_EXT_gpu_shader5 : require")?;
         }
 
         Ok(())
@@ -344,6 +352,27 @@ impl<'a, W> Writer<'a, W> {
                 StorageClass::Storage { .. } => self.features.request(Features::BUFFER_STORAGE),
                 StorageClass::PushConstant => return Err(Error::PushConstantNotSupported),
                 _ => {}
+            }
+        }
+
+        if self.options.version.supports_fma_function() {
+            let has_fma = self
+                .module
+                .functions
+                .iter()
+                .flat_map(|(_, f)| f.expressions.iter())
+                .chain(
+                    self.module
+                        .entry_points
+                        .iter()
+                        .flat_map(|e| e.function.expressions.iter()),
+                )
+                .any(|(_, e)| match *e {
+                    Expression::Math { fun, .. } if fun == MathFunction::Fma => true,
+                    _ => false,
+                });
+            if has_fma {
+                self.features.request(Features::FMA);
             }
         }
 

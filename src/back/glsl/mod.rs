@@ -160,6 +160,10 @@ impl Version {
     fn supports_std430_layout(&self) -> bool {
         *self >= Version::Desktop(430) || *self >= Version::Embedded(310)
     }
+
+    fn supports_fma_function(&self) -> bool {
+        *self >= Version::Desktop(400) || *self >= Version::Embedded(310)
+    }
 }
 
 impl PartialOrd for Version {
@@ -2471,7 +2475,30 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Refract => "refract",
                     // computational
                     Mf::Sign => "sign",
-                    Mf::Fma => "fma",
+                    Mf::Fma => {
+                        if self.options.version.supports_fma_function() {
+                            // Use the fma function when available
+                            "fma"
+                        } else {
+                            // No fma support. Transform the function call into an arithmetic expression
+                            write!(self.out, "(")?;
+
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " * ")?;
+
+                            let arg1 =
+                                arg1.ok_or_else(|| Error::Custom("Missing fma arg1".to_owned()))?;
+                            self.write_expr(arg1, ctx)?;
+                            write!(self.out, " + ")?;
+
+                            let arg2 =
+                                arg2.ok_or_else(|| Error::Custom("Missing fma arg2".to_owned()))?;
+                            self.write_expr(arg2, ctx)?;
+                            write!(self.out, ")")?;
+
+                            return Ok(());
+                        }
+                    }
                     Mf::Mix => "mix",
                     Mf::Step => "step",
                     Mf::SmoothStep => "smoothstep",
