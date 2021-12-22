@@ -35,16 +35,18 @@ struct ImageCoordinates {
 
 /// A trait for image access (load or store) code generators.
 ///
-/// When generating code for `ImageLoad` and `ImageStore` expressions, the image
-/// bounds checks policy can affect some operands of the image access
-/// instruction (the coordinates, level of detail, and sample index), but other
-/// aspects are unaffected: the image id, result type (if any), and the specific
-/// SPIR-V instruction used.
+/// Types implementing this trait hold information about an `ImageStore` or
+/// `ImageLoad` operation that is not affected by the bounds check policy. The
+/// `generate` method emits code for the access, given the results of bounds
+/// checking.
 ///
-/// This struct holds the latter category of information, saving us from passing
-/// a half-dozen parameters along the various code paths. The parts that are
-/// affected by bounds checks, are passed as parameters to the `generate`
-/// method.
+/// The [`image`] bounds checks policy affects access coordinates, level of
+/// detail, and sample index, but never the image id, result type (if any), or
+/// the specific SPIR-V instruction used. Types that implement this trait gather
+/// together the latter category, so we don't have to plumb them through the
+/// bounds-checking code.
+///
+/// [`image`]: crate::proc::BoundsCheckPolicies::index
 trait Access {
     /// The Rust type that represents SPIR-V values and types for this access.
     ///
