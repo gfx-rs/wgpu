@@ -199,17 +199,51 @@ pub struct FunctionInfo {
     pub uniformity: Uniformity,
     /// Function may kill the invocation.
     pub may_kill: bool,
-    /// Set of image-sampler pais used with sampling.
+
+    /// All pairs of (texture, sampler) globals that may be used together in
+    /// sampling operations by this function and its callees. This includes
+    /// pairings that arise when this function passes textures and samplers as
+    /// arguments to its callees.
+    ///
+    /// This table does not include uses of textures and samplers passed as
+    /// arguments to this function itself, since we do not know which globals
+    /// those will be. However, this table *is* exhaustive when computed for an
+    /// entry point function: entry points never receive textures or samplers as
+    /// arguments, so all an entry point's sampling can be reported in terms of
+    /// globals.
+    ///
+    /// The GLSL back end uses this table to construct reflection info that
+    /// clients need to construct texture-combined sampler values.
     pub sampling_set: crate::FastHashSet<SamplingKey>,
-    /// Vector of global variable usages.
+
+    /// How this function and its callees use this module's globals.
     ///
-    /// Each item corresponds to a global variable in the module.
+    /// This is indexed by `Handle<GlobalVariable>` indices. However,
+    /// `FunctionInfo` implements `std::ops::Index<Handle<Globalvariable>>`,
+    /// so you can simply index this struct with a global handle to retrieve
+    /// its usage information.
     global_uses: Box<[GlobalUse]>,
-    /// Vector of expression infos.
+
+    /// Information about each expression in this function's body.
     ///
-    /// Each item corresponds to an expression in the function.
+    /// This is indexed by `Handle<Expression>` indices. However, `FunctionInfo`
+    /// implements `std::ops::Index<Handle<Expression>>`, so you can simply
+    /// index this struct with an expression handle to retrieve its
+    /// `ExpressionInfo`.
     expressions: Box<[ExpressionInfo]>,
-    /// HashSet with information about sampling realized by the function
+
+    /// All (texture, sampler) pairs that may be used together in sampling
+    /// operations by this function and its callees, whether they are accessed
+    /// as globals or passed as arguments.
+    ///
+    /// Participants are represented by [`GlobalVariable`] handles whenever
+    /// possible, and otherwise by indices of this function's arguments.
+    ///
+    /// When analyzing a function call, we combine this data about the callee
+    /// with the actual arguments being passed to produce the callers' own
+    /// `sampling_set` and `sampling` tables.
+    ///
+    /// [`GlobalVariable`]: crate::GlobalVariable
     sampling: crate::FastHashSet<Sampling>,
 }
 
@@ -309,14 +343,15 @@ impl FunctionInfo {
     /// Inherit information from a called function.
     fn process_call(
         &mut self,
-        info: &Self,
+        callee: &Self,
         arguments: &[Handle<crate::Expression>],
         expression_arena: &Arena<crate::Expression>,
     ) -> Result<FunctionUniformity, WithSpan<FunctionError>> {
-        for key in info.sampling_set.iter() {
-            self.sampling_set.insert(key.clone());
-        }
-        for sampling in info.sampling.iter() {
+        self.sampling_set
+            .extend(callee.sampling_set.iter().cloned());
+        for sampling in callee.sampling.iter() {
+            // If the callee was passed the texture or sampler as an argument,
+            // we may now be able to determine which globals those referred to.
             let image_storage = match sampling.image {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
                 GlobalOrArgument::Argument(i) => {
@@ -343,6 +378,10 @@ impl FunctionInfo {
                 }
             };
 
+            // If we've managed to pin both the image and sampler down to
+            // specific globals, record that in our `sampling_set`. Otherwise,
+            // record as much as we do know in our own `sampling` table, for our
+            // callers to sort out.
             match (image_storage, sampler_storage) {
                 (GlobalOrArgument::Global(image), GlobalOrArgument::Global(sampler)) => {
                     self.sampling_set.insert(SamplingKey { image, sampler });
@@ -352,12 +391,15 @@ impl FunctionInfo {
                 }
             }
         }
-        for (mine, other) in self.global_uses.iter_mut().zip(info.global_uses.iter()) {
+
+        // Inherit global use from our callees.
+        for (mine, other) in self.global_uses.iter_mut().zip(callee.global_uses.iter()) {
             *mine |= *other;
         }
+
         Ok(FunctionUniformity {
-            result: info.uniformity.clone(),
-            exit: if info.may_kill {
+            result: callee.uniformity.clone(),
+            exit: if callee.may_kill {
                 ExitFlags::MAY_KILL
             } else {
                 ExitFlags::empty()
