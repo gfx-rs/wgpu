@@ -208,7 +208,7 @@ impl super::Instance {
             let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                 .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
                 .message_severity(severity)
-                .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+                .message_type(!vk::DebugUtilsMessageTypeFlagsEXT::empty())
                 .pfn_user_callback(Some(debug_utils_messenger_callback));
             let messenger = extension
                 .create_debug_utils_messenger(&vk_info, None)
@@ -438,7 +438,7 @@ impl Drop for super::InstanceShared {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let entry = match ash::Entry::new() {
+        let entry = match ash::Entry::load() {
             Ok(entry) => entry,
             Err(err) => {
                 log::info!("Missing Vulkan entry points: {:?}", err);
