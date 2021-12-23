@@ -1116,8 +1116,8 @@ impl super::Adapter {
         let timeline_semaphore_fn = if enabled_extensions.contains(&khr::TimelineSemaphore::name())
         {
             Some(super::ExtensionFn::Extension(khr::TimelineSemaphore::new(
-                &self.instance.entry,
                 &self.instance.raw,
+                &raw_device,
             )))
         } else if self.phd_capabilities.properties.api_version >= vk::API_VERSION_1_2 {
             Some(super::ExtensionFn::Promoted)
