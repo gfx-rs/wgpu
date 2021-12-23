@@ -442,7 +442,7 @@ impl Drop for super::InstanceShared {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let entry = match ash::Entry::new() {
+        let entry = match ash::Entry::load() {
             Ok(entry) => entry,
             Err(err) => {
                 log::info!("Missing Vulkan entry points: {:?}", err);

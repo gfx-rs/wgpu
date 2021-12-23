@@ -594,9 +594,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             .cmd_set_scissor(self.active, 0, &vk_scissors);
     }
     unsafe fn set_stencil_reference(&mut self, value: u32) {
-        self.device
-            .raw
-            .cmd_set_stencil_reference(self.active, vk::StencilFaceFlags::all(), value);
+        self.device.raw.cmd_set_stencil_reference(
+            self.active,
+            vk::StencilFaceFlags::FRONT_AND_BACK,
+            value,
+        );
     }
     unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
         self.device.raw.cmd_set_blend_constants(self.active, color);

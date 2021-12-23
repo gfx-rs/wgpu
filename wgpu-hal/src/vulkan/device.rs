@@ -1716,7 +1716,7 @@ impl crate::Device<super::Api> for super::Device {
                     .values(&values);
                 let result = match self.shared.extension_fns.timeline_semaphore {
                     Some(super::ExtensionFn::Extension(ref ext)) => {
-                        ext.wait_semaphores(self.shared.raw.handle(), &vk_info, timeout_us)
+                        ext.wait_semaphores(&vk_info, timeout_us)
                     }
                     Some(super::ExtensionFn::Promoted) => {
                         self.shared.raw.wait_semaphores(&vk_info, timeout_us)
