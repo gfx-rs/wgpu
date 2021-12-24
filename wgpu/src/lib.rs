@@ -753,35 +753,29 @@ impl Drop for ShaderModule {
 }
 
 /// Source of a shader module.
+///
+/// The source will be parsed and validated.
+///
+/// Any necessary shader translation (e.g. from WGSL to SPIR-V or vice versa)
+/// will be done internally by wgpu.
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
-    ///
-    /// wgpu will attempt to parse and validate it, but the original binary
-    /// is passed to `gfx-rs` and `spirv_cross` for translation.
     #[cfg(feature = "spirv")]
     SpirV(Cow<'a, [u32]>),
     /// GLSL module as a string slice.
     ///
-    /// wgpu will attempt to parse and validate it. The module will get
-    /// passed to wgpu-core where it will translate it to the required languages.
-    ///
-    /// Note: GLSL is not yet fully supported and must be a direct ShaderStage.
+    /// Note: GLSL is not yet fully supported and must be a specific ShaderStage.
     #[cfg(feature = "glsl")]
     Glsl {
-        /// The shaders code
+        /// The source code of the shader.
         shader: Cow<'a, str>,
-        /// Stage in which the GLSL shader is for example: naga::ShaderStage::Vertex
+        /// The shader stage that the shader targets. For example, `naga::ShaderStage::Vertex`
         stage: naga::ShaderStage,
-        /// Defines to unlock configured shader features
+        /// Defines to unlock configured shader features.
         defines: naga::FastHashMap<String, String>,
     },
     /// WGSL module as a string slice.
-    ///
-    /// wgpu-rs will parse it and use for validation. It will attempt
-    /// to build a SPIR-V module internally and panic otherwise.
-    ///
-    /// Note: WGSL is not yet supported on the Web.
     Wgsl(Cow<'a, str>),
 }
 
