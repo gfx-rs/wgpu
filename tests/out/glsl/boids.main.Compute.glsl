@@ -18,15 +18,15 @@ struct SimParams {
     float rule2Scale;
     float rule3Scale;
 };
-uniform SimParams_block_0Compute { SimParams _group_0_binding_0; };
+uniform SimParams_block_0Compute { SimParams _group_0_binding_0_cs; };
 
 layout(std430) readonly buffer Particles_block_1Compute {
     Particle particles[];
-} _group_0_binding_1;
+} _group_0_binding_1_cs;
 
 layout(std430) buffer Particles_block_2Compute {
     Particle particles[];
-} _group_0_binding_2;
+} _group_0_binding_2_cs;
 
 
 void main() {
@@ -45,9 +45,9 @@ void main() {
     if ((index >= 1500u)) {
         return;
     }
-    vec2 _e10 = _group_0_binding_1.particles[index].pos;
+    vec2 _e10 = _group_0_binding_1_cs.particles[index].pos;
     vPos = _e10;
-    vec2 _e15 = _group_0_binding_1.particles[index].vel;
+    vec2 _e15 = _group_0_binding_1_cs.particles[index].vel;
     vVel = _e15;
     cMass = vec2(0.0, 0.0);
     cVel = vec2(0.0, 0.0);
@@ -68,14 +68,14 @@ void main() {
             continue;
         }
         uint _e42 = i;
-        vec2 _e45 = _group_0_binding_1.particles[_e42].pos;
+        vec2 _e45 = _group_0_binding_1_cs.particles[_e42].pos;
         pos = _e45;
         uint _e47 = i;
-        vec2 _e50 = _group_0_binding_1.particles[_e47].vel;
+        vec2 _e50 = _group_0_binding_1_cs.particles[_e47].vel;
         vel = _e50;
         vec2 _e51 = pos;
         vec2 _e52 = vPos;
-        float _e55 = _group_0_binding_0.rule1Distance;
+        float _e55 = _group_0_binding_0_cs.rule1Distance;
         if ((distance(_e51, _e52) < _e55)) {
             vec2 _e57 = cMass;
             vec2 _e58 = pos;
@@ -85,7 +85,7 @@ void main() {
         }
         vec2 _e63 = pos;
         vec2 _e64 = vPos;
-        float _e67 = _group_0_binding_0.rule2Distance;
+        float _e67 = _group_0_binding_0_cs.rule2Distance;
         if ((distance(_e63, _e64) < _e67)) {
             vec2 _e69 = colVel;
             vec2 _e70 = pos;
@@ -94,7 +94,7 @@ void main() {
         }
         vec2 _e74 = pos;
         vec2 _e75 = vPos;
-        float _e78 = _group_0_binding_0.rule3Distance;
+        float _e78 = _group_0_binding_0_cs.rule3Distance;
         if ((distance(_e74, _e75) < _e78)) {
             vec2 _e80 = cVel;
             vec2 _e81 = vel;
@@ -118,18 +118,18 @@ void main() {
     }
     vec2 _e107 = vVel;
     vec2 _e108 = cMass;
-    float _e110 = _group_0_binding_0.rule1Scale;
+    float _e110 = _group_0_binding_0_cs.rule1Scale;
     vec2 _e113 = colVel;
-    float _e115 = _group_0_binding_0.rule2Scale;
+    float _e115 = _group_0_binding_0_cs.rule2Scale;
     vec2 _e118 = cVel;
-    float _e120 = _group_0_binding_0.rule3Scale;
+    float _e120 = _group_0_binding_0_cs.rule3Scale;
     vVel = (((_e107 + (_e108 * _e110)) + (_e113 * _e115)) + (_e118 * _e120));
     vec2 _e123 = vVel;
     vec2 _e125 = vVel;
     vVel = (normalize(_e123) * clamp(length(_e125), 0.0, 0.10000000149011612));
     vec2 _e131 = vPos;
     vec2 _e132 = vVel;
-    float _e134 = _group_0_binding_0.deltaT;
+    float _e134 = _group_0_binding_0_cs.deltaT;
     vPos = (_e131 + (_e132 * _e134));
     float _e138 = vPos.x;
     if ((_e138 < -1.0)) {
@@ -148,9 +148,9 @@ void main() {
         vPos.y = -1.0;
     }
     vec2 _e164 = vPos;
-    _group_0_binding_2.particles[index].pos = _e164;
+    _group_0_binding_2_cs.particles[index].pos = _e164;
     vec2 _e168 = vVel;
-    _group_0_binding_2.particles[index].vel = _e168;
+    _group_0_binding_2_cs.particles[index].vel = _e168;
     return;
 }
 

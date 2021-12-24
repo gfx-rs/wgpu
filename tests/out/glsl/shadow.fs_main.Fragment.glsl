@@ -11,13 +11,13 @@ struct Light {
     vec4 pos;
     vec4 color;
 };
-uniform Globals_block_0Fragment { Globals _group_0_binding_0; };
+uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };
 
 layout(std430) readonly buffer Lights_block_1Fragment {
     Light data[];
-} _group_0_binding_1;
+} _group_0_binding_1_fs;
 
-uniform highp sampler2DArrayShadow _group_0_binding_2;
+uniform highp sampler2DArrayShadow _group_0_binding_2_fs;
 
 layout(location = 0) smooth in vec3 _vs2fs_location0;
 layout(location = 1) smooth in vec4 _vs2fs_location1;
@@ -29,7 +29,7 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
     }
     vec2 flip_correction = vec2(0.5, -0.5);
     vec2 light_local = (((homogeneous_coords.xy * flip_correction) / vec2(homogeneous_coords.w)) + vec2(0.5, 0.5));
-    float _e26 = textureGrad(_group_0_binding_2, vec4(light_local, int(light_id), (homogeneous_coords.z / homogeneous_coords.w)), vec2(0,0), vec2(0,0));
+    float _e26 = textureGrad(_group_0_binding_2_fs, vec4(light_local, int(light_id), (homogeneous_coords.z / homogeneous_coords.w)), vec2(0,0), vec2(0,0));
     return _e26;
 }
 
@@ -47,12 +47,12 @@ void main() {
         }
         loop_init = false;
         uint _e12 = i;
-        uint _e15 = _group_0_binding_0.num_lights.x;
+        uint _e15 = _group_0_binding_0_fs.num_lights.x;
         if ((_e12 >= min(_e15, 10u))) {
             break;
         }
         uint _e19 = i;
-        Light light = _group_0_binding_1.data[_e19];
+        Light light = _group_0_binding_1_fs.data[_e19];
         uint _e22 = i;
         float _e25 = fetch_shadow(_e22, (light.proj * position));
         vec3 light_dir = normalize((light.pos.xyz - position.xyz));
