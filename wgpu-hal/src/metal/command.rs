@@ -62,6 +62,7 @@ impl super::CommandState {
         self.stage_infos.fs.clear();
         self.stage_infos.cs.clear();
         self.work_group_memory_sizes.clear();
+        self.push_constants.clear();
     }
 
     fn make_sizes_buffer_update<'a>(
@@ -605,21 +606,21 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         if stages.contains(wgt::ShaderStages::COMPUTE) {
             self.state.compute.as_ref().unwrap().set_bytes(
                 layout.push_constants_infos.cs.unwrap().buffer_index as _,
-                (state_pc.len() * WORD_SIZE) as _,
+                (layout.total_push_constants as usize * WORD_SIZE) as _,
                 state_pc.as_ptr() as _,
             )
         }
         if stages.contains(wgt::ShaderStages::VERTEX) {
             self.state.render.as_ref().unwrap().set_vertex_bytes(
                 layout.push_constants_infos.vs.unwrap().buffer_index as _,
-                (state_pc.len() * WORD_SIZE) as _,
+                (layout.total_push_constants as usize * WORD_SIZE) as _,
                 state_pc.as_ptr() as _,
             )
         }
         if stages.contains(wgt::ShaderStages::FRAGMENT) {
             self.state.render.as_ref().unwrap().set_fragment_bytes(
                 layout.push_constants_infos.fs.unwrap().buffer_index as _,
-                (state_pc.len() * WORD_SIZE) as _,
+                (layout.total_push_constants as usize * WORD_SIZE) as _,
                 state_pc.as_ptr() as _,
             )
         }
