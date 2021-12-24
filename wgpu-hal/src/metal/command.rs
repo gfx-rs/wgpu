@@ -16,6 +16,7 @@ impl Default for super::CommandState {
             stage_infos: Default::default(),
             storage_buffer_length_map: Default::default(),
             work_group_memory_sizes: Vec::new(),
+            push_constants: Vec::new(),
         }
     }
 }
@@ -587,12 +588,41 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn set_push_constants(
         &mut self,
-        _layout: &super::PipelineLayout,
-        _stages: wgt::ShaderStages,
-        _offset: u32,
-        _data: &[u32],
+        layout: &super::PipelineLayout,
+        stages: wgt::ShaderStages,
+        offset: u32,
+        data: &[u32],
     ) {
-        //TODO
+        let state_pc = &mut self.state.push_constants;
+        if state_pc.len() < layout.total_push_constants as usize {
+            state_pc.resize(layout.total_push_constants as usize, 0);
+        }
+        assert_eq!(offset as usize % WORD_SIZE, 0);
+
+        let offset = offset as usize / WORD_SIZE;
+        state_pc[offset..offset + data.len()].copy_from_slice(data);
+
+        if stages.contains(wgt::ShaderStages::COMPUTE) {
+            self.state.compute.as_ref().unwrap().set_bytes(
+                layout.push_constants_infos.cs.unwrap().buffer_index as _,
+                (state_pc.len() * WORD_SIZE) as _,
+                state_pc.as_ptr() as _,
+            )
+        }
+        if stages.contains(wgt::ShaderStages::VERTEX) {
+            self.state.render.as_ref().unwrap().set_vertex_bytes(
+                layout.push_constants_infos.vs.unwrap().buffer_index as _,
+                (state_pc.len() * WORD_SIZE) as _,
+                state_pc.as_ptr() as _,
+            )
+        }
+        if stages.contains(wgt::ShaderStages::FRAGMENT) {
+            self.state.render.as_ref().unwrap().set_fragment_bytes(
+                layout.push_constants_infos.fs.unwrap().buffer_index as _,
+                (state_pc.len() * WORD_SIZE) as _,
+                state_pc.as_ptr() as _,
+            )
+        }
     }
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {
