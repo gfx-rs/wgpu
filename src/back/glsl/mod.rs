@@ -305,6 +305,16 @@ impl fmt::Display for VaryingName<'_> {
     }
 }
 
+impl ShaderStage {
+    fn to_str(self) -> &'static str {
+        match self {
+            ShaderStage::Compute => "cs",
+            ShaderStage::Fragment => "fs",
+            ShaderStage::Vertex => "vs",
+        }
+    }
+}
+
 /// Shorthand result used internally by the backend
 type BackendResult<T = ()> = Result<T, Error>;
 
@@ -961,7 +971,12 @@ impl<'a, W: Write> Writer<'a, W> {
     ) -> String {
         match global.binding {
             Some(ref br) => {
-                format!("_group_{}_binding_{}", br.group, br.binding)
+                format!(
+                    "_group_{}_binding_{}_{}",
+                    br.group,
+                    br.binding,
+                    self.entry_point.stage.to_str()
+                )
             }
             None => self.names[&NameKey::GlobalVariable(handle)].clone(),
         }
@@ -974,7 +989,13 @@ impl<'a, W: Write> Writer<'a, W> {
         global: &crate::GlobalVariable,
     ) -> BackendResult {
         match global.binding {
-            Some(ref br) => write!(self.out, "_group_{}_binding_{}", br.group, br.binding)?,
+            Some(ref br) => write!(
+                self.out,
+                "_group_{}_binding_{}_{}",
+                br.group,
+                br.binding,
+                self.entry_point.stage.to_str()
+            )?,
             None => write!(
                 self.out,
                 "{}",
