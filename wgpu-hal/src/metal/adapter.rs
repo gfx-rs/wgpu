@@ -918,6 +918,7 @@ impl super::PrivateCapabilities {
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | F::PUSH_CONSTANTS
             | F::POLYGON_MODE_LINE
             | F::CLEAR_COMMANDS
             | F::TEXTURE_FORMAT_16BIT_NORM;
