@@ -12,3 +12,4 @@ Cargo.lock
 /*.vert
 /*.frag
 /*.comp
+/*.wgsl

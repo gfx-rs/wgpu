@@ -3,7 +3,7 @@
 precision highp float;
 precision highp int;
 
-uniform highp sampler2D _group_0_binding_0;
+uniform highp sampler2D _group_0_binding_0_fs;
 
 layout(location = 0) out vec4 _fs2p_location0;
 
@@ -13,7 +13,7 @@ vec4 test(highp sampler2D Passed_Texture) {
 }
 
 void main() {
-    vec4 _e2 = test(_group_0_binding_0);
+    vec4 _e2 = test(_group_0_binding_0_fs);
     _fs2p_location0 = _e2;
     return;
 }
