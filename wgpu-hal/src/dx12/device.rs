@@ -1,3 +1,5 @@
+use crate::FormatAspects;
+
 use super::{conv, descriptor, view, HResult as _};
 use parking_lot::Mutex;
 use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
@@ -495,6 +497,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::TextureView {
             raw_format: view_desc.format,
+            format_aspects: FormatAspects::from(desc.format),
             target_base: (
                 texture.resource,
                 texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
@@ -558,7 +561,7 @@ impl crate::Device<super::Api> for super::Device {
                 .usage
                 .intersects(crate::TextureUses::DEPTH_STENCIL_WRITE)
             {
-                let raw_desc = view_desc.to_dsv(crate::FormatAspects::empty());
+                let raw_desc = view_desc.to_dsv(FormatAspects::empty());
                 let handle = self.dsv_pool.lock().alloc_handle();
                 self.raw.CreateDepthStencilView(
                     texture.resource.as_mut_ptr(),

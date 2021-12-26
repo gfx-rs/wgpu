@@ -422,6 +422,7 @@ impl Texture {
 #[derive(Debug)]
 pub struct TextureView {
     raw_format: native::Format,
+    format_aspects: crate::FormatAspects, // May explicitly ignore stencil aspect of raw_format!
     target_base: (native::Resource, u32),
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
