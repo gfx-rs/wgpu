@@ -81,7 +81,7 @@ impl CommandBufferTextureMemoryActions {
 
                     // Mark surface as implicitly initialized (this is relevant because it might have been uninitialized prior to discarding
                     init_actions.push(TextureInitTrackerAction {
-                        id: discarded_surface.texture.clone(),
+                        id: discarded_surface.texture,
                         range: TextureInitRange {
                             mip_range: discarded_surface.mip_level
                                 ..(discarded_surface.mip_level + 1),

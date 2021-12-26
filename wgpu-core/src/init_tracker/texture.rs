@@ -83,7 +83,7 @@ impl TextureInitTracker {
 
         if mip_range_start < mip_range_end && layer_range_start < layer_range_end {
             Some(TextureInitTrackerAction {
-                id: action.id.clone(),
+                id: action.id,
                 range: TextureInitRange {
                     mip_range: mip_range_start as u32..mip_range_end as u32,
                     layer_range: layer_range_start..layer_range_end,
