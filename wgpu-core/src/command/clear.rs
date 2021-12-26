@@ -407,54 +407,53 @@ fn clear_texture_via_render_passes<A: hal::Api>(
     let extent_base = wgt::Extent3d {
         width: dst_texture.desc.size.width,
         height: dst_texture.desc.size.height,
-        depth_or_array_layers: 1, // TODO: What about 3d textures? Only one slice a time, sure but how to select it?
+        depth_or_array_layers: 1, // Only one layer or slice is cleared at a time.
+    };
+    let layer_or_depth_range = match dst_texture.desc.dimension {
+        wgt::TextureDimension::D1 => range.layer_range,
+        wgt::TextureDimension::D2 => range.layer_range,
+        wgt::TextureDimension::D3 => 0..dst_texture.desc.size.depth_or_array_layers,
     };
     let sample_count = dst_texture.desc.sample_count;
     let is_3d_texture = dst_texture.desc.dimension == wgt::TextureDimension::D3;
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
-        for layer in range.layer_range.clone() {
-            let view = dst_texture.get_clear_view(mip_level, layer);
-            if is_color {
-                unsafe {
-                    encoder.begin_render_pass(&hal::RenderPassDescriptor {
-                        label: Some("clear_texture clear pass"),
-                        extent,
-                        sample_count,
-                        color_attachments: &[hal::ColorAttachment {
-                            target: hal::Attachment {
-                                view,
-                                usage: hal::TextureUses::COLOR_TARGET,
-                            },
-                            resolve_target: None,
-                            ops: hal::AttachmentOps::STORE,
-                            clear_value: wgt::Color::TRANSPARENT,
-                        }],
-                        depth_stencil_attachment: None,
-                        multiview: None,
-                    });
-                }
+        for depth_or_layer in layer_or_depth_range.clone() {
+            let color_attachments_tmp;
+            let (color_attachments, depth_stencil_attachment) = if is_color {
+                color_attachments_tmp = [hal::ColorAttachment {
+                    target: hal::Attachment {
+                        view: dst_texture.get_clear_view(mip_level, depth_or_layer),
+                        usage: hal::TextureUses::COLOR_TARGET,
+                    },
+                    resolve_target: None,
+                    ops: hal::AttachmentOps::STORE,
+                    clear_value: wgt::Color::TRANSPARENT,
+                }];
+                (&color_attachments_tmp[..], None)
             } else {
-                unsafe {
-                    encoder.begin_render_pass(&hal::RenderPassDescriptor {
-                        label: Some("clear_texture clear pass"),
-                        extent,
-                        sample_count,
-                        color_attachments: &[],
-                        depth_stencil_attachment: Some(hal::DepthStencilAttachment {
-                            target: hal::Attachment {
-                                view,
-                                usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
-                            },
-                            depth_ops: hal::AttachmentOps::STORE,
-                            stencil_ops: hal::AttachmentOps::STORE,
-                            clear_value: (0.0, 0),
-                        }),
-                        multiview: None,
-                    });
-                }
+                (
+                    &[][..],
+                    Some(hal::DepthStencilAttachment {
+                        target: hal::Attachment {
+                            view: dst_texture.get_clear_view(mip_level, depth_or_layer),
+                            usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
+                        },
+                        depth_ops: hal::AttachmentOps::STORE,
+                        stencil_ops: hal::AttachmentOps::STORE,
+                        clear_value: (0.0, 0),
+                    }),
+                )
             };
             unsafe {
+                encoder.begin_render_pass(&hal::RenderPassDescriptor {
+                    label: Some("clear_texture clear pass"),
+                    extent,
+                    sample_count,
+                    color_attachments,
+                    depth_stencil_attachment,
+                    multiview: None,
+                });
                 encoder.end_render_pass();
             }
         }

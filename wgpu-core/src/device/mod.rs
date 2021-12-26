@@ -716,7 +716,7 @@ impl<A: HalApi> Device<A> {
             };
 
             let mut clear_views = SmallVec::new();
-            for layer in 0..desc.size.depth_or_array_layers {
+            for slice_or_layer in 0..desc.size.depth_or_array_layers {
                 for mip_level in 0..desc.mip_level_count {
                     unsafe {
                         clear_views.push(
@@ -732,7 +732,7 @@ impl<A: HalApi> Device<A> {
                                             aspect: wgt::TextureAspect::All,
                                             base_mip_level: mip_level,
                                             mip_level_count: NonZeroU32::new(1),
-                                            base_array_layer: layer,
+                                            base_array_layer: slice_or_layer,
                                             array_layer_count: NonZeroU32::new(1),
                                         },
                                     },
