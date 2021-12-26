@@ -182,7 +182,7 @@ impl<A: hal::Api> TextureInner<A> {
 #[derive(Debug)]
 pub enum TextureClearMode<A: hal::Api> {
     BufferCopy,
-    // View for clear via RenderPass for every subsurface
+    // View for clear via RenderPass for every subsurface (mip/layer/slice)
     RenderPass {
         clear_views: SmallVec<[A::TextureView; 1]>,
         is_color: bool,
@@ -214,8 +214,16 @@ impl<A: hal::Api> Texture<A> {
             TextureClearMode::None => {
                 panic!("Given texture can't be cleared")
             }
-            TextureClearMode::RenderPass{ ref clear_views, .. } => {
-                let index = mip_level + depth_or_layer * self.desc.mip_level_count;
+            TextureClearMode::RenderPass {
+                ref clear_views, ..
+            } => {
+                let index = if self.desc.dimension == wgt::TextureDimension::D3 {
+                    (0..mip_level).fold(0, |acc, mip| {
+                        acc + (self.desc.size.depth_or_array_layers >> mip).max(1)
+                    })
+                } else {
+                    mip_level * self.desc.size.depth_or_array_layers
+                } + depth_or_layer;
                 &clear_views[index as usize]
             }
         }

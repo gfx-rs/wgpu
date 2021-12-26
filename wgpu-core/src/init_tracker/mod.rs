@@ -20,7 +20,7 @@ mod buffer;
 mod texture;
 
 pub(crate) use buffer::{BufferInitTracker, BufferInitTrackerAction};
-pub(crate) use texture::{TextureInitRange, TextureInitTracker, TextureInitTrackerAction};
+pub(crate) use texture::{TextureInitRange, TextureInitTracker, TextureInitTrackerAction, has_copy_partial_init_tracker_coverage};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum MemoryInitKind {

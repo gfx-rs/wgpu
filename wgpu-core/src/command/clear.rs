@@ -411,16 +411,18 @@ fn clear_texture_via_render_passes<A: hal::Api>(
         height: dst_texture.desc.size.height,
         depth_or_array_layers: 1, // Only one layer or slice is cleared at a time.
     };
-    let layer_or_depth_range = match dst_texture.desc.dimension {
-        wgt::TextureDimension::D1 => range.layer_range,
-        wgt::TextureDimension::D2 => range.layer_range,
-        wgt::TextureDimension::D3 => 0..dst_texture.desc.size.depth_or_array_layers,
-    };
+
     let sample_count = dst_texture.desc.sample_count;
     let is_3d_texture = dst_texture.desc.dimension == wgt::TextureDimension::D3;
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, is_3d_texture);
-        for depth_or_layer in layer_or_depth_range.clone() {
+        let layer_or_depth_range = if dst_texture.desc.dimension == wgt::TextureDimension::D3 {
+            // TODO: We assume that we're allowed to do clear operations on volume texture slices, this is not properly specified.
+            0..extent.depth_or_array_layers
+        } else {
+            range.layer_range.clone()
+        };
+        for depth_or_layer in layer_or_depth_range {
             let color_attachments_tmp;
             let (color_attachments, depth_stencil_attachment) = if is_color {
                 color_attachments_tmp = [hal::ColorAttachment {

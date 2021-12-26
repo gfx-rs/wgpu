@@ -11,7 +11,7 @@ use crate::{
     get_lowest_common_denom,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id,
-    init_tracker::TextureInitRange,
+    init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{BufferAccessError, BufferMapState, TextureInner},
     track, FastHashSet,
 };
@@ -438,13 +438,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // If the copy does not fully cover the layers, we need to initialize to zero *first* as we don't keep track of partial texture layer inits.
         // Strictly speaking we only need to clear the areas of a layer untouched, but this would get increasingly messy.
 
-        let init_layer_range =
-            destination.origin.z..destination.origin.z + size.depth_or_array_layers;
+        let init_layer_range = if dst.desc.dimension == wgt::TextureDimension::D3 {
+            0..1 // volume textures don't have a layer range as array volumes aren't supported
+        } else {
+            destination.origin.z..destination.origin.z + size.depth_or_array_layers
+        };
         if dst.initialization_status.mips[destination.mip_level as usize]
             .check(init_layer_range.clone())
             .is_some()
         {
-            if size.width != dst.desc.size.width || size.height != dst.desc.size.height {
+            if has_copy_partial_init_tracker_coverage(size, destination.mip_level, &dst.desc) {
                 for layer_range in dst.initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
                     .collect::<Vec<std::ops::Range<u32>>>()

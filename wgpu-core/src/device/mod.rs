@@ -712,12 +712,17 @@ impl<A: HalApi> Device<A> {
             let dimension = match desc.dimension {
                 wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
                 wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                wgt::TextureDimension::D3 => wgt::TextureViewDimension::D2, // Todo? Is this even specified?
+                wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
             };
 
             let mut clear_views = SmallVec::new();
-            for slice_or_layer in 0..desc.size.depth_or_array_layers {
                 for mip_level in 0..desc.mip_level_count {
+                let num_slices_or_layers = if desc.dimension == wgt::TextureDimension::D3 {
+                    (desc.size.depth_or_array_layers >> mip_level).max(1)
+                } else {
+                    desc.size.depth_or_array_layers
+                };
+                for slice_or_layer in 0..num_slices_or_layers {
                     unsafe {
                         clear_views.push(
                             self.raw

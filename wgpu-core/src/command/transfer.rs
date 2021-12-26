@@ -7,7 +7,10 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{BufferId, CommandEncoderId, Id, TextureId, Valid},
-    init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
+    init_tracker::{
+        has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
+        TextureInitTrackerAction,
+    },
     resource::{Texture, TextureErrorDimension},
     track::TextureSelector,
 };
@@ -457,12 +460,14 @@ fn handle_dst_texture_init<A: hal::Api>(
 
     // Attention: If we don't write full texture subresources, we need to a full clear first since we don't track subrects.
     // This means that in rare cases even a *destination* texture of a transfer may need an immediate texture init.
-    let dst_init_kind = if copy_size.width == texture.desc.size.width
-        && copy_size.height == texture.desc.size.height
-    {
-        MemoryInitKind::ImplicitlyInitialized
-    } else {
+    let dst_init_kind = if has_copy_partial_init_tracker_coverage(
+        copy_size,
+        destination.mip_level,
+        &texture.desc,
+    ) {
         MemoryInitKind::NeedsInitializedMemory
+    } else {
+        MemoryInitKind::ImplicitlyInitialized
     };
 
     handle_texture_init(
