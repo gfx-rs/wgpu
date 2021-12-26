@@ -730,28 +730,23 @@ impl<A: HalApi> Device<A> {
                     desc.size.depth_or_array_layers
                 };
                 for slice_or_layer in 0..num_slices_or_layers {
-                    unsafe {
-                        clear_views.push(
-                            self.raw
-                                .create_texture_view(
-                                    &raw_texture,
-                                    &hal::TextureViewDescriptor {
-                                        label: Some("clear texture view"),
-                                        format: desc.format,
-                                        dimension,
-                                        usage,
-                                        range: wgt::ImageSubresourceRange {
-                                            aspect: wgt::TextureAspect::All,
-                                            base_mip_level: mip_level,
-                                            mip_level_count: NonZeroU32::new(1),
-                                            base_array_layer: slice_or_layer,
-                                            array_layer_count: NonZeroU32::new(1),
-                                        },
-                                    },
-                                )
-                                .map_err(DeviceError::from)?,
-                        )
-                    }
+                    let desc = hal::TextureViewDescriptor {
+                        label: Some("clear texture view"),
+                        format: desc.format,
+                        dimension,
+                        usage,
+                        range: wgt::ImageSubresourceRange {
+                            aspect: wgt::TextureAspect::All,
+                            base_mip_level: mip_level,
+                            mip_level_count: NonZeroU32::new(1),
+                            base_array_layer: slice_or_layer,
+                            array_layer_count: NonZeroU32::new(1),
+                        },
+                    };
+                    clear_views.push(
+                        unsafe { self.raw.create_texture_view(&raw_texture, &desc) }
+                            .map_err(DeviceError::from)?,
+                    );
                 }
             }
             resource::TextureClearMode::RenderPass {

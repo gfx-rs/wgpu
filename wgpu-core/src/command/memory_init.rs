@@ -261,12 +261,12 @@ impl<A: hal::Api> BakedCommands<A> {
                 }
                 MemoryInitKind::NeedsInitializedMemory => {
                     for (mip_level, mip_tracker) in affected_mip_trackers {
-                        ranges.extend(mip_tracker.drain(use_range.layer_range.clone()).map(
-                            |layer_range| TextureInitRange {
+                        for layer_range in mip_tracker.drain(use_range.layer_range.clone()) {
+                            ranges.push(TextureInitRange {
                                 mip_range: (mip_level as u32)..(mip_level as u32 + 1),
                                 layer_range,
-                            },
-                        ));
+                            });
+                        }
                     }
                 }
             }
