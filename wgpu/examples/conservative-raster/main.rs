@@ -26,8 +26,8 @@ impl Example {
             .create_texture(&wgpu::TextureDescriptor {
                 label: Some("Low Resolution Target"),
                 size: wgpu::Extent3d {
-                    width: config.width / 16,
-                    height: config.width / 16,
+                    width: (config.width / 16).max(1),
+                    height: (config.height / 16).max(1),
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
