@@ -497,7 +497,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::TextureView {
             raw_format: view_desc.format,
-            has_stencil_aspect: FormatAspects::from(desc.format).contains(FormatAspects::STENCIL),
+            format_aspects: FormatAspects::from(desc.format),
             target_base: (
                 texture.resource,
                 texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),

@@ -1,5 +1,3 @@
-use crate::FormatAspects;
-
 use super::{conv, HResult as _};
 use std::{mem, ops::Range, ptr};
 use winapi::um::d3d12;
@@ -321,9 +319,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     // Only one barrier if it affects the whole image.
                     self.temp.barriers.push(raw);
                 } else {
-                    let has_stencil = FormatAspects::from(barrier.texture.format)
-                        .contains(FormatAspects::STENCIL);
-                    let planes = if has_stencil {
+                    // Selected texture aspect is relevant if the texture format has both depth _and_ stencil aspects.
+                    let planes = if crate::FormatAspects::from(barrier.texture.format)
+                        .contains(crate::FormatAspects::DEPTH | crate::FormatAspects::STENCIL)
+                    {
                         match barrier.range.aspect {
                             wgt::TextureAspect::All => 0..2,
                             wgt::TextureAspect::StencilOnly => 1..2,
@@ -623,11 +622,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
         if let Some(ref ds) = desc.depth_stencil_attachment {
             let mut flags = native::ClearFlags::empty();
-            if !ds.depth_ops.contains(crate::AttachmentOps::LOAD) {
+            let aspects = ds.target.view.format_aspects;
+            if !ds.depth_ops.contains(crate::AttachmentOps::LOAD)
+                && aspects.contains(crate::FormatAspects::DEPTH)
+            {
                 flags |= native::ClearFlags::DEPTH;
             }
             if !ds.stencil_ops.contains(crate::AttachmentOps::LOAD)
-                && ds.target.view.has_stencil_aspect
+                && aspects.contains(crate::FormatAspects::STENCIL)
             {
                 flags |= native::ClearFlags::STENCIL;
             }
