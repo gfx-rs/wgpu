@@ -597,14 +597,13 @@ impl<A: HalApi> Device<A> {
     fn create_texture_from_hal(
         &self,
         hal_texture: A::Texture,
+        hal_usage: hal::TextureUses,
         self_id: id::DeviceId,
         desc: &resource::TextureDescriptor,
         format_features: wgt::TextureFormatFeatures,
         clear_mode: resource::TextureClearMode<A>,
     ) -> resource::Texture<A> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
-
-        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into());
 
         resource::Texture {
             inner: resource::TextureInner::Native {
@@ -645,27 +644,6 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateTextureError::CannotCreateDepthVolumeTexture(desc.format));
         }
 
-        // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
-        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())
-            | if format_desc.sample_type == wgt::TextureSampleType::Depth {
-                hal::TextureUses::DEPTH_STENCIL_WRITE
-            } else if desc.sample_count > 1 {
-                hal::TextureUses::COLOR_TARGET
-            } else {
-                hal::TextureUses::COPY_DST
-            };
-
-        let hal_desc = hal::TextureDescriptor {
-            label: desc.label.borrow_option(),
-            size: desc.size,
-            mip_level_count: desc.mip_level_count,
-            sample_count: desc.sample_count,
-            dimension: desc.dimension,
-            format: desc.format,
-            usage: hal_usage,
-            memory_flags: hal::MemoryFlags::empty(),
-        };
-
         let format_features = self
             .describe_format_features(adapter, desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -694,14 +672,43 @@ impl<A: HalApi> Device<A> {
             return Err(resource::CreateTextureError::InvalidMipLevelCount(mips));
         }
 
+        // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.
+        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())
+            | if format_desc.sample_type == wgt::TextureSampleType::Depth {
+                hal::TextureUses::DEPTH_STENCIL_WRITE
+            } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
+                hal::TextureUses::COPY_DST // (set already)
+            } else {
+                // Use COPY_DST only if we can't use COLOR_TARGET
+                if format_features
+                    .allowed_usages
+                    .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+                {
+                    hal::TextureUses::COLOR_TARGET
+                } else {
+                    hal::TextureUses::COPY_DST
+                }
+            };
+
+        let hal_desc = hal::TextureDescriptor {
+            label: desc.label.borrow_option(),
+            size: desc.size,
+            mip_level_count: desc.mip_level_count,
+            sample_count: desc.sample_count,
+            dimension: desc.dimension,
+            format: desc.format,
+            usage: hal_usage,
+            memory_flags: hal::MemoryFlags::empty(),
+        };
+
         let raw_texture = unsafe {
             self.raw
                 .create_texture(&hal_desc)
                 .map_err(DeviceError::from)?
         };
 
-        let clear_mode = if hal_usage.contains(hal::TextureUses::DEPTH_STENCIL_WRITE)
-            || hal_usage.contains(hal::TextureUses::COLOR_TARGET)
+        let clear_mode = if hal_usage
+            .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
         {
             let (is_color, usage) =
                 if desc.format.describe().sample_type == wgt::TextureSampleType::Depth {
@@ -716,7 +723,7 @@ impl<A: HalApi> Device<A> {
             };
 
             let mut clear_views = SmallVec::new();
-                for mip_level in 0..desc.mip_level_count {
+            for mip_level in 0..desc.mip_level_count {
                 let num_slices_or_layers = if desc.dimension == wgt::TextureDimension::D3 {
                     (desc.size.depth_or_array_layers >> mip_level).max(1)
                 } else {
@@ -755,8 +762,14 @@ impl<A: HalApi> Device<A> {
             resource::TextureClearMode::BufferCopy
         };
 
-        let mut texture =
-            self.create_texture_from_hal(raw_texture, self_id, desc, format_features, clear_mode);
+        let mut texture = self.create_texture_from_hal(
+            raw_texture,
+            hal_usage,
+            self_id,
+            desc,
+            format_features,
+            clear_mode,
+        );
         texture.hal_usage = hal_usage;
         Ok(texture)
     }
@@ -3397,6 +3410,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut texture = device.create_texture_from_hal(
                 hal_texture,
+                conv::map_texture_usage(desc.usage, desc.format.into()),
                 device_id,
                 desc,
                 format_features,
