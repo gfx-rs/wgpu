@@ -568,7 +568,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         if channel.load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
-                    id: view.parent_id.clone(),
+                    id: view.parent_id.value.0,
                     range: TextureInitRange::from(view.selector.clone()),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -578,7 +578,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         } else if channel.store_op == StoreOp::Store {
             // Clear + Store
             texture_memory_actions.register_implicit_init(
-                view.parent_id.clone(),
+                view.parent_id.value,
                 TextureInitRange::from(view.selector.clone()),
                 texture_guard,
             );
@@ -587,7 +587,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             // the discard happens at the *end* of a pass
             // but recording the discard right away be alright since the texture can't be used during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent_id.clone(),
+                texture: view.parent_id.value.0,
                 mip_level: view.selector.levels.start,
                 layer: view.selector.layers.start,
             });
@@ -729,7 +729,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     pending_discard_init_fixups.extend(
                         cmd_buf.texture_memory_actions.register_init_action(
                             &TextureInitTrackerAction {
-                                id: view.parent_id.clone(),
+                                id: view.parent_id.value.0,
                                 range: TextureInitRange::from(view.selector.clone()),
                                 kind: MemoryInitKind::NeedsInitializedMemory,
                             },
@@ -745,7 +745,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 if at.depth.store_op != at.stencil.store_op {
                     if !need_init_beforehand {
                         cmd_buf.texture_memory_actions.register_implicit_init(
-                            view.parent_id.clone(),
+                            view.parent_id.value,
                             TextureInitRange::from(view.selector.clone()),
                             texture_guard,
                         );
@@ -761,7 +761,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
-                        texture: view.parent_id.clone(),
+                        texture: view.parent_id.value.0,
                         mip_level: view.selector.levels.start,
                         layer: view.selector.layers.start,
                     });
@@ -838,7 +838,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }
 
                 cmd_buf.texture_memory_actions.register_implicit_init(
-                    resolve_view.parent_id.clone(),
+                    resolve_view.parent_id.value,
                     TextureInitRange::from(resolve_view.selector.clone()),
                     texture_guard,
                 );

@@ -13,7 +13,7 @@ use crate::{
     id,
     init_tracker::TextureInitRange,
     resource::{BufferAccessError, BufferMapState, TextureInner},
-    track, FastHashSet, Stored,
+    track, FastHashSet,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
@@ -450,10 +450,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
                     crate::command::clear_texture_no_device(
-                        &Stored {
-                            value: id::Valid(destination.texture),
-                            ref_count: dst.life_guard.ref_count.as_ref().unwrap().clone(),
-                        },
+                        id::Valid(destination.texture),
                         &*dst,
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),

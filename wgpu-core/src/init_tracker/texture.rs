@@ -1,5 +1,5 @@
 use super::{InitTracker, MemoryInitKind};
-use crate::{id::TextureId, track::TextureSelector, Stored};
+use crate::{id::TextureId, track::TextureSelector};
 use arrayvec::ArrayVec;
 use std::ops::Range;
 
@@ -20,7 +20,7 @@ impl From<TextureSelector> for TextureInitRange {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TextureInitTrackerAction {
-    pub(crate) id: Stored<TextureId>,
+    pub(crate) id: TextureId,
     pub(crate) range: TextureInitRange,
     pub(crate) kind: MemoryInitKind,
 }

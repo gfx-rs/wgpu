@@ -1535,7 +1535,7 @@ impl<A: HalApi> Device<A> {
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
-            id: view.parent_id.clone(),
+            id: view.parent_id.value.0,
             range: TextureInitRange {
                 mip_range: view.desc.range.mip_range(&texture.desc),
                 layer_range: view.desc.range.layer_range(&texture.desc),

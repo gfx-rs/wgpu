@@ -10,7 +10,6 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     resource::{Texture, TextureErrorDimension},
     track::TextureSelector,
-    Stored,
 };
 
 use hal::CommandEncoder as _;
@@ -386,11 +385,7 @@ fn handle_texture_init<A: hal::Api>(
     texture: &Texture<A>,
 ) {
     let init_action = TextureInitTrackerAction {
-        id: Stored {
-            value: Valid(copy_texture.texture),
-            // For copies the texture object isn't discarded yet (somebody just passed it in!), so it should be safe to access the ref_count
-            ref_count: texture.life_guard.ref_count.as_ref().unwrap().clone(),
-        },
+        id: copy_texture.texture,
         range: TextureInitRange {
             mip_range: copy_texture.mip_level..copy_texture.mip_level + 1,
             layer_range: copy_texture.origin.z
@@ -409,7 +404,7 @@ fn handle_texture_init<A: hal::Api>(
         let cmd_buf_raw = cmd_buf.encoder.open();
         for init in immediate_inits {
             clear_texture(
-                &init.texture,
+                Valid(init.texture),
                 texture,
                 TextureInitRange {
                     mip_range: init.mip_level..(init.mip_level + 1),

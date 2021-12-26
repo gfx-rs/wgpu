@@ -12,7 +12,6 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
     track::{ResourceTracker, TextureSelector, TextureState},
-    Stored,
 };
 
 use hal::CommandEncoder as _;
@@ -220,10 +219,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         clear_texture(
-            &Stored {
-                value: Valid(dst),
-                ref_count: dst_texture.life_guard().ref_count.as_ref().unwrap().clone(),
-            },
+            Valid(dst),
             dst_texture,
             TextureInitRange {
                 mip_range: subresource_range.base_mip_level..subresource_level_end,
@@ -237,7 +233,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub(crate) fn clear_texture<A: hal::Api>(
-    dst_texture_id: &Stored<TextureId>,
+    dst_texture_id: Valid<TextureId>,
     dst_texture: &Texture<A>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
@@ -256,7 +252,7 @@ pub(crate) fn clear_texture<A: hal::Api>(
 }
 
 pub(crate) fn clear_texture_no_device<A: hal::Api>(
-    dst_texture_id: &Stored<TextureId>,
+    dst_texture_id: Valid<TextureId>,
     dst_texture: &Texture<A>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
@@ -267,7 +263,7 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
     let dst_raw = dst_texture
         .inner
         .as_raw()
-        .ok_or(ClearError::InvalidTexture(dst_texture_id.value.0))?;
+        .ok_or(ClearError::InvalidTexture(dst_texture_id.0))?;
 
     // Issue the right barrier.
     let clear_usage = match dst_texture.clear_mode {
@@ -277,21 +273,27 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
         } => hal::TextureUses::DEPTH_STENCIL_WRITE,
         TextureClearMode::RenderPass { is_color: true, .. } => hal::TextureUses::COLOR_TARGET,
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture_id.value.0));
+            return Err(ClearError::NoValidTextureClearMode(dst_texture_id.0));
         }
     };
 
-    let dst_barrier = texture_tracker
-        .change_replace(
-            dst_texture_id.value,
-            &dst_texture_id.ref_count,
-            TextureSelector {
-                levels: range.mip_range.clone(),
-                layers: range.layer_range.clone(),
-            },
-            clear_usage,
-        )
-        .map(|pending| pending.into_hal(dst_texture));
+    let selector = TextureSelector {
+        levels: range.mip_range.clone(),
+        layers: range.layer_range.clone(),
+    };
+
+    // If we're in a texture-init usecase, we know that the texture is already tracked since whatever caused the init requirement,
+    // will have caused the usage tracker to be aware of the texture. Meaning, that it is safe to call call change_replace_tracked if the life_guard is already gone
+    // (i.e. the user no longer holds on to this texture).
+    // On the other hand, when coming via command_encoder_clear_texture, the life_guard is still there since in order to call it a texture object is needed.
+    //
+    // We could in theory distinguish these two scenarios in the internal clear_texture api in order to remove this check and call the cheaper change_replace_tracked whenever possible.
+    let dst_barrier = if let Some(ref_count) = dst_texture.life_guard().ref_count.as_ref() {
+        texture_tracker.change_replace(dst_texture_id, ref_count, selector, clear_usage)
+    } else {
+        texture_tracker.change_replace_tracked(dst_texture_id, selector, clear_usage)
+    }
+    .map(|pending| pending.into_hal(dst_texture));
     unsafe {
         encoder.transition_textures(dst_barrier);
     }
@@ -310,7 +312,7 @@ pub(crate) fn clear_texture_no_device<A: hal::Api>(
             clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture_id.value.0));
+            return Err(ClearError::NoValidTextureClearMode(dst_texture_id.0));
         }
     }
     Ok(())
