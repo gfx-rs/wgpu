@@ -1,0 +1,13 @@
+// language: metal1.1
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+
+vertex void main_(
+) {
+    metal::float4 v = metal::float4(0.0);
+    float a = ((1.0) * 57.295779513082322865);
+    float b = ((1.0) * 0.017453292519943295474);
+    metal::float4 c = ((v) * 57.295779513082322865);
+    metal::float4 d = ((v) * 0.017453292519943295474);
+}

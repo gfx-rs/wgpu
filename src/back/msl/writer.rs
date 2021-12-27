@@ -1135,6 +1135,8 @@ impl<W: Write> Writer<W> {
                     Mf::Asinh => "asinh",
                     Mf::Acosh => "acosh",
                     Mf::Atanh => "atanh",
+                    Mf::Radians => "",
+                    Mf::Degrees => "",
                     // decomposition
                     Mf::Ceil => "ceil",
                     Mf::Floor => "floor",
@@ -1223,6 +1225,14 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "as_type<uint>(half2(")?;
                     self.put_expression(arg, context, false)?;
                     write!(self.out, "))")?;
+                } else if fun == Mf::Radians {
+                    write!(self.out, "((")?;
+                    self.put_expression(arg, context, false)?;
+                    write!(self.out, ") * 0.017453292519943295474)")?;
+                } else if fun == Mf::Degrees {
+                    write!(self.out, "((")?;
+                    self.put_expression(arg, context, false)?;
+                    write!(self.out, ") * 57.295779513082322865)")?;
                 } else {
                     write!(self.out, "{}::{}", NAMESPACE, fun_name)?;
                     self.put_call_parameters(

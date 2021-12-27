@@ -701,6 +701,8 @@ impl<'a> ResolveContext<'a> {
                     Mf::Asinh |
                     Mf::Acosh |
                     Mf::Atanh |
+                    Mf::Radians |
+                    Mf::Degrees |
                     // decomposition
                     Mf::Ceil |
                     Mf::Floor |

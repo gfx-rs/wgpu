@@ -221,6 +221,8 @@ impl super::MathFunction {
             Self::Asinh => 1,
             Self::Acosh => 1,
             Self::Atanh => 1,
+            Self::Radians => 1,
+            Self::Degrees => 1,
             // decomposition
             Self::Ceil => 1,
             Self::Floor => 1,

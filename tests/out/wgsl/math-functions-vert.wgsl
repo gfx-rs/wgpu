@@ -42,6 +42,8 @@ fn main_1() {
     var outerProductOut: mat4x4<f32>;
     var distanceOut: f32;
     var stepOut: vec4<f32>;
+    var rad: vec4<f32>;
+    var deg: f32;
 
     let _e6 = a;
     let _e7 = b;
@@ -144,6 +146,11 @@ fn main_1() {
     let _e222 = a;
     let _e223 = b;
     stepOut = step(_e222, _e223);
+    let _e227 = a;
+    rad = radians(_e227);
+    let _e230 = a;
+    let _e232 = a;
+    deg = degrees(_e232.x);
     return;
 }
 

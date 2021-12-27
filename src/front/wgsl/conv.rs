@@ -160,6 +160,8 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "asin" => Mf::Asin,
         "atan" => Mf::Atan,
         "atan2" => Mf::Atan2,
+        "radians" => Mf::Radians,
+        "degrees" => Mf::Degrees,
         // decomposition
         "ceil" => Mf::Ceil,
         "floor" => Mf::Floor,

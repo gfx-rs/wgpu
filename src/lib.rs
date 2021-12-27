@@ -885,6 +885,8 @@ pub enum MathFunction {
     Asinh,
     Acosh,
     Atanh,
+    Radians,
+    Degrees,
     // decomposition
     Ceil,
     Floor,

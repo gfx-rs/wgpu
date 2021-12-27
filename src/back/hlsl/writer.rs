@@ -1835,6 +1835,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Asinh => Function::Asincosh { is_sin: true },
                     Mf::Acosh => Function::Asincosh { is_sin: false },
                     Mf::Atanh => Function::Atanh,
+                    Mf::Radians => Function::Regular("radians"),
+                    Mf::Degrees => Function::Regular("degrees"),
                     // decomposition
                     Mf::Ceil => Function::Regular("ceil"),
                     Mf::Floor => Function::Regular("floor"),

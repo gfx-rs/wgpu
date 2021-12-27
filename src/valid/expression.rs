@@ -987,6 +987,8 @@ impl super::Validator {
                     | Mf::Asinh
                     | Mf::Acosh
                     | Mf::Atanh
+                    | Mf::Radians
+                    | Mf::Degrees
                     | Mf::Ceil
                     | Mf::Floor
                     | Mf::Round
