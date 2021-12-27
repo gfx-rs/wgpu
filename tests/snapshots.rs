@@ -486,7 +486,7 @@ fn convert_wgsl() {
         ("cubeArrayShadow", Targets::GLSL),
         (
             "math-functions",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
     ];
 
