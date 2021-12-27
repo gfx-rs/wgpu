@@ -30,6 +30,12 @@ petgraph = { version ="0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 
+[profile.release]
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
+
 [features]
 default = []
 dot-out = []
