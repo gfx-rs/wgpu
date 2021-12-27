@@ -6,18 +6,22 @@ struct _mslBufferSizes {
     metal::uint size0;
 };
 
-struct type_3 {
+struct type_2 {
+    metal::float2x2 inner[2];
+};
+struct type_5 {
     metal::uint2 inner[2];
 };
-typedef int type_5[1];
+typedef int type_7[1];
 struct Bar {
     metal::float4x4 matrix;
+    type_2 matrix_array;
     metal::atomic_int atom;
-    char _pad2[4];
-    type_3 arr;
-    type_5 data;
+    char _pad3[4];
+    type_5 arr;
+    type_7 data;
 };
-struct type_11 {
+struct type_13 {
     int inner[5];
 };
 
@@ -39,19 +43,19 @@ vertex fooOutput foo(
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
     float foo_1 = 0.0;
-    type_11 c;
+    type_13 c;
     float baz = foo_1;
     foo_1 = 1.0;
     metal::float4x4 matrix = bar.matrix;
-    type_3 arr = bar.arr;
+    type_5 arr = bar.arr;
     float b = bar.matrix[3].x;
-    int a = bar.data[(1 + (_buffer_sizes.size0 - 88 - 4) / 8) - 2u];
+    int a = bar.data[(1 + (_buffer_sizes.size0 - 120 - 4) / 8) - 2u];
     float _e25 = read_from_private(foo_1);
     bar.matrix[1].z = 1.0;
     bar.matrix = metal::float4x4(metal::float4(0.0), metal::float4(1.0), metal::float4(2.0), metal::float4(3.0));
-    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type_3 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
+    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type_5 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
     bar.data[1] = 1;
-    for(int _i=0; _i<5; ++_i) c.inner[_i] = type_11 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
+    for(int _i=0; _i<5; ++_i) c.inner[_i] = type_13 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
     c.inner[vi + 1u] = 42;
     int value = c.inner[vi];
     return fooOutput { matrix * static_cast<metal::float4>(metal::int4(value)) };

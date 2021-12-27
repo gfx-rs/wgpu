@@ -5,6 +5,7 @@ precision highp int;
 
 layout(std430) buffer Bar_block_0Vertex {
     mat4x4 matrix;
+    mat2x2 matrix_array[2];
     int atom;
     uvec2 arr[2];
     int data[];
