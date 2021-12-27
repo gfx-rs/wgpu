@@ -715,22 +715,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     stride: _,
                 } => {
                     // HLSL arrays are written as `type name[size]`
-                    let (ty_name, vec_size) = match module.types[base].inner {
-                        // Write scalar type by backend so as not to depend on the front-end implementation
-                        // Name returned from frontend can be generated (type1, float1, etc.)
-                        TypeInner::Scalar { kind, width } => (kind.to_hlsl_str(width)?, None),
-                        // Similarly, write vector types directly.
-                        TypeInner::Vector { size, kind, width } => {
-                            (kind.to_hlsl_str(width)?, Some(size))
-                        }
-                        _ => (self.names[&NameKey::Type(base)].as_str(), None),
-                    };
-
-                    // Write `type` and `name`
-                    write!(self.out, "{}", ty_name)?;
-                    if let Some(s) = vec_size {
-                        write!(self.out, "{}", s as usize)?;
+                    if let TypeInner::Matrix { .. } = module.types[base].inner {
+                        write!(self.out, "row_major ")?;
                     }
+                    self.write_type(module, base)?;
+                    // Write `name`
                     write!(
                         self.out,
                         " {}",

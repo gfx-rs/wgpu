@@ -7,6 +7,7 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout(std430) buffer Bar_block_0Compute {
     mat4x4 matrix;
+    mat2x2 matrix_array[2];
     int atom;
     uvec2 arr[2];
     int data[];
