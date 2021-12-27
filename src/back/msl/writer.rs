@@ -2314,8 +2314,9 @@ impl<W: Write> Writer<W> {
                             Some(kind) => {
                                 writeln!(
                                     self.out,
-                                    "{}packed_{}3 {};",
+                                    "{}{}::packed_{}3 {};",
                                     back::INDENT,
+                                    NAMESPACE,
                                     scalar_kind_string(kind),
                                     member_name
                                 )?;

@@ -2,18 +2,24 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constexpr constant bool Foo_1 = true;
+constexpr constant bool Foo_2 = true;
 struct type_2 {
     float inner[10u];
+};
+struct Foo {
+    metal::packed_float3 v3_;
+    float v1_;
 };
 
 kernel void main_(
   threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at_1
+, constant Foo& alignment [[user(fake0)]]
 ) {
-    float Foo = 1.0;
+    float Foo_1 = 1.0;
     bool at = true;
-    wg.inner[3] = 1.0;
+    float _e7 = alignment.v1_;
+    wg.inner[3] = _e7;
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
     return;
 }
