@@ -1,5 +1,6 @@
 struct Bar {
     matrix: mat4x4<f32>;
+    matrix_array: [[stride(16)]] array<mat2x2<f32>,2>;
     atom: atomic<i32>;
     arr: [[stride(8)]] array<vec2<u32>,2>;
     data: [[stride(8)]] array<i32>;
