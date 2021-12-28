@@ -208,7 +208,11 @@ impl super::Instance {
             let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                 .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
                 .message_severity(severity)
-                .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+                .message_type(
+                    vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                        | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                        | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+                )
                 .pfn_user_callback(Some(debug_utils_messenger_callback));
             let messenger = extension
                 .create_debug_utils_messenger(&vk_info, None)
