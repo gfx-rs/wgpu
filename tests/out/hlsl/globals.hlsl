@@ -17,6 +17,8 @@ void main()
 
     float _expr7 = asfloat(alignment.Load(12));
     wg[3] = _expr7;
+    float _expr12 = asfloat(alignment.Load(0+0));
+    wg[2] = _expr12;
     at_1 = 2u;
     return;
 }

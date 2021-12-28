@@ -21,6 +21,8 @@ void main() {
     bool at = true;
     float _e7 = _group_0_binding_1_cs.v1_;
     wg[3] = _e7;
+    float _e12 = _group_0_binding_1_cs.v3_.x;
+    wg[2] = _e12;
     at_1 = 2u;
     return;
 }

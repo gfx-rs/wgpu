@@ -45,7 +45,7 @@ kernel void main_(
     metal::float2 pos;
     metal::float2 vel;
     metal::uint i = 0u;
-    uint index = global_invocation_id.x;
+    metal::uint index = global_invocation_id.x;
     if (index >= NUM_PARTICLES) {
         return;
     }

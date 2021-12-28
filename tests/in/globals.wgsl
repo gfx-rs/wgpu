@@ -16,6 +16,7 @@ var<storage> alignment: Foo;
 [[stage(compute), workgroup_size(1)]]
 fn main() {
     wg[3] = alignment.v1;
+    wg[2] = alignment.v3.x;
     atomicStore(&at, 2u);
 
     // Valid, Foo and at is in function scope
