@@ -286,7 +286,7 @@ impl super::Adapter {
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | wgt::Features::CLEAR_COMMANDS;
+            | wgt::Features::CLEAR_TEXTURE;
         features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
             extensions.contains("GL_EXT_texture_border_clamp"),

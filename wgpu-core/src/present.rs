@@ -9,6 +9,8 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
+use std::{borrow::Borrow, num::NonZeroU32};
+
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
@@ -125,6 +127,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let suf = A::get_surface_mut(surface);
         let (texture_id, status) = match unsafe { suf.raw.acquire_texture(FRAME_TIMEOUT_MS) } {
             Ok(Some(ast)) => {
+                let clear_view_desc = hal::TextureViewDescriptor {
+                    label: Some("clear texture view"),
+                    format: config.format,
+                    dimension: wgt::TextureViewDimension::D2,
+                    usage: hal::TextureUses::COLOR_TARGET,
+                    range: wgt::ImageSubresourceRange {
+                        aspect: wgt::TextureAspect::All,
+                        base_mip_level: 0,
+                        mip_level_count: NonZeroU32::new(1),
+                        base_array_layer: 0,
+                        array_layer_count: NonZeroU32::new(1),
+                    },
+                };
+                let mut clear_views = smallvec::SmallVec::new();
+                clear_views.push(
+                    unsafe {
+                        hal::Device::create_texture_view(
+                            &device.raw,
+                            &ast.texture.borrow(),
+                            &clear_view_desc,
+                        )
+                    }
+                    .map_err(DeviceError::from)?,
+                );
+
                 let present = surface.presentation.as_mut().unwrap();
                 let texture = resource::Texture {
                     inner: resource::TextureInner::Surface {
@@ -158,6 +185,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         levels: 0..1,
                     },
                     life_guard: LifeGuard::new("<Surface>"),
+                    clear_mode: resource::TextureClearMode::RenderPass {
+                        clear_views,
+                        is_color: true,
+                    },
                 };
 
                 let ref_count = texture.life_guard.add_ref();
@@ -239,6 +270,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);
             if let Some(texture) = texture {
+                if let resource::TextureClearMode::RenderPass { clear_views, .. } =
+                    texture.clear_mode
+                {
+                    for clear_view in clear_views {
+                        unsafe {
+                            hal::Device::destroy_texture_view(&device.raw, clear_view);
+                        }
+                    }
+                }
+
                 let suf = A::get_surface_mut(surface);
                 match texture.inner {
                     resource::TextureInner::Surface {

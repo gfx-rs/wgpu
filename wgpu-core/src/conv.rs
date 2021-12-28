@@ -71,6 +71,10 @@ pub fn map_texture_usage(
         usage.contains(wgt::TextureUsages::COPY_SRC),
     );
     u.set(
+        hal::TextureUses::COPY_DST,
+        usage.contains(wgt::TextureUsages::COPY_DST),
+    );
+    u.set(
         hal::TextureUses::RESOURCE,
         usage.contains(wgt::TextureUsages::TEXTURE_BINDING),
     );
