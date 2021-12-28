@@ -4558,19 +4558,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             config: &mut hal::SurfaceConfiguration,
             caps: &hal::SurfaceCapabilities,
         ) -> Result<(), E> {
-            let width = config.extent.width;
-            let height = config.extent.height;
-            if width < caps.extents.start().width
-                || width > caps.extents.end().width
-                || height < caps.extents.start().height
-                || height > caps.extents.end().height
+            let config_width = config.extent.width;
+            let config_height = config.extent.height;
+            let min_width = caps.extents.start().width;
+            let max_width = caps.extents.end().width;
+            let min_height = caps.extents.start().height;
+            let max_height = caps.extents.end().height;
+            if config_width < min_width
+                || config_width > max_width
+                || config_height < min_height
+                || config_height > max_height
             {
                 log::warn!(
-                    "Requested size {}x{} is outside of the supported range: {:?}",
-                    width,
-                    height,
+                    "Requested size {}x{} is outside of the supported range: {:?}, clamping size into supported range",
+                    config_width,
+                    config_height,
                     caps.extents
                 );
+                config.extent.width = config_width.clamp(min_width, max_width);
+                config.extent.height = config_height.clamp(min_height, max_height);
             }
             if !caps.present_modes.contains(&config.present_mode) {
                 log::warn!(
@@ -4588,7 +4594,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if !caps.usage.contains(config.usage) {
                 return Err(E::UnsupportedUsage);
             }
-            if width == 0 || height == 0 {
+            if config.extent.width == 0 || config.extent.height == 0 {
                 return Err(E::ZeroArea);
             }
             Ok(())
