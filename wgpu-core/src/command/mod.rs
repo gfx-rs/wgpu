@@ -8,8 +8,10 @@ mod query;
 mod render;
 mod transfer;
 
-pub(crate) use self::clear::{clear_texture_no_device, ClearError};
-pub use self::{bundle::*, compute::*, draw::*, query::*, render::*, transfer::*};
+pub(crate) use self::clear::clear_texture_no_device;
+pub use self::{
+    bundle::*, clear::ClearError, compute::*, draw::*, query::*, render::*, transfer::*,
+};
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
