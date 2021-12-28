@@ -756,8 +756,6 @@ impl Parser {
                     // If the argument is to be passed as a pointer but the type of the
                     // expression returns a vector it must mean that it was for example
                     // swizzled and it must be spilled into a local before calling
-                    // TODO: this part doesn't work because of #1385 once that's sorted out
-                    // revisit this part.
                     TypeInner::Vector { size, kind, width } => (
                         self.module.types.insert(
                             Type {
@@ -829,7 +827,40 @@ impl Parser {
                 arguments.push(temp_expr);
                 // Register the temporary local to be written back to it's original
                 // place after the function call
-                proxy_writes.push((handle, temp_expr));
+                if let Expression::Swizzle {
+                    size,
+                    mut vector,
+                    pattern,
+                } = ctx.expressions[value]
+                {
+                    if let Expression::Load { pointer } = ctx.expressions[vector] {
+                        vector = pointer;
+                    }
+
+                    for (i, component) in pattern.iter().take(size as usize).enumerate() {
+                        let original = ctx.add_expression(
+                            Expression::AccessIndex {
+                                base: vector,
+                                index: *component as u32,
+                            },
+                            Span::default(),
+                            body,
+                        );
+
+                        let temp = ctx.add_expression(
+                            Expression::AccessIndex {
+                                base: temp_expr,
+                                index: i as u32,
+                            },
+                            Span::default(),
+                            body,
+                        );
+
+                        proxy_writes.push((original, temp));
+                    }
+                } else {
+                    proxy_writes.push((handle, temp_expr));
+                }
                 continue;
             }
 
