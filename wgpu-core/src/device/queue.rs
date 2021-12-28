@@ -4,19 +4,21 @@ use crate::{
     align_to,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
-        CommandBuffer, CopySide, ImageCopyTexture, TransferError,
+        ClearError, CommandBuffer, CopySide, ImageCopyTexture, TransferError,
     },
     conv,
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Token},
     id,
+    init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{BufferAccessError, BufferMapState, TextureInner},
     track, FastHashSet,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
+use smallvec::SmallVec;
 use std::{iter, mem, num::NonZeroU32, ptr};
 use thiserror::Error;
 
@@ -63,7 +65,7 @@ impl<A: hal::Api> StagingData<A> {
 #[derive(Debug)]
 pub enum TempResource<A: hal::Api> {
     Buffer(A::Buffer),
-    Texture(A::Texture),
+    Texture(A::Texture, SmallVec<[A::TextureView; 1]>),
 }
 
 /// A queue execution for a particular command encoder.
@@ -116,7 +118,10 @@ impl<A: hal::Api> PendingWrites<A> {
                 TempResource::Buffer(buffer) => unsafe {
                     device.destroy_buffer(buffer);
                 },
-                TempResource::Texture(texture) => unsafe {
+                TempResource::Texture(texture, views) => unsafe {
+                    for view in views.into_iter() {
+                        device.destroy_texture_view(view);
+                    }
                     device.destroy_texture(texture);
                 },
             }
@@ -212,6 +217,8 @@ pub enum QueueWriteError {
     Queue(#[from] DeviceError),
     #[error(transparent)]
     Transfer(#[from] TransferError),
+    #[error(transparent)]
+    MemoryInitFailure(#[from] ClearError),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -373,7 +380,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let (mut texture_guard, _) = hub.textures.write(&mut token); // For clear we need write access to the texture. TODO: Can we acquire write lock later?
         let (selector, dst_base, texture_format) =
             extract_texture_selector(destination, size, &*texture_guard)?;
         let format_desc = texture_format.describe();
@@ -418,7 +425,53 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
         let stage = device.prepare_stage(stage_size)?;
 
+        let dst = texture_guard.get_mut(destination.texture).unwrap();
+        if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
+            return Err(
+                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
+            );
+        }
+
         let mut trackers = device.trackers.lock();
+        let encoder = device.pending_writes.activate();
+
+        // If the copy does not fully cover the layers, we need to initialize to zero *first* as we don't keep track of partial texture layer inits.
+        // Strictly speaking we only need to clear the areas of a layer untouched, but this would get increasingly messy.
+
+        let init_layer_range = if dst.desc.dimension == wgt::TextureDimension::D3 {
+            0..1 // volume textures don't have a layer range as array volumes aren't supported
+        } else {
+            destination.origin.z..destination.origin.z + size.depth_or_array_layers
+        };
+        if dst.initialization_status.mips[destination.mip_level as usize]
+            .check(init_layer_range.clone())
+            .is_some()
+        {
+            if has_copy_partial_init_tracker_coverage(size, destination.mip_level, &dst.desc) {
+                for layer_range in dst.initialization_status.mips[destination.mip_level as usize]
+                    .drain(init_layer_range)
+                    .collect::<Vec<std::ops::Range<u32>>>()
+                {
+                    crate::command::clear_texture_no_device(
+                        id::Valid(destination.texture),
+                        &*dst,
+                        TextureInitRange {
+                            mip_range: destination.mip_level..(destination.mip_level + 1),
+                            layer_range,
+                        },
+                        encoder,
+                        &mut trackers.textures,
+                        &device.alignments,
+                        &device.zero_buffer,
+                    )
+                    .map_err(QueueWriteError::from)?;
+                }
+            } else {
+                dst.initialization_status.mips[destination.mip_level as usize]
+                    .drain(init_layer_range);
+            }
+        }
+
         let (dst, transition) = trackers
             .textures
             .use_replace(
@@ -429,11 +482,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .unwrap();
 
-        if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
-        }
         let (hal_copy_size, array_layer_count) =
             validate_texture_copy_range(destination, &dst.desc, CopySide::Destination, size)?;
         dst.life_guard.use_at(device.active_submission_index + 1);
@@ -508,78 +556,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         };
 
-        let encoder = device.pending_writes.activate();
+        let dst_raw = dst
+            .inner
+            .as_raw()
+            .ok_or(TransferError::InvalidTexture(destination.texture))?;
+
         unsafe {
             encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
             encoder.transition_buffers(iter::once(barrier));
-        }
-
-        // If the copy does not fully cover the layers, we need to initialize to zero *first* as we don't keep track of partial texture layer inits.
-        // Strictly speaking we only need to clear the areas of a layer untouched, but this would get increasingly messy.
-
-        let init_layer_range =
-            destination.origin.z..destination.origin.z + size.depth_or_array_layers;
-        if dst.initialization_status.mips[destination.mip_level as usize]
-            .check(init_layer_range.clone())
-            .is_some()
-        {
-            // For clear we need write access to the texture!
-            drop(texture_guard);
-            let (mut texture_guard, _) = hub.textures.write(&mut token);
-            let dst = texture_guard.get_mut(destination.texture).unwrap();
-            let dst_raw = dst
-                .inner
-                .as_raw()
-                .ok_or(TransferError::InvalidTexture(destination.texture))?;
-
-            let layers_to_initialize = dst.initialization_status.mips
-                [destination.mip_level as usize]
-                .drain(init_layer_range);
-
-            let mut zero_buffer_copy_regions = Vec::new();
-            if size.width != dst.desc.size.width || size.height != dst.desc.size.height {
-                for layer in layers_to_initialize {
-                    crate::command::collect_zero_buffer_copies_for_clear_texture(
-                        &dst.desc,
-                        device.alignments.buffer_copy_pitch.get() as u32,
-                        destination.mip_level..(destination.mip_level + 1),
-                        layer,
-                        &mut zero_buffer_copy_regions,
-                    );
-                }
-            }
-            unsafe {
-                if !zero_buffer_copy_regions.is_empty() {
-                    encoder.copy_buffer_to_texture(
-                        &device.zero_buffer,
-                        dst_raw,
-                        zero_buffer_copy_regions.iter().cloned(),
-                    );
-                    encoder.transition_textures(zero_buffer_copy_regions.iter().map(|copy| {
-                        hal::TextureBarrier {
-                            texture: dst_raw,
-                            range: wgt::ImageSubresourceRange {
-                                aspect: wgt::TextureAspect::All,
-                                base_mip_level: copy.texture_base.mip_level,
-                                mip_level_count: NonZeroU32::new(1),
-                                base_array_layer: copy.texture_base.array_layer,
-                                array_layer_count: NonZeroU32::new(1),
-                            },
-                            usage: hal::TextureUses::COPY_DST..hal::TextureUses::COPY_DST,
-                        }
-                    }));
-                }
-                encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
-            }
-        } else {
-            let dst_raw = dst
-                .inner
-                .as_raw()
-                .ok_or(TransferError::InvalidTexture(destination.texture))?;
-
-            unsafe {
-                encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
-            }
+            encoder.copy_buffer_to_texture(&stage.buffer, dst_raw, regions);
         }
 
         device.pending_writes.consume(stage);

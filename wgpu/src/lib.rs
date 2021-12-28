@@ -2383,12 +2383,16 @@ impl CommandEncoder {
 
     /// Clears texture to zero.
     ///
-    /// Where possible it may be significantly more efficient to perform clears via render passes!
+    /// Note that unlike with clear_buffer, `COPY_DST` usage is not required.
+    ///
+    /// # Implementation notes
+    ///
+    /// - implemented either via buffer copies and render/depth target clear, path depends on texture usages
+    /// - behaves like texture zero init, but is performed immediately (clearing is *not* delayed via marking it as uninitialized)
     ///
     /// # Panics
     ///
-    /// - `CLEAR_COMMANDS` extension not enabled
-    /// - Texture does not have `COPY_DST` usage.
+    /// - `CLEAR_TEXTURE` extension not enabled
     /// - Range is out of bounds
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
         Context::command_encoder_clear_texture(

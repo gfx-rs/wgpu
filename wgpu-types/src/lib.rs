@@ -505,13 +505,13 @@ bitflags::bitflags! {
         ///
         /// This is a native-only feature.
         const VERTEX_WRITABLE_STORAGE = 1 << 36;
-        /// Enables clear to zero for buffers & textures.
+        /// Enables clear to zero for textures.
         ///
         /// Supported platforms:
         /// - All
         ///
         /// This is a native only feature.
-        const CLEAR_COMMANDS = 1 << 37;
+        const CLEAR_TEXTURE = 1 << 37;
         /// Enables creating shader modules from SPIR-V binary data (unsafe).
         ///
         /// SPIR-V data is not parsed or interpreted in any way; you can use
