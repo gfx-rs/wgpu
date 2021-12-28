@@ -256,7 +256,10 @@ impl<A: hal::Api> LifetimeTracker<A> {
         for res in temp_resources {
             match res {
                 TempResource::Buffer(raw) => last_resources.buffers.push(raw),
-                TempResource::Texture(raw) => last_resources.textures.push(raw),
+                TempResource::Texture(raw, views) => {
+                    last_resources.textures.push(raw);
+                    last_resources.texture_views.extend(views);
+                }
             }
         }
 
@@ -336,7 +339,10 @@ impl<A: hal::Api> LifetimeTracker<A> {
             .map_or(&mut self.free_resources, |a| &mut a.last_resources);
         match temp_resource {
             TempResource::Buffer(raw) => resources.buffers.push(raw),
-            TempResource::Texture(raw) => resources.textures.push(raw),
+            TempResource::Texture(raw, views) => {
+                resources.texture_views.extend(views);
+                resources.textures.push(raw);
+            }
         }
     }
 
@@ -455,12 +461,20 @@ impl<A: HalApi> LifetimeTracker<A> {
                             resource::TextureInner::Native { raw: Some(raw) } => raw,
                             _ => continue,
                         };
-                        self.active
+                        let non_referenced_resources = self
+                            .active
                             .iter_mut()
                             .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .textures
-                            .push(raw);
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources);
+
+                        non_referenced_resources.textures.push(raw);
+                        if let resource::TextureClearMode::RenderPass { clear_views, .. } =
+                            res.clear_mode
+                        {
+                            non_referenced_resources
+                                .texture_views
+                                .extend(clear_views.into_iter());
+                        }
                     }
                 }
             }

@@ -8,6 +8,7 @@ use crate::{
     Label, LifeGuard, RefCount, Stored,
 };
 
+use smallvec::SmallVec;
 use thiserror::Error;
 
 use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
@@ -179,6 +180,19 @@ impl<A: hal::Api> TextureInner<A> {
 }
 
 #[derive(Debug)]
+pub enum TextureClearMode<A: hal::Api> {
+    BufferCopy,
+    // View for clear via RenderPass for every subsurface (mip/layer/slice)
+    RenderPass {
+        clear_views: SmallVec<[A::TextureView; 1]>,
+        is_color: bool,
+    },
+    // Texture can't be cleared, attempting to do so will cause panic.
+    // (either because it is impossible for the type of texture or it is being destroyed)
+    None,
+}
+
+#[derive(Debug)]
 pub struct Texture<A: hal::Api> {
     pub(crate) inner: TextureInner<A>,
     pub(crate) device_id: Stored<DeviceId>,
@@ -188,6 +202,32 @@ pub struct Texture<A: hal::Api> {
     pub(crate) initialization_status: TextureInitTracker,
     pub(crate) full_range: TextureSelector,
     pub(crate) life_guard: LifeGuard,
+    pub(crate) clear_mode: TextureClearMode<A>,
+}
+
+impl<A: hal::Api> Texture<A> {
+    pub(crate) fn get_clear_view(&self, mip_level: u32, depth_or_layer: u32) -> &A::TextureView {
+        match self.clear_mode {
+            TextureClearMode::BufferCopy => {
+                panic!("Given texture is cleared with buffer copies, not render passes")
+            }
+            TextureClearMode::None => {
+                panic!("Given texture can't be cleared")
+            }
+            TextureClearMode::RenderPass {
+                ref clear_views, ..
+            } => {
+                let index = if self.desc.dimension == wgt::TextureDimension::D3 {
+                    (0..mip_level).fold(0, |acc, mip| {
+                        acc + (self.desc.size.depth_or_array_layers >> mip).max(1)
+                    })
+                } else {
+                    mip_level * self.desc.size.depth_or_array_layers
+                } + depth_or_layer;
+                &clear_views[index as usize]
+            }
+        }
+    }
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -255,6 +295,8 @@ pub enum TextureDimensionError {
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error("Depth Texture format {0:?} can't be used for volume textures")]
+    CannotCreateDepthVolumeTexture(wgt::TextureFormat),
     #[error("Textures cannot have empty usage flags")]
     EmptyUsage,
     #[error(transparent)]
