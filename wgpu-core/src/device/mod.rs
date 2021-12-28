@@ -683,6 +683,7 @@ impl<A: HalApi> Device<A> {
                 if format_features
                     .allowed_usages
                     .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+                    && desc.dimension != wgt::TextureDimension::D3 // Render targets into 3D textures are not 
                 {
                     hal::TextureUses::COLOR_TARGET
                 } else {
@@ -719,17 +720,12 @@ impl<A: HalApi> Device<A> {
             let dimension = match desc.dimension {
                 wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
                 wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
+                wgt::TextureDimension::D3 => unreachable!(),
             };
 
             let mut clear_views = SmallVec::new();
             for mip_level in 0..desc.mip_level_count {
-                let num_slices_or_layers = if desc.dimension == wgt::TextureDimension::D3 {
-                    (desc.size.depth_or_array_layers >> mip_level).max(1)
-                } else {
-                    desc.size.depth_or_array_layers
-                };
-                for slice_or_layer in 0..num_slices_or_layers {
+                for array_layer in 0..desc.size.depth_or_array_layers {
                     let desc = hal::TextureViewDescriptor {
                         label: Some("clear texture view"),
                         format: desc.format,
@@ -739,7 +735,7 @@ impl<A: HalApi> Device<A> {
                             aspect: wgt::TextureAspect::All,
                             base_mip_level: mip_level,
                             mip_level_count: NonZeroU32::new(1),
-                            base_array_layer: slice_or_layer,
+                            base_array_layer: array_layer,
                             array_layer_count: NonZeroU32::new(1),
                         },
                     };
