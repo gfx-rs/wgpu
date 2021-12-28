@@ -3465,17 +3465,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let last_submit_index = texture.life_guard.life_count();
 
+        let clear_views =
+            match std::mem::replace(&mut texture.clear_mode, resource::TextureClearMode::None) {
+                resource::TextureClearMode::BufferCopy => SmallVec::new(),
+                resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
+                resource::TextureClearMode::None => SmallVec::new(),
+            };
+
         match texture.inner {
             resource::TextureInner::Native { ref mut raw } => {
                 let raw = raw.take().ok_or(resource::DestroyError::AlreadyDestroyed)?;
-                let clear_views = match std::mem::replace(
-                    &mut texture.clear_mode,
-                    resource::TextureClearMode::None,
-                ) {
-                    resource::TextureClearMode::BufferCopy => SmallVec::new(),
-                    resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
-                    resource::TextureClearMode::None => SmallVec::new(),
-                };
                 let temp = queue::TempResource::Texture(raw, clear_views);
 
                 if device.pending_writes.dst_textures.contains(&texture_id) {
@@ -3487,7 +3486,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .schedule_resource_destruction(temp, last_submit_index);
                 }
             }
-            resource::TextureInner::Surface { .. } => {} //TODO
+            resource::TextureInner::Surface { .. } => {
+                for clear_view in clear_views {
+                    unsafe {
+                        device.raw.destroy_texture_view(clear_view);
+                    }
+                }
+                // TODO?
+            }
         }
 
         Ok(())
