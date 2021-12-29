@@ -511,7 +511,7 @@ bitflags::bitflags! {
         /// - All
         ///
         /// This is a native only feature.
-        const CLEAR_TEXTURE = 1 << 37;
+        const CLEAR_COMMANDS = 1 << 37;
         /// Enables creating shader modules from SPIR-V binary data (unsafe).
         ///
         /// SPIR-V data is not parsed or interpreted in any way; you can use

@@ -1,5 +1,13 @@
 # Change Log
 
+## wgpu-0.12.1
+  - zero initialization uses now render target clears when possible (faster and doesn't enforce COPY_DST internally if not necessary)
+    - fix use of MSAA targets in WebGL
+    - fix not providing `COPY_DST` flag for textures causing assertions in some cases
+    - fix surface textures not getting zero initialized
+    - clear_texture supports now depth/stencil targets
+  - error message on creating depth/stencil volume texture
+
 ## wgpu-0.12 (2021-12-18)
   - API:
     - `MULTIVIEW` feature
@@ -191,7 +199,7 @@
     - naga to `v0.5`.
   - Added:
     - `Features::VERTEX_WRITABLE_STORAGE`.
-    - `Features::CLEAR_COMMANDS` which allows you to use `cmd_buf.clear_texture` and `cmd_buf.clear_buffer`.
+    - `Features::CLEAR_COMMANDS` which allows you to use `cmd_buf.CLEAR_COMMANDS` and `cmd_buf.clear_buffer`.
   - Changed:
     - Updated default storage buffer/image limit to `8` from `4`.
   - Fixed:

@@ -2397,7 +2397,7 @@ impl CommandEncoder {
     ///
     /// # Panics
     ///
-    /// - `CLEAR_TEXTURE` extension not enabled
+    /// - `CLEAR_COMMANDS` extension not enabled
     /// - Range is out of bounds
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
         Context::command_encoder_clear_texture(
