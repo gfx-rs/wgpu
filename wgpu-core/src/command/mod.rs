@@ -98,7 +98,7 @@ pub struct CommandBuffer<A: hal::Api> {
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
     limits: wgt::Limits,
-    support_clear_texture: bool,
+    support_clear_commands: bool,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
 }
@@ -126,7 +126,7 @@ impl<A: HalApi> CommandBuffer<A> {
             buffer_memory_init_actions: Default::default(),
             texture_memory_actions: Default::default(),
             limits,
-            support_clear_texture: features.contains(wgt::Features::CLEAR_TEXTURE),
+            support_clear_commands: features.contains(wgt::Features::CLEAR_COMMANDS),
             #[cfg(feature = "trace")]
             commands: if enable_tracing {
                 Some(Vec::new())
