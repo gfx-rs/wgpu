@@ -881,7 +881,7 @@ impl Context {
 
     pub fn expr_scalar_components(
         &mut self,
-        parser: &mut Parser,
+        parser: &Parser,
         expr: Handle<Expression>,
         meta: Span,
     ) -> Result<Option<(ScalarKind, crate::Bytes)>> {
@@ -891,7 +891,7 @@ impl Context {
 
     pub fn expr_power(
         &mut self,
-        parser: &mut Parser,
+        parser: &Parser,
         expr: Handle<Expression>,
         meta: Span,
     ) -> Result<Option<u32>> {
@@ -921,7 +921,7 @@ impl Context {
 
     pub fn implicit_conversion(
         &mut self,
-        parser: &mut Parser,
+        parser: &Parser,
         expr: &mut Handle<Expression>,
         meta: Span,
         kind: ScalarKind,
@@ -941,7 +941,7 @@ impl Context {
 
     pub fn binary_implicit_conversion(
         &mut self,
-        parser: &mut Parser,
+        parser: &Parser,
         left: &mut Handle<Expression>,
         left_meta: Span,
         right: &mut Handle<Expression>,
@@ -974,7 +974,7 @@ impl Context {
 
     pub fn implicit_splat(
         &mut self,
-        parser: &mut Parser,
+        parser: &Parser,
         expr: &mut Handle<Expression>,
         meta: Span,
         vector_size: Option<VectorSize>,

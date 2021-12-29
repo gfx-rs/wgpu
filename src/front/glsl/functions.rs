@@ -195,14 +195,39 @@ impl Parser {
                 (value, expr_meta),
                 meta,
             )?,
-            TypeInner::Struct { .. } | TypeInner::Array { .. } => ctx.add_expression(
-                Expression::Compose {
-                    ty,
-                    components: vec![value],
-                },
-                meta,
-                body,
-            ),
+            TypeInner::Struct { ref members, .. } => {
+                let scalar_components = members
+                    .get(0)
+                    .and_then(|member| scalar_components(&self.module.types[member.ty].inner));
+                if let Some((kind, width)) = scalar_components {
+                    ctx.implicit_conversion(self, &mut value, expr_meta, kind, width)?;
+                }
+
+                ctx.add_expression(
+                    Expression::Compose {
+                        ty,
+                        components: vec![value],
+                    },
+                    meta,
+                    body,
+                )
+            }
+
+            TypeInner::Array { base, .. } => {
+                let scalar_components = scalar_components(&self.module.types[base].inner);
+                if let Some((kind, width)) = scalar_components {
+                    ctx.implicit_conversion(self, &mut value, expr_meta, kind, width)?;
+                }
+
+                ctx.add_expression(
+                    Expression::Compose {
+                        ty,
+                        components: vec![value],
+                    },
+                    meta,
+                    body,
+                )
+            }
             _ => {
                 self.errors.push(Error {
                     kind: ErrorKind::SemanticError("Bad type constructor".into()),
@@ -534,6 +559,26 @@ impl Parser {
             }
             TypeInner::Vector { size, kind, width } => {
                 return self.vector_constructor(ctx, body, ty, size, kind, width, &args, meta)
+            }
+            TypeInner::Array { base, .. } => {
+                for (mut arg, meta) in args.iter().copied() {
+                    let scalar_components = scalar_components(&self.module.types[base].inner);
+                    if let Some((kind, width)) = scalar_components {
+                        ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
+                    }
+
+                    components.push(arg)
+                }
+            }
+            TypeInner::Struct { ref members, .. } => {
+                for ((mut arg, meta), member) in args.iter().copied().zip(members.iter()) {
+                    let scalar_components = scalar_components(&self.module.types[member.ty].inner);
+                    if let Some((kind, width)) = scalar_components {
+                        ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
+                    }
+
+                    components.push(arg)
+                }
             }
             _ => {
                 return Err(Error {
