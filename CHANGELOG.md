@@ -1,5 +1,16 @@
 # Change Log
 
+### v0.8.1 (2021-12-29)
+  - API:
+    - make `WithSpan` clonable
+  - GLSL-out:
+    - fix conflicting names for uniform buffers
+    - fix FMA instruction
+  - MSL-out:
+    - improve support for packed vec3
+  - HLSL-out:
+    - fix arrays of matrices in uniform buffers
+
 ## v0.8 (2021-12-18)
   - development release for wgpu-0.12
   - lots of fixes in all parts
