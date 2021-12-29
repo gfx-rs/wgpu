@@ -1,12 +1,19 @@
 # Change Log
 
-## wgpu-0.12.1
+## wgpu-core-0.12.1, wgpu-hal-0.12.1 (2021-12-29)
   - zero initialization uses now render target clears when possible (faster and doesn't enforce COPY_DST internally if not necessary)
     - fix use of MSAA targets in WebGL
     - fix not providing `COPY_DST` flag for textures causing assertions in some cases
     - fix surface textures not getting zero initialized
     - clear_texture supports now depth/stencil targets
   - error message on creating depth/stencil volume texture
+  - Vulkan:
+    - fix validation error on debug message types
+  - DX12:
+    - fix check for integrated GPUs
+    - fix stencil subresource transitions
+  - Metal:
+    - implement push constants
 
 ## wgpu-0.12 (2021-12-18)
   - API:
