@@ -806,7 +806,11 @@ impl crate::Device<super::Api> for super::Device {
         let copy_size = conv::map_extent_to_copy_size(&desc.size, desc.dimension);
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
-        if desc.dimension == wgt::TextureDimension::D2 && desc.size.depth_or_array_layers % 6 == 0 {
+        if desc.dimension == wgt::TextureDimension::D2
+            && desc.size.depth_or_array_layers % 6 == 0
+            && desc.sample_count == 1
+            && desc.size.width == desc.size.height
+        {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
         }
 

@@ -295,12 +295,12 @@ pub enum TextureDimensionError {
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Depth Texture format {0:?} can't be used for volume textures")]
-    CannotCreateDepthVolumeTexture(wgt::TextureFormat),
     #[error("Textures cannot have empty usage flags")]
     EmptyUsage,
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
+    #[error("Depth texture kind {0:?} of format {0:?} can't be created")]
+    InvalidDepthKind(wgt::TextureDimension, wgt::TextureFormat),
     #[error("texture descriptor mip level count ({0}) is invalid")]
     InvalidMipLevelCount(u32),
     #[error("The texture usages {0:?} are not allowed on a texture of type {1:?}")]
@@ -382,6 +382,8 @@ pub enum CreateTextureViewError {
         view: wgt::TextureViewDimension,
         texture: wgt::TextureDimension,
     },
+    #[error("Invalid texture view dimension `{0:?}` of a multisampled texture")]
+    InvalidMultisampledTextureViewDimension(wgt::TextureViewDimension),
     #[error("Invalid texture depth `{depth}` for texture view of dimension `Cubemap`. Cubemap views must use images of size 6.")]
     InvalidCubemapTextureDepth { depth: u32 },
     #[error("Invalid texture depth `{depth}` for texture view of dimension `CubemapArray`. Cubemap views must use images with sizes which are a multiple of 6.")]

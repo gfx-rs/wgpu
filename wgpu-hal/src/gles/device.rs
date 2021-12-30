@@ -563,6 +563,7 @@ impl crate::Device<super::Api> for super::Device {
                         //HACK: detect a cube map
                         let cube_count = if desc.size.width == desc.size.height
                             && desc.size.depth_or_array_layers % 6 == 0
+                            && desc.sample_count == 1
                         {
                             Some(desc.size.depth_or_array_layers / 6)
                         } else {
