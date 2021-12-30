@@ -535,7 +535,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => return,
         };
 
-        profiling::scope!("enumerating", format!("{:?}", A::VARIANT));
+        profiling::scope!("enumerating", &*format!("{:?}", A::VARIANT));
         let hub = HalApi::hub(self);
         let mut token = Token::root();
 

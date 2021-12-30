@@ -1,5 +1,8 @@
 # Change Log
 
+## Unreleased
+  - Fix tracy compile error
+
 ## wgpu-core-0.12.1, wgpu-hal-0.12.1 (2021-12-29)
   - zero initialization uses now render target clears when possible (faster and doesn't enforce COPY_DST internally if not necessary)
     - fix use of MSAA targets in WebGL
