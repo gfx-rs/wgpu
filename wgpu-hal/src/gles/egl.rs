@@ -114,20 +114,30 @@ fn open_x_display() -> Option<(ptr::NonNull<raw::c_void>, libloading::Library)> 
     }
 }
 
+unsafe fn find_library(paths: &[&str]) -> Option<libloading::Library> {
+    for path in paths {
+        match libloading::Library::new(path) {
+            Ok(lib) => return Some(lib),
+            _ => continue,
+        };
+    }
+    None
+}
+
 fn test_wayland_display() -> Option<libloading::Library> {
     /* We try to connect and disconnect here to simply ensure there
      * is an active wayland display available.
      */
     log::info!("Loading Wayland library to get the current display");
     let library = unsafe {
-        let client_library = libloading::Library::new("libwayland-client.so").ok()?;
+        let client_library = find_library(&["libwayland-client.so.0", "libwayland-client.so"])?;
         let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
             client_library.get(b"wl_display_connect").unwrap();
         let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
             client_library.get(b"wl_display_disconnect").unwrap();
         let display = ptr::NonNull::new(wl_display_connect(ptr::null()))?;
         wl_display_disconnect(display.as_ptr());
-        libloading::Library::new("libwayland-egl.so").ok()?
+        find_library(&["libwayland-egl.so.1", "libwayland-egl.so"])?
     };
     Some(library)
 }
