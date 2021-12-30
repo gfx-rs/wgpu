@@ -637,11 +637,14 @@ impl<A: HalApi> Device<A> {
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         let format_desc = desc.format.describe();
 
-        // Depth volume textures can't be written to - depth forbids COPY_DST and volume textures can't be rendered to - therefore they aren't allowed.
+        // Depth textures can only be 2D
         if format_desc.sample_type == wgt::TextureSampleType::Depth
-            && desc.dimension == wgt::TextureDimension::D3
+            && desc.dimension != wgt::TextureDimension::D2
         {
-            return Err(resource::CreateTextureError::CannotCreateDepthVolumeTexture(desc.format));
+            return Err(resource::CreateTextureError::InvalidDepthKind(
+                desc.dimension,
+                desc.format,
+            ));
         }
 
         let format_features = self
@@ -779,6 +782,7 @@ impl<A: HalApi> Device<A> {
 
         let view_dim = match desc.dimension {
             Some(dim) => {
+                // check if the dimension is compatible with the texture
                 if texture.desc.dimension != dim.compatible_texture_dimension() {
                     return Err(
                         resource::CreateTextureViewError::InvalidTextureViewDimension {
@@ -786,6 +790,14 @@ impl<A: HalApi> Device<A> {
                             texture: texture.desc.dimension,
                         },
                     );
+                }
+                // check if multisampled texture is seen as anything but 2D
+                match dim {
+                    wgt::TextureViewDimension::D2 | wgt::TextureViewDimension::D2Array => {}
+                    _ if texture.desc.sample_count > 1 => {
+                        return Err(resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(dim));
+                    }
+                    _ => {}
                 }
                 dim
             }
