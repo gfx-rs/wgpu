@@ -1207,10 +1207,10 @@ impl<W: Write> Writer<W> {
                     Mf::FindLsb => "",
                     Mf::FindMsb => "",
                     // data packing
-                    Mf::Pack4x8snorm => "pack_float_to_unorm4x8",
-                    Mf::Pack4x8unorm => "pack_float_to_snorm4x8",
-                    Mf::Pack2x16snorm => "pack_float_to_unorm2x16",
-                    Mf::Pack2x16unorm => "pack_float_to_snorm2x16",
+                    Mf::Pack4x8snorm => "pack_float_to_snorm4x8",
+                    Mf::Pack4x8unorm => "pack_float_to_unorm4x8",
+                    Mf::Pack2x16snorm => "pack_float_to_snorm2x16",
+                    Mf::Pack2x16unorm => "pack_float_to_unorm2x16",
                     Mf::Pack2x16float => "",
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpack_snorm4x8_to_float",
