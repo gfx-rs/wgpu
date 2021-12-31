@@ -9,7 +9,7 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::{borrow::Borrow, num::NonZeroU32};
+use std::borrow::Borrow;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -128,17 +128,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_id, status) = match unsafe { suf.raw.acquire_texture(FRAME_TIMEOUT_MS) } {
             Ok(Some(ast)) => {
                 let clear_view_desc = hal::TextureViewDescriptor {
-                    label: Some("clear texture view"),
+                    label: Some("clear surface texture view"),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
                     usage: hal::TextureUses::COLOR_TARGET,
-                    range: wgt::ImageSubresourceRange {
-                        aspect: wgt::TextureAspect::All,
-                        base_mip_level: 0,
-                        mip_level_count: NonZeroU32::new(1),
-                        base_array_layer: 0,
-                        array_layer_count: NonZeroU32::new(1),
-                    },
+                    range: wgt::ImageSubresourceRange::default(),
                 };
                 let mut clear_views = smallvec::SmallVec::new();
                 clear_views.push(
