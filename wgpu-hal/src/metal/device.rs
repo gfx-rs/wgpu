@@ -329,6 +329,8 @@ impl crate::Device<super::Api> for super::Device {
             conv::map_texture_view_dimension(desc.dimension)
         };
 
+        //Note: this doesn't check properly if the mipmap level count or array layer count
+        // is explicitly set to 1.
         let raw = if raw_format == texture.raw_format
             && raw_type == texture.raw_type
             && desc.range == wgt::ImageSubresourceRange::default()
