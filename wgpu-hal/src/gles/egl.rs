@@ -160,6 +160,7 @@ fn choose_config(
 ) -> Result<(egl::Config, bool), crate::InstanceError> {
     //TODO: EGL_SLOW_CONFIG
     let tiers = [
+        ("surfaceless", &[egl::SURFACE_TYPE, egl::PBUFFER_BIT][..]),
         (
             "off-screen",
             &[egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT][..],
@@ -618,8 +619,13 @@ impl crate::Instance<super::Api> for Instance {
                 .unwrap();
             (display, Some(Arc::new(library)), WindowKind::AngleX11)
         } else {
-            log::info!("Using default platform");
-            let display = egl.get_display(egl::DEFAULT_DISPLAY).unwrap();
+            log::info!("No windowing system present. Using surfaceless platform");
+            let egl = egl
+                .upcast::<egl::EGL1_5>()
+                .expect("Failed to get EGL 1.5 for surfaceless");
+            let display = egl
+                .get_platform_display(0x31DD, std::ptr::null_mut(), &[egl::ATTRIB_NONE]) // EGL_PLATFORM_SURFACELESS_MESA
+                .unwrap();
             (display, None, WindowKind::Unknown)
         };
 
