@@ -625,7 +625,11 @@ impl crate::Instance<super::Api> for Instance {
                 .upcast::<egl::EGL1_5>()
                 .expect("Failed to get EGL 1.5 for surfaceless");
             let display = egl
-                .get_platform_display(EGL_PLATFORM_SURFACELESS_MESA, std::ptr::null_mut(), &[egl::ATTRIB_NONE])
+                .get_platform_display(
+                    EGL_PLATFORM_SURFACELESS_MESA,
+                    std::ptr::null_mut(),
+                    &[egl::ATTRIB_NONE],
+                )
                 .unwrap();
             (display, None, WindowKind::Unknown)
         } else {
