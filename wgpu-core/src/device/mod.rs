@@ -618,7 +618,7 @@ impl<A: HalApi> Device<A> {
             format_features,
             initialization_status: TextureInitTracker::new(
                 desc.mip_level_count,
-                desc.size.depth_or_array_layers,
+                desc.array_layer_count(),
             ),
             full_range: TextureSelector {
                 levels: 0..desc.mip_level_count,
