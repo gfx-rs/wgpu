@@ -149,9 +149,9 @@ jobs:
       - name: disable debug
         shell: bash
         run: |
-          mkdir .cargo
-          echo """[profile.dev]
-          debug = 1" > .cargo/config.toml
+          mkdir -p .cargo
+          echo """\n[profile.dev]
+          debug = 1" >> .cargo/config.toml
 
       - name: check web
         if: matrix.kind == 'web'
