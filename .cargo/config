@@ -1,0 +1,7 @@
+[alias]
+run-wasm = "run --release --package run-wasm --"
+
+[build]
+rustflags = [
+"--cfg=web_sys_unstable_apis"
+]

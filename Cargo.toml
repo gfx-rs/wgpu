@@ -8,6 +8,7 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
+    "run-wasm",
 ]
 exclude = [
     "cts_runner",
