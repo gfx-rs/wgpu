@@ -19,6 +19,13 @@ gles = ["naga/glsl-out", "glow", "egl", "libloading"]
 dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
 renderdoc = ["libloading", "renderdoc-sys"]
 
+[[example]]
+name = "halmark"
+
+[[example]]
+name = "raw-gles"
+required-features = ["gles"]
+
 [dependencies]
 bitflags = "1.0"
 parking_lot = "0.11"
@@ -86,4 +93,5 @@ features = ["wgsl-in"]
 
 [dev-dependencies]
 env_logger = "0.8"
-winit = "0.26"
+winit = "0.26" # for "halmark" example
+glutin = "0.28" # for "gles" example
