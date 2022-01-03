@@ -64,7 +64,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             tool: clippy
             kind: local
-            backends: vulkan # gl
+            backends: vulkan gl
 
           - name: Linux aarch64
             os: ubuntu-20.04
