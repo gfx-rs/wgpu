@@ -1,3 +1,5 @@
+//! This example shows basic usage of wgpu-hal by rendering
+//! a ton of moving sprites, each with a separate texture and draw call.
 extern crate wgpu_hal as hal;
 
 use hal::{

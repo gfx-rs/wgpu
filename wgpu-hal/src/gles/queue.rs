@@ -82,6 +82,7 @@ impl super::Queue {
             super::TextureInner::Renderbuffer { raw } => {
                 gl.framebuffer_renderbuffer(fbo_target, attachment, glow::RENDERBUFFER, Some(raw));
             }
+            super::TextureInner::DefaultRenderbuffer => panic!("Unexpected default RBO"),
             super::TextureInner::Texture { raw, target } => {
                 if is_layered_target(target) {
                     gl.framebuffer_texture_layer(
@@ -636,24 +637,28 @@ impl super::Queue {
                     }
                 }
             }
-            C::ResetFramebuffer => {
-                gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo));
-                gl.framebuffer_texture_2d(
-                    glow::DRAW_FRAMEBUFFER,
-                    glow::DEPTH_STENCIL_ATTACHMENT,
-                    glow::TEXTURE_2D,
-                    None,
-                    0,
-                );
-                for i in 0..crate::MAX_COLOR_TARGETS {
-                    let target = glow::COLOR_ATTACHMENT0 + i as u32;
+            C::ResetFramebuffer { is_default } => {
+                if is_default {
+                    gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+                } else {
+                    gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo));
                     gl.framebuffer_texture_2d(
                         glow::DRAW_FRAMEBUFFER,
-                        target,
+                        glow::DEPTH_STENCIL_ATTACHMENT,
                         glow::TEXTURE_2D,
                         None,
                         0,
                     );
+                    for i in 0..crate::MAX_COLOR_TARGETS {
+                        let target = glow::COLOR_ATTACHMENT0 + i as u32;
+                        gl.framebuffer_texture_2d(
+                            glow::DRAW_FRAMEBUFFER,
+                            target,
+                            glow::TEXTURE_2D,
+                            None,
+                            0,
+                        );
+                    }
                 }
                 gl.color_mask(true, true, true, true);
                 gl.depth_mask(true);

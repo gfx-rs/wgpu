@@ -386,54 +386,72 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.state.has_pass_label = true;
         }
 
-        // set the framebuffer
-        self.cmd_buffer.commands.push(C::ResetFramebuffer);
-        for (i, cat) in desc.color_attachments.iter().enumerate() {
-            let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
-            self.cmd_buffer.commands.push(C::BindAttachment {
-                attachment,
-                view: cat.target.view.clone(),
-            });
-            if let Some(ref rat) = cat.resolve_target {
-                self.state
-                    .resolve_attachments
-                    .push((attachment, rat.view.clone()));
+        match desc
+            .color_attachments
+            .first()
+            .map(|at| &at.target.view.inner)
+        {
+            // default framebuffer (provided externally)
+            Some(&super::TextureInner::DefaultRenderbuffer) => {
+                self.cmd_buffer
+                    .commands
+                    .push(C::ResetFramebuffer { is_default: true });
             }
-            if !cat.ops.contains(crate::AttachmentOps::STORE) {
-                self.state.invalidate_attachments.push(attachment);
-            }
-        }
-        if let Some(ref dsat) = desc.depth_stencil_attachment {
-            let aspects = dsat.target.view.aspects;
-            let attachment = match aspects {
-                crate::FormatAspects::DEPTH => glow::DEPTH_ATTACHMENT,
-                crate::FormatAspects::STENCIL => glow::STENCIL_ATTACHMENT,
-                _ => glow::DEPTH_STENCIL_ATTACHMENT,
-            };
-            self.cmd_buffer.commands.push(C::BindAttachment {
-                attachment,
-                view: dsat.target.view.clone(),
-            });
-            if aspects.contains(crate::FormatAspects::DEPTH)
-                && !dsat.depth_ops.contains(crate::AttachmentOps::STORE)
-            {
-                self.state
-                    .invalidate_attachments
-                    .push(glow::DEPTH_ATTACHMENT);
-            }
-            if aspects.contains(crate::FormatAspects::STENCIL)
-                && !dsat.stencil_ops.contains(crate::AttachmentOps::STORE)
-            {
-                self.state
-                    .invalidate_attachments
-                    .push(glow::STENCIL_ATTACHMENT);
+            _ => {
+                // set the framebuffer
+                self.cmd_buffer
+                    .commands
+                    .push(C::ResetFramebuffer { is_default: false });
+
+                for (i, cat) in desc.color_attachments.iter().enumerate() {
+                    let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
+                    self.cmd_buffer.commands.push(C::BindAttachment {
+                        attachment,
+                        view: cat.target.view.clone(),
+                    });
+                    if let Some(ref rat) = cat.resolve_target {
+                        self.state
+                            .resolve_attachments
+                            .push((attachment, rat.view.clone()));
+                    }
+                    if !cat.ops.contains(crate::AttachmentOps::STORE) {
+                        self.state.invalidate_attachments.push(attachment);
+                    }
+                }
+                if let Some(ref dsat) = desc.depth_stencil_attachment {
+                    let aspects = dsat.target.view.aspects;
+                    let attachment = match aspects {
+                        crate::FormatAspects::DEPTH => glow::DEPTH_ATTACHMENT,
+                        crate::FormatAspects::STENCIL => glow::STENCIL_ATTACHMENT,
+                        _ => glow::DEPTH_STENCIL_ATTACHMENT,
+                    };
+                    self.cmd_buffer.commands.push(C::BindAttachment {
+                        attachment,
+                        view: dsat.target.view.clone(),
+                    });
+                    if aspects.contains(crate::FormatAspects::DEPTH)
+                        && !dsat.depth_ops.contains(crate::AttachmentOps::STORE)
+                    {
+                        self.state
+                            .invalidate_attachments
+                            .push(glow::DEPTH_ATTACHMENT);
+                    }
+                    if aspects.contains(crate::FormatAspects::STENCIL)
+                        && !dsat.stencil_ops.contains(crate::AttachmentOps::STORE)
+                    {
+                        self.state
+                            .invalidate_attachments
+                            .push(glow::STENCIL_ATTACHMENT);
+                    }
+                }
+
+                // set the draw buffers and states
+                self.cmd_buffer
+                    .commands
+                    .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
             }
         }
 
-        // set the draw buffers and states
-        self.cmd_buffer
-            .commands
-            .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
         let rect = crate::Rect {
             x: 0,
             y: 0,
