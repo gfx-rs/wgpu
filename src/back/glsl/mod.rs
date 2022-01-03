@@ -1343,6 +1343,9 @@ impl<'a, W: Write> Writer<'a, W> {
             // `type(components)` where `components` is a comma separated list of constants
             crate::ConstantInner::Composite { ty, ref components } => {
                 self.write_type(ty)?;
+                if let TypeInner::Array { size, .. } = self.module.types[ty].inner {
+                    self.write_array_size(size)?;
+                }
                 write!(self.out, "(")?;
 
                 // Write the comma separated constants
