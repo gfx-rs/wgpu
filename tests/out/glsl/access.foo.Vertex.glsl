@@ -20,7 +20,7 @@ float read_from_private(inout float foo_2) {
 void main() {
     uint vi = uint(gl_VertexID);
     float foo_1 = 0.0;
-    int c[5];
+    int c[5] = int[5](0, 0, 0, 0, 0);
     float baz = foo_1;
     foo_1 = 1.0;
     mat4x4 matrix = _group_0_binding_0_vs.matrix;

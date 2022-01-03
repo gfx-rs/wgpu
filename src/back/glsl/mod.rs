@@ -90,6 +90,16 @@ impl crate::StorageClass {
             _ => false,
         }
     }
+
+    /// Whether a variable with this storage class can be initialized
+    fn initializable(&self) -> bool {
+        match *self {
+            crate::StorageClass::WorkGroup
+            | crate::StorageClass::Uniform
+            | crate::StorageClass::Storage { .. } => false,
+            _ => true,
+        }
+    }
 }
 
 //Note: similar to `back/spv/helpers.rs`
@@ -941,7 +951,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_array_size(size)?;
         }
 
-        if is_value_init_supported(self.module, global.ty) {
+        if global.class.initializable() && is_value_init_supported(self.module, global.ty) {
             write!(self.out, " = ")?;
             if let Some(init) = global.init {
                 self.write_constant(init)?;
@@ -2770,6 +2780,25 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_zero_init_scalar(crate::ScalarKind::Float)?;
                 write!(self.out, ")")?;
             }
+            TypeInner::Array { base, size, .. } => {
+                let count = match size
+                    .to_indexable_length(self.module)
+                    .expect("Bad array size")
+                {
+                    proc::IndexableLength::Known(count) => count,
+                    proc::IndexableLength::Dynamic => return Ok(()),
+                };
+                self.write_type(base)?;
+                self.write_array_size(size)?;
+                write!(self.out, "(")?;
+                for _ in 1..count {
+                    self.write_zero_init_value(base)?;
+                    write!(self.out, ", ")?;
+                }
+                // write last parameter without comma and space
+                self.write_zero_init_value(base)?;
+                write!(self.out, ")")?;
+            }
             _ => {} // TODO:
         }
 
@@ -3054,6 +3083,9 @@ fn glsl_storage_format(format: crate::StorageFormat) -> &'static str {
 fn is_value_init_supported(module: &crate::Module, ty: Handle<crate::Type>) -> bool {
     match module.types[ty].inner {
         TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => true,
+        TypeInner::Array { base, size, .. } => {
+            size != crate::ArraySize::Dynamic && is_value_init_supported(module, base)
+        }
         _ => false,
     }
 }
