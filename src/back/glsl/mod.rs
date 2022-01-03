@@ -2799,6 +2799,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_zero_init_value(base)?;
                 write!(self.out, ")")?;
             }
+            TypeInner::Struct { ref members, .. } => {
+                let name = &self.names[&NameKey::Type(ty)];
+                write!(self.out, "{}(", name)?;
+                for (i, member) in members.iter().enumerate() {
+                    self.write_zero_init_value(member.ty)?;
+                    if i != members.len().saturating_sub(1) {
+                        write!(self.out, ", ")?;
+                    }
+                }
+                write!(self.out, ")")?;
+            }
             _ => {} // TODO:
         }
 
@@ -3086,6 +3097,9 @@ fn is_value_init_supported(module: &crate::Module, ty: Handle<crate::Type>) -> b
         TypeInner::Array { base, size, .. } => {
             size != crate::ArraySize::Dynamic && is_value_init_supported(module, base)
         }
+        TypeInner::Struct { ref members, .. } => members
+            .iter()
+            .all(|member| is_value_init_supported(module, member.ty)),
         _ => false,
     }
 }
