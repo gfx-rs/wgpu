@@ -161,11 +161,21 @@ fn choose_config(
 ) -> Result<(egl::Config, bool), crate::InstanceError> {
     //TODO: EGL_SLOW_CONFIG
     let tiers = [
-        ("surfaceless", &[egl::SURFACE_TYPE, egl::PBUFFER_BIT]),
-        ("off-screen", &[egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT]),
-        ("presentation", &[egl::SURFACE_TYPE, egl::WINDOW_BIT]),
+        (
+            "off-screen",
+            &[
+                egl::SURFACE_TYPE,
+                egl::PBUFFER_BIT,
+                egl::RENDERABLE_TYPE,
+                egl::OPENGL_ES2_BIT,
+            ][..],
+        ),
+        ("presentation", &[egl::SURFACE_TYPE, egl::WINDOW_BIT][..]),
         #[cfg(not(target_os = "android"))]
-        ("native-render", &[egl::NATIVE_RENDERABLE, egl::TRUE as _]),
+        (
+            "native-render",
+            &[egl::NATIVE_RENDERABLE, egl::TRUE as _][..],
+        ),
     ];
 
     let mut attributes = Vec::with_capacity(9);
