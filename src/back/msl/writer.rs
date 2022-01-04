@@ -616,7 +616,7 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
     ) -> BackendResult {
         // coordinates in IR are int, but Metal expects uint
-        let size_str = match *context.info[expr].ty.inner_with(&context.module.types) {
+        let size_str = match *context.resolve_type(expr) {
             crate::TypeInner::Scalar { .. } => "",
             crate::TypeInner::Vector { size, .. } => back::vector_size_str(size),
             _ => return Err(Error::Validation),
@@ -1401,7 +1401,7 @@ impl<W: Write> Writer<W> {
                 crate::Expression::AccessIndex { base, index } => {
                     // Don't try to check indices into structs. Validation already took
                     // care of them, and index::needs_guard doesn't handle that case.
-                    let mut base_inner = context.info[base].ty.inner_with(&context.module.types);
+                    let mut base_inner = context.resolve_type(base);
                     if let crate::TypeInner::Pointer { base, .. } = *base_inner {
                         base_inner = &context.module.types[base].inner;
                     }
@@ -1475,7 +1475,7 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         match context.function.expressions[chain] {
             crate::Expression::Access { base, index } => {
-                let mut base_ty = context.info[base].ty.inner_with(&context.module.types);
+                let mut base_ty = context.resolve_type(base);
 
                 // Look through any pointers to see what we're really indexing.
                 if let crate::TypeInner::Pointer { base, class: _ } = *base_ty {
@@ -2172,21 +2172,20 @@ impl<W: Write> Writer<W> {
         level: back::Level,
         context: &StatementContext,
     ) -> BackendResult {
-        let pointer_info = &context.expression.info[pointer];
-        let (array_size, is_atomic) =
-            match *pointer_info.ty.inner_with(&context.expression.module.types) {
-                crate::TypeInner::Pointer { base, .. } => {
-                    match context.expression.module.types[base].inner {
-                        crate::TypeInner::Array {
-                            size: crate::ArraySize::Constant(ch),
-                            ..
-                        } => (Some(ch), false),
-                        crate::TypeInner::Atomic { .. } => (None, true),
-                        _ => (None, false),
-                    }
+        let pointer_inner = context.expression.resolve_type(pointer);
+        let (array_size, is_atomic) = match *pointer_inner {
+            crate::TypeInner::Pointer { base, .. } => {
+                match context.expression.module.types[base].inner {
+                    crate::TypeInner::Array {
+                        size: crate::ArraySize::Constant(ch),
+                        ..
+                    } => (Some(ch), false),
+                    crate::TypeInner::Atomic { .. } => (None, true),
+                    _ => (None, false),
                 }
-                _ => (None, false),
-            };
+            }
+            _ => (None, false),
+        };
 
         // we can't assign fixed-size arrays
         if let Some(const_handle) = array_size {
