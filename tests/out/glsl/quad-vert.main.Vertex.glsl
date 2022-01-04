@@ -13,13 +13,13 @@ struct type_9 {
     vec2 member;
     vec4 gen_gl_Position;
 };
-vec2 v_uv = vec2(0.0, 0.0);
+vec2 v_uv = vec2(0.0);
 
-vec2 a_uv_1 = vec2(0.0, 0.0);
+vec2 a_uv_1 = vec2(0.0);
 
 gen_gl_PerVertex perVertexStruct = gen_gl_PerVertex(vec4(0.0, 0.0, 0.0, 1.0), 1.0, float[1](0.0), float[1](0.0));
 
-vec2 a_pos_1 = vec2(0.0, 0.0);
+vec2 a_pos_1 = vec2(0.0);
 
 layout(location = 1) in vec2 _p2vs_location1;
 layout(location = 0) in vec2 _p2vs_location0;

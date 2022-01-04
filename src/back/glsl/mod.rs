@@ -2756,27 +2756,15 @@ impl<'a, W: Write> Writer<'a, W> {
             TypeInner::Scalar { kind, .. } => {
                 self.write_zero_init_scalar(kind)?;
             }
-            TypeInner::Vector { size, kind, .. } => {
+            TypeInner::Vector { kind, .. } => {
                 self.write_value_type(inner)?;
                 write!(self.out, "(")?;
-                for _ in 1..(size as usize) {
-                    self.write_zero_init_scalar(kind)?;
-                    write!(self.out, ", ")?;
-                }
-                // write last parameter without comma and space
                 self.write_zero_init_scalar(kind)?;
                 write!(self.out, ")")?;
             }
-            TypeInner::Matrix { columns, rows, .. } => {
-                let number_of_components = (columns as usize) * (rows as usize);
+            TypeInner::Matrix { .. } => {
                 self.write_value_type(inner)?;
                 write!(self.out, "(")?;
-                for _ in 1..number_of_components {
-                    // IR supports only float matrix
-                    self.write_zero_init_scalar(crate::ScalarKind::Float)?;
-                    write!(self.out, ", ")?;
-                }
-                // write last parameter without comma and space
                 self.write_zero_init_scalar(crate::ScalarKind::Float)?;
                 write!(self.out, ")")?;
             }

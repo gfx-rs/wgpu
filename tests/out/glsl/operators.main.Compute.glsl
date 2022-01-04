@@ -42,7 +42,7 @@ vec3 bool_cast(vec3 x) {
 }
 
 float constructors() {
-    Foo foo = Foo(vec4(0.0, 0.0, 0.0, 0.0), 0);
+    Foo foo = Foo(vec4(0.0), 0);
     foo = Foo(vec4(1.0), 1);
     mat2x2 mat2comp = mat2x2(vec2(1.0, 0.0), vec2(0.0, 1.0));
     mat4x4 mat4comp = mat4x4(vec4(1.0, 0.0, 0.0, 0.0), vec4(0.0, 1.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0));

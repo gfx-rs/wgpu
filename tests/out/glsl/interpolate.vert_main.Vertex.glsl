@@ -18,7 +18,7 @@ smooth centroid out float _vs2fs_location5;
 smooth sample out float _vs2fs_location6;
 
 void main() {
-    FragmentInput out_ = FragmentInput(vec4(0.0, 0.0, 0.0, 0.0), 0u, 0.0, vec2(0.0, 0.0), vec3(0.0, 0.0, 0.0), vec4(0.0, 0.0, 0.0, 0.0), 0.0, 0.0);
+    FragmentInput out_ = FragmentInput(vec4(0.0), 0u, 0.0, vec2(0.0), vec3(0.0), vec4(0.0), 0.0, 0.0);
     out_.position = vec4(2.0, 4.0, 5.0, 6.0);
     out_.flat_ = 8u;
     out_.linear = 27.0;
