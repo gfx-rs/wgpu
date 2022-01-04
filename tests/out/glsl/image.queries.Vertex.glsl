@@ -19,6 +19,7 @@ uniform highp sampler3D _group_0_binding_5_vs;
 
 void main() {
     int dim_1d = textureSize(_group_0_binding_0_vs, 0).x;
+    int dim_1d_lod = textureSize(_group_0_binding_0_vs, int(dim_1d)).x;
     ivec2 dim_2d = textureSize(_group_0_binding_1_vs, 0).xy;
     ivec2 dim_2d_lod = textureSize(_group_0_binding_1_vs, 1).xy;
     ivec2 dim_2d_array = textureSize(_group_0_binding_2_vs, 0).xy;

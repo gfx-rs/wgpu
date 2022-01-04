@@ -10,6 +10,8 @@ var image_storage_src: texture_storage_2d<rgba8uint, read>;
 var image_array_src: texture_2d_array<u32>;
 [[group(0), binding(6)]]
 var image_dup_src: texture_storage_1d<r32uint,read>; // for #1307
+[[group(0), binding(7)]]
+var image_1d_src: texture_1d<u32>;
 [[group(0), binding(2)]]
 var image_dst: texture_storage_1d<r32uint,write>;
 
@@ -25,7 +27,8 @@ fn main(
     let value2 = textureLoad(image_multisampled_src, itc, i32(local_id.z));
     let value4 = textureLoad(image_storage_src, itc);
     let value5 = textureLoad(image_array_src, itc, i32(local_id.z), i32(local_id.z) + 1);
-    textureStore(image_dst, itc.x, value1 + value2 + value4 + value5);
+    let value6 = textureLoad(image_1d_src, i32(local_id.x), i32(local_id.z));
+    textureStore(image_dst, itc.x, value1 + value2 + value4 + value5 + value6);
 }
 
 [[stage(compute), workgroup_size(16, 1, 1)]]
@@ -55,6 +58,7 @@ var image_aa: texture_multisampled_2d<f32>;
 [[stage(vertex)]]
 fn queries() -> [[builtin(position)]] vec4<f32> {
     let dim_1d = textureDimensions(image_1d);
+    let dim_1d_lod = textureDimensions(image_1d, i32(dim_1d));
     let dim_2d = textureDimensions(image_2d);
     let dim_2d_lod = textureDimensions(image_2d, 1);
     let dim_2d_array = textureDimensions(image_2d_array);

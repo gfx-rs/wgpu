@@ -582,7 +582,10 @@ impl<W: Write> Writer<W> {
         match dim {
             crate::ImageDimension::D1 => {
                 write!(self.out, "int(")?;
-                self.put_image_query(image, "width", level, context)?;
+                // Since 1D textures never have mipmaps, MSL requires that the
+                // `level` argument be a constexpr 0. It's simplest for us just
+                // to omit the level entirely.
+                self.put_image_query(image, "width", None, context)?;
                 write!(self.out, ")")?;
             }
             crate::ImageDimension::D2 => {
@@ -996,8 +999,18 @@ impl<W: Write> Writer<W> {
                     self.put_expression(expr, context, true)?;
                 }
                 if let Some(index) = index {
-                    write!(self.out, ", ")?;
-                    self.put_expression(index, context, true)?;
+                    // Metal requires that the `level` argument to
+                    // `texture1d::read` be a constexpr equal to zero.
+                    if let crate::TypeInner::Image {
+                        dim: crate::ImageDimension::D1,
+                        ..
+                    } = *context.resolve_type(image)
+                    {
+                        // The argument defaults to zero.
+                    } else {
+                        write!(self.out, ", ")?;
+                        self.put_expression(index, context, true)?
+                    }
                 }
                 write!(self.out, ")")?;
             }
