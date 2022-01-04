@@ -5,6 +5,7 @@ Texture2DMS<float> image_depth_multisampled_src : register(t4);
 RWTexture2D<uint4> image_storage_src : register(u1);
 Texture2DArray<uint4> image_array_src : register(t5);
 RWTexture1D<uint4> image_dup_src : register(u6);
+Texture1D<uint4> image_1d_src : register(t7);
 RWTexture1D<uint4> image_dst : register(u2);
 Texture1D<float4> image_1d : register(t0);
 Texture2D<float4> image_2d : register(t1);
@@ -33,7 +34,8 @@ void main(uint3 local_id : SV_GroupThreadID)
     uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
     uint4 value4_ = image_storage_src.Load(itc);
     uint4 value5_ = image_array_src.Load(int4(itc, int(local_id.z), (int(local_id.z) + 1)));
-    image_dst[itc.x] = (((value1_ + value2_) + value4_) + value5_);
+    uint4 value6_ = image_1d_src.Load(int2(int(local_id.x), int(local_id.z)));
+    image_dst[itc.x] = ((((value1_ + value2_) + value4_) + value5_) + value6_);
     return;
 }
 
@@ -51,6 +53,13 @@ int NagaDimensions1D(Texture1D<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y);
+    return ret.x;
+}
+
+int NagaMipDimensions1D(Texture1D<float4> tex, uint mip_level)
+{
+    uint4 ret;
+    tex.GetDimensions(mip_level, ret.x, ret.y);
     return ret.x;
 }
 
@@ -127,6 +136,7 @@ int3 NagaMipDimensions3D(Texture3D<float4> tex, uint mip_level)
 float4 queries() : SV_Position
 {
     int dim_1d = NagaDimensions1D(image_1d);
+    int dim_1d_lod = NagaMipDimensions1D(image_1d, int(dim_1d));
     int2 dim_2d = NagaDimensions2D(image_2d);
     int2 dim_2d_lod = NagaMipDimensions2D(image_2d, 1);
     int2 dim_2d_array = NagaDimensions2DArray(image_2d_array);

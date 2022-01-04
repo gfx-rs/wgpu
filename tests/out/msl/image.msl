@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-constant metal::int2 const_type_8_ = {3, 1};
+constant metal::int2 const_type_9_ = {3, 1};
 
 struct main_Input {
 };
@@ -12,6 +12,7 @@ kernel void main_(
 , metal::texture2d_ms<uint, metal::access::read> image_multisampled_src [[user(fake0)]]
 , metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
 , metal::texture2d_array<uint, metal::access::sample> image_array_src [[user(fake0)]]
+, metal::texture1d<uint, metal::access::sample> image_1d_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
     metal::int2 dim = int2(image_storage_src.get_width(), image_storage_src.get_height());
@@ -20,7 +21,8 @@ kernel void main_(
     metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value4_ = image_storage_src.read(metal::uint2(itc));
     metal::uint4 value5_ = image_array_src.read(metal::uint2(itc), static_cast<int>(local_id.z), static_cast<int>(local_id.z) + 1);
-    image_dst.write(((value1_ + value2_) + value4_) + value5_, metal::uint(itc.x));
+    metal::uint4 value6_ = image_1d_src.read(metal::uint(static_cast<int>(local_id.x)));
+    image_dst.write((((value1_ + value2_) + value4_) + value5_) + value6_, metal::uint(itc.x));
     return;
 }
 
@@ -53,6 +55,7 @@ vertex queriesOutput queries(
 , metal::texture3d<float, metal::access::sample> image_3d [[user(fake0)]]
 ) {
     int dim_1d = int(image_1d.get_width());
+    int dim_1d_lod = int(image_1d.get_width());
     metal::int2 dim_2d = int2(image_2d.get_width(), image_2d.get_height());
     metal::int2 dim_2d_lod = int2(image_2d.get_width(1), image_2d.get_height(1));
     metal::int2 dim_2d_array = int2(image_2d_array.get_width(), image_2d_array.get_height());
@@ -103,9 +106,9 @@ fragment sampleOutput sample(
     metal::float2 tc = metal::float2(0.5);
     metal::float4 s1d = image_1d.sample(sampler_reg, tc.x);
     metal::float4 s2d = image_2d.sample(sampler_reg, tc);
-    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type_8_);
+    metal::float4 s2d_offset = image_2d.sample(sampler_reg, tc, const_type_9_);
     metal::float4 s2d_level = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284));
-    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284), const_type_8_);
+    metal::float4 s2d_level_offset = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284), const_type_9_);
     return sampleOutput { (((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset };
 }
 
@@ -135,9 +138,9 @@ fragment gatherOutput gather(
 ) {
     metal::float2 tc_2 = metal::float2(0.5);
     metal::float4 s2d_1 = image_2d.gather(sampler_reg, tc_2, int2(0), metal::component::y);
-    metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_type_8_, metal::component::w);
+    metal::float4 s2d_offset_1 = image_2d.gather(sampler_reg, tc_2, const_type_9_, metal::component::w);
     metal::float4 s2d_depth_1 = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5);
-    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_type_8_);
+    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_type_9_);
     return gatherOutput { ((s2d_1 + s2d_offset_1) + s2d_depth_1) + s2d_depth_offset };
 }
 

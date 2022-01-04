@@ -10,6 +10,8 @@ var image_storage_src: texture_storage_2d<rgba8uint,read>;
 var image_array_src: texture_2d_array<u32>;
 [[group(0), binding(6)]]
 var image_dup_src: texture_storage_1d<r32uint,read>;
+[[group(0), binding(7)]]
+var image_1d_src: texture_1d<u32>;
 [[group(0), binding(2)]]
 var image_dst: texture_storage_1d<r32uint,write>;
 [[group(0), binding(0)]]
@@ -41,7 +43,8 @@ fn main([[builtin(local_invocation_id)]] local_id: vec3<u32>) {
     let value2_ = textureLoad(image_multisampled_src, itc, i32(local_id.z));
     let value4_ = textureLoad(image_storage_src, itc);
     let value5_ = textureLoad(image_array_src, itc, i32(local_id.z), (i32(local_id.z) + 1));
-    textureStore(image_dst, itc.x, (((value1_ + value2_) + value4_) + value5_));
+    let value6_ = textureLoad(image_1d_src, i32(local_id.x), i32(local_id.z));
+    textureStore(image_dst, itc.x, ((((value1_ + value2_) + value4_) + value5_) + value6_));
     return;
 }
 
@@ -57,6 +60,7 @@ fn depth_load([[builtin(local_invocation_id)]] local_id_1: vec3<u32>) {
 [[stage(vertex)]]
 fn queries() -> [[builtin(position)]] vec4<f32> {
     let dim_1d = textureDimensions(image_1d);
+    let dim_1d_lod = textureDimensions(image_1d, i32(dim_1d));
     let dim_2d = textureDimensions(image_2d);
     let dim_2d_lod = textureDimensions(image_2d, 1);
     let dim_2d_array = textureDimensions(image_2d_array);
