@@ -1173,7 +1173,12 @@ impl ParseError {
 
     /// Emits a summary of the error to standard error stream.
     pub fn emit_to_stderr(&self, source: &str) {
-        let files = SimpleFile::new("wgsl", source);
+        self.emit_to_stderr_with_path(source, "wgsl")
+    }
+
+    /// Emits a summary of the error to standard error stream.
+    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
+        let files = SimpleFile::new(path, source);
         let config = codespan_reporting::term::Config::default();
         let writer = StandardStream::stderr(ColorChoice::Always);
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
