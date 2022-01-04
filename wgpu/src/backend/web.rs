@@ -1272,21 +1272,25 @@ impl crate::Context for Context {
                 );
                 let spv_module_info = validator.validate(&spv_module).unwrap();
 
-                let wgsl_text = back::wgsl::write_string(&spv_module, &spv_module_info).unwrap();
+                let writer_flags = naga::back::wgsl::WriterFlags::empty();
+                let wgsl_text =
+                    back::wgsl::write_string(&spv_module, &spv_module_info, writer_flags).unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
             #[cfg(feature = "glsl")]
-            ShaderSource::Glsl {
+            crate::ShaderSource::Glsl {
                 ref shader,
                 stage,
                 ref defines,
             } => {
+                use naga::{back, front, valid};
+
                 // Parse the given shader code and store its representation.
-                let options = naga::front::glsl::Options {
+                let options = front::glsl::Options {
                     stage,
                     defines: defines.clone(),
                 };
-                let mut parser = naga::front::glsl::Parser::default();
+                let mut parser = front::glsl::Parser::default();
                 let glsl_module = parser.parse(&options, shader).unwrap();
 
                 let mut validator = valid::Validator::new(
@@ -1295,7 +1299,10 @@ impl crate::Context for Context {
                 );
                 let glsl_module_info = validator.validate(&glsl_module).unwrap();
 
-                let wgsl_text = back::wgsl::write_string(&glsl_module, &glsl_module_info).unwrap();
+                let writer_flags = naga::back::wgsl::WriterFlags::empty();
+                let wgsl_text =
+                    back::wgsl::write_string(&glsl_module, &glsl_module_info, writer_flags)
+                        .unwrap();
                 web_sys::GpuShaderModuleDescriptor::new(wgsl_text.as_str())
             }
             crate::ShaderSource::Wgsl(ref code) => web_sys::GpuShaderModuleDescriptor::new(code),
