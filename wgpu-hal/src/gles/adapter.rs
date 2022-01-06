@@ -292,6 +292,10 @@ impl super::Adapter {
             extensions.contains("GL_EXT_texture_border_clamp"),
         );
         features.set(
+            wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
+            extensions.contains("GL_EXT_texture_border_clamp"),
+        );
+        features.set(
             wgt::Features::DEPTH_CLIP_CONTROL,
             extensions.contains("GL_EXT_depth_clamp"),
         );
