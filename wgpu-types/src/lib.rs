@@ -551,6 +551,17 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_16BIT_NORM = 1 << 41;
+        /// Allows the use of [`AddressMode::ClampToZero`].
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        /// - DX11
+        /// - OpenGL
+        ///
+        /// This is a web and native feature.
+        const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 42;
     }
 }
 
@@ -3048,6 +3059,12 @@ pub enum AddressMode {
     /// -0.25 -> border
     /// 1.25 -> border
     ClampToBorder = 3,
+    /// Clamp the value to zero outside of the texture
+    /// Requires feature [`Features::ADDRESS_MODE_CLAMP_TO_ZERO`]
+    ///
+    /// -0.25 -> zero
+    /// 1.25 -> zero
+    ClampToZero = 3,
 }
 
 impl Default for AddressMode {

@@ -990,6 +990,14 @@ impl<A: HalApi> Device<A> {
             self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER)?;
         }
 
+        if desc
+            .address_modes
+            .iter()
+            .any(|am| am == &wgt::AddressMode::ClampToZero)
+        {
+            self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO)?;
+        }
+
         let lod_clamp = if desc.lod_min_clamp > 0.0 || desc.lod_max_clamp < 32.0 {
             Some(desc.lod_min_clamp..desc.lod_max_clamp)
         } else {

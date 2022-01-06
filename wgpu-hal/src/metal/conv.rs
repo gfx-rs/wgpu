@@ -63,6 +63,7 @@ pub fn map_address_mode(address: wgt::AddressMode) -> mtl::MTLSamplerAddressMode
         Fm::MirrorRepeat => MirrorRepeat,
         Fm::ClampToEdge => ClampToEdge,
         Fm::ClampToBorder => ClampToBorderColor,
+        Fm::ClampToZero => ClampToZero,
         //Fm::MirrorClamp => MirrorClampToEdge,
     }
 }
