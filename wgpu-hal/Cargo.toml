@@ -85,6 +85,8 @@ git = "https://github.com/gfx-rs/naga"
 rev = "09d35f3"
 #version = "0.8"
 
+# DEV dependencies
+
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
 rev = "09d35f3"
@@ -94,4 +96,6 @@ features = ["wgsl-in"]
 [dev-dependencies]
 env_logger = "0.8"
 winit = "0.26" # for "halmark" example
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 glutin = "0.28" # for "gles" example
