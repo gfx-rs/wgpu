@@ -13,6 +13,13 @@ struct Foo {
 [[group(0), binding(1)]]
 var<storage> alignment: Foo;
 
+struct Dummy {
+    arr: array<vec2<f32>>;
+};
+
+[[group(0), binding(2)]]
+var<storage> dummy: Dummy;
+
 [[stage(compute), workgroup_size(1)]]
 fn main() {
     wg[3] = alignment.v1;

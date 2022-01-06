@@ -2,6 +2,10 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+struct _mslBufferSizes {
+    metal::uint size3;
+};
+
 constexpr constant bool Foo_2 = true;
 struct type_2 {
     float inner[10u];
@@ -9,6 +13,10 @@ struct type_2 {
 struct Foo {
     metal::packed_float3 v3_;
     float v1_;
+};
+typedef metal::float2 type_6[1];
+struct Dummy {
+    type_6 arr;
 };
 
 kernel void main_(
@@ -18,10 +26,10 @@ kernel void main_(
 ) {
     float Foo_1 = 1.0;
     bool at = true;
-    float _e7 = alignment.v1_;
-    wg.inner[3] = _e7;
-    float _e12 = metal::float3(alignment.v3_).x;
-    wg.inner[2] = _e12;
+    float _e8 = alignment.v1_;
+    wg.inner[3] = _e8;
+    float _e13 = metal::float3(alignment.v3_).x;
+    wg.inner[2] = _e13;
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
     return;
 }

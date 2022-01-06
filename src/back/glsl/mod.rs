@@ -102,21 +102,30 @@ impl crate::StorageClass {
     }
 }
 
-//Note: similar to `back/spv/helpers.rs`
-fn global_needs_wrapper(ir_module: &crate::Module, global_ty: Handle<crate::Type>) -> bool {
-    match ir_module.types[global_ty].inner {
-        crate::TypeInner::Struct {
-            ref members,
-            span: _,
-        } => match ir_module.types[members.last().unwrap().ty].inner {
-            // Structs with dynamically sized arrays can't be copied and can't be wrapped.
-            crate::TypeInner::Array {
-                size: crate::ArraySize::Dynamic,
-                ..
-            } => false,
-            _ => true,
-        },
-        _ => false,
+#[derive(PartialEq)]
+enum GlobalTypeKind<'a> {
+    WrappedStruct,
+    Unsized(&'a [crate::StructMember]),
+    Other,
+}
+
+impl<'a> GlobalTypeKind<'a> {
+    //Note: similar to `back/spv/helpers.rs`
+    fn new(ir_module: &'a crate::Module, global_ty: Handle<crate::Type>) -> Self {
+        match ir_module.types[global_ty].inner {
+            crate::TypeInner::Struct {
+                ref members,
+                span: _,
+            } => match ir_module.types[members.last().unwrap().ty].inner {
+                // Structs with dynamically sized arrays can't be copied and can't be wrapped.
+                crate::TypeInner::Array {
+                    size: crate::ArraySize::Dynamic,
+                    ..
+                } => Self::Unsized(members),
+                _ => Self::WrappedStruct,
+            },
+            _ => Self::Other,
+        }
     }
 }
 
@@ -545,14 +554,21 @@ impl<'a, W: Write> Writer<'a, W> {
         // struct without adding all of it's members first
         for (handle, ty) in self.module.types.iter() {
             if let TypeInner::Struct { ref members, .. } = ty.inner {
-                let used_by_global = self.module.global_variables.iter().any(|(vh, var)| {
-                    !ep_info[vh].is_empty() && var.class.is_buffer() && var.ty == handle
-                });
-
-                let is_wrapped = global_needs_wrapper(self.module, handle);
-                // If it's a global non-wrapped struct, it will be printed
-                // with the corresponding global variable.
-                if !used_by_global || is_wrapped {
+                let generate_struct = match GlobalTypeKind::new(self.module, handle) {
+                    GlobalTypeKind::WrappedStruct => true,
+                    // If it's a global non-wrapped struct, it will be printed
+                    // with the corresponding global variable.
+                    GlobalTypeKind::Unsized(_) => false,
+                    GlobalTypeKind::Other => {
+                        let used_by_global =
+                            self.module.global_variables.iter().any(|(vh, var)| {
+                                !ep_info[vh].is_empty() && var.class.is_buffer() && var.ty == handle
+                            });
+                        // If not used by a global, it's safe to just spew it here
+                        !used_by_global
+                    }
+                };
+                if generate_struct {
                     let name = &self.names[&NameKey::Type(handle)];
                     write!(self.out, "struct {} ", name)?;
                     self.write_struct_body(handle, members)?;
@@ -925,18 +941,22 @@ impl<'a, W: Write> Writer<'a, W> {
             write!(self.out, "{} ", block_name)?;
             self.reflection_names_globals.insert(handle, block_name);
 
-            let needs_wrapper = global_needs_wrapper(self.module, global.ty);
-            if needs_wrapper {
-                write!(self.out, "{{ ")?;
-                // Write the type
-                // `write_type` adds no leading or trailing spaces
-                self.write_type(global.ty)?;
-            } else if let crate::TypeInner::Struct { ref members, .. } =
-                self.module.types[global.ty].inner
-            {
-                self.write_struct_body(global.ty, members)?;
+            match GlobalTypeKind::new(self.module, global.ty) {
+                GlobalTypeKind::WrappedStruct => {
+                    write!(self.out, "{{ ")?;
+                    // Write the type
+                    // `write_type` adds no leading or trailing spaces
+                    self.write_type(global.ty)?;
+                    true
+                }
+                GlobalTypeKind::Unsized(members) => {
+                    self.write_struct_body(global.ty, members)?;
+                    false
+                }
+                GlobalTypeKind::Other => {
+                    return Err(Error::Custom("Non-struct type of a buffer".to_string()));
+                }
             }
-            needs_wrapper
         } else {
             self.write_type(global.ty)?;
             false
