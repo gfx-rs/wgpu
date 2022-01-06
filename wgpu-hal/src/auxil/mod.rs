@@ -15,6 +15,12 @@ pub mod db {
     }
 }
 
+/// Maximum binding size for the shaders that only support `i32` indexing.
+/// Interestingly, the index itself can't reach that high, because the minimum
+/// element size is 4 bytes, but the compiler toolchain still computes the
+/// offset at some intermediate point, internally, as i32.
+pub const MAX_I32_BINDING_SIZE: u32 = 1 << 31;
+
 pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {
     match stage {
         naga::ShaderStage::Vertex => wgt::ShaderStages::VERTEX,
