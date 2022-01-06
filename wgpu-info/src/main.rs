@@ -104,9 +104,12 @@ fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     env_logger::init();
-
     let args: Vec<_> = std::env::args().skip(1).collect();
 
     let instance = wgpu::Instance::new(wgpu::Backends::all());

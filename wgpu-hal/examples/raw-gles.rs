@@ -2,9 +2,14 @@
 //! the ability to hook up wgpu-hal to an existing context and draw into it.
 
 extern crate wgpu_hal as hal;
-use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
 
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
+    use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
+
     env_logger::init();
     println!("Initializing external GL context");
 

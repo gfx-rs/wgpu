@@ -156,10 +156,14 @@ jobs:
       - name: check web
         if: matrix.kind == 'web'
         run: |
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu
+          # build examples
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --examples
 
-          # Build for WebGL
-          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --features webgl -- -D warnings
+          # build with features
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --features glsl,spirv
+
+          # build for WebGL
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu --features webgl
 
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
