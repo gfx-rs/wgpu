@@ -283,6 +283,10 @@ impl super::Device {
         result
     }
 
+    pub fn raw_device(&self) -> &native::Device {
+        &self.raw
+    }
+
     pub unsafe fn texture_from_raw(
         resource: native::Resource,
         format: wgt::TextureFormat,

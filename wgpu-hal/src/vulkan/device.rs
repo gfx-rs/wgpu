@@ -677,6 +677,10 @@ impl super::Device {
             },
         })
     }
+
+    pub fn raw_device(&self) -> &ash::Device {
+        &self.shared.raw
+    }
 }
 
 impl crate::Device<super::Api> for super::Device {
