@@ -3064,7 +3064,7 @@ pub enum AddressMode {
     ///
     /// -0.25 -> zero
     /// 1.25 -> zero
-    ClampToZero = 3,
+    ClampToZero = 4,
 }
 
 impl Default for AddressMode {
