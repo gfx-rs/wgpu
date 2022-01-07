@@ -3,6 +3,7 @@
 mod belt;
 mod device;
 mod encoder;
+mod indirect;
 mod init;
 
 use std::future::Future;
@@ -15,6 +16,7 @@ use std::{
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
+pub use indirect::*;
 pub use init::*;
 
 /// Treat the given byte slice as a SPIR-V module.

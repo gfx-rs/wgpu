@@ -50,17 +50,7 @@ pub trait RenderEncoder<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` is the following:
-    ///
-    /// ```rust
-    /// #[repr(C)]
-    /// struct DrawIndirect {
-    ///     vertex_count: u32, // The number of vertices to draw.
-    ///     instance_count: u32, // The number of instances to draw.
-    ///     base_vertex: u32, // The Index of the first vertex to draw.
-    ///     base_instance: u32, // The instance ID of the first instance to draw.
-    /// }
-    /// ```
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
     fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress);
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
@@ -69,18 +59,7 @@ pub trait RenderEncoder<'a> {
     /// The active index buffer can be set with [`RenderEncoder::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` is the following:
-    ///
-    /// ```rust
-    /// #[repr(C)]
-    /// struct DrawIndexedIndirect {
-    ///     vertex_count: u32, // The number of vertices to draw.
-    ///     instance_count: u32, // The number of instances to draw.
-    ///     base_index: u32, // The base index within the index buffer.
-    ///     vertex_offset: i32, // The value added to the vertex index before indexing into the vertex buffer.
-    ///     base_instance: u32, // The instance ID of the first instance to draw.
-    /// }
-    /// ```
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
     fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
