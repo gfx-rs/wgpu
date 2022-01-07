@@ -409,7 +409,7 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(fun) = desc.compare {
             descriptor.set_compare_function(conv::map_compare_function(fun));
         }
-        
+
         if let Some(border_color) = desc.border_color {
             descriptor.set_border_color(conv::map_border_color(border_color));
         }
