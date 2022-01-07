@@ -13,6 +13,7 @@ pub(super) fn map_binary_operator(word: spirv::Op) -> Result<crate::BinaryOperat
         Op::IMul | Op::FMul => Ok(BinaryOperator::Multiply),
         Op::UDiv | Op::SDiv | Op::FDiv => Ok(BinaryOperator::Divide),
         Op::UMod | Op::SMod | Op::FMod => Ok(BinaryOperator::Modulo),
+        Op::SRem => Ok(BinaryOperator::Modulo),
         // Relational and Logical Instructions
         Op::IEqual | Op::FOrdEqual | Op::FUnordEqual | Op::LogicalEqual => {
             Ok(BinaryOperator::Equal)
@@ -34,6 +35,9 @@ pub(super) fn map_binary_operator(word: spirv::Op) -> Result<crate::BinaryOperat
         | Op::SGreaterThanEqual
         | Op::FOrdGreaterThanEqual
         | Op::FUnordGreaterThanEqual => Ok(BinaryOperator::GreaterEqual),
+        Op::BitwiseOr => Ok(BinaryOperator::InclusiveOr),
+        Op::BitwiseXor => Ok(BinaryOperator::ExclusiveOr),
+        Op::BitwiseAnd => Ok(BinaryOperator::And),
         _ => Err(Error::UnknownBinaryOperator(word)),
     }
 }
