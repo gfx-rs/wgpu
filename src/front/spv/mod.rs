@@ -854,6 +854,59 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    /// A more complicated version of the unary op,
+    /// where we force the operand to have the same type as the result.
+    fn parse_expr_unary_op_sign_adjusted(
+        &mut self,
+        ctx: &mut BlockContext,
+        emitter: &mut super::Emitter,
+        block: &mut crate::Block,
+        block_id: spirv::Word,
+        body_idx: usize,
+        op: crate::UnaryOperator,
+    ) -> Result<(), Error> {
+        let start = self.data_offset;
+        let result_type_id = self.next()?;
+        let result_id = self.next()?;
+        let p1_id = self.next()?;
+        let span = self.span_from_with_op(start);
+
+        let p1_lexp = self.lookup_expression.lookup(p1_id)?;
+        let left = self.get_expr_handle(p1_id, p1_lexp, ctx, emitter, block, body_idx);
+
+        let result_lookup_ty = self.lookup_type.lookup(result_type_id)?;
+        let kind = ctx.type_arena[result_lookup_ty.handle]
+            .inner
+            .scalar_kind()
+            .unwrap();
+
+        let expr = crate::Expression::Unary {
+            op,
+            expr: if p1_lexp.type_id == result_type_id {
+                left
+            } else {
+                ctx.expressions.append(
+                    crate::Expression::As {
+                        expr: left,
+                        kind,
+                        convert: None,
+                    },
+                    span,
+                )
+            },
+        };
+
+        self.lookup_expression.insert(
+            result_id,
+            LookupExpression {
+                handle: ctx.expressions.append(expr, span),
+                type_id: result_type_id,
+                block_id,
+            },
+        );
+        Ok(())
+    }
+
     /// A more complicated version of the binary op,
     /// where we force the operand to have the same type as the result.
     /// This is mostly needed for "i++" and "i--" coming from GLSL.
@@ -1872,7 +1925,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 // Arithmetic Instructions +, -, *, /, %
                 Op::SNegate | Op::FNegate => {
                     inst.expect(4)?;
-                    parse_expr_op!(crate::UnaryOperator::Negate, UNARY)?;
+                    self.parse_expr_unary_op_sign_adjusted(
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                        crate::UnaryOperator::Negate,
+                    )?;
                 }
                 Op::IAdd
                 | Op::ISub
@@ -2159,7 +2219,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 // Bitwise instructions
                 Op::Not => {
                     inst.expect(4)?;
-                    parse_expr_op!(crate::UnaryOperator::Not, UNARY)?;
+                    self.parse_expr_unary_op_sign_adjusted(
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                        crate::UnaryOperator::Not,
+                    )?;
                 }
                 Op::ShiftRightLogical => {
                     inst.expect(5)?;
