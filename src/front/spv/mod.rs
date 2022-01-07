@@ -1634,7 +1634,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let root_handle = get_expr_handle!(composite_id, root_lexp);
                     let root_type_lookup = self.lookup_type.lookup(root_lexp.type_id)?;
                     let index_lexp = self.lookup_expression.lookup(index_id)?;
-                    let index_handle = get_expr_handle!(index_id, index_lexp);
+                    let mut index_handle = get_expr_handle!(index_id, index_lexp);
+                    let index_type = self.lookup_type.lookup(index_lexp.type_id)?.handle;
+
+                    // SPIR-V allows signed and unsigned indices but naga's is strict about
+                    // types and since the `index_constants` are all signed integers, we need
+                    // to cast the index to a signed integer if it's unsigned.
+                    if let Some(crate::ScalarKind::Uint) =
+                        ctx.type_arena[index_type].inner.scalar_kind()
+                    {
+                        index_handle = ctx.expressions.append(
+                            crate::Expression::As {
+                                expr: index_handle,
+                                kind: crate::ScalarKind::Sint,
+                                convert: None,
+                            },
+                            span,
+                        )
+                    }
 
                     let num_components = match ctx.type_arena[root_type_lookup.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as usize,
