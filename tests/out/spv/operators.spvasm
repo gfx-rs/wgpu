@@ -149,13 +149,13 @@ OpFunctionEnd
 OpBranch %118
 %118 = OpLabel
 %119 = OpSMod  %8  %7 %7
-%120 = OpFMod  %4  %3 %3
+%120 = OpFRem  %4  %3 %3
 %122 = OpCompositeConstruct  %121  %7 %7 %7
 %123 = OpCompositeConstruct  %121  %7 %7 %7
 %124 = OpSMod  %121  %122 %123
 %125 = OpCompositeConstruct  %22  %3 %3 %3
 %126 = OpCompositeConstruct  %22  %3 %3 %3
-%127 = OpFMod  %22  %125 %126
+%127 = OpFRem  %22  %125 %126
 OpReturn
 OpFunctionEnd
 %129 = OpFunction  %2  None %117
