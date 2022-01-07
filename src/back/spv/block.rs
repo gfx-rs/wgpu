@@ -390,7 +390,7 @@ impl<'w> BlockContext<'w> {
                     crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Sint) => spirv::Op::SMod,
                         Some(crate::ScalarKind::Uint) => spirv::Op::UMod,
-                        Some(crate::ScalarKind::Float) => spirv::Op::FMod,
+                        Some(crate::ScalarKind::Float) => spirv::Op::FRem,
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Equal => match left_ty_inner.scalar_kind() {
