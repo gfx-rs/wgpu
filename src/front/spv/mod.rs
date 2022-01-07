@@ -1874,7 +1874,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     parse_expr_op!(crate::UnaryOperator::Negate, UNARY)?;
                 }
-                Op::IAdd | Op::ISub | Op::IMul => {
+                Op::IAdd
+                | Op::ISub
+                | Op::IMul
+                | Op::BitwiseOr
+                | Op::BitwiseXor
+                | Op::BitwiseAnd
+                | Op::SDiv
+                | Op::SMod
+                | Op::SRem => {
                     inst.expect(5)?;
                     let operator = map_binary_operator(inst.op)?;
                     self.parse_expr_binary_op_sign_adjusted(
@@ -1912,11 +1920,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Multiply, BINARY)?;
                 }
-                Op::SDiv | Op::UDiv | Op::FDiv => {
+                Op::UDiv | Op::FDiv => {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Divide, BINARY)?;
                 }
-                Op::SMod | Op::UMod | Op::FMod | Op::SRem | Op::FRem => {
+                Op::UMod | Op::FMod | Op::FRem => {
                     inst.expect(5)?;
                     parse_expr_op!(crate::BinaryOperator::Modulo, BINARY)?;
                 }
@@ -2152,18 +2160,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Not => {
                     inst.expect(4)?;
                     parse_expr_op!(crate::UnaryOperator::Not, UNARY)?;
-                }
-                Op::BitwiseOr => {
-                    inst.expect(5)?;
-                    parse_expr_op!(crate::BinaryOperator::InclusiveOr, BINARY)?;
-                }
-                Op::BitwiseXor => {
-                    inst.expect(5)?;
-                    parse_expr_op!(crate::BinaryOperator::ExclusiveOr, BINARY)?;
-                }
-                Op::BitwiseAnd => {
-                    inst.expect(5)?;
-                    parse_expr_op!(crate::BinaryOperator::And, BINARY)?;
                 }
                 Op::ShiftRightLogical => {
                     inst.expect(5)?;
