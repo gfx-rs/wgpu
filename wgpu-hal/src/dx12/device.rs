@@ -620,17 +620,15 @@ impl crate::Device<super::Api> for super::Device {
                 .anisotropy_clamp
                 .map_or(0, |_| d3d12::D3D12_FILTER_ANISOTROPIC);
 
-        let border_color = conv::map_border_color(desc.border_color).or_else(|| {
-            if desc
-                .address_modes
-                .iter()
-                .any(|am| am == &wgt::AddressMode::ClampToBorder)
-            {
-                Some([0.0; 4])
-            } else {
-                None
-            }
-        });
+        let border_color = if desc
+            .address_modes
+            .iter()
+            .any(|am| am == &wgt::AddressMode::ClampToZero)
+        {
+            [0.0; 4]
+        } else {
+            conv::map_border_color(desc.border_color)
+        };
 
         self.raw.create_sampler(
             handle.raw,
