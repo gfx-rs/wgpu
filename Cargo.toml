@@ -20,7 +20,7 @@ bitflags = "1"
 bit-set = "0.5"
 codespan-reporting = { version = "0.11.0", optional = true }
 rustc-hash = "1.1.0"
-indexmap = "1.6" # 1.7 has MSRV 1.49
+indexmap = "~1.6" # 1.7 has MSRV 1.49
 log = "0.4"
 num-traits = "0.2"
 spirv = { version = "0.2", optional = true }
