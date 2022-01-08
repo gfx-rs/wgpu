@@ -11,6 +11,10 @@ pub struct AdapterContext {
 }
 
 impl AdapterContext {
+    pub fn is_owned(&self) -> bool {
+        false
+    }
+
     /// Obtain a lock to the EGL context and get handle to the [`glow::Context`] that can be used to
     /// do rendering.
     #[track_caller]

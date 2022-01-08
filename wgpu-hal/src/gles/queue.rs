@@ -46,11 +46,13 @@ impl super::Queue {
         gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
         gl.draw_arrays(glow::TRIANGLES, 0, 3);
 
-        // Reset the draw buffers to what they were before the clear
-        let indices = (0..self.draw_buffer_count as u32)
-            .map(|i| glow::COLOR_ATTACHMENT0 + i)
-            .collect::<ArrayVec<_, { crate::MAX_COLOR_TARGETS }>>();
-        gl.draw_buffers(&indices);
+        if self.draw_buffer_count != 0 {
+            // Reset the draw buffers to what they were before the clear
+            let indices = (0..self.draw_buffer_count as u32)
+                .map(|i| glow::COLOR_ATTACHMENT0 + i)
+                .collect::<ArrayVec<_, { crate::MAX_COLOR_TARGETS }>>();
+            gl.draw_buffers(&indices);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         for draw_buffer in 0..self.draw_buffer_count as u32 {
             gl.disable_draw_buffer(glow::BLEND, draw_buffer);

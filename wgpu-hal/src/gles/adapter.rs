@@ -442,7 +442,8 @@ impl super::Adapter {
         let r = renderer.to_lowercase();
         // Check for Mesa sRGB clear bug. See
         // [`super::PrivateCapabilities::MESA_I915_SRGB_SHADER_CLEAR`].
-        if r.contains("mesa")
+        if context.is_owned()
+            && r.contains("mesa")
             && r.contains("intel")
             && r.split(&[' ', '(', ')'][..])
                 .any(|substr| substr.len() == 3 && substr.chars().nth(2) == Some('l'))
