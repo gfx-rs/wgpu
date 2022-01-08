@@ -293,6 +293,10 @@ unsafe impl Sync for AdapterContext {}
 unsafe impl Send for AdapterContext {}
 
 impl AdapterContext {
+    pub fn is_owned(&self) -> bool {
+        self.egl.is_some()
+    }
+
     #[cfg(feature = "renderdoc")]
     pub fn raw_context(&self) -> *mut raw::c_void {
         match self.egl {
