@@ -226,6 +226,7 @@ struct PrivateCapabilities {
     supports_arrays_of_textures_write: bool,
     supports_mutability: bool,
     supports_depth_clip_control: bool,
+    supports_preserve_invariance: bool,
 }
 
 #[derive(Clone, Debug)]
