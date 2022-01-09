@@ -979,6 +979,11 @@ impl super::PrivateCapabilities {
             supports_depth_clip_control: device
                 .supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
                 || os_is_mac,
+            supports_preserve_invariance: if os_is_mac {
+                Self::version_at_least(major, minor, 11, 0)
+            } else {
+                Self::version_at_least(major, minor, 13, 0)
+            },
         }
     }
 
