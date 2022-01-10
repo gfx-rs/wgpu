@@ -301,9 +301,11 @@ pub enum CreateTextureError {
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture kind {0:?} of format {0:?} can't be created")]
     InvalidDepthKind(wgt::TextureDimension, wgt::TextureFormat),
-    #[error("texture descriptor mip level count ({0}) is invalid")]
-    InvalidMipLevelCount(u32),
-    #[error("The texture usages {0:?} are not allowed on a texture of type {1:?}")]
+    #[error(
+        "Texture descriptor mip level count {requested} is invalid, maximum allowed is {maximum}"
+    )]
+    InvalidMipLevelCount { requested: u32, maximum: u32 },
+    #[error("Texture usages {0:?} are not allowed on a texture of type {1:?}")]
     InvalidUsages(wgt::TextureUsages, wgt::TextureFormat),
     #[error("Texture format {0:?} can't be used")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),

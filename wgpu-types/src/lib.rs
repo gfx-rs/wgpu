@@ -2848,25 +2848,6 @@ impl Extent3d {
     ///
     /// This is the texture extent that you must upload at when uploading to _mipmaps_ of compressed textures.
     ///
-    /// ```rust
-    /// # use wgpu_types as wgpu;
-    /// let format = wgpu::TextureFormat::Bc1RgbaUnormSrgb; // 4x4 blocks
-    /// assert_eq!(
-    ///     wgpu::Extent3d { width: 7, height: 7, depth_or_array_layers: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }
-    /// );
-    /// // Doesn't change, already aligned
-    /// assert_eq!(
-    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 8, depth_or_array_layers: 1 }
-    /// );
-    /// let format = wgpu::TextureFormat::Astc8x5RgbaUnorm; // 8x5 blocks
-    /// assert_eq!(
-    ///     wgpu::Extent3d { width: 7, height: 7, depth_or_array_layers: 1 }.physical_size(format),
-    ///     wgpu::Extent3d { width: 8, height: 10, depth_or_array_layers: 1 }
-    /// );
-    /// ```
-    ///
     /// [physical size]: https://gpuweb.github.io/gpuweb/#physical-size
     pub fn physical_size(&self, format: TextureFormat) -> Self {
         let (block_width, block_height) = format.describe().block_dimensions;
@@ -2887,16 +2868,18 @@ impl Extent3d {
     ///
     /// Treats the depth as part of the mipmaps. If calculating
     /// for a 2DArray texture, which does not mipmap depth, set depth to 1.
-    ///
-    /// ```rust
-    /// # use wgpu_types as wgpu;
-    /// assert_eq!(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }.max_mips(), 1);
-    /// assert_eq!(wgpu::Extent3d { width: 60, height: 60, depth_or_array_layers: 1 }.max_mips(), 6);
-    /// assert_eq!(wgpu::Extent3d { width: 240, height: 1, depth_or_array_layers: 1 }.max_mips(), 8);
-    /// ```
-    pub fn max_mips(&self) -> u32 {
-        let max_dim = self.width.max(self.height.max(self.depth_or_array_layers));
-        32 - max_dim.leading_zeros()
+    pub fn max_mips(&self, dim: TextureDimension) -> u32 {
+        match dim {
+            TextureDimension::D1 => 1,
+            TextureDimension::D2 => {
+                let max_dim = self.width.max(self.height);
+                32 - max_dim.leading_zeros()
+            }
+            TextureDimension::D3 => {
+                let max_dim = self.width.max(self.height.max(self.depth_or_array_layers));
+                32 - max_dim.leading_zeros()
+            }
+        }
     }
 
     /// Calculates the extent at a given mip level.
@@ -2911,6 +2894,104 @@ impl Extent3d {
             },
         }
     }
+}
+
+#[test]
+fn test_physical_size() {
+    let format = TextureFormat::Bc1RgbaUnormSrgb; // 4x4 blocks
+    assert_eq!(
+        Extent3d {
+            width: 7,
+            height: 7,
+            depth_or_array_layers: 1
+        }
+        .physical_size(format),
+        Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1
+        }
+    );
+    // Doesn't change, already aligned
+    assert_eq!(
+        Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1
+        }
+        .physical_size(format),
+        Extent3d {
+            width: 8,
+            height: 8,
+            depth_or_array_layers: 1
+        }
+    );
+    let format = TextureFormat::Astc8x5RgbaUnorm; // 8x5 blocks
+    assert_eq!(
+        Extent3d {
+            width: 7,
+            height: 7,
+            depth_or_array_layers: 1
+        }
+        .physical_size(format),
+        Extent3d {
+            width: 8,
+            height: 10,
+            depth_or_array_layers: 1
+        }
+    );
+}
+
+#[test]
+fn test_max_mips() {
+    // 1D
+    assert_eq!(
+        Extent3d {
+            width: 240,
+            height: 1,
+            depth_or_array_layers: 1
+        }
+        .max_mips(TextureDimension::D1),
+        1
+    );
+    // 2D
+    assert_eq!(
+        Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1
+        }
+        .max_mips(TextureDimension::D2),
+        1
+    );
+    assert_eq!(
+        Extent3d {
+            width: 60,
+            height: 60,
+            depth_or_array_layers: 1
+        }
+        .max_mips(TextureDimension::D2),
+        6
+    );
+    assert_eq!(
+        Extent3d {
+            width: 240,
+            height: 1,
+            depth_or_array_layers: 1000
+        }
+        .max_mips(TextureDimension::D2),
+        8
+    );
+    // 3D
+    assert_eq!(
+        Extent3d {
+            width: 16,
+            height: 30,
+            depth_or_array_layers: 60
+        }
+        .max_mips(TextureDimension::D3),
+        6
+    );
 }
 
 /// Describes a [`Texture`].
