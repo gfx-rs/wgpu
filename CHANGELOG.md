@@ -1,7 +1,13 @@
 # Change Log
 
-## Unreleased
-  - Fix tracy compile error
+## wgpu-core-0.12.2, wgpu-hal-0.12.2 (2022-01-10)
+  - fix tracy compile error
+  - fix buffer binding limits beyond 2Gb
+  - fix zero initialization of 3D textures
+  - Metal:
+    - fix surface texture views
+  - Gles:
+    - extend `libwayland` search paths
 
 ## wgpu-core-0.12.1, wgpu-hal-0.12.1 (2021-12-29)
   - zero initialization uses now render target clears when possible (faster and doesn't enforce COPY_DST internally if not necessary)
