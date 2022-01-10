@@ -13,3 +13,5 @@ Cargo.lock
 /*.frag
 /*.comp
 /*.wgsl
+/*.hlsl
+/*.txt

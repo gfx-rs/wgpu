@@ -164,7 +164,7 @@ pub enum Error<'a> {
     ZeroSizeOrAlign(Span),
     InconsistentBinding(Span),
     UnknownLocalFunction(Span),
-    InitializationTypeMismatch(Span, Handle<crate::Type>),
+    InitializationTypeMismatch(Span, String),
     MissingType(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
@@ -414,7 +414,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::InitializationTypeMismatch(ref name_span, ref expected_ty) => ParseError {
-                message: format!("the type of `{}` is expected to be {:?}", &source[name_span.clone()], expected_ty),
+                message: format!("the type of `{}` is expected to be `{}`", &source[name_span.clone()], expected_ty),
                 labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
                 notes: vec![],
             },
@@ -3453,7 +3453,10 @@ impl Parser {
                                     given_inner,
                                     expr_inner
                                 );
-                                return Err(Error::InitializationTypeMismatch(name_span, ty));
+                                return Err(Error::InitializationTypeMismatch(
+                                    name_span,
+                                    expr_inner.to_wgsl(context.types, context.constants),
+                                ));
                             }
                         }
                         block.extend(emitter.finish(context.expressions));
@@ -3518,7 +3521,8 @@ impl Parser {
                                             expr_inner
                                         );
                                         return Err(Error::InitializationTypeMismatch(
-                                            name_span, ty,
+                                            name_span,
+                                            expr_inner.to_wgsl(context.types, context.constants),
                                         ));
                                     }
                                     ty
@@ -4293,7 +4297,22 @@ impl Parser {
                         crate::ConstantInner::Composite { ty, components: _ } => ty == explicit_ty,
                     };
                     if !type_match {
-                        return Err(Error::InitializationTypeMismatch(name_span, explicit_ty));
+                        let exptected_inner_str = match con.inner {
+                            crate::ConstantInner::Scalar { width, value } => {
+                                crate::TypeInner::Scalar {
+                                    kind: value.scalar_kind(),
+                                    width,
+                                }
+                                .to_wgsl(&module.types, &module.constants)
+                            }
+                            crate::ConstantInner::Composite { .. } => module.types[explicit_ty]
+                                .inner
+                                .to_wgsl(&module.types, &module.constants),
+                        };
+                        return Err(Error::InitializationTypeMismatch(
+                            name_span,
+                            exptected_inner_str,
+                        ));
                     }
                 }
 

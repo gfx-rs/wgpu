@@ -461,7 +461,7 @@ fn let_type_mismatch() {
         r#"
             let x: i32 = 1.0;
         "#,
-        r#"error: the type of `x` is expected to be [1]
+        r#"error: the type of `x` is expected to be `f32`
   ┌─ wgsl:2:17
   │
 2 │             let x: i32 = 1.0;
@@ -469,20 +469,48 @@ fn let_type_mismatch() {
 
 "#,
     );
-}
 
-#[test]
-fn local_var_type_mismatch() {
     check(
         r#"
             fn foo() {
-                var x: f32 = 1;
+                let x: f32 = true;
             }
         "#,
-        r#"error: the type of `x` is expected to be [1]
+        r#"error: the type of `x` is expected to be `bool`
   ┌─ wgsl:3:21
   │
-3 │                 var x: f32 = 1;
+3 │                 let x: f32 = true;
+  │                     ^ definition of `x`
+
+"#,
+    );
+}
+
+#[test]
+fn var_type_mismatch() {
+    check(
+        r#"
+            let x: f32 = 1;
+        "#,
+        r#"error: the type of `x` is expected to be `i32`
+  ┌─ wgsl:2:17
+  │
+2 │             let x: f32 = 1;
+  │                 ^ definition of `x`
+
+"#,
+    );
+
+    check(
+        r#"
+            fn foo() {
+                var x: f32 = 1u32;
+            }
+        "#,
+        r#"error: the type of `x` is expected to be `u32`
+  ┌─ wgsl:3:21
+  │
+3 │                 var x: f32 = 1u32;
   │                     ^ definition of `x`
 
 "#,
