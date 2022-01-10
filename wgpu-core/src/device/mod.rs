@@ -671,8 +671,12 @@ impl<A: HalApi> Device<A> {
         )?;
 
         let mips = desc.mip_level_count;
-        if mips == 0 || mips > hal::MAX_MIP_LEVELS || mips > desc.size.max_mips() {
-            return Err(resource::CreateTextureError::InvalidMipLevelCount(mips));
+        let max_levels_allowed = desc.size.max_mips(desc.dimension).min(hal::MAX_MIP_LEVELS);
+        if mips == 0 || mips > max_levels_allowed {
+            return Err(resource::CreateTextureError::InvalidMipLevelCount {
+                requested: mips,
+                maximum: max_levels_allowed,
+            });
         }
 
         // Enforce having COPY_DST/DEPTH_STENCIL_WRIT/COLOR_TARGET otherwise we wouldn't be able to initialize the texture.

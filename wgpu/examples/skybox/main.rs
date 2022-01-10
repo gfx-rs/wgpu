@@ -295,7 +295,7 @@ impl framework::Example for Skybox {
             depth_or_array_layers: 1,
             ..size
         };
-        let max_mips = layer_size.max_mips();
+        let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
 
         log::debug!(
             "Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
