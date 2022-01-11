@@ -411,16 +411,16 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         if let Some(border_color) = desc.border_color {
-            if let SamplerBorderColor::AutoBlack = border_color {
-                if s == SamplerAddressMode::ClampToBorder {
+            if let wgt::SamplerBorderColor::AutoBlack = border_color {
+                if s == wgt::AddressMode::ClampToBorder {
                     descriptor.set_address_mode_s(mtl::MTLSamplerAddressMode::ClampToZero);
                 }
 
-                if t == SamplerAddressMode::ClampToBorder {
+                if t == wgt::AddressMode::ClampToBorder {
                     descriptor.set_address_mode_t(mtl::MTLSamplerAddressMode::ClampToZero);
                 }
 
-                if r == SamplerAddressMode::ClampToBorder {
+                if r == wgt::AddressMode::ClampToBorder {
                     descriptor.set_address_mode_r(mtl::MTLSamplerAddressMode::ClampToZero);
                 }
             } else {
