@@ -86,11 +86,7 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let normal = normalize(in.world_normal);
     // accumulate color
     var color: vec3<f32> = c_ambient;
-    var i: u32 = 0u;
-    loop {
-        if (i >= min(u_globals.num_lights.x, c_max_lights)) {
-            break;
-        }
+    for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
         let light = s_lights.data[i];
         // project into the light space
         let shadow = fetch_shadow(i, light.proj * in.world_position);
@@ -98,10 +94,7 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
         let light_dir = normalize(light.pos.xyz - in.world_position.xyz);
         let diffuse = max(0.0, dot(normal, light_dir));
         // add light contribution
-        color = color + shadow * diffuse * light.color.xyz;
-        continuing {
-            i = i + 1u;
-        }
+        color += shadow * diffuse * light.color.xyz;
     }
     // multiply the light by material color
     return vec4<f32>(color, 1.0) * u_entity.color;
@@ -112,21 +105,14 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 fn fs_main_without_storage(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let normal = normalize(in.world_normal);
     var color: vec3<f32> = c_ambient;
-    var i: u32 = 0u;
-    loop {
-        if (i >= min(u_globals.num_lights.x, c_max_lights)) {
-            break;
-        }
+    for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
         // This line is the only difference from the entrypoint above. It uses the lights
         // uniform instead of the lights storage buffer
         let light = u_lights.data[i];
         let shadow = fetch_shadow(i, light.proj * in.world_position);
         let light_dir = normalize(light.pos.xyz - in.world_position.xyz);
         let diffuse = max(0.0, dot(normal, light_dir));
-        color = color + shadow * diffuse * light.color.xyz;
-        continuing {
-            i = i + 1u;
-        }
+        color += shadow * diffuse * light.color.xyz;
     }
     return vec4<f32>(color, 1.0) * u_entity.color;
 }

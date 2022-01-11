@@ -6,9 +6,9 @@ struct Uniforms {
 [[group(0), binding(0)]]
 var<uniform> uniforms: Uniforms;
 
-let light: vec3<f32> = vec3<f32>(150.0, 70.0, 0.0);
-let light_colour: vec3<f32> = vec3<f32>(1.0, 0.98, 0.82);
-let ambient: f32 = 0.2;
+let light = vec3<f32>(150.0, 70.0, 0.0);
+let light_colour = vec3<f32>(1.0, 0.98, 0.82);
+let ambient = 0.2;
 
 struct VertexOutput {
     [[builtin(position)]] position: vec4<f32>;
