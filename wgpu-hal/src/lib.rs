@@ -562,10 +562,15 @@ bitflags!(
         /// Format can be used as depth-stencil and input attachment.
         const DEPTH_STENCIL_ATTACHMENT = 1 << 8;
 
+        /// Format can be multisampled.
+        const MULTISAMPLE = 1 << 9;
+        /// Format can be used for render pass resolve targets.
+        const MULTISAMPLE_RESOLVE = 1 << 10;
+
         /// Format can be copied from.
-        const COPY_SRC = 1 << 9;
+        const COPY_SRC = 1 << 11;
         /// Format can be copied to.
-        const COPY_DST = 1 << 10;
+        const COPY_DST = 1 << 12;
     }
 );
 

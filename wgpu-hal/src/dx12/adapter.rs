@@ -332,13 +332,16 @@ impl crate::Adapter<super::Api> for super::Adapter {
         );
 
         let mut caps = Tfc::COPY_SRC | Tfc::COPY_DST;
-        let can_image = 0
-            != data.Support1
-                & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
-                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
-                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
-                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
-        caps.set(Tfc::SAMPLED, can_image);
+        let is_texture = data.Support1
+            & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
+                | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
+                | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
+                | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE)
+            != 0;
+        caps.set(
+            Tfc::SAMPLED,
+            is_texture && data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD != 0,
+        );
         caps.set(
             Tfc::SAMPLED_LINEAR,
             data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0,
@@ -362,6 +365,19 @@ impl crate::Adapter<super::Api> for super::Adapter {
         caps.set(
             Tfc::STORAGE_READ_WRITE,
             data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0,
+        );
+
+        let no_msaa_load = caps.contains(Tfc::SAMPLED)
+            && data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD == 0;
+        let no_msaa_target = data.Support1
+            & (d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET
+                | d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)
+            != 0
+            && data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RENDERTARGET == 0;
+        caps.set(Tfc::MULTISAMPLE, !no_msaa_load && !no_msaa_target);
+        caps.set(
+            Tfc::MULTISAMPLE_RESOLVE,
+            data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RESOLVE != 0,
         );
 
         caps

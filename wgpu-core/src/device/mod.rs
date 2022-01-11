@@ -1886,19 +1886,19 @@ impl<A: HalApi> Device<A> {
                         view_samples: view.samples,
                     });
                 }
-                match (sample_type, format_info.sample_type, view.format_features.filterable) {
-                    (Tst::Uint, Tst::Uint, ..) |
-                    (Tst::Sint, Tst::Sint, ..) |
-                    (Tst::Depth, Tst::Depth, ..) |
+                match (sample_type, format_info.sample_type) {
+                    (Tst::Uint, Tst::Uint) |
+                    (Tst::Sint, Tst::Sint) |
+                    (Tst::Depth, Tst::Depth) |
                     // if we expect non-filterable, accept anything float
-                    (Tst::Float { filterable: false }, Tst::Float { .. }, ..) |
+                    (Tst::Float { filterable: false }, Tst::Float { .. }) |
                     // if we expect filterable, require it
-                    (Tst::Float { filterable: true }, Tst::Float { filterable: true }, ..) |
-                    // if we expect filterable, also accept Float that is defined as unfilterable if filterable feature is explicitly enabled
-                    // (only hit if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is enabled)
-                    (Tst::Float { filterable: true }, Tst::Float { .. }, true) |
+                    (Tst::Float { filterable: true }, Tst::Float { filterable: true }) |
                     // if we expect float, also accept depth
                     (Tst::Float { .. }, Tst::Depth, ..) => {}
+                    // if we expect filterable, also accept Float that is defined as unfilterable if filterable feature is explicitly enabled
+                    // (only hit if wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES is enabled)
+                    (Tst::Float { filterable: true }, Tst::Float { .. }) if view.format_features.flags.contains(wgt::TextureFormatFeatureFlags::FILTERABLE) => {}
                     _ => {
                         return Err(Error::InvalidTextureSampleType {
                             binding,
@@ -2264,6 +2264,8 @@ impl<A: HalApi> Device<A> {
         hub: &Hub<A, G>,
         token: &mut Token<Self>,
     ) -> Result<pipeline::RenderPipeline<A>, pipeline::CreateRenderPipelineError> {
+        use wgt::TextureFormatFeatureFlags as Tfff;
+
         //TODO: only lock mutable if the layout is derived
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(token);
         let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
@@ -2409,11 +2411,15 @@ impl<A: HalApi> Device<A> {
                 {
                     break Some(pipeline::ColorStateError::FormatNotRenderable(cs.format));
                 }
-                if cs.blend.is_some() && !format_features.filterable {
+                if cs.blend.is_some() && !format_features.flags.contains(Tfff::FILTERABLE) {
                     break Some(pipeline::ColorStateError::FormatNotBlendable(cs.format));
                 }
                 if !hal::FormatAspects::from(cs.format).contains(hal::FormatAspects::COLOR) {
                     break Some(pipeline::ColorStateError::FormatNotColor(cs.format));
+                }
+                if desc.multisample.count > 1 && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                {
+                    break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
                 }
 
                 break None;
@@ -2425,8 +2431,8 @@ impl<A: HalApi> Device<A> {
 
         if let Some(ds) = depth_stencil_state {
             let error = loop {
-                if !self
-                    .describe_format_features(adapter, ds.format)?
+                let format_features = self.describe_format_features(adapter, ds.format)?;
+                if !format_features
                     .allowed_usages
                     .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
                 {
@@ -2434,6 +2440,7 @@ impl<A: HalApi> Device<A> {
                         ds.format,
                     ));
                 }
+
                 let aspect = hal::FormatAspects::from(ds.format);
                 if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspects::DEPTH) {
                     break Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
@@ -2443,6 +2450,13 @@ impl<A: HalApi> Device<A> {
                         ds.format,
                     ));
                 }
+                if desc.multisample.count > 1 && !format_features.flags.contains(Tfff::MULTISAMPLE)
+                {
+                    break Some(pipeline::DepthStencilStateError::FormatNotMultisampled(
+                        ds.format,
+                    ));
+                }
+
                 break None;
             };
             if let Some(e) = error {

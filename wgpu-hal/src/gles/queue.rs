@@ -373,7 +373,7 @@ impl super::Queue {
                 gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, row_texels as i32);
                 gl.pixel_store_i32(glow::UNPACK_IMAGE_HEIGHT, column_texels as i32);
                 let mut unbind_unpack_buffer = false;
-                if format_info.block_dimensions == (1, 1) {
+                if !format_info.is_compressed() {
                     let buffer_data;
                     let unpack_data = match src.raw {
                         Some(buffer) => {
@@ -540,7 +540,7 @@ impl super::Queue {
                 ref copy,
             } => {
                 let format_info = src_format.describe();
-                if format_info.block_dimensions != (1, 1) {
+                if format_info.is_compressed() {
                     log::error!("Not implemented yet: compressed texture copy to buffer");
                     return;
                 }

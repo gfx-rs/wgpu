@@ -94,6 +94,8 @@ impl RenderBundleEncoder {
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
     ) -> Result<Self, CreateRenderBundleError> {
+        //TODO: validate that attachment formats are renderable,
+        // have expected aspects, support multisampling.
         Ok(Self {
             base: base.unwrap_or_else(|| BasePass::new(&desc.label)),
             parent_id,

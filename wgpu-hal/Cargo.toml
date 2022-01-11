@@ -71,7 +71,7 @@ winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
 native = { package = "d3d12", version = "0.4.1", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
-mtl = { package = "metal", version = "0.23.1" }
+mtl = { package = "metal", git = "https://github.com/gfx-rs/metal-rs", rev = "140c8f4" }
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
