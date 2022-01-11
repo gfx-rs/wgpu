@@ -576,9 +576,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
         use wgt::TextureFormat as Tf;
+
         // The storage types are sprinkled based on section
         // "TEXTURE IMAGE LOADS AND STORES" of GLES-3.2 spec.
-        let unfiltered_color = Tfc::SAMPLED | Tfc::COLOR_ATTACHMENT;
+        let unfiltered_color =
+            Tfc::SAMPLED | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE;
         let filtered_color = unfiltered_color | Tfc::SAMPLED_LINEAR | Tfc::COLOR_ATTACHMENT_BLEND;
         match format {
             Tf::R8Unorm | Tf::R8Snorm => filtered_color,

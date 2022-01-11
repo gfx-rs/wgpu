@@ -1332,6 +1332,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         format: wgt::TextureFormat,
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
+
         let vk_format = self.private_caps.map_texture_format(format);
         let properties = self
             .phd_capabilities
@@ -1384,6 +1385,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
             features.intersects(
                 vk::FormatFeatureFlags::TRANSFER_DST | vk::FormatFeatureFlags::BLIT_DST,
             ),
+        );
+        // Vulkan is very permissive about MSAA
+        flags.set(
+            Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE,
+            !format.describe().is_compressed(),
         );
         flags
     }

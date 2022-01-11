@@ -409,6 +409,8 @@ pub enum RenderPassErrorInner {
     InvalidColorAttachmentFormat(wgt::TextureFormat),
     #[error("attachment format {0:?} is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
+    #[error("attachment format {0:?} can not be resolved")]
+    UnsupportedResolveTargetFormat(wgt::TextureFormat),
     #[error("necessary attachments are missing")]
     MissingAttachments,
     #[error("attachments have differing sizes: {previous:?} is followed by {mismatch:?}")]
@@ -418,10 +420,15 @@ pub enum RenderPassErrorInner {
     },
     #[error("attachment's sample count {0} is invalid")]
     InvalidSampleCount(u32),
-    #[error("attachment with resolve target must be multi-sampled")]
-    InvalidResolveSourceSampleCount,
-    #[error("resolve target must have a sample count of 1")]
-    InvalidResolveTargetSampleCount,
+    #[error("resolve source must be multi-sampled (has {src} samples) while the resolve destination must not be multisampled (has {dst} samples)")]
+    InvalidResolveSampleCounts { src: u32, dst: u32 },
+    #[error(
+        "resource source format ({src:?}) must match the resolve destination format ({dst:?})"
+    )]
+    MismatchedResolveTextureFormat {
+        src: wgt::TextureFormat,
+        dst: wgt::TextureFormat,
+    },
     #[error("surface texture is dropped before the render pass is finished")]
     SurfaceTextureDropped,
     #[error("not enough memory left")]
@@ -438,7 +445,8 @@ pub enum RenderPassErrorInner {
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
-    #[error("indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}", count.map_or_else(String::new, |v| format!("(using count {})", v)))]
+    #[error("indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}",
+        count.map_or_else(String::new, |v| format!("(using count {})", v)))]
     IndirectBufferOverrun {
         count: Option<NonZeroU32>,
         offset: u64,
@@ -823,6 +831,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .views
                     .use_extend(&*view_guard, resolve_target, (), ())
                     .map_err(|_| RenderPassErrorInner::InvalidAttachment(resolve_target))?;
+
                 check_multiview(resolve_view)?;
                 if color_view.extent != resolve_view.extent {
                     return Err(RenderPassErrorInner::AttachmentsDimensionMismatch {
@@ -830,11 +839,26 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                         mismatch: ("resolve", resolve_view.extent),
                     });
                 }
-                if color_view.samples == 1 {
-                    return Err(RenderPassErrorInner::InvalidResolveSourceSampleCount);
+                if color_view.samples == 1 || resolve_view.samples != 1 {
+                    return Err(RenderPassErrorInner::InvalidResolveSampleCounts {
+                        src: color_view.samples,
+                        dst: resolve_view.samples,
+                    });
                 }
-                if resolve_view.samples != 1 {
-                    return Err(RenderPassErrorInner::InvalidResolveTargetSampleCount);
+                if color_view.desc.format != resolve_view.desc.format {
+                    return Err(RenderPassErrorInner::MismatchedResolveTextureFormat {
+                        src: color_view.desc.format,
+                        dst: resolve_view.desc.format,
+                    });
+                }
+                if !resolve_view
+                    .format_features
+                    .flags
+                    .contains(wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE)
+                {
+                    return Err(RenderPassErrorInner::UnsupportedResolveTargetFormat(
+                        resolve_view.desc.format,
+                    ));
                 }
 
                 cmd_buf.texture_memory_actions.register_implicit_init(
