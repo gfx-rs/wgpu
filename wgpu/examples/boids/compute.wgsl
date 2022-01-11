@@ -52,15 +52,15 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     let vel = particlesSrc.particles[i].vel;
 
     if (distance(pos, vPos) < params.rule1Distance) {
-      cMass = cMass + pos;
-      cMassCount = cMassCount + 1;
+      cMass += pos;
+      cMassCount += 1;
     }
     if (distance(pos, vPos) < params.rule2Distance) {
-      colVel = colVel - (pos - vPos);
+      colVel -= pos - vPos;
     }
     if (distance(pos, vPos) < params.rule3Distance) {
-      cVel = cVel + vel;
-      cVelCount = cVelCount + 1;
+      cVel += vel;
+      cVelCount += 1;
     }
 
     continuing {
@@ -71,7 +71,7 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     cMass = cMass * (1.0 / f32(cMassCount)) - vPos;
   }
   if (cVelCount > 0) {
-    cVel = cVel * (1.0 / f32(cVelCount));
+    cVel *= 1.0 / f32(cVelCount);
   }
 
   vVel = vVel + (cMass * params.rule1Scale) +
@@ -82,7 +82,7 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
   vVel = normalize(vVel) * clamp(length(vVel), 0.0, 0.1);
 
   // kinematic update
-  vPos = vPos + (vVel * params.deltaT);
+  vPos += vVel * params.deltaT;
 
   // Wrap around boundary
   if (vPos.x < -1.0) {
@@ -99,6 +99,5 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
   }
 
   // Write back
-  particlesDst.particles[index].pos = vPos;
-  particlesDst.particles[index].vel = vVel;
+  particlesDst.particles[index] = Particle(vPos, vVel);
 }
