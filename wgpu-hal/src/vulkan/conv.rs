@@ -698,14 +698,18 @@ pub fn map_stencil_op(op: wgt::StencilOperation) -> vk::StencilOp {
     }
 }
 
-pub fn map_stencil_face(face: &wgt::StencilFaceState) -> vk::StencilOpState {
+pub fn map_stencil_face(
+    face: &wgt::StencilFaceState,
+    compare_mask: u32,
+    write_mask: u32,
+) -> vk::StencilOpState {
     vk::StencilOpState {
         fail_op: map_stencil_op(face.fail_op),
         pass_op: map_stencil_op(face.pass_op),
         depth_fail_op: map_stencil_op(face.depth_fail_op),
         compare_op: map_comparison(face.compare),
-        compare_mask: !0,
-        write_mask: !0,
+        compare_mask,
+        write_mask,
         reference: 0,
     }
 }
