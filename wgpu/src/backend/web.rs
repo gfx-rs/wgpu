@@ -887,7 +887,6 @@ fn map_address_mode(mode: wgt::AddressMode) -> web_sys::GpuAddressMode {
         wgt::AddressMode::Repeat => web_sys::GpuAddressMode::Repeat,
         wgt::AddressMode::MirrorRepeat => web_sys::GpuAddressMode::MirrorRepeat,
         wgt::AddressMode::ClampToBorder => panic!("Clamp to border is not supported"),
-        wgt::AddressMode::ClampToZero => panic!("Clamp to zero is not supported"),
     }
 }
 

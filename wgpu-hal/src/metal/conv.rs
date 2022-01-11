@@ -63,7 +63,6 @@ pub fn map_address_mode(address: wgt::AddressMode) -> mtl::MTLSamplerAddressMode
         Fm::MirrorRepeat => MirrorRepeat,
         Fm::ClampToEdge => ClampToEdge,
         Fm::ClampToBorder => ClampToBorderColor,
-        Fm::ClampToZero => ClampToZero,
         //Fm::MirrorClamp => MirrorClampToEdge,
     }
 }
@@ -74,6 +73,7 @@ pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> mtl::MTLSample
         wgt::SamplerBorderColor::TransparentBlack => TransparentBlack,
         wgt::SamplerBorderColor::OpaqueBlack => OpaqueBlack,
         wgt::SamplerBorderColor::OpaqueWhite => OpaqueWhite,
+        _ => unreachable!()
     }
 }
 

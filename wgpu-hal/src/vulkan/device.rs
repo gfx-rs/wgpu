@@ -977,12 +977,6 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(color) = desc.border_color {
             vk_info = vk_info.border_color(conv::map_border_color(color));
-        } else if desc
-            .address_modes
-            .iter()
-            .any(|am| am == &wgt::AddressMode::ClampToBorder)
-        {
-            vk_info = vk_info.border_color(vk::BorderColor::FLOAT_TRANSPARENT_BLACK);
         }
 
         let raw = self.shared.raw.create_sampler(&vk_info, None)?;

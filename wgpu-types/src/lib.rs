@@ -551,7 +551,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_16BIT_NORM = 1 << 41;
-        /// Allows the use of [`AddressMode::ClampToZero`].
+        /// Allows the use of [`SamplerBorderColor::AutoBlack`].
         ///
         /// Supported platforms:
         /// - DX12
@@ -560,8 +560,8 @@ bitflags::bitflags! {
         /// - DX11
         /// - OpenGL
         ///
-        /// This is a web and native feature.
-        const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 42;
+        /// This is a native only feature.
+        const SAMPLER_BORDER_COLOR_AUTO_BLACK = 1 << 42;
     }
 }
 
@@ -3059,12 +3059,6 @@ pub enum AddressMode {
     /// -0.25 -> border
     /// 1.25 -> border
     ClampToBorder = 3,
-    /// Clamp the value to zero outside of the texture
-    /// Requires feature [`Features::ADDRESS_MODE_CLAMP_TO_ZERO`]
-    ///
-    /// -0.25 -> zero
-    /// 1.25 -> zero
-    ClampToZero = 4,
 }
 
 impl Default for AddressMode {
@@ -3549,6 +3543,11 @@ pub enum SamplerBorderColor {
     OpaqueBlack,
     /// [1, 1, 1, 1]
     OpaqueWhite,
+    /// On the Metal backend, this is equivalent to `TransparentBlack` for
+    /// textures that have an alpha component, and equivalent to `OpaqueBlack`
+    /// for textures that do not have an alpha component. On other backends,
+    /// this is equivalent to `TransparentBlack`. Not supported on the web.
+    AutoBlack,
 }
 
 /// Describes how to create a QuerySet.

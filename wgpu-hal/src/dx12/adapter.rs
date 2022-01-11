@@ -180,7 +180,7 @@ impl super::Adapter {
             | wgt::Features::MULTI_DRAW_INDIRECT
             | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
-            | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
+            | wgt::Features::SAMPLER_BORDER_COLOR_AUTO_BLACK
             | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::POLYGON_MODE_POINT
             | wgt::Features::VERTEX_WRITABLE_STORAGE

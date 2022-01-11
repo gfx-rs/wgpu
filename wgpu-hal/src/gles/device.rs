@@ -721,17 +721,11 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(border_color) = desc.border_color {
             let border = match border_color {
-                wgt::SamplerBorderColor::TransparentBlack => [0.0; 4],
+                wgt::SamplerBorderColor::TransparentBlack | wgt::SamplerBorderColor::AutoBlack => [0.0; 4],
                 wgt::SamplerBorderColor::OpaqueBlack => [0.0, 0.0, 0.0, 1.0],
                 wgt::SamplerBorderColor::OpaqueWhite => [1.0; 4],
             };
             gl.sampler_parameter_f32_slice(raw, glow::TEXTURE_BORDER_COLOR, &border);
-        } else if desc
-            .address_modes
-            .iter()
-            .any(|am| am == &wgt::AddressMode::ClampToBorder)
-        {
-            gl.sampler_parameter_f32_slice(raw, glow::TEXTURE_BORDER_COLOR, &[0.0; 4]);
         }
 
         if let Some(ref range) = desc.lod_clamp {

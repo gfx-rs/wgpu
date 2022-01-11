@@ -276,7 +276,7 @@ pub fn map_comparison(func: wgt::CompareFunction) -> d3d12::D3D12_COMPARISON_FUN
 pub fn map_border_color(border_color: Option<wgt::SamplerBorderColor>) -> [f32; 4] {
     use wgt::SamplerBorderColor as Sbc;
     match border_color {
-        Some(Sbc::TransparentBlack) | None => [0.0; 4],
+        Some(Sbc::TransparentBlack) | Some(Sbc::AutoBlack) | None => [0.0; 4],
         Some(Sbc::OpaqueBlack) => [0.0, 0.0, 0.0, 1.0],
         Some(Sbc::OpaqueWhite) => [1.0; 4],
     }

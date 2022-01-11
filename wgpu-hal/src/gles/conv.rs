@@ -226,7 +226,7 @@ pub fn map_address_mode(mode: wgt::AddressMode) -> u32 {
         wgt::AddressMode::Repeat => glow::REPEAT,
         wgt::AddressMode::MirrorRepeat => glow::MIRRORED_REPEAT,
         wgt::AddressMode::ClampToEdge => glow::CLAMP_TO_EDGE,
-        wgt::AddressMode::ClampToBorder | wgt::AddressMode::ClampToZero => glow::CLAMP_TO_BORDER,
+        wgt::AddressMode::ClampToBorder => glow::CLAMP_TO_BORDER,
         //wgt::AddressMode::MirrorClamp => glow::MIRROR_CLAMP_TO_EDGE,
     }
 }
