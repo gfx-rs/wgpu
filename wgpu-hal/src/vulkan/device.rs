@@ -1462,8 +1462,9 @@ impl crate::Device<super::Api> for super::Device {
                     .depth_compare_op(conv::map_comparison(ds.depth_compare));
             }
             if ds.stencil.is_enabled() {
-                let front = conv::map_stencil_face(&ds.stencil.front);
-                let back = conv::map_stencil_face(&ds.stencil.back);
+                let s = &ds.stencil;
+                let front = conv::map_stencil_face(&s.front, s.read_mask, s.write_mask);
+                let back = conv::map_stencil_face(&s.back, s.read_mask, s.write_mask);
                 vk_depth_stencil = vk_depth_stencil
                     .stencil_test_enable(true)
                     .front(front)
