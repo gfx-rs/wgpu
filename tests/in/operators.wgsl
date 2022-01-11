@@ -80,9 +80,20 @@ fn scalar_times_matrix() {
     let assertion: mat4x4<f32> = 2.0 * model;
 }
 
-fn binary() {
+fn logical() {
     let a = true | false;
     let b = true & false;
+}
+
+fn binary_assignment() {
+    var a = 1;
+    a += 1;
+    a -= 1;
+    a *= a;
+    a /= a;
+    a %= 1;
+    a ^= 0;
+    a &= 0;
 }
 
 [[stage(compute), workgroup_size(1)]]
@@ -94,5 +105,6 @@ fn main() {
     let e = constructors();
     modulo();
     scalar_times_matrix();
-    binary();
+    logical();
+    binary_assignment();
 }

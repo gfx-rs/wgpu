@@ -68,6 +68,7 @@ pub enum Token<'a> {
     Operation(char),
     LogicalOperation(char),
     ShiftOperation(char),
+    AssignmentOperation(char),
     Arrow,
     Unknown(char),
     UnterminatedString,
@@ -198,6 +199,8 @@ impl<'a> Error<'a> {
                                 Token::Operation(c) => format!("operation ('{}')", c),
                                 Token::LogicalOperation(c) => format!("logical operation ('{}')", c),
                                 Token::ShiftOperation(c) => format!("bitshift ('{}{}')", c, c),
+                                Token::AssignmentOperation(c) if c=='<' || c=='>' => format!("bitshift ('{}{}=')", c, c),
+                                Token::AssignmentOperation(c) => format!("operation ('{}=')", c),
                                 Token::Arrow => "->".to_string(),
                                 Token::Unknown(c) => format!("unknown ('{}')", c),
                                 Token::UnterminatedString => "unterminated string".to_string(),
@@ -3308,6 +3311,8 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut context: ExpressionContext<'a, '_, 'out>,
     ) -> Result<(), Error<'a>> {
+        use crate::BinaryOperator as Bo;
+
         let span_start = lexer.current_byte_offset();
         context.emitter.start(context.expressions);
         let reference = self.parse_unary_expression(lexer, context.reborrow())?;
@@ -3319,8 +3324,40 @@ impl Parser {
                 span,
             ));
         }
-        lexer.expect(Token::Operation('='))?;
-        let value = self.parse_general_expression(lexer, context.reborrow())?;
+
+        let value = match lexer.next() {
+            (Token::Operation('='), _) => {
+                self.parse_general_expression(lexer, context.reborrow())?
+            }
+            (Token::AssignmentOperation(c), span) => {
+                let op = match c {
+                    '<' => Bo::ShiftLeft,
+                    '>' => Bo::ShiftRight,
+                    '+' => Bo::Add,
+                    '-' => Bo::Subtract,
+                    '*' => Bo::Multiply,
+                    '/' => Bo::Divide,
+                    '%' => Bo::Modulo,
+                    '&' => Bo::And,
+                    '|' => Bo::InclusiveOr,
+                    '^' => Bo::ExclusiveOr,
+                    //Note: `consume_token` shouldn't produce any other assignment ops
+                    _ => unreachable!(),
+                };
+                let left = context.expressions.append(
+                    crate::Expression::Load {
+                        pointer: reference.handle,
+                    },
+                    NagaSpan::from(span_start..lexer.current_byte_offset()),
+                );
+                let right = self.parse_general_expression(lexer, context.reborrow())?;
+                context
+                    .expressions
+                    .append(crate::Expression::Binary { op, left, right }, span.into())
+            }
+            other => return Err(Error::Unexpected(other, ExpectedToken::SwitchItem)),
+        };
+
         let span_end = lexer.current_byte_offset();
         context
             .block

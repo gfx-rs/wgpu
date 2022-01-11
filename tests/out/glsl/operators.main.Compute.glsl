@@ -23,9 +23,9 @@ vec4 builtins() {
 }
 
 vec4 splat() {
-    vec2 a = (((vec2(1.0) + vec2(2.0)) - vec2(3.0)) / vec2(4.0));
+    vec2 a_1 = (((vec2(1.0) + vec2(2.0)) - vec2(3.0)) / vec2(4.0));
     ivec4 b = (ivec4(5) % ivec4(2));
-    return (a.xyxy + vec4(b));
+    return (a_1.xyxy + vec4(b));
 }
 
 int unary() {
@@ -51,7 +51,7 @@ float constructors() {
 }
 
 void modulo() {
-    int a_1 = (1 % 1);
+    int a_2 = (1 % 1);
     float b_1 = (1.0 - 1.0 * trunc(1.0 / 1.0));
     ivec3 c = (ivec3(1) % ivec3(1));
     vec3 d = (vec3(1.0) - vec3(1.0) * trunc(vec3(1.0) / vec3(1.0)));
@@ -62,9 +62,30 @@ void scalar_times_matrix() {
     mat4x4 assertion = (2.0 * model);
 }
 
-void binary() {
-    bool a_2 = (true || false);
+void logical() {
+    bool a_3 = (true || false);
     bool b_2 = (true && false);
+}
+
+void binary_assignment() {
+    int a = 1;
+    int _e6 = a;
+    a = (_e6 + 1);
+    int _e9 = a;
+    a = (_e9 - 1);
+    int _e12 = a;
+    int _e13 = a;
+    a = (_e12 * _e13);
+    int _e15 = a;
+    int _e16 = a;
+    a = (_e15 / _e16);
+    int _e18 = a;
+    a = (_e18 % 1);
+    int _e21 = a;
+    a = (_e21 ^ 0);
+    int _e24 = a;
+    a = (_e24 & 0);
+    return;
 }
 
 void main() {
@@ -75,7 +96,8 @@ void main() {
     float _e9 = constructors();
     modulo();
     scalar_times_matrix();
-    binary();
+    logical();
+    binary_assignment();
     return;
 }
 

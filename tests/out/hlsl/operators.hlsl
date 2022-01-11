@@ -23,9 +23,9 @@ float4 builtins()
 
 float4 splat()
 {
-    float2 a = (((float2(1.0.xx) + float2(2.0.xx)) - float2(3.0.xx)) / float2(4.0.xx));
+    float2 a_1 = (((float2(1.0.xx) + float2(2.0.xx)) - float2(3.0.xx)) / float2(4.0.xx));
     int4 b = (int4(5.xxxx) % int4(2.xxxx));
-    return (a.xyxy + float4(b));
+    return (a_1.xyxy + float4(b));
 }
 
 int unary()
@@ -63,7 +63,7 @@ float constructors()
 
 void modulo()
 {
-    int a_1 = (1 % 1);
+    int a_2 = (1 % 1);
     float b_1 = (1.0 % 1.0);
     int3 c = (int3(1.xxx) % int3(1.xxx));
     float3 d = (float3(1.0.xxx) % float3(1.0.xxx));
@@ -75,10 +75,33 @@ void scalar_times_matrix()
     float4x4 assertion = mul(model, 2.0);
 }
 
-void binary()
+void logical()
 {
-    bool a_2 = (true | false);
+    bool a_3 = (true | false);
     bool b_2 = (true & false);
+}
+
+void binary_assignment()
+{
+    int a = 1;
+
+    int _expr6 = a;
+    a = (_expr6 + 1);
+    int _expr9 = a;
+    a = (_expr9 - 1);
+    int _expr12 = a;
+    int _expr13 = a;
+    a = (_expr12 * _expr13);
+    int _expr15 = a;
+    int _expr16 = a;
+    a = (_expr15 / _expr16);
+    int _expr18 = a;
+    a = (_expr18 % 1);
+    int _expr21 = a;
+    a = (_expr21 ^ 0);
+    int _expr24 = a;
+    a = (_expr24 & 0);
+    return;
 }
 
 [numthreads(1, 1, 1)]
@@ -91,6 +114,7 @@ void main()
     const float _e9 = constructors();
     modulo();
     scalar_times_matrix();
-    binary();
+    logical();
+    binary_assignment();
     return;
 }

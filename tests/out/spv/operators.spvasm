@@ -1,12 +1,12 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 154
+; Bound: 176
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %143 "main"
-OpExecutionMode %143 LocalSize 1 1 1
+OpEntryPoint GLCompute %164 "main"
+OpExecutionMode %164 LocalSize 1 1 1
 OpMemberDecorate %23 0 Offset 0
 OpMemberDecorate %23 1 Offset 16
 %2 = OpTypeVoid
@@ -51,6 +51,7 @@ OpMemberDecorate %23 1 Offset 16
 %111 = OpConstant  %112  0
 %117 = OpTypeFunction %2
 %121 = OpTypeVector %8 3
+%143 = OpTypePointer Function %8
 %32 = OpFunction  %19  None %33
 %31 = OpLabel
 OpBranch %34
@@ -178,18 +179,49 @@ OpBranch %139
 %141 = OpLogicalAnd  %10  %9 %12
 OpReturn
 OpFunctionEnd
-%143 = OpFunction  %2  None %117
-%142 = OpLabel
-OpBranch %144
+%145 = OpFunction  %2  None %117
 %144 = OpLabel
-%145 = OpFunctionCall  %19  %32
-%146 = OpFunctionCall  %19  %57
-%147 = OpFunctionCall  %8  %73
-%148 = OpVectorShuffle  %22  %27 %27 0 1 2
-%149 = OpFunctionCall  %22  %84 %148
-%150 = OpFunctionCall  %4  %96
-%151 = OpFunctionCall  %2  %116
-%152 = OpFunctionCall  %2  %129
-%153 = OpFunctionCall  %2  %138
+%142 = OpVariable  %143  Function %7
+OpBranch %146
+%146 = OpLabel
+%147 = OpLoad  %8  %142
+%148 = OpIAdd  %8  %147 %7
+OpStore %142 %148
+%149 = OpLoad  %8  %142
+%150 = OpISub  %8  %149 %7
+OpStore %142 %150
+%151 = OpLoad  %8  %142
+%152 = OpLoad  %8  %142
+%153 = OpIMul  %8  %151 %152
+OpStore %142 %153
+%154 = OpLoad  %8  %142
+%155 = OpLoad  %8  %142
+%156 = OpSDiv  %8  %154 %155
+OpStore %142 %156
+%157 = OpLoad  %8  %142
+%158 = OpSMod  %8  %157 %7
+OpStore %142 %158
+%159 = OpLoad  %8  %142
+%160 = OpBitwiseXor  %8  %159 %11
+OpStore %142 %160
+%161 = OpLoad  %8  %142
+%162 = OpBitwiseAnd  %8  %161 %11
+OpStore %142 %162
+OpReturn
+OpFunctionEnd
+%164 = OpFunction  %2  None %117
+%163 = OpLabel
+OpBranch %165
+%165 = OpLabel
+%166 = OpFunctionCall  %19  %32
+%167 = OpFunctionCall  %19  %57
+%168 = OpFunctionCall  %8  %73
+%169 = OpVectorShuffle  %22  %27 %27 0 1 2
+%170 = OpFunctionCall  %22  %84 %169
+%171 = OpFunctionCall  %4  %96
+%172 = OpFunctionCall  %2  %116
+%173 = OpFunctionCall  %2  %129
+%174 = OpFunctionCall  %2  %138
+%175 = OpFunctionCall  %2  %145
 OpReturn
 OpFunctionEnd

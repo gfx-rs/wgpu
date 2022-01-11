@@ -20,9 +20,9 @@ fn builtins() -> vec4<f32> {
 }
 
 fn splat() -> vec4<f32> {
-    let a = (((vec2<f32>(1.0) + vec2<f32>(2.0)) - vec2<f32>(3.0)) / vec2<f32>(4.0));
+    let a_1 = (((vec2<f32>(1.0) + vec2<f32>(2.0)) - vec2<f32>(3.0)) / vec2<f32>(4.0));
     let b = (vec4<i32>(5) % vec4<i32>(2));
-    return (a.xyxy + vec4<f32>(b));
+    return (a_1.xyxy + vec4<f32>(b));
 }
 
 fn unary() -> i32 {
@@ -49,7 +49,7 @@ fn constructors() -> f32 {
 }
 
 fn modulo() {
-    let a_1 = (1 % 1);
+    let a_2 = (1 % 1);
     let b_1 = (1.0 % 1.0);
     let c = (vec3<i32>(1) % vec3<i32>(1));
     let d = (vec3<f32>(1.0) % vec3<f32>(1.0));
@@ -60,9 +60,31 @@ fn scalar_times_matrix() {
     let assertion = (2.0 * model);
 }
 
-fn binary() {
-    let a_2 = (true | false);
+fn logical() {
+    let a_3 = (true | false);
     let b_2 = (true & false);
+}
+
+fn binary_assignment() {
+    var a: i32 = 1;
+
+    let _e6 = a;
+    a = (_e6 + 1);
+    let _e9 = a;
+    a = (_e9 - 1);
+    let _e12 = a;
+    let _e13 = a;
+    a = (_e12 * _e13);
+    let _e15 = a;
+    let _e16 = a;
+    a = (_e15 / _e16);
+    let _e18 = a;
+    a = (_e18 % 1);
+    let _e21 = a;
+    a = (_e21 ^ 0);
+    let _e24 = a;
+    a = (_e24 & 0);
+    return;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
@@ -74,6 +96,7 @@ fn main() {
     let _e9 = constructors();
     modulo();
     scalar_times_matrix();
-    binary();
+    logical();
+    binary_assignment();
     return;
 }
