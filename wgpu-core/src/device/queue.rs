@@ -609,7 +609,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
                     let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
                     let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
-                    // This could be made immutable. It's only mutated for the `has_work` flag.
                     let (mut texture_guard, mut token) = hub.textures.write(&mut token);
                     let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
                     let (sampler_guard, mut token) = hub.samplers.read(&mut token);
@@ -684,34 +683,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     *has_work = true;
                                     let ref_count = cmdbuf.trackers.textures.get_ref_count(id);
                                     //TODO: better error handling here?
-                                    {
-                                        // first, register it in the device tracker with uninitialized,
-                                        // if it wasn't used before.
-                                        let mut ts = track::TextureState::default();
-                                        let _ = ts.change(
-                                            id,
-                                            texture.full_range.clone(),
-                                            hal::TextureUses::UNINITIALIZED,
-                                            None,
-                                        );
-                                        let _ = trackers.textures.init(
-                                            id,
-                                            ref_count.clone(),
-                                            ts.clone(),
-                                        );
-                                    }
-                                    {
-                                        // then, register it in the temporary tracker.
-                                        let mut ts = track::TextureState::default();
-                                        let _ = ts.change(
-                                            id,
-                                            texture.full_range.clone(),
-                                            hal::TextureUses::empty(),
-                                            None,
-                                        );
-                                        let _ =
-                                            used_surface_textures.init(id, ref_count.clone(), ts);
-                                    }
+                                    // register it in the temporary tracker.
+                                    let mut ts = track::TextureState::default();
+                                    let _ = ts.change(
+                                        id,
+                                        texture.full_range.clone(),
+                                        hal::TextureUses::empty(), //present
+                                        None,
+                                    );
+                                    let _ = used_surface_textures.init(id, ref_count.clone(), ts);
                                 }
                             }
                             if !texture.life_guard.use_at(submit_index) {
@@ -840,6 +820,63 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     ref mut fence,
                     ..
                 } = *device;
+
+                {
+                    //TODO: these blocks have a few organizational issues and should be refactored
+                    // (1) it's similar to the code we have per-command-buffer (at the begin and end)
+                    // Maybe we an merge some?
+                    // (2) it's doing the extra locking unconditionally
+                    // Maybe we can only do so if any surfaces are being written to?
+
+                    let (_, mut token) = hub.buffers.read(&mut token); // skip token
+                    let (mut texture_guard, _) = hub.textures.write(&mut token);
+
+                    for &id in pending_writes.dst_textures.iter() {
+                        let texture = texture_guard.get_mut(id).unwrap();
+                        match texture.inner {
+                            TextureInner::Native { raw: None } => {
+                                return Err(QueueSubmitError::DestroyedTexture(id));
+                            }
+                            TextureInner::Native { raw: Some(_) } => {}
+                            TextureInner::Surface {
+                                ref mut has_work, ..
+                            } => {
+                                use track::ResourceState as _;
+
+                                *has_work = true;
+                                let ref_count = texture.life_guard.add_ref();
+                                //TODO: better error handling here?
+                                // register it in the temporary tracker.
+                                let mut ts = track::TextureState::default();
+                                let _ = ts.change(
+                                    id::Valid(id),
+                                    texture.full_range.clone(),
+                                    hal::TextureUses::empty(), //present
+                                    None,
+                                );
+                                let _ = used_surface_textures.init(id::Valid(id), ref_count, ts);
+                            }
+                        }
+                    }
+
+                    if !used_surface_textures.is_empty() {
+                        let mut trackers = device.trackers.lock();
+                        let texture_barriers = trackers
+                            .textures
+                            .merge_replace(&used_surface_textures)
+                            .map(|pending| {
+                                let tex = &texture_guard[pending.id];
+                                pending.into_hal(tex)
+                            });
+                        unsafe {
+                            pending_writes
+                                .command_encoder
+                                .transition_textures(texture_barriers);
+                        };
+                        used_surface_textures.clear();
+                    }
+                }
+
                 let refs = pending_writes
                     .pre_submit()
                     .into_iter()

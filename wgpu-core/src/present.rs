@@ -19,9 +19,7 @@ use crate::{
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::TextureInitTracker,
-    resource,
-    track::TextureSelector,
-    LifeGuard, Stored,
+    resource, track, LifeGuard, Stored,
 };
 
 use hal::{Queue as _, Surface as _};
@@ -174,7 +172,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
                     },
                     initialization_status: TextureInitTracker::new(1, 1),
-                    full_range: TextureSelector {
+                    full_range: track::TextureSelector {
                         layers: 0..1,
                         levels: 0..1,
                     },
@@ -188,7 +186,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let ref_count = texture.life_guard.add_ref();
                 let id = fid.assign(texture, &mut token);
 
-                //suf.acquired_texture = Some(suf_texture);
+                {
+                    use track::ResourceState as _;
+                    // register it in the device tracker as uninitialized
+                    let mut trackers = device.trackers.lock();
+                    let mut ts = track::TextureState::default();
+                    let _ = ts.change(
+                        id,
+                        track::TextureSelector {
+                            layers: 0..1,
+                            levels: 0..1,
+                        },
+                        hal::TextureUses::UNINITIALIZED,
+                        None,
+                    );
+                    let _ = trackers.textures.init(id, ref_count.clone(), ts);
+                }
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
