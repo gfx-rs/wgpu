@@ -23,6 +23,12 @@ jobs:
           command: update
           args: -p bitflags --precise 1.2.1
       - uses: actions-rs/cargo@v1
+        name: Downgrade indexmap to MSRV
+        if: ${{ matrix.rust }} == "1.43.0"
+        with:
+          command: update
+          args: -p indexmap --precise 1.6.2
+      - uses: actions-rs/cargo@v1
         name: Default test
         with:
           # Our intention here is to test `naga` with no features enabled. But
