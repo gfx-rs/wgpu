@@ -1,5 +1,18 @@
 # Change Log
 
+### v0.8.2 (2022-01-11)
+  - validator:
+    - check structure resource types
+  - MSL-out:
+    - fix data packing functions
+    - fix 1D texture loads
+  - SPV-in:
+    - more operations are sign-agnostic
+  - SPV-out:
+    - fix modulo operator
+  - WGSL-in:
+    - improve type mismatch errors
+
 ### v0.8.1 (2021-12-29)
   - API:
     - make `WithSpan` clonable
