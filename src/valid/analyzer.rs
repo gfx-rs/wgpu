@@ -266,7 +266,10 @@ impl FunctionInfo {
         handle: Handle<crate::Expression>,
         global_use: GlobalUse,
     ) -> NonUniformResult {
-        let info = &mut self.expressions[handle.index()];
+        //Note: if the expression doesn't exist, this function
+        // will return `None`, but the later validation of
+        // expressions should detect this and error properly.
+        let info = self.expressions.get_mut(handle.index())?;
         info.ref_count += 1;
         // mark the used global as read
         if let Some(global) = info.assignable_global {
@@ -290,7 +293,8 @@ impl FunctionInfo {
         handle: Handle<crate::Expression>,
         assignable_global: &mut Option<Handle<crate::GlobalVariable>>,
     ) -> NonUniformResult {
-        let info = &mut self.expressions[handle.index()];
+        //Note: similarly to `add_ref_impl`, this ignores invalid expressions.
+        let info = self.expressions.get_mut(handle.index())?;
         info.ref_count += 1;
         // propagate the assignable global up the chain, till it either hits
         // a value-type expression, or the assignment statement.
@@ -629,7 +633,10 @@ impl FunctionInfo {
                 S::Emit(ref range) => {
                     let mut requirements = UniformityRequirements::empty();
                     for expr in range.clone() {
-                        let req = self.expressions[expr.index()].uniformity.requirements;
+                        let req = match self.expressions.get(expr.index()) {
+                            Some(expr) => expr.uniformity.requirements,
+                            None => UniformityRequirements::empty(),
+                        };
                         #[cfg(feature = "validate")]
                         if self
                             .flags
