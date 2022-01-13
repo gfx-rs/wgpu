@@ -332,7 +332,10 @@ impl super::Validator {
         use super::TypeFlags;
 
         log::debug!("var {:?}", var);
-        let type_info = &self.types[var.ty.index()];
+        let type_info = self
+            .types
+            .get(var.ty.index())
+            .ok_or(GlobalVariableError::InvalidType)?;
 
         let (required_type_flags, is_resource) = match var.class {
             crate::StorageClass::Function => return Err(GlobalVariableError::InvalidUsage),
