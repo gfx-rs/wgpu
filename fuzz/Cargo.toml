@@ -14,7 +14,7 @@ libfuzzer-sys = "0.4"
 
 [dependencies.naga]
 path = ".."
-features = ["spv-in", "wgsl-in", "glsl-in"]
+features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in", "validate"]
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -35,5 +35,11 @@ doc = false
 [[bin]]
 name = "glsl_parser"
 path = "fuzz_targets/glsl_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ir"
+path = "fuzz_targets/ir.rs"
 test = false
 doc = false
