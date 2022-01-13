@@ -1293,7 +1293,10 @@ impl Parser {
                         offset: span,
                     });
 
-                    span += self.module.types[ty].inner.span(&self.module.constants);
+                    span += self.module.types[ty]
+                        .inner
+                        .size(&self.module.constants)
+                        .unwrap();
 
                     let len = expressions.len();
                     let load = expressions.append(Expression::Load { pointer }, Default::default());

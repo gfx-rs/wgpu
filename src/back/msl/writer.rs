@@ -349,7 +349,7 @@ fn should_pack_struct_member(
     }
 
     let ty_inner = &module.types[member.ty].inner;
-    let last_offset = member.offset + ty_inner.span(&module.constants);
+    let last_offset = member.offset + ty_inner.size(&module.constants).unwrap();
     let next_offset = match members.get(index + 1) {
         Some(next) => next.offset,
         None => span,
@@ -750,22 +750,23 @@ impl<W: Write> Writer<W> {
             None => return Err(Error::Validation),
         };
 
-        let (span, stride) = match context.module.types[array_ty].inner {
+        let (size, stride) = match context.module.types[array_ty].inner {
             crate::TypeInner::Array { base, stride, .. } => (
                 context.module.types[base]
                     .inner
-                    .span(&context.module.constants),
+                    .size(&context.module.constants)
+                    .unwrap(),
                 stride,
             ),
             _ => return Err(Error::Validation),
         };
 
-        // When the stride length is larger than the span, the final element's stride of
+        // When the stride length is larger than the size, the final element's stride of
         // bytes would have padding following the value. But the buffer size in
         // `buffer_sizes.sizeN` may not include this padding - it only needs to be large
         // enough to hold the actual values' bytes.
         //
-        // So subtract off the span to get a byte size that falls at the start or within
+        // So subtract off the size to get a byte size that falls at the start or within
         // the final element. Then divide by the stride size, to get one less than the
         // length, and then add one. This works even if the buffer size does include the
         // stride padding, since division rounds towards zero (MSL 2.4 §6.1). It will fail
@@ -774,10 +775,10 @@ impl<W: Write> Writer<W> {
         // prevent that.
         write!(
             self.out,
-            "(_buffer_sizes.size{idx} - {offset} - {span}) / {stride}",
+            "(_buffer_sizes.size{idx} - {offset} - {size}) / {stride}",
             idx = handle.index(),
             offset = offset,
-            span = span,
+            size = size,
             stride = stride,
         )?;
         Ok(())
@@ -2379,7 +2380,7 @@ impl<W: Write> Writer<W> {
                             writeln!(self.out, "{}char _pad{}[{}];", back::INDENT, index, pad)?;
                         }
                         let ty_inner = &module.types[member.ty].inner;
-                        last_offset = member.offset + ty_inner.span(&module.constants);
+                        last_offset = member.offset + ty_inner.size(&module.constants).unwrap();
 
                         let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
 

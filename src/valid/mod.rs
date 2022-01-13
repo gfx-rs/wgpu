@@ -10,7 +10,7 @@ use crate::arena::{Arena, UniqueArena};
 
 use crate::{
     arena::Handle,
-    proc::{InvalidBaseType, Layouter},
+    proc::{LayoutError, Layouter},
     FastHashSet,
 };
 use bit_set::BitSet;
@@ -127,7 +127,7 @@ pub enum ConstantError {
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ValidationError {
     #[error(transparent)]
-    Layouter(#[from] InvalidBaseType),
+    Layouter(#[from] LayoutError),
     #[error("Type {handle:?} '{name}' is invalid")]
     Type {
         handle: Handle<crate::Type>,
@@ -278,7 +278,7 @@ impl Validator {
         self.layouter
             .update(&module.types, &module.constants)
             .map_err(|e| {
-                let InvalidBaseType(handle) = e;
+                let handle = e.ty;
                 ValidationError::from(e).with_span_handle(handle, &module.types)
             })?;
 

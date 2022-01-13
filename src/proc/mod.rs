@@ -9,16 +9,16 @@ mod typifier;
 use std::cmp::PartialEq;
 
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength};
-pub use layouter::{Alignment, InvalidBaseType, Layouter, TypeLayout};
+pub use layouter::{Alignment, LayoutError, Layouter, TypeLayout, TypeLayoutError};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
 
-#[derive(Clone, Debug, thiserror::Error, PartialEq)]
+#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
 pub enum ProcError {
-    #[error("type is not indexable, and has no length (validation error)")]
+    #[error("Type is not indexable, and has no length (validation error)")]
     TypeNotIndexable,
-    #[error("array length is wrong kind of constant (validation error)")]
+    #[error("Array length {0:?} is wrong kind of constant (validation error)")]
     InvalidArraySizeConstant(crate::Handle<crate::Constant>),
 }
 
@@ -94,8 +94,8 @@ impl super::TypeInner {
         }
     }
 
-    pub fn span(&self, constants: &super::Arena<super::Constant>) -> u32 {
-        match *self {
+    pub fn size(&self, constants: &super::Arena<super::Constant>) -> Result<u32, ProcError> {
+        Ok(match *self {
             Self::Scalar { kind: _, width } | Self::Atomic { kind: _, width } => width as u32,
             Self::Vector {
                 size,
@@ -119,8 +119,10 @@ impl super::TypeInner {
             } => {
                 let count = match size {
                     super::ArraySize::Constant(handle) => {
-                        // Bad array lengths will be caught during validation.
-                        constants[handle].to_array_length().unwrap_or(1)
+                        let constant = constants
+                            .try_get(handle)
+                            .ok_or(ProcError::InvalidArraySizeConstant(handle))?;
+                        constant.to_array_length().unwrap_or(1)
                     }
                     // A dynamically-sized array has to have at least one element
                     super::ArraySize::Dynamic => 1,
@@ -129,7 +131,7 @@ impl super::TypeInner {
             }
             Self::Struct { span, .. } => span,
             Self::Image { .. } | Self::Sampler { .. } => 0,
-        }
+        })
     }
 
     /// Return the canoncal form of `self`, or `None` if it's already in
@@ -447,7 +449,7 @@ fn test_matrix_size() {
             rows: crate::VectorSize::Tri,
             width: 4
         }
-        .span(&constants),
-        48
+        .size(&constants),
+        Ok(48),
     );
 }

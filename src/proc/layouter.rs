@@ -30,8 +30,29 @@ impl ops::Index<Handle<crate::Type>> for Layouter {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, thiserror::Error)]
-#[error("Base type {0:?} is out of bounds")]
-pub struct InvalidBaseType(pub Handle<crate::Type>);
+pub enum TypeLayoutError {
+    #[error("Array element type {0:?} doesn't exist")]
+    InvalidArrayElementType(Handle<crate::Type>),
+    #[error("Struct member[{0}] type {1:?} doesn't exist")]
+    InvalidStructMemberType(u32, Handle<crate::Type>),
+    #[error("Zero width is not supported")]
+    ZeroWidth,
+    #[error(transparent)]
+    Size(#[from] super::ProcError),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, thiserror::Error)]
+#[error("Error laying out type {ty:?}: {inner}")]
+pub struct LayoutError {
+    pub ty: Handle<crate::Type>,
+    pub inner: TypeLayoutError,
+}
+
+impl TypeLayoutError {
+    fn with(self, ty: Handle<crate::Type>) -> LayoutError {
+        LayoutError { ty, inner: self }
+    }
+}
 
 impl Layouter {
     pub fn clear(&mut self) {
@@ -62,19 +83,24 @@ impl Layouter {
         (start..start + span, alignment)
     }
 
+    #[allow(clippy::or_fun_call)]
     pub fn update(
         &mut self,
         types: &UniqueArena<crate::Type>,
         constants: &Arena<crate::Constant>,
-    ) -> Result<(), InvalidBaseType> {
+    ) -> Result<(), LayoutError> {
         use crate::TypeInner as Ti;
 
         for (ty_handle, ty) in types.iter().skip(self.layouts.len()) {
-            let size = ty.inner.span(constants);
+            let size = ty
+                .inner
+                .size(constants)
+                .map_err(|error| TypeLayoutError::Size(error).with(ty_handle))?;
             let layout = match ty.inner {
                 Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(width as u32).ok_or(InvalidBaseType(ty_handle))?,
+                    alignment: Alignment::new(width as u32)
+                        .ok_or(TypeLayoutError::ZeroWidth.with(ty_handle))?,
                 },
                 Ti::Vector {
                     size: vec_size,
@@ -88,7 +114,8 @@ impl Layouter {
                         } else {
                             2
                         };
-                        Alignment::new(count * width as u32).ok_or(InvalidBaseType(ty_handle))?
+                        Alignment::new(count * width as u32)
+                            .ok_or(TypeLayoutError::ZeroWidth.with(ty_handle))?
                     },
                 },
                 Ti::Matrix {
@@ -99,7 +126,8 @@ impl Layouter {
                     size,
                     alignment: {
                         let count = if rows >= crate::VectorSize::Tri { 4 } else { 2 };
-                        Alignment::new(count * width as u32).ok_or(InvalidBaseType(ty_handle))?
+                        Alignment::new(count * width as u32)
+                            .ok_or(TypeLayoutError::ZeroWidth.with(ty_handle))?
                     },
                 },
                 Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
@@ -115,16 +143,20 @@ impl Layouter {
                     alignment: if base < ty_handle {
                         self[base].alignment
                     } else {
-                        return Err(InvalidBaseType(base));
+                        return Err(TypeLayoutError::InvalidArrayElementType(base).with(ty_handle));
                     },
                 },
                 Ti::Struct { span, ref members } => {
                     let mut alignment = Alignment::new(1).unwrap();
-                    for member in members {
+                    for (index, member) in members.iter().enumerate() {
                         alignment = if member.ty < ty_handle {
                             alignment.max(self[member.ty].alignment)
                         } else {
-                            return Err(InvalidBaseType(member.ty));
+                            return Err(TypeLayoutError::InvalidStructMemberType(
+                                index as u32,
+                                member.ty,
+                            )
+                            .with(ty_handle));
                         };
                     }
                     TypeLayout {
@@ -137,7 +169,7 @@ impl Layouter {
                     alignment: Alignment::new(1).unwrap(),
                 },
             };
-            debug_assert!(ty.inner.span(constants) <= layout.size);
+            debug_assert!(size <= layout.size);
             self.layouts.push(layout);
         }
 

@@ -4078,7 +4078,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             size: crate::ArraySize::Constant(length_const.handle),
             stride: match decor.array_stride {
                 Some(stride) => stride.get(),
-                None => module.types[base].inner.span(&module.constants),
+                None => module.types[base].inner.size(&module.constants).unwrap(),
             },
         };
         self.lookup_type.insert(
@@ -4115,7 +4115,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             size: crate::ArraySize::Dynamic,
             stride: match decor.array_stride {
                 Some(stride) => stride.get(),
-                None => module.types[base].inner.span(&module.constants),
+                None => module.types[base].inner.size(&module.constants).unwrap(),
             },
         };
         self.lookup_type.insert(
