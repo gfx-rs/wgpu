@@ -240,7 +240,7 @@ impl Validator {
                 }
             }
             crate::ConstantInner::Composite { ty, ref components } => {
-                match types[ty].inner {
+                match types.get_handle(ty).ok_or(ConstantError::InvalidType)?.inner {
                     crate::TypeInner::Array {
                         size: crate::ArraySize::Constant(size_handle),
                         ..
