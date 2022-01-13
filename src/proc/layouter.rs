@@ -74,7 +74,7 @@ impl Layouter {
             let layout = match ty.inner {
                 Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => TypeLayout {
                     size,
-                    alignment: Alignment::new(width as u32).unwrap(),
+                    alignment: Alignment::new(width as u32).ok_or(InvalidBaseType(ty_handle))?,
                 },
                 Ti::Vector {
                     size: vec_size,
@@ -88,7 +88,7 @@ impl Layouter {
                         } else {
                             2
                         };
-                        Alignment::new((count * width) as u32).unwrap()
+                        Alignment::new((count * width) as u32).ok_or(InvalidBaseType(ty_handle))?
                     },
                 },
                 Ti::Matrix {
@@ -99,7 +99,7 @@ impl Layouter {
                     size,
                     alignment: {
                         let count = if rows >= crate::VectorSize::Tri { 4 } else { 2 };
-                        Alignment::new((count * width) as u32).unwrap()
+                        Alignment::new((count * width) as u32).ok_or(InvalidBaseType(ty_handle))?
                     },
                 },
                 Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
