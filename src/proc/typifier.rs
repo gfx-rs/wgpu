@@ -189,10 +189,14 @@ pub enum ResolveError {
     FunctionNotDefined { name: String },
     #[error("Function without return type")]
     FunctionReturnsVoid,
-    #[error("Type is not found in the given immutable arena")]
-    TypeNotFound,
     #[error("Incompatible operands: {0}")]
     IncompatibleOperands(String),
+    #[error("Local var {0:?} doesn't exist")]
+    LocalVariableNotFound(Handle<crate::LocalVariable>),
+    #[error("Global var {0:?} doesn't exist")]
+    GlobalVariableNotFound(Handle<crate::GlobalVariable>),
+    #[error("Function argument {0} doesn't exist")]
+    FunctionArgumentNotFound(u32),
 }
 
 pub struct ResolveContext<'a> {
@@ -430,10 +434,17 @@ impl<'a> ResolveContext<'a> {
             },
             crate::Expression::Compose { ty, .. } => TypeResolution::Handle(ty),
             crate::Expression::FunctionArgument(index) => {
-                TypeResolution::Handle(self.arguments[index as usize].ty)
+                let arg = self
+                    .arguments
+                    .get(index as usize)
+                    .ok_or(ResolveError::FunctionArgumentNotFound(index))?;
+                TypeResolution::Handle(arg.ty)
             }
             crate::Expression::GlobalVariable(h) => {
-                let var = &self.global_vars[h];
+                let var = self
+                    .global_vars
+                    .try_get(h)
+                    .ok_or(ResolveError::GlobalVariableNotFound(h))?;
                 if var.class == crate::StorageClass::Handle {
                     TypeResolution::Handle(var.ty)
                 } else {
@@ -444,7 +455,10 @@ impl<'a> ResolveContext<'a> {
                 }
             }
             crate::Expression::LocalVariable(h) => {
-                let var = &self.local_vars[h];
+                let var = self
+                    .local_vars
+                    .try_get(h)
+                    .ok_or(ResolveError::LocalVariableNotFound(h))?;
                 TypeResolution::Value(Ti::Pointer {
                     base: var.ty,
                     class: crate::StorageClass::Function,

@@ -819,13 +819,7 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
-        #[cfg(feature = "validate")]
-        let mut info = mod_info
-            .process_function(fun, module, self.flags)
-            .map_err(WithSpan::into_other)?;
-
-        #[cfg(not(feature = "validate"))]
-        let info = mod_info.process_function(fun, module, self.flags)?;
+        let mut info = mod_info.process_function(fun, module, self.flags)?;
 
         #[cfg(feature = "validate")]
         for (var_handle, var) in fun.local_variables.iter() {
