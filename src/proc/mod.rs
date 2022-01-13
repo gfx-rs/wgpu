@@ -101,7 +101,7 @@ impl super::TypeInner {
                 size,
                 kind: _,
                 width,
-            } => (size as u8 * width) as u32,
+            } => size as u32 * width as u32,
             // matrices are treated as arrays of aligned columns
             Self::Matrix {
                 columns,
