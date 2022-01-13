@@ -1,5 +1,5 @@
 use super::{
-    help::{MipLevelCoordinate, WrappedArrayLength, WrappedConstructor, WrappedImageQuery},
+    help::{WrappedArrayLength, WrappedConstructor, WrappedImageQuery},
     storage::StoreValue,
     BackendResult, Error, Options,
 };
@@ -1629,7 +1629,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     "float",
                     coordinate,
                     array_index,
-                    MipLevelCoordinate::NotApplicable,
+                    None,
                     module,
                     func_ctx,
                 )?;
@@ -1697,26 +1697,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 index,
             } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                let (ms, storage) = match *func_ctx.info[image].ty.inner_with(&module.types) {
+                let (sample, mip_level) = match *func_ctx.info[image].ty.inner_with(&module.types) {
                     TypeInner::Image { class, .. } => match class {
-                        crate::ImageClass::Sampled { multi, .. }
-                        | crate::ImageClass::Depth { multi } => (multi, false),
-                        crate::ImageClass::Storage { .. } => (false, true),
+                        crate::ImageClass::Sampled { multi: true, .. }
+                        | crate::ImageClass::Depth { multi: true } => (index, None),
+                        crate::ImageClass::Storage { .. } => (None, None),
+                        _ => (None, index),
                     },
-                    _ => (false, false),
+                    _ => (None, None),
                 };
 
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ".Load(")?;
-
-                let mip_level = if ms || storage {
-                    MipLevelCoordinate::NotApplicable
-                } else {
-                    match index {
-                        Some(expr) => MipLevelCoordinate::Expression(expr),
-                        None => MipLevelCoordinate::Zero,
-                    }
-                };
 
                 self.write_texture_coordinates(
                     "int",
@@ -1727,9 +1719,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     func_ctx,
                 )?;
 
-                if ms {
+                if let Some(sample) = sample {
                     write!(self.out, ", ")?;
-                    self.write_expr(module, index.unwrap(), func_ctx)?;
+                    self.write_expr(module, sample, func_ctx)?;
                 }
 
                 // close bracket for Load function

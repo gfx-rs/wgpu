@@ -101,13 +101,6 @@ impl From<crate::ImageQuery> for ImageQuery {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub(super) enum MipLevelCoordinate {
-    NotApplicable,
-    Zero,
-    Expression(Handle<crate::Expression>),
-}
-
 impl<'a, W: Write> super::Writer<'a, W> {
     pub(super) fn write_image_type(
         &mut self,
@@ -497,13 +490,12 @@ impl<'a, W: Write> super::Writer<'a, W> {
         kind: &str,
         coordinate: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
-        mip_level: MipLevelCoordinate,
+        mip_level: Option<Handle<crate::Expression>>,
         module: &crate::Module,
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
         // HLSL expects the array index to be merged with the coordinate
-        let extra = array_index.is_some() as usize
-            + (mip_level != MipLevelCoordinate::NotApplicable) as usize;
+        let extra = array_index.is_some() as usize + (mip_level.is_some()) as usize;
         if extra == 0 {
             self.write_expr(module, coordinate, func_ctx)?;
         } else {
@@ -518,15 +510,9 @@ impl<'a, W: Write> super::Writer<'a, W> {
                 write!(self.out, ", ")?;
                 self.write_expr(module, expr, func_ctx)?;
             }
-            match mip_level {
-                MipLevelCoordinate::NotApplicable => {}
-                MipLevelCoordinate::Zero => {
-                    write!(self.out, ", 0")?;
-                }
-                MipLevelCoordinate::Expression(expr) => {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, expr, func_ctx)?;
-                }
+            if let Some(expr) = mip_level {
+                write!(self.out, ", ")?;
+                self.write_expr(module, expr, func_ctx)?;
             }
             write!(self.out, ")")?;
         }
