@@ -94,7 +94,8 @@ impl Typifier {
     ) -> Result<(), ResolveError> {
         if self.resolutions.len() <= expr_handle.index() {
             for (eh, expr) in expressions.iter().skip(self.resolutions.len()) {
-                let resolution = ctx.resolve(expr, |h| &self.resolutions[h.index()])?;
+                //Note: the closure can't `Err` by construction
+                let resolution = ctx.resolve(expr, |h| Ok(&self.resolutions[h.index()]))?;
                 log::debug!("Resolving {:?} = {:?} : {:?}", eh, expr, resolution);
                 self.resolutions.push(resolution);
             }
@@ -116,7 +117,8 @@ impl Typifier {
             self.grow(expr_handle, expressions, ctx)
         } else {
             let expr = &expressions[expr_handle];
-            let resolution = ctx.resolve(expr, |h| &self.resolutions[h.index()])?;
+            //Note: the closure can't `Err` by construction
+            let resolution = ctx.resolve(expr, |h| Ok(&self.resolutions[h.index()]))?;
             self.resolutions[expr_handle.index()] = resolution;
             Ok(())
         }
