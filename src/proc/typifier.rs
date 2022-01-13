@@ -197,6 +197,8 @@ pub enum ResolveError {
     GlobalVariableNotFound(Handle<crate::GlobalVariable>),
     #[error("Function argument {0} doesn't exist")]
     FunctionArgumentNotFound(u32),
+    #[error("Constant {0:?} doesn't exist")]
+    ConstantNotFound(Handle<crate::Constant>),
     #[error("Expression {0:?} depends on expressions that follow")]
     ExpressionForwardDependency(Handle<crate::Expression>),
 }
@@ -403,15 +405,23 @@ impl<'a> ResolveContext<'a> {
                     }
                 }
             }
-            crate::Expression::Constant(h) => match self.constants[h].inner {
-                crate::ConstantInner::Scalar { width, ref value } => {
-                    TypeResolution::Value(Ti::Scalar {
-                        kind: value.scalar_kind(),
-                        width,
-                    })
+            crate::Expression::Constant(h) => {
+                let constant = self
+                    .constants
+                    .try_get(h)
+                    .ok_or(ResolveError::ConstantNotFound(h))?;
+                match constant.inner {
+                    crate::ConstantInner::Scalar { width, ref value } => {
+                        TypeResolution::Value(Ti::Scalar {
+                            kind: value.scalar_kind(),
+                            width,
+                        })
+                    }
+                    crate::ConstantInner::Composite { ty, components: _ } => {
+                        TypeResolution::Handle(ty)
+                    }
                 }
-                crate::ConstantInner::Composite { ty, components: _ } => TypeResolution::Handle(ty),
-            },
+            }
             crate::Expression::Splat { size, value } => match *past(value)?.inner_with(types) {
                 Ti::Scalar { kind, width } => {
                     TypeResolution::Value(Ti::Vector { size, kind, width })
