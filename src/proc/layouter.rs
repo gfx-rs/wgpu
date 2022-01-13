@@ -88,7 +88,7 @@ impl Layouter {
                         } else {
                             2
                         };
-                        Alignment::new((count * width) as u32).ok_or(InvalidBaseType(ty_handle))?
+                        Alignment::new(count * width as u32).ok_or(InvalidBaseType(ty_handle))?
                     },
                 },
                 Ti::Matrix {
@@ -99,7 +99,7 @@ impl Layouter {
                     size,
                     alignment: {
                         let count = if rows >= crate::VectorSize::Tri { 4 } else { 2 };
-                        Alignment::new((count * width) as u32).ok_or(InvalidBaseType(ty_handle))?
+                        Alignment::new(count * width as u32).ok_or(InvalidBaseType(ty_handle))?
                     },
                 },
                 Ti::Pointer { .. } | Ti::ValuePointer { .. } => TypeLayout {
