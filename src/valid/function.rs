@@ -786,12 +786,17 @@ impl super::Validator {
         constants: &Arena<crate::Constant>,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);
-        if !self.types[var.ty.index()]
+        let type_info = self
+            .types
+            .get(var.ty.index())
+            .ok_or(LocalVariableError::InvalidType(var.ty))?;
+        if !type_info
             .flags
             .contains(super::TypeFlags::DATA | super::TypeFlags::SIZED)
         {
             return Err(LocalVariableError::InvalidType(var.ty));
         }
+
         if let Some(const_handle) = var.init {
             match constants[const_handle].inner {
                 crate::ConstantInner::Scalar { width, ref value } => {
