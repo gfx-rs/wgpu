@@ -837,7 +837,14 @@ impl super::Validator {
 
         #[cfg(feature = "validate")]
         for (index, argument) in fun.arguments.iter().enumerate() {
-            match module.types[argument.ty].inner.pointer_class() {
+            let ty = module.types.get_handle(argument.ty).ok_or(
+                FunctionError::InvalidArgumentType {
+                    index,
+                    name: argument.name.clone().unwrap_or_default(),
+                }
+                .with_span_handle(argument.ty, &module.types),
+            )?;
+            match ty.inner.pointer_class() {
                 Some(crate::StorageClass::Private)
                 | Some(crate::StorageClass::Function)
                 | Some(crate::StorageClass::WorkGroup)
