@@ -57,7 +57,7 @@ impl super::Queue {
         }
     }
 
-    unsafe fn reset_state(&self, gl: &glow::Context) {
+    unsafe fn reset_state(&mut self, gl: &glow::Context) {
         gl.use_program(None);
         gl.bind_framebuffer(glow::FRAMEBUFFER, None);
         gl.disable(glow::DEPTH_TEST);
@@ -69,6 +69,9 @@ impl super::Queue {
         if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
             gl.disable(glow::DEPTH_CLAMP);
         }
+
+        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
+        self.current_index_buffer = None;
     }
 
     unsafe fn set_attachment(
