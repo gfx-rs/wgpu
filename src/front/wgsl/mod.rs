@@ -1953,20 +1953,25 @@ impl Parser {
                     } else {
                         None
                     };
-                    let index = match class {
-                        crate::ImageClass::Storage { .. } => None,
-                        // it's the MSAA index for multi-sampled, and LOD for the others
-                        crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => {
-                            lexer.expect(Token::Separator(','))?;
-                            Some(self.parse_general_expression(lexer, ctx.reborrow())?)
-                        }
+                    let level = if class.is_mipmapped() {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
+                    };
+                    let sample = if class.is_multisampled() {
+                        lexer.expect(Token::Separator(','))?;
+                        Some(self.parse_general_expression(lexer, ctx.reborrow())?)
+                    } else {
+                        None
                     };
                     lexer.close_arguments()?;
                     crate::Expression::ImageLoad {
                         image,
                         coordinate,
                         array_index,
-                        index,
+                        sample,
+                        level,
                     }
                 }
                 "textureDimensions" => {

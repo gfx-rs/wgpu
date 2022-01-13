@@ -1234,37 +1234,22 @@ pub enum Expression {
         /// [`Sint`]: ScalarKind::Sint
         array_index: Option<Handle<Expression>>,
 
-        /// The sample within a particular texel.
+        /// A sample index, for multisampled [`Sampled`] and [`Depth`] images.
         ///
-        /// The meaning of this value depends on the [`class`] of `image`:
-        ///
-        /// -   [`Storage`] images hold exactly one sample per texel, so `index` must
-        ///     be `None`.
-        ///
-        /// -   [`Depth`] and [`Sampled`] images may be multisampled or have
-        ///     mipmaps, but not both. Which one is indicated by the variant's
-        ///     [`multi`] field:
-        ///
-        ///     - If `multi` is `true`, then the image has multiple samples per
-        ///       texel, and `index` must be `Some(sample)`, where `sample` is
-        ///       the index of the sample to retrieve.
-        ///
-        ///     - If `multi` is `false`, then the image may have mipmaps. In
-        ///       this case, `index` must be `Some(level)`, where `level`
-        ///       identifies the level of detail. Even if the image has only the
-        ///       full-sized version, `level` must still be present; its only
-        ///       in-range value is zero.
-        ///
-        /// When `index` is `Some` the value must be a `Sint` scalar value. If
-        /// it identifes a level of detail, zero represents the full resolution
-        /// mipmap.
-        ///
-        /// [`class`]: TypeInner::Image::class
         /// [`Sampled`]: ImageClass::Sampled
-        /// [`Storage`]: ImageClass::Storage
         /// [`Depth`]: ImageClass::Depth
-        /// [`multi`]: ImageClass::Sampled::multi
-        index: Option<Handle<Expression>>,
+        sample: Option<Handle<Expression>>,
+
+        /// A level of detail, for mipmapped images.
+        ///
+        /// This must be present when accessing non-multisampled
+        /// [`Sampled`] and [`Depth`] images, even if only the
+        /// full-resolution level is present (in which case the only
+        /// valid level is zero).
+        ///
+        /// [`Sampled`]: ImageClass::Sampled
+        /// [`Depth`]: ImageClass::Depth
+        level: Option<Handle<Expression>>,
     },
 
     /// Query information from an image.
@@ -1476,7 +1461,8 @@ pub enum Statement {
     /// The `image`, `coordinate`, and `array_index` fields have the same
     /// meanings as the corresponding operands of an [`ImageLoad`] expression;
     /// see that documentation for details. Storing into multisampled images or
-    /// images with mipmaps is not supported, so there is no `index`operand.
+    /// images with mipmaps is not supported, so there are no `level` or
+    /// `sample` operands.
     ///
     /// This statement is a barrier for any operations on the corresponding
     /// [`Expression::GlobalVariable`] for this image.

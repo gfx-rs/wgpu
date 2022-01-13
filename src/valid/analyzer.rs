@@ -557,16 +557,19 @@ impl FunctionInfo {
                 image,
                 coordinate,
                 array_index,
-                index,
+                sample,
+                level,
             } => {
                 let array_nur = array_index.and_then(|h| self.add_ref(h));
-                let index_nur = index.and_then(|h| self.add_ref(h));
+                let sample_nur = sample.and_then(|h| self.add_ref(h));
+                let level_nur = level.and_then(|h| self.add_ref(h));
                 Uniformity {
                     non_uniform_result: self
                         .add_ref(image)
                         .or(self.add_ref(coordinate))
                         .or(array_nur)
-                        .or(index_nur),
+                        .or(sample_nur)
+                        .or(level_nur),
                     requirements: UniformityRequirements::empty(),
                 }
             }

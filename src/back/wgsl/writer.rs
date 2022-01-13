@@ -1335,7 +1335,8 @@ impl<W: Write> Writer<W> {
                 image,
                 coordinate,
                 array_index,
-                index,
+                sample,
+                level,
             } => {
                 write!(self.out, "textureLoad(")?;
                 self.write_expr(module, image, func_ctx)?;
@@ -1345,7 +1346,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ", ")?;
                     self.write_expr(module, array_index, func_ctx)?;
                 }
-                if let Some(index) = index {
+                if let Some(index) = sample.or(level) {
                     write!(self.out, ", ")?;
                     self.write_expr(module, index, func_ctx)?;
                 }

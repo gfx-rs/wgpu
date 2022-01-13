@@ -2249,7 +2249,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 image,
                 coordinate,
                 array_index,
-                index,
+                sample,
+                level,
             } => {
                 // This will only panic if the module is invalid
                 let (dim, class) = match *ctx.info[image].ty.inner_with(&self.module.types) {
@@ -2275,9 +2276,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ", ")?;
                 self.write_texture_coordinates(coordinate, array_index, dim, ctx)?;
 
-                if let Some(index_expr) = index {
+                if let Some(sample_or_level) = sample.or(level) {
                     write!(self.out, ", ")?;
-                    self.write_expr(index_expr, ctx)?;
+                    self.write_expr(sample_or_level, ctx)?;
                 }
                 write!(self.out, ")")?;
             }

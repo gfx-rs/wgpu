@@ -915,10 +915,17 @@ impl<'w> BlockContext<'w> {
                 image,
                 coordinate,
                 array_index,
-                index,
-            } => {
-                self.write_image_load(result_type_id, image, coordinate, array_index, index, block)?
-            }
+                sample,
+                level,
+            } => self.write_image_load(
+                result_type_id,
+                image,
+                coordinate,
+                array_index,
+                level,
+                sample,
+                block,
+            )?,
             crate::Expression::ImageSample {
                 image,
                 sampler,

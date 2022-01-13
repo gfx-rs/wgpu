@@ -1037,7 +1037,8 @@ impl<W: Write> Writer<W> {
                 image,
                 coordinate,
                 array_index,
-                index,
+                sample,
+                level,
             } => {
                 self.put_expression(image, context, false)?;
                 write!(self.out, ".read(")?;
@@ -1046,7 +1047,11 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ", ")?;
                     self.put_expression(expr, context, true)?;
                 }
-                if let Some(index) = index {
+                if let Some(sample) = sample {
+                    write!(self.out, ", ")?;
+                    self.put_expression(sample, context, true)?
+                }
+                if let Some(level) = level {
                     // Metal requires that the `level` argument to
                     // `texture1d::read` be a constexpr equal to zero.
                     if let crate::TypeInner::Image {
@@ -1057,7 +1062,7 @@ impl<W: Write> Writer<W> {
                         // The argument defaults to zero.
                     } else {
                         write!(self.out, ", ")?;
-                        self.put_expression(index, context, true)?
+                        self.put_expression(level, context, true)?
                     }
                 }
                 write!(self.out, ")")?;

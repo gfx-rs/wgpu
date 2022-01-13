@@ -75,11 +75,11 @@ pub enum ExpressionError {
     InvalidDerivative,
     #[error("Image array index parameter is misplaced")]
     InvalidImageArrayIndex,
-    #[error("Image other index parameter is misplaced")]
+    #[error("Inappropriate sample or level-of-detail index for texel access")]
     InvalidImageOtherIndex,
     #[error("Image array index type of {0:?} is not an integer scalar")]
     InvalidImageArrayIndexType(Handle<crate::Expression>),
-    #[error("Image other index type of {0:?} is not an integer scalar")]
+    #[error("Image sample or level-of-detail index's type of {0:?} is not an integer scalar")]
     InvalidImageOtherIndexType(Handle<crate::Expression>),
     #[error("Image coordinate type of {1:?} does not match dimension {0:?}")]
     InvalidImageCoordinateType(crate::ImageDimension, Handle<crate::Expression>),
@@ -537,7 +537,8 @@ impl super::Validator {
                 image,
                 coordinate,
                 array_index,
-                index,
+                sample,
+                level,
             } => {
                 let ty = match function.expressions[image] {
                     crate::Expression::GlobalVariable(var_handle) => {
@@ -560,15 +561,8 @@ impl super::Validator {
                                 ))
                             }
                         };
-                        let needs_index = match class {
-                            crate::ImageClass::Storage { .. } => false,
-                            _ => true,
-                        };
                         if arrayed != array_index.is_some() {
                             return Err(ExpressionError::InvalidImageArrayIndex);
-                        }
-                        if needs_index != index.is_some() {
-                            return Err(ExpressionError::InvalidImageOtherIndex);
                         }
                         if let Some(expr) = array_index {
                             match *resolver.resolve(expr)? {
@@ -579,13 +573,30 @@ impl super::Validator {
                                 _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),
                             }
                         }
-                        if let Some(expr) = index {
-                            match *resolver.resolve(expr)? {
-                                Ti::Scalar {
-                                    kind: Sk::Sint,
-                                    width: _,
-                                } => {}
-                                _ => return Err(ExpressionError::InvalidImageOtherIndexType(expr)),
+
+                        match (sample, class.is_multisampled()) {
+                            (None, false) => {}
+                            (Some(sample), true) => {
+                                if resolver.resolve(sample)?.scalar_kind() != Some(Sk::Sint) {
+                                    return Err(ExpressionError::InvalidImageOtherIndexType(
+                                        sample,
+                                    ));
+                                }
+                            }
+                            _ => {
+                                return Err(ExpressionError::InvalidImageOtherIndex);
+                            }
+                        }
+
+                        match (level, class.is_mipmapped()) {
+                            (None, false) => {}
+                            (Some(level), true) => {
+                                if resolver.resolve(level)?.scalar_kind() != Some(Sk::Sint) {
+                                    return Err(ExpressionError::InvalidImageOtherIndexType(level));
+                                }
+                            }
+                            _ => {
+                                return Err(ExpressionError::InvalidImageOtherIndex);
                             }
                         }
                     }
@@ -603,18 +614,12 @@ impl super::Validator {
                 };
                 match module.types[ty].inner {
                     Ti::Image { class, arrayed, .. } => {
-                        let can_level = match class {
-                            crate::ImageClass::Sampled { multi, .. } => !multi,
-                            crate::ImageClass::Depth { multi } => !multi,
-                            crate::ImageClass::Storage { .. } => false,
-                        };
                         let good = match query {
                             crate::ImageQuery::NumLayers => arrayed,
                             crate::ImageQuery::Size { level: None } => true,
                             crate::ImageQuery::Size { level: Some(_) }
-                            | crate::ImageQuery::NumLevels => can_level,
-                            //TODO: forbid on storage images
-                            crate::ImageQuery::NumSamples => !can_level,
+                            | crate::ImageQuery::NumLevels => class.is_mipmapped(),
+                            crate::ImageQuery::NumSamples => class.is_multisampled(),
                         };
                         if !good {
                             return Err(ExpressionError::InvalidImageClass(class));

@@ -709,13 +709,15 @@ impl<'w> BlockContext<'w> {
     /// Generate code for an `ImageLoad` expression.
     ///
     /// The arguments are the components of an `Expression::ImageLoad` variant.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_image_load(
         &mut self,
         result_type_id: Word,
         image: Handle<crate::Expression>,
         coordinate: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
-        level_or_sample: Option<Handle<crate::Expression>>,
+        level: Option<Handle<crate::Expression>>,
+        sample: Option<Handle<crate::Expression>>,
         block: &mut Block,
     ) -> Result<Word, Error> {
         let image_id = self.get_image_id(image);
@@ -728,18 +730,8 @@ impl<'w> BlockContext<'w> {
         let access = Load::from_image_expr(self, image_id, image_class, result_type_id)?;
         let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
 
-        // Figure out what the `level_or_sample` operand really means.
-        let level_or_sample_id = level_or_sample.map(|i| self.cached[i]);
-        let (level_id, sample_id) = match image_class {
-            crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => {
-                if multi {
-                    (None, level_or_sample_id)
-                } else {
-                    (level_or_sample_id, None)
-                }
-            }
-            crate::ImageClass::Storage { .. } => (None, None),
-        };
+        let level_id = level.map(|expr| self.cached[expr]);
+        let sample_id = sample.map(|expr| self.cached[expr]);
 
         // Perform the access, according to the bounds check policy.
         let access_id = match self.writer.bounds_check_policies.image {

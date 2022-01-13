@@ -350,7 +350,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
             texture_args_generator(TextureArgsOptions::all(), f)
         }
         "texelFetch" => {
-            let f = |kind, dim, arrayed, multi, _| {
+            let f = |kind, dim, arrayed, multi, _shadow| {
                 // Cube images aren't supported
                 if let Dim::Cube = dim {
                     return;
@@ -376,7 +376,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
 
                 declaration
                     .overloads
-                    .push(module.add_builtin(args, MacroCall::ImageLoad))
+                    .push(module.add_builtin(args, MacroCall::ImageLoad { multi }))
             };
 
             // Don't generate shadow images since they aren't supported
@@ -439,7 +439,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
 
                 declaration
                     .overloads
-                    .push(module.add_builtin(args, MacroCall::ImageLoad))
+                    .push(module.add_builtin(args, MacroCall::ImageLoad { multi: false }))
             };
 
             // Don't generate shadow nor multisampled images since they aren't supported
@@ -1537,7 +1537,9 @@ pub enum MacroCall {
     TextureSize {
         arrayed: bool,
     },
-    ImageLoad,
+    ImageLoad {
+        multi: bool,
+    },
     ImageStore,
     MathFunction(MathFunction),
     BitfieldExtract,
@@ -1760,15 +1762,21 @@ impl MacroCall {
 
                 expr
             }
-            MacroCall::ImageLoad => {
+            MacroCall::ImageLoad { multi } => {
                 let comps =
                     parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
+                let (sample, level) = match (multi, args.get(2)) {
+                    (_, None) => (None, None),
+                    (true, Some(&arg)) => (Some(arg), None),
+                    (false, Some(&arg)) => (None, Some(arg)),
+                };
                 ctx.add_expression(
                     Expression::ImageLoad {
                         image: args[0],
                         coordinate: comps.coordinate,
                         array_index: comps.array_index,
-                        index: args.get(2).copied(),
+                        sample,
+                        level,
                     },
                     Span::default(),
                     body,

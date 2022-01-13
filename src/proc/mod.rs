@@ -441,6 +441,22 @@ impl super::SwizzleComponent {
     }
 }
 
+impl super::ImageClass {
+    pub fn is_multisampled(self) -> bool {
+        match self {
+            crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => multi,
+            crate::ImageClass::Storage { .. } => false,
+        }
+    }
+
+    pub fn is_mipmapped(self) -> bool {
+        match self {
+            crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => !multi,
+            crate::ImageClass::Storage { .. } => false,
+        }
+    }
+}
+
 #[test]
 fn test_matrix_size() {
     let constants = crate::Arena::new();

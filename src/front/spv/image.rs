@@ -332,7 +332,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             0
         };
 
-        let mut index = None;
+        let mut sample = None;
+        let mut level = None;
         while image_ops != 0 {
             let bit = 1 << image_ops.trailing_zeros();
             match spirv::ImageOperands::from_bits_truncate(bit) {
@@ -341,13 +342,13 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                     let lod_lexp = self.lookup_expression.lookup(lod_expr)?;
                     let lod_handle =
                         self.get_expr_handle(lod_expr, lod_lexp, ctx, emitter, block, body_idx);
-                    index = Some(lod_handle);
+                    level = Some(lod_handle);
                     words_left -= 1;
                 }
                 spirv::ImageOperands::SAMPLE => {
                     let sample_expr = self.next()?;
                     let sample_handle = self.lookup_expression.lookup(sample_expr)?.handle;
-                    index = Some(sample_handle);
+                    sample = Some(sample_handle);
                     words_left -= 1;
                 }
                 other => {
@@ -393,7 +394,8 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
             image: image_lexp.handle,
             coordinate,
             array_index,
-            index,
+            sample,
+            level,
         };
         self.lookup_expression.insert(
             result_id,

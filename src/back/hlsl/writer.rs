@@ -1694,19 +1694,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 image,
                 coordinate,
                 array_index,
-                index,
+                sample,
+                level,
             } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                let (sample, mip_level) = match *func_ctx.info[image].ty.inner_with(&module.types) {
-                    TypeInner::Image { class, .. } => match class {
-                        crate::ImageClass::Sampled { multi: true, .. }
-                        | crate::ImageClass::Depth { multi: true } => (index, None),
-                        crate::ImageClass::Storage { .. } => (None, None),
-                        _ => (None, index),
-                    },
-                    _ => (None, None),
-                };
-
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ".Load(")?;
 
@@ -1714,7 +1705,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     "int",
                     coordinate,
                     array_index,
-                    mip_level,
+                    level,
                     module,
                     func_ctx,
                 )?;
