@@ -247,7 +247,7 @@ pub fn map_address_mode(mode: wgt::AddressMode) -> d3d12::D3D12_TEXTURE_ADDRESS_
         Am::Repeat => d3d12::D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         Am::MirrorRepeat => d3d12::D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
         Am::ClampToEdge => d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-        Am::ClampToBorder | Am::ClampToZero => d3d12::D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        Am::ClampToBorder => d3d12::D3D12_TEXTURE_ADDRESS_MODE_BORDER,
         //Am::MirrorClamp => d3d12::D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE,
     }
 }
