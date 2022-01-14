@@ -990,8 +990,8 @@ impl<A: HalApi> Device<A> {
             self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER)?;
         }
 
-        if desc.border_color == Some(wgt::SamplerBorderColor::AutoBlack) {
-            self.require_features(wgt::Features::SAMPLER_BORDER_COLOR_AUTO_BLACK)?;
+        if desc.border_color == Some(wgt::SamplerBorderColor::Zero) {
+            self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO)?;
         }
 
         let lod_clamp = if desc.lod_min_clamp > 0.0 || desc.lod_max_clamp < 32.0 {

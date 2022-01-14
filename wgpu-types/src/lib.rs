@@ -399,7 +399,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
-        /// - Metal (macOS 10.12+ only)
+        /// - Metal (macOS 10.12+ always, iOS if used with [`SamplerBorderColor::AutoBlack`])
         /// - DX11
         /// - OpenGL
         ///
@@ -561,7 +561,7 @@ bitflags::bitflags! {
         /// - OpenGL
         ///
         /// This is a native only feature.
-        const SAMPLER_BORDER_COLOR_AUTO_BLACK = 1 << 42;
+        const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 42;
     }
 }
 
@@ -3543,11 +3543,13 @@ pub enum SamplerBorderColor {
     OpaqueBlack,
     /// [1, 1, 1, 1]
     OpaqueWhite,
+
     /// On the Metal backend, this is equivalent to `TransparentBlack` for
     /// textures that have an alpha component, and equivalent to `OpaqueBlack`
     /// for textures that do not have an alpha component. On other backends,
-    /// this is equivalent to `TransparentBlack`. Not supported on the web.
-    AutoBlack,
+    /// this is equivalent to `TransparentBlack`. Requires
+    /// [`Features::ADDRESS_MODE_CLAMP_TO_ZERO`]. Not supported on the web.
+    Zero,
 }
 
 /// Describes how to create a QuerySet.

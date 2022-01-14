@@ -411,7 +411,7 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         if let Some(border_color) = desc.border_color {
-            if let wgt::SamplerBorderColor::AutoBlack = border_color {
+            if let wgt::SamplerBorderColor::Zero = border_color {
                 if s == wgt::AddressMode::ClampToBorder {
                     descriptor.set_address_mode_s(mtl::MTLSamplerAddressMode::ClampToZero);
                 }

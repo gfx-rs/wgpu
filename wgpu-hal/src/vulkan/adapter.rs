@@ -329,7 +329,7 @@ impl PhysicalDeviceFeatures {
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::PUSH_CONSTANTS
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
-            | F::SAMPLER_BORDER_COLOR_AUTO_BLACK
+            | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
             | F::PIPELINE_STATISTICS_QUERY
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES

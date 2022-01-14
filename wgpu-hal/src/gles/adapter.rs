@@ -292,7 +292,7 @@ impl super::Adapter {
             extensions.contains("GL_EXT_texture_border_clamp"),
         );
         features.set(
-            wgt::Features::SAMPLER_BORDER_COLOR_AUTO_BLACK,
+            wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
             extensions.contains("GL_EXT_texture_border_clamp"),
         );
         features.set(

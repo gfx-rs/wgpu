@@ -721,7 +721,7 @@ impl crate::Device<super::Api> for super::Device {
 
         if let Some(border_color) = desc.border_color {
             let border = match border_color {
-                wgt::SamplerBorderColor::TransparentBlack | wgt::SamplerBorderColor::AutoBlack => [0.0; 4],
+                wgt::SamplerBorderColor::TransparentBlack | wgt::SamplerBorderColor::Zero => [0.0; 4],
                 wgt::SamplerBorderColor::OpaqueBlack => [0.0, 0.0, 0.0, 1.0],
                 wgt::SamplerBorderColor::OpaqueWhite => [1.0; 4],
             };
