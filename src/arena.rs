@@ -8,6 +8,13 @@ type Index = NonZeroU32;
 use crate::Span;
 use indexmap::set::IndexSet;
 
+#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
+#[error("Handle {index} of {kind} is either not present, or inaccessible yet")]
+pub struct BadHandle {
+    pub kind: &'static str,
+    pub index: usize,
+}
+
 /// A strongly typed reference to an arena item.
 ///
 /// A `Handle` value can be used as an index into an [`Arena`] or [`UniqueArena`].
@@ -265,8 +272,11 @@ impl<T> Arena<T> {
         self.fetch_if_or_append(value, span, T::eq)
     }
 
-    pub fn try_get(&self, handle: Handle<T>) -> Option<&T> {
-        self.data.get(handle.index())
+    pub fn try_get(&self, handle: Handle<T>) -> Result<&T, BadHandle> {
+        self.data.get(handle.index()).ok_or_else(|| BadHandle {
+            kind: std::any::type_name::<T>(),
+            index: handle.index(),
+        })
     }
 
     /// Get a mutable reference to an element in the arena.

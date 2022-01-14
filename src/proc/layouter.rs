@@ -1,4 +1,4 @@
-use crate::arena::{Arena, Handle, UniqueArena};
+use crate::arena::{Arena, BadHandle, Handle, UniqueArena};
 use std::{num::NonZeroU32, ops};
 
 pub type Alignment = NonZeroU32;
@@ -37,8 +37,8 @@ pub enum TypeLayoutError {
     InvalidStructMemberType(u32, Handle<crate::Type>),
     #[error("Zero width is not supported")]
     ZeroWidth,
-    #[error(transparent)]
-    Size(#[from] super::ProcError),
+    #[error("Array size is a bad handle")]
+    BadHandle(#[from] BadHandle),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, thiserror::Error)]
@@ -95,7 +95,7 @@ impl Layouter {
             let size = ty
                 .inner
                 .size(constants)
-                .map_err(|error| TypeLayoutError::Size(error).with(ty_handle))?;
+                .map_err(|error| TypeLayoutError::BadHandle(error).with(ty_handle))?;
             let layout = match ty.inner {
                 Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => TypeLayout {
                     size,

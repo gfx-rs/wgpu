@@ -79,13 +79,17 @@ impl<'w> BlockContext<'w> {
         block: &mut Block,
     ) -> Result<MaybeKnown<u32>, Error> {
         let sequence_ty = self.fun_info[sequence].ty.inner_with(&self.ir_module.types);
-        match sequence_ty.indexable_length(self.ir_module)? {
-            crate::proc::IndexableLength::Known(known_length) => {
+        match sequence_ty.indexable_length(self.ir_module) {
+            Ok(crate::proc::IndexableLength::Known(known_length)) => {
                 Ok(MaybeKnown::Known(known_length))
             }
-            crate::proc::IndexableLength::Dynamic => {
+            Ok(crate::proc::IndexableLength::Dynamic) => {
                 let length_id = self.write_runtime_array_length(sequence, block)?;
                 Ok(MaybeKnown::Computed(length_id))
+            }
+            Err(err) => {
+                log::error!("Sequence length for {:?} failed: {}", sequence, err);
+                Err(Error::Validation("indexable length"))
             }
         }
     }

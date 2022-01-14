@@ -1,6 +1,6 @@
-use crate::arena::Handle;
 #[cfg(feature = "validate")]
 use crate::arena::{Arena, UniqueArena};
+use crate::arena::{BadHandle, Handle};
 
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
@@ -16,8 +16,8 @@ use bit_set::BitSet;
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum CallError {
-    #[error("Bad function")]
-    InvalidFunction,
+    #[error(transparent)]
+    BadHandle(#[from] BadHandle),
     #[error("The callee is declared after the caller")]
     ForwardDeclaredFunction,
     #[error("Argument {index} expression is invalid")]
@@ -67,6 +67,8 @@ pub enum LocalVariableError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum FunctionError {
+    #[error(transparent)]
+    BadHandle(#[from] BadHandle),
     #[error("Expression {handle:?} is invalid")]
     Expression {
         handle: Handle<crate::Expression>,
@@ -121,8 +123,6 @@ pub enum FunctionError {
         pointer: Handle<crate::Expression>,
         value: Handle<crate::Expression>,
     },
-    #[error("The expression {0:?} is currupted")]
-    InvalidExpression(Handle<crate::Expression>),
     #[error("Image store parameters are invalid")]
     InvalidImageStore(#[source] ExpressionError),
     #[error("Call to {function:?} is invalid")]
@@ -201,9 +201,7 @@ impl<'a> BlockContext<'a> {
         &self,
         handle: Handle<crate::Expression>,
     ) -> Result<&'a crate::Expression, FunctionError> {
-        self.expressions
-            .try_get(handle)
-            .ok_or(FunctionError::InvalidExpression(handle))
+        Ok(self.expressions.try_get(handle)?)
     }
 
     fn resolve_type_impl(
@@ -256,7 +254,7 @@ impl super::Validator {
         let fun = context
             .functions
             .try_get(function)
-            .ok_or(CallError::InvalidFunction)
+            .map_err(CallError::BadHandle)
             .map_err(WithSpan::new)?;
         if fun.arguments.len() != arguments.len() {
             return Err(CallError::ArgumentCount {

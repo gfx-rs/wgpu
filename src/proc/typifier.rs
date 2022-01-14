@@ -1,4 +1,4 @@
-use crate::arena::{Arena, Handle, UniqueArena};
+use crate::arena::{Arena, BadHandle, Handle, UniqueArena};
 
 use thiserror::Error;
 
@@ -162,6 +162,8 @@ impl crate::ConstantInner {
 
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum ResolveError {
+    #[error(transparent)]
+    BadHandle(#[from] BadHandle),
     #[error("Index {index} is out of bounds for expression {expr:?}")]
     OutOfBoundsIndex {
         expr: Handle<crate::Expression>,
@@ -191,14 +193,8 @@ pub enum ResolveError {
     FunctionReturnsVoid,
     #[error("Incompatible operands: {0}")]
     IncompatibleOperands(String),
-    #[error("Local var {0:?} doesn't exist")]
-    LocalVariableNotFound(Handle<crate::LocalVariable>),
-    #[error("Global var {0:?} doesn't exist")]
-    GlobalVariableNotFound(Handle<crate::GlobalVariable>),
     #[error("Function argument {0} doesn't exist")]
     FunctionArgumentNotFound(u32),
-    #[error("Constant {0:?} doesn't exist")]
-    ConstantNotFound(Handle<crate::Constant>),
     #[error("Expression {0:?} depends on expressions that follow")]
     ExpressionForwardDependency(Handle<crate::Expression>),
 }
@@ -406,10 +402,7 @@ impl<'a> ResolveContext<'a> {
                 }
             }
             crate::Expression::Constant(h) => {
-                let constant = self
-                    .constants
-                    .try_get(h)
-                    .ok_or(ResolveError::ConstantNotFound(h))?;
+                let constant = self.constants.try_get(h)?;
                 match constant.inner {
                     crate::ConstantInner::Scalar { width, ref value } => {
                         TypeResolution::Value(Ti::Scalar {
@@ -455,10 +448,7 @@ impl<'a> ResolveContext<'a> {
                 TypeResolution::Handle(arg.ty)
             }
             crate::Expression::GlobalVariable(h) => {
-                let var = self
-                    .global_vars
-                    .try_get(h)
-                    .ok_or(ResolveError::GlobalVariableNotFound(h))?;
+                let var = self.global_vars.try_get(h)?;
                 if var.class == crate::StorageClass::Handle {
                     TypeResolution::Handle(var.ty)
                 } else {
@@ -469,10 +459,7 @@ impl<'a> ResolveContext<'a> {
                 }
             }
             crate::Expression::LocalVariable(h) => {
-                let var = self
-                    .local_vars
-                    .try_get(h)
-                    .ok_or(ResolveError::LocalVariableNotFound(h))?;
+                let var = self.local_vars.try_get(h)?;
                 TypeResolution::Value(Ti::Pointer {
                     base: var.ty,
                     class: crate::StorageClass::Function,

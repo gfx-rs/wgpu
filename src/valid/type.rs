@@ -1,6 +1,6 @@
 use super::Capabilities;
 use crate::{
-    arena::{Arena, Handle, UniqueArena},
+    arena::{Arena, BadHandle, Handle, UniqueArena},
     proc::Alignment,
 };
 
@@ -72,6 +72,8 @@ pub enum Disalignment {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum TypeError {
+    #[error(transparent)]
+    BadHandle(#[from] BadHandle),
     #[error("The {0:?} scalar width {1} is not supported")]
     InvalidWidth(crate::ScalarKind, crate::Bytes),
     #[error("The {0:?} scalar width {1} is not supported for an atomic")]
@@ -375,11 +377,12 @@ impl super::Validator {
 
                 let sized_flag = match size {
                     crate::ArraySize::Constant(const_handle) => {
-                        let length_is_positive = match constants.try_get(const_handle) {
-                            Some(&crate::Constant {
+                        let constant = constants.try_get(const_handle)?;
+                        let length_is_positive = match *constant {
+                            crate::Constant {
                                 specialization: Some(_),
                                 ..
-                            }) => {
+                            } => {
                                 // Many of our back ends don't seem to support
                                 // specializable array lengths. If you want to try to make
                                 // this work, be sure to address all uses of
@@ -389,28 +392,28 @@ impl super::Validator {
                                     const_handle,
                                 ));
                             }
-                            Some(&crate::Constant {
+                            crate::Constant {
                                 inner:
                                     crate::ConstantInner::Scalar {
                                         width: _,
                                         value: crate::ScalarValue::Uint(length),
                                     },
                                 ..
-                            }) => length > 0,
+                            } => length > 0,
                             // Accept a signed integer size to avoid
                             // requiring an explicit uint
                             // literal. Type inference should make
                             // this unnecessary.
-                            Some(&crate::Constant {
+                            crate::Constant {
                                 inner:
                                     crate::ConstantInner::Scalar {
                                         width: _,
                                         value: crate::ScalarValue::Sint(length),
                                     },
                                 ..
-                            }) => length > 0,
-                            other => {
-                                log::warn!("Array size {:?}", other);
+                            } => length > 0,
+                            _ => {
+                                log::warn!("Array size {:?}", constant);
                                 return Err(TypeError::InvalidArraySizeConstant(const_handle));
                             }
                         };

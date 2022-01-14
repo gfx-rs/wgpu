@@ -8,19 +8,11 @@ mod typifier;
 
 use std::cmp::PartialEq;
 
-pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength};
+pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
 pub use layouter::{Alignment, LayoutError, Layouter, TypeLayout, TypeLayoutError};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
-
-#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
-pub enum ProcError {
-    #[error("Type is not indexable, and has no length (validation error)")]
-    TypeNotIndexable,
-    #[error("Array length {0:?} is wrong kind of constant (validation error)")]
-    InvalidArraySizeConstant(crate::Handle<crate::Constant>),
-}
 
 impl From<super::StorageFormat> for super::ScalarKind {
     fn from(format: super::StorageFormat) -> Self {
@@ -94,7 +86,10 @@ impl super::TypeInner {
         }
     }
 
-    pub fn size(&self, constants: &super::Arena<super::Constant>) -> Result<u32, ProcError> {
+    pub fn size(
+        &self,
+        constants: &super::Arena<super::Constant>,
+    ) -> Result<u32, crate::arena::BadHandle> {
         Ok(match *self {
             Self::Scalar { kind: _, width } | Self::Atomic { kind: _, width } => width as u32,
             Self::Vector {
@@ -119,9 +114,7 @@ impl super::TypeInner {
             } => {
                 let count = match size {
                     super::ArraySize::Constant(handle) => {
-                        let constant = constants
-                            .try_get(handle)
-                            .ok_or(ProcError::InvalidArraySizeConstant(handle))?;
+                        let constant = constants.try_get(handle)?;
                         constant.to_array_length().unwrap_or(1)
                     }
                     // A dynamically-sized array has to have at least one element

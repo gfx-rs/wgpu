@@ -4,8 +4,8 @@ use super::{compose::validate_compose, FunctionInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
 
 use crate::{
-    arena::Handle,
-    proc::{ProcError, ResolveError},
+    arena::{BadHandle, Handle},
+    proc::{IndexableLengthError, ResolveError},
 };
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -17,6 +17,8 @@ pub enum ExpressionError {
     NotInScope,
     #[error("Depends on {0:?}, which has not been processed yet")]
     ForwardDependency(Handle<crate::Expression>),
+    #[error(transparent)]
+    BadDependency(#[from] BadHandle),
     #[error("Base type {0:?} is not compatible with this expression")]
     InvalidBaseType(Handle<crate::Expression>),
     #[error("Accessing with index {0:?} can't be done")]
@@ -27,12 +29,6 @@ pub enum ExpressionError {
     IndexMustBeConstant(Handle<crate::Expression>),
     #[error("Function argument {0:?} doesn't exist")]
     FunctionArgumentDoesntExist(u32),
-    #[error("Constant {0:?} doesn't exist")]
-    ConstantDoesntExist(Handle<crate::Constant>),
-    #[error("Global variable {0:?} doesn't exist")]
-    GlobalVarDoesntExist(Handle<crate::GlobalVariable>),
-    #[error("Local variable {0:?} doesn't exist")]
-    LocalVarDoesntExist(Handle<crate::LocalVariable>),
     #[error("Loading of {0:?} can't be done")]
     InvalidPointerType(Handle<crate::Expression>),
     #[error("Array length of {0:?} can't be done")]
@@ -46,7 +42,7 @@ pub enum ExpressionError {
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
     #[error(transparent)]
-    Proc(#[from] ProcError),
+    IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
     InvalidUnaryOperandType(crate::UnaryOperator, Handle<crate::Expression>),
     #[error("Operation {0:?} can't work with {1:?} and {2:?}")]
@@ -266,10 +262,7 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::Constant(handle) => {
-                let _ = module
-                    .constants
-                    .try_get(handle)
-                    .ok_or(ExpressionError::ConstantDoesntExist(handle))?;
+                let _ = module.constants.try_get(handle)?;
                 ShaderStages::all()
             }
             E::Splat { size: _, value } => match *resolver.resolve(value)? {
@@ -319,17 +312,11 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::GlobalVariable(handle) => {
-                let _ = module
-                    .global_variables
-                    .try_get(handle)
-                    .ok_or(ExpressionError::GlobalVarDoesntExist(handle))?;
+                let _ = module.global_variables.try_get(handle)?;
                 ShaderStages::all()
             }
             E::LocalVariable(handle) => {
-                let _ = function
-                    .local_variables
-                    .try_get(handle)
-                    .ok_or(ExpressionError::LocalVarDoesntExist(handle))?;
+                let _ = function.local_variables.try_get(handle)?;
                 ShaderStages::all()
             }
             E::Load { pointer } => {
