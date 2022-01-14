@@ -262,10 +262,7 @@ impl Parser {
         array_specifier
             .map(|(size, size_meta)| {
                 meta.subsume(size_meta);
-                let stride = self.module.types[base]
-                    .inner
-                    .size(&self.module.constants)
-                    .unwrap();
+                let stride = self.module.types[base].inner.size(&self.module.constants);
                 self.module.types.insert(
                     Type {
                         name: None,

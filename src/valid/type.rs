@@ -329,7 +329,7 @@ impl super::Validator {
                 }
 
                 //Note: `unwrap()` is fine, since `Layouter` goes first and calls it
-                let base_size = types[base].inner.size(constants).unwrap();
+                let base_size = types[base].inner.size(constants);
                 if stride < base_size {
                     return Err(TypeError::InsufficientArrayStride { stride, base_size });
                 }
@@ -484,7 +484,7 @@ impl super::Validator {
                     }
 
                     //Note: `unwrap()` is fine because `Layouter` goes first and checks this
-                    let base_size = types[member.ty].inner.size(constants).unwrap();
+                    let base_size = types[member.ty].inner.size(constants);
                     min_offset = member.offset + base_size;
                     if min_offset > span {
                         return Err(TypeError::MemberOutOfBounds {

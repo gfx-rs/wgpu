@@ -86,7 +86,7 @@ impl super::TypeInner {
         }
     }
 
-    pub fn size(
+    pub fn try_size(
         &self,
         constants: &super::Arena<super::Constant>,
     ) -> Result<u32, crate::arena::BadHandle> {
@@ -125,6 +125,12 @@ impl super::TypeInner {
             Self::Struct { span, .. } => span,
             Self::Image { .. } | Self::Sampler { .. } => 0,
         })
+    }
+
+    /// Get the size of this type. Panics if the `constants` doesn't contain
+    /// a referenced handle. This may not happen in a properly validated IR module.
+    pub fn size(&self, constants: &super::Arena<super::Constant>) -> u32 {
+        self.try_size(constants).unwrap()
     }
 
     /// Return the canoncal form of `self`, or `None` if it's already in
@@ -443,6 +449,6 @@ fn test_matrix_size() {
             width: 4
         }
         .size(&constants),
-        Ok(48),
+        48,
     );
 }

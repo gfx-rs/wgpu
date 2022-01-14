@@ -94,7 +94,7 @@ impl Layouter {
         for (ty_handle, ty) in types.iter().skip(self.layouts.len()) {
             let size = ty
                 .inner
-                .size(constants)
+                .try_size(constants)
                 .map_err(|error| TypeLayoutError::BadHandle(error).with(ty_handle))?;
             let layout = match ty.inner {
                 Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => TypeLayout {
