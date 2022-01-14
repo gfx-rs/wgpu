@@ -394,12 +394,13 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const PUSH_CONSTANTS = 1 << 26;
-        /// Allows the use of [`AddressMode::ClampToBorder`].
+        /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
+        /// other than [`SamplerBorderColor::Zero`].
         ///
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
-        /// - Metal (macOS 10.12+ always, iOS if used with [`SamplerBorderColor::AutoBlack`])
+        /// - Metal (macOS 10.12+ only)
         /// - DX11
         /// - OpenGL
         ///
@@ -551,7 +552,8 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_16BIT_NORM = 1 << 41;
-        /// Allows the use of [`SamplerBorderColor::AutoBlack`].
+        /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
+        /// of [`SamplerBorderColor::Zero`].
         ///
         /// Supported platforms:
         /// - DX12
