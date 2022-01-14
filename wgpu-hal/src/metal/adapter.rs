@@ -940,8 +940,11 @@ impl super::PrivateCapabilities {
         {
             features.insert(F::STORAGE_RESOURCE_BINDING_ARRAY);
         }
-        
-        features.set(F::ADDRESS_MODE_CLAMP_TO_BORDER, self.sampler_clamp_to_border);
+
+        features.set(
+            F::ADDRESS_MODE_CLAMP_TO_BORDER,
+            self.sampler_clamp_to_border,
+        );
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features
