@@ -394,7 +394,8 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const PUSH_CONSTANTS = 1 << 26;
-        /// Allows the use of [`AddressMode::ClampToBorder`].
+        /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
+        /// other than [`SamplerBorderColor::Zero`].
         ///
         /// Supported platforms:
         /// - DX12
@@ -551,6 +552,18 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_16BIT_NORM = 1 << 41;
+        /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
+        /// of [`SamplerBorderColor::Zero`].
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        /// - DX11
+        /// - OpenGL
+        ///
+        /// This is a native only feature.
+        const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 42;
     }
 }
 
@@ -3727,6 +3740,13 @@ pub enum SamplerBorderColor {
     OpaqueBlack,
     /// [1, 1, 1, 1]
     OpaqueWhite,
+
+    /// On the Metal backend, this is equivalent to `TransparentBlack` for
+    /// textures that have an alpha component, and equivalent to `OpaqueBlack`
+    /// for textures that do not have an alpha component. On other backends,
+    /// this is equivalent to `TransparentBlack`. Requires
+    /// [`Features::ADDRESS_MODE_CLAMP_TO_ZERO`]. Not supported on the web.
+    Zero,
 }
 
 /// Describes how to create a QuerySet.

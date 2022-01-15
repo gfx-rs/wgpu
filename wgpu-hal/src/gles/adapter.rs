@@ -288,7 +288,7 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE;
         features.set(
-            wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+            wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
             extensions.contains("GL_EXT_texture_border_clamp"),
         );
         features.set(

@@ -392,14 +392,14 @@ impl crate::Device<super::Api> for super::Device {
             wgt::FilterMode::Linear => mtl::MTLSamplerMipFilter::Linear,
         });
 
-        if let Some(aniso) = desc.anisotropy_clamp {
-            descriptor.set_max_anisotropy(aniso.get() as _);
-        }
-
         let [s, t, r] = desc.address_modes;
         descriptor.set_address_mode_s(conv::map_address_mode(s));
         descriptor.set_address_mode_t(conv::map_address_mode(t));
         descriptor.set_address_mode_r(conv::map_address_mode(r));
+
+        if let Some(aniso) = desc.anisotropy_clamp {
+            descriptor.set_max_anisotropy(aniso.get() as _);
+        }
 
         if let Some(ref range) = desc.lod_clamp {
             descriptor.set_lod_min_clamp(range.start);
@@ -413,8 +413,23 @@ impl crate::Device<super::Api> for super::Device {
         if let Some(fun) = desc.compare {
             descriptor.set_compare_function(conv::map_compare_function(fun));
         }
+
         if let Some(border_color) = desc.border_color {
-            descriptor.set_border_color(conv::map_border_color(border_color));
+            if let wgt::SamplerBorderColor::Zero = border_color {
+                if s == wgt::AddressMode::ClampToBorder {
+                    descriptor.set_address_mode_s(mtl::MTLSamplerAddressMode::ClampToZero);
+                }
+
+                if t == wgt::AddressMode::ClampToBorder {
+                    descriptor.set_address_mode_t(mtl::MTLSamplerAddressMode::ClampToZero);
+                }
+
+                if r == wgt::AddressMode::ClampToBorder {
+                    descriptor.set_address_mode_r(mtl::MTLSamplerAddressMode::ClampToZero);
+                }
+            } else {
+                descriptor.set_border_color(conv::map_border_color(border_color));
+            }
         }
 
         if let Some(label) = desc.label {

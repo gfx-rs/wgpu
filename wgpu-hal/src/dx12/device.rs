@@ -620,6 +620,8 @@ impl crate::Device<super::Api> for super::Device {
                 .anisotropy_clamp
                 .map_or(0, |_| d3d12::D3D12_FILTER_ANISOTROPIC);
 
+        let border_color = conv::map_border_color(desc.border_color);
+
         self.raw.create_sampler(
             handle.raw,
             filter,
@@ -631,7 +633,7 @@ impl crate::Device<super::Api> for super::Device {
             0.0,
             desc.anisotropy_clamp.map_or(0, |aniso| aniso.get() as u32),
             conv::map_comparison(desc.compare.unwrap_or(wgt::CompareFunction::Always)),
-            conv::map_border_color(desc.border_color),
+            border_color,
             desc.lod_clamp.clone().unwrap_or(0.0..16.0),
         );
 

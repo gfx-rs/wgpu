@@ -73,6 +73,7 @@ pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> mtl::MTLSample
         wgt::SamplerBorderColor::TransparentBlack => TransparentBlack,
         wgt::SamplerBorderColor::OpaqueBlack => OpaqueBlack,
         wgt::SamplerBorderColor::OpaqueWhite => OpaqueWhite,
+        wgt::SamplerBorderColor::Zero => unreachable!(),
     }
 }
 

@@ -589,13 +589,15 @@ pub fn map_address_mode(mode: wgt::AddressMode) -> vk::SamplerAddressMode {
         wgt::AddressMode::Repeat => vk::SamplerAddressMode::REPEAT,
         wgt::AddressMode::MirrorRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
         wgt::AddressMode::ClampToBorder => vk::SamplerAddressMode::CLAMP_TO_BORDER,
-        //wgt::AddressMode::MirrorClamp => vk::SamplerAddressMode::MIRROR_CLAMP_TO_EDGE,
+        // wgt::AddressMode::MirrorClamp => vk::SamplerAddressMode::MIRROR_CLAMP_TO_EDGE,
     }
 }
 
 pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> vk::BorderColor {
     match border_color {
-        wgt::SamplerBorderColor::TransparentBlack => vk::BorderColor::FLOAT_TRANSPARENT_BLACK,
+        wgt::SamplerBorderColor::TransparentBlack | wgt::SamplerBorderColor::Zero => {
+            vk::BorderColor::FLOAT_TRANSPARENT_BLACK
+        }
         wgt::SamplerBorderColor::OpaqueBlack => vk::BorderColor::FLOAT_OPAQUE_BLACK,
         wgt::SamplerBorderColor::OpaqueWhite => vk::BorderColor::FLOAT_OPAQUE_WHITE,
     }
