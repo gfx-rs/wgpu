@@ -937,7 +937,7 @@ pub struct ComputePass<'a> {
 /// It only supports a handful of render commands, but it makes them reusable. [`RenderBundle`]s
 /// can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
 ///
-/// Executing a [`RenderBundle`] is often more efficient then issuing the underlying commands manually.
+/// Executing a [`RenderBundle`] is often more efficient than issuing the underlying commands manually.
 #[derive(Debug)]
 pub struct RenderBundleEncoder<'a> {
     context: Arc<C>,
@@ -953,7 +953,7 @@ pub struct RenderBundleEncoder<'a> {
 /// It only supports a handful of render commands, but it makes them reusable. [`RenderBundle`]s
 /// can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
 ///
-/// Executing a [`RenderBundle`] is often more efficient then issuing the underlying commands manually.
+/// Executing a [`RenderBundle`] is often more efficient than issuing the underlying commands manually.
 #[derive(Debug)]
 pub struct RenderBundle {
     context: Arc<C>,
