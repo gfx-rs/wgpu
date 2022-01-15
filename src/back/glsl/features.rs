@@ -343,6 +343,8 @@ impl<'a, W> Writer<'a, W> {
             }
         }
 
+        let mut push_constant_used = false;
+
         for (handle, global) in self.module.global_variables.iter() {
             if ep_info[handle].is_empty() {
                 continue;
@@ -350,7 +352,12 @@ impl<'a, W> Writer<'a, W> {
             match global.class {
                 StorageClass::WorkGroup => self.features.request(Features::COMPUTE_SHADER),
                 StorageClass::Storage { .. } => self.features.request(Features::BUFFER_STORAGE),
-                StorageClass::PushConstant => return Err(Error::PushConstantNotSupported),
+                StorageClass::PushConstant => {
+                    if push_constant_used {
+                        return Err(Error::MultiplePushConstants);
+                    }
+                    push_constant_used = true;
+                }
                 _ => {}
             }
         }

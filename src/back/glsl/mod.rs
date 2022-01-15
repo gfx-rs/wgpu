@@ -86,7 +86,9 @@ impl crate::AtomicFunction {
 impl crate::StorageClass {
     fn is_buffer(&self) -> bool {
         match *self {
-            crate::StorageClass::Uniform | crate::StorageClass::Storage { .. } => true,
+            crate::StorageClass::PushConstant
+            | crate::StorageClass::Uniform
+            | crate::StorageClass::Storage { .. } => true,
             _ => false,
         }
     }
@@ -96,6 +98,7 @@ impl crate::StorageClass {
         match *self {
             crate::StorageClass::WorkGroup
             | crate::StorageClass::Uniform
+            | crate::StorageClass::PushConstant
             | crate::StorageClass::Storage { .. } => false,
             _ => true,
         }
@@ -227,6 +230,8 @@ pub struct Options {
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
     pub binding_map: BindingMap,
+    /// The binding to give the push constant buffer if it's present
+    pub push_constant_binding: u32,
 }
 
 impl Default for Options {
@@ -235,6 +240,7 @@ impl Default for Options {
             version: Version::Embedded(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
+            push_constant_binding: 0,
         }
     }
 }
@@ -257,6 +263,7 @@ pub struct PipelineOptions {
 pub struct ReflectionInfo {
     pub texture_mapping: crate::FastHashMap<String, TextureMapping>,
     pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
+    pub push_constant: Option<String>,
 }
 
 /// Structure that connects a texture to a sampler or not
@@ -348,10 +355,10 @@ pub enum Error {
     /// Contains the missing [`Features`](Features)
     #[error("The selected version doesn't support {0:?}")]
     MissingFeatures(Features),
-    /// [`StorageClass::PushConstant`](crate::StorageClass::PushConstant) was used and isn't
-    /// supported in the glsl backend
-    #[error("Push constants aren't supported")]
-    PushConstantNotSupported,
+    /// [`StorageClass::PushConstant`](crate::StorageClass::PushConstant) was used more than
+    /// once in the entry point which isn't supported
+    #[error("Multiple push constants aren't supported")]
+    MultiplePushConstants,
     /// The specified [`Version`](Version) isn't supported
     #[error("The specified version isn't supported")]
     VersionNotSupported,
@@ -887,7 +894,13 @@ impl<'a, W: Write> Writer<'a, W> {
         global: &crate::GlobalVariable,
     ) -> BackendResult {
         if self.options.version.supports_explicit_locations() {
-            if let Some(ref br) = global.binding {
+            if let crate::StorageClass::PushConstant = global.class {
+                write!(
+                    self.out,
+                    "layout(std140, binding = {}) ",
+                    self.options.push_constant_binding
+                )?
+            } else if let Some(ref br) = global.binding {
                 match self.options.binding_map.get(br) {
                     Some(binding) => {
                         let layout = match global.class {
@@ -898,7 +911,9 @@ impl<'a, W: Write> Writer<'a, W> {
                                     "std140, "
                                 }
                             }
-                            crate::StorageClass::Uniform => "std140, ",
+                            crate::StorageClass::Uniform | crate::StorageClass::PushConstant => {
+                                "std140, "
+                            }
                             _ => "",
                         };
                         write!(self.out, "layout({}binding = {}) ", layout, binding)?
@@ -2853,15 +2868,12 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 
     /// Helper method used to produce the reflection info that's returned to the user
-    ///
-    /// It takes an iterator of [`Function`](crate::Function) references instead of
-    /// [`Handle`](crate::arena::Handle) because [`EntryPoint`](crate::EntryPoint) isn't in any
-    /// [`Arena`](crate::arena::Arena) and we need to traverse it
     fn collect_reflection_info(&self) -> Result<ReflectionInfo, Error> {
         use std::collections::hash_map::Entry;
         let info = self.info.get_entry_point(self.entry_point_idx as usize);
         let mut texture_mapping = crate::FastHashMap::default();
         let mut uniforms = crate::FastHashMap::default();
+        let mut push_constant = None;
 
         for sampling in info.sampling_set.iter() {
             let tex_name = self.reflection_names_globals[&sampling.image].clone();
@@ -2892,6 +2904,10 @@ impl<'a, W: Write> Writer<'a, W> {
                         let name = self.reflection_names_globals[&handle].clone();
                         uniforms.insert(handle, name);
                     }
+                    crate::StorageClass::PushConstant => {
+                        let name = self.reflection_names_globals[&handle].clone();
+                        push_constant = Some(name)
+                    }
                     _ => (),
                 },
                 crate::TypeInner::Image { .. } => {
@@ -2915,6 +2931,7 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(ReflectionInfo {
             texture_mapping,
             uniforms,
+            push_constant,
         })
     }
 }
@@ -3022,7 +3039,7 @@ fn glsl_storage_class(class: crate::StorageClass) -> Option<&'static str> {
         Sc::Uniform => Some("uniform"),
         Sc::Handle => Some("uniform"),
         Sc::WorkGroup => Some("shared"),
-        Sc::PushConstant => None,
+        Sc::PushConstant => Some("uniform"),
     }
 }
 
