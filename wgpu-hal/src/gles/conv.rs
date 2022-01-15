@@ -375,3 +375,59 @@ pub(super) fn map_storage_access(access: wgt::StorageTextureAccess) -> u32 {
         wgt::StorageTextureAccess::ReadWrite => glow::READ_WRITE,
     }
 }
+
+pub(super) fn is_sampler(glsl_uniform_type: u32) -> bool {
+    match glsl_uniform_type {
+        glow::INT_SAMPLER_1D
+        | glow::INT_SAMPLER_1D_ARRAY
+        | glow::INT_SAMPLER_2D
+        | glow::INT_SAMPLER_2D_ARRAY
+        | glow::INT_SAMPLER_2D_MULTISAMPLE
+        | glow::INT_SAMPLER_2D_MULTISAMPLE_ARRAY
+        | glow::INT_SAMPLER_2D_RECT
+        | glow::INT_SAMPLER_3D
+        | glow::INT_SAMPLER_CUBE
+        | glow::INT_SAMPLER_CUBE_MAP_ARRAY
+        | glow::UNSIGNED_INT_SAMPLER_1D
+        | glow::UNSIGNED_INT_SAMPLER_1D_ARRAY
+        | glow::UNSIGNED_INT_SAMPLER_2D
+        | glow::UNSIGNED_INT_SAMPLER_2D_ARRAY
+        | glow::UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE
+        | glow::UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY
+        | glow::UNSIGNED_INT_SAMPLER_2D_RECT
+        | glow::UNSIGNED_INT_SAMPLER_3D
+        | glow::UNSIGNED_INT_SAMPLER_CUBE
+        | glow::UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY
+        | glow::SAMPLER_1D
+        | glow::SAMPLER_1D_SHADOW
+        | glow::SAMPLER_1D_ARRAY
+        | glow::SAMPLER_1D_ARRAY_SHADOW
+        | glow::SAMPLER_2D
+        | glow::SAMPLER_2D_SHADOW
+        | glow::SAMPLER_2D_ARRAY
+        | glow::SAMPLER_2D_ARRAY_SHADOW
+        | glow::SAMPLER_2D_MULTISAMPLE
+        | glow::SAMPLER_2D_MULTISAMPLE_ARRAY
+        | glow::SAMPLER_2D_RECT
+        | glow::SAMPLER_2D_RECT_SHADOW
+        | glow::SAMPLER_3D
+        | glow::SAMPLER_CUBE
+        | glow::SAMPLER_CUBE_MAP_ARRAY
+        | glow::SAMPLER_CUBE_MAP_ARRAY_SHADOW
+        | glow::SAMPLER_CUBE_SHADOW => true,
+        _ => false,
+    }
+}
+
+pub(super) fn uniform_byte_size(glsl_uniform_type: u32) -> u32 {
+    match glsl_uniform_type {
+        glow::FLOAT | glow::INT => 4,
+        glow::FLOAT_VEC2 | glow::INT_VEC2 => 8,
+        glow::FLOAT_VEC3 | glow::INT_VEC3 => 12,
+        glow::FLOAT_VEC4 | glow::INT_VEC4 => 16,
+        glow::FLOAT_MAT2 => 16,
+        glow::FLOAT_MAT3 => 36,
+        glow::FLOAT_MAT4 => 64,
+        _ => panic!("Unsupported uniform datatype!"),
+    }
+}

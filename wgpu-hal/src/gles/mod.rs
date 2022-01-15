@@ -88,6 +88,7 @@ const MAX_TEXTURE_SLOTS: usize = 16;
 const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
 const ZERO_BUFFER_SIZE: usize = 256 << 10;
+const MAX_PUSH_CONSTANTS: usize = 16;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -392,13 +393,18 @@ struct VertexBufferDesc {
     stride: u32,
 }
 
-#[allow(unused)]
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 struct UniformDesc {
-    location: glow::UniformLocation,
-    offset: u32,
+    location: Option<glow::UniformLocation>,
+    size: u32,
     utype: u32,
 }
+
+// Safe: WASM doesn't have threads
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for UniformDesc {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for UniformDesc {}
 
 /// For each texture in the pipeline layout, store the index of the only
 /// sampler (in this layout) that the texture is used with.
@@ -407,7 +413,7 @@ type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
-    uniforms: Box<[UniformDesc]>,
+    uniforms: [UniformDesc; MAX_PUSH_CONSTANTS],
 }
 
 #[derive(Clone, Debug)]
@@ -716,6 +722,11 @@ enum Command {
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
+    SetPushConstants {
+        uniform: UniformDesc,
+        /// Offset from the start of the `data_bytes`
+        offset: u32,
+    },
 }
 
 #[derive(Default)]

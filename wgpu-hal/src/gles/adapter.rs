@@ -286,7 +286,8 @@ impl super::Adapter {
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | wgt::Features::CLEAR_TEXTURE;
+            | wgt::Features::CLEAR_TEXTURE
+            | wgt::Features::PUSH_CONSTANTS;
         features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
             extensions.contains("GL_EXT_texture_border_clamp"),
@@ -399,7 +400,7 @@ impl super::Adapter {
             } else {
                 !0
             },
-            max_push_constant_size: 0,
+            max_push_constant_size: super::MAX_PUSH_CONSTANTS as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
             max_inter_stage_shader_components: gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS)

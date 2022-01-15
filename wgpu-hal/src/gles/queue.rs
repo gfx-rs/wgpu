@@ -1067,6 +1067,70 @@ impl super::Queue {
                 #[cfg(not(target_arch = "wasm32"))]
                 gl.pop_debug_group();
             }
+            C::SetPushConstants {
+                ref uniform,
+                offset,
+            } => {
+                fn get_data<T>(data: &[u8], offset: u32) -> &[T] {
+                    let raw = &data[(offset as usize)..];
+                    unsafe {
+                        slice::from_raw_parts(
+                            raw.as_ptr() as *const _,
+                            raw.len() / mem::size_of::<T>(),
+                        )
+                    }
+                }
+
+                let location = uniform.location.as_ref();
+
+                match uniform.utype {
+                    glow::FLOAT => {
+                        let data = get_data::<f32>(data_bytes, offset)[0];
+                        gl.uniform_1_f32(location, data);
+                    }
+                    glow::FLOAT_VEC2 => {
+                        let data = get_data::<[f32; 2]>(data_bytes, offset)[0];
+                        gl.uniform_2_f32_slice(location, &data);
+                    }
+                    glow::FLOAT_VEC3 => {
+                        let data = get_data::<[f32; 3]>(data_bytes, offset)[0];
+                        gl.uniform_3_f32_slice(location, &data);
+                    }
+                    glow::FLOAT_VEC4 => {
+                        let data = get_data::<[f32; 4]>(data_bytes, offset)[0];
+                        gl.uniform_4_f32_slice(location, &data);
+                    }
+                    glow::INT => {
+                        let data = get_data::<i32>(data_bytes, offset)[0];
+                        gl.uniform_1_i32(location, data);
+                    }
+                    glow::INT_VEC2 => {
+                        let data = get_data::<[i32; 2]>(data_bytes, offset)[0];
+                        gl.uniform_2_i32_slice(location, &data);
+                    }
+                    glow::INT_VEC3 => {
+                        let data = get_data::<[i32; 3]>(data_bytes, offset)[0];
+                        gl.uniform_3_i32_slice(location, &data);
+                    }
+                    glow::INT_VEC4 => {
+                        let data = get_data::<[i32; 4]>(data_bytes, offset)[0];
+                        gl.uniform_4_i32_slice(location, &data);
+                    }
+                    glow::FLOAT_MAT2 => {
+                        let data = get_data::<[f32; 4]>(data_bytes, offset)[0];
+                        gl.uniform_matrix_2_f32_slice(location, false, &data);
+                    }
+                    glow::FLOAT_MAT3 => {
+                        let data = get_data::<[f32; 9]>(data_bytes, offset)[0];
+                        gl.uniform_matrix_3_f32_slice(location, false, &data);
+                    }
+                    glow::FLOAT_MAT4 => {
+                        let data = get_data::<[f32; 16]>(data_bytes, offset)[0];
+                        gl.uniform_matrix_4_f32_slice(location, false, &data);
+                    }
+                    _ => panic!("Unsupported uniform datatype!"),
+                }
+            }
         }
     }
 }
