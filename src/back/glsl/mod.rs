@@ -1178,12 +1178,13 @@ impl<'a, W: Write> Writer<'a, W> {
         };
         let arguments: Vec<_> = arguments
             .iter()
-            .filter(|arg| match self.module.types[arg.ty].inner {
+            .enumerate()
+            .filter(|&(_, arg)| match self.module.types[arg.ty].inner {
                 TypeInner::Sampler { .. } => false,
                 _ => true,
             })
             .collect();
-        self.write_slice(&arguments, |this, i, arg| {
+        self.write_slice(&arguments, |this, _, &(i, arg)| {
             // Write the argument type
             match this.module.types[arg.ty].inner {
                 // We treat images separately because they might require
@@ -1221,7 +1222,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
             // Write the argument name
             // The leading space is important
-            write!(this.out, " {}", &this.names[&ctx.argument_key(i)])?;
+            write!(this.out, " {}", &this.names[&ctx.argument_key(i as u32)])?;
 
             Ok(())
         })?;
