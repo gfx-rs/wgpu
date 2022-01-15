@@ -28,6 +28,7 @@ pub(super) struct State {
     has_pass_label: bool,
     instance_vbuf_mask: usize,
     dirty_vbuf_mask: usize,
+    push_offset_to_uniform: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANTS }>,
 }
 
 impl super::CommandBuffer {
@@ -42,6 +43,21 @@ impl super::CommandBuffer {
         let start = self.data_bytes.len() as u32;
         self.data_bytes.extend(marker.as_bytes());
         start..self.data_bytes.len() as u32
+    }
+
+    fn add_push_constant_data(&mut self, data: &[u32]) -> Range<u32> {
+        let data_raw = unsafe {
+            std::slice::from_raw_parts(
+                data.as_ptr() as *const _,
+                data.len() * mem::size_of::<u32>(),
+            )
+        };
+        let start = self.data_bytes.len();
+        assert!(start < u32::MAX as usize);
+        self.data_bytes.extend_from_slice(data_raw);
+        let end = self.data_bytes.len();
+        assert!(end < u32::MAX as usize);
+        (start as u32)..(end as u32)
     }
 }
 
@@ -148,8 +164,10 @@ impl super::CommandEncoder {
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
-        //TODO: push constants
-        let _ = &inner.uniforms;
+        self.state.push_offset_to_uniform.clear();
+        self.state
+            .push_offset_to_uniform
+            .extend(inner.uniforms.iter().cloned());
 
         // rebind textures, if needed
         let mut dirty_textures = 0u32;
@@ -603,10 +621,25 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         _layout: &super::PipelineLayout,
         _stages: wgt::ShaderStages,
-        _offset: u32,
-        _data: &[u32],
+        start_offset: u32,
+        data: &[u32],
     ) {
-        unimplemented!()
+        let range = self.cmd_buffer.add_push_constant_data(data);
+
+        let end = start_offset + data.len() as u32 * 4;
+        let mut offset = start_offset;
+        while offset < end {
+            let uniform = self.state.push_offset_to_uniform[offset as usize / 4].clone();
+            let size = uniform.size;
+            if uniform.location.is_none() {
+                panic!("No uniform for push constant");
+            }
+            self.cmd_buffer.commands.push(C::SetPushConstants {
+                uniform,
+                offset: range.start + offset,
+            });
+            offset += size;
+        }
     }
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {

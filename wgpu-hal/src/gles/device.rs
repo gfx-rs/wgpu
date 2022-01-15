@@ -272,30 +272,35 @@ impl super::Device {
             }
         }
 
-        let uniforms = {
-            let count = gl.get_active_uniforms(program);
-            let mut offset = 0;
-            let mut uniforms = Vec::new();
+        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] = Default::default();
+        let count = gl.get_active_uniforms(program);
+        let mut offset = 0;
 
-            for uniform in 0..count {
-                let glow::ActiveUniform { size, utype, name } =
-                    gl.get_active_uniform(program, uniform).unwrap();
+        for uniform in 0..count {
+            let glow::ActiveUniform { utype, name, .. } =
+                gl.get_active_uniform(program, uniform).unwrap();
 
-                if let Some(location) = gl.get_uniform_location(program, &name) {
-                    // Sampler2D won't show up in UniformLocation and the only other uniforms
-                    // should be push constants
-                    uniforms.push(super::UniformDesc {
-                        location,
-                        offset,
-                        utype,
-                    });
-
-                    offset += size as u32;
-                }
+            if conv::is_sampler(utype) {
+                continue;
             }
 
-            uniforms.into_boxed_slice()
-        };
+            if let Some(location) = gl.get_uniform_location(program, &name) {
+                if uniforms[offset / 4].location.is_some() {
+                    panic!("Offset already occupied")
+                }
+
+                // `size` will always be 1 so we need to guess the real size from the type
+                let uniform_size = conv::uniform_byte_size(utype);
+
+                uniforms[offset / 4] = super::UniformDesc {
+                    location: Some(location),
+                    size: uniform_size,
+                    utype,
+                };
+
+                offset += uniform_size as usize;
+            }
+        }
 
         Ok(super::PipelineInner {
             program,
@@ -858,7 +863,6 @@ impl crate::Device<super::Api> for super::Device {
                 version: self.shared.shading_language_version,
                 writer_flags,
                 binding_map,
-                push_constant_binding: 0, //TODO?
             },
         })
     }
