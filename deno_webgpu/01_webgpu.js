@@ -1,6 +1,6 @@
 // Copyright 2018-2021 the Deno authors. All rights reserved. MIT license.
 
-// @ts-check
+// @ts-dont-check
 /// <reference path="../../core/lib.deno_core.d.ts" />
 /// <reference path="../web/internal.d.ts" />
 /// <reference path="../web/lib.deno_web.d.ts" />
@@ -291,7 +291,7 @@
         "op_webgpu_request_device",
         {
           adapterRid: this[_adapter].rid,
-          labe: descriptor.label,
+          label: descriptor.label,
           requiredFeatures,
           requiredLimits,
         },
@@ -611,6 +611,148 @@
         this[_label] = label;
       },
     });
+  }
+
+  const _validConfiguration = Symbol("[[validConfiguration]]");
+  const _configuration = Symbol("[[configuration]]");
+  const _currentTexture = Symbol("[[currentTexture]]");
+
+  class GPUCanvasContext {
+    /** @type {number} */
+    [_rid];
+
+    // TODO: Canvas
+    /** @type {any} */
+    canvas;
+
+    /** @type {boolean} */
+    [_validConfiguration];
+    /** @type {GPUCanvasConfiguration} */
+    [_configuration];
+    /** @type {GPUExtent3D} */
+    [_size];
+    /** @type {GPUTexture | null} */
+    [_currentTexture];
+
+    constructor() {
+      webidl.illegalConstructor();
+    }
+
+    /**
+     * 
+     * @param {GPUCanvasConfiguration} configuration 
+     */
+    configure(configuration) {
+      webidl.assertBranded(this, GPUCanvasContext);
+      const prefix = "Failed to execute 'configure' on 'GPUCanvasContext'";
+
+      configuration = webidl.converters.GPUCanvasConfiguration(configuration, {
+        prefix,
+        context: "Argument 1",
+      });
+      
+      this[_validConfiguration] = false;
+      
+      this[_configuration] = configuration;
+      
+      if (this[_currentTexture] !== null) {
+        this[_currentTexture].destroy();
+      }
+
+      this[_currentTexture] = null;
+      
+      const device = configuration.device;
+      const canvas = this.canvas;
+      
+      if (configuration.size === undefined) {
+        this[_size] = [canvas.width, canvas.height, 1];
+      } else {
+        this[_size] = configuration.size;
+      }
+
+      const size = this[_size];
+      const width = size instanceof Array ? size[0] : size.width;
+      const height = size instanceof Array ? size[1] : size.height;
+      const depthOrArrayLayers = size instanceof Array ? size[2] : size.depthOrArrayLayers;
+
+      {
+        let error;
+
+        // TODO: How to check this:
+        // "Supported context formats contains configuration.format."
+
+        if (device[_device].isLost) {
+          error = "'GPUDevice' has been lost.";
+        } else if (
+          width <= 0 ||
+          height <- 0 ||
+          width > device.limits.maxTextureDimension2D ||
+          height > device.limits.maxTextureDimension2D ||
+          depthOrArrayLayers !== 1
+        ) {
+          error = "Invalid 'size' of 'GPUCanvasConfiguration'";
+        }
+
+        if (error) {
+          device[_device].pushError({
+            type: "validation",
+            value: error,
+          });
+          return;
+        }
+      }
+
+      core.opSync(
+        "op_webgpu_configure_surface",
+        {
+          deviceRid: device[_device].rid,
+          surfaceRid: this[_rid],
+          format: this[_configuration].format,
+          usage: this[_configuration].usage,
+          width,
+          height,
+          // TODO: wgpu doesn't support these
+          // colorSpace,
+          // compositingAlphaMode,
+        },
+      );
+
+      this[_validConfiguration] = true;
+    }
+
+    unconfigure() {
+      // https://github.com/gfx-rs/wgpu/pull/2279#issuecomment-991951895
+      webidl.assertBranded(this, GPUCanvasContext);
+
+      this[_validConfiguration] = false;
+      this[_configuration] = null;
+
+      if (this[_currentTexture] !== null) {
+        this[_currentTexture].destroy();
+      }
+
+      this[_currentTexture] = null;
+    }
+
+    /**
+     * @param {GPUAdapter} adapter 
+     * @returns {GPUTextureFormat}
+     */
+    getPreferredFormat(adapter) {
+      webidl.assertBranded(adapter, GPUAdapter);
+      return core.opSync(
+        "op_webgpu_surface_get_preferred_format",
+        {
+          adapterRid: adapter[_adapter].rid,
+          surfaceRid: this[_rid],
+        },
+      );
+    }
+
+    getCurrentTexture() {
+      webidl.assertBranded(this, GPUCanvasContext);
+      // TODO
+    }
   }
 
   const _device = Symbol("[[device]]");
@@ -5131,6 +5273,7 @@
     GPUAdapter,
     GPUSupportedLimits,
     GPUSupportedFeatures,
+    GPUCanvasContext,
     GPUDevice,
     GPUQueue,
     GPUBuffer,

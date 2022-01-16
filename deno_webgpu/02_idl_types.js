@@ -12,6 +12,7 @@
     GPUAdapter,
     GPUSupportedLimits,
     GPUSupportedFeatures,
+    GPUCanvasContext,
     GPUDevice,
     GPUQueue,
     GPUBuffer,
@@ -1999,4 +2000,54 @@
 
   // TYPEDEF: GPUFlagsConstant
   webidl.converters["GPUFlagsConstant"] = webidl.converters["unsigned long"];
+
+  // INTERFACE: GPUCanvasContext
+  webidl.converters["GPUCanvasContext"] = webidl.createInterfaceConverter(
+    "GPUCanvasContext",
+    GPUCanvasContext,
+  );
+
+  // ENUM: GPUCanvasCompositingAlphaMode
+  webidl.converters["GPUCanvasCompositingAlphaMode"] = webidl.createEnumConverter(
+    "GPUCanvasCompositingAlphaMode",
+    ["opaque", "premultiplied"],
+  );
+
+  // DICTIONARY: GPUCanvasConfiguration
+  const dictMembersGPUCanvasConfiguration = [
+    {
+      key: "device",
+      converter: webidl.converters["GPUDevice"],
+      required: true,
+    },
+    {
+      key: "format",
+      converter: webidl.converters["GPUTextureFormat"],
+      required: true,
+    },
+    {
+      key: "usage",
+      converter: webidl.converters["GPUTextureUsageFlags"],
+      defaultValue: 0x10, // GPUTextureUsage.RENDER_ATTACHMENT
+    },
+    {
+      key: "colorSpace",
+      converter: webidl.converters["GPUPredefinedColorSpace"],
+      defaultValue: "srgb",
+    },
+    {
+      key: "compositingAlphaMode",
+      converter: webidl.converter["GPUCanvasCompositingAlphaMode"],
+      defaultValue: "opaque",
+    },
+    {
+      key: "size",
+      converter: webidl.converters["GPUExtent3D"],
+      required: false,
+    },
+  ];
+  webidl.converters["GPUCanvasConfiguration"] = webidl.createDictionaryConverter(
+    "GPUCanvasConfiguration",
+    dictMembersGPUCanvasConfiguration,
+  );
 })(this);
