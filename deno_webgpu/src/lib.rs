@@ -14,6 +14,7 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::rc::Rc;
 pub use wgpu_core;
 pub use wgpu_types;
@@ -122,6 +123,10 @@ pub fn init(unstable: bool) -> Extension {
             Ok(())
         })
         .build()
+}
+
+pub fn get_declaration() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib.deno_webgpu.d.ts")
 }
 
 fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
