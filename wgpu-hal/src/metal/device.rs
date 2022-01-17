@@ -117,7 +117,10 @@ impl super::Device {
         let mut immutable_buffer_mask = 0;
         for (var_handle, var) in module.global_variables.iter() {
             if var.class == naga::StorageClass::WorkGroup {
-                let size = module.types[var.ty].inner.span(&module.constants);
+                let size = module.types[var.ty]
+                    .inner
+                    .try_size(&module.constants)
+                    .unwrap();
                 wg_memory_sizes.push(size);
             }
 
