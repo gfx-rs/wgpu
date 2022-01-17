@@ -858,6 +858,7 @@ impl crate::Device<super::Api> for super::Device {
                 version: self.shared.shading_language_version,
                 writer_flags,
                 binding_map,
+                push_constant_binding: 0, //TODO?
             },
         })
     }
