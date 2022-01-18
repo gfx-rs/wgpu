@@ -16,4 +16,7 @@
 	wgsl: (
 		explicit_types: true,
 	),
+	msl_pipeline: (
+		allow_point_size: true,
+	),
 )

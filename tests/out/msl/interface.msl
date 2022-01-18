@@ -21,6 +21,7 @@ struct vertex_Input {
 struct vertex_Output {
     metal::float4 position [[position]];
     float varying [[user(loc1), center_perspective]];
+    float _point_size [[point_size]];
 };
 vertex vertex_Output vertex_(
   vertex_Input varyings [[stage_in]]
@@ -30,7 +31,7 @@ vertex vertex_Output vertex_(
     const auto color = varyings.color;
     metal::uint tmp = (vertex_index + instance_index) + color;
     const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>(tmp)};
-    return vertex_Output { _tmp.position, _tmp.varying };
+    return vertex_Output { _tmp.position, _tmp.varying, 1.0 };
 }
 
 
