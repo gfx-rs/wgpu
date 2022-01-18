@@ -9,7 +9,7 @@ struct PushConstants {
 struct FragmentIn {
     vec4 color;
 };
-layout(std140, binding = 4) uniform PushConstants_block_0Fragment { PushConstants pc; };
+uniform PushConstants pc;
 
 layout(location = 0) smooth in vec4 _vs2fs_location0;
 layout(location = 0) out vec4 _fs2p_location0;

@@ -86,9 +86,7 @@ impl crate::AtomicFunction {
 impl crate::StorageClass {
     fn is_buffer(&self) -> bool {
         match *self {
-            crate::StorageClass::PushConstant
-            | crate::StorageClass::Uniform
-            | crate::StorageClass::Storage { .. } => true,
+            crate::StorageClass::Uniform | crate::StorageClass::Storage { .. } => true,
             _ => false,
         }
     }
@@ -230,8 +228,6 @@ pub struct Options {
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
     pub binding_map: BindingMap,
-    /// The binding to give the push constant buffer if it's present
-    pub push_constant_binding: u32,
 }
 
 impl Default for Options {
@@ -240,7 +236,6 @@ impl Default for Options {
             version: Version::Embedded(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
-            push_constant_binding: 0,
         }
     }
 }
@@ -263,7 +258,6 @@ pub struct PipelineOptions {
 pub struct ReflectionInfo {
     pub texture_mapping: crate::FastHashMap<String, TextureMapping>,
     pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
-    pub push_constant: Option<String>,
 }
 
 /// Structure that connects a texture to a sampler or not
@@ -894,13 +888,7 @@ impl<'a, W: Write> Writer<'a, W> {
         global: &crate::GlobalVariable,
     ) -> BackendResult {
         if self.options.version.supports_explicit_locations() {
-            if let crate::StorageClass::PushConstant = global.class {
-                write!(
-                    self.out,
-                    "layout(std140, binding = {}) ",
-                    self.options.push_constant_binding
-                )?
-            } else if let Some(ref br) = global.binding {
+            if let Some(ref br) = global.binding {
                 match self.options.binding_map.get(br) {
                     Some(binding) => {
                         let layout = match global.class {
@@ -911,9 +899,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                     "std140, "
                                 }
                             }
-                            crate::StorageClass::Uniform | crate::StorageClass::PushConstant => {
-                                "std140, "
-                            }
+                            crate::StorageClass::Uniform => "std140, ",
                             _ => "",
                         };
                         write!(self.out, "layout({}binding = {}) ", layout, binding)?
@@ -976,6 +962,11 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_type(global.ty)?;
             false
         };
+
+        if let crate::StorageClass::PushConstant = global.class {
+            let global_name = self.get_global_name(handle, global);
+            self.reflection_names_globals.insert(handle, global_name);
+        }
 
         // Finally write the global name and end the global with a `;` and a newline
         // Leading space is important
@@ -2878,7 +2869,6 @@ impl<'a, W: Write> Writer<'a, W> {
         let info = self.info.get_entry_point(self.entry_point_idx as usize);
         let mut texture_mapping = crate::FastHashMap::default();
         let mut uniforms = crate::FastHashMap::default();
-        let mut push_constant = None;
 
         for sampling in info.sampling_set.iter() {
             let tex_name = self.reflection_names_globals[&sampling.image].clone();
@@ -2909,10 +2899,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         let name = self.reflection_names_globals[&handle].clone();
                         uniforms.insert(handle, name);
                     }
-                    crate::StorageClass::PushConstant => {
-                        let name = self.reflection_names_globals[&handle].clone();
-                        push_constant = Some(name)
-                    }
                     _ => (),
                 },
                 crate::TypeInner::Image { .. } => {
@@ -2936,7 +2922,6 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(ReflectionInfo {
             texture_mapping,
             uniforms,
-            push_constant,
         })
     }
 }

@@ -4,6 +4,5 @@
 		version: Embedded(320),
 		writer_flags: (bits: 0),
 		binding_map: {},
-		push_constant_binding: 4,
 	),
 )
