@@ -46,10 +46,7 @@ impl<'a> Display for TypeContext<'a> {
                 match kind {
                     // work around Metal toolchain bug with `uint` typedef
                     crate::ScalarKind::Uint => write!(out, "{}::uint", NAMESPACE),
-                    _ => {
-                        let kind_str = kind.to_msl_name();
-                        write!(out, "{}", kind_str)
-                    }
+                    _ => write!(out, "{}", kind.to_msl_name()),
                 }
             }
             crate::TypeInner::Atomic { kind, .. } => {
@@ -96,7 +93,11 @@ impl<'a> Display for TypeContext<'a> {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{} {}&", class_name, kind.to_msl_name(),)
+                write!(out, "{} ", class_name)?;
+                if kind == crate::ScalarKind::Uint {
+                    write!(out, "{}::", NAMESPACE)?;
+                }
+                write!(out, "{}&", kind.to_msl_name())
             }
             crate::TypeInner::ValuePointer {
                 size: Some(size),
@@ -1708,20 +1709,25 @@ impl<W: Write> Writer<W> {
                         self.put_expression(expr_handle, context, true)?;
                         writeln!(self.out, ";")?;
                         write!(self.out, "{}return {} {{", level, struct_name)?;
+
                         let mut is_first = true;
+                        let mut has_point_size = false;
+
                         for (index, member) in members.iter().enumerate() {
-                            if !context.pipeline_options.allow_point_size
-                                && member.binding
-                                    == Some(crate::Binding::BuiltIn(crate::BuiltIn::PointSize))
-                            {
-                                continue;
+                            match member.binding {
+                                Some(crate::Binding::BuiltIn(crate::BuiltIn::PointSize)) => {
+                                    has_point_size = true;
+                                    if !context.pipeline_options.allow_point_size {
+                                        continue;
+                                    }
+                                }
+                                Some(crate::Binding::BuiltIn(crate::BuiltIn::CullDistance)) => {
+                                    log::warn!("Ignoring CullDistance built-in");
+                                    continue;
+                                }
+                                _ => {}
                             }
-                            if member.binding
-                                == Some(crate::Binding::BuiltIn(crate::BuiltIn::CullDistance))
-                            {
-                                log::warn!("Ignoring CullDistance BuiltIn");
-                                continue;
-                            }
+
                             let comma = if is_first { "" } else { "," };
                             is_first = false;
                             let name = &self.names[&NameKey::StructMember(result_ty, index as u32)];
@@ -1750,6 +1756,17 @@ impl<W: Write> Writer<W> {
                                 write!(self.out, "}}")?;
                             } else {
                                 write!(self.out, "{} {}.{}", comma, tmp, name)?;
+                            }
+                        }
+
+                        if let FunctionOrigin::EntryPoint(ep_index) = context.origin {
+                            let stage = context.module.entry_points[ep_index as usize].stage;
+                            if context.pipeline_options.allow_point_size
+                                && stage == crate::ShaderStage::Vertex
+                                && !has_point_size
+                            {
+                                // point size was injected and comes last
+                                write!(self.out, ", 1.0")?;
                             }
                         }
                     }
@@ -2874,6 +2891,7 @@ impl<W: Write> Writer<W> {
                     }
 
                     writeln!(self.out, "struct {} {{", stage_out_name)?;
+                    let mut has_point_size = false;
                     for (name, ty, binding) in result_members {
                         let ty_name = TypeContext {
                             handle: ty,
@@ -2883,19 +2901,27 @@ impl<W: Write> Writer<W> {
                             first_time: true,
                         };
                         let binding = binding.ok_or(Error::Validation)?;
-                        // Cull Distance is not supported in Metal.
-                        // But we can't return UnsupportedBuiltIn error to user.
-                        // Because otherwise we can't generate msl shader from any glslang SPIR-V shaders.
-                        // glslang generates gl_PerVertex struct with gl_CullDistance builtin inside by default.
-                        if *binding == crate::Binding::BuiltIn(crate::BuiltIn::CullDistance) {
-                            log::warn!("Ignoring CullDistance BuiltIn");
-                            continue;
+
+                        match *binding {
+                            // Point size is only supported in VS of pipelines with
+                            // point primitive topology.
+                            crate::Binding::BuiltIn(crate::BuiltIn::PointSize) => {
+                                has_point_size = true;
+                                if !pipeline_options.allow_point_size {
+                                    continue;
+                                }
+                            }
+                            // Cull Distance is not supported in Metal.
+                            // But we can't return UnsupportedBuiltIn error to user.
+                            // Because otherwise we can't generate msl shader from any glslang SPIR-V shaders.
+                            // glslang generates gl_PerVertex struct with gl_CullDistance builtin inside by default.
+                            crate::Binding::BuiltIn(crate::BuiltIn::CullDistance) => {
+                                log::warn!("Ignoring CullDistance BuiltIn");
+                                continue;
+                            }
+                            _ => {}
                         }
-                        if !pipeline_options.allow_point_size
-                            && *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize)
-                        {
-                            continue;
-                        }
+
                         let array_len = match module.types[ty].inner {
                             crate::TypeInner::Array {
                                 size: crate::ArraySize::Constant(handle),
@@ -2910,6 +2936,18 @@ impl<W: Write> Writer<W> {
                             write!(self.out, " [{}]", array_len)?;
                         }
                         writeln!(self.out, ";")?;
+                    }
+
+                    if pipeline_options.allow_point_size
+                        && ep.stage == crate::ShaderStage::Vertex
+                        && !has_point_size
+                    {
+                        // inject the point size output last
+                        writeln!(
+                            self.out,
+                            "{}float _point_size [[point_size]];",
+                            back::INDENT
+                        )?;
                     }
                     writeln!(self.out, "}};")?;
                     &stage_out_name

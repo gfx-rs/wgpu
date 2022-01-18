@@ -63,6 +63,9 @@ struct Parameters {
     #[cfg(all(feature = "deserialize", feature = "msl-out"))]
     #[serde(default)]
     msl: naga::back::msl::Options,
+    #[cfg(all(feature = "deserialize", feature = "msl-out"))]
+    #[serde(default)]
+    msl_pipeline: naga::back::msl::PipelineOptions,
     #[cfg(all(feature = "deserialize", feature = "glsl-out"))]
     #[serde(default)]
     glsl: naga::back::glsl::Options,
@@ -135,6 +138,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
                 &dest,
                 name,
                 &params.msl,
+                &params.msl_pipeline,
                 params.bounds_check_policies,
             );
         }
@@ -235,20 +239,17 @@ fn write_output_msl(
     destination: &PathBuf,
     file_name: &str,
     options: &naga::back::msl::Options,
+    pipeline_options: &naga::back::msl::PipelineOptions,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
 ) {
     use naga::back::msl;
 
     println!("writing MSL");
 
-    let pipeline_options = msl::PipelineOptions {
-        allow_point_size: true,
-    };
-
     let mut options = options.clone();
     options.bounds_check_policies = bounds_check_policies;
     let (string, tr_info) =
-        msl::write_string(module, info, &options, &pipeline_options).expect("Metal write failed");
+        msl::write_string(module, info, &options, pipeline_options).expect("Metal write failed");
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
         if let Err(error) = result {

@@ -196,21 +196,13 @@ impl Default for Options {
 }
 
 // A subset of options that are meant to be changed per pipeline.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
     /// Allow `BuiltIn::PointSize` in the vertex shader.
     /// Metal doesn't like this for non-point primitive topologies.
     pub allow_point_size: bool,
-}
-
-impl Default for PipelineOptions {
-    fn default() -> Self {
-        PipelineOptions {
-            allow_point_size: true,
-        }
-    }
 }
 
 impl Options {
