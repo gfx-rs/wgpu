@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use deno_core::error::anyhow;
+use deno_core::anyhow::anyhow;
 use deno_core::error::AnyError;
 use deno_core::located_script_name;
 use deno_core::resolve_url_or_path;
@@ -41,7 +41,7 @@ async fn run() -> Result<(), AnyError> {
             deno_console::init(),
             deno_url::init(),
             deno_web::init(BlobStore::default(), None),
-            deno_timers::init::<deno_timers::NoTimersPermission>(),
+            deno_timers::init::<Permissions>(),
             deno_webgpu::init(true),
             extension(),
         ],
@@ -56,9 +56,9 @@ async fn run() -> Result<(), AnyError> {
     isolate
         .op_state()
         .borrow_mut()
-        .put(deno_timers::NoTimersPermission);
+        .put(Permissions{});
 
-    let mod_id = isolate.load_module(&specifier, None).await?;
+    let mod_id = isolate.load_main_module(&specifier, None).await?;
     let mod_rx = isolate.mod_evaluate(mod_id);
 
     let rx = tokio::spawn(async move {
@@ -148,4 +148,15 @@ fn red_bold<S: AsRef<str>>(s: S) -> impl fmt::Display {
     let mut style_spec = ColorSpec::new();
     style_spec.set_fg(Some(Red)).set_bold(true);
     style(s, style_spec)
+}
+
+// NOP permissions
+struct Permissions;
+
+impl deno_timers::TimersPermission for Permissions {
+    fn allow_hrtime(&mut self) -> bool {
+        false
+    }
+
+    fn check_unstable(&self, _state: &deno_core::OpState, _api_name: &'static str) {}
 }
