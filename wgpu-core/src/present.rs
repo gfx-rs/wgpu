@@ -137,7 +137,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unsafe {
                         hal::Device::create_texture_view(
                             &device.raw,
-                            &ast.texture.borrow(),
+                            ast.texture.borrow(),
                             &clear_view_desc,
                         )
                     }
