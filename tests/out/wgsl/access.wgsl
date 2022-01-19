@@ -1,12 +1,12 @@
 struct Bar {
     matrix: mat4x4<f32>;
-    matrix_array: [[stride(16)]] array<mat2x2<f32>,2>;
+    matrix_array: @stride(16) array<mat2x2<f32>,2>;
     atom: atomic<i32>;
-    arr: [[stride(8)]] array<vec2<u32>,2>;
-    data: [[stride(8)]] array<i32>;
+    arr: @stride(8) array<vec2<u32>,2>;
+    data: @stride(8) array<i32>;
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0) 
 var<storage, read_write> bar: Bar;
 
 fn read_from_private(foo_2: ptr<function, f32>) -> f32 {
@@ -14,8 +14,8 @@ fn read_from_private(foo_2: ptr<function, f32>) -> f32 {
     return _e2;
 }
 
-[[stage(vertex)]]
-fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
+@stage(vertex) 
+fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo_1: f32 = 0.0;
     var c: array<i32,5>;
 
@@ -37,7 +37,7 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
     return (matrix * vec4<f32>(vec4<i32>(value)));
 }
 
-[[stage(compute), workgroup_size(1, 1, 1)]]
+@stage(compute) @workgroup_size(1, 1, 1) 
 fn atomics() {
     var tmp: i32;
 

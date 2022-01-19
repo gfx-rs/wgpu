@@ -7,7 +7,7 @@ fn test_fma() -> vec2<f32> {
 }
 
 
-[[stage(vertex)]]
+@stage(vertex)
 fn main() {
     let a = test_fma();
 }

@@ -14,8 +14,8 @@ struct TestStruct {
 };
 
 struct VertexOutput {
-    [[location(0)]] position: vec2<f32>;
-    [[location(1)]] a: vec2<f32>;
+    @location(0) position: vec2<f32>;
+    @location(1) a: vec2<f32>;
 };
 
 var<private> vert: VertexData;
@@ -27,8 +27,8 @@ fn main_1() {
 
 }
 
-[[stage(vertex)]]
-fn main([[location(0)]] position: vec2<f32>, [[location(1)]] a: vec2<f32>) -> VertexOutput {
+@stage(vertex) 
+fn main(@location(0) position: vec2<f32>, @location(1) a: vec2<f32>) -> VertexOutput {
     vert.position = position;
     vert.a = a;
     main_1();

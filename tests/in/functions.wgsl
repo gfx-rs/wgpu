@@ -9,7 +9,7 @@ fn test_fma() -> vec2<f32> {
 }
 
 
-[[stage(compute), workgroup_size(1)]]
+@stage(compute) @workgroup_size(1)
 fn main() {
     let a = test_fma();
 }

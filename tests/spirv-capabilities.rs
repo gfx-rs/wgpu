@@ -62,7 +62,7 @@ fn sampler1d() {
     require(
         &[Ca::Sampled1D],
         r#"
-        [[group(0), binding(0)]]
+        @group(0) @binding(0)
         var image_1d: texture_1d<f32>;
     "#,
     );
@@ -73,7 +73,7 @@ fn storage1d() {
     require(
         &[Ca::Image1D],
         r#"
-        [[group(0), binding(0)]]
+        @group(0) @binding(0)
         var image_1d: texture_storage_1d<rgba8unorm,write>;
     "#,
     );
@@ -87,7 +87,7 @@ fn cube_array() {
         &[Ca::SampledCubeArray],
         &[Ca::ImageCubeArray],
         r#"
-        [[group(0), binding(0)]]
+        @group(0) @binding(0)
         var image_cube: texture_cube_array<f32>;
     "#,
     );
@@ -134,16 +134,16 @@ fn sample_rate_shading() {
     require(
         &[Ca::SampleRateShading],
         r#"
-        [[stage(fragment)]]
-        fn f([[location(0), interpolate(perspective, sample)]] x: f32) { }
+        @stage(fragment)
+        fn f(@location(0) @interpolate(perspective, sample) x: f32) { }
     "#,
     );
 
     require(
         &[Ca::SampleRateShading],
         r#"
-        [[stage(fragment)]]
-        fn f([[builtin(sample_index)]] x: u32) { }
+        @stage(fragment)
+        fn f(@builtin(sample_index) x: u32) { }
     "#,
     );
 }
@@ -153,8 +153,8 @@ fn geometry() {
     require(
         &[Ca::Geometry],
         r#"
-        [[stage(fragment)]]
-        fn f([[builtin(primitive_index)]] x: u32) { }
+        @stage(fragment)
+        fn f(@builtin(primitive_index) x: u32) { }
     "#,
     );
 }
@@ -165,7 +165,7 @@ fn storage_image_formats() {
         &[Ca::Shader],
         &[Ca::StorageImageExtendedFormats],
         r#"
-            [[group(0), binding(0)]]
+            @group(0) @binding(0)
             var image_rg32f: texture_storage_2d<rgba16uint, read>;
         "#,
     );
@@ -173,7 +173,7 @@ fn storage_image_formats() {
     require(
         &[Ca::StorageImageExtendedFormats],
         r#"
-            [[group(0), binding(0)]]
+            @group(0) @binding(0)
             var image_rg32f: texture_storage_2d<rg32float, read>;
         "#,
     );

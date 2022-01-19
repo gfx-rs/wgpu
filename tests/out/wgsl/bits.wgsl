@@ -1,4 +1,4 @@
-[[stage(compute), workgroup_size(1, 1, 1)]]
+@stage(compute) @workgroup_size(1, 1, 1) 
 fn main() {
     var i: i32 = 0;
     var i2_: vec2<i32>;

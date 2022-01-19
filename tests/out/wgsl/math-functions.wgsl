@@ -1,4 +1,4 @@
-[[stage(vertex)]]
+@stage(vertex) 
 fn main() {
     let v = vec4<f32>(0.0);
     let a = degrees(1.0);

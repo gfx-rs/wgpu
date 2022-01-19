@@ -4,19 +4,19 @@ struct Bar {
 	matrix: mat4x4<f32>;
 	matrix_array: array<mat2x2<f32>, 2>;
 	atom: atomic<i32>;
-	arr: [[stride(8)]] array<vec2<u32>, 2>;
-	data: [[stride(8)]] array<i32>;
+	arr: @stride(8) array<vec2<u32>, 2>;
+	data: @stride(8) array<i32>;
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<storage,read_write> bar: Bar;
 
 fn read_from_private(foo: ptr<function, f32>) -> f32 {
     return *foo;
 }
 
-[[stage(vertex)]]
-fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
+@stage(vertex)
+fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0.0;
     // We should check that backed doesn't skip this expression
     let baz: f32 = foo;
@@ -47,7 +47,7 @@ fn foo([[builtin(vertex_index)]] vi: u32) -> [[builtin(position)]] vec4<f32> {
 	return matrix * vec4<f32>(vec4<i32>(value));
 }
 
-[[stage(compute), workgroup_size(1)]]
+@stage(compute) @workgroup_size(1)
 fn atomics() {
 	var tmp: i32;
 	let value = atomicLoad(&bar.atom);

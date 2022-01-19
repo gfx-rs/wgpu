@@ -20,8 +20,8 @@ struct CameraPosition {
 struct Lights {
     AmbientColor: vec4<f32>;
     NumLights: vec4<u32>;
-    PointLights: [[stride(48)]] array<PointLight,10u>;
-    DirectionalLights: [[stride(32)]] array<DirectionalLight,1u>;
+    PointLights: @stride(48) array<PointLight,10u>;
+    DirectionalLights: @stride(32) array<DirectionalLight,1u>;
 };
 
 struct StandardMaterial_base_color {
@@ -45,7 +45,7 @@ struct StandardMaterial_emissive {
 };
 
 struct FragmentOutput {
-    [[location(0)]] o_Target: vec4<f32>;
+    @location(0) o_Target: vec4<f32>;
 };
 
 var<private> v_WorldPosition_1: vec3<f32>;
@@ -53,41 +53,41 @@ var<private> v_WorldNormal_1: vec3<f32>;
 var<private> v_Uv_1: vec2<f32>;
 var<private> v_WorldTangent_1: vec4<f32>;
 var<private> o_Target: vec4<f32>;
-[[group(0), binding(0)]]
+@group(0) @binding(0) 
 var<uniform> global: CameraViewProj;
-[[group(0), binding(1)]]
+@group(0) @binding(1) 
 var<uniform> global_1: CameraPosition;
-[[group(1), binding(0)]]
+@group(1) @binding(0) 
 var<uniform> global_2: Lights;
-[[group(3), binding(0)]]
+@group(3) @binding(0) 
 var<uniform> global_3: StandardMaterial_base_color;
-[[group(3), binding(1)]]
+@group(3) @binding(1) 
 var StandardMaterial_base_color_texture: texture_2d<f32>;
-[[group(3), binding(2)]]
+@group(3) @binding(2) 
 var StandardMaterial_base_color_texture_sampler: sampler;
-[[group(3), binding(3)]]
+@group(3) @binding(3) 
 var<uniform> global_4: StandardMaterial_roughness;
-[[group(3), binding(4)]]
+@group(3) @binding(4) 
 var<uniform> global_5: StandardMaterial_metallic;
-[[group(3), binding(5)]]
+@group(3) @binding(5) 
 var StandardMaterial_metallic_roughness_texture: texture_2d<f32>;
-[[group(3), binding(6)]]
+@group(3) @binding(6) 
 var StandardMaterial_metallic_roughness_texture_sampler: sampler;
-[[group(3), binding(7)]]
+@group(3) @binding(7) 
 var<uniform> global_6: StandardMaterial_reflectance;
-[[group(3), binding(8)]]
+@group(3) @binding(8) 
 var StandardMaterial_normal_map: texture_2d<f32>;
-[[group(3), binding(9)]]
+@group(3) @binding(9) 
 var StandardMaterial_normal_map_sampler: sampler;
-[[group(3), binding(10)]]
+@group(3) @binding(10) 
 var StandardMaterial_occlusion_texture: texture_2d<f32>;
-[[group(3), binding(11)]]
+@group(3) @binding(11) 
 var StandardMaterial_occlusion_texture_sampler: sampler;
-[[group(3), binding(12)]]
+@group(3) @binding(12) 
 var<uniform> global_7: StandardMaterial_emissive;
-[[group(3), binding(13)]]
+@group(3) @binding(13) 
 var StandardMaterial_emissive_texture: texture_2d<f32>;
-[[group(3), binding(14)]]
+@group(3) @binding(14) 
 var StandardMaterial_emissive_texture_sampler: sampler;
 var<private> gl_FrontFacing: bool;
 
@@ -895,8 +895,8 @@ fn main_1() {
     return;
 }
 
-[[stage(fragment)]]
-fn main([[location(0)]] v_WorldPosition: vec3<f32>, [[location(1)]] v_WorldNormal: vec3<f32>, [[location(2)]] v_Uv: vec2<f32>, [[location(3)]] v_WorldTangent: vec4<f32>, [[builtin(front_facing)]] param: bool) -> FragmentOutput {
+@stage(fragment) 
+fn main(@location(0) v_WorldPosition: vec3<f32>, @location(1) v_WorldNormal: vec3<f32>, @location(2) v_Uv: vec2<f32>, @location(3) v_WorldTangent: vec4<f32>, @builtin(front_facing) param: bool) -> FragmentOutput {
     v_WorldPosition_1 = v_WorldPosition;
     v_WorldNormal_1 = v_WorldNormal;
     v_Uv_1 = v_Uv;

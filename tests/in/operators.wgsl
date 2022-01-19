@@ -96,7 +96,7 @@ fn binary_assignment() {
     a &= 0;
 }
 
-[[stage(compute), workgroup_size(1)]]
+@stage(compute) @workgroup_size(1)
 fn main() {
     let a = builtins();
     let b = splat();

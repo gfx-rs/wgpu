@@ -1,5 +1,5 @@
-[[stage(fragment)]]
-fn derivatives([[builtin(position)]] foo: vec4<f32>) -> [[location(0)]] vec4<f32> {
+@stage(fragment) 
+fn derivatives(@builtin(position) foo: vec4<f32>) -> @location(0) vec4<f32> {
     let x = dpdx(foo);
     let y = dpdy(foo);
     let z = fwidth(foo);

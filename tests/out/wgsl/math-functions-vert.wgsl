@@ -154,7 +154,7 @@ fn main_1() {
     return;
 }
 
-[[stage(vertex)]]
+@stage(vertex) 
 fn main() {
     main_1();
     return;

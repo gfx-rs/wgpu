@@ -7,7 +7,7 @@ struct Globals {
     d: array<f32>;
 };
 
-[[group(0), binding(0)]] var<storage, read_write> globals: Globals;
+@group(0) @binding(0) var<storage, read_write> globals: Globals;
 
 fn index_array(i: i32) -> f32 {
    return globals.a[i];

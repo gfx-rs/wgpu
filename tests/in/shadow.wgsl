@@ -2,7 +2,7 @@ struct Globals {
     num_lights: vec4<u32>;
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> u_globals: Globals;
 
 struct Light {
@@ -12,14 +12,14 @@ struct Light {
 };
 
 struct Lights {
-    data: [[stride(96)]] array<Light>;
+    data: @stride(96) array<Light>;
 };
 
-[[group(0), binding(1)]]
+@group(0) @binding(1)
 var<storage> s_lights: Lights;
-[[group(0), binding(2)]]
+@group(0) @binding(2)
 var t_shadow: texture_depth_2d_array;
-[[group(0), binding(3)]]
+@group(0) @binding(3)
 var sampler_shadow: sampler_comparison;
 
 fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
@@ -34,11 +34,11 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
 let c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
 let c_max_lights: u32 = 10u;
 
-[[stage(fragment)]]
+@stage(fragment)
 fn fs_main(
-    [[location(0)]] raw_normal: vec3<f32>,
-    [[location(1)]] position: vec4<f32>
-) -> [[location(0)]] vec4<f32> {
+    @location(0) raw_normal: vec3<f32>,
+    @location(1) position: vec4<f32>
+) -> @location(0) vec4<f32> {
     let normal: vec3<f32> = normalize(raw_normal);
     // accumulate color
     var color = c_ambient;

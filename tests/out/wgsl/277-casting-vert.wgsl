@@ -3,7 +3,7 @@ fn main_1() {
 
 }
 
-[[stage(vertex)]]
+@stage(vertex) 
 fn main() {
     main_1();
     return;

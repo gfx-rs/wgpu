@@ -1,8 +1,8 @@
 struct Data {
-    vecs: [[stride(16)]] array<vec4<f32>,42u>;
+    vecs: @stride(16) array<vec4<f32>,42u>;
 };
 
-[[group(1), binding(0)]]
+@group(1) @binding(0) 
 var<uniform> global: Data;
 
 fn function_() -> vec4<f32> {
@@ -33,7 +33,7 @@ fn main_1() {
     return;
 }
 
-[[stage(vertex)]]
+@stage(vertex) 
 fn main() {
     main_1();
     return;

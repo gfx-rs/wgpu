@@ -7,10 +7,10 @@ struct Transform {
 };
 
 struct VertexOutput {
-    [[location(0)]] v_Position: vec3<f32>;
-    [[location(1)]] v_Normal: vec3<f32>;
-    [[location(2)]] v_Uv: vec2<f32>;
-    [[builtin(position)]] member: vec4<f32>;
+    @location(0) v_Position: vec3<f32>;
+    @location(1) v_Normal: vec3<f32>;
+    @location(2) v_Uv: vec2<f32>;
+    @builtin(position) member: vec4<f32>;
 };
 
 var<private> Vertex_Position_1: vec3<f32>;
@@ -19,9 +19,9 @@ var<private> Vertex_Uv_1: vec2<f32>;
 var<private> v_Position: vec3<f32>;
 var<private> v_Normal: vec3<f32>;
 var<private> v_Uv: vec2<f32>;
-[[group(0), binding(0)]]
+@group(0) @binding(0) 
 var<uniform> global: Camera;
-[[group(2), binding(0)]]
+@group(2) @binding(0) 
 var<uniform> global_1: Transform;
 var<private> gl_Position: vec4<f32>;
 
@@ -43,8 +43,8 @@ fn main_1() {
     return;
 }
 
-[[stage(vertex)]]
-fn main([[location(0)]] Vertex_Position: vec3<f32>, [[location(1)]] Vertex_Normal: vec3<f32>, [[location(2)]] Vertex_Uv: vec2<f32>) -> VertexOutput {
+@stage(vertex) 
+fn main(@location(0) Vertex_Position: vec3<f32>, @location(1) Vertex_Normal: vec3<f32>, @location(2) Vertex_Uv: vec2<f32>) -> VertexOutput {
     Vertex_Position_1 = Vertex_Position;
     Vertex_Normal_1 = Vertex_Normal;
     Vertex_Uv_1 = Vertex_Uv;

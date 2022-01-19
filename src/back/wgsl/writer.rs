@@ -159,7 +159,7 @@ impl<W: Write> Writer<W> {
                 ],
             };
 
-            self.write_attributes(&attributes, false)?;
+            self.write_attributes(&attributes)?;
             // Add a newline after attribute
             writeln!(self.out)?;
 
@@ -244,11 +244,10 @@ impl<W: Write> Writer<W> {
         for (index, arg) in func.arguments.iter().enumerate() {
             // Write argument attribute if a binding is present
             if let Some(ref binding) = arg.binding {
-                self.write_attributes(
-                    &map_binding_to_attribute(binding, module.types[arg.ty].inner.scalar_kind()),
-                    false,
-                )?;
-                write!(self.out, " ")?;
+                self.write_attributes(&map_binding_to_attribute(
+                    binding,
+                    module.types[arg.ty].inner.scalar_kind(),
+                ))?;
             }
             // Write argument name
             let argument_name = match func_ctx.ty {
@@ -275,10 +274,10 @@ impl<W: Write> Writer<W> {
         if let Some(ref result) = func.result {
             write!(self.out, " -> ")?;
             if let Some(ref binding) = result.binding {
-                self.write_attributes(
-                    &map_binding_to_attribute(binding, module.types[result.ty].inner.scalar_kind()),
-                    true,
-                )?;
+                self.write_attributes(&map_binding_to_attribute(
+                    binding,
+                    module.types[result.ty].inner.scalar_kind(),
+                ))?;
             }
             self.write_type(module, result.ty)?;
         }
@@ -331,62 +330,40 @@ impl<W: Write> Writer<W> {
     }
 
     /// Helper method to write a attribute
-    ///
-    /// # Notes
-    /// Adds an extra space if required
-    fn write_attributes(&mut self, attributes: &[Attribute], extra_space: bool) -> BackendResult {
-        write!(self.out, "[[")?;
-
-        let mut need_last_comma = true;
-        if let Some(last_attrib) = attributes.last() {
-            // We duplicate the logic a little, but this will help to avoid extra heap allocation
-            match *last_attrib {
-                Attribute::BuiltIn(builtin_attrib) => {
-                    need_last_comma = builtin_str(builtin_attrib).is_some();
-                }
-                Attribute::Interpolate(interpolation, sampling) => {
-                    need_last_comma = (sampling.is_some()
-                        && sampling != Some(crate::Sampling::Center))
-                        || (interpolation.is_some()
-                            && interpolation != Some(crate::Interpolation::Perspective))
-                }
-                _ => {}
-            }
-        }
-
-        for (index, attribute) in attributes.iter().enumerate() {
+    fn write_attributes(&mut self, attributes: &[Attribute]) -> BackendResult {
+        for attribute in attributes {
             match *attribute {
-                Attribute::Location(id) => write!(self.out, "location({})", id)?,
+                Attribute::Location(id) => write!(self.out, "@location({}) ", id)?,
                 Attribute::BuiltIn(builtin_attrib) => {
                     if let Some(builtin) = builtin_str(builtin_attrib) {
-                        write!(self.out, "builtin({})", builtin)?;
+                        write!(self.out, "@builtin({}) ", builtin)?;
                     } else {
                         log::warn!("Unsupported builtin attribute: {:?}", builtin_attrib);
                     }
                 }
                 Attribute::Stage(shader_stage) => {
                     let stage_str = match shader_stage {
-                        ShaderStage::Vertex => "stage(vertex)",
-                        ShaderStage::Fragment => "stage(fragment)",
-                        ShaderStage::Compute => "stage(compute)",
+                        ShaderStage::Vertex => "vertex",
+                        ShaderStage::Fragment => "fragment",
+                        ShaderStage::Compute => "compute",
                     };
-                    write!(self.out, "{}", stage_str)?;
+                    write!(self.out, "@stage({}) ", stage_str)?;
                 }
-                Attribute::Stride(stride) => write!(self.out, "stride({})", stride)?,
+                Attribute::Stride(stride) => write!(self.out, "@stride({}) ", stride)?,
                 Attribute::WorkGroupSize(size) => {
                     write!(
                         self.out,
-                        "workgroup_size({}, {}, {})",
+                        "@workgroup_size({}, {}, {}) ",
                         size[0], size[1], size[2]
                     )?;
                 }
-                Attribute::Binding(id) => write!(self.out, "binding({})", id)?,
-                Attribute::Group(id) => write!(self.out, "group({})", id)?,
+                Attribute::Binding(id) => write!(self.out, "@binding({}) ", id)?,
+                Attribute::Group(id) => write!(self.out, "@group({}) ", id)?,
                 Attribute::Interpolate(interpolation, sampling) => {
                     if sampling.is_some() && sampling != Some(crate::Sampling::Center) {
                         write!(
                             self.out,
-                            "interpolate({}, {})",
+                            "@interpolate({}, {}) ",
                             interpolation_str(
                                 interpolation.unwrap_or(crate::Interpolation::Perspective)
                             ),
@@ -397,7 +374,7 @@ impl<W: Write> Writer<W> {
                     {
                         write!(
                             self.out,
-                            "interpolate({})",
+                            "@interpolate({}) ",
                             interpolation_str(
                                 interpolation.unwrap_or(crate::Interpolation::Perspective)
                             )
@@ -405,19 +382,7 @@ impl<W: Write> Writer<W> {
                     }
                 }
             };
-
-            // Only write a comma if isn't the last element
-            if index + 1 != attributes.len() && need_last_comma {
-                // The leading space is for readability only
-                write!(self.out, ", ")?;
-            }
         }
-
-        write!(self.out, "]]")?;
-        if extra_space {
-            write!(self.out, " ")?;
-        }
-
         Ok(())
     }
 
@@ -447,10 +412,10 @@ impl<W: Write> Writer<W> {
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
             if let Some(ref binding) = member.binding {
-                self.write_attributes(
-                    &map_binding_to_attribute(binding, module.types[member.ty].inner.scalar_kind()),
-                    true,
-                )?;
+                self.write_attributes(&map_binding_to_attribute(
+                    binding,
+                    module.types[member.ty].inner.scalar_kind(),
+                ))?;
             }
             // Write struct member name and type
             let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
@@ -462,7 +427,7 @@ impl<W: Write> Writer<W> {
                 stride,
             } = module.types[member.ty].inner
             {
-                self.write_attributes(&[Attribute::Stride(stride)], true)?;
+                self.write_attributes(&[Attribute::Stride(stride)])?;
             }
             self.write_type(module, member.ty)?;
             write!(self.out, ";")?;
@@ -1716,13 +1681,10 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Write group and dinding attributes if present
         if let Some(ref binding) = global.binding {
-            self.write_attributes(
-                &[
-                    Attribute::Group(binding.group),
-                    Attribute::Binding(binding.binding),
-                ],
-                false,
-            )?;
+            self.write_attributes(&[
+                Attribute::Group(binding.group),
+                Attribute::Binding(binding.binding),
+            ])?;
             writeln!(self.out)?;
         }
 

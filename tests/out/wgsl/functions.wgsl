@@ -5,7 +5,7 @@ fn test_fma() -> vec2<f32> {
     return fma(a, b, c);
 }
 
-[[stage(compute), workgroup_size(1, 1, 1)]]
+@stage(compute) @workgroup_size(1, 1, 1) 
 fn main() {
     let _e0 = test_fma();
     return;

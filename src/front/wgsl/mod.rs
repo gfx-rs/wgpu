@@ -57,7 +57,7 @@ pub enum Token<'a> {
     Separator(char),
     DoubleColon,
     Paren(char),
-    DoubleParen(char),
+    Attribute,
     Number {
         value: &'a str,
         ty: NumberType,
@@ -89,11 +89,9 @@ pub enum ExpectedToken<'a> {
     Constant,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
-    /// Expected: ']]', ','
-    AttributeSeparator,
     /// Expected: '}', identifier
     FieldName,
-    /// Expected: ']]', 'access', 'stride'
+    /// Expected: attribute for a type
     TypeAttribute,
     /// Expected: ';', '{', word
     Statement,
@@ -103,8 +101,6 @@ pub enum ExpectedToken<'a> {
     WorkgroupSizeSeparator,
     /// Expected: 'struct', 'let', 'var', 'type', ';', 'fn', eof
     GlobalItem,
-    /// Expected: ']]', 'size', 'align'
-    StructAttribute,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -168,6 +164,7 @@ pub enum Error<'a> {
     UnknownLocalFunction(Span),
     InitializationTypeMismatch(Span, String),
     MissingType(Span),
+    MissingAttribute(&'static str, Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
     Pointer(&'static str, Span),
@@ -191,7 +188,7 @@ impl<'a> Error<'a> {
                                 Token::Separator(c) => format!("'{}'", c),
                                 Token::DoubleColon => "'::'".to_string(),
                                 Token::Paren(c) => format!("'{}'", c),
-                                Token::DoubleParen(c) => format!("'{}{}'", c, c),
+                                Token::Attribute => "@".to_string(),
                                 Token::Number { value, .. } => {
                                     format!("number ({})", value)
                                 }
@@ -234,14 +231,12 @@ impl<'a> Error<'a> {
                         ExpectedToken::Integer => "unsigned/signed integer literal".to_string(),
                         ExpectedToken::Constant => "constant".to_string(),
                         ExpectedToken::PrimaryExpression => "expression".to_string(),
-                        ExpectedToken::AttributeSeparator => "attribute separator (',') or an end of the attribute list (']]')".to_string(),
                         ExpectedToken::FieldName => "field name or a closing curly bracket to signify the end of the struct".to_string(),
-                        ExpectedToken::TypeAttribute => "type attribute ('stride') or an end of the attribute list (']]')".to_string(),
+                        ExpectedToken::TypeAttribute => "type attribute ('stride')".to_string(),
                         ExpectedToken::Statement => "statement".to_string(),
                         ExpectedToken::SwitchItem => "switch item ('case' or 'default') or a closing curly bracket to signify the end of the switch statement ('}')".to_string(),
                         ExpectedToken::WorkgroupSizeSeparator => "workgroup size separator (',') or a closing parenthesis".to_string(),
                         ExpectedToken::GlobalItem => "global item ('struct', 'let', 'var', 'type', ';', 'fn') or the end of the file".to_string(),
-                        ExpectedToken::StructAttribute => "struct attribute ('size' or 'align') or an end of the attribute list (']]')".to_string(),
                     };
                     ParseError {
                     message: format!(
@@ -425,6 +420,11 @@ impl<'a> Error<'a> {
             },
             Error::MissingType(ref name_span) => ParseError {
                 message: format!("variable `{}` needs a type", &source[name_span.clone()]),
+                labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
+                notes: vec![],
+            },
+            Error::MissingAttribute(name, ref name_span) => ParseError {
+                message: format!("variable `{}` needs a '{}' attribute", &source[name_span.clone()], name),
                 labels: vec![(name_span.clone(), format!("definition of `{}`", &source[name_span.clone()]).into())],
                 notes: vec![],
             },
@@ -2830,51 +2830,23 @@ impl Parser {
             let (mut size, mut align) = (None, None);
             self.push_scope(Scope::Attribute, lexer);
             let mut bind_parser = BindingParser::default();
-            if lexer.skip(Token::DoubleParen('[')) {
-                let mut ready = true;
-                loop {
-                    match lexer.next() {
-                        (Token::DoubleParen(']'), _) => {
-                            break;
-                        }
-                        (Token::Separator(','), _) if !ready => {
-                            ready = true;
-                        }
-                        (Token::Word(word), word_span) if ready => {
-                            match word {
-                                "size" => {
-                                    lexer.expect(Token::Paren('('))?;
-                                    let (value, span) = lexer.capture_span(|lexer| {
-                                        parse_non_negative_sint_literal(lexer, 4)
-                                    })?;
-                                    lexer.expect(Token::Paren(')'))?;
-                                    size = Some(
-                                        NonZeroU32::new(value)
-                                            .ok_or(Error::ZeroSizeOrAlign(span))?,
-                                    );
-                                }
-                                "align" => {
-                                    lexer.expect(Token::Paren('('))?;
-                                    let (value, span) = lexer.capture_span(|lexer| {
-                                        parse_non_negative_sint_literal(lexer, 4)
-                                    })?;
-                                    lexer.expect(Token::Paren(')'))?;
-                                    align = Some(
-                                        NonZeroU32::new(value)
-                                            .ok_or(Error::ZeroSizeOrAlign(span))?,
-                                    );
-                                }
-                                _ => bind_parser.parse(lexer, word, word_span)?,
-                            }
-                            ready = false;
-                        }
-                        other if ready => {
-                            return Err(Error::Unexpected(other, ExpectedToken::StructAttribute))
-                        }
-                        other => {
-                            return Err(Error::Unexpected(other, ExpectedToken::AttributeSeparator))
-                        }
+            while lexer.skip(Token::Attribute) {
+                match lexer.next_ident_with_span()? {
+                    ("size", _) => {
+                        lexer.expect(Token::Paren('('))?;
+                        let (value, span) = lexer
+                            .capture_span(|lexer| parse_non_negative_sint_literal(lexer, 4))?;
+                        lexer.expect(Token::Paren(')'))?;
+                        size = Some(NonZeroU32::new(value).ok_or(Error::ZeroSizeOrAlign(span))?);
                     }
+                    ("align", _) => {
+                        lexer.expect(Token::Paren('('))?;
+                        let (value, span) = lexer
+                            .capture_span(|lexer| parse_non_negative_sint_literal(lexer, 4))?;
+                        lexer.expect(Token::Paren(')'))?;
+                        align = Some(NonZeroU32::new(value).ok_or(Error::ZeroSizeOrAlign(span))?);
+                    }
+                    (word, word_span) => bind_parser.parse(lexer, word, word_span)?,
                 }
             }
 
@@ -3270,21 +3242,18 @@ impl Parser {
         self.push_scope(Scope::TypeDecl, lexer);
         let mut attribute = TypeAttributes::default();
 
-        if lexer.skip(Token::DoubleParen('[')) {
+        while lexer.skip(Token::Attribute) {
             self.push_scope(Scope::Attribute, lexer);
-            loop {
-                match lexer.next() {
-                    (Token::Word("stride"), _) => {
-                        lexer.expect(Token::Paren('('))?;
-                        let (stride, span) = lexer
-                            .capture_span(|lexer| parse_non_negative_sint_literal(lexer, 4))?;
-                        attribute.stride =
-                            Some(NonZeroU32::new(stride).ok_or(Error::ZeroStride(span))?);
-                        lexer.expect(Token::Paren(')'))?;
-                    }
-                    (Token::DoubleParen(']'), _) => break,
-                    other => return Err(Error::Unexpected(other, ExpectedToken::TypeAttribute)),
+            match lexer.next() {
+                (Token::Word("stride"), _) => {
+                    lexer.expect(Token::Paren('('))?;
+                    let (stride, span) =
+                        lexer.capture_span(|lexer| parse_non_negative_sint_literal(lexer, 4))?;
+                    attribute.stride =
+                        Some(NonZeroU32::new(stride).ok_or(Error::ZeroStride(span))?);
+                    lexer.expect(Token::Paren(')'))?;
                 }
+                other => return Err(Error::Unexpected(other, ExpectedToken::TypeAttribute)),
             }
             self.pop_scope(lexer);
         }
@@ -4008,24 +3977,12 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
     ) -> Result<Option<crate::Binding>, Error<'a>> {
+        let mut bind_parser = BindingParser::default();
         self.push_scope(Scope::Attribute, lexer);
 
-        if !lexer.skip(Token::DoubleParen('[')) {
-            self.pop_scope(lexer);
-            return Ok(None);
-        }
-
-        let mut bind_parser = BindingParser::default();
-        loop {
+        while lexer.skip(Token::Attribute) {
             let (word, span) = lexer.next_ident_with_span()?;
             bind_parser.parse(lexer, word, span)?;
-            match lexer.next() {
-                (Token::DoubleParen(']'), _) => {
-                    break;
-                }
-                (Token::Separator(','), _) => {}
-                other => return Err(Error::Unexpected(other, ExpectedToken::AttributeSeparator)),
-            }
         }
 
         let span = self.pop_scope(lexer);
@@ -4174,83 +4131,77 @@ impl Parser {
     ) -> Result<bool, Error<'a>> {
         // read attributes
         let mut binding = None;
-        // Perspective is the default qualifier.
         let mut stage = None;
         let mut workgroup_size = [0u32; 3];
         let mut early_depth_test = None;
+        let (mut bind_index, mut bind_group) = (None, None);
 
-        if lexer.skip(Token::DoubleParen('[')) {
-            let (mut bind_index, mut bind_group) = (None, None);
-            self.push_scope(Scope::Attribute, lexer);
-            loop {
-                match lexer.next_ident_with_span()? {
-                    ("binding", _) => {
-                        lexer.expect(Token::Paren('('))?;
-                        bind_index = Some(parse_non_negative_sint_literal(lexer, 4)?);
-                        lexer.expect(Token::Paren(')'))?;
+        self.push_scope(Scope::Attribute, lexer);
+        while lexer.skip(Token::Attribute) {
+            match lexer.next_ident_with_span()? {
+                ("binding", _) => {
+                    lexer.expect(Token::Paren('('))?;
+                    bind_index = Some(parse_non_negative_sint_literal(lexer, 4)?);
+                    lexer.expect(Token::Paren(')'))?;
+                }
+                ("group", _) => {
+                    lexer.expect(Token::Paren('('))?;
+                    bind_group = Some(parse_non_negative_sint_literal(lexer, 4)?);
+                    lexer.expect(Token::Paren(')'))?;
+                }
+                ("stage", _) => {
+                    lexer.expect(Token::Paren('('))?;
+                    let (ident, ident_span) = lexer.next_ident_with_span()?;
+                    stage = Some(conv::map_shader_stage(ident, ident_span)?);
+                    lexer.expect(Token::Paren(')'))?;
+                }
+                ("workgroup_size", _) => {
+                    lexer.expect(Token::Paren('('))?;
+                    for (i, size) in workgroup_size.iter_mut().enumerate() {
+                        *size = parse_generic_non_negative_int_literal(lexer, 4)?;
+                        match lexer.next() {
+                            (Token::Paren(')'), _) => break,
+                            (Token::Separator(','), _) if i != 2 => (),
+                            other => {
+                                return Err(Error::Unexpected(
+                                    other,
+                                    ExpectedToken::WorkgroupSizeSeparator,
+                                ))
+                            }
+                        }
                     }
-                    ("group", _) => {
-                        lexer.expect(Token::Paren('('))?;
-                        bind_group = Some(parse_non_negative_sint_literal(lexer, 4)?);
-                        lexer.expect(Token::Paren(')'))?;
+                    for size in workgroup_size.iter_mut() {
+                        if *size == 0 {
+                            *size = 1;
+                        }
                     }
-                    ("stage", _) => {
-                        lexer.expect(Token::Paren('('))?;
+                }
+                ("early_depth_test", _) => {
+                    let conservative = if lexer.skip(Token::Paren('(')) {
                         let (ident, ident_span) = lexer.next_ident_with_span()?;
-                        stage = Some(conv::map_shader_stage(ident, ident_span)?);
+                        let value = conv::map_conservative_depth(ident, ident_span)?;
                         lexer.expect(Token::Paren(')'))?;
-                    }
-                    ("workgroup_size", _) => {
-                        lexer.expect(Token::Paren('('))?;
-                        for (i, size) in workgroup_size.iter_mut().enumerate() {
-                            *size = parse_generic_non_negative_int_literal(lexer, 4)?;
-                            match lexer.next() {
-                                (Token::Paren(')'), _) => break,
-                                (Token::Separator(','), _) if i != 2 => (),
-                                other => {
-                                    return Err(Error::Unexpected(
-                                        other,
-                                        ExpectedToken::WorkgroupSizeSeparator,
-                                    ))
-                                }
-                            }
-                        }
-                        for size in workgroup_size.iter_mut() {
-                            if *size == 0 {
-                                *size = 1;
-                            }
-                        }
-                    }
-                    ("early_depth_test", _) => {
-                        let conservative = if lexer.skip(Token::Paren('(')) {
-                            let (ident, ident_span) = lexer.next_ident_with_span()?;
-                            let value = conv::map_conservative_depth(ident, ident_span)?;
-                            lexer.expect(Token::Paren(')'))?;
-                            Some(value)
-                        } else {
-                            None
-                        };
-                        early_depth_test = Some(crate::EarlyDepthTest { conservative });
-                    }
-                    (_, word_span) => return Err(Error::UnknownAttribute(word_span)),
+                        Some(value)
+                    } else {
+                        None
+                    };
+                    early_depth_test = Some(crate::EarlyDepthTest { conservative });
                 }
-                match lexer.next() {
-                    (Token::DoubleParen(']'), _) => {
-                        break;
-                    }
-                    (Token::Separator(','), _) => {}
-                    other => {
-                        return Err(Error::Unexpected(other, ExpectedToken::AttributeSeparator))
-                    }
-                }
+                (_, word_span) => return Err(Error::UnknownAttribute(word_span)),
             }
-            if let (Some(group), Some(index)) = (bind_group, bind_index) {
+        }
+
+        let attrib_scope = self.pop_scope(lexer);
+        match (bind_group, bind_index) {
+            (Some(group), Some(index)) => {
                 binding = Some(crate::ResourceBinding {
                     group,
                     binding: index,
                 });
             }
-            self.pop_scope(lexer);
+            (Some(_), None) => return Err(Error::MissingAttribute("binding", attrib_scope)),
+            (None, Some(_)) => return Err(Error::MissingAttribute("group", attrib_scope)),
+            (None, None) => {}
         }
 
         // read items
