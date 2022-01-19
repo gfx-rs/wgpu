@@ -72,6 +72,7 @@ pub enum Token<'a> {
     Arrow,
     Unknown(char),
     UnterminatedString,
+    UnterminatedBlockComment,
     Trivia,
     End,
 }
@@ -204,6 +205,7 @@ impl<'a> Error<'a> {
                                 Token::Arrow => "->".to_string(),
                                 Token::Unknown(c) => format!("unknown ('{}')", c),
                                 Token::UnterminatedString => "unterminated string".to_string(),
+                                Token::UnterminatedBlockComment => "unterminated block comment".to_string(),
                                 Token::Trivia => "trivia".to_string(),
                                 Token::End => "end".to_string(),
                             }

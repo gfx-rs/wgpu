@@ -356,9 +356,47 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
                 (Token::UnterminatedString, quote_content)
             }
         }
-        '/' if chars.as_str().starts_with('/') => {
-            let _ = chars.position(|c| c == '\n' || c == '\r');
-            (Token::Trivia, chars.as_str())
+        '/' => {
+            input = chars.as_str();
+            match chars.next() {
+                Some('/') => {
+                    let _ = chars.position(|c| c == '\n' || c == '\r');
+                    (Token::Trivia, chars.as_str())
+                }
+                Some('*') => {
+                    input = chars.as_str();
+
+                    let mut depth = 1;
+                    let mut prev = '\0';
+
+                    for c in &mut chars {
+                        match (prev, c) {
+                            ('*', '/') => {
+                                prev = '\0';
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            ('/', '*') => {
+                                prev = '\0';
+                                depth += 1;
+                            }
+                            _ => {
+                                prev = c;
+                            }
+                        }
+                    }
+
+                    if depth > 0 {
+                        (Token::UnterminatedBlockComment, input)
+                    } else {
+                        (Token::Trivia, chars.as_str())
+                    }
+                }
+                Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
+                _ => (Token::Operation(cur), input),
+            }
         }
         '-' => {
             let sub_input = chars.as_str();
@@ -369,7 +407,7 @@ fn consume_token(mut input: &str, generic: bool) -> (Token<'_>, &str) {
                 _ => (Token::Operation(cur), sub_input),
             }
         }
-        '+' | '*' | '/' | '%' | '^' => {
+        '+' | '*' | '%' | '^' => {
             input = chars.as_str();
             if chars.next() == Some('=') {
                 (Token::AssignmentOperation(cur), chars.as_str())
@@ -673,6 +711,14 @@ fn test_tokens() {
     sub_test("No好", &[Token::Word("No"), Token::Unknown('好')]);
     sub_test("_No", &[Token::Word("_No")]);
     sub_test("\"\u{2}ПЀ\u{0}\"", &[Token::String("\u{2}ПЀ\u{0}")]); // https://github.com/gfx-rs/naga/issues/90
+    sub_test(
+        "*/*/***/*//=/*****//",
+        &[
+            Token::Operation('*'),
+            Token::AssignmentOperation('/'),
+            Token::Operation('/'),
+        ],
+    );
 }
 
 #[test]
