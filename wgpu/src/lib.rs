@@ -2628,7 +2628,7 @@ impl<'a> RenderPass<'a> {
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
     /// that can be run together.
-    pub fn execute_bundles<I: Iterator<Item = &'a RenderBundle>>(&mut self, render_bundles: I) {
+    pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle>>(&mut self, render_bundles: I) {
         self.id
             .execute_bundles(render_bundles.into_iter().map(|rb| &rb.id))
     }
