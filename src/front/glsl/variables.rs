@@ -654,21 +654,14 @@ impl Parser {
         &mut self,
         ctx: &mut Context,
         body: &mut Block,
-        #[cfg_attr(not(feature = "glsl-validate"), allow(unused_variables))]
-        VarDeclaration {
-            qualifiers,
-            ty,
-            name,
-            init,
-            meta,
-        }: VarDeclaration,
+        decl: VarDeclaration,
     ) -> Result<Handle<Expression>> {
         #[cfg(feature = "glsl-validate")]
-        if let Some(ref name) = name {
+        if let Some(ref name) = decl.name {
             if ctx.lookup_local_var_current_scope(name).is_some() {
                 self.errors.push(Error {
                     kind: ErrorKind::VariableAlreadyDeclared(name.clone()),
-                    meta,
+                    meta: decl.meta,
                 })
             }
         }
@@ -676,7 +669,7 @@ impl Parser {
         let mut mutable = true;
         let mut precision = None;
 
-        for &(ref qualifier, meta) in qualifiers {
+        for &(ref qualifier, meta) in decl.qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(StorageQualifier::Const) => {
                     if !mutable {
@@ -707,15 +700,15 @@ impl Parser {
 
         let handle = ctx.locals.append(
             LocalVariable {
-                name: name.clone(),
-                ty,
-                init,
+                name: decl.name.clone(),
+                ty: decl.ty,
+                init: decl.init,
             },
-            meta,
+            decl.meta,
         );
-        let expr = ctx.add_expression(Expression::LocalVariable(handle), meta, body);
+        let expr = ctx.add_expression(Expression::LocalVariable(handle), decl.meta, body);
 
-        if let Some(name) = name {
+        if let Some(name) = decl.name {
             ctx.add_local_var(name, expr, mutable);
         }
 
