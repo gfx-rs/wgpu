@@ -1,5 +1,12 @@
 # Change Log
 
+### v0.8.3 (2022-01-20)
+  - don't pin `indexmap`
+  - MSL-out:
+    - fix support for point primitives
+  - GLSL-out:
+    - fix sampler association
+
 ### v0.8.2 (2022-01-11)
   - validator:
     - check structure resource types
