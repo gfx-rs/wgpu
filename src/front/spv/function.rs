@@ -464,9 +464,9 @@ impl<I: Iterator<Item = u32>> super::Parser<I> {
                 *component = function.expressions.append(load_expr, span);
             }
 
-            match &members[..] {
+            match members[..] {
                 [] => {}
-                [member] => {
+                [ref member] => {
                     function.body.extend(emitter.finish(&function.expressions));
                     let span = function.expressions.get_span(components[0]);
                     function.body.push(
