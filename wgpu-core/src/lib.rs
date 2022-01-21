@@ -252,14 +252,6 @@ pub(crate) fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
     }
 }
 
-#[inline]
-pub(crate) fn align_to(value: u32, alignment: u32) -> u32 {
-    match value % alignment {
-        0 => value,
-        other => value - other + alignment,
-    }
-}
-
 #[test]
 fn test_lcd() {
     assert_eq!(get_lowest_common_denom(2, 2), 2);

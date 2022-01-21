@@ -69,7 +69,7 @@ struct Example<A: hal::Api> {
     pipeline: A::RenderPipeline,
     bunnies: Vec<Locals>,
     local_buffer: A::Buffer,
-    local_alignment: wgt::BufferAddress,
+    local_alignment: u32,
     global_buffer: A::Buffer,
     sampler: A::Sampler,
     texture: A::Texture,
@@ -378,22 +378,13 @@ impl<A: hal::Api> Example<A> {
             buffer
         };
 
-        fn align_to(
-            value: wgt::BufferAddress,
-            alignment: wgt::BufferAddress,
-        ) -> wgt::BufferAddress {
-            match value % alignment {
-                0 => value,
-                other => value - other + alignment,
-            }
-        }
-        let local_alignment = align_to(
-            mem::size_of::<Locals>() as _,
-            capabilities.limits.min_uniform_buffer_offset_alignment as _,
+        let local_alignment = hal::auxil::align_to(
+            mem::size_of::<Locals>() as u32,
+            capabilities.limits.min_uniform_buffer_offset_alignment,
         );
         let local_buffer_desc = hal::BufferDescriptor {
             label: Some("local"),
-            size: (MAX_BUNNIES as wgt::BufferAddress) * local_alignment,
+            size: (MAX_BUNNIES as wgt::BufferAddress) * (local_alignment as wgt::BufferAddress),
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
