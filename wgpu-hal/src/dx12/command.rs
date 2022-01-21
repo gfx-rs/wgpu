@@ -13,6 +13,40 @@ fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> d3d12::D3D12_BO
     }
 }
 
+impl crate::BufferTextureCopy {
+    fn to_subresource_footprint(
+        &self,
+        format: wgt::TextureFormat,
+    ) -> d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+        let desc = format.describe();
+        d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+            Offset: self.buffer_layout.offset,
+            Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
+                Format: conv::map_texture_format(format),
+                Width: self.size.width,
+                Height: self
+                    .buffer_layout
+                    .rows_per_image
+                    .map_or(self.size.height, |count| {
+                        count.get() * desc.block_dimensions.1 as u32
+                    }),
+                Depth: self.size.depth,
+                RowPitch: {
+                    let actual = match self.buffer_layout.bytes_per_row {
+                        Some(count) => count.get(),
+                        // this may happen for single-line updates
+                        None => {
+                            (self.size.width / desc.block_dimensions.0 as u32)
+                                * desc.block_size as u32
+                        }
+                    };
+                    crate::auxil::align_to(actual, d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
+                },
+            },
+        }
+    }
+}
+
 impl super::Temp {
     fn prepare_marker(&mut self, marker: &str) -> (&[u16], u32) {
         self.marker.clear();
@@ -458,28 +492,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: mem::zeroed(),
         };
-        let raw_format = conv::map_texture_format(dst.format);
-
-        let block_size = dst.format.describe().block_dimensions.0 as u32;
         for r in regions {
             let src_box = make_box(&wgt::Origin3d::ZERO, &r.size);
-            *src_location.u.PlacedFootprint_mut() = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-                Offset: r.buffer_layout.offset,
-                Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
-                    Format: raw_format,
-                    Width: r.size.width,
-                    Height: r
-                        .buffer_layout
-                        .rows_per_image
-                        .map_or(r.size.height, |count| count.get() * block_size),
-                    Depth: r.size.depth,
-                    RowPitch: r.buffer_layout.bytes_per_row.map_or(0, |count| {
-                        count.get().max(d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
-                    }),
-                },
-            };
+            *src_location.u.PlacedFootprint_mut() = r.to_subresource_footprint(dst.format);
             *dst_location.u.SubresourceIndex_mut() = dst.calc_subresource_for_copy(&r.texture_base);
-
             list.CopyTextureRegion(
                 &dst_location,
                 r.texture_base.origin.x,
@@ -511,26 +527,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
             u: mem::zeroed(),
         };
-        let raw_format = conv::map_texture_format(src.format);
-
-        let block_size = src.format.describe().block_dimensions.0 as u32;
         for r in regions {
             let src_box = make_box(&r.texture_base.origin, &r.size);
             *src_location.u.SubresourceIndex_mut() = src.calc_subresource_for_copy(&r.texture_base);
-            *dst_location.u.PlacedFootprint_mut() = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-                Offset: r.buffer_layout.offset,
-                Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
-                    Format: raw_format,
-                    Width: r.size.width,
-                    Height: r
-                        .buffer_layout
-                        .rows_per_image
-                        .map_or(r.size.height, |count| count.get() * block_size),
-                    Depth: r.size.depth,
-                    RowPitch: r.buffer_layout.bytes_per_row.map_or(0, |count| count.get()),
-                },
-            };
-
+            *dst_location.u.PlacedFootprint_mut() = r.to_subresource_footprint(src.format);
             list.CopyTextureRegion(&dst_location, 0, 0, 0, &src_location, &src_box);
         }
     }
