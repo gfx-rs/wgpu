@@ -259,10 +259,13 @@ impl Parser {
         mut meta: Span,
         array_specifier: Option<(ArraySize, Span)>,
     ) -> Handle<Type> {
-        array_specifier
-            .map(|(size, size_meta)| {
+        match array_specifier {
+            Some((size, size_meta)) => {
                 meta.subsume(size_meta);
-                let stride = self.module.types[base].inner.size(&self.module.constants);
+                self.layouter
+                    .update(&self.module.types, &self.module.constants)
+                    .unwrap();
+                let stride = self.layouter[base].to_stride();
                 self.module.types.insert(
                     Type {
                         name: None,
@@ -270,7 +273,8 @@ impl Parser {
                     },
                     meta,
                 )
-            })
-            .unwrap_or(base)
+            }
+            None => base,
+        }
     }
 }

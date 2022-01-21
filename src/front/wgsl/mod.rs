@@ -158,7 +158,6 @@ pub enum Error<'a> {
     UnknownType(Span),
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
-    ZeroStride(Span),
     ZeroSizeOrAlign(Span),
     InconsistentBinding(Span),
     UnknownLocalFunction(Span),
@@ -232,7 +231,7 @@ impl<'a> Error<'a> {
                         ExpectedToken::Constant => "constant".to_string(),
                         ExpectedToken::PrimaryExpression => "expression".to_string(),
                         ExpectedToken::FieldName => "field name or a closing curly bracket to signify the end of the struct".to_string(),
-                        ExpectedToken::TypeAttribute => "type attribute ('stride')".to_string(),
+                        ExpectedToken::TypeAttribute => "type attribute".to_string(),
                         ExpectedToken::Statement => "statement".to_string(),
                         ExpectedToken::SwitchItem => "switch item ('case' or 'default') or a closing curly bracket to signify the end of the switch statement ('}')".to_string(),
                         ExpectedToken::WorkgroupSizeSeparator => "workgroup size separator (',') or a closing parenthesis".to_string(),
@@ -391,11 +390,6 @@ impl<'a> Error<'a> {
             Error::UnknownType(ref bad_span) => ParseError {
                 message: format!("unknown type: '{}'", &source[bad_span.clone()]),
                 labels: vec![(bad_span.clone(), "unknown type".into())],
-                notes: vec![],
-            },
-            Error::ZeroStride(ref bad_span) => ParseError {
-                message: "array stride must not be zero".to_string(),
-                labels: vec![(bad_span.clone(), "array stride must not be zero".into())],
                 notes: vec![],
             },
             Error::ZeroSizeOrAlign(ref bad_span) => ParseError {
@@ -1048,7 +1042,9 @@ impl Composition {
 
 #[derive(Default)]
 struct TypeAttributes {
-    stride: Option<NonZeroU32>,
+    // Although WGSL nas no type attributes at the moment, it had them in the past
+// (`[[stride]]`) and may as well acquire some again in the future.
+// Therefore, we are leaving the plumbing in for now.
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2888,7 +2884,7 @@ impl Parser {
     fn parse_type_decl_impl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        attribute: TypeAttributes,
+        _attribute: TypeAttributes,
         word: &'a str,
         type_arena: &mut UniqueArena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
@@ -3024,15 +3020,11 @@ impl Parser {
                     crate::ArraySize::Dynamic
                 };
                 lexer.expect_generic_paren('>')?;
-                let stride = match attribute.stride {
-                    Some(stride) => stride.get(),
-                    None => {
-                        self.layouter.update(type_arena, const_arena).unwrap();
-                        let layout = &self.layouter[base];
-                        Layouter::round_up(layout.alignment, layout.size)
-                    }
-                };
 
+                let stride = {
+                    self.layouter.update(type_arena, const_arena).unwrap();
+                    self.layouter[base].to_stride()
+                };
                 crate::TypeInner::Array { base, size, stride }
             }
             "sampler" => crate::TypeInner::Sampler { comparison: false },
@@ -3240,22 +3232,11 @@ impl Parser {
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<(Handle<crate::Type>, crate::StorageAccess), Error<'a>> {
         self.push_scope(Scope::TypeDecl, lexer);
-        let mut attribute = TypeAttributes::default();
+        let attribute = TypeAttributes::default();
 
-        while lexer.skip(Token::Attribute) {
-            self.push_scope(Scope::Attribute, lexer);
-            match lexer.next() {
-                (Token::Word("stride"), _) => {
-                    lexer.expect(Token::Paren('('))?;
-                    let (stride, span) =
-                        lexer.capture_span(|lexer| parse_non_negative_sint_literal(lexer, 4))?;
-                    attribute.stride =
-                        Some(NonZeroU32::new(stride).ok_or(Error::ZeroStride(span))?);
-                    lexer.expect(Token::Paren(')'))?;
-                }
-                other => return Err(Error::Unexpected(other, ExpectedToken::TypeAttribute)),
-            }
-            self.pop_scope(lexer);
+        if lexer.skip(Token::Attribute) {
+            let other = lexer.next();
+            return Err(Error::Unexpected(other, ExpectedToken::TypeAttribute));
         }
 
         let storage_access = crate::StorageAccess::default();

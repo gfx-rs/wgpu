@@ -97,8 +97,8 @@ pub enum TypeError {
     UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
     #[error("Array type {0:?} must have a length of one or more")]
     NonPositiveArrayLength(Handle<crate::Constant>),
-    #[error("Array stride {stride} is smaller than the base element size {base_size}")]
-    InsufficientArrayStride { stride: u32, base_size: u32 },
+    #[error("Array stride {stride} does not match the expected {expected}")]
+    InvalidArrayStride { stride: u32, expected: u32 },
     #[error("Field '{0}' can't be dynamically-sized, has type {1:?}")]
     InvalidDynamicArray(String, Handle<crate::Type>),
     #[error("Structure member[{index}] at {offset} overlaps the previous member")]
@@ -328,19 +328,20 @@ impl super::Validator {
                     return Err(TypeError::InvalidArrayBaseType(base));
                 }
 
-                //Note: `unwrap()` is fine, since `Layouter` goes first and calls it
-                let base_size = types[base].inner.size(constants);
-                if stride < base_size {
-                    return Err(TypeError::InsufficientArrayStride { stride, base_size });
+                let base_layout = self.layouter[base];
+                let expected_stride = base_layout.to_stride();
+                if stride != expected_stride {
+                    return Err(TypeError::InvalidArrayStride {
+                        stride,
+                        expected: expected_stride,
+                    });
                 }
 
-                let general_alignment = self.layouter[base].alignment;
+                let general_alignment = base_layout.alignment.get();
                 let uniform_layout = match base_info.uniform_layout {
                     Ok(base_alignment) => {
                         // combine the alignment requirements
-                        let align = ((base_alignment.unwrap().get() - 1)
-                            | (general_alignment.get() - 1))
-                            + 1;
+                        let align = base_alignment.unwrap().get().max(general_alignment);
                         if stride % align != 0 {
                             Err((
                                 handle,
@@ -357,9 +358,7 @@ impl super::Validator {
                 };
                 let storage_layout = match base_info.storage_layout {
                     Ok(base_alignment) => {
-                        let align = ((base_alignment.unwrap().get() - 1)
-                            | (general_alignment.get() - 1))
-                            + 1;
+                        let align = base_alignment.unwrap().get().max(general_alignment);
                         if stride % align != 0 {
                             Err((
                                 handle,

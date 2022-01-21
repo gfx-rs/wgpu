@@ -17,7 +17,6 @@ enum Attribute {
     Interpolate(Option<crate::Interpolation>, Option<crate::Sampling>),
     Location(u32),
     Stage(ShaderStage),
-    Stride(u32),
     WorkGroupSize([u32; 3]),
 }
 
@@ -349,7 +348,6 @@ impl<W: Write> Writer<W> {
                     };
                     write!(self.out, "@stage({}) ", stage_str)?;
                 }
-                Attribute::Stride(stride) => write!(self.out, "@stride({}) ", stride)?,
                 Attribute::WorkGroupSize(size) => {
                     write!(
                         self.out,
@@ -420,15 +418,6 @@ impl<W: Write> Writer<W> {
             // Write struct member name and type
             let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
             write!(self.out, "{}: ", member_name)?;
-            // Write stride attribute for array struct member
-            if let TypeInner::Array {
-                base: _,
-                size: _,
-                stride,
-            } = module.types[member.ty].inner
-            {
-                self.write_attributes(&[Attribute::Stride(stride)])?;
-            }
             self.write_type(module, member.ty)?;
             write!(self.out, ";")?;
             writeln!(self.out)?;
@@ -523,7 +512,11 @@ impl<W: Write> Writer<W> {
             TypeInner::Atomic { kind, .. } => {
                 write!(self.out, "atomic<{}>", scalar_kind_str(kind))?;
             }
-            TypeInner::Array { base, size, .. } => {
+            TypeInner::Array {
+                base,
+                size,
+                stride: _,
+            } => {
                 // More info https://gpuweb.github.io/gpuweb/wgsl/#array-types
                 // array<A, 3> -- Constant array
                 // array<A> -- Dynamic array

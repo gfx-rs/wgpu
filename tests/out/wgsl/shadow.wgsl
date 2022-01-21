@@ -9,7 +9,7 @@ struct Light {
 };
 
 struct Lights {
-    data: @stride(96) array<Light>;
+    data: array<Light>;
 };
 
 let c_ambient: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);

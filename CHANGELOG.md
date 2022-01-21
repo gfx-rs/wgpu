@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.9 (TBD)
+  - WGSL:
+    - attributes are declared with `@attrib` instead of `[[attrib]]`
+    - `stride` attribute is removed
+    - block comments are supported
+
 ## v0.8 (2021-12-18)
   - development release for wgpu-0.12
   - lots of fixes in all parts

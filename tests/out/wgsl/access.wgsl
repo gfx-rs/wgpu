@@ -1,9 +1,13 @@
+struct AlignedWrapper {
+    value: i32;
+};
+
 struct Bar {
     matrix: mat4x4<f32>;
-    matrix_array: @stride(16) array<mat2x2<f32>,2>;
+    matrix_array: array<mat2x2<f32>,2>;
     atom: atomic<i32>;
-    arr: @stride(8) array<vec2<u32>,2>;
-    data: @stride(8) array<i32>;
+    arr: array<vec2<u32>,2>;
+    data: array<AlignedWrapper>;
 };
 
 @group(0) @binding(0) 
@@ -24,13 +28,13 @@ fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let matrix = bar.matrix;
     let arr = bar.arr;
     let b = bar.matrix[3][0];
-    let a = bar.data[(arrayLength((&bar.data)) - 2u)];
-    let data_pointer = (&bar.data[0]);
-    let _e25 = read_from_private((&foo_1));
+    let a = bar.data[(arrayLength((&bar.data)) - 2u)].value;
+    let data_pointer = (&bar.data[0].value);
+    let _e27 = read_from_private((&foo_1));
     bar.matrix[1][2] = 1.0;
     bar.matrix = mat4x4<f32>(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(2.0), vec4<f32>(3.0));
     bar.arr = array<vec2<u32>,2>(vec2<u32>(0u), vec2<u32>(1u));
-    bar.data[1] = 1;
+    bar.data[1].value = 1;
     c = array<i32,5>(a, i32(b), 3, 4, 5);
     c[(vi + 1u)] = 42;
     let value = c[vi];

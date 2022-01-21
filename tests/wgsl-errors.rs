@@ -370,22 +370,6 @@ fn unknown_conservative_depth() {
 }
 
 #[test]
-fn zero_array_stride() {
-    check(
-        r#"
-            type zero = @stride(0) array<f32>;
-        "#,
-        r#"error: array stride must not be zero
-  ┌─ wgsl:2:33
-  │
-2 │             type zero = @stride(0) array<f32>;
-  │                                 ^ array stride must not be zero
-
-"#,
-    );
-}
-
-#[test]
 fn struct_member_zero_size() {
     check(
         r#"
@@ -828,16 +812,6 @@ fn invalid_arrays() {
         "type Bad = array<texture_2d<f32>, 4>;":
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::InvalidArrayBaseType(_),
-            ..
-        })
-    }
-
-    check_validation_error! {
-        r#"
-            type Bad = @stride(2) array<f32, 4>;
-        "#:
-        Err(naga::valid::ValidationError::Type {
-            error: naga::valid::TypeError::InsufficientArrayStride { stride: 2, base_size: 4 },
             ..
         })
     }

@@ -6,19 +6,22 @@ struct _mslBufferSizes {
     metal::uint size0;
 };
 
-struct type_2 {
+struct AlignedWrapper {
+    int value;
+};
+struct type_3 {
     metal::float2x2 inner[2];
 };
-struct type_5 {
+struct type_6 {
     metal::uint2 inner[2];
 };
-typedef int type_7[1];
+typedef AlignedWrapper type_7[1];
 struct Bar {
     metal::float4x4 matrix;
-    type_2 matrix_array;
+    type_3 matrix_array;
     metal::atomic_int atom;
     char _pad3[4];
-    type_5 arr;
+    type_6 arr;
     type_7 data;
 };
 struct type_13 {
@@ -47,14 +50,14 @@ vertex fooOutput foo(
     float baz = foo_1;
     foo_1 = 1.0;
     metal::float4x4 matrix = bar.matrix;
-    type_5 arr = bar.arr;
+    type_6 arr = bar.arr;
     float b = bar.matrix[3].x;
-    int a = bar.data[(1 + (_buffer_sizes.size0 - 120 - 4) / 8) - 2u];
-    float _e25 = read_from_private(foo_1);
+    int a = bar.data[(1 + (_buffer_sizes.size0 - 120 - 8) / 8) - 2u].value;
+    float _e27 = read_from_private(foo_1);
     bar.matrix[1].z = 1.0;
     bar.matrix = metal::float4x4(metal::float4(0.0), metal::float4(1.0), metal::float4(2.0), metal::float4(3.0));
-    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type_5 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
-    bar.data[1] = 1;
+    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type_6 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
+    bar.data[1].value = 1;
     for(int _i=0; _i<5; ++_i) c.inner[_i] = type_13 {a, static_cast<int>(b), 3, 4, 5}.inner[_i];
     c.inner[vi + 1u] = 42;
     int value = c.inner[vi];

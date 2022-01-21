@@ -1,4 +1,8 @@
 
+struct AlignedWrapper {
+    int value;
+};
+
 RWByteAddressBuffer bar : register(u0);
 
 float read_from_private(inout float foo_2)
@@ -24,8 +28,8 @@ float4 foo(uint vi : SV_VertexID) : SV_Position
     float4x4 matrix_ = float4x4(asfloat(bar.Load4(0+0)), asfloat(bar.Load4(0+16)), asfloat(bar.Load4(0+32)), asfloat(bar.Load4(0+48)));
     uint2 arr[2] = {asuint(bar.Load2(104+0)), asuint(bar.Load2(104+8))};
     float b = asfloat(bar.Load(0+48+0));
-    int a = asint(bar.Load((((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
-    const float _e25 = read_from_private(foo_1);
+    int a = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
+    const float _e27 = read_from_private(foo_1);
     bar.Store(8+16+0, asuint(1.0));
     {
         float4x4 _value2 = float4x4(float4(0.0.xxxx), float4(1.0.xxxx), float4(2.0.xxxx), float4(3.0.xxxx));
@@ -39,7 +43,7 @@ float4 foo(uint vi : SV_VertexID) : SV_Position
         bar.Store2(104+0, asuint(_value2[0]));
         bar.Store2(104+8, asuint(_value2[1]));
     }
-    bar.Store(8+120, asuint(1));
+    bar.Store(0+8+120, asuint(1));
     {
         int _result[5]={ a, int(b), 3, 4, 5 };
         for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];

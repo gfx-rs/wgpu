@@ -12,6 +12,13 @@ pub struct TypeLayout {
     pub alignment: Alignment,
 }
 
+impl TypeLayout {
+    /// Produce the stride as if this type is a base of an array.
+    pub fn to_stride(&self) -> u32 {
+        Layouter::round_up(self.alignment, self.size)
+    }
+}
+
 /// Helper processor that derives the sizes of all types.
 ///
 /// `Layouter` uses the default layout algorithm/table, described in

@@ -1,11 +1,15 @@
 // This snapshot tests accessing various containers, dereferencing pointers.
 
+struct AlignedWrapper {
+	@align(8) value: i32;
+};
+
 struct Bar {
 	matrix: mat4x4<f32>;
 	matrix_array: array<mat2x2<f32>, 2>;
 	atom: atomic<i32>;
-	arr: @stride(8) array<vec2<u32>, 2>;
-	data: @stride(8) array<i32>;
+	arr: array<vec2<u32>, 2>;
+	data: array<AlignedWrapper>;
 };
 
 @group(0) @binding(0)
@@ -27,17 +31,17 @@ fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	let arr = bar.arr;
 	let index = 3u;
 	let b = bar.matrix[index].x;
-	let a = bar.data[arrayLength(&bar.data) - 2u];
+	let a = bar.data[arrayLength(&bar.data) - 2u].value;
 
 	// test pointer types
-	let data_pointer: ptr<storage, i32, read_write> = &bar.data[0];
+	let data_pointer: ptr<storage, i32, read_write> = &bar.data[0].value;
 	let foo_value = read_from_private(&foo);
 
 	// test storage stores
 	bar.matrix[1].z = 1.0;
 	bar.matrix = mat4x4<f32>(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(2.0), vec4<f32>(3.0));
 	bar.arr = array<vec2<u32>, 2>(vec2<u32>(0u), vec2<u32>(1u));
-	bar.data[1] = 1;
+	bar.data[1].value = 1;
 
 	// test array indexing
 	var c = array<i32, 5>(a, i32(b), 3, 4, 5);

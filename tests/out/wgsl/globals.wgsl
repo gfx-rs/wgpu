@@ -4,7 +4,7 @@ struct Foo {
 };
 
 struct Dummy {
-    arr: @stride(8) array<vec2<f32>>;
+    arr: array<vec2<f32>>;
 };
 
 let Foo_2: bool = true;

@@ -14,7 +14,7 @@ struct SimParams {
 };
 
 struct Particles {
-    particles: @stride(16) array<Particle>;
+    particles: array<Particle>;
 };
 
 let NUM_PARTICLES: u32 = 1500u;

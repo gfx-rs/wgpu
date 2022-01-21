@@ -12,7 +12,7 @@ struct Light {
 };
 
 struct Lights {
-    data: @stride(96) array<Light>;
+    data: array<Light>;
 };
 
 @group(0) @binding(1)
