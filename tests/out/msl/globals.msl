@@ -15,8 +15,8 @@ struct Foo {
     float v1_;
 };
 typedef metal::float2 type_6[1];
-struct Dummy {
-    type_6 arr;
+struct type_8 {
+    metal::float4 inner[20];
 };
 
 kernel void main_(
@@ -26,10 +26,10 @@ kernel void main_(
 ) {
     float Foo_1 = 1.0;
     bool at = true;
-    float _e8 = alignment.v1_;
-    wg.inner[3] = _e8;
-    float _e13 = metal::float3(alignment.v3_).x;
-    wg.inner[2] = _e13;
+    float _e9 = alignment.v1_;
+    wg.inner[3] = _e9;
+    float _e14 = metal::float3(alignment.v3_).x;
+    wg.inner[2] = _e14;
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
     return;
 }

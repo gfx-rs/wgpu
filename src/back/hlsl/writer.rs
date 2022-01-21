@@ -585,9 +585,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         let name = &self.names[&NameKey::GlobalVariable(handle)];
         write!(self.out, " {}", name)?;
-        if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
-            self.write_array_size(module, size)?;
-        }
 
         if let Some(ref binding) = global.binding {
             // this was already resolved earlier when we started evaluating an entry point.
@@ -597,20 +594,31 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ", space{}", bt.space)?;
             }
             write!(self.out, ")")?;
-        } else if global.space == crate::AddressSpace::Private {
-            write!(self.out, " = ")?;
-            if let Some(init) = global.init {
-                self.write_constant(module, init)?;
-            } else {
-                self.write_default_init(module, global.ty)?;
+        } else {
+            // need to write the array size if the type was emitted with `write_type`
+            if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
+                self.write_array_size(module, size)?;
+            }
+            if global.space == crate::AddressSpace::Private {
+                write!(self.out, " = ")?;
+                if let Some(init) = global.init {
+                    self.write_constant(module, init)?;
+                } else {
+                    self.write_default_init(module, global.ty)?;
+                }
             }
         }
 
         if global.space == crate::AddressSpace::Uniform {
             write!(self.out, " {{ ")?;
             self.write_type(module, global.ty)?;
-            let name = &self.names[&NameKey::GlobalVariable(handle)];
-            writeln!(self.out, " {}; }}", name)?;
+            let sub_name = &self.names[&NameKey::GlobalVariable(handle)];
+            write!(self.out, " {}", sub_name)?;
+            // need to write the array size if the type was emitted with `write_type`
+            if let TypeInner::Array { size, .. } = module.types[global.ty].inner {
+                self.write_array_size(module, size)?;
+            }
+            writeln!(self.out, "; }}")?;
         } else {
             writeln!(self.out, ";")?;
         }

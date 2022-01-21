@@ -9,6 +9,7 @@ groupshared float wg[10];
 groupshared uint at_1;
 ByteAddressBuffer alignment : register(t1);
 ByteAddressBuffer dummy : register(t2);
+cbuffer float_vecs : register(b3) { float4 float_vecs[20]; }
 
 [numthreads(1, 1, 1)]
 void main()
@@ -16,10 +17,10 @@ void main()
     float Foo_1 = 1.0;
     bool at = true;
 
-    float _expr8 = asfloat(alignment.Load(12));
-    wg[3] = _expr8;
-    float _expr13 = asfloat(alignment.Load(0+0));
-    wg[2] = _expr13;
+    float _expr9 = asfloat(alignment.Load(12));
+    wg[3] = _expr9;
+    float _expr14 = asfloat(alignment.Load(0+0));
+    wg[2] = _expr14;
     at_1 = 2u;
     return;
 }

@@ -368,18 +368,25 @@ fn should_pack_struct_member(
 }
 
 fn needs_array_length(ty: Handle<crate::Type>, arena: &crate::UniqueArena<crate::Type>) -> bool {
-    if let crate::TypeInner::Struct { ref members, .. } = arena[ty].inner {
-        if let Some(member) = members.last() {
-            if let crate::TypeInner::Array {
-                size: crate::ArraySize::Dynamic,
-                ..
-            } = arena[member.ty].inner
-            {
-                return true;
+    match arena[ty].inner {
+        crate::TypeInner::Struct { ref members, .. } => {
+            if let Some(member) = members.last() {
+                if let crate::TypeInner::Array {
+                    size: crate::ArraySize::Dynamic,
+                    ..
+                } = arena[member.ty].inner
+                {
+                    return true;
+                }
             }
+            false
         }
+        crate::TypeInner::Array {
+            size: crate::ArraySize::Dynamic,
+            ..
+        } => true,
+        _ => false,
     }
-    false
 }
 
 impl crate::AddressSpace {
@@ -741,14 +748,16 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
     ) -> BackendResult {
         let global = &context.module.global_variables[handle];
-        let members = match context.module.types[global.ty].inner {
-            crate::TypeInner::Struct { ref members, .. } => members,
+        let (offset, array_ty) = match context.module.types[global.ty].inner {
+            crate::TypeInner::Struct { ref members, .. } => match members.last() {
+                Some(&crate::StructMember { offset, ty, .. }) => (offset, ty),
+                None => return Err(Error::Validation),
+            },
+            crate::TypeInner::Array {
+                size: crate::ArraySize::Dynamic,
+                ..
+            } => (0, global.ty),
             _ => return Err(Error::Validation),
-        };
-
-        let (offset, array_ty) = match members.last() {
-            Some(&crate::StructMember { offset, ty, .. }) => (offset, ty),
-            None => return Err(Error::Validation),
         };
 
         let (size, stride) = match context.module.types[array_ty].inner {

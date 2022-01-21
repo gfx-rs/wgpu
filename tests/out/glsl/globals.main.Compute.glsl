@@ -19,10 +19,10 @@ layout(std430) readonly buffer Foo_block_0Compute { Foo _group_0_binding_1_cs; }
 void main() {
     float Foo_1 = 1.0;
     bool at = true;
-    float _e8 = _group_0_binding_1_cs.v1_;
-    wg[3] = _e8;
-    float _e13 = _group_0_binding_1_cs.v3_.x;
-    wg[2] = _e13;
+    float _e9 = _group_0_binding_1_cs.v1_;
+    wg[3] = _e9;
+    float _e14 = _group_0_binding_1_cs.v3_.x;
+    wg[2] = _e14;
     at_1 = 2u;
     return;
 }

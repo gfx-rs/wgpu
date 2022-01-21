@@ -86,6 +86,7 @@ pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariab
             },
             None => false,
         },
-        _ => false,
+        // if it's not a structure, let's wrap it to be able to put "Block"
+        _ => true,
     }
 }
