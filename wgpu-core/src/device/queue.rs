@@ -1,7 +1,6 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
-    align_to,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
         ClearError, CommandBuffer, CopySide, ImageCopyTexture, TransferError,
@@ -415,7 +414,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.alignments.buffer_copy_pitch.get() as u32,
             format_desc.block_size as u32,
         );
-        let stage_bytes_per_row = align_to(
+        let stage_bytes_per_row = hal::auxil::align_to(
             format_desc.block_size as u32 * width_blocks,
             bytes_per_row_alignment,
         );
