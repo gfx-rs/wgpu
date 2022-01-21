@@ -1,5 +1,15 @@
 # Change Log
 
+## wgpu-hal-0.12.3, deno-webgpu-? (2022-01-20)
+  - Metal:
+    - preserve vertex invariance
+  - Vulkan
+    - fix stencil read/write masks
+  - Gles:
+    - reset index binding properly
+  - DX12:
+    - fix copies into 1D textures
+
 ## wgpu-core-0.12.2, wgpu-hal-0.12.2 (2022-01-10)
   - fix tracy compile error
   - fix buffer binding limits beyond 2Gb
