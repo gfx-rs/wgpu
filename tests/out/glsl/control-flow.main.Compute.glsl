@@ -38,8 +38,10 @@ void loop_switch_continue(int x) {
 void main() {
     uvec3 global_id = gl_GlobalInvocationID;
     int pos = 0;
-    groupMemoryBarrier();
-    groupMemoryBarrier();
+    memoryBarrierBuffer();
+    barrier();
+    memoryBarrierShared();
+    barrier();
     switch(1) {
         default:
             pos = 1;

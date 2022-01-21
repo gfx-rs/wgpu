@@ -1723,13 +1723,18 @@ impl<'a, W: Write> Writer<'a, W> {
             // keyword which ceases all further processing in a fragment shader, it's called OpKill
             // in spir-v that's why it's called `Statement::Kill`
             Statement::Kill => writeln!(self.out, "{}discard;", level)?,
-            // Issue an execution or a memory barrier.
+            // Issue a memory barrier. Please note that to ensure visibility,
+            // OpenGL always requires a call to the `barrier()` function after a `memoryBarrier*()`
             Statement::Barrier(flags) => {
-                if flags.is_empty() {
-                    writeln!(self.out, "{}barrier();", level)?;
-                } else {
-                    writeln!(self.out, "{}groupMemoryBarrier();", level)?;
+                if flags.contains(crate::Barrier::STORAGE) {
+                    writeln!(self.out, "{}memoryBarrierBuffer();", level)?;
                 }
+
+                if flags.contains(crate::Barrier::WORK_GROUP) {
+                    writeln!(self.out, "{}memoryBarrierShared();", level)?;
+                }
+
+                writeln!(self.out, "{}barrier();", level)?;
             }
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
