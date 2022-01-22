@@ -1039,7 +1039,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.8.0"
-source = "git+https://github.com/JCapucho/naga?branch=glsl-out-push-constants-v2#c60d70eddf99d5858747d0a7823ab79c8cd0d019"
+source = "git+https://github.com/gfx-rs/naga?rev=81dc674#81dc67402a743b4dc6b2d24c0d306cd18799238b"
 dependencies = [
  "bit-set",
  "bitflags",
