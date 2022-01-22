@@ -4,7 +4,7 @@ struct Uniforms {
     time_size_width: vec4<f32>;
     viewport_height: f32;
 };
-[[group(0), binding(0)]] var<uniform> uniforms: Uniforms;
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 let light_point = vec3<f32>(150.0, 70.0, 0.0);
 let light_colour = vec3<f32>(1.0, 0.98, 0.82);
@@ -181,16 +181,16 @@ fn calc_specular(eye: vec3<f32>, normal: vec3<f32>, light: vec3<f32>) -> f32 {
 }
 
 struct VertexOutput {
-    [[builtin(position)]] position: vec4<f32>;
-    [[location(0)]] f_WaterScreenPos: vec2<f32>;
-    [[location(1)]] f_Fresnel: f32;
-    [[location(2)]] f_Light: vec3<f32>;
+    @builtin(position) position: vec4<f32>;
+    @location(0) f_WaterScreenPos: vec2<f32>;
+    @location(1) f_Fresnel: f32;
+    @location(2) f_Light: vec3<f32>;
 };
 
-[[stage(vertex)]]
+@stage(vertex)
 fn vs_main(
-    [[location(0)]] position: vec2<i32>,
-    [[location(1)]] offsets: vec4<i32>,
+    @location(0) position: vec2<i32>,
+    @location(1) offsets: vec4<i32>,
 ) -> VertexOutput {
     let p_pos = vec2<f32>(position);
     let b_pos = make_position(p_pos + vec2<f32>(offsets.xy));
@@ -222,9 +222,9 @@ let water_colour = vec3<f32>(0.0, 0.46, 0.95);
 let zNear = 10.0;
 let zFar = 400.0;
 
-[[group(0), binding(1)]] var reflection: texture_2d<f32>;
-[[group(0), binding(2)]] var terrain_depth_tex: texture_2d<f32>;
-[[group(0), binding(3)]] var colour_sampler: sampler;
+@group(0) @binding(1) var reflection: texture_2d<f32>;
+@group(0) @binding(2) var terrain_depth_tex: texture_2d<f32>;
+@group(0) @binding(3) var colour_sampler: sampler;
 
 fn to_linear_depth(depth: f32) -> f32 {
     let z_n = 2.0 * depth - 1.0;
@@ -232,8 +232,8 @@ fn to_linear_depth(depth: f32) -> f32 {
     return z_e;
 }
 
-[[stage(fragment)]]
-fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+@stage(fragment)
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let reflection_colour = textureSample(reflection, colour_sampler, in.f_WaterScreenPos.xy).xyz;
 
     let pixel_depth = to_linear_depth(in.position.z);

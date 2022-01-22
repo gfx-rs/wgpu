@@ -18,7 +18,6 @@ default-members = ["wgpu", "wgpu-hal", "wgpu-info"]
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
-naga = { git = "https://github.com/JCapucho/naga", branch = "glsl-out-push-constants-v2" }
 
 [patch."https://github.com/zakarumych/gpu-descriptor"]
 #gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }

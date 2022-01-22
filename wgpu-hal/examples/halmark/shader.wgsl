@@ -9,20 +9,22 @@ struct Locals {
     color: u32;
 };
 
-[[group(0), binding(0)]]
+@group(0)
+@binding(0)
 var<uniform> globals: Globals;
 
-[[group(1), binding(0)]]
+@group(1)
+@binding(0)
 var<uniform> locals: Locals;
 
 struct VertexOutput {
-    [[builtin(position)]] position: vec4<f32>;
-    [[location(0)]] tex_coords: vec2<f32>;
-    [[location(1)]] color: vec4<f32>;
+    @builtin(position) position: vec4<f32>;
+    @location(0) tex_coords: vec2<f32>;
+    @location(1) color: vec4<f32>;
 };
 
-[[stage(vertex)]]
-fn vs_main([[builtin(vertex_index)]] vi: u32) -> VertexOutput {
+@stage(vertex)
+fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
     let tc = vec2<f32>(f32(vi & 1u), 0.5 * f32(vi & 2u));
     let offset = vec2<f32>(tc.x * globals.size.x, tc.y * globals.size.y);
     let pos = globals.mvp * vec4<f32>(locals.position + offset, 0.0, 1.0);
@@ -30,12 +32,14 @@ fn vs_main([[builtin(vertex_index)]] vi: u32) -> VertexOutput {
     return VertexOutput(pos, tc, color);
 }
 
-[[group(0), binding(1)]]
+@group(0)
+@binding(1)
 var texture: texture_2d<f32>;
-[[group(0), binding(2)]]
+@group(0)
+@binding(2)
 var sam: sampler;
 
-[[stage(fragment)]]
-fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+@stage(fragment)
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return in.color * textureSampleLevel(texture, sam, in.tex_coords, 0.0);
 }

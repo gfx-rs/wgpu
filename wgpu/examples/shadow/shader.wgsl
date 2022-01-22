@@ -3,7 +3,8 @@ struct Globals {
     num_lights: vec4<u32>;
 };
 
-[[group(0), binding(0)]]
+@group(0)
+@binding(0)
 var<uniform> u_globals: Globals;
 
 struct Entity {
@@ -11,24 +12,25 @@ struct Entity {
     color: vec4<f32>;
 };
 
-[[group(1), binding(0)]]
+@group(1)
+@binding(0)
 var<uniform> u_entity: Entity;
 
-[[stage(vertex)]]
-fn vs_bake([[location(0)]] position: vec4<i32>) -> [[builtin(position)]] vec4<f32> {
+@stage(vertex)
+fn vs_bake(@location(0) position: vec4<i32>) -> @builtin(position) vec4<f32> {
     return u_globals.view_proj * u_entity.world * vec4<f32>(position);
 }
 
 struct VertexOutput {
-    [[builtin(position)]] proj_position: vec4<f32>;
-    [[location(0)]] world_normal: vec3<f32>;
-    [[location(1)]] world_position: vec4<f32>;
+    @builtin(position) proj_position: vec4<f32>;
+    @location(0) world_normal: vec3<f32>;
+    @location(1) world_position: vec4<f32>;
 };
 
-[[stage(vertex)]]
+@stage(vertex)
 fn vs_main(
-    [[location(0)]] position: vec4<i32>,
-    [[location(1)]] normal: vec4<i32>,
+    @location(0) position: vec4<i32>,
+    @location(1) normal: vec4<i32>,
 ) -> VertexOutput {
     let w = u_entity.world;
     let world_pos = u_entity.world * vec4<f32>(position);
@@ -48,7 +50,7 @@ struct Light {
 };
 
 struct Lights {
-    data: [[stride(96)]] array<Light>;
+    data: @stride(96) array<Light>;
 };
 
 // Used when storage types are not supported
@@ -56,13 +58,17 @@ struct LightsWithoutStorage {
     data: array<Light, 10>;
 };
 
-[[group(0), binding(1)]]
+@group(0)
+@binding(1)
 var<storage, read> s_lights: Lights;
-[[group(0), binding(1)]]
+@group(0)
+@binding(1)
 var<uniform> u_lights: LightsWithoutStorage;
-[[group(0), binding(2)]]
+@group(0)
+@binding(2)
 var t_shadow: texture_depth_2d_array;
-[[group(0), binding(3)]]
+@group(0)
+@binding(3)
 var sampler_shadow: sampler_comparison;
 
 fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
@@ -81,8 +87,8 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
 let c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
 let c_max_lights: u32 = 10u;
 
-[[stage(fragment)]]
-fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+@stage(fragment)
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.world_normal);
     // accumulate color
     var color: vec3<f32> = c_ambient;
@@ -101,8 +107,8 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 }
 
 // The fragment entrypoint used when storage buffers are not available for the lights
-[[stage(fragment)]]
-fn fs_main_without_storage(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+@stage(fragment)
+fn fs_main_without_storage(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.world_normal);
     var color: vec3<f32> = c_ambient;
     for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
