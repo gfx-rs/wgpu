@@ -574,7 +574,9 @@ impl super::PrivateCapabilities {
         Self {
             family_check,
             msl_version: if os_is_mac {
-                if Self::version_at_least(major, minor, 10, 15) {
+                if Self::version_at_least(major, minor, 11, 0) {
+                    MTLLanguageVersion::V2_3
+                } else if Self::version_at_least(major, minor, 10, 15) {
                     MTLLanguageVersion::V2_2
                 } else if Self::version_at_least(major, minor, 10, 14) {
                     MTLLanguageVersion::V2_1
@@ -587,6 +589,8 @@ impl super::PrivateCapabilities {
                 } else {
                     MTLLanguageVersion::V1_0
                 }
+            } else if Self::version_at_least(major, minor, 14, 0) {
+                MTLLanguageVersion::V2_3
             } else if Self::version_at_least(major, minor, 13, 0) {
                 MTLLanguageVersion::V2_2
             } else if Self::version_at_least(major, minor, 12, 0) {
