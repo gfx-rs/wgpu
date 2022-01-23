@@ -203,7 +203,8 @@ dependencies = [
 [[package]]
 name = "cargo-run-wasm"
 version = "0.1.0"
-source = "git+https://github.com/rukai/cargo-run-wasm#ee7abbb8885f4b26d5d9d0969b32864bcfa1c9a4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "601e6c8c774ca4cba5d01a44d3844a04a56189eb6c1f4c49b06999be890c8ab4"
 dependencies = [
  "devserver_lib",
  "pico-args",
