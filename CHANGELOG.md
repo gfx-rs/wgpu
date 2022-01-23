@@ -1,5 +1,9 @@
 # Change Log
 
+## wgpu-hal-0.12.4 (2022-01-24)
+  - Metal:
+    - check for MSL-2.3
+
 ## wgpu-hal-0.12.3, deno-webgpu-? (2022-01-20)
   - Metal:
     - preserve vertex invariance
