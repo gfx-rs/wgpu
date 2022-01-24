@@ -381,11 +381,10 @@ impl ResolvedBinding {
         Ok(())
     }
 
-    fn try_fmt_decorated<W: Write>(&self, out: &mut W, terminator: &str) -> Result<(), Error> {
+    fn try_fmt_decorated<W: Write>(&self, out: &mut W) -> Result<(), Error> {
         write!(out, " [[")?;
         self.try_fmt(out)?;
         write!(out, "]]")?;
-        write!(out, "{}", terminator)?;
         Ok(())
     }
 }
