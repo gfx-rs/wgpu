@@ -2663,7 +2663,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         let source_kind = inner.scalar_kind().unwrap();
                         let conv_op = match (source_kind, target_kind) {
                             (Sk::Float, Sk::Sint) => "floatBitsToInt",
-                            (Sk::Float, Sk::Uint) => "floatBitsToUInt",
+                            (Sk::Float, Sk::Uint) => "floatBitsToUint",
                             (Sk::Sint, Sk::Float) => "intBitsToFloat",
                             (Sk::Uint, Sk::Float) => "uintBitsToFloat",
                             // There is no way to bitcast between Uint/Sint in glsl. Use constructor conversion
