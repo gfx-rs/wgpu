@@ -2820,7 +2820,7 @@ impl<W: Write> Writer<W> {
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
                     write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                    resolved.try_fmt_decorated(&mut self.out, "")?;
+                    resolved.try_fmt_decorated(&mut self.out)?;
                     writeln!(self.out, ";")?;
                 }
                 writeln!(self.out, "}};")?;
@@ -2889,11 +2889,17 @@ impl<W: Write> Writer<W> {
                         };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;
                         write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                        resolved.try_fmt_decorated(&mut self.out, "")?;
                         if let Some(array_len) = array_len {
                             write!(self.out, " [{}]", array_len)?;
                         }
-                        writeln!(self.out, ";")?;
+                        write!(self.out, " [[")?;
+                        resolved.try_fmt(&mut self.out)?;
+                        if options.lang_version >= (2, 3)
+                            && *binding == crate::Binding::BuiltIn(crate::BuiltIn::Position)
+                        {
+                            write!(self.out, ", invariant")?;
+                        }
+                        writeln!(self.out, "]];")?;
                     }
 
                     if pipeline_options.allow_point_size
@@ -2944,7 +2950,8 @@ impl<W: Write> Writer<W> {
                     ','
                 };
                 write!(self.out, "{} {} {}", separator, ty_name, name)?;
-                resolved.try_fmt_decorated(&mut self.out, "\n")?;
+                resolved.try_fmt_decorated(&mut self.out)?;
+                writeln!(self.out)?;
             }
             for (handle, var) in module.global_variables.iter() {
                 let usage = fun_info[handle];
@@ -2984,7 +2991,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{} ", separator)?;
                 tyvar.try_fmt(&mut self.out)?;
                 if let Some(resolved) = resolved {
-                    resolved.try_fmt_decorated(&mut self.out, "")?;
+                    resolved.try_fmt_decorated(&mut self.out)?;
                 }
                 if let Some(value) = var.init {
                     let coco = ConstantContext {
@@ -3011,7 +3018,8 @@ impl<W: Write> Writer<W> {
                     "{} constant _mslBufferSizes& _buffer_sizes",
                     separator,
                 )?;
-                resolved.try_fmt_decorated(&mut self.out, "\n")?;
+                resolved.try_fmt_decorated(&mut self.out)?;
+                writeln!(self.out)?;
             }
 
             // end of the entry point argument list
