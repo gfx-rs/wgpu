@@ -1,5 +1,12 @@
 # Change Log
 
+### v0.8.4 (2022-01-24)
+  - MSL:
+    - make VS-output positions invariant if possible
+  - GLSL-out:
+    - fix barriers to affect the execution in addition to memory
+    - fix `floatBitsToUint` spelling
+
 ### v0.8.3 (2022-01-20)
   - don't pin `indexmap`
   - MSL-out:
