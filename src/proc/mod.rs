@@ -9,7 +9,7 @@ mod typifier;
 use std::cmp::PartialEq;
 
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
-pub use layouter::{Alignment, LayoutError, Layouter, TypeLayout, TypeLayoutError};
+pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
