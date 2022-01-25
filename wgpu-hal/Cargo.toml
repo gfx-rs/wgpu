@@ -18,6 +18,7 @@ vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "i
 gles = ["naga/glsl-out", "glow", "egl", "libloading"]
 dx12 = ["naga/hlsl-out", "native", "bit-set", "range-alloc", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
 renderdoc = ["libloading", "renderdoc-sys"]
+emscripten = ["gles"]
 
 [[example]]
 name = "halmark"
@@ -66,6 +67,11 @@ egl = { package = "khronos-egl", version = "4.1", features = ["dynamic"], option
 #Note: it's only unused on Apple platforms
 libloading = { version = "0.7", optional = true }
 
+[target.'cfg(target_os = "emscripten")'.dependencies]
+egl = { package = "khronos-egl", version = "4.1", features = ["static", "no-pkg-config"] }
+#Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
+libloading = { version = "0.7", optional = true }
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
 native = { package = "d3d12", version = "0.4.1", features = ["libloading"], optional = true }
@@ -75,7 +81,7 @@ mtl = { package = "metal", git = "https://github.com/gfx-rs/metal-rs", rev = "14
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext"] }
 js-sys = { version = "0.3" }

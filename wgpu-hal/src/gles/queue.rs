@@ -1176,10 +1176,10 @@ impl crate::Queue<super::Api> for super::Queue {
         surface: &mut super::Surface,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
         let gl = &self.shared.context.get_without_egl_lock();
 
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
         let gl = &self.shared.context.glow_context;
 
         surface.present(texture, gl)

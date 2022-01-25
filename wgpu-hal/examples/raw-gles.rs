@@ -1,15 +1,16 @@
 //! This example shows interop with raw GLES contexts -
 //! the ability to hook up wgpu-hal to an existing context and draw into it.
+//!
+//! Emscripten build:
+//! 1. install emsdk
+//! 2. build this example with cargo:
+//!    EMMAKEN_CFLAGS="-g -s ERROR_ON_UNDEFINED_SYMBOLS=0 --no-entry -s FULL_ES3=1" cargo build --example raw-gles --target wasm32-unknown-emscripten --features emscripten,webgl
+//! 3. copy raw-gles.em.html into target/wasm32-unknown-emscripten/debug/examples/ and open it in browser
 
 extern crate wgpu_hal as hal;
 
-#[cfg(target_arch = "wasm32")]
-fn main() {}
-
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
-
     env_logger::init();
     println!("Initializing external GL context");
 
@@ -32,6 +33,94 @@ fn main() {
         })
     }
     .expect("GL adapter can't be initialized");
+
+    fill_screen(&exposed, inner_size.width, inner_size.height);
+
+    println!("Showing the window");
+    gl_context.swap_buffers().unwrap();
+
+    event_loop.run(move |event, _, control_flow| {
+        use glutin::{
+            event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+            event_loop::ControlFlow,
+        };
+        *control_flow = ControlFlow::Wait;
+
+        match event {
+            Event::LoopDestroyed => return,
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested
+                | WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => *control_flow = ControlFlow::Exit,
+                _ => (),
+            },
+            _ => (),
+        }
+    });
+}
+
+#[cfg(feature = "emscripten")]
+fn main() {
+    env_logger::init();
+
+    println!("Initializing external GL context");
+    let egl = egl::Instance::new(egl::Static);
+    let display = egl.get_display(egl::DEFAULT_DISPLAY).unwrap();
+    egl.initialize(display)
+        .expect("unable to initialize display");
+
+    let attributes = [
+        egl::RED_SIZE,
+        8,
+        egl::GREEN_SIZE,
+        8,
+        egl::BLUE_SIZE,
+        8,
+        egl::NONE,
+    ];
+
+    let config = egl
+        .choose_first_config(display, &attributes)
+        .unwrap()
+        .expect("unable to choose config");
+    let surface = unsafe {
+        let window = std::ptr::null_mut::<std::ffi::c_void>();
+        egl.create_window_surface(display, config, window, None)
+    }
+    .expect("unable to create surface");
+
+    let context_attributes = [egl::CONTEXT_CLIENT_VERSION, 3, egl::NONE];
+
+    let gl_context = egl
+        .create_context(display, config, None, &context_attributes)
+        .expect("unable to create context");
+    egl.make_current(display, Some(surface), Some(surface), Some(gl_context))
+        .expect("can't make context current");
+
+    println!("Hooking up to wgpu-hal");
+    let exposed = unsafe {
+        <hal::api::Gles as hal::Api>::Adapter::new_external(|name| {
+            egl.get_proc_address(name)
+                .map_or(std::ptr::null(), |p| p as *const _)
+        })
+    }
+    .expect("GL adapter can't be initialized");
+
+    fill_screen(&exposed, 640, 400);
+}
+
+#[cfg(all(target_arch = "wasm32", not(feature = "emscripten")))]
+fn main() {}
+
+fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height: u32) {
+    use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
+
     let mut od = unsafe {
         exposed
             .adapter
@@ -68,8 +157,8 @@ fn main() {
     let rp_desc = hal::RenderPassDescriptor {
         label: None,
         extent: wgt::Extent3d {
-            width: inner_size.width,
-            height: inner_size.height,
+            width,
+            height,
             depth_or_array_layers: 1,
         },
         sample_count: 1,
@@ -92,32 +181,4 @@ fn main() {
         let cmd_buf = encoder.end_encoding().unwrap();
         od.queue.submit(&[&cmd_buf], None).unwrap();
     }
-
-    println!("Showing the window");
-    gl_context.swap_buffers().unwrap();
-
-    event_loop.run(move |event, _, control_flow| {
-        use glutin::{
-            event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-            event_loop::ControlFlow,
-        };
-        *control_flow = ControlFlow::Wait;
-
-        match event {
-            Event::LoopDestroyed => return,
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
-                    ..
-                } => *control_flow = ControlFlow::Exit,
-                _ => (),
-            },
-            _ => (),
-        }
-    });
 }

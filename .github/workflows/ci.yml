@@ -14,6 +14,7 @@ env:
 # - local: build for the same target as we compile on, and do local tests
 # - other: build without testing, e.g. cross-build
 # - web: build for the Web
+# - em: build for the Emscripten
 
 jobs:
   build:
@@ -94,6 +95,12 @@ jobs:
             tool: clippy
             kind: web
 
+          - name: Emscripten
+            os: ubuntu-20.04
+            target: wasm32-unknown-emscripten
+            tool: clippy
+            kind: em
+
     name: Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
@@ -167,6 +174,15 @@ jobs:
 
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps
+
+      - name: check em
+        if: matrix.kind == 'em'
+        run: |
+          # build for Emscripten/WebGL
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} -p wgpu -p wgpu-hal --features webgl,emscripten
+
+          # build raw-gles example
+          cargo ${{matrix.tool}} --target ${{ matrix.target }} --example raw-gles --features webgl,emscripten
 
       - name: check native
         if: matrix.kind == 'local' || matrix.kind == 'other'
