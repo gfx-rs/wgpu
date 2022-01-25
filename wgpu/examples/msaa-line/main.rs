@@ -250,21 +250,25 @@ impl framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
-            let ops = wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                store: true,
-            };
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachment {
                     view,
                     resolve_target: None,
-                    ops,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: true,
+                    },
                 }
             } else {
                 wgpu::RenderPassColorAttachment {
                     view: &self.multisampled_framebuffer,
                     resolve_target: Some(view),
-                    ops,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        // Storing pre-resolve MSAA data is unnecessary if it isn't used later.
+                        // On tile-based GPU, avoid store can reduce your app's memory footprint.
+                        store: false,
+                    },
                 }
             };
 
