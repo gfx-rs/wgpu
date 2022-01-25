@@ -1431,7 +1431,7 @@ impl Instance {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(C::from_hal_instance::<A>(hal_instance)),
@@ -1443,7 +1443,7 @@ impl Instance {
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub fn enumerate_adapters(&self, backends: Backends) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
@@ -1474,7 +1474,7 @@ impl Instance {
     /// # Safety
     ///
     /// `hal_adapter` must be created from this instance internal handle.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
@@ -1555,7 +1555,7 @@ impl Instance {
     }
 
     /// Generates memory report.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub fn generate_report(&self) -> wgc::hub::GlobalReport {
         self.context.generate_report()
     }
@@ -1607,7 +1607,7 @@ impl Adapter {
     ///
     /// - `hal_device` must be created from this adapter internal handle.
     /// - `desc.features` must be a subset of `hal_device` features.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
@@ -1846,7 +1846,7 @@ impl Device {
     /// - `hal_texture` must be created from this device internal handle
     /// - `hal_texture` must be created respecting `desc`
     /// - `hal_texture` must be initialized
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -1910,7 +1910,7 @@ impl Device {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Device must not be manually destroyed
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
@@ -2203,7 +2203,7 @@ impl Texture {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Texture must not be manually destroyed
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
