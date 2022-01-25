@@ -6,7 +6,7 @@
 		adjust_coordinate_space: false,
 	),
 	msl: (
-		lang_version: (2, 3),
+		lang_version: (2, 1),
 		per_stage_map: (
 			vs: (
 				resources: {
