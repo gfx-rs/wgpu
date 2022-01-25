@@ -12,7 +12,7 @@ use crate::{
         variables::{GlobalOrConstant, VarDeclaration},
         Error, ErrorKind, Parser, Span,
     },
-    Block, Expression, FunctionResult, Handle, ScalarKind, Statement, StorageClass, StructMember,
+    AddressSpace, Block, Expression, FunctionResult, Handle, ScalarKind, Statement, StructMember,
     Type, TypeInner,
 };
 
@@ -480,7 +480,7 @@ impl<'source> ParsingContext<'source> {
 
         for &(ref qualifier, _) in qualifiers {
             match *qualifier {
-                TypeQualifier::StorageQualifier(StorageQualifier::StorageClass(c)) => {
+                TypeQualifier::StorageQualifier(StorageQualifier::AddressSpace(c)) => {
                     storage = Some(c)
                 }
                 TypeQualifier::Layout(l) => layout = Some(l),
@@ -490,7 +490,7 @@ impl<'source> ParsingContext<'source> {
 
         let layout = match (layout, storage) {
             (Some(layout), _) => layout,
-            (None, Some(StorageClass::Storage { .. })) => StructLayout::Std430,
+            (None, Some(AddressSpace::Storage { .. })) => StructLayout::Std430,
             _ => StructLayout::Std140,
         };
 

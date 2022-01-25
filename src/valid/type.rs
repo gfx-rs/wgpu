@@ -82,10 +82,10 @@ pub enum TypeError {
     UnresolvedBase(Handle<crate::Type>),
     #[error("Invalid type for pointer target {0:?}")]
     InvalidPointerBase(Handle<crate::Type>),
-    #[error("Unsized types like {base:?} must be in the `Storage` storage class, not `{class:?}`")]
+    #[error("Unsized types like {base:?} must be in the `Storage` address space, not `{space:?}`")]
     InvalidPointerToUnsized {
         base: Handle<crate::Type>,
-        class: crate::StorageClass,
+        space: crate::AddressSpace,
     },
     #[error("Expected data type, found {0:?}")]
     InvalidData(Handle<crate::Type>),
@@ -257,8 +257,8 @@ impl super::Validator {
                     width as u32,
                 )
             }
-            Ti::Pointer { base, class } => {
-                use crate::StorageClass as Sc;
+            Ti::Pointer { base, space } => {
+                use crate::AddressSpace as As;
 
                 if base >= handle {
                     return Err(TypeError::UnresolvedBase(base));
@@ -270,8 +270,8 @@ impl super::Validator {
                 }
 
                 // Runtime-sized values can only live in the `Storage` storage
-                // class, so it's useless to have a pointer to such a type in
-                // any other class.
+                // space, so it's useless to have a pointer to such a type in
+                // any other space.
                 //
                 // Detecting this problem here prevents the definition of
                 // functions like:
@@ -281,25 +281,25 @@ impl super::Validator {
                 // which would otherwise be permitted, but uncallable. (They
                 // may also present difficulties in code generation).
                 if !base_info.flags.contains(TypeFlags::SIZED) {
-                    match class {
-                        Sc::Storage { .. } => {}
+                    match space {
+                        As::Storage { .. } => {}
                         _ => {
-                            return Err(TypeError::InvalidPointerToUnsized { base, class });
+                            return Err(TypeError::InvalidPointerToUnsized { base, space });
                         }
                     }
                 }
 
                 // Pointers passed as arguments to user-defined functions must
                 // be in the `Function`, `Private`, or `Workgroup` storage
-                // class. We only mark pointers in those classes as `ARGUMENT`.
+                // space. We only mark pointers in those spaces as `ARGUMENT`.
                 //
                 // `Validator::validate_function` actually checks the storage
-                // class of pointer arguments explicitly before checking the
+                // space of pointer arguments explicitly before checking the
                 // `ARGUMENT` flag, to give better error messages. But it seems
                 // best to set `ARGUMENT` accurately anyway.
-                let argument_flag = match class {
-                    Sc::Function | Sc::Private | Sc::WorkGroup => TypeFlags::ARGUMENT,
-                    Sc::Uniform | Sc::Storage { .. } | Sc::Handle | Sc::PushConstant => {
+                let argument_flag = match space {
+                    As::Function | As::Private | As::WorkGroup => TypeFlags::ARGUMENT,
+                    As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant => {
                         TypeFlags::empty()
                     }
                 };
@@ -312,7 +312,7 @@ impl super::Validator {
                 size: _,
                 kind,
                 width,
-                class: _,
+                space: _,
             } => {
                 if !self.check_width(kind, width) {
                     return Err(TypeError::InvalidWidth(kind, width));

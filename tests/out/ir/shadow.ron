@@ -73,14 +73,14 @@
             name: None,
             inner: Pointer(
                 base: 2,
-                class: Function,
+                space: Function,
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 3,
-                class: Function,
+                space: Function,
             ),
         ),
         (
@@ -109,21 +109,21 @@
             name: None,
             inner: Pointer(
                 base: 13,
-                class: Uniform,
+                space: Uniform,
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 12,
-                class: Uniform,
+                space: Uniform,
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 3,
-                class: Uniform,
+                space: Uniform,
             ),
         ),
         (
@@ -186,7 +186,7 @@
             name: None,
             inner: Pointer(
                 base: 20,
-                class: Storage(
+                space: Storage(
                     access: (
                         bits: 0,
                     ),
@@ -197,7 +197,7 @@
             name: None,
             inner: Pointer(
                 base: 19,
-                class: Storage(
+                space: Storage(
                     access: (
                         bits: 3,
                     ),
@@ -208,7 +208,7 @@
             name: None,
             inner: Pointer(
                 base: 18,
-                class: Storage(
+                space: Storage(
                     access: (
                         bits: 3,
                     ),
@@ -219,7 +219,7 @@
             name: None,
             inner: Pointer(
                 base: 17,
-                class: Storage(
+                space: Storage(
                     access: (
                         bits: 3,
                     ),
@@ -230,21 +230,21 @@
             name: None,
             inner: Pointer(
                 base: 4,
-                class: Private,
+                space: Private,
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 2,
-                class: Private,
+                space: Private,
             ),
         ),
         (
             name: None,
             inner: Pointer(
                 base: 4,
-                class: Storage(
+                space: Storage(
                     access: (
                         bits: 3,
                     ),
@@ -255,7 +255,7 @@
             name: None,
             inner: Pointer(
                 base: 1,
-                class: Storage(
+                space: Storage(
                     access: (
                         bits: 3,
                     ),
@@ -266,7 +266,7 @@
             name: None,
             inner: Pointer(
                 base: 1,
-                class: Private,
+                space: Private,
             ),
         ),
         (
@@ -607,7 +607,7 @@
     global_variables: [
         (
             name: Some("t_shadow"),
-            class: Handle,
+            space: Handle,
             binding: Some((
                 group: 0,
                 binding: 2,
@@ -617,7 +617,7 @@
         ),
         (
             name: Some("sampler_shadow"),
-            class: Handle,
+            space: Handle,
             binding: Some((
                 group: 0,
                 binding: 3,
@@ -627,7 +627,7 @@
         ),
         (
             name: Some("u_globals"),
-            class: Uniform,
+            space: Uniform,
             binding: Some((
                 group: 0,
                 binding: 0,
@@ -637,7 +637,7 @@
         ),
         (
             name: Some("s_lights"),
-            class: Storage(
+            space: Storage(
                 access: (
                     bits: 1,
                 ),
@@ -651,21 +651,21 @@
         ),
         (
             name: Some("in_position_fs"),
-            class: Private,
+            space: Private,
             binding: None,
             ty: 4,
             init: None,
         ),
         (
             name: Some("in_normal_fs"),
-            class: Private,
+            space: Private,
             binding: None,
             ty: 2,
             init: None,
         ),
         (
             name: Some("out_color_fs"),
-            class: Private,
+            space: Private,
             binding: None,
             ty: 4,
             init: None,

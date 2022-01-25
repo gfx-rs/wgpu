@@ -434,21 +434,21 @@ impl FunctionInfo {
                     requirements: UniformityRequirements::empty(),
                 }
             }
-            // depends on the storage class
+            // depends on the address space
             E::GlobalVariable(gh) => {
-                use crate::StorageClass as Sc;
+                use crate::AddressSpace as As;
                 assignable_global = Some(gh);
                 let var = &resolve_context.global_vars[gh];
-                let uniform = match var.class {
+                let uniform = match var.space {
                     // local data is non-uniform
-                    Sc::Function | Sc::Private => false,
+                    As::Function | As::Private => false,
                     // workgroup memory is exclusively accessed by the group
-                    Sc::WorkGroup => true,
+                    As::WorkGroup => true,
                     // uniform data
-                    Sc::Uniform | Sc::PushConstant => true,
+                    As::Uniform | As::PushConstant => true,
                     // storage data is only uniform when read-only
-                    Sc::Storage { access } => !access.contains(crate::StorageAccess::STORE),
-                    Sc::Handle => false,
+                    As::Storage { access } => !access.contains(crate::StorageAccess::STORE),
+                    As::Handle => false,
                 };
                 Uniformity {
                     non_uniform_result: if uniform { None } else { Some(handle) },
@@ -905,7 +905,7 @@ fn uniform_control_flow() {
             name: None,
             init: None,
             ty,
-            class: crate::StorageClass::Handle,
+            space: crate::AddressSpace::Handle,
             binding: None,
         },
         Default::default(),
@@ -916,7 +916,7 @@ fn uniform_control_flow() {
             init: None,
             ty,
             binding: None,
-            class: crate::StorageClass::Uniform,
+            space: crate::AddressSpace::Uniform,
         },
         Default::default(),
     );

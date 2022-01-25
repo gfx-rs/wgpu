@@ -330,7 +330,7 @@ enum LookupLoadOverride {
 
 #[derive(PartialEq)]
 enum ExtendedClass {
-    Global(crate::StorageClass),
+    Global(crate::AddressSpace),
     Input,
     Output,
 }
@@ -4004,19 +4004,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let decor = self.future_decor.remove(&id);
         let base_lookup_ty = self.lookup_type.lookup(type_id)?;
         let base_inner = &module.types[base_lookup_ty.handle].inner;
-        let class = if let Some(class) = base_inner.pointer_class() {
-            class
+        let space = if let Some(space) = base_inner.pointer_space() {
+            space
         } else if self
             .lookup_storage_buffer_types
             .contains_key(&base_lookup_ty.handle)
         {
-            crate::StorageClass::Storage {
+            crate::AddressSpace::Storage {
                 access: crate::StorageAccess::default(),
             }
         } else {
             match map_storage_class(storage_class)? {
-                ExtendedClass::Global(class) => class,
-                ExtendedClass::Input | ExtendedClass::Output => crate::StorageClass::Private,
+                ExtendedClass::Global(space) => space,
+                ExtendedClass::Input | ExtendedClass::Output => crate::AddressSpace::Private,
             }
         };
 
@@ -4028,8 +4028,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             ..
         } = *base_inner
         {
-            match class {
-                crate::StorageClass::Storage { .. } => {}
+            match space {
+                crate::AddressSpace::Storage { .. } => {}
                 _ => {
                     return Err(Error::UnsupportedRuntimeArrayStorageClass);
                 }
@@ -4037,7 +4037,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
 
         // Don't bother with pointer stuff for `Handle` types.
-        let lookup_ty = if class == crate::StorageClass::Handle {
+        let lookup_ty = if space == crate::AddressSpace::Handle {
             base_lookup_ty.clone()
         } else {
             LookupType {
@@ -4046,7 +4046,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         name: decor.and_then(|dec| dec.name),
                         inner: crate::TypeInner::Pointer {
                             base: base_lookup_ty.handle,
-                            class,
+                            space,
                         },
                     },
                     self.span_from_with_op(start),
@@ -4576,7 +4576,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let original_ty = self.lookup_type.lookup(type_id)?.handle;
         let mut effective_ty = original_ty;
-        if let crate::TypeInner::Pointer { base, class: _ } = module.types[original_ty].inner {
+        if let crate::TypeInner::Pointer { base, space: _ } = module.types[original_ty].inner {
             effective_ty = base;
         };
         if let crate::TypeInner::Image {
@@ -4601,7 +4601,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
 
         let ext_class = match self.lookup_storage_buffer_types.get(&effective_ty) {
-            Some(&access) => ExtendedClass::Global(crate::StorageClass::Storage { access }),
+            Some(&access) => ExtendedClass::Global(crate::AddressSpace::Storage { access }),
             None => map_storage_class(storage_class)?,
         };
 
@@ -4617,14 +4617,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
 
         let (inner, var) = match ext_class {
-            ExtendedClass::Global(mut class) => {
-                if let crate::StorageClass::Storage { ref mut access } = class {
+            ExtendedClass::Global(mut space) => {
+                if let crate::AddressSpace::Storage { ref mut access } = space {
                     *access &= dec.flags.to_storage_access();
                 }
                 let var = crate::GlobalVariable {
                     binding: dec.resource_binding(),
                     name: dec.name,
-                    class,
+                    space,
                     ty: effective_ty,
                     init,
                 };
@@ -4667,7 +4667,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                 let var = crate::GlobalVariable {
                     name: dec.name.clone(),
-                    class: crate::StorageClass::Private,
+                    space: crate::AddressSpace::Private,
                     binding: None,
                     ty: effective_ty,
                     init: None,
@@ -4745,7 +4745,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                 let var = crate::GlobalVariable {
                     name: dec.name,
-                    class: crate::StorageClass::Private,
+                    space: crate::AddressSpace::Private,
                     binding: None,
                     ty: effective_ty,
                     init,

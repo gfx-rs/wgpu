@@ -86,11 +86,11 @@ pub enum FunctionError {
     },
     #[error("Argument '{name}' at index {index} has a type that can't be passed into functions.")]
     InvalidArgumentType { index: usize, name: String },
-    #[error("Argument '{name}' at index {index} is a pointer of class {class:?}, which can't be passed into functions.")]
-    InvalidArgumentPointerClass {
+    #[error("Argument '{name}' at index {index} is a pointer of space {space:?}, which can't be passed into functions.")]
+    InvalidArgumentPointerSpace {
         index: usize,
         name: String,
-        class: crate::StorageClass,
+        space: crate::AddressSpace,
     },
     #[error("There are instructions after `return`/`break`/`continue`")]
     InstructionsAfterReturn,
@@ -610,7 +610,7 @@ impl super::Validator {
                         .map_err(|e| e.with_span())?;
 
                     let good = match *pointer_ty {
-                        Ti::Pointer { base, class: _ } => match context.types[base].inner {
+                        Ti::Pointer { base, space: _ } => match context.types[base].inner {
                             Ti::Atomic { kind, width } => *value_ty == Ti::Scalar { kind, width },
                             ref other => value_ty == other,
                         },
@@ -618,13 +618,13 @@ impl super::Validator {
                             size: Some(size),
                             kind,
                             width,
-                            class: _,
+                            space: _,
                         } => *value_ty == Ti::Vector { size, kind, width },
                         Ti::ValuePointer {
                             size: None,
                             kind,
                             width,
-                            class: _,
+                            space: _,
                         } => *value_ty == Ti::Scalar { kind, width },
                         _ => false,
                     };
@@ -635,8 +635,8 @@ impl super::Validator {
                             .with_handle(value, context.expressions));
                     }
 
-                    if let Some(class) = pointer_ty.pointer_class() {
-                        if !class.access().contains(crate::StorageAccess::STORE) {
+                    if let Some(space) = pointer_ty.pointer_space() {
+                        if !space.access().contains(crate::StorageAccess::STORE) {
                             return Err(FunctionError::InvalidStorePointer(pointer)
                                 .with_span_static(
                                     context.expressions.get_span(pointer),
@@ -848,16 +848,16 @@ impl super::Validator {
                 }
                 .with_span_handle(argument.ty, &module.types)
             })?;
-            match ty.inner.pointer_class() {
-                Some(crate::StorageClass::Private)
-                | Some(crate::StorageClass::Function)
-                | Some(crate::StorageClass::WorkGroup)
+            match ty.inner.pointer_space() {
+                Some(crate::AddressSpace::Private)
+                | Some(crate::AddressSpace::Function)
+                | Some(crate::AddressSpace::WorkGroup)
                 | None => {}
                 Some(other) => {
-                    return Err(FunctionError::InvalidArgumentPointerClass {
+                    return Err(FunctionError::InvalidArgumentPointerSpace {
                         index,
                         name: argument.name.clone().unwrap_or_default(),
-                        class: other,
+                        space: other,
                     }
                     .with_span_handle(argument.ty, &module.types))
                 }

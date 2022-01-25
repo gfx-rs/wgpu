@@ -126,7 +126,7 @@ impl Load {
                     vector_size: Some(crate::VectorSize::Quad),
                     kind: crate::ScalarKind::Float,
                     width: 4,
-                    pointer_class: None,
+                    pointer_space: None,
                 }))
             }
             _ => result_type_id,
@@ -318,7 +318,7 @@ impl<'w> BlockContext<'w> {
                 vector_size: None,
                 kind: component_kind,
                 width: 4,
-                pointer_class: None,
+                pointer_space: None,
             }));
 
             let reconciled_id = self.gen_id();
@@ -336,7 +336,7 @@ impl<'w> BlockContext<'w> {
             vector_size: size,
             kind: component_kind,
             width: 4,
-            pointer_class: None,
+            pointer_space: None,
         }));
 
         // Schmear the coordinates and index together.
@@ -505,7 +505,7 @@ impl<'w> BlockContext<'w> {
             vector_size: None,
             kind: crate::ScalarKind::Sint,
             width: 4,
-            pointer_class: None,
+            pointer_space: None,
         }));
 
         // If `level` is `Some`, clamp it to fall within bounds. This must
@@ -593,7 +593,7 @@ impl<'w> BlockContext<'w> {
             vector_size: None,
             kind: crate::ScalarKind::Sint,
             width: 4,
-            pointer_class: None,
+            pointer_space: None,
         }));
 
         let null_id = access.out_of_bounds_value(self);
@@ -661,7 +661,7 @@ impl<'w> BlockContext<'w> {
             vector_size: coordinates.size,
             kind: crate::ScalarKind::Bool,
             width: 1,
-            pointer_class: None,
+            pointer_space: None,
         }));
         let coords_conds_id = self.gen_id();
         selection.block().body.push(Instruction::binary(
@@ -825,7 +825,7 @@ impl<'w> BlockContext<'w> {
                 vector_size: Some(crate::VectorSize::Quad),
                 kind: crate::ScalarKind::Float,
                 width: 4,
-                pointer_class: None,
+                pointer_space: None,
             }))
         } else {
             result_type_id
@@ -1029,7 +1029,7 @@ impl<'w> BlockContext<'w> {
                         vector_size,
                         kind: crate::ScalarKind::Sint,
                         width: 4,
-                        pointer_class: None,
+                        pointer_space: None,
                     }))
                 };
 
@@ -1097,7 +1097,7 @@ impl<'w> BlockContext<'w> {
                     vector_size: Some(vec_size),
                     kind: crate::ScalarKind::Sint,
                     width: 4,
-                    pointer_class: None,
+                    pointer_space: None,
                 }));
                 let id_extended = self.gen_id();
                 let mut inst = Instruction::image_query(

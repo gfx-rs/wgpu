@@ -32,7 +32,7 @@
                     assignable_global: Some(1),
                     ty: Value(Pointer(
                         base: 3,
-                        class: Storage(
+                        space: Storage(
                             access: (
                                 bits: 3,
                             ),
@@ -61,7 +61,7 @@
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 1,
-                        class: Function,
+                        space: Function,
                     )),
                 ),
                 (
@@ -89,7 +89,7 @@
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 1,
-                        class: Function,
+                        space: Function,
                     )),
                 ),
                 (
@@ -376,7 +376,7 @@
                     assignable_global: Some(1),
                     ty: Value(Pointer(
                         base: 3,
-                        class: Storage(
+                        space: Storage(
                             access: (
                                 bits: 3,
                             ),
@@ -405,7 +405,7 @@
                     assignable_global: Some(1),
                     ty: Value(Pointer(
                         base: 2,
-                        class: Storage(
+                        space: Storage(
                             access: (
                                 bits: 3,
                             ),
@@ -437,7 +437,7 @@
                     assignable_global: Some(1),
                     ty: Value(Pointer(
                         base: 1,
-                        class: Storage(
+                        space: Storage(
                             access: (
                                 bits: 3,
                             ),
@@ -455,7 +455,7 @@
                     assignable_global: Some(1),
                     ty: Value(Pointer(
                         base: 2,
-                        class: Storage(
+                        space: Storage(
                             access: (
                                 bits: 3,
                             ),
@@ -487,7 +487,7 @@
                     assignable_global: Some(1),
                     ty: Value(Pointer(
                         base: 1,
-                        class: Storage(
+                        space: Storage(
                             access: (
                                 bits: 3,
                             ),

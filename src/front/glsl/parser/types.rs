@@ -6,7 +6,7 @@ use crate::{
         token::{Token, TokenValue},
         Error, ErrorKind, Parser, Result,
     },
-    ArraySize, Handle, Span, StorageClass, Type, TypeInner,
+    AddressSpace, ArraySize, Handle, Span, Type, TypeInner,
 };
 
 impl<'source> ParsingContext<'source> {
@@ -150,13 +150,13 @@ impl<'source> ParsingContext<'source> {
                     TokenValue::In => TypeQualifier::StorageQualifier(StorageQualifier::Input),
                     TokenValue::Out => TypeQualifier::StorageQualifier(StorageQualifier::Output),
                     TokenValue::Uniform => TypeQualifier::StorageQualifier(
-                        StorageQualifier::StorageClass(StorageClass::Uniform),
+                        StorageQualifier::AddressSpace(AddressSpace::Uniform),
                     ),
                     TokenValue::Shared => TypeQualifier::StorageQualifier(
-                        StorageQualifier::StorageClass(StorageClass::WorkGroup),
+                        StorageQualifier::AddressSpace(AddressSpace::WorkGroup),
                     ),
                     TokenValue::Buffer => TypeQualifier::StorageQualifier(
-                        StorageQualifier::StorageClass(StorageClass::Storage {
+                        StorageQualifier::AddressSpace(AddressSpace::Storage {
                             access: crate::StorageAccess::default(),
                         }),
                     ),
@@ -237,7 +237,7 @@ impl<'source> ParsingContext<'source> {
                                 ));
                                 qualifiers.push((
                                     TypeQualifier::StorageQualifier(
-                                        StorageQualifier::StorageClass(StorageClass::PushConstant),
+                                        StorageQualifier::AddressSpace(AddressSpace::PushConstant),
                                     ),
                                     token.meta,
                                 ));

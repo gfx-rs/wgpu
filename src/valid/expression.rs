@@ -1042,12 +1042,12 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         };
                         let good = match *arg1_ty {
-                            Ti::Pointer { base, class: _ } => module.types[base].inner == *arg_ty,
+                            Ti::Pointer { base, space: _ } => module.types[base].inner == *arg_ty,
                             Ti::ValuePointer {
                                 size,
                                 kind: Sk::Float,
                                 width,
-                                class: _,
+                                space: _,
                             } => size == size0 && width == width0,
                             _ => false,
                         };

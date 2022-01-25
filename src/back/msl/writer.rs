@@ -71,29 +71,29 @@ impl<'a> Display for TypeContext<'a> {
                     back::vector_size_str(rows),
                 )
             }
-            crate::TypeInner::Pointer { base, class } => {
+            crate::TypeInner::Pointer { base, space } => {
                 let sub = Self {
                     handle: base,
                     first_time: false,
                     ..*self
                 };
-                let class_name = match class.to_msl_name() {
+                let space_name = match space.to_msl_name() {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{} {}&", class_name, sub)
+                write!(out, "{} {}&", space_name, sub)
             }
             crate::TypeInner::ValuePointer {
                 size: None,
                 kind,
                 width: _,
-                class,
+                space,
             } => {
-                let class_name = match class.to_msl_name() {
+                let space_name = match space.to_msl_name() {
                     Some(name) => name,
                     None => return Ok(()),
                 };
-                write!(out, "{} ", class_name)?;
+                write!(out, "{} ", space_name)?;
                 if kind == crate::ScalarKind::Uint {
                     write!(out, "{}::", NAMESPACE)?;
                 }
@@ -103,16 +103,16 @@ impl<'a> Display for TypeContext<'a> {
                 size: Some(size),
                 kind,
                 width: _,
-                class,
+                space,
             } => {
-                let class_name = match class.to_msl_name() {
+                let space_name = match space.to_msl_name() {
                     Some(name) => name,
                     None => return Ok(()),
                 };
                 write!(
                     out,
                     "{} {}::{}{}&",
-                    class_name,
+                    space_name,
                     NAMESPACE,
                     kind.to_msl_name(),
                     back::vector_size_str(size),
@@ -214,8 +214,8 @@ impl<'a> TypedGlobalVariable<'a> {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
 
-        let storage_access = match var.class {
-            crate::StorageClass::Storage { access } => access,
+        let storage_access = match var.space {
+            crate::AddressSpace::Storage { access } => access,
             _ => match self.module.types[var.ty].inner {
                 crate::TypeInner::Image {
                     class: crate::ImageClass::Storage { access, .. },
@@ -232,10 +232,10 @@ impl<'a> TypedGlobalVariable<'a> {
             first_time: false,
         };
 
-        let (space, access, reference) = match var.class.to_msl_name() {
+        let (space, access, reference) = match var.space.to_msl_name() {
             Some(space) if self.reference => {
-                let access = match var.class {
-                    crate::StorageClass::Private | crate::StorageClass::WorkGroup
+                let access = match var.space {
+                    crate::AddressSpace::Private | crate::AddressSpace::WorkGroup
                         if !self.usage.contains(valid::GlobalUse::WRITE) =>
                     {
                         "const"
@@ -382,20 +382,20 @@ fn needs_array_length(ty: Handle<crate::Type>, arena: &crate::UniqueArena<crate:
     false
 }
 
-impl crate::StorageClass {
+impl crate::AddressSpace {
     /// Returns true for storage classes, for which the global
     /// variables are passed in function arguments.
     /// These arguments need to be passed through any functions
     /// called from the entry point.
     fn needs_pass_through(&self) -> bool {
         match *self {
-            crate::StorageClass::Uniform
-            | crate::StorageClass::Storage { .. }
-            | crate::StorageClass::Private
-            | crate::StorageClass::WorkGroup
-            | crate::StorageClass::PushConstant
-            | crate::StorageClass::Handle => true,
-            crate::StorageClass::Function => false,
+            crate::AddressSpace::Uniform
+            | crate::AddressSpace::Storage { .. }
+            | crate::AddressSpace::Private
+            | crate::AddressSpace::WorkGroup
+            | crate::AddressSpace::PushConstant
+            | crate::AddressSpace::Handle => true,
+            crate::AddressSpace::Function => false,
         }
     }
 
@@ -1492,7 +1492,7 @@ impl<W: Write> Writer<W> {
                 let mut base_ty = context.resolve_type(base);
 
                 // Look through any pointers to see what we're really indexing.
-                if let crate::TypeInner::Pointer { base, class: _ } = *base_ty {
+                if let crate::TypeInner::Pointer { base, space: _ } = *base_ty {
                     base_ty = &context.module.types[base].inner;
                 }
 
@@ -1510,7 +1510,7 @@ impl<W: Write> Writer<W> {
                 let mut base_ty_handle = base_resolution.handle();
 
                 // Look through any pointers to see what we're really indexing.
-                if let crate::TypeInner::Pointer { base, class: _ } = *base_ty {
+                if let crate::TypeInner::Pointer { base, space: _ } = *base_ty {
                     base_ty = &context.module.types[base].inner;
                     base_ty_handle = Some(base);
                 }
@@ -1865,7 +1865,7 @@ impl<W: Write> Writer<W> {
                         let ptr_class = info
                             .ty
                             .inner_with(&context.expression.module.types)
-                            .pointer_class();
+                            .pointer_space();
                         let expr_name = if ptr_class.is_some() {
                             None // don't bake pointer expressions (just yet)
                         } else if let Some(name) =
@@ -2084,7 +2084,7 @@ impl<W: Write> Writer<W> {
                         if fun_info[handle].is_empty() {
                             continue;
                         }
-                        if var.class.needs_pass_through() {
+                        if var.space.needs_pass_through() {
                             let name = &self.names[&NameKey::GlobalVariable(handle)];
                             if separate {
                                 write!(self.out, ", ")?;
@@ -2626,7 +2626,7 @@ impl<W: Write> Writer<W> {
             let mut supports_array_length = false;
             for (handle, var) in module.global_variables.iter() {
                 if !fun_info[handle].is_empty() {
-                    if var.class.needs_pass_through() {
+                    if var.space.needs_pass_through() {
                         pass_through_globals.push(handle);
                     }
                     supports_array_length |= needs_array_length(var.ty, &module.types);
@@ -2780,7 +2780,7 @@ impl<W: Write> Writer<W> {
                             break;
                         }
                     }
-                    if var.class == crate::StorageClass::PushConstant {
+                    if var.space == crate::AddressSpace::PushConstant {
                         if let Err(e) = options.resolve_push_constants(ep.stage) {
                             ep_error = Some(e);
                             break;
@@ -2997,15 +2997,15 @@ impl<W: Write> Writer<W> {
             }
             for (handle, var) in module.global_variables.iter() {
                 let usage = fun_info[handle];
-                if usage.is_empty() || var.class == crate::StorageClass::Private {
+                if usage.is_empty() || var.space == crate::AddressSpace::Private {
                     continue;
                 }
                 // the resolves have already been checked for `!fake_missing_bindings` case
-                let resolved = match var.class {
-                    crate::StorageClass::PushConstant => {
+                let resolved = match var.space {
+                    crate::AddressSpace::PushConstant => {
                         options.resolve_push_constants(ep.stage).ok()
                     }
-                    crate::StorageClass::WorkGroup => None,
+                    crate::AddressSpace::WorkGroup => None,
                     _ => options
                         .resolve_resource_binding(ep.stage, var.binding.as_ref().unwrap())
                         .ok(),
@@ -3074,7 +3074,7 @@ impl<W: Write> Writer<W> {
                 if usage.is_empty() {
                     continue;
                 }
-                if var.class == crate::StorageClass::Private {
+                if var.space == crate::AddressSpace::Private {
                     let tyvar = TypedGlobalVariable {
                         module,
                         names: &self.names,

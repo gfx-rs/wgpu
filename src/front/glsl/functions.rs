@@ -7,9 +7,9 @@ use super::{
     Parser, Result,
 };
 use crate::{
-    front::glsl::types::type_power, proc::ensure_block_returns, Arena, Block, Constant,
-    ConstantInner, EntryPoint, Expression, FastHashMap, Function, FunctionArgument, FunctionResult,
-    Handle, LocalVariable, ScalarKind, ScalarValue, Span, Statement, StorageClass, StructMember,
+    front::glsl::types::type_power, proc::ensure_block_returns, AddressSpace, Arena, Block,
+    Constant, ConstantInner, EntryPoint, Expression, FastHashMap, Function, FunctionArgument,
+    FunctionResult, Handle, LocalVariable, ScalarKind, ScalarValue, Span, Statement, StructMember,
     Type, TypeInner,
 };
 use std::iter;
@@ -811,10 +811,10 @@ impl Parser {
                         ),
                         handle,
                     ),
-                    // If the argument is a pointer whose storage class isn't `Function` an
+                    // If the argument is a pointer whose address space isn't `Function` an
                     // indirection trough a local variable is needed to align the storage
                     // classes of the call argument and the overload parameter
-                    TypeInner::Pointer { base, class } if class != StorageClass::Function => (
+                    TypeInner::Pointer { base, space } if space != AddressSpace::Function => (
                         base,
                         ctx.add_expression(
                             Expression::Load { pointer: handle },
@@ -826,8 +826,8 @@ impl Parser {
                         size,
                         kind,
                         width,
-                        class,
-                    } if class != StorageClass::Function => {
+                        space,
+                    } if space != AddressSpace::Function => {
                         let inner = match size {
                             Some(size) => TypeInner::Vector { size, kind, width },
                             None => TypeInner::Scalar { kind, width },

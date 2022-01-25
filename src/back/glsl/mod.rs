@@ -83,21 +83,21 @@ impl crate::AtomicFunction {
     }
 }
 
-impl crate::StorageClass {
+impl crate::AddressSpace {
     fn is_buffer(&self) -> bool {
         match *self {
-            crate::StorageClass::Uniform | crate::StorageClass::Storage { .. } => true,
+            crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => true,
             _ => false,
         }
     }
 
-    /// Whether a variable with this storage class can be initialized
+    /// Whether a variable with this address space can be initialized
     fn initializable(&self) -> bool {
         match *self {
-            crate::StorageClass::WorkGroup
-            | crate::StorageClass::Uniform
-            | crate::StorageClass::PushConstant
-            | crate::StorageClass::Storage { .. } => false,
+            crate::AddressSpace::WorkGroup
+            | crate::AddressSpace::Uniform
+            | crate::AddressSpace::PushConstant
+            | crate::AddressSpace::Storage { .. } => false,
             _ => true,
         }
     }
@@ -349,7 +349,7 @@ pub enum Error {
     /// Contains the missing [`Features`](Features)
     #[error("The selected version doesn't support {0:?}")]
     MissingFeatures(Features),
-    /// [`StorageClass::PushConstant`](crate::StorageClass::PushConstant) was used more than
+    /// [`AddressSpace::PushConstant`](crate::AddressSpace::PushConstant) was used more than
     /// once in the entry point which isn't supported
     #[error("Multiple push constants aren't supported")]
     MultiplePushConstants,
@@ -563,7 +563,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     GlobalTypeKind::Other => {
                         let used_by_global =
                             self.module.global_variables.iter().any(|(vh, var)| {
-                                !ep_info[vh].is_empty() && var.class.is_buffer() && var.ty == handle
+                                !ep_info[vh].is_empty() && var.space.is_buffer() && var.ty == handle
                             });
                         // If not used by a global, it's safe to just spew it here
                         !used_by_global
@@ -752,7 +752,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 size: None,
                 kind,
                 width,
-                class: _,
+                space: _,
             } => write!(self.out, "{}", glsl_scalar(kind, width)?.full)?,
             // Vectors are just `gvecN` where `g` is the scalar prefix and `N` is the vector size
             TypeInner::Vector { size, kind, width }
@@ -760,7 +760,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 size: Some(size),
                 kind,
                 width,
-                class: _,
+                space: _,
             } => write!(
                 self.out,
                 "{}vec{}",
@@ -891,22 +891,22 @@ impl<'a, W: Write> Writer<'a, W> {
             if let Some(ref br) = global.binding {
                 match self.options.binding_map.get(br) {
                     Some(binding) => {
-                        let layout = match global.class {
-                            crate::StorageClass::Storage { .. } => {
+                        let layout = match global.space {
+                            crate::AddressSpace::Storage { .. } => {
                                 if self.options.version.supports_std430_layout() {
                                     "std430, "
                                 } else {
                                     "std140, "
                                 }
                             }
-                            crate::StorageClass::Uniform => "std140, ",
+                            crate::AddressSpace::Uniform => "std140, ",
                             _ => "",
                         };
                         write!(self.out, "layout({}binding = {}) ", layout, binding)?
                     }
                     None => {
                         log::debug!("unassigned binding for {:?}", global.name);
-                        if let crate::StorageClass::Storage { .. } = global.class {
+                        if let crate::AddressSpace::Storage { .. } = global.space {
                             if self.options.version.supports_std430_layout() {
                                 write!(self.out, "layout(std430) ")?
                             }
@@ -916,13 +916,13 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        if let crate::StorageClass::Storage { access } = global.class {
+        if let crate::AddressSpace::Storage { access } = global.space {
             self.write_storage_access(access)?;
         }
 
         // Write the storage class
         // Trailing space is important
-        if let Some(storage_class) = glsl_storage_class(global.class) {
+        if let Some(storage_class) = glsl_storage_class(global.space) {
             write!(self.out, "{} ", storage_class)?;
         }
 
@@ -931,7 +931,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // generated number so it's unique and `members` are the same as in a struct
 
         // Write the block name, it's just the struct name appended with `_block_ID`
-        let needs_wrapper = if global.class.is_buffer() {
+        let needs_wrapper = if global.space.is_buffer() {
             let ty_name = &self.names[&NameKey::Type(global.ty)];
             let block_name = format!(
                 "{}_block_{}{:?}",
@@ -963,7 +963,7 @@ impl<'a, W: Write> Writer<'a, W> {
             false
         };
 
-        if let crate::StorageClass::PushConstant = global.class {
+        if let crate::AddressSpace::PushConstant = global.space {
             let global_name = self.get_global_name(handle, global);
             self.reflection_names_globals.insert(handle, global_name);
         }
@@ -977,7 +977,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_array_size(size)?;
         }
 
-        if global.class.initializable() && is_value_init_supported(self.module, global.ty) {
+        if global.space.initializable() && is_value_init_supported(self.module, global.ty) {
             write!(self.out, " = ")?;
             if let Some(init) = global.init {
                 self.write_constant(init)?;
@@ -1472,7 +1472,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
                     let info = &ctx.info[handle];
-                    let ptr_class = info.ty.inner_with(&self.module.types).pointer_class();
+                    let ptr_class = info.ty.inner_with(&self.module.types).pointer_space();
                     let expr_name = if ptr_class.is_some() {
                         // GLSL can't save a pointer-valued expression in a variable,
                         // but we shouldn't ever need to: they should never be named expressions,
@@ -1905,7 +1905,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 let base_ty_res = &ctx.info[base].ty;
                 let mut resolved = base_ty_res.inner_with(&self.module.types);
                 let base_ty_handle = match *resolved {
-                    TypeInner::Pointer { base, class: _ } => {
+                    TypeInner::Pointer { base, space: _ } => {
                         resolved = &self.module.types[base].inner;
                         Some(base)
                     }
@@ -2894,8 +2894,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 continue;
             }
             match self.module.types[var.ty].inner {
-                crate::TypeInner::Struct { .. } => match var.class {
-                    crate::StorageClass::Uniform | crate::StorageClass::Storage { .. } => {
+                crate::TypeInner::Struct { .. } => match var.space {
+                    crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => {
                         let name = self.reflection_names_globals[&handle].clone();
                         uniforms.insert(handle, name);
                     }
@@ -3018,18 +3018,18 @@ fn glsl_built_in(built_in: crate::BuiltIn, output: bool) -> &'static str {
     }
 }
 
-/// Helper function that returns the string corresponding to the storage class
-fn glsl_storage_class(class: crate::StorageClass) -> Option<&'static str> {
-    use crate::StorageClass as Sc;
+/// Helper function that returns the string corresponding to the address space
+fn glsl_storage_class(space: crate::AddressSpace) -> Option<&'static str> {
+    use crate::AddressSpace as As;
 
-    match class {
-        Sc::Function => None,
-        Sc::Private => None,
-        Sc::Storage { .. } => Some("buffer"),
-        Sc::Uniform => Some("uniform"),
-        Sc::Handle => Some("uniform"),
-        Sc::WorkGroup => Some("shared"),
-        Sc::PushConstant => Some("uniform"),
+    match space {
+        As::Function => None,
+        As::Private => None,
+        As::Storage { .. } => Some("buffer"),
+        As::Uniform => Some("uniform"),
+        As::Handle => Some("uniform"),
+        As::WorkGroup => Some("shared"),
+        As::PushConstant => Some("uniform"),
     }
 }
 

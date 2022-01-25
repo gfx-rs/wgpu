@@ -78,10 +78,10 @@ impl super::TypeInner {
         }
     }
 
-    pub fn pointer_class(&self) -> Option<crate::StorageClass> {
+    pub fn pointer_space(&self) -> Option<crate::AddressSpace> {
         match *self {
-            Self::Pointer { class, .. } => Some(class),
-            Self::ValuePointer { class, .. } => Some(class),
+            Self::Pointer { space, .. } => Some(space),
+            Self::ValuePointer { space, .. } => Some(space),
             _ => None,
         }
     }
@@ -147,18 +147,18 @@ impl super::TypeInner {
     ) -> Option<crate::TypeInner> {
         use crate::TypeInner as Ti;
         match *self {
-            Ti::Pointer { base, class } => match types[base].inner {
+            Ti::Pointer { base, space } => match types[base].inner {
                 Ti::Scalar { kind, width } => Some(Ti::ValuePointer {
                     size: None,
                     kind,
                     width,
-                    class,
+                    space,
                 }),
                 Ti::Vector { size, kind, width } => Some(Ti::ValuePointer {
                     size: Some(size),
                     kind,
                     width,
-                    class,
+                    space,
                 }),
                 _ => None,
             },
@@ -185,17 +185,17 @@ impl super::TypeInner {
     }
 }
 
-impl super::StorageClass {
+impl super::AddressSpace {
     pub fn access(self) -> crate::StorageAccess {
         use crate::StorageAccess as Sa;
         match self {
-            crate::StorageClass::Function
-            | crate::StorageClass::Private
-            | crate::StorageClass::WorkGroup => Sa::LOAD | Sa::STORE,
-            crate::StorageClass::Uniform => Sa::LOAD,
-            crate::StorageClass::Storage { access } => access,
-            crate::StorageClass::Handle => Sa::LOAD,
-            crate::StorageClass::PushConstant => Sa::LOAD,
+            crate::AddressSpace::Function
+            | crate::AddressSpace::Private
+            | crate::AddressSpace::WorkGroup => Sa::LOAD | Sa::STORE,
+            crate::AddressSpace::Uniform => Sa::LOAD,
+            crate::AddressSpace::Storage { access } => access,
+            crate::AddressSpace::Handle => Sa::LOAD,
+            crate::AddressSpace::PushConstant => Sa::LOAD,
         }
     }
 }

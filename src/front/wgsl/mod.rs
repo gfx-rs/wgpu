@@ -148,7 +148,7 @@ pub enum Error<'a> {
     InvalidForInitializer(Span),
     InvalidGatherComponent(Span, i32),
     ReservedIdentifierPrefix(Span),
-    UnknownStorageClass(Span),
+    UnknownAddressSpace(Span),
     UnknownAttribute(Span),
     UnknownBuiltin(Span),
     UnknownAccess(Span),
@@ -352,9 +352,9 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span.clone(), "invalid identifier".into())],
                 notes: vec![],
             },
-            Error::UnknownStorageClass(ref bad_span) => ParseError {
-                message: format!("unknown storage class: '{}'", &source[bad_span.clone()]),
-                labels: vec![(bad_span.clone(), "unknown storage class".into())],
+            Error::UnknownAddressSpace(ref bad_span) => ParseError {
+                message: format!("unknown address space: '{}'", &source[bad_span.clone()]),
+                labels: vec![(bad_span.clone(), "unknown address space".into())],
                 notes: vec![],
             },
             Error::UnknownAttribute(ref bad_span) => ParseError {
@@ -667,7 +667,7 @@ mod type_inner_tests {
 
         let ptr = crate::TypeInner::Pointer {
             base: mytype2,
-            class: crate::StorageClass::Storage {
+            space: crate::AddressSpace::Storage {
                 access: crate::StorageAccess::default(),
             },
         };
@@ -1135,7 +1135,7 @@ impl BindingParser {
 struct ParsedVariable<'a> {
     name: &'a str,
     name_span: Span,
-    class: Option<crate::StorageClass>,
+    space: Option<crate::AddressSpace>,
     ty: Handle<crate::Type>,
     init: Option<Handle<crate::Constant>>,
 }
@@ -2545,7 +2545,7 @@ impl Parser {
 
                 // An expression like `&*ptr` may generate no Naga IR at all, but WGSL requires
                 // an error if `ptr` is not a pointer. So we have to type-check this ourselves.
-                if ctx.resolve_type(pointer)?.pointer_class().is_none() {
+                if ctx.resolve_type(pointer)?.pointer_space().is_none() {
                     let span = ctx
                         .expressions
                         .get_span(pointer)
@@ -2772,11 +2772,11 @@ impl Parser {
         const_arena: &mut Arena<crate::Constant>,
     ) -> Result<ParsedVariable<'a>, Error<'a>> {
         self.push_scope(Scope::VariableDecl, lexer);
-        let mut class = None;
+        let mut space = None;
 
         if lexer.skip(Token::Paren('<')) {
             let (class_str, span) = lexer.next_ident_with_span()?;
-            class = Some(match class_str {
+            space = Some(match class_str {
                 "storage" => {
                     let access = if lexer.skip(Token::Separator(',')) {
                         lexer.next_storage_access()?
@@ -2784,9 +2784,9 @@ impl Parser {
                         // defaulting to `read`
                         crate::StorageAccess::LOAD
                     };
-                    crate::StorageClass::Storage { access }
+                    crate::AddressSpace::Storage { access }
                 }
-                _ => conv::map_storage_class(class_str, span)?,
+                _ => conv::map_address_space(class_str, span)?,
             });
             lexer.expect(Token::Paren('>'))?;
         }
@@ -2805,7 +2805,7 @@ impl Parser {
         Ok(ParsedVariable {
             name,
             name_span,
-            class,
+            space,
             ty,
             init,
         })
@@ -2996,10 +2996,10 @@ impl Parser {
             "ptr" => {
                 lexer.expect_generic_paren('<')?;
                 let (ident, span) = lexer.next_ident_with_span()?;
-                let mut class = conv::map_storage_class(ident, span)?;
+                let mut space = conv::map_address_space(ident, span)?;
                 lexer.expect(Token::Separator(','))?;
                 let (base, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
-                if let crate::StorageClass::Storage { ref mut access } = class {
+                if let crate::AddressSpace::Storage { ref mut access } = space {
                     *access = if lexer.skip(Token::Separator(',')) {
                         lexer.next_storage_access()?
                     } else {
@@ -3007,7 +3007,7 @@ impl Parser {
                     };
                 }
                 lexer.expect_generic_paren('>')?;
-                crate::TypeInner::Pointer { base, class }
+                crate::TypeInner::Pointer { base, space }
             }
             "array" => {
                 lexer.expect_generic_paren('<')?;
@@ -3998,7 +3998,7 @@ impl Parser {
             let (span, is_reference) = match *expression {
                 crate::Expression::GlobalVariable(handle) => (
                     module.global_variables.get_span(handle),
-                    module.global_variables[handle].class != crate::StorageClass::Handle,
+                    module.global_variables[handle].space != crate::AddressSpace::Handle,
                 ),
                 crate::Expression::Constant(handle) => (module.constants.get_span(handle), false),
                 _ => unreachable!(),
@@ -4308,7 +4308,7 @@ impl Parser {
                 let var_handle = module.global_variables.append(
                     crate::GlobalVariable {
                         name: Some(pvar.name.to_owned()),
-                        class: pvar.class.unwrap_or(crate::StorageClass::Handle),
+                        space: pvar.space.unwrap_or(crate::AddressSpace::Handle),
                         binding: binding.take(),
                         ty: pvar.ty,
                         init: pvar.init,

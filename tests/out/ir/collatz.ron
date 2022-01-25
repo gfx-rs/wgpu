@@ -75,7 +75,7 @@
     global_variables: [
         (
             name: Some("v_indices"),
-            class: Storage(
+            space: Storage(
                 access: (
                     bits: 3,
                 ),

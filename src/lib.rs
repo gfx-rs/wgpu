@@ -92,7 +92,7 @@ Naga's rules for when `Expression`s are evaluated are as follows:
         does not.
 
     -   A `GlobalVariable` expression referring to a global in the
-        [`StorageClass::Handle`] storage class produces the value directly, not
+        [`AddressSpace::Handle`] address space produces the value directly, not
         a pointer. Such global variables hold opaque types like shaders or
         images, and cannot be assigned to.
 
@@ -291,12 +291,12 @@ pub enum ShaderStage {
     Compute,
 }
 
-/// Class of storage for variables.
+/// Addressing space of variables.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum StorageClass {
+pub enum AddressSpace {
     /// Function locals.
     Function,
     /// Private data, per invocation, mutable.
@@ -615,7 +615,7 @@ pub enum TypeInner {
     /// [`AccessIndex`]: Expression::AccessIndex
     Pointer {
         base: Handle<Type>,
-        class: StorageClass,
+        space: AddressSpace,
     },
 
     /// Pointer to a scalar or vector.
@@ -634,7 +634,7 @@ pub enum TypeInner {
         size: Option<VectorSize>,
         kind: ScalarKind,
         width: Bytes,
-        class: StorageClass,
+        space: AddressSpace,
     },
 
     /// Homogenous list of elements.
@@ -787,7 +787,7 @@ pub struct GlobalVariable {
     /// Name of the variable, if any.
     pub name: Option<String>,
     /// How this variable is to be stored.
-    pub class: StorageClass,
+    pub space: AddressSpace,
     /// For resources, defines the binding point.
     pub binding: Option<ResourceBinding>,
     /// The type of this variable.
@@ -1035,9 +1035,9 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
     #[derive(Default)]
     pub struct Barrier: u32 {
-        /// Barrier affects all `StorageClass::Storage` accesses.
+        /// Barrier affects all `AddressSpace::Storage` accesses.
         const STORAGE = 0x1;
-        /// Barrier affects all `StorageClass::WorkGroup` accesses.
+        /// Barrier affects all `AddressSpace::WorkGroup` accesses.
         const WORK_GROUP = 0x2;
     }
 }
@@ -1065,7 +1065,7 @@ pub enum Expression {
     /// Indexing a [`Matrix`] produces a [`Vector`].
     ///
     /// Indexing a [`Pointer`] to any of the above produces a pointer to the
-    /// element/component type, in the same [`class`]. In the case of [`Array`],
+    /// element/component type, in the same [`space`]. In the case of [`Array`],
     /// the result is an actual [`Pointer`], but for vectors and matrices, there
     /// may not be any type in the arena representing the component's type, so
     /// those produce [`ValuePointer`] types equivalent to the appropriate
@@ -1094,7 +1094,7 @@ pub enum Expression {
     /// [`Matrix`]: TypeInner::Matrix
     /// [`Array`]: TypeInner::Array
     /// [`Pointer`]: TypeInner::Pointer
-    /// [`class`]: TypeInner::Pointer::class
+    /// [`space`]: TypeInner::Pointer::space
     /// [`ValuePointer`]: TypeInner::ValuePointer
     /// [`Float`]: ScalarKind::Float
     Access {
@@ -1139,16 +1139,16 @@ pub enum Expression {
 
     /// Reference a global variable.
     ///
-    /// If the given `GlobalVariable`'s [`class`] is [`StorageClass::Handle`],
+    /// If the given `GlobalVariable`'s [`space`] is [`AddressSpace::Handle`],
     /// then the variable stores some opaque type like a sampler or an image,
     /// and a `GlobalVariable` expression referring to it produces the
     /// variable's value directly.
     ///
-    /// For any other storage class, a `GlobalVariable` expression produces a
+    /// For any other address space, a `GlobalVariable` expression produces a
     /// pointer to the variable's value. You must use a [`Load`] expression to
     /// retrieve its value, or a [`Store`] statement to assign it a new value.
     ///
-    /// [`class`]: GlobalVariable::class
+    /// [`space`]: GlobalVariable::space
     /// [`Load`]: Expression::Load
     /// [`Store`]: Statement::Store
     GlobalVariable(Handle<GlobalVariable>),
@@ -1633,13 +1633,13 @@ pub struct EntryPoint {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Module {
-    /// Storage for the types defined in this module.
+    /// Arena for the types defined in this module.
     pub types: UniqueArena<Type>,
-    /// Storage for the constants defined in this module.
+    /// Arena for the constants defined in this module.
     pub constants: Arena<Constant>,
-    /// Storage for the global variables defined in this module.
+    /// Arena for the global variables defined in this module.
     pub global_variables: Arena<GlobalVariable>,
-    /// Storage for the functions defined in this module.
+    /// Arena for the functions defined in this module.
     ///
     /// Each function must appear in this arena strictly before all its callers.
     /// Recursion is not supported.

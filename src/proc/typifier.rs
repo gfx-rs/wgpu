@@ -54,7 +54,7 @@ use thiserror::Error;
 /// })
 /// ```
 ///
-/// and the type of an access to a pointer of storage class `class` to such a
+/// and the type of an access to a pointer of address space `space` to such a
 /// matrix might be:
 ///
 /// ```ignore
@@ -62,7 +62,7 @@ use thiserror::Error;
 ///     size: Some(rows),
 ///     kind: ScalarKind::Float,
 ///     width,
-///     class
+///     space,
 /// })
 /// ```
 ///
@@ -130,17 +130,17 @@ impl Clone for TypeResolution {
                     columns,
                     width,
                 },
-                Ti::Pointer { base, class } => Ti::Pointer { base, class },
+                Ti::Pointer { base, space } => Ti::Pointer { base, space },
                 Ti::ValuePointer {
                     size,
                     kind,
                     width,
-                    class,
+                    space,
                 } => Ti::ValuePointer {
                     size,
                     kind,
                     width,
-                    class,
+                    space,
                 },
                 _ => unreachable!("Unexpected clone type: {:?}", v),
             }),
@@ -251,16 +251,16 @@ impl<'a> ResolveContext<'a> {
                     size: Some(_),
                     kind,
                     width,
-                    class,
+                    space,
                 } => TypeResolution::Value(Ti::ValuePointer {
                     size: None,
                     kind,
                     width,
-                    class,
+                    space,
                 }),
-                Ti::Pointer { base, class } => {
+                Ti::Pointer { base, space } => {
                     TypeResolution::Value(match types[base].inner {
-                        Ti::Array { base, .. } => Ti::Pointer { base, class },
+                        Ti::Array { base, .. } => Ti::Pointer { base, space },
                         Ti::Vector {
                             size: _,
                             kind,
@@ -269,7 +269,7 @@ impl<'a> ResolveContext<'a> {
                             size: None,
                             kind,
                             width,
-                            class,
+                            space,
                         },
                         // Matrices are only dynamically indexed behind a pointer
                         Ti::Matrix {
@@ -280,7 +280,7 @@ impl<'a> ResolveContext<'a> {
                             kind: crate::ScalarKind::Float,
                             size: Some(rows),
                             width,
-                            class,
+                            space,
                         },
                         ref other => {
                             log::error!("Access sub-type {:?}", other);
@@ -332,7 +332,7 @@ impl<'a> ResolveContext<'a> {
                         size: Some(size),
                         kind,
                         width,
-                        class,
+                        space,
                     } => {
                         if index >= size as u32 {
                             return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
@@ -341,14 +341,14 @@ impl<'a> ResolveContext<'a> {
                             size: None,
                             kind,
                             width,
-                            class,
+                            space,
                         })
                     }
                     Ti::Pointer {
                         base: ty_base,
-                        class,
+                        space,
                     } => TypeResolution::Value(match types[ty_base].inner {
-                        Ti::Array { base, .. } => Ti::Pointer { base, class },
+                        Ti::Array { base, .. } => Ti::Pointer { base, space },
                         Ti::Vector { size, kind, width } => {
                             if index >= size as u32 {
                                 return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
@@ -357,7 +357,7 @@ impl<'a> ResolveContext<'a> {
                                 size: None,
                                 kind,
                                 width,
-                                class,
+                                space,
                             }
                         }
                         Ti::Matrix {
@@ -372,7 +372,7 @@ impl<'a> ResolveContext<'a> {
                                 size: Some(rows),
                                 kind: crate::ScalarKind::Float,
                                 width,
-                                class,
+                                space,
                             }
                         }
                         Ti::Struct { ref members, .. } => {
@@ -381,7 +381,7 @@ impl<'a> ResolveContext<'a> {
                                 .ok_or(ResolveError::OutOfBoundsIndex { expr: base, index })?;
                             Ti::Pointer {
                                 base: member.ty,
-                                class,
+                                space,
                             }
                         }
                         ref other => {
@@ -449,12 +449,12 @@ impl<'a> ResolveContext<'a> {
             }
             crate::Expression::GlobalVariable(h) => {
                 let var = self.global_vars.try_get(h)?;
-                if var.class == crate::StorageClass::Handle {
+                if var.space == crate::AddressSpace::Handle {
                     TypeResolution::Handle(var.ty)
                 } else {
                     TypeResolution::Value(Ti::Pointer {
                         base: var.ty,
-                        class: var.class,
+                        space: var.space,
                     })
                 }
             }
@@ -462,11 +462,11 @@ impl<'a> ResolveContext<'a> {
                 let var = self.local_vars.try_get(h)?;
                 TypeResolution::Value(Ti::Pointer {
                     base: var.ty,
-                    class: crate::StorageClass::Function,
+                    space: crate::AddressSpace::Function,
                 })
             }
             crate::Expression::Load { pointer } => match *past(pointer)?.inner_with(types) {
-                Ti::Pointer { base, class: _ } => {
+                Ti::Pointer { base, space: _ } => {
                     if let Ti::Atomic { kind, width } = types[base].inner {
                         TypeResolution::Value(Ti::Scalar { kind, width })
                     } else {
@@ -477,7 +477,7 @@ impl<'a> ResolveContext<'a> {
                     size,
                     kind,
                     width,
-                    class: _,
+                    space: _,
                 } => TypeResolution::Value(match size {
                     Some(size) => Ti::Vector { size, kind, width },
                     None => Ti::Scalar { kind, width },

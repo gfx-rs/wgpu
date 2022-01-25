@@ -210,11 +210,11 @@ fn unknown_storage_class() {
         r#"
             @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
         "#,
-        r#"error: unknown storage class: 'bad'
+        r#"error: unknown address space: 'bad'
   ┌─ wgsl:2:39
   │
 2 │             @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
-  │                                       ^^^ unknown storage class
+  │                                       ^^^ unknown address space
 
 "#,
     );
@@ -877,7 +877,7 @@ fn invalid_functions() {
         if function_name == "unacceptable_unsized" && argument_name == "arg"
     }
 
-    // Pointer's storage class cannot hold unsized data.
+    // Pointer's address space cannot hold unsized data.
     check_validation_error! {
         "fn unacceptable_unsized(arg: ptr<workgroup, array<f32>>) { }",
         "
@@ -887,7 +887,7 @@ fn invalid_functions() {
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::InvalidPointerToUnsized {
                 base: _,
-                class: naga::StorageClass::WorkGroup { .. },
+                space: naga::AddressSpace::WorkGroup { .. },
             },
             ..
         })
@@ -895,31 +895,31 @@ fn invalid_functions() {
 
     // Pointers of these storage classes cannot be passed as arguments.
     check_validation_error! {
-        "fn unacceptable_ptr_class(arg: ptr<storage, array<f32>>) { }":
+        "fn unacceptable_ptr_space(arg: ptr<storage, array<f32>>) { }":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            error: naga::valid::FunctionError::InvalidArgumentPointerClass {
+            error: naga::valid::FunctionError::InvalidArgumentPointerSpace {
                 index: 0,
                 name: argument_name,
-                class: naga::StorageClass::Storage { .. },
+                space: naga::AddressSpace::Storage { .. },
             },
             ..
         })
-        if function_name == "unacceptable_ptr_class" && argument_name == "arg"
+        if function_name == "unacceptable_ptr_space" && argument_name == "arg"
     }
 
     check_validation_error! {
-        "fn unacceptable_ptr_class(arg: ptr<uniform, f32>) { }":
+        "fn unacceptable_ptr_space(arg: ptr<uniform, f32>) { }":
         Err(naga::valid::ValidationError::Function {
             name: function_name,
-            error: naga::valid::FunctionError::InvalidArgumentPointerClass {
+            error: naga::valid::FunctionError::InvalidArgumentPointerSpace {
                 index: 0,
                 name: argument_name,
-                class: naga::StorageClass::Uniform,
+                space: naga::AddressSpace::Uniform,
             },
             ..
         })
-        if function_name == "unacceptable_ptr_class" && argument_name == "arg"
+        if function_name == "unacceptable_ptr_space" && argument_name == "arg"
     }
 }
 

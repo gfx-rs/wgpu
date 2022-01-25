@@ -2,8 +2,8 @@ use std::fmt;
 
 use super::{builtins::MacroCall, context::ExprPos, Span};
 use crate::{
-    BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle, Interpolation,
-    Sampling, StorageAccess, StorageClass, Type, UnaryOperator,
+    AddressSpace, BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle,
+    Interpolation, Sampling, StorageAccess, Type, UnaryOperator,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -163,7 +163,7 @@ pub struct FunctionCall {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StorageQualifier {
-    StorageClass(StorageClass),
+    AddressSpace(AddressSpace),
     Input,
     Output,
     Const,

@@ -76,7 +76,7 @@ pub struct BoundsCheckPolicies {
     /// ensures that using a pointer cannot access memory outside the 'buffer'
     /// that it was derived from. In Naga terms, this means that the hardware
     /// ensures that pointers computed by applying [`Access`] and
-    /// [`AccessIndex`] expressions to a [`GlobalVariable`] whose [`class`] is
+    /// [`AccessIndex`] expressions to a [`GlobalVariable`] whose [`space`] is
     /// [`Storage`] or [`Uniform`] will never read or write memory outside that
     /// global variable.
     ///
@@ -94,13 +94,13 @@ pub struct BoundsCheckPolicies {
     /// the same as `index_bounds_check_policy`.
     ///
     /// [`GlobalVariable`]: crate::GlobalVariable
-    /// [`class`]: crate::GlobalVariable::class
+    /// [`space`]: crate::GlobalVariable::space
     /// [`Restrict`]: crate::back::BoundsCheckPolicy::Restrict
     /// [`ReadZeroSkipWrite`]: crate::back::BoundsCheckPolicy::ReadZeroSkipWrite
     /// [`Access`]: crate::Expression::Access
     /// [`AccessIndex`]: crate::Expression::AccessIndex
-    /// [`Storage`]: crate::StorageClass::Storage
-    /// [`Uniform`]: crate::StorageClass::Uniform
+    /// [`Storage`]: crate::AddressSpace::Storage
+    /// [`Uniform`]: crate::AddressSpace::Uniform
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub buffer: BoundsCheckPolicy,
 
@@ -138,9 +138,9 @@ impl BoundsCheckPolicies {
         types: &UniqueArena<crate::Type>,
         info: &valid::FunctionInfo,
     ) -> BoundsCheckPolicy {
-        match info[access].ty.inner_with(types).pointer_class() {
-            Some(crate::StorageClass::Storage { access: _ })
-            | Some(crate::StorageClass::Uniform) => self.buffer,
+        match info[access].ty.inner_with(types).pointer_space() {
+            Some(crate::AddressSpace::Storage { access: _ })
+            | Some(crate::AddressSpace::Uniform) => self.buffer,
             // This covers other storage classes, but also accessing vectors and
             // matrices by value, where no pointer is involved.
             _ => self.index,

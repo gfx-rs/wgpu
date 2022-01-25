@@ -546,16 +546,16 @@ impl<W: Write> Writer<W> {
                     back::vector_size_str(rows),
                 )?;
             }
-            TypeInner::Pointer { base, class } => {
-                let (storage, maybe_access) = storage_class_str(class);
-                // Everything but `StorageClass::Handle` gives us a `storage` name, but
+            TypeInner::Pointer { base, space } => {
+                let (address, maybe_access) = address_space_str(space);
+                // Everything but `AddressSpace::Handle` gives us a `address` name, but
                 // Naga IR never produces pointers to handles, so it doesn't matter much
                 // how we write such a type. Just write it as the base type alone.
-                if let Some(class) = storage {
-                    write!(self.out, "ptr<{}, ", class)?;
+                if let Some(space) = address {
+                    write!(self.out, "ptr<{}, ", space)?;
                 }
                 self.write_type(module, base)?;
-                if storage.is_some() {
+                if address.is_some() {
                     if let Some(access) = maybe_access {
                         write!(self.out, ", {}", access)?;
                     }
@@ -566,18 +566,18 @@ impl<W: Write> Writer<W> {
                 size: None,
                 kind,
                 width: _,
-                class,
+                space,
             } => {
-                let (storage, maybe_access) = storage_class_str(class);
-                if let Some(class) = storage {
-                    write!(self.out, "ptr<{}, {}", class, scalar_kind_str(kind))?;
+                let (address, maybe_access) = address_space_str(space);
+                if let Some(space) = address {
+                    write!(self.out, "ptr<{}, {}", space, scalar_kind_str(kind))?;
                     if let Some(access) = maybe_access {
                         write!(self.out, ", {}", access)?;
                     }
                     write!(self.out, ">")?;
                 } else {
                     return Err(Error::Unimplemented(format!(
-                        "ValuePointer to StorageClass::Handle {:?}",
+                        "ValuePointer to AddressSpace::Handle {:?}",
                         inner
                     )));
                 }
@@ -586,14 +586,14 @@ impl<W: Write> Writer<W> {
                 size: Some(size),
                 kind,
                 width: _,
-                class,
+                space,
             } => {
-                let (storage, maybe_access) = storage_class_str(class);
-                if let Some(class) = storage {
+                let (address, maybe_access) = address_space_str(space);
+                if let Some(space) = address {
                     write!(
                         self.out,
                         "ptr<{}, vec{}<{}>",
-                        class,
+                        space,
                         back::vector_size_str(size),
                         scalar_kind_str(kind)
                     )?;
@@ -603,7 +603,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ">")?;
                 } else {
                     return Err(Error::Unimplemented(format!(
-                        "ValuePointer to StorageClass::Handle {:?}",
+                        "ValuePointer to AddressSpace::Handle {:?}",
                         inner
                     )));
                 }
@@ -935,7 +935,7 @@ impl<W: Write> Writer<W> {
     ///
     /// - The plain form of `GlobalVariable(g)` is simply `g`, which is usually a
     ///   reference to the global variable's storage. However, globals in the
-    ///   `Handle` storage class are immutable, and `GlobalVariable` expressions for
+    ///   `Handle` address space are immutable, and `GlobalVariable` expressions for
     ///   those produce the value directly, not a pointer to it. Such
     ///   `GlobalVariable` expressions are `Ordinary`.
     ///
@@ -966,8 +966,8 @@ impl<W: Write> Writer<W> {
             Ex::LocalVariable(_) => Indirection::Reference,
             Ex::GlobalVariable(handle) => {
                 let global = &module.global_variables[handle];
-                match global.class {
-                    crate::StorageClass::Handle => Indirection::Ordinary,
+                match global.space {
+                    crate::AddressSpace::Handle => Indirection::Ordinary,
                     _ => Indirection::Reference,
                 }
             }
@@ -1165,7 +1165,7 @@ impl<W: Write> Writer<W> {
                 self.write_expr_with_indirection(module, base, func_ctx, indirection)?;
 
                 let base_ty_handle = match *resolved {
-                    TypeInner::Pointer { base, class: _ } => {
+                    TypeInner::Pointer { base, space: _ } => {
                         resolved = &module.types[base].inner;
                         Some(base)
                     }
@@ -1681,11 +1681,11 @@ impl<W: Write> Writer<W> {
             writeln!(self.out)?;
         }
 
-        // First write global name and storage class if supported
+        // First write global name and address space if supported
         write!(self.out, "var")?;
-        let (storage, maybe_access) = storage_class_str(global.class);
-        if let Some(class) = storage {
-            write!(self.out, "<{}", class)?;
+        let (address, maybe_access) = address_space_str(global.space);
+        if let Some(space) = address {
+            write!(self.out, "<{}", space)?;
             if let Some(access) = maybe_access {
                 write!(self.out, ", {}", access)?;
             }
@@ -1946,26 +1946,24 @@ fn sampling_str(sampling: crate::Sampling) -> &'static str {
     }
 }
 
-fn storage_class_str(
-    storage_class: crate::StorageClass,
-) -> (Option<&'static str>, Option<&'static str>) {
-    use crate::StorageClass as Sc;
+fn address_space_str(space: crate::AddressSpace) -> (Option<&'static str>, Option<&'static str>) {
+    use crate::AddressSpace as As;
 
     (
-        Some(match storage_class {
-            Sc::Private => "private",
-            Sc::Uniform => "uniform",
-            Sc::Storage { access } => {
+        Some(match space {
+            As::Private => "private",
+            As::Uniform => "uniform",
+            As::Storage { access } => {
                 if access.contains(crate::StorageAccess::STORE) {
                     return (Some("storage"), Some("read_write"));
                 } else {
                     "storage"
                 }
             }
-            Sc::PushConstant => "push_constant",
-            Sc::WorkGroup => "workgroup",
-            Sc::Handle => return (None, None),
-            Sc::Function => "function",
+            As::PushConstant => "push_constant",
+            As::WorkGroup => "workgroup",
+            As::Handle => return (None, None),
+            As::Function => "function",
         }),
         None,
     )

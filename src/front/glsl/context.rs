@@ -9,9 +9,9 @@ use super::{
 };
 use crate::{
     front::{Emitter, Typifier},
-    Arena, BinaryOperator, Block, Constant, Expression, FastHashMap, FunctionArgument, Handle,
-    LocalVariable, RelationalFunction, ScalarKind, ScalarValue, Span, Statement, StorageClass,
-    Type, TypeInner, VectorSize,
+    AddressSpace, Arena, BinaryOperator, Block, Constant, Expression, FastHashMap,
+    FunctionArgument, Handle, LocalVariable, RelationalFunction, ScalarKind, ScalarValue, Span,
+    Statement, Type, TypeInner, VectorSize,
 };
 use std::{convert::TryFrom, ops::Index};
 
@@ -107,7 +107,7 @@ impl Context {
                 let span = parser.module.global_variables.get_span(v);
                 let res = (
                     self.expressions.append(Expression::GlobalVariable(v), span),
-                    parser.module.global_variables[v].class != StorageClass::Handle,
+                    parser.module.global_variables[v].space != AddressSpace::Handle,
                     None,
                 );
                 self.emit_start();
@@ -262,7 +262,7 @@ impl Context {
                     name: None,
                     inner: TypeInner::Pointer {
                         base: arg.ty,
-                        class: StorageClass::Function,
+                        space: AddressSpace::Function,
                     },
                 },
                 span,
@@ -540,7 +540,7 @@ impl Context {
 
                 if ExprPos::Rhs == pos {
                     let resolved = parser.resolve_type(self, pointer, meta)?;
-                    if resolved.pointer_class().is_some() {
+                    if resolved.pointer_space().is_some() {
                         return Ok((
                             Some(self.add_expression(Expression::Load { pointer }, meta, body)),
                             meta,

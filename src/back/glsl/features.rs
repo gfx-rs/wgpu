@@ -1,14 +1,14 @@
 use super::{BackendResult, Error, Version, Writer};
 use crate::{
-    Binding, Bytes, Expression, Handle, ImageClass, ImageDimension, Interpolation, MathFunction,
-    Sampling, ScalarKind, ShaderStage, StorageClass, StorageFormat, Type, TypeInner,
+    AddressSpace, Binding, Bytes, Expression, Handle, ImageClass, ImageDimension, Interpolation,
+    MathFunction, Sampling, ScalarKind, ShaderStage, StorageFormat, Type, TypeInner,
 };
 use std::fmt::Write;
 
 bitflags::bitflags! {
     /// Structure used to encode a set of additions to glsl that aren't supported by all versions
     pub struct Features: u32 {
-        /// Buffer storage class support
+        /// Buffer address space support
         const BUFFER_STORAGE = 1;
         const ARRAY_OF_ARRAYS = 1 << 1;
         /// 8 byte floats
@@ -349,10 +349,10 @@ impl<'a, W> Writer<'a, W> {
             if ep_info[handle].is_empty() {
                 continue;
             }
-            match global.class {
-                StorageClass::WorkGroup => self.features.request(Features::COMPUTE_SHADER),
-                StorageClass::Storage { .. } => self.features.request(Features::BUFFER_STORAGE),
-                StorageClass::PushConstant => {
+            match global.space {
+                AddressSpace::WorkGroup => self.features.request(Features::COMPUTE_SHADER),
+                AddressSpace::Storage { .. } => self.features.request(Features::BUFFER_STORAGE),
+                AddressSpace::PushConstant => {
                     if push_constant_used {
                         return Err(Error::MultiplePushConstants);
                     }

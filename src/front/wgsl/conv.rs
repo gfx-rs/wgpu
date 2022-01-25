@@ -1,16 +1,16 @@
 use super::{Error, Span};
 
-pub fn map_storage_class(word: &str, span: Span) -> Result<crate::StorageClass, Error<'_>> {
+pub fn map_address_space(word: &str, span: Span) -> Result<crate::AddressSpace, Error<'_>> {
     match word {
-        "private" => Ok(crate::StorageClass::Private),
-        "workgroup" => Ok(crate::StorageClass::WorkGroup),
-        "uniform" => Ok(crate::StorageClass::Uniform),
-        "storage" => Ok(crate::StorageClass::Storage {
+        "private" => Ok(crate::AddressSpace::Private),
+        "workgroup" => Ok(crate::AddressSpace::WorkGroup),
+        "uniform" => Ok(crate::AddressSpace::Uniform),
+        "storage" => Ok(crate::AddressSpace::Storage {
             access: crate::StorageAccess::default(),
         }),
-        "push_constant" => Ok(crate::StorageClass::PushConstant),
-        "function" => Ok(crate::StorageClass::Function),
-        _ => Err(Error::UnknownStorageClass(span)),
+        "push_constant" => Ok(crate::AddressSpace::PushConstant),
+        "function" => Ok(crate::AddressSpace::Function),
+        _ => Err(Error::UnknownAddressSpace(span)),
     }
 }
 

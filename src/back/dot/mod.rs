@@ -484,7 +484,7 @@ pub fn write(module: &crate::Module, mod_info: Option<&ModuleInfo>) -> Result<St
             "\t\tg{} [ shape=hexagon label=\"{:?} {:?}/'{}'\" ]",
             handle.index(),
             handle,
-            var.class,
+            var.space,
             name(&var.name),
         )?;
     }

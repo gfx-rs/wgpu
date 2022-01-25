@@ -20,15 +20,15 @@ pub(super) fn string_to_words(input: &str) -> Vec<Word> {
     words
 }
 
-pub(super) fn map_storage_class(class: crate::StorageClass) -> spirv::StorageClass {
-    match class {
-        crate::StorageClass::Handle => spirv::StorageClass::UniformConstant,
-        crate::StorageClass::Function => spirv::StorageClass::Function,
-        crate::StorageClass::Private => spirv::StorageClass::Private,
-        crate::StorageClass::Storage { .. } => spirv::StorageClass::StorageBuffer,
-        crate::StorageClass::Uniform => spirv::StorageClass::Uniform,
-        crate::StorageClass::WorkGroup => spirv::StorageClass::Workgroup,
-        crate::StorageClass::PushConstant => spirv::StorageClass::PushConstant,
+pub(super) fn map_storage_class(space: crate::AddressSpace) -> spirv::StorageClass {
+    match space {
+        crate::AddressSpace::Handle => spirv::StorageClass::UniformConstant,
+        crate::AddressSpace::Function => spirv::StorageClass::Function,
+        crate::AddressSpace::Private => spirv::StorageClass::Private,
+        crate::AddressSpace::Storage { .. } => spirv::StorageClass::StorageBuffer,
+        crate::AddressSpace::Uniform => spirv::StorageClass::Uniform,
+        crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
+        crate::AddressSpace::PushConstant => spirv::StorageClass::PushConstant,
     }
 }
 
@@ -49,7 +49,7 @@ pub(super) fn contains_builtin(
     }
 }
 
-impl crate::StorageClass {
+impl crate::AddressSpace {
     pub(super) fn to_spirv_semantics_and_scope(self) -> (spirv::MemorySemantics, spirv::Scope) {
         match self {
             Self::Storage { .. } => (spirv::MemorySemantics::UNIFORM_MEMORY, spirv::Scope::Device),
@@ -65,10 +65,10 @@ impl crate::StorageClass {
 /// Return true if the global requires a type decorated with "Block".
 // See `back::spv::GlobalVariable::access_id` for details.
 pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariable) -> bool {
-    match var.class {
-        crate::StorageClass::Uniform
-        | crate::StorageClass::Storage { .. }
-        | crate::StorageClass::PushConstant => {}
+    match var.space {
+        crate::AddressSpace::Uniform
+        | crate::AddressSpace::Storage { .. }
+        | crate::AddressSpace::PushConstant => {}
         _ => return false,
     };
     match ir_module.types[var.ty].inner {

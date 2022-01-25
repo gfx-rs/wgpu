@@ -439,8 +439,8 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         }
                         ref other => unreachable!("Array length of base {:?}", other),
                     };
-                    let storage_access = match global_var.class {
-                        crate::StorageClass::Storage { access } => access,
+                    let storage_access = match global_var.space {
+                        crate::AddressSpace::Storage { access } => access,
                         _ => crate::StorageAccess::default(),
                     };
                     let wal = WrappedArrayLength {

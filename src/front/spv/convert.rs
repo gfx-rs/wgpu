@@ -155,19 +155,19 @@ pub(super) fn map_storage_class(word: spirv::Word) -> Result<super::ExtendedClas
     use super::ExtendedClass as Ec;
     use spirv::StorageClass as Sc;
     Ok(match Sc::from_u32(word) {
-        Some(Sc::Function) => Ec::Global(crate::StorageClass::Function),
+        Some(Sc::Function) => Ec::Global(crate::AddressSpace::Function),
         Some(Sc::Input) => Ec::Input,
         Some(Sc::Output) => Ec::Output,
-        Some(Sc::Private) => Ec::Global(crate::StorageClass::Private),
-        Some(Sc::UniformConstant) => Ec::Global(crate::StorageClass::Handle),
-        Some(Sc::StorageBuffer) => Ec::Global(crate::StorageClass::Storage {
+        Some(Sc::Private) => Ec::Global(crate::AddressSpace::Private),
+        Some(Sc::UniformConstant) => Ec::Global(crate::AddressSpace::Handle),
+        Some(Sc::StorageBuffer) => Ec::Global(crate::AddressSpace::Storage {
             //Note: this is restricted by decorations later
             access: crate::StorageAccess::all(),
         }),
         // we expect the `Storage` case to be filtered out before calling this function.
-        Some(Sc::Uniform) => Ec::Global(crate::StorageClass::Uniform),
-        Some(Sc::Workgroup) => Ec::Global(crate::StorageClass::WorkGroup),
-        Some(Sc::PushConstant) => Ec::Global(crate::StorageClass::PushConstant),
+        Some(Sc::Uniform) => Ec::Global(crate::AddressSpace::Uniform),
+        Some(Sc::Workgroup) => Ec::Global(crate::AddressSpace::WorkGroup),
+        Some(Sc::PushConstant) => Ec::Global(crate::AddressSpace::PushConstant),
         _ => return Err(Error::UnsupportedStorageClass(word)),
     })
 }

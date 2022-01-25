@@ -223,7 +223,7 @@ impl Writer {
             vector_size: None,
             kind: crate::ScalarKind::Uint,
             width: 4,
-            pointer_class: None,
+            pointer_space: None,
         };
         self.get_type_id(local_type.into())
     }
@@ -233,7 +233,7 @@ impl Writer {
             vector_size: None,
             kind: crate::ScalarKind::Float,
             width: 4,
-            pointer_class: None,
+            pointer_space: None,
         };
         self.get_type_id(local_type.into())
     }
@@ -243,7 +243,7 @@ impl Writer {
             vector_size: None,
             kind: crate::ScalarKind::Float,
             width: 4,
-            pointer_class: Some(class),
+            pointer_space: Some(class),
         });
         if let Some(&id) = self.lookup_type.get(&lookup_type) {
             id
@@ -262,7 +262,7 @@ impl Writer {
             vector_size: None,
             kind: crate::ScalarKind::Bool,
             width: 1,
-            pointer_class: None,
+            pointer_space: None,
         };
         self.get_type_id(local_type.into())
     }
@@ -497,7 +497,7 @@ impl Writer {
             let mut gv = self.global_variables[handle.index()].clone();
 
             // Handle globals are pre-emitted and should be loaded automatically.
-            if var.class == crate::StorageClass::Handle {
+            if var.space == crate::AddressSpace::Handle {
                 let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
                 let id = self.id_gen.next();
                 prelude
@@ -506,7 +506,7 @@ impl Writer {
                 gv.access_id = gv.var_id;
                 gv.handle_id = id;
             } else if global_needs_wrapper(ir_module, var) {
-                let class = map_storage_class(var.class);
+                let class = map_storage_class(var.space);
                 let pointer_type_id = self.get_pointer_id(&ir_module.types, var.ty, class)?;
                 let index_id = self.get_index_constant(0);
 
@@ -727,19 +727,19 @@ impl Writer {
                 vector_size: None,
                 kind,
                 width,
-                pointer_class: None,
+                pointer_space: None,
             } => self.make_scalar(id, kind, width),
             LocalType::Value {
                 vector_size: Some(size),
                 kind,
                 width,
-                pointer_class: None,
+                pointer_space: None,
             } => {
                 let scalar_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size: None,
                     kind,
                     width,
-                    pointer_class: None,
+                    pointer_space: None,
                 }));
                 Instruction::type_vector(id, scalar_id, size)
             }
@@ -752,7 +752,7 @@ impl Writer {
                     vector_size: Some(rows),
                     kind: crate::ScalarKind::Float,
                     width,
-                    pointer_class: None,
+                    pointer_space: None,
                 }));
                 Instruction::type_matrix(id, vector_id, columns)
             }
@@ -764,13 +764,13 @@ impl Writer {
                 vector_size,
                 kind,
                 width,
-                pointer_class: Some(class),
+                pointer_space: Some(class),
             } => {
                 let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size,
                     kind,
                     width,
-                    pointer_class: None,
+                    pointer_space: None,
                 }));
                 Instruction::type_pointer(id, class, type_id)
             }
@@ -779,7 +779,7 @@ impl Writer {
                     vector_size: None,
                     kind: image.sampled_type,
                     width: 4,
-                    pointer_class: None,
+                    pointer_space: None,
                 };
                 let type_id = self.get_type_id(LookupType::Local(local_type));
                 Instruction::type_image(id, type_id, image.dim, image.flags, image.image_format)
@@ -1018,7 +1018,7 @@ impl Writer {
             vector_size: None,
             kind: value.scalar_kind(),
             width,
-            pointer_class: None,
+            pointer_space: None,
         }));
         let (solo, pair);
         let instruction = match *value {
@@ -1239,7 +1239,7 @@ impl Writer {
         use spirv::Decoration;
 
         let id = self.id_gen.next();
-        let class = map_storage_class(global_variable.class);
+        let class = map_storage_class(global_variable.space);
 
         //self.check(class.required_capabilities())?;
 
@@ -1249,8 +1249,8 @@ impl Writer {
             }
         }
 
-        let storage_access = match global_variable.class {
-            crate::StorageClass::Storage { access } => Some(access),
+        let storage_access = match global_variable.space {
+            crate::AddressSpace::Storage { access } => Some(access),
             _ => match ir_module.types[global_variable.ty].inner {
                 crate::TypeInner::Image {
                     class: crate::ImageClass::Storage { access, .. },
@@ -1301,7 +1301,7 @@ impl Writer {
             // This is a global variable in a Storage class. The only way it could
             // have `global_needs_wrapper() == false` is if it has a runtime-sized array.
             // In this case, we need to decorate it with Block.
-            if let crate::StorageClass::Storage { .. } = global_variable.class {
+            if let crate::AddressSpace::Storage { .. } = global_variable.space {
                 self.decorate(inner_type_id, Decoration::Block, &[]);
             }
             self.get_pointer_id(&ir_module.types, global_variable.ty, class)?
@@ -1359,8 +1359,8 @@ impl Writer {
             ir_module
                 .global_variables
                 .iter()
-                .any(|(_, var)| match var.class {
-                    crate::StorageClass::Storage { .. } => true,
+                .any(|(_, var)| match var.space {
+                    crate::AddressSpace::Storage { .. } => true,
                     _ => false,
                 });
         let has_view_index = ir_module

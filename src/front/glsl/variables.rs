@@ -5,8 +5,8 @@ use super::{
     Parser, Result, Span,
 };
 use crate::{
-    Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
-    LocalVariable, ResourceBinding, ScalarKind, ShaderStage, StorageAccess, StorageClass,
+    AddressSpace, Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle,
+    Interpolation, LocalVariable, ResourceBinding, ScalarKind, ShaderStage, StorageAccess,
     SwizzleComponent, Type, TypeInner, VectorSize,
 };
 
@@ -69,7 +69,7 @@ impl Parser {
         let handle = self.module.global_variables.append(
             GlobalVariable {
                 name: Some(name.into()),
-                class: StorageClass::Private,
+                space: AddressSpace::Private,
                 binding: None,
                 ty,
                 init: None,
@@ -412,7 +412,7 @@ impl Parser {
             meta,
         }: VarDeclaration,
     ) -> Result<GlobalOrConstant> {
-        let mut storage = StorageQualifier::StorageClass(StorageClass::Private);
+        let mut storage = StorageQualifier::AddressSpace(AddressSpace::Private);
         let mut interpolation = None;
         let mut set = None;
         let mut binding = None;
@@ -425,12 +425,12 @@ impl Parser {
         for &(ref qualifier, meta) in qualifiers {
             match *qualifier {
                 TypeQualifier::StorageQualifier(s) => {
-                    if StorageQualifier::StorageClass(StorageClass::PushConstant) == storage
-                        && s == StorageQualifier::StorageClass(StorageClass::Uniform)
+                    if StorageQualifier::AddressSpace(AddressSpace::PushConstant) == storage
+                        && s == StorageQualifier::AddressSpace(AddressSpace::Uniform)
                     {
-                        // Ignore the Uniform qualifier if the class was already set to PushConstant
+                        // Ignore the Uniform qualifier if the space was already set to PushConstant
                         continue;
-                    } else if StorageQualifier::StorageClass(StorageClass::Private) != storage {
+                    } else if StorageQualifier::AddressSpace(AddressSpace::Private) != storage {
                         self.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "Cannot use more than one storage qualifier per declaration".into(),
@@ -501,7 +501,7 @@ impl Parser {
         }
 
         match storage {
-            StorageQualifier::StorageClass(StorageClass::PushConstant) => {
+            StorageQualifier::AddressSpace(AddressSpace::PushConstant) => {
                 if set.is_some() {
                     self.errors.push(Error {
                         kind: ErrorKind::SemanticError(
@@ -511,8 +511,8 @@ impl Parser {
                     })
                 }
             }
-            StorageQualifier::StorageClass(StorageClass::Uniform)
-            | StorageQualifier::StorageClass(StorageClass::Storage { .. }) => {
+            StorageQualifier::AddressSpace(AddressSpace::Uniform)
+            | StorageQualifier::AddressSpace(AddressSpace::Storage { .. }) => {
                 if binding.is_none() {
                     self.errors.push(Error {
                         kind: ErrorKind::SemanticError(
@@ -557,7 +557,7 @@ impl Parser {
             let handle = self.module.global_variables.append(
                 GlobalVariable {
                     name: name.clone(),
-                    class: StorageClass::Private,
+                    space: AddressSpace::Private,
                     binding: None,
                     ty,
                     init,
@@ -607,16 +607,16 @@ impl Parser {
             return Ok(GlobalOrConstant::Constant(init));
         }
 
-        let class = match self.module.types[ty].inner {
-            TypeInner::Image { .. } => StorageClass::Handle,
-            TypeInner::Sampler { .. } => StorageClass::Handle,
+        let space = match self.module.types[ty].inner {
+            TypeInner::Image { .. } => AddressSpace::Handle,
+            TypeInner::Sampler { .. } => AddressSpace::Handle,
             _ => {
-                if let StorageQualifier::StorageClass(StorageClass::Storage { .. }) = storage {
-                    StorageClass::Storage { access }
+                if let StorageQualifier::AddressSpace(AddressSpace::Storage { .. }) = storage {
+                    AddressSpace::Storage { access }
                 } else {
                     match storage {
-                        StorageQualifier::StorageClass(class) => class,
-                        _ => StorageClass::Private,
+                        StorageQualifier::AddressSpace(space) => space,
+                        _ => AddressSpace::Private,
                     }
                 }
             }
@@ -625,7 +625,7 @@ impl Parser {
         let handle = self.module.global_variables.append(
             GlobalVariable {
                 name: name.clone(),
-                class,
+                space,
                 binding: binding.map(|binding| ResourceBinding {
                     group: set.unwrap_or(0),
                     binding,

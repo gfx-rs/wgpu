@@ -63,7 +63,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct Capabilities: u8 {
-        /// Support for `StorageClass:PushConstant`.
+        /// Support for `AddressSpace:PushConstant`.
         const PUSH_CONSTANT = 0x1;
         /// Float values with width = 8.
         const FLOAT64 = 0x2;
