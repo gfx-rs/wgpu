@@ -2894,7 +2894,7 @@ impl<W: Write> Writer<W> {
                         }
                         write!(self.out, " [[")?;
                         resolved.try_fmt(&mut self.out)?;
-                        if options.lang_version >= (2, 3)
+                        if options.lang_version >= (2, 1)
                             && *binding == crate::Binding::BuiltIn(crate::BuiltIn::Position)
                         {
                             write!(self.out, ", invariant")?;
