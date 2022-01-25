@@ -1,5 +1,10 @@
 # Change Log
 
+### v0.8.5 (2022-01-25)
+  - MSL:
+    - make VS-output positions invariant on even more systems
+    - improve support for point primitives
+
 ### v0.8.4 (2022-01-24)
   - MSL:
     - make VS-output positions invariant if possible
