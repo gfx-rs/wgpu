@@ -1701,6 +1701,7 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         match result_struct {
             Some(struct_name) => {
+                let mut has_point_size = false;
                 let result_ty = context.function.result.as_ref().unwrap().ty;
                 match context.module.types[result_ty].inner {
                     crate::TypeInner::Struct { ref members, .. } => {
@@ -1711,7 +1712,6 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "{}return {} {{", level, struct_name)?;
 
                         let mut is_first = true;
-                        let mut has_point_size = false;
 
                         for (index, member) in members.iter().enumerate() {
                             match member.binding {
@@ -1758,21 +1758,21 @@ impl<W: Write> Writer<W> {
                                 write!(self.out, "{} {}.{}", comma, tmp, name)?;
                             }
                         }
-
-                        if let FunctionOrigin::EntryPoint(ep_index) = context.origin {
-                            let stage = context.module.entry_points[ep_index as usize].stage;
-                            if context.pipeline_options.allow_point_size
-                                && stage == crate::ShaderStage::Vertex
-                                && !has_point_size
-                            {
-                                // point size was injected and comes last
-                                write!(self.out, ", 1.0")?;
-                            }
-                        }
                     }
                     _ => {
                         write!(self.out, "{}return {} {{ ", level, struct_name)?;
                         self.put_expression(expr_handle, context, true)?;
+                    }
+                }
+
+                if let FunctionOrigin::EntryPoint(ep_index) = context.origin {
+                    let stage = context.module.entry_points[ep_index as usize].stage;
+                    if context.pipeline_options.allow_point_size
+                        && stage == crate::ShaderStage::Vertex
+                        && !has_point_size
+                    {
+                        // point size was injected and comes last
+                        write!(self.out, ", 1.0")?;
                     }
                 }
                 write!(self.out, " }}")?;
