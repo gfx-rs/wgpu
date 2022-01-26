@@ -2037,7 +2037,7 @@
     },
     {
       key: "compositingAlphaMode",
-      converter: webidl.converter["GPUCanvasCompositingAlphaMode"],
+      converter: webidl.converters["GPUCanvasCompositingAlphaMode"],
       defaultValue: "opaque",
     },
     {
