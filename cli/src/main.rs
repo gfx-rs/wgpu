@@ -1,7 +1,7 @@
 #![allow(clippy::manual_strip)]
 #[allow(unused_imports)]
 use std::fs;
-use std::{error::Error, fmt, path::Path, str::FromStr};
+use std::{error::Error, fmt, io::Read, path::Path, str::FromStr};
 
 /// Translate shaders to different formats
 #[derive(argh::FromArgs, Debug, Clone)]
@@ -60,13 +60,20 @@ struct Args {
     #[argh(switch)]
     keep_coordinate_space: bool,
 
-    /// the input file
-    #[argh(positional)]
-    input: String,
+    /// specify file path to process STDIN as
+    #[argh(option)]
+    stdin_file_path: Option<String>,
 
-    /// the output file. If not specified, only validation will be performed
+    /// the input and output files.
+    ///
+    /// First positional argument is the input file. If not specified, the
+    /// input will be read from stdin. In the case, --stdin-file-path must also
+    /// be specified.
+    ///
+    /// The rest arguments are the output files. If not specified, only
+    /// validation will be performed.
     #[argh(positional)]
-    output: Vec<String>,
+    files: Vec<String>,
 }
 
 /// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
@@ -202,8 +209,21 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Parse commandline arguments
     let args: Args = argh::from_env();
-    let input_path = Path::new(&args.input);
-    let output_paths = args.output;
+    let (input_path, input) = if let Some(path) = args.files.first() {
+        let path = Path::new(path);
+        (path, fs::read(path)?)
+    } else if let Some(path) = &args.stdin_file_path {
+        let mut input = vec![];
+        std::io::stdin().lock().read_to_end(&mut input)?;
+        (Path::new(path), input)
+    } else {
+        return Err(CliError("Input file path is not specified").into());
+    };
+    let output_paths = if !args.files.is_empty() {
+        &args.files[1..]
+    } else {
+        &[]
+    };
 
     // Update parameters from commandline arguments
     if let Some(bits) = args.validate {
@@ -245,11 +265,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .spv_block_ctx_dump_prefix
                     .map(std::path::PathBuf::from),
             };
-            let input = fs::read(input_path)?;
             naga::front::spv::parse_u8_slice(&input, &options).map(|m| (m, None))?
         }
         "wgsl" => {
-            let input = fs::read_to_string(input_path)?;
+            let input = String::from_utf8(input)?;
             let result = naga::front::wgsl::parse_str(&input);
             match result {
                 Ok(v) => (v, Some(input)),
@@ -260,7 +279,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         ext @ "vert" | ext @ "frag" | ext @ "comp" => {
-            let input = fs::read_to_string(input_path)?;
+            let input = String::from_utf8(input)?;
             let mut parser = naga::front::glsl::Parser::default();
 
             (
