@@ -16,21 +16,52 @@ use wgt::Backend;
 use std::cell::Cell;
 use std::{fmt::Debug, marker::PhantomData, mem, ops};
 
-/// A simple structure to manage identities of objects.
+/// A simple structure to allocate [`Id`] identifiers.
+///
+/// Calling [`alloc`] returns a fresh, never-before-seen id. Calling [`free`]
+/// marks an id as dead; it will never be returned again by `alloc`.
+///
+/// Use `IdentityManager::default` to construct new instances.
+///
+/// `IdentityManager` returns `Id`s whose index values are suitable for use as
+/// indices into a vector of information (which you maintain elsewhere) about
+/// those ids' referents:
+///
+/// - Every live id has a distinct index value. Each live id's index selects a
+///   distinct element in the vector.
+///
+/// - `IdentityManager` prefers low index numbers. If you size your vector to
+///   accommodate the indices produced here, the vector's length will reflect
+///   the highwater mark of actual occupancy.
+///
+/// - `IdentityManager` reuses the index values of freed ids before returning
+///   ids with new index values. Freed vector entries get reused.
+///
+/// [`Id`]: crate::id::Id
+/// [`Backend`]: wgt::Backend;
+/// [`alloc`]: IdentityManager::alloc
+/// [`free`]: IdentityManager::free
 #[derive(Debug, Default)]
 pub struct IdentityManager {
+    /// Available index values. If empty, then `epochs.len()` is the next index
+    /// to allocate.
     free: Vec<Index>,
+
+    /// The next or currently-live epoch value associated with each `Id` index.
+    ///
+    /// If there is a live id with index `i`, then `epochs[i]` is its epoch; any
+    /// id with the same index but an older epoch is dead.
+    ///
+    /// If index `i` is currently unused, `epochs[i]` is the epoch to use in its
+    /// next `Id`.
     epochs: Vec<Epoch>,
 }
 
 impl IdentityManager {
-    pub fn from_index(min_index: u32) -> Self {
-        Self {
-            free: (0..min_index).collect(),
-            epochs: vec![1; min_index as usize],
-        }
-    }
-
+    /// Allocate a fresh, never-before-seen id with the given `backend`.
+    ///
+    /// The backend is incorporated into the id, so that ids allocated with
+    /// different `backend` values are always distinct.
     pub fn alloc<I: id::TypedId>(&mut self, backend: Backend) -> I {
         match self.free.pop() {
             Some(index) => I::zip(index, self.epochs[index as usize], backend),
@@ -43,6 +74,7 @@ impl IdentityManager {
         }
     }
 
+    /// Free `id`. It will never be returned from `alloc` again.
     pub fn free<I: id::TypedId + Debug>(&mut self, id: I) {
         let (index, epoch, _backend) = id.unzip();
         let pe = &mut self.epochs[index as usize];
@@ -361,7 +393,7 @@ impl<I: id::TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
 
 pub trait IdentityHandlerFactory<I> {
     type Filter: IdentityHandler<I>;
-    fn spawn(&self, min_index: Index) -> Self::Filter;
+    fn spawn(&self) -> Self::Filter;
 }
 
 #[derive(Debug)]
@@ -369,8 +401,8 @@ pub struct IdentityManagerFactory;
 
 impl<I: id::TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
     type Filter = Mutex<IdentityManager>;
-    fn spawn(&self, min_index: Index) -> Self::Filter {
-        Mutex::new(IdentityManager::from_index(min_index))
+    fn spawn(&self) -> Self::Filter {
+        Mutex::new(IdentityManager::default())
     }
 }
 
@@ -419,7 +451,7 @@ pub struct Registry<T: Resource, I: id::TypedId, F: IdentityHandlerFactory<I>> {
 impl<T: Resource, I: id::TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     fn new(backend: Backend, factory: &F) -> Self {
         Self {
-            identity: factory.spawn(0),
+            identity: factory.spawn(),
             data: RwLock::new(Storage {
                 map: Vec::new(),
                 kind: T::TYPE,
@@ -431,7 +463,7 @@ impl<T: Resource, I: id::TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F
 
     fn without_backend(factory: &F, kind: &'static str) -> Self {
         Self {
-            identity: factory.spawn(1),
+            identity: factory.spawn(),
             data: RwLock::new(Storage {
                 map: Vec::new(),
                 kind,

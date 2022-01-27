@@ -28,7 +28,7 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandlerFactory<I>
     for IdentityPassThroughFactory
 {
     type Filter = IdentityPassThrough<I>;
-    fn spawn(&self, _min_index: u32) -> Self::Filter {
+    fn spawn(&self) -> Self::Filter {
         IdentityPassThrough(PhantomData)
     }
 }
