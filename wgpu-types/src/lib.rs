@@ -909,6 +909,9 @@ bitflags::bitflags! {
 
         /// Supports storage buffers in fragment shaders.
         const FRAGMENT_STORAGE = 1 << 12;
+
+        ///  Supports sample shading and multisample interpolation.
+        const MULTISAMPLED_SHADING = 1 << 13;
     }
 }
 
