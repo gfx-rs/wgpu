@@ -108,18 +108,13 @@ impl crate::Instance<Api> for Instance {
             .into_iter()
             .map(|dev| {
                 let name = dev.name().into();
-                let has_unified_memory = dev.has_unified_memory();
                 let shared = AdapterShared::new(dev);
                 crate::ExposedAdapter {
                     info: wgt::AdapterInfo {
                         name,
                         vendor: 0,
                         device: 0,
-                        device_type: if has_unified_memory {
-                            wgt::DeviceType::IntegratedGpu
-                        } else {
-                            wgt::DeviceType::DiscreteGpu
-                        },
+                        device_type: shared.private_caps.device_type(),
                         backend: wgt::Backend::Metal,
                     },
                     features: shared.private_caps.features(),
@@ -231,6 +226,7 @@ struct PrivateCapabilities {
     supports_mutability: bool,
     supports_depth_clip_control: bool,
     supports_preserve_invariance: bool,
+    has_unified_memory: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
