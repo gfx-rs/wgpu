@@ -64,6 +64,10 @@ struct Args {
     #[argh(option)]
     stdin_file_path: Option<String>,
 
+    /// show version
+    #[argh(switch)]
+    version: bool,
+
     /// the input and output files.
     ///
     /// First positional argument is the input file. If not specified, the
@@ -209,6 +213,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Parse commandline arguments
     let args: Args = argh::from_env();
+    if args.version {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     let (input_path, input) = if let Some(path) = args.files.first() {
         let path = Path::new(path);
         (path, fs::read(path)?)
