@@ -988,6 +988,21 @@ impl super::PrivateCapabilities {
             } else {
                 Self::version_at_least(major, minor, 13, 0)
             },
+            has_unified_memory: if (os_is_mac && Self::version_at_least(major, minor, 10, 15))
+                || (!os_is_mac && Self::version_at_least(major, minor, 13, 0))
+            {
+                Some(device.has_unified_memory())
+            } else {
+                None
+            },
+        }
+    }
+
+    pub fn device_type(&self) -> wgt::DeviceType {
+        if self.has_unified_memory.unwrap_or(self.low_power) {
+            wgt::DeviceType::IntegratedGpu
+        } else {
+            wgt::DeviceType::DiscreteGpu
         }
     }
 

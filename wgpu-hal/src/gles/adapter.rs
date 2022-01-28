@@ -118,6 +118,7 @@ impl super::Adapter {
             "mali",
             "intel",
             "v3d",
+            "apple m1",
         ];
         let strings_that_imply_cpu = ["mesa offscreen", "swiftshader", "llvmpipe"];
 
