@@ -100,7 +100,9 @@ impl PhysicalDeviceFeatures {
             core: vk::PhysicalDeviceFeatures::builder()
                 .robust_buffer_access(private_caps.robust_buffer_access)
                 .independent_blend(true)
-                .sample_rate_shading(true)
+                .sample_rate_shading(
+                    downlevel_flags.contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
+                )
                 .image_cube_array(
                     downlevel_flags.contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
                 )
@@ -342,6 +344,7 @@ impl PhysicalDeviceFeatures {
             Df::FRAGMENT_WRITABLE_STORAGE,
             self.core.fragment_stores_and_atomics != 0,
         );
+        dl_flags.set(Df::MULTISAMPLED_SHADING, self.core.sample_rate_shading != 0);
 
         features.set(
             F::INDIRECT_FIRST_INSTANCE,
@@ -925,13 +928,6 @@ impl super::Instance {
         {
             log::warn!(
                 "SPIR-V storage buffer class is not supported, hiding adapter: {}",
-                info.name
-            );
-            return None;
-        }
-        if phd_features.core.sample_rate_shading == 0 {
-            log::warn!(
-                "sample_rate_shading feature is not supported, hiding adapter: {}",
                 info.name
             );
             return None;
