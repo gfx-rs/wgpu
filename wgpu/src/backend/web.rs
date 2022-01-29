@@ -1173,6 +1173,7 @@ impl crate::Context for Context {
             device: 0,
             device_type: wgt::DeviceType::Other,
             backend: wgt::Backend::BrowserWebGpu,
+            mpo: false,
         }
     }
 

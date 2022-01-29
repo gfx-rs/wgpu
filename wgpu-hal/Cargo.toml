@@ -73,7 +73,7 @@ egl = { package = "khronos-egl", version = "4.1", features = ["static", "no-pkg-
 libloading = { version = "0.7", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
+winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser", "dcomp"] }
 native = { package = "d3d12", version = "0.4.1", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]

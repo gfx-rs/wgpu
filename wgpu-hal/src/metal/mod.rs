@@ -116,6 +116,7 @@ impl crate::Instance<Api> for Instance {
                         device: 0,
                         device_type: shared.private_caps.device_type(),
                         backend: wgt::Backend::Metal,
+                        mpo: false,
                     },
                     features: shared.private_caps.features(),
                     capabilities: shared.private_caps.capabilities(),

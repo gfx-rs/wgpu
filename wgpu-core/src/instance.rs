@@ -523,6 +523,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
+    #[cfg(dx12)]
+    pub unsafe fn instance_create_surface_from_visual(
+        &self,
+        visual: *mut std::ffi::c_void,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        profiling::scope!("instance_create_surface_from_visual", "Instance");
+
+        let surface = Surface {
+            presentation: None,
+            #[cfg(vulkan)]
+            vulkan: None,
+            dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
+                raw: { inst.create_surface_from_visual(visual as _) },
+            }),
+            #[cfg(gl)]
+            gl: None,
+        };
+
+        let mut token = Token::root();
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        id.0
+    }
+
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("drop", "Surface");
         let mut token = Token::root();

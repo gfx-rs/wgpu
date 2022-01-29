@@ -1,4 +1,5 @@
 use super::HResult as _;
+use crate::dx12::SurfaceTarget;
 use std::{borrow::Cow, slice, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_6, winerror},
@@ -153,7 +154,7 @@ impl crate::Instance<super::Api> for super::Instance {
         match has_handle.raw_window_handle() {
             raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
                 factory: self.factory,
-                wnd_handle: handle.hwnd as *mut _,
+                target: SurfaceTarget::WndHandle(handle.hwnd as *mut _),
                 swap_chain: None,
             }),
             _ => Err(crate::InstanceError),

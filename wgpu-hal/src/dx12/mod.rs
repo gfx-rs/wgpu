@@ -44,6 +44,7 @@ mod view;
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use std::{borrow::Cow, ffi, mem, num::NonZeroU32, ptr, sync::Arc};
+use winapi::um::dcomp::IDCompositionVisual;
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgitype, windef, winerror},
     um::{d3d12, synchapi, winbase, winnt},
@@ -129,6 +130,16 @@ pub struct Instance {
     flags: crate::InstanceFlags,
 }
 
+impl Instance {
+    pub unsafe fn create_surface_from_visual(&self, visual: *mut IDCompositionVisual) -> Surface {
+        Surface {
+            factory: self.factory,
+            target: SurfaceTarget::Visual(native::WeakPtr::from_raw(visual)),
+            swap_chain: None,
+        }
+    }
+}
+
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
@@ -144,9 +155,14 @@ struct SwapChain {
     size: wgt::Extent3d,
 }
 
+enum SurfaceTarget {
+    WndHandle(windef::HWND),
+    Visual(native::WeakPtr<IDCompositionVisual>),
+}
+
 pub struct Surface {
     factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
-    wnd_handle: windef::HWND,
+    target: SurfaceTarget,
     swap_chain: Option<SwapChain>,
 }
 
@@ -617,20 +633,46 @@ impl crate::Surface<Api> for Surface {
                 };
 
                 let hr = {
-                    profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
-                    self.factory.CreateSwapChainForHwnd(
-                        device.present_queue.as_mut_ptr() as *mut _,
-                        self.wnd_handle,
-                        &raw_desc,
-                        ptr::null(),
-                        ptr::null_mut(),
-                        swap_chain1.mut_void() as *mut *mut _,
-                    )
+                    match self.target {
+                        SurfaceTarget::WndHandle(wnd_handle) => {
+                            profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
+                            self.factory.CreateSwapChainForHwnd(
+                                device.present_queue.as_mut_ptr() as *mut _,
+                                wnd_handle,
+                                &raw_desc,
+                                ptr::null(),
+                                ptr::null_mut(),
+                                swap_chain1.mut_void() as *mut *mut _,
+                            )
+                        }
+                        SurfaceTarget::Visual(_) => {
+                            profiling::scope!("IDXGIFactory4::CreateSwapChainForComposition");
+                            self.factory.CreateSwapChainForComposition(
+                                device.present_queue.as_mut_ptr() as *mut _,
+                                &raw_desc,
+                                ptr::null_mut(),
+                                swap_chain1.mut_void() as *mut *mut _,
+                            )
+                        }
+                    }
                 };
 
                 if let Err(err) = hr.into_result() {
                     log::error!("SwapChain creation error: {}", err);
                     return Err(crate::SurfaceError::Other("swap chain creation"));
+                }
+
+                match self.target {
+                    SurfaceTarget::WndHandle(_) => {}
+                    SurfaceTarget::Visual(visual) => {
+                        if let Err(err) = visual.SetContent(swap_chain1.as_unknown()).into_result()
+                        {
+                            log::error!("Unable to SetContent: {}", err);
+                            return Err(crate::SurfaceError::Other(
+                                "IDCompositionVisual::SetContent",
+                            ));
+                        }
+                    }
                 }
 
                 match swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>().into_result() {
@@ -646,13 +688,18 @@ impl crate::Surface<Api> for Surface {
             }
         };
 
-        // Disable automatic Alt+Enter handling by DXGI.
-        const DXGI_MWA_NO_WINDOW_CHANGES: u32 = 1;
-        const DXGI_MWA_NO_ALT_ENTER: u32 = 2;
-        self.factory.MakeWindowAssociation(
-            self.wnd_handle,
-            DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
-        );
+        match self.target {
+            SurfaceTarget::WndHandle(wnd_handle) => {
+                // Disable automatic Alt+Enter handling by DXGI.
+                const DXGI_MWA_NO_WINDOW_CHANGES: u32 = 1;
+                const DXGI_MWA_NO_ALT_ENTER: u32 = 2;
+                self.factory.MakeWindowAssociation(
+                    wnd_handle,
+                    DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
+                );
+            }
+            SurfaceTarget::Visual(_) => {}
+        }
 
         swap_chain.SetMaximumFrameLatency(config.swap_chain_size);
         let waitable = swap_chain.GetFrameLatencyWaitableObject();

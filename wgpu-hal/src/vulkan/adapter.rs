@@ -903,6 +903,7 @@ impl super::Instance {
                 _ => wgt::DeviceType::Other,
             },
             backend: wgt::Backend::Vulkan,
+            mpo: false,
         };
 
         let (available_features, downlevel_flags) = phd_features.to_wgpu(&phd_capabilities);

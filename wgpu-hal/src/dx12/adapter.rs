@@ -1,5 +1,8 @@
 use super::{conv, HResult as _};
+use crate::dx12::SurfaceTarget;
 use std::{mem, sync::Arc, thread};
+use winapi::shared::dxgi1_3;
+use winapi::shared::minwindef::TRUE;
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
     um::{d3d12, d3d12sdklayers, winuser},
@@ -90,7 +93,7 @@ impl super::Adapter {
 
         let mut workarounds = super::Workarounds::default();
 
-        let info = wgt::AdapterInfo {
+        let mut info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
             name: device_name,
             vendor: desc.VendorId as usize,
@@ -103,7 +106,35 @@ impl super::Adapter {
             } else {
                 wgt::DeviceType::DiscreteGpu
             },
+            mpo: false,
         };
+
+        unsafe {
+            if let Ok(adapter1) = adapter.cast::<dxgi::IDXGIAdapter1>().into_result() {
+                for i in 0.. {
+                    let mut output = native::WeakPtr::<dxgi::IDXGIOutput>::null();
+                    match adapter1
+                        .EnumOutputs(i, output.mut_void() as _)
+                        .into_result()
+                    {
+                        Ok(_) => {
+                            if let Ok(output2) =
+                                output.cast::<dxgi1_3::IDXGIOutput2>().into_result()
+                            {
+                                info.mpo = output2.SupportsOverlays() == TRUE;
+                                output2.destroy();
+                            }
+                            output.destroy();
+                            if info.mpo {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                adapter1.destroy();
+            }
+        }
 
         let mut options: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
         assert_eq!(0, unsafe {
@@ -389,16 +420,21 @@ impl crate::Adapter<super::Api> for super::Adapter {
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
         let current_extent = {
-            let mut rect: windef::RECT = mem::zeroed();
-            if winuser::GetClientRect(surface.wnd_handle, &mut rect) != 0 {
-                Some(wgt::Extent3d {
-                    width: (rect.right - rect.left) as u32,
-                    height: (rect.bottom - rect.top) as u32,
-                    depth_or_array_layers: 1,
-                })
-            } else {
-                log::warn!("Unable to get the window client rect");
-                None
+            match surface.target {
+                SurfaceTarget::WndHandle(wnd_handle) => {
+                    let mut rect: windef::RECT = mem::zeroed();
+                    if winuser::GetClientRect(wnd_handle, &mut rect) != 0 {
+                        Some(wgt::Extent3d {
+                            width: (rect.right - rect.left) as u32,
+                            height: (rect.bottom - rect.top) as u32,
+                            depth_or_array_layers: 1,
+                        })
+                    } else {
+                        log::warn!("Unable to get the window client rect");
+                        None
+                    }
+                }
+                SurfaceTarget::Visual(_) => None,
             }
         };
 
