@@ -281,7 +281,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             match result {
                 Ok(v) => (v, Some(input)),
                 Err(ref e) => {
-                    e.emit_to_stderr(&input);
+                    let path = input_path.to_string_lossy();
+                    e.emit_to_stderr_with_path(&input, &path);
                     return Err(CliError("Could not parse WGSL").into());
                 }
             }
