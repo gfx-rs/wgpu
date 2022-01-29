@@ -1181,7 +1181,7 @@ impl ParseError {
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
         let files = SimpleFile::new(path, source);
         let config = codespan_reporting::term::Config::default();
-        let writer = StandardStream::stderr(ColorChoice::Always);
+        let writer = StandardStream::stderr(ColorChoice::Auto);
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
     }
