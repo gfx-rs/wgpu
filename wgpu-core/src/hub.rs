@@ -1042,10 +1042,16 @@ impl HalApi for hal::api::Dx12 {
     }
 }
 
-/*
 #[cfg(dx11)]
 impl HalApi for hal::api::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
+    fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
+        Instance {
+            name: name.to_owned(),
+            dx11: Some(hal_instance),
+            ..Default::default()
+        }
+    }
     fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
     }
@@ -1056,7 +1062,6 @@ impl HalApi for hal::api::Dx11 {
         surface.dx11.as_mut().unwrap()
     }
 }
-*/
 
 #[cfg(gl)]
 impl HalApi for hal::api::Gles {
