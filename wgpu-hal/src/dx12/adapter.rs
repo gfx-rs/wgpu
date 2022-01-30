@@ -107,29 +107,18 @@ impl super::Adapter {
         };
 
         unsafe {
-            if let Ok(adapter1) = adapter.cast::<dxgi::IDXGIAdapter1>().into_result() {
-                for i in 0.. {
-                    let mut output = native::WeakPtr::<dxgi::IDXGIOutput>::null();
-                    match adapter1
-                        .EnumOutputs(i, output.mut_void() as _)
-                        .into_result()
-                    {
-                        Ok(_) => {
-                            if let Ok(output2) =
-                                output.cast::<dxgi1_3::IDXGIOutput2>().into_result()
-                            {
-                                info.mpo = output2.SupportsOverlays() == minwindef::TRUE;
-                                output2.destroy();
-                            }
-                            output.destroy();
-                            if info.mpo {
-                                break;
-                            }
+            for i in 0.. {
+                let mut output = native::WeakPtr::<dxgi1_3::IDXGIOutput2>::null();
+                match adapter.EnumOutputs(i, output.mut_void() as _).into_result() {
+                    Ok(_) => {
+                        info.mpo = output.SupportsOverlays() == minwindef::TRUE;
+                        output.destroy();
+                        if info.mpo {
+                            break;
                         }
-                        Err(_) => break,
                     }
+                    Err(_) => break,
                 }
-                adapter1.destroy();
             }
         }
 
