@@ -44,10 +44,9 @@ mod view;
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use std::{borrow::Cow, ffi, mem, num::NonZeroU32, ptr, sync::Arc};
-use winapi::um::dcomp::IDCompositionVisual;
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgitype, windef, winerror},
-    um::{d3d12, synchapi, winbase, winnt},
+    um::{d3d12, dcomp, synchapi, winbase, winnt},
     Interface as _,
 };
 
@@ -131,7 +130,10 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub unsafe fn create_surface_from_visual(&self, visual: *mut IDCompositionVisual) -> Surface {
+    pub unsafe fn create_surface_from_visual(
+        &self,
+        visual: *mut dcomp::IDCompositionVisual,
+    ) -> Surface {
         Surface {
             factory: self.factory,
             target: SurfaceTarget::Visual(native::WeakPtr::from_raw(visual)),
@@ -157,7 +159,7 @@ struct SwapChain {
 
 enum SurfaceTarget {
     WndHandle(windef::HWND),
-    Visual(native::WeakPtr<IDCompositionVisual>),
+    Visual(native::WeakPtr<dcomp::IDCompositionVisual>),
 }
 
 pub struct Surface {

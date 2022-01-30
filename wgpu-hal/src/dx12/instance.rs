@@ -1,5 +1,4 @@
-use super::HResult as _;
-use crate::dx12::SurfaceTarget;
+use super::{HResult as _, SurfaceTarget};
 use std::{borrow::Cow, slice, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_6, winerror},

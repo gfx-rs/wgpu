@@ -1,10 +1,7 @@
-use super::{conv, HResult as _};
-use crate::dx12::SurfaceTarget;
+use super::{conv, HResult as _, SurfaceTarget};
 use std::{mem, sync::Arc, thread};
-use winapi::shared::dxgi1_3;
-use winapi::shared::minwindef::TRUE;
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
+    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_5, minwindef, windef, winerror},
     um::{d3d12, d3d12sdklayers, winuser},
 };
 
@@ -121,7 +118,7 @@ impl super::Adapter {
                             if let Ok(output2) =
                                 output.cast::<dxgi1_3::IDXGIOutput2>().into_result()
                             {
-                                info.mpo = output2.SupportsOverlays() == TRUE;
+                                info.mpo = output2.SupportsOverlays() == minwindef::TRUE;
                                 output2.destroy();
                             }
                             output.destroy();
