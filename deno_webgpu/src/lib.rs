@@ -175,15 +175,6 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::UNSIZED_BINDING_ARRAY) {
         return_features.push("unsized-binding-array");
     }
-    if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT) {
-        return_features.push("multi-draw-indirect");
-    }
-    if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT) {
-        return_features.push("multi-draw-indirect-count");
-    }
-    if features.contains(wgpu_types::Features::PUSH_CONSTANTS) {
-        return_features.push("push-constants");
-    }
     if features.contains(wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER) {
         return_features.push("address-mode-clamp-to-border");
     }
@@ -196,19 +187,16 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::VERTEX_ATTRIBUTE_64BIT) {
         return_features.push("vertex-attribute-64bit");
     }
-    if features.contains(wgpu_types::Features::CONSERVATIVE_RASTERIZATION) {
-        return_features.push("conservative-rasterization");
-    }
     if features.contains(wgpu_types::Features::VERTEX_WRITABLE_STORAGE) {
         return_features.push("vertex-writable-storage");
     }
     if features.contains(wgpu_types::Features::CLEAR_TEXTURE) {
         return_features.push("clear-texture");
     }
-    if features.contains(wgpu_types::Features::SPIRV_SHADER_PASSTHROUGH) {
-        return_features.push("spirv-shader-passthrough");
-    }
     if features.contains(wgpu_types::Features::SHADER_PRIMITIVE_INDEX) {
+        return_features.push("shader-primitive-index");
+    }
+    if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
         return_features.push("shader-primitive-index");
     }
 
@@ -379,18 +367,6 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             required_features.0.contains("unsized-binding-array"),
         );
         features.set(
-            wgpu_types::Features::MULTI_DRAW_INDIRECT,
-            required_features.0.contains("multi-draw-indirect"),
-        );
-        features.set(
-            wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT,
-            required_features.0.contains("multi-draw-indirect-count"),
-        );
-        features.set(
-            wgpu_types::Features::PUSH_CONSTANTS,
-            required_features.0.contains("push-constants"),
-        );
-        features.set(
             wgpu_types::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
             required_features.0.contains("address-mode-clamp-to-border"),
         );
@@ -409,10 +385,6 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             required_features.0.contains("vertex-attribute-64bit"),
         );
         features.set(
-            wgpu_types::Features::CONSERVATIVE_RASTERIZATION,
-            required_features.0.contains("conservative-rasterization"),
-        );
-        features.set(
             wgpu_types::Features::VERTEX_WRITABLE_STORAGE,
             required_features.0.contains("vertex-writable-storage"),
         );
@@ -421,12 +393,14 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             required_features.0.contains("clear-commands"),
         );
         features.set(
-            wgpu_types::Features::SPIRV_SHADER_PASSTHROUGH,
-            required_features.0.contains("spirv-shader-passthrough"),
-        );
-        features.set(
             wgpu_types::Features::SHADER_PRIMITIVE_INDEX,
             required_features.0.contains("shader-primitive-index"),
+        );
+        features.set(
+            wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY,
+            required_features
+                .0
+                .contains("partially-bound-binding-array"),
         );
 
         features
