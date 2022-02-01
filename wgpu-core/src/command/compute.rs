@@ -117,7 +117,7 @@ pub struct ComputePassDescriptor<'a> {
 pub enum DispatchError {
     #[error("compute pipeline must be set")]
     MissingPipeline,
-    #[error("current compute pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {index}")]
+    #[error("the pipeline layout, associated with the current compute pipeline, contains a bind group layout at index {index} which is incompatible with the bind group layout associated with the bind group at {index}")]
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,

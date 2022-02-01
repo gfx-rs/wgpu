@@ -76,21 +76,23 @@ pub(crate) struct RenderPassContext {
 }
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassCompatibilityError {
-    #[error("Incompatible color attachment: {0:?} != {1:?}")]
+    #[error("Incompatible color attachment: the renderpass expected {0:?} but was given {1:?}")]
     IncompatibleColorAttachment(
         ArrayVec<TextureFormat, { hal::MAX_COLOR_TARGETS }>,
         ArrayVec<TextureFormat, { hal::MAX_COLOR_TARGETS }>,
     ),
-    #[error("Incompatible depth-stencil attachment: {0:?} != {1:?}")]
+    #[error(
+        "Incompatible depth-stencil attachment: the renderpass expected {0:?} but was given {1:?}"
+    )]
     IncompatibleDepthStencilAttachment(Option<TextureFormat>, Option<TextureFormat>),
-    #[error("Incompatible sample count: {0:?} != {1:?}")]
+    #[error("Incompatible sample count: the renderpass expected {0:?} but was given {1:?}")]
     IncompatibleSampleCount(u32, u32),
-    #[error("Incompatible multiview: {0:?} != {1:?}")]
+    #[error("Incompatible multiview: the renderpass expected {0:?} but was given {1:?}")]
     IncompatibleMultiview(Option<NonZeroU32>, Option<NonZeroU32>),
 }
 
 impl RenderPassContext {
-    // Assumed the renderpass only contains one subpass
+    // Assumes the renderpass only contains one subpass
     pub(crate) fn check_compatible(
         &self,
         other: &Self,
