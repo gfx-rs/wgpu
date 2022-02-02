@@ -1474,6 +1474,9 @@
         queueRid: device.rid,
         commandBuffers: commandBufferRids,
       });
+      for (const commandBuffer of commandBuffers) {
+        commandBuffer[_rid] = undefined;
+      }
       device.pushError(err);
     }
 
