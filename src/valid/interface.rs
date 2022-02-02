@@ -2,7 +2,7 @@ use super::{
     analyzer::{FunctionInfo, GlobalUse},
     Capabilities, Disalignment, FunctionError, ModuleInfo,
 };
-use crate::arena::{Handle, UniqueArena};
+use crate::arena::{BadHandle, Handle, UniqueArena};
 
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
 use bit_set::BitSet;
@@ -12,10 +12,12 @@ const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum GlobalVariableError {
-    #[error("Usage isn't compatible with the storage class")]
-    InvalidUsage,
-    #[error("Type isn't compatible with the storage class")]
-    InvalidType,
+    #[error(transparent)]
+    BadHandle(#[from] BadHandle),
+    #[error("Usage isn't compatible with address space {0:?}")]
+    InvalidUsage(crate::AddressSpace),
+    #[error("Type isn't compatible with with address space {0:?}")]
+    InvalidType(crate::AddressSpace),
     #[error("Type flags {seen:?} do not meet the required {required:?}")]
     MissingTypeFlags {
         required: super::TypeFlags,
@@ -25,8 +27,12 @@ pub enum GlobalVariableError {
     UnsupportedCapability(Capabilities),
     #[error("Binding decoration is missing or not applicable")]
     InvalidBinding,
-    #[error("Alignment requirements for this storage class are not met by {0:?}")]
-    Alignment(Handle<crate::Type>, #[source] Disalignment),
+    #[error("Alignment requirements for address space {0:?} are not met by {1:?}")]
+    Alignment(
+        crate::AddressSpace,
+        Handle<crate::Type>,
+        #[source] Disalignment,
+    ),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -332,17 +338,23 @@ impl super::Validator {
         use super::TypeFlags;
 
         log::debug!("var {:?}", var);
-        let type_info = self
-            .types
-            .get(var.ty.index())
-            .ok_or(GlobalVariableError::InvalidType)?;
+        let type_info = self.types.get(var.ty.index()).ok_or_else(|| BadHandle {
+            kind: "type",
+            index: var.ty.index(),
+        })?;
 
         let (required_type_flags, is_resource) = match var.space {
-            crate::AddressSpace::Function => return Err(GlobalVariableError::InvalidUsage),
+            crate::AddressSpace::Function => {
+                return Err(GlobalVariableError::InvalidUsage(var.space))
+            }
             crate::AddressSpace::Storage { .. } => {
                 if let Err((ty_handle, disalignment)) = type_info.storage_layout {
                     if self.flags.contains(super::ValidationFlags::STRUCT_LAYOUTS) {
-                        return Err(GlobalVariableError::Alignment(ty_handle, disalignment));
+                        return Err(GlobalVariableError::Alignment(
+                            var.space,
+                            ty_handle,
+                            disalignment,
+                        ));
                     }
                 }
                 (TypeFlags::DATA | TypeFlags::HOST_SHARED, true)
@@ -350,7 +362,11 @@ impl super::Validator {
             crate::AddressSpace::Uniform => {
                 if let Err((ty_handle, disalignment)) = type_info.uniform_layout {
                     if self.flags.contains(super::ValidationFlags::STRUCT_LAYOUTS) {
-                        return Err(GlobalVariableError::Alignment(ty_handle, disalignment));
+                        return Err(GlobalVariableError::Alignment(
+                            var.space,
+                            ty_handle,
+                            disalignment,
+                        ));
                     }
                 }
                 (
@@ -362,7 +378,7 @@ impl super::Validator {
                 match types[var.ty].inner {
                     crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {}
                     _ => {
-                        return Err(GlobalVariableError::InvalidType);
+                        return Err(GlobalVariableError::InvalidType(var.space));
                     }
                 };
                 (TypeFlags::empty(), true)

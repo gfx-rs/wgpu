@@ -1383,10 +1383,11 @@ impl super::Validator {
             }
             E::ArrayLength(expr) => match *resolver.resolve(expr)? {
                 Ti::Pointer { base, .. } => {
-                    if let Some(&Ti::Array {
+                    let base_ty = resolver.types.get_handle(base)?;
+                    if let Ti::Array {
                         size: crate::ArraySize::Dynamic,
                         ..
-                    }) = resolver.types.get_handle(base).map(|ty| &ty.inner)
+                    } = base_ty.inner
                     {
                         ShaderStages::all()
                     } else {

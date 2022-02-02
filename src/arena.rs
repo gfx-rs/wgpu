@@ -529,8 +529,11 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
     }
 
     /// Return this arena's value at `handle`, if that is a valid handle.
-    pub fn get_handle(&self, handle: Handle<T>) -> Option<&T> {
-        self.set.get_index(handle.index())
+    pub fn get_handle(&self, handle: Handle<T>) -> Result<&T, BadHandle> {
+        self.set.get_index(handle.index()).ok_or_else(|| BadHandle {
+            kind: std::any::type_name::<T>(),
+            index: handle.index(),
+        })
     }
 }
 

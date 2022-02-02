@@ -9,7 +9,7 @@ mod r#type;
 use crate::arena::{Arena, UniqueArena};
 
 use crate::{
-    arena::Handle,
+    arena::{BadHandle, Handle},
     proc::{LayoutError, Layouter},
     FastHashSet,
 };
@@ -114,6 +114,8 @@ pub struct Validator {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum ConstantError {
+    #[error(transparent)]
+    BadHandle(#[from] BadHandle),
     #[error("The type doesn't match the constant")]
     InvalidType,
     #[error("The component handle {0:?} can not be resolved")]
@@ -240,11 +242,7 @@ impl Validator {
                 }
             }
             crate::ConstantInner::Composite { ty, ref components } => {
-                match types
-                    .get_handle(ty)
-                    .ok_or(ConstantError::InvalidType)?
-                    .inner
-                {
+                match types.get_handle(ty)?.inner {
                     crate::TypeInner::Array {
                         size: crate::ArraySize::Constant(size_handle),
                         ..

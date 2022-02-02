@@ -841,12 +841,8 @@ impl super::Validator {
 
         #[cfg(feature = "validate")]
         for (index, argument) in fun.arguments.iter().enumerate() {
-            let ty = module.types.get_handle(argument.ty).ok_or_else(|| {
-                FunctionError::InvalidArgumentType {
-                    index,
-                    name: argument.name.clone().unwrap_or_default(),
-                }
-                .with_span_handle(argument.ty, &module.types)
+            let ty = module.types.get_handle(argument.ty).map_err(|err| {
+                FunctionError::from(err).with_span_handle(argument.ty, &module.types)
             })?;
             match ty.inner.pointer_space() {
                 Some(crate::AddressSpace::Private)
