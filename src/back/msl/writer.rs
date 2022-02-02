@@ -791,15 +791,33 @@ impl<W: Write> Writer<W> {
         value: Handle<crate::Expression>,
         context: &ExpressionContext,
     ) -> BackendResult {
+        // If the pointer we're passing to the atomic operation needs to be conditional
+        // for `ReadZeroSkipWrite`, the condition needs to *surround* the atomic op, and
+        // the pointer operand should be unchecked.
+        let policy = context.choose_bounds_check_policy(pointer);
+        let checked = policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
+            && self.put_bounds_checks(pointer, context, back::Level(0), "")?;
+
+        // If requested and successfully put bounds checks, continue the ternary expression.
+        if checked {
+            write!(self.out, " ? ")?;
+        }
+
         write!(
             self.out,
             "{}::atomic_fetch_{}_explicit({}",
             NAMESPACE, key, ATOMIC_REFERENCE
         )?;
-        self.put_expression(pointer, context, true)?;
+        self.put_access_chain(pointer, policy, context)?;
         write!(self.out, ", ")?;
         self.put_expression(value, context, true)?;
         write!(self.out, ", {}::memory_order_relaxed)", NAMESPACE)?;
+
+        // Finish the ternary expression.
+        if checked {
+            write!(self.out, " : DefaultConstructible()")?;
+        }
+
         Ok(())
     }
 
