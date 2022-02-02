@@ -1,4 +1,7 @@
-use super::{conv, HResult as _, SurfaceTarget};
+use crate::{
+    auxil,
+    dx12::{HResult as _, SurfaceTarget},
+};
 use std::{mem, sync::Arc, thread};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
@@ -317,7 +320,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
 
-        let raw_format = conv::map_texture_format(format);
+        let raw_format = auxil::dxgi::conv::map_texture_format(format);
         let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: raw_format,
             Support1: mem::zeroed(),

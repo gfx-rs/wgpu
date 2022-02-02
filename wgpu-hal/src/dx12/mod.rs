@@ -41,6 +41,8 @@ mod device;
 mod instance;
 mod view;
 
+use crate::auxil;
+
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use std::{borrow::Cow, ffi, mem, num::NonZeroU32, ptr, sync::Arc};
@@ -592,7 +594,7 @@ impl crate::Surface<Api> for Surface {
             _ => {}
         }
 
-        let non_srgb_format = conv::map_texture_format_nosrgb(config.format);
+        let non_srgb_format = auxil::dxgi::conv::map_texture_format_nosrgb(config.format);
 
         let swap_chain = match self.swap_chain.take() {
             //Note: this path doesn't properly re-initialize all of the things
@@ -618,7 +620,9 @@ impl crate::Surface<Api> for Surface {
                 let mut swap_chain1 = native::WeakPtr::<dxgi1_2::IDXGISwapChain1>::null();
 
                 let raw_desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
-                    AlphaMode: conv::map_acomposite_alpha_mode(config.composite_alpha_mode),
+                    AlphaMode: auxil::dxgi::conv::map_acomposite_alpha_mode(
+                        config.composite_alpha_mode,
+                    ),
                     BufferCount: config.swap_chain_size,
                     Width: config.extent.width,
                     Height: config.extent.height,

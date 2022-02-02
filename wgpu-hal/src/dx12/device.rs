@@ -1,4 +1,4 @@
-use crate::FormatAspects;
+use crate::{auxil, FormatAspects};
 
 use super::{conv, descriptor, view, HResult as _};
 use parking_lot::Mutex;
@@ -432,13 +432,13 @@ impl crate::Device<super::Api> for super::Device {
                         | crate::TextureUses::STORAGE_READ
                         | crate::TextureUses::STORAGE_WRITE,
                 ) {
-                conv::map_texture_format(desc.format)
+                auxil::dxgi::conv::map_texture_format(desc.format)
             } else {
                 // This branch is needed if it's a depth texture, and it's ever needed to be viewed as SRV or UAV,
                 // because then we'd create a non-depth format view of it.
                 // Note: we can skip this branch if
                 // `D3D12_FEATURE_D3D12_OPTIONS3::CastingFullyTypedFormatSupported`
-                conv::map_texture_format_depth_typeless(desc.format)
+                auxil::dxgi::conv::map_texture_format_depth_typeless(desc.format)
             },
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: desc.sample_count,
@@ -1249,7 +1249,7 @@ impl crate::Device<super::Api> for super::Device {
                 input_element_descs.push(d3d12::D3D12_INPUT_ELEMENT_DESC {
                     SemanticName: NAGA_LOCATION_SEMANTIC.as_ptr() as *const _,
                     SemanticIndex: attribute.shader_location,
-                    Format: conv::map_vertex_format(attribute.format),
+                    Format: auxil::dxgi::conv::map_vertex_format(attribute.format),
                     InputSlot: i as u32,
                     AlignedByteOffset: attribute.offset as u32,
                     InputSlotClass: slot_class,
@@ -1261,7 +1261,7 @@ impl crate::Device<super::Api> for super::Device {
         let mut rtv_formats = [dxgiformat::DXGI_FORMAT_UNKNOWN;
             d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
         for (rtv_format, ct) in rtv_formats.iter_mut().zip(desc.color_targets) {
-            *rtv_format = conv::map_texture_format(ct.format);
+            *rtv_format = auxil::dxgi::conv::map_texture_format(ct.format);
         }
 
         let bias = desc
@@ -1350,7 +1350,7 @@ impl crate::Device<super::Api> for super::Device {
                 .depth_stencil
                 .as_ref()
                 .map_or(dxgiformat::DXGI_FORMAT_UNKNOWN, |ds| {
-                    conv::map_texture_format(ds.format)
+                    auxil::dxgi::conv::map_texture_format(ds.format)
                 }),
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: desc.multisample.count,

@@ -1,3 +1,6 @@
+#[cfg(any(feature = "dx11", feature = "dx12"))]
+pub(super) mod dxgi;
+
 #[cfg(feature = "renderdoc")]
 pub(super) mod renderdoc;
 
