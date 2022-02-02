@@ -28,6 +28,8 @@ default-members = ["wgpu", "wgpu-hal", "wgpu-info"]
 [patch.crates-io]
 #naga = { path = "../naga" }
 #glow = { path = "../glow" }
+d3d12 = { git = "https://github.com/cwfitzgerald/d3d12-rs.git", rev = "799c61f85c5fb8b1c6c8578973a384fbfe063af1" }
+# d3d12 = { path = "../d3d12-rs" }
 #metal = { path = "../metal-rs" }
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }

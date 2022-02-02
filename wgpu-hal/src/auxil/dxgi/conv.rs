@@ -1,4 +1,4 @@
-use winapi::shared::{dxgi1_2, dxgiformat};
+use winapi::shared::{dxgiformat};
 
 pub fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
     use wgt::TextureFormat as Tf;
@@ -165,11 +165,11 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> dxgiformat::DXGI_FORMAT {
     }
 }
 
-pub fn map_acomposite_alpha_mode(mode: crate::CompositeAlphaMode) -> dxgi1_2::DXGI_ALPHA_MODE {
+pub fn map_acomposite_alpha_mode(mode: crate::CompositeAlphaMode) -> native::AlphaMode {
     use crate::CompositeAlphaMode as Cam;
     match mode {
-        Cam::Opaque => dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
-        Cam::PreMultiplied => dxgi1_2::DXGI_ALPHA_MODE_PREMULTIPLIED,
-        Cam::PostMultiplied => dxgi1_2::DXGI_ALPHA_MODE_STRAIGHT,
+        Cam::Opaque => native::AlphaMode::Ignore,
+        Cam::PreMultiplied => native::AlphaMode::Premultiplied,
+        Cam::PostMultiplied => native::AlphaMode::Straight,
     }
 }

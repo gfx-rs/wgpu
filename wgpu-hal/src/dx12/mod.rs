@@ -45,7 +45,7 @@ use crate::auxil;
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{borrow::Cow, ffi, mem, num::NonZeroU32, ptr, sync::Arc};
+use std::{borrow::Cow, ffi, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgitype, windef, winerror},
     um::{d3d12, dcomp, synchapi, winbase, winnt},
@@ -617,56 +617,55 @@ impl crate::Surface<Api> for Surface {
                 raw
             }
             None => {
-                let mut swap_chain1 = native::WeakPtr::<dxgi1_2::IDXGISwapChain1>::null();
-
-                let raw_desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
-                    AlphaMode: auxil::dxgi::conv::map_acomposite_alpha_mode(
+                let desc = native::SwapchainDesc {
+                    alpha_mode: auxil::dxgi::conv::map_acomposite_alpha_mode(
                         config.composite_alpha_mode,
                     ),
-                    BufferCount: config.swap_chain_size,
-                    Width: config.extent.width,
-                    Height: config.extent.height,
-                    Format: non_srgb_format,
-                    Flags: flags,
-                    BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                    SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                        Count: 1,
-                        Quality: 0,
+                    width: config.extent.width,
+                    height: config.extent.height,
+                    format: non_srgb_format,
+                    stereo: false,
+                    sample: native::SampleDesc {
+                        count: 1,
+                        quality: 0,
                     },
-                    Scaling: dxgi1_2::DXGI_SCALING_STRETCH,
-                    Stereo: 0,
-                    SwapEffect: dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
+                    buffer_usage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+                    buffer_count: config.swap_chain_size,
+                    scaling: native::Scaling::Stretch,
+                    swap_effect: native::SwapEffect::FlipDiscard,
+                    flags,
                 };
-
-                let hr = {
-                    match self.target {
-                        SurfaceTarget::WndHandle(wnd_handle) => {
-                            profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
-                            self.factory.CreateSwapChainForHwnd(
+                let swap_chain1 = match self.target {
+                    SurfaceTarget::Visual(_) => {
+                        profiling::scope!("IDXGIFactory4::CreateSwapChainForComposition");
+                        self.factory
+                            .as_factory2()
+                            .create_swapchain_for_composition(
                                 device.present_queue.as_mut_ptr() as *mut _,
-                                wnd_handle,
-                                &raw_desc,
-                                ptr::null(),
-                                ptr::null_mut(),
-                                swap_chain1.mut_void() as *mut *mut _,
+                                &desc,
                             )
-                        }
-                        SurfaceTarget::Visual(_) => {
-                            profiling::scope!("IDXGIFactory4::CreateSwapChainForComposition");
-                            self.factory.CreateSwapChainForComposition(
+                            .into_result()
+                    }
+                    SurfaceTarget::WndHandle(hwnd) => {
+                        profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
+                        self.factory
+                            .as_factory2()
+                            .create_swapchain_for_hwnd(
                                 device.present_queue.as_mut_ptr() as *mut _,
-                                &raw_desc,
-                                ptr::null_mut(),
-                                swap_chain1.mut_void() as *mut *mut _,
+                                hwnd,
+                                &desc,
                             )
-                        }
+                            .into_result()
                     }
                 };
 
-                if let Err(err) = hr.into_result() {
-                    log::error!("SwapChain creation error: {}", err);
-                    return Err(crate::SurfaceError::Other("swap chain creation"));
-                }
+                let swap_chain1 = match swap_chain1 {
+                    Ok(s) => s,
+                    Err(err) => {
+                        log::error!("SwapChain creation error: {}", err);
+                        return Err(crate::SurfaceError::Other("swap chain creation"));
+                    }
+                };
 
                 match self.target {
                     SurfaceTarget::WndHandle(_) => {}
