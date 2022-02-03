@@ -410,10 +410,7 @@ impl crate::AddressSpace {
         match self {
             Self::Handle => None,
             Self::Uniform | Self::PushConstant => Some("constant"),
-            Self::Storage { access } if access.contains(crate::StorageAccess::STORE) => {
-                Some("device")
-            }
-            Self::Storage { .. } => Some("constant"),
+            Self::Storage { .. } => Some("device"),
             Self::Private | Self::Function => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
         }
@@ -3033,6 +3030,9 @@ impl<W: Write> Writer<W> {
                         options.resolve_push_constants(ep.stage).ok()
                     }
                     crate::AddressSpace::WorkGroup => None,
+                    crate::AddressSpace::Storage { .. } if options.lang_version < (2, 0) => {
+                        return Err(Error::UnsupportedAddressSpace(var.space))
+                    }
                     _ => options
                         .resolve_resource_binding(ep.stage, var.binding.as_ref().unwrap())
                         .ok(),

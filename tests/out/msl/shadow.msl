@@ -1,4 +1,4 @@
-// language: metal1.1
+// language: metal2.0
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -46,7 +46,7 @@ struct fs_mainOutput {
 fragment fs_mainOutput fs_main(
   fs_mainInput varyings [[stage_in]]
 , constant Globals& u_globals [[user(fake0)]]
-, constant Lights& s_lights [[user(fake0)]]
+, device Lights& s_lights [[user(fake0)]]
 , metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
 , metal::sampler sampler_shadow [[user(fake0)]]
 ) {

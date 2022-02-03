@@ -1,4 +1,4 @@
-// language: metal1.1
+// language: metal2.0
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -22,7 +22,7 @@ struct type_8 {
 kernel void main_(
   threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at_1
-, constant Foo& alignment [[user(fake0)]]
+, device Foo& alignment [[user(fake0)]]
 ) {
     float Foo_1 = 1.0;
     bool at = true;
