@@ -1014,7 +1014,6 @@ impl super::PrivateCapabilities {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::TEXTURE_COMPRESSION_BC
             | F::INDIRECT_FIRST_INSTANCE
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
@@ -1023,6 +1022,10 @@ impl super::PrivateCapabilities {
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM;
+
+        features.set(F::TEXTURE_COMPRESSION_ASTC_LDR, self.format_astc);
+        features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
+        features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
 
