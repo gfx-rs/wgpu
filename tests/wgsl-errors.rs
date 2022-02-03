@@ -1,4 +1,6 @@
-//! Tests for the WGSL front end.
+/*!
+Tests for the WGSL front end.
+*/
 #![cfg(feature = "wgsl-in")]
 
 fn check(input: &str, snapshot: &str) {

@@ -1,4 +1,6 @@
-//! Test SPIR-V backend capability checks.
+/*!
+Test SPIR-V backend capability checks.
+*/
 
 #![cfg(all(feature = "wgsl-in", feature = "spv-out"))]
 

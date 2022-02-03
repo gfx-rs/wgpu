@@ -1,6 +1,9 @@
-//! HLSL Reserved Words
-//! - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-appendix-keywords>
-//! - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-appendix-reserved-words>
+/*!
+HLSL Reserved Words
+- <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-appendix-keywords>
+- <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-appendix-reserved-words>
+*/
+
 pub const RESERVED: &[&str] = &[
     "AppendStructuredBuffer",
     "asm",

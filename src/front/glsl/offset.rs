@@ -1,13 +1,16 @@
-//! Module responsible for calculating the offset and span for types.
-//!
-//! There exists two types of layouts std140 and std430 (there's technically
-//! two more layouts, shared and packed. Shared is not supported by spirv. Packed is
-//! implementation dependent and for now it's just implemented as an alias to
-//! std140).
-//!
-//! The OpenGl spec (the layout rules are defined by the OpenGl spec in section
-//! 7.6.2.2 as opposed to the GLSL spec) uses the term basic machine units which are
-//! equivalent to bytes.
+/*!
+Module responsible for calculating the offset and span for types.
+
+There exists two types of layouts std140 and std430 (there's technically
+two more layouts, shared and packed. Shared is not supported by spirv. Packed is
+implementation dependent and for now it's just implemented as an alias to
+std140).
+
+The OpenGl spec (the layout rules are defined by the OpenGl spec in section
+7.6.2.2 as opposed to the GLSL spec) uses the term basic machine units which are
+equivalent to bytes.
+*/
+
 use super::{
     ast::StructLayout,
     error::{Error, ErrorKind},

@@ -1,4 +1,6 @@
-//! Definitions for index bounds checking.
+/*!
+Definitions for index bounds checking.
+*/
 
 use crate::{valid, Handle, UniqueArena};
 use bit_set::BitSet;

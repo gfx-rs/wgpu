@@ -16,7 +16,7 @@ pub struct Token {
     pub meta: Span,
 }
 
-/// A token passed from the lexing used in the parsing
+/// A token passed from the lexing used in the parsing.
 ///
 /// This type is exported since it's returned in the
 /// [`InvalidToken`](super::ErrorKind::InvalidToken) error.

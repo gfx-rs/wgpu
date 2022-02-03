@@ -1,4 +1,5 @@
-/*! Metal Shading Language (MSL) backend
+/*!
+Backend for [MSL][msl] (Metal Shading Language).
 
 ## Binding model
 
@@ -21,7 +22,9 @@ pretend that MSL doesn't have all the restrictions it has.
 
 For the result type, if it's a structure, we re-compose it with a temporary value
 holding the result.
-!*/
+
+[msl]: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+*/
 
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
 use std::{
@@ -197,12 +200,13 @@ impl Default for Options {
     }
 }
 
-// A subset of options that are meant to be changed per pipeline.
+/// A subset of options that are meant to be changed per pipeline.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
     /// Allow `BuiltIn::PointSize` in the vertex shader.
+    ///
     /// Metal doesn't like this for non-point primitive topologies.
     pub allow_point_size: bool,
 }

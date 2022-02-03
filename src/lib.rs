@@ -182,8 +182,7 @@ tree.
 
 [`Validator::validate`]: valid::Validator::validate
 [`ModuleInfo`]: valid::ModuleInfo
-
-!*/
+*/
 
 // TODO: use `strip_prefix` instead when Rust 1.45 <= MSRV
 #![allow(
@@ -235,18 +234,23 @@ pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
 /// Map of expressions that have associated variable names
 pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
 
-/// Early fragment tests. In a standard situation if a driver determines that it is possible to
-/// switch on early depth test it will. Typical situations when early depth test is switched off:
-///   - Calling ```discard``` in a shader.
+/// Early fragment tests.
+///
+/// In a standard situation, if a driver determines that it is possible to switch on early depth test, it will.
+///
+/// Typical situations when early depth test is switched off:
+///   - Calling `discard` in a shader.
 ///   - Writing to the depth buffer, unless ConservativeDepth is enabled.
 ///
-/// SPIR-V: ExecutionMode EarlyFragmentTests
-/// In GLSL: layout(early_fragment_tests) in;
-/// HLSL: Attribute earlydepthstencil
+/// To use in a shader:
+///   - GLSL: `layout(early_fragment_tests) in;`
+///   - HLSL: `Attribute earlydepthstencil`
+///   - SPIR-V: `ExecutionMode EarlyFragmentTests`
 ///
 /// For more, see:
 ///   - <https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification>
 ///   - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-earlydepthstencil>
+///   - <https://www.khronos.org/registry/SPIR-V/specs/unified1/SPIRV.html#Execution_Mode>
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -256,20 +260,22 @@ pub struct EarlyDepthTest {
 }
 /// Enables adjusting depth without disabling early Z.
 ///
-/// SPIR-V: ExecutionMode DepthGreater/DepthLess/DepthUnchanged
-/// GLSL: layout (depth_<greater/less/unchanged/any>) out float gl_FragDepth;
-///   - ```depth_any``` option behaves as if the layout qualifier was not present.
-/// HLSL: SV_Depth/SV_DepthGreaterEqual/SV_DepthLessEqual
+/// To use in a shader:
+///   - GLSL: `layout (depth_<greater/less/unchanged/any>) out float gl_FragDepth;`
+///     - `depth_any` option behaves as if the layout qualifier was not present.
+///   - HLSL: `SV_DepthGreaterEqual`/`SV_DepthLessEqual`/`SV_Depth`
+///   - SPIR-V: `ExecutionMode Depth<Greater/Less/Unchanged>`
 ///
 /// For more, see:
 ///   - <https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt>
 ///   - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics>
+///   - <https://www.khronos.org/registry/SPIR-V/specs/unified1/SPIRV.html#Execution_Mode>
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum ConservativeDepth {
-    /// Shader may rewrite depth only with a value greater than calculated;
+    /// Shader may rewrite depth only with a value greater than calculated.
     GreaterEqual,
 
     /// Shader may rewrite depth smaller than one that would have been written without the modification.
@@ -474,7 +480,7 @@ bitflags::bitflags! {
     }
 }
 
-// Storage image format.
+/// Image storage format.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -1333,7 +1339,7 @@ pub enum Expression {
 
 pub use block::Block;
 
-/// The value of the switch case
+/// The value of the switch case.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1521,6 +1527,7 @@ pub struct FunctionArgument {
     pub binding: Option<Binding>,
 }
 
+/// A function result.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]

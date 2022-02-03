@@ -23,8 +23,8 @@ pub struct GlobalLookup {
 #[derive(Debug, Clone)]
 pub struct ParameterInfo {
     pub qualifier: ParameterQualifier,
-    /// Wether the parameter should be treated as a depth image instead of a
-    /// sampled image
+    /// Whether the parameter should be treated as a depth image instead of a
+    /// sampled image.
     pub depth: bool,
 }
 
@@ -62,10 +62,10 @@ pub struct Overload {
 #[derive(Debug, Default)]
 pub struct FunctionDeclaration {
     pub overloads: Vec<Overload>,
-    /// Wether or not this function has the name of a builtin
+    /// Whether or not this function has the name of a builtin.
     pub builtin: bool,
-    /// In case [`builtin`](Self::builtin) is true, this field indicates wether
-    /// this function already has double overloads added or not, otherwise is unused
+    /// If [`builtin`](Self::builtin) is true, this field indicates whether
+    /// this function already has double overloads added or not. Otherwise, it is unused.
     pub double: bool,
 }
 
@@ -176,7 +176,7 @@ pub enum StructLayout {
 }
 
 // TODO: Encode precision hints in the IR
-/// A precision hint used in glsl declarations
+/// A precision hint used in GLSL declarations.
 ///
 /// Precision hints can be used to either speed up shader execution or control
 /// the precision of arithmetic operations.
@@ -229,7 +229,7 @@ impl ParameterQualifier {
     }
 }
 
-/// The glsl profile used by a shader
+/// The GLSL profile used by a shader.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Profile {
     /// The `core` profile, default when no profile is specified.

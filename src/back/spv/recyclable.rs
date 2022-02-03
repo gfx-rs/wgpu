@@ -1,4 +1,6 @@
-//! Reusing collections' previous allocations.
+/*!
+Reusing collections' previous allocations.
+*/
 
 /// A value that can be reset to its initial state, retaining its current allocations.
 ///

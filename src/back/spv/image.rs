@@ -1,4 +1,6 @@
-//! Generating SPIR-V for image operations.
+/*!
+Generating SPIR-V for image operations.
+*/
 
 use super::{
     selection::{MergeTuple, Selection},

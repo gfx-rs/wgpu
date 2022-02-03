@@ -1,4 +1,6 @@
-//! Implementations for `BlockContext` methods.
+/*!
+Implementations for `BlockContext` methods.
+*/
 
 use super::{
     index::BoundsCheckResult, make_local, selection::Selection, Block, BlockContext, Dimension,

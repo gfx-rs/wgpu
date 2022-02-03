@@ -1,6 +1,8 @@
-//! Logic related to `ByteAddressBuffer` operations.
-//!
-//! HLSL backend uses byte address buffers for all storage buffers in IR.
+/*!
+Logic related to `ByteAddressBuffer` operations.
+
+HLSL backend uses byte address buffers for all storage buffers in IR.
+*/
 
 use super::{super::FunctionCtx, BackendResult, Error};
 use crate::{

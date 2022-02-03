@@ -1,59 +1,61 @@
-//! Generate SPIR-V conditional structures.
-//!
-//! Builders for `if` structures with `and`s.
-//!
-//! The types in this module track the information needed to emit SPIR-V code
-//! for complex conditional structures, like those whose conditions involve
-//! short-circuiting 'and' and 'or' structures. These track labels and can emit
-//! `OpPhi` instructions to merge values produced along different paths.
-//!
-//! This currently only supports exactly the forms Naga uses, so it doesn't
-//! support `or` or `else`, and only supports zero or one merged values.
-//!
-//! Naga needs to emit code roughly like this:
-//!
-//! ```ignore
-//!
-//!     value = DEFAULT;
-//!     if COND1 && COND2 {
-//!         value = THEN_VALUE;
-//!     }
-//!     // use value
-//!
-//! ```
-//!
-//! Assuming `ctx` and `block` are a mutable references to a [`BlockContext`]
-//! and the current [`Block`], and `merge_type` is the SPIR-V type for the
-//! merged value `value`, we can build SPIR-V for the code above like so:
-//!
-//! ```ignore
-//!
-//!     let cond = Selection::start(block, merge_type);
-//!         // ... compute `cond1` ...
-//!     cond.if_true(ctx, cond1, DEFAULT);
-//!         // ... compute `cond2` ...
-//!     cond.if_true(ctx, cond2, DEFAULT);
-//!         // ... compute THEN_VALUE
-//!     let merged_value = cond.finish(ctx, THEN_VALUE);
-//!
-//! ```
-//!
-//! After this, `merged_value` is either `DEFAULT` or `THEN_VALUE`, depending on
-//! the path by which the merged block was reached.
-//!
-//! This takes care of writing all branch instructions, including an
-//! `OpSelectionMerge` annotation in the header block; starting new blocks and
-//! assigning them labels; and emitting the `OpPhi` that gathers together the
-//! right sources for the merged values, for every path through the selection
-//! construct.
-//!
-//! When there is no merged value to produce, you can pass `()` for `merge_type`
-//! and the merge values. In this case no `OpPhi` instructions are produced, and
-//! the `finish` method returns `()`.
-//!
-//! To enforce proper nesting, a `Selection` takes ownership of the `&mut Block`
-//! pointer for the duration of its lifetime. To obtain the block for generating
-//! code in the selection's body, call the `Selection::block` method.
+/*!
+Generate SPIR-V conditional structures.
+
+Builders for `if` structures with `and`s.
+
+The types in this module track the information needed to emit SPIR-V code
+for complex conditional structures, like those whose conditions involve
+short-circuiting 'and' and 'or' structures. These track labels and can emit
+`OpPhi` instructions to merge values produced along different paths.
+
+This currently only supports exactly the forms Naga uses, so it doesn't
+support `or` or `else`, and only supports zero or one merged values.
+
+Naga needs to emit code roughly like this:
+
+```ignore
+
+    value = DEFAULT;
+    if COND1 && COND2 {
+        value = THEN_VALUE;
+    }
+    // use value
+
+```
+
+Assuming `ctx` and `block` are a mutable references to a [`BlockContext`]
+and the current [`Block`], and `merge_type` is the SPIR-V type for the
+merged value `value`, we can build SPIR-V for the code above like so:
+
+```ignore
+
+    let cond = Selection::start(block, merge_type);
+        // ... compute `cond1` ...
+    cond.if_true(ctx, cond1, DEFAULT);
+        // ... compute `cond2` ...
+    cond.if_true(ctx, cond2, DEFAULT);
+        // ... compute THEN_VALUE
+    let merged_value = cond.finish(ctx, THEN_VALUE);
+
+```
+
+After this, `merged_value` is either `DEFAULT` or `THEN_VALUE`, depending on
+the path by which the merged block was reached.
+
+This takes care of writing all branch instructions, including an
+`OpSelectionMerge` annotation in the header block; starting new blocks and
+assigning them labels; and emitting the `OpPhi` that gathers together the
+right sources for the merged values, for every path through the selection
+construct.
+
+When there is no merged value to produce, you can pass `()` for `merge_type`
+and the merge values. In this case no `OpPhi` instructions are produced, and
+the `finish` method returns `()`.
+
+To enforce proper nesting, a `Selection` takes ownership of the `&mut Block`
+pointer for the duration of its lifetime. To obtain the block for generating
+code in the selection's body, call the `Selection::block` method.
+*/
 
 use super::{Block, BlockContext, Instruction};
 use spirv::Word;

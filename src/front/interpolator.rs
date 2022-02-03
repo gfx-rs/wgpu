@@ -1,4 +1,6 @@
-//! Interpolation defaults.
+/*!
+Interpolation defaults.
+*/
 
 impl crate::Binding {
     /// Apply the usual default interpolation for `ty` to `binding`.

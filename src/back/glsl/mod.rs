@@ -1,22 +1,25 @@
-//! OpenGL shading language backend
-//!
-//! The main structure is [`Writer`](Writer), it maintains internal state that is used
-//! to output a [`Module`](crate::Module) into glsl
-//!
-//! # Supported versions
-//! ### Core
-//! - 330
-//! - 400
-//! - 410
-//! - 420
-//! - 430
-//! - 450
-//! - 460
-//!
-//! ### ES
-//! - 300
-//! - 310
-//!
+/*!
+Backend for [GLSL][glsl] (OpenGL Shading Language).
+
+The main structure is [`Writer`], it maintains internal state that is used
+to output a [`Module`](crate::Module) into glsl
+
+# Supported versions
+### Core
+- 330
+- 400
+- 410
+- 420
+- 430
+- 450
+- 460
+
+### ES
+- 300
+- 310
+
+[glsl]: https://www.khronos.org/registry/OpenGL/index_gl.php
+*/
 
 // GLSL is mostly a superset of C but it also removes some parts of it this is a list of relevant
 // aspects for this backend.
@@ -33,7 +36,7 @@
 // `#extension name: behaviour`
 // Extensions provide increased features in a plugin fashion but they aren't required to be
 // supported hence why they are called extensions, that's why `behaviour` is used it specifies
-// wether the extension is strictly required or if it should only be enabled if needed. In our case
+// whether the extension is strictly required or if it should only be enabled if needed. In our case
 // when we use extensions we set behaviour to `require` always.
 //
 // The only thing that glsl removes that makes a difference are pointers.
@@ -61,11 +64,12 @@ mod features;
 /// Contains a constant with a slice of all the reserved keywords RESERVED_KEYWORDS
 mod keywords;
 
-/// List of supported core glsl versions
+/// List of supported `core` GLSL versions.
 pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
-/// List of supported es glsl versions
+/// List of supported `es` GLSL versions.
 pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 
+/// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
 impl crate::AtomicFunction {
@@ -130,14 +134,14 @@ impl<'a> GlobalTypeKind<'a> {
     }
 }
 
-/// glsl version
+/// A GLSL version.
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum Version {
-    /// `core` glsl
+    /// `core` GLSL.
     Desktop(u16),
-    /// `es` glsl
+    /// `es` GLSL.
     Embedded(u16),
 }
 
@@ -206,10 +210,11 @@ impl fmt::Display for Version {
 }
 
 bitflags::bitflags! {
+    /// Configuration flags for the [`Writer`].
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     pub struct WriterFlags: u32 {
-        /// Flip output Y and extend Z from (0,1) to (-1,1).
+        /// Flip output Y and extend Z from (0, 1) to (-1, 1).
         const ADJUST_COORDINATE_SPACE = 0x1;
         /// Supports GL_EXT_texture_shadow_lod on the host, which provides
         /// additional functions on shadows and arrays of shadows.
@@ -217,14 +222,14 @@ bitflags::bitflags! {
     }
 }
 
-/// Structure that contains the configuration used in the [`Writer`](Writer)
+/// Configuration used in the [`Writer`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
-    /// The glsl version to be used
+    /// The GLSL version to be used.
     pub version: Version,
-    /// Configuration flags for the writer.
+    /// Configuration flags for the [`Writer`].
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
     pub binding_map: BindingMap,
@@ -240,40 +245,41 @@ impl Default for Options {
     }
 }
 
-// A subset of options that are meant to be changed per pipeline.
+/// A subset of options meant to be changed per pipeline.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
-    /// The stage of the entry point
+    /// The stage of the entry point.
     pub shader_stage: ShaderStage,
-    /// The name of the entry point
+    /// The name of the entry point.
     ///
-    /// If no entry point that matches is found a error will be thrown while creating a new instance
-    /// of [`Writer`](struct.Writer.html)
+    /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
 }
 
-/// Structure that contains a reflection info
+/// Reflection info for texture mappings and uniforms.
 pub struct ReflectionInfo {
+    /// Mapping between texture names and variables/samplers.
     pub texture_mapping: crate::FastHashMap<String, TextureMapping>,
+    /// Mapping between uniform variables and names.
     pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
 }
 
-/// Structure that connects a texture to a sampler or not
+/// Mapping between a texture and its sampler, if it exists.
 ///
-/// glsl pre vulkan has no concept of separate textures and samplers instead everything is a
-/// `gsamplerN` where `g` is the scalar type and `N` is the dimension, but naga uses separate textures
-/// and samplers in the IR so the backend produces a [`HashMap`](crate::FastHashMap) with the texture name
-/// as a key and a [`TextureMapping`](TextureMapping) as a value this way the user knows where to bind.
+/// GLSL pre-Vulkan has no concept of separate textures and samplers. Instead, everything is a
+/// `gsamplerN` where `g` is the scalar type and `N` is the dimension. But naga uses separate textures
+/// and samplers in the IR, so the backend produces a [`FastHashMap`](crate::FastHashMap) with the texture name
+/// as a key and a [`TextureMapping`] as a value. This way, the user knows where to bind.
 ///
-/// [`Storage`](crate::ImageClass::Storage) images produce `gimageN` and don't have an associated sampler
-/// so the [`sampler`](Self::sampler) field will be [`None`](std::option::Option::None)
+/// [`Storage`](crate::ImageClass::Storage) images produce `gimageN` and don't have an associated sampler,
+/// so the [`sampler`](Self::sampler) field will be [`None`].
 #[derive(Debug, Clone)]
 pub struct TextureMapping {
-    /// Handle to the image global variable
+    /// Handle to the image global variable.
     pub texture: Handle<crate::GlobalVariable>,
-    /// Handle to the associated sampler global variable if it exists
+    /// Handle to the associated sampler global variable, if it exists.
     pub sampler: Option<Handle<crate::GlobalVariable>>,
 }
 
@@ -338,88 +344,88 @@ impl ShaderStage {
 /// Shorthand result used internally by the backend
 type BackendResult<T = ()> = Result<T, Error>;
 
-/// A glsl compilation error.
+/// A GLSL compilation error.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// A error occurred while writing to the output
+    /// A error occurred while writing to the output.
     #[error("Format error")]
     FmtError(#[from] FmtError),
-    /// The specified [`Version`](Version) doesn't have all required [`Features`](super)
+    /// The specified [`Version`] doesn't have all required [`Features`].
     ///
-    /// Contains the missing [`Features`](Features)
+    /// Contains the missing [`Features`].
     #[error("The selected version doesn't support {0:?}")]
     MissingFeatures(Features),
     /// [`AddressSpace::PushConstant`](crate::AddressSpace::PushConstant) was used more than
-    /// once in the entry point which isn't supported
+    /// once in the entry point, which isn't supported.
     #[error("Multiple push constants aren't supported")]
     MultiplePushConstants,
-    /// The specified [`Version`](Version) isn't supported
+    /// The specified [`Version`] isn't supported.
     #[error("The specified version isn't supported")]
     VersionNotSupported,
-    /// The entry point couldn't be found
+    /// The entry point couldn't be found.
     #[error("The requested entry point couldn't be found")]
     EntryPointNotFound,
-    /// A call was made to an unsupported external
+    /// A call was made to an unsupported external.
     #[error("A call was made to an unsupported external: {0}")]
     UnsupportedExternal(String),
-    /// A scalar with an unsupported width was requested
+    /// A scalar with an unsupported width was requested.
     #[error("A scalar with an unsupported width was requested: {0:?} {1:?}")]
     UnsupportedScalar(crate::ScalarKind, crate::Bytes),
-    /// A image was used with multiple samplers, this isn't supported
+    /// A image was used with multiple samplers, which isn't supported.
     #[error("A image was used with multiple samplers")]
     ImageMultipleSamplers,
     #[error("{0}")]
     Custom(String),
 }
 
-/// Binary operation with a different logic on the GLSL side
+/// Binary operation with a different logic on the GLSL side.
 enum BinaryOperation {
     /// Vector comparison should use the function like `greaterThan()`, etc.
     VectorCompare,
-    /// GLSL `%` is SPIR-V `OpUMod/OpSMod` and `mod()` is `OpFMod`, but [`BinaryOperator::Modulo`](crate::BinaryOperator::Modulo) is `OpFRem`
+    /// GLSL `%` is SPIR-V `OpUMod/OpSMod` and `mod()` is `OpFMod`, but [`BinaryOperator::Modulo`](crate::BinaryOperator::Modulo) is `OpFRem`.
     Modulo,
-    /// Any plain operation. No additional logic required
+    /// Any plain operation. No additional logic required.
     Other,
 }
 
-/// Main structure of the glsl backend responsible for all code generation
+/// Writer responsible for all code generation.
 pub struct Writer<'a, W> {
     // Inputs
-    /// The module being written
+    /// The module being written.
     module: &'a crate::Module,
     /// The module analysis.
     info: &'a valid::ModuleInfo,
-    /// The output writer
+    /// The output writer.
     out: W,
-    /// User defined configuration to be used
+    /// User defined configuration to be used.
     options: &'a Options,
 
     // Internal State
-    /// Features manager used to store all the needed features and write them
+    /// Features manager used to store all the needed features and write them.
     features: FeaturesManager,
     namer: proc::Namer,
     /// A map with all the names needed for writing the module
-    /// (generated by a [`Namer`](crate::proc::Namer))
+    /// (generated by a [`Namer`](crate::proc::Namer)).
     names: crate::FastHashMap<NameKey, String>,
-    /// A map with the names of global variables needed for reflections
+    /// A map with the names of global variables needed for reflections.
     reflection_names_globals: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
-    /// The selected entry point
+    /// The selected entry point.
     entry_point: &'a crate::EntryPoint,
-    /// The index of the selected entry point
+    /// The index of the selected entry point.
     entry_point_idx: proc::EntryPointIndex,
-    /// Used to generate a unique number for blocks
+    /// A generator for unique block numbers.
     block_id: IdGenerator,
-    /// Set of expressions that have associated temporary variables
+    /// Set of expressions that have associated temporary variables.
     named_expressions: crate::NamedExpressions,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
-    /// Creates a new [`Writer`](Writer) instance
+    /// Creates a new [`Writer`] instance.
     ///
     /// # Errors
-    /// - If the version specified isn't supported (or invalid)
-    /// - If the entry point couldn't be found on the module
-    /// - If the version specified doesn't support some used features
+    /// - If the version specified is invalid or supported.
+    /// - If the entry point couldn't be found in the module.
+    /// - If the version specified doesn't support some used features.
     pub fn new(
         out: W,
         module: &'a crate::Module,
@@ -1988,7 +1994,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Load { pointer } => self.write_expr(pointer, ctx)?,
             // `ImageSample` is a bit complicated compared to the rest of the IR.
             //
-            // First there are three variations depending wether the sample level is explicitly set,
+            // First there are three variations depending whether the sample level is explicitly set,
             // if it's automatic or it it's bias:
             // `texture(image, coordinate)` - Automatic sample level
             // `texture(image, coordinate, bias)` - Bias sample level

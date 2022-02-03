@@ -6,56 +6,57 @@ use crate::{
 use std::fmt::Write;
 
 bitflags::bitflags! {
-    /// Structure used to encode a set of additions to glsl that aren't supported by all versions
+    /// Structure used to encode additions to GLSL that aren't supported by all versions.
     pub struct Features: u32 {
-        /// Buffer address space support
+        /// Buffer address space support.
         const BUFFER_STORAGE = 1;
         const ARRAY_OF_ARRAYS = 1 << 1;
-        /// 8 byte floats
+        /// 8 byte floats.
         const DOUBLE_TYPE = 1 << 2;
-        /// Includes support for more image formats
+        /// More image formats.
         const FULL_IMAGE_FORMATS = 1 << 3;
         const MULTISAMPLED_TEXTURES = 1 << 4;
         const MULTISAMPLED_TEXTURE_ARRAYS = 1 << 5;
         const CUBE_TEXTURES_ARRAY = 1 << 6;
         const COMPUTE_SHADER = 1 << 7;
-        /// Adds support for image load and early depth tests
+        /// Image load and early depth tests.
         const IMAGE_LOAD_STORE = 1 << 8;
         const CONSERVATIVE_DEPTH = 1 << 9;
-        /// Interpolation and auxiliary qualifiers. Perspective, Flat, and
-        /// Centroid are available in all GLSL versions we support.
+        /// Interpolation and auxiliary qualifiers.
+        ///
+        /// Perspective, Flat, and Centroid are available in all GLSL versions we support.
         const NOPERSPECTIVE_QUALIFIER = 1 << 11;
         const SAMPLE_QUALIFIER = 1 << 12;
         const CLIP_DISTANCE = 1 << 13;
         const CULL_DISTANCE = 1 << 14;
-        // Sample ID
+        /// Sample ID.
         const SAMPLE_VARIABLES = 1 << 15;
-        /// Arrays with a dynamic length
+        /// Arrays with a dynamic length.
         const DYNAMIC_ARRAY_SIZE = 1 << 16;
         const MULTI_VIEW = 1 << 17;
-        /// Adds support for fused multiply-add
+        /// Fused multiply-add.
         const FMA = 1 << 18;
     }
 }
 
-/// Helper structure used to store the required [`Features`](Features) needed to output a
+/// Helper structure used to store the required [`Features`] needed to output a
 /// [`Module`](crate::Module)
 ///
 /// Provides helper methods to check for availability and writing required extensions
 pub struct FeaturesManager(Features);
 
 impl FeaturesManager {
-    /// Creates a new [`FeaturesManager`](FeaturesManager) instance
+    /// Creates a new [`FeaturesManager`] instance
     pub fn new() -> Self {
         Self(Features::empty())
     }
 
-    /// Adds to the list of required [`Features`](Features)
+    /// Adds to the list of required [`Features`]
     pub fn request(&mut self, features: Features) {
         self.0 |= features
     }
 
-    /// Checks that all required [`Features`](Features) are available for the specified
+    /// Checks that all required [`Features`] are available for the specified
     /// [`Version`](super::Version) otherwise returns an
     /// [`Error::MissingFeatures`](super::Error::MissingFeatures)
     pub fn check_availability(&self, version: Version) -> BackendResult {
@@ -214,10 +215,10 @@ impl FeaturesManager {
 }
 
 impl<'a, W> Writer<'a, W> {
-    /// Helper method that searches the module for all the needed [`Features`](Features)
+    /// Helper method that searches the module for all the needed [`Features`]
     ///
     /// # Errors
-    /// If the version doesn't support any of the needed [`Features`](Features) a
+    /// If the version doesn't support any of the needed [`Features`] a
     /// [`Error::MissingFeatures`](super::Error::MissingFeatures) will be returned
     pub(super) fn collect_required_features(&mut self) -> BackendResult {
         let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
@@ -386,7 +387,7 @@ impl<'a, W> Writer<'a, W> {
         self.features.check_availability(self.options.version)
     }
 
-    /// Helper method that checks the [`Features`](Features) needed by a scalar
+    /// Helper method that checks the [`Features`] needed by a scalar
     fn scalar_required_features(&mut self, kind: ScalarKind, width: Bytes) {
         if kind == ScalarKind::Float && width == 8 {
             self.features.request(Features::DOUBLE_TYPE);

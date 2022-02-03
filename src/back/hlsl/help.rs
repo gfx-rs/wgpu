@@ -1,28 +1,30 @@
-//! Helpers for the hlsl backend
-//!
-//! Important note about `Expression::ImageQuery`/`Expression::ArrayLength` and hlsl backend:
-//!
-//! Due to implementation of `GetDimensions` function in hlsl (<https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions>)
-//! backend can't work with it as an expression.
-//! Instead, it generates a unique wrapped function per `Expression::ImageQuery`, based on texure info and query function.
-//! See `WrappedImageQuery` struct that represents a unique function and will be generated before writing all statements and expressions.
-//! This allowed to works with `Expression::ImageQuery` as expression and write wrapped function.
-//!
-//! For example:
-//! ```wgsl
-//! let dim_1d = textureDimensions(image_1d);
-//! ```
-//!
-//! ```hlsl
-//! int NagaDimensions1D(Texture1D<float4>)
-//! {
-//!    uint4 ret;
-//!    image_1d.GetDimensions(ret.x);
-//!    return ret.x;
-//! }
-//!
-//! int dim_1d = NagaDimensions1D(image_1d);
-//! ```
+/*!
+Helpers for the hlsl backend
+
+Important note about `Expression::ImageQuery`/`Expression::ArrayLength` and hlsl backend:
+
+Due to implementation of `GetDimensions` function in hlsl (<https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions>)
+backend can't work with it as an expression.
+Instead, it generates a unique wrapped function per `Expression::ImageQuery`, based on texure info and query function.
+See `WrappedImageQuery` struct that represents a unique function and will be generated before writing all statements and expressions.
+This allowed to works with `Expression::ImageQuery` as expression and write wrapped function.
+
+For example:
+```wgsl
+let dim_1d = textureDimensions(image_1d);
+```
+
+```hlsl
+int NagaDimensions1D(Texture1D<float4>)
+{
+   uint4 ret;
+   image_1d.GetDimensions(ret.x);
+   return ret.x;
+}
+
+int dim_1d = NagaDimensions1D(image_1d);
+```
+*/
 
 use super::{super::FunctionCtx, BackendResult, Error};
 use crate::{arena::Handle, proc::NameKey};

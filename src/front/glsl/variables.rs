@@ -31,15 +31,15 @@ pub struct VarDeclaration<'a> {
     pub meta: Span,
 }
 
-/// Information about a builtin used in [`add_builtin`](Parser::add_builtin)
+/// Information about a builtin used in [`add_builtin`](Parser::add_builtin).
 struct BuiltInData {
-    /// The type of the builtin
+    /// The type of the builtin.
     inner: TypeInner,
-    /// The builtin class associated with
+    /// The associated builtin class.
     builtin: BuiltIn,
-    /// Wether it should be allowed to write to the builtin or not
+    /// Whether the builtin can be written to or not.
     mutable: bool,
-    /// The storage used for the builtin
+    /// The storage used for the builtin.
     storage: StorageQualifier,
 }
 

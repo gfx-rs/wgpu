@@ -3,7 +3,7 @@
 use std::fs;
 use std::{error::Error, fmt, io::Read, path::Path, str::FromStr};
 
-/// Translate shaders to different formats
+/// Translate shaders to different formats.
 #[derive(argh::FromArgs, Debug, Clone)]
 struct Args {
     /// bitmask of the ValidationFlags to be used, use 0 to disable validation

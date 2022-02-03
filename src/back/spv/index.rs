@@ -1,4 +1,6 @@
-//! Bounds-checking for SPIR-V output.
+/*!
+Bounds-checking for SPIR-V output.
+*/
 
 use super::{selection::Selection, Block, BlockContext, Error, IdGenerator, Instruction, Word};
 use crate::{arena::Handle, proc::BoundsCheckPolicy};

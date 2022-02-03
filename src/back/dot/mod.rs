@@ -1,8 +1,11 @@
-/*! GraphViz (DOT) backend
- *
- * This backend writes a graph in the DOT format, for the ease
- * of IR inspection and debugging.
-!*/
+/*!
+Backend for [DOT][dot] (Graphviz).
+
+This backend writes a graph in the DOT language, for the ease
+of IR inspection and debugging.
+
+[dot]: https://graphviz.org/doc/info/lang.html
+*/
 
 use crate::{
     arena::Handle,
@@ -470,6 +473,7 @@ fn write_fun(
     Ok(())
 }
 
+/// Write shader module to a [`String`].
 pub fn write(module: &crate::Module, mod_info: Option<&ModuleInfo>) -> Result<String, FmtError> {
     use std::fmt::Write as _;
 
