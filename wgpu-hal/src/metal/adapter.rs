@@ -718,8 +718,12 @@ impl super::PrivateCapabilities {
             format_min_srgb_channels: if os_is_mac { 4 } else { 1 },
             format_b5: !os_is_mac,
             format_bc: os_is_mac,
-            format_eac_etc: !os_is_mac,
-            format_astc: Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES),
+            format_eac_etc: !os_is_mac
+                // M1 in macOS supports EAC/ETC2
+                || device.supports_family(MTLGPUFamily::Apple7),
+            format_astc: Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES)
+                // A14/M1 always support ASTC
+                || device.supports_family(MTLGPUFamily::Apple7),
             format_any8_unorm_srgb_all: Self::supports_any(device, ANY8_UNORM_SRGB_ALL),
             format_any8_unorm_srgb_no_write: !Self::supports_any(device, ANY8_UNORM_SRGB_ALL)
                 && !os_is_mac,
