@@ -1059,7 +1059,28 @@ impl super::Validator {
                             ));
                         }
                     }
-                    Mf::Dot | Mf::Outer | Mf::Cross | Mf::Reflect => {
+                    Mf::Dot => {
+                        let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), None, None) => ty1,
+                            _ => return Err(ExpressionError::WrongArgumentCount(fun)),
+                        };
+                        match *arg_ty {
+                            Ti::Vector {
+                                kind: Sk::Float, ..
+                            }
+                            | Ti::Vector { kind: Sk::Sint, .. }
+                            | Ti::Vector { kind: Sk::Uint, .. } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                        if arg1_ty != arg_ty {
+                            return Err(ExpressionError::InvalidArgumentType(
+                                fun,
+                                1,
+                                arg1.unwrap(),
+                            ));
+                        }
+                    }
+                    Mf::Outer | Mf::Cross | Mf::Reflect => {
                         let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
                             (Some(ty1), None, None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),

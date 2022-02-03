@@ -417,6 +417,8 @@ pub struct Writer<'a, W> {
     block_id: IdGenerator,
     /// Set of expressions that have associated temporary variables.
     named_expressions: crate::NamedExpressions,
+    /// Set of expressions that need to be baked to avoid unnecessary repetition in output
+    need_bake_expressions: crate::NeedBakeExpressions,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -468,6 +470,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
             block_id: IdGenerator::default(),
             named_expressions: crate::NamedExpressions::default(),
+            need_bake_expressions: crate::NeedBakeExpressions::default(),
         };
 
         // Find all features required to print this module
@@ -1000,6 +1003,45 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method used to find which expressions of a given function require baking
+    ///
+    /// # Notes
+    /// Clears `need_bake_expressions` set before adding to it
+    fn update_expressions_to_bake(&mut self, func: &crate::Function, info: &valid::FunctionInfo) {
+        use crate::Expression;
+        self.need_bake_expressions.clear();
+        for expr in func.expressions.iter() {
+            let expr_info = &info[expr.0];
+            let min_ref_count = func.expressions[expr.0].bake_ref_count();
+            if min_ref_count <= expr_info.ref_count {
+                self.need_bake_expressions.insert(expr.0);
+            }
+            // if the expression is a Dot product with integer arguments,
+            // then the args needs baking as well
+            if let (
+                fun_handle,
+                &Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    arg,
+                    arg1,
+                    ..
+                },
+            ) = expr
+            {
+                let inner = info[fun_handle].ty.inner_with(&self.module.types);
+                if let TypeInner::Scalar { kind, .. } = *inner {
+                    match kind {
+                        crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                            self.need_bake_expressions.insert(arg);
+                            self.need_bake_expressions.insert(arg1.unwrap());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
     /// Helper method used to get a name for a global
     ///
     /// Globals have different naming schemes depending on their binding:
@@ -1151,6 +1193,7 @@ impl<'a, W: Write> Writer<'a, W> {
         };
 
         self.named_expressions.clear();
+        self.update_expressions_to_bake(func, info);
 
         // Write the function header
         //
@@ -1401,6 +1444,33 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method used to output a dot product as an arithmetic expression
+    ///
+    fn write_dot_product(
+        &mut self,
+        arg: Handle<crate::Expression>,
+        arg1: Handle<crate::Expression>,
+        size: usize,
+    ) -> BackendResult {
+        write!(self.out, "(")?;
+
+        let arg0_name = &self.named_expressions[&arg];
+        let arg1_name = &self.named_expressions[&arg1];
+
+        // This will print an extra '+' at the beginning but that is fine in glsl
+        for index in 0..size {
+            let component = back::COMPONENTS[index];
+            write!(
+                self.out,
+                " + {}.{} * {}.{}",
+                arg0_name, component, arg1_name, component
+            )?;
+        }
+
+        write!(self.out, ")")?;
+        Ok(())
+    }
+
     /// Helper method used to write structs
     ///
     /// # Notes
@@ -1490,13 +1560,10 @@ impl<'a, W: Write> Writer<'a, W> {
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
+                    } else if self.need_bake_expressions.contains(&handle) {
+                        Some(format!("{}{}", super::BAKE_PREFIX, handle.index()))
                     } else {
-                        let min_ref_count = ctx.expressions[handle].bake_ref_count();
-                        if min_ref_count <= info.ref_count {
-                            Some(format!("{}{}", super::BAKE_PREFIX, handle.index()))
-                        } else {
-                            None
-                        }
+                        None
                     };
 
                     if let Some(name) = expr_name {
@@ -2538,7 +2605,18 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Log2 => "log2",
                     Mf::Pow => "pow",
                     // geometry
-                    Mf::Dot => "dot",
+                    Mf::Dot => match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                        crate::TypeInner::Vector {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        } => "dot",
+                        crate::TypeInner::Vector { size, .. } => {
+                            return self.write_dot_product(arg, arg1.unwrap(), size as usize)
+                        }
+                        _ => unreachable!(
+                            "Correct TypeInner for dot product should be already validated"
+                        ),
+                    },
                     Mf::Outer => "outerProduct",
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",

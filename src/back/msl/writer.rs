@@ -309,6 +309,8 @@ pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
     named_expressions: crate::NamedExpressions,
+    /// Set of expressions that need to be baked to avoid unnecessary repetition in output
+    need_bake_expressions: crate::NeedBakeExpressions,
     namer: proc::Namer,
     #[cfg(test)]
     put_expression_stack_pointers: FastHashSet<*const ()>,
@@ -526,6 +528,7 @@ impl<W: Write> Writer<W> {
             out,
             names: FastHashMap::default(),
             named_expressions: crate::NamedExpressions::default(),
+            need_bake_expressions: crate::NeedBakeExpressions::default(),
             namer: proc::Namer::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
@@ -824,6 +827,33 @@ impl<W: Write> Writer<W> {
             write!(self.out, " : DefaultConstructible()")?;
         }
 
+        Ok(())
+    }
+
+    /// Emit code for the arithmetic expression of the dot product.
+    ///
+    fn put_dot_product(
+        &mut self,
+        arg: Handle<crate::Expression>,
+        arg1: Handle<crate::Expression>,
+        size: usize,
+    ) -> BackendResult {
+        write!(self.out, "(")?;
+
+        let arg0_name = &self.named_expressions[&arg];
+        let arg1_name = &self.named_expressions[&arg1];
+
+        // This will print an extra '+' at the beginning but that is fine in msl
+        for index in 0..size {
+            let component = back::COMPONENTS[index];
+            write!(
+                self.out,
+                " + {}.{} * {}.{}",
+                arg0_name, component, arg1_name, component
+            )?;
+        }
+
+        write!(self.out, ")")?;
         Ok(())
     }
 
@@ -1216,7 +1246,18 @@ impl<W: Write> Writer<W> {
                     Mf::Log2 => "log2",
                     Mf::Pow => "pow",
                     // geometry
-                    Mf::Dot => "dot",
+                    Mf::Dot => match *context.resolve_type(arg) {
+                        crate::TypeInner::Vector {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        } => "dot",
+                        crate::TypeInner::Vector { size, .. } => {
+                            return self.put_dot_product(arg, arg1.unwrap(), size as usize)
+                        }
+                        _ => unreachable!(
+                            "Correct TypeInner for dot product should be already validated"
+                        ),
+                    },
                     Mf::Outer => return Err(Error::UnsupportedCall(format!("{:?}", fun))),
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",
@@ -1810,6 +1851,55 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Helper method used to find which expressions of a given function require baking
+    ///
+    /// # Notes
+    /// This function overwrites the contents of `self.need_bake_expressions`
+    fn update_expressions_to_bake(
+        &mut self,
+        func: &crate::Function,
+        info: &valid::FunctionInfo,
+        context: &ExpressionContext,
+    ) {
+        use crate::Expression;
+        self.need_bake_expressions.clear();
+        for expr in func.expressions.iter() {
+            // Expressions whose reference count is above the
+            // threshold should always be stored in temporaries.
+            let expr_info = &info[expr.0];
+            let min_ref_count = func.expressions[expr.0].bake_ref_count();
+            if min_ref_count <= expr_info.ref_count {
+                self.need_bake_expressions.insert(expr.0);
+            }
+            // if the expression is a Dot product with integer arguments,
+            // then the args needs baking as well
+            if let (
+                fun_handle,
+                &Expression::Math {
+                    fun: crate::MathFunction::Dot,
+                    arg,
+                    arg1,
+                    ..
+                },
+            ) = expr
+            {
+                use crate::TypeInner;
+                // check what kind of product this is depending
+                // on the resolve type of the Dot function itself
+                let inner = context.resolve_type(fun_handle);
+                if let TypeInner::Scalar { kind, .. } = *inner {
+                    match kind {
+                        crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                            self.need_bake_expressions.insert(arg);
+                            self.need_bake_expressions.insert(arg1.unwrap());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
     fn start_baking_expression(
         &mut self,
         handle: Handle<crate::Expression>,
@@ -1913,12 +2003,7 @@ impl<W: Write> Writer<W> {
                                 if context.expression.guarded_indices.contains(handle.index()) {
                                     true
                                 } else {
-                                    // Expressions whose reference count is above the
-                                    // threshold should always be stored in temporaries.
-                                    let min_ref_count = context.expression.function.expressions
-                                        [handle]
-                                        .bake_ref_count();
-                                    min_ref_count <= info.ref_count
+                                    self.need_bake_expressions.contains(&handle)
                                 };
 
                             if bake {
@@ -2763,6 +2848,7 @@ impl<W: Write> Writer<W> {
                 result_struct: None,
             };
             self.named_expressions.clear();
+            self.update_expressions_to_bake(fun, fun_info, &context.expression);
             self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
         }
@@ -3226,6 +3312,7 @@ impl<W: Write> Writer<W> {
                 result_struct: Some(&stage_out_name),
             };
             self.named_expressions.clear();
+            self.update_expressions_to_bake(fun, fun_info, &context.expression);
             self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
             if ep_index + 1 != module.entry_points.len() {

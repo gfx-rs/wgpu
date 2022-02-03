@@ -554,13 +554,34 @@ impl<'w> BlockContext<'w> {
                     Mf::Frexp => MathOp::Ext(spirv::GLOp::Frexp),
                     Mf::Ldexp => MathOp::Ext(spirv::GLOp::Ldexp),
                     // geometry
-                    Mf::Dot => MathOp::Custom(Instruction::binary(
-                        spirv::Op::Dot,
-                        result_type_id,
-                        id,
-                        arg0_id,
-                        arg1_id,
-                    )),
+                    Mf::Dot => match *self.fun_info[arg].ty.inner_with(&self.ir_module.types) {
+                        crate::TypeInner::Vector {
+                            kind: crate::ScalarKind::Float,
+                            ..
+                        } => MathOp::Custom(Instruction::binary(
+                            spirv::Op::Dot,
+                            result_type_id,
+                            id,
+                            arg0_id,
+                            arg1_id,
+                        )),
+                        // TODO: consider using integer dot product if VK_KHR_shader_integer_dot_product is available
+                        crate::TypeInner::Vector { size, .. } => {
+                            self.write_dot_product(
+                                id,
+                                result_type_id,
+                                arg0_id,
+                                arg1_id,
+                                size as u32,
+                                block,
+                            );
+                            self.cached[expr_handle] = id;
+                            return Ok(());
+                        }
+                        _ => unreachable!(
+                            "Correct TypeInner for dot product should be already validated"
+                        ),
+                    },
                     Mf::Outer => MathOp::Custom(Instruction::binary(
                         spirv::Op::OuterProduct,
                         result_type_id,
@@ -1120,6 +1141,68 @@ impl<'w> BlockContext<'w> {
         };
 
         Ok(pointer)
+    }
+
+    /// Build the instructions for the arithmetic expression of a dot product
+    fn write_dot_product(
+        &mut self,
+        result_id: Word,
+        result_type_id: Word,
+        arg0_id: Word,
+        arg1_id: Word,
+        size: u32,
+        block: &mut Block,
+    ) {
+        let const_null = self.gen_id();
+        block
+            .body
+            .push(Instruction::constant_null(result_type_id, const_null));
+
+        let mut partial_sum = const_null;
+        let last_component = size - 1;
+        for index in 0..=last_component {
+            // compute the product of the current components
+            let a_id = self.gen_id();
+            block.body.push(Instruction::composite_extract(
+                result_type_id,
+                a_id,
+                arg0_id,
+                &[index],
+            ));
+            let b_id = self.gen_id();
+            block.body.push(Instruction::composite_extract(
+                result_type_id,
+                b_id,
+                arg1_id,
+                &[index],
+            ));
+            let prod_id = self.gen_id();
+            block.body.push(Instruction::binary(
+                spirv::Op::IMul,
+                result_type_id,
+                prod_id,
+                a_id,
+                b_id,
+            ));
+
+            // choose the id for the next sum, depending on current index
+            let id = if index == last_component {
+                result_id
+            } else {
+                self.gen_id()
+            };
+
+            // sum the computed product with the partial sum
+            block.body.push(Instruction::binary(
+                spirv::Op::IAdd,
+                result_type_id,
+                id,
+                partial_sum,
+                prod_id,
+            ));
+            // set the id of the result as the previous partial sum
+            partial_sum = id;
+        }
     }
 
     pub(super) fn write_block(
