@@ -486,12 +486,21 @@ impl<'source> ParsingContext<'source> {
                 let mut block = Block::new();
                 ctx.push_scope();
 
-                let meta =
-                    self.parse_compound_statement(meta, parser, ctx, &mut block, terminator)?;
+                let mut block_terminator = None;
+                let meta = self.parse_compound_statement(
+                    meta,
+                    parser,
+                    ctx,
+                    &mut block,
+                    &mut block_terminator,
+                )?;
 
                 ctx.remove_current_scope();
 
                 body.push(Statement::Block(block), meta);
+                if block_terminator.is_some() {
+                    terminator.get_or_insert(body.len());
+                }
 
                 meta
             }
