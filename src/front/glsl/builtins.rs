@@ -443,14 +443,20 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
         }
         "texelFetch" => {
             // bits layout
-            // bit 0 - dim part 1 - 1D/2D
-            // bit 1 - array
-            // bit 2 - dim part 2 - 3D
+            // bit 0 - array
+            // bit 1 - multisample
+            // bits 2 trough 3 - dims
             //
-            // 0b100 is the latest since 3D arrayed images aren't allowed
-            for bits in 0..(0b101) {
-                let dim = bits & 0b1 | (bits & 0b100) >> 1;
-                let arrayed = bits & 0b10 == 0b10;
+            // 0b1000 is the latest since 3D images aren't allowed to be multisampled or arrayed
+            for bits in 0..=(0b1000) {
+                let arrayed = bits & 0b1 != 0;
+                let multi = bits & 0b10 != 0;
+                let dim = bits >> 2;
+
+                // Multisampled 1d images don't exist
+                if dim == 0b00 && multi {
+                    continue;
+                }
 
                 let image = TypeInner::Image {
                     dim: match dim {
@@ -461,7 +467,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                     arrayed,
                     class: ImageClass::Sampled {
                         kind: Sk::Float,
-                        multi: false,
+                        multi,
                     },
                 };
 
