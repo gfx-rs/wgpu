@@ -6,25 +6,12 @@ use super::{
 };
 use crate::{
     AddressSpace, Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle,
-    Interpolation, LocalVariable, ResourceBinding, ScalarKind, ShaderStage, StorageAccess,
-    SwizzleComponent, Type, TypeInner, VectorSize,
+    Interpolation, LocalVariable, ResourceBinding, ScalarKind, ShaderStage, SwizzleComponent, Type,
+    TypeInner, VectorSize,
 };
 
-macro_rules! qualifier_arm {
-    ($src:expr, $tgt:expr, $meta:expr, $msg:literal, $errors:expr $(,)?) => {{
-        if $tgt.is_some() {
-            $errors.push(Error {
-                kind: ErrorKind::SemanticError($msg.into()),
-                meta: $meta,
-            })
-        }
-
-        $tgt = Some($src);
-    }};
-}
-
-pub struct VarDeclaration<'a> {
-    pub qualifiers: &'a [(TypeQualifier, Span)],
+pub struct VarDeclaration<'a, 'key> {
+    pub qualifiers: &'a mut TypeQualifiers<'key>,
     pub ty: Handle<Type>,
     pub name: Option<String>,
     pub init: Option<Handle<Constant>>,
@@ -412,242 +399,141 @@ impl Parser {
             meta,
         }: VarDeclaration,
     ) -> Result<GlobalOrConstant> {
-        let mut storage = StorageQualifier::AddressSpace(AddressSpace::Private);
-        let mut interpolation = None;
-        let mut set = None;
-        let mut binding = None;
-        let mut location = None;
-        let mut sampling = None;
-        let mut layout = None;
-        let mut precision = None;
-        let mut access = StorageAccess::all();
-
-        for &(ref qualifier, meta) in qualifiers {
-            match *qualifier {
-                TypeQualifier::StorageQualifier(s) => {
-                    if StorageQualifier::AddressSpace(AddressSpace::PushConstant) == storage
-                        && s == StorageQualifier::AddressSpace(AddressSpace::Uniform)
-                    {
-                        // Ignore the Uniform qualifier if the space was already set to PushConstant
-                        continue;
-                    } else if StorageQualifier::AddressSpace(AddressSpace::Private) != storage {
-                        self.errors.push(Error {
-                            kind: ErrorKind::SemanticError(
-                                "Cannot use more than one storage qualifier per declaration".into(),
-                            ),
-                            meta,
-                        });
-                    }
-
-                    storage = s;
-                }
-                TypeQualifier::Interpolation(i) => qualifier_arm!(
-                    i,
-                    interpolation,
-                    meta,
-                    "Cannot use more than one interpolation qualifier per declaration",
-                    self.errors
-                ),
-                TypeQualifier::Binding(r) => qualifier_arm!(
-                    r,
-                    binding,
-                    meta,
-                    "Cannot use more than one binding per declaration",
-                    self.errors
-                ),
-                TypeQualifier::Set(s) => qualifier_arm!(
-                    s,
-                    set,
-                    meta,
-                    "Cannot use more than one binding per declaration",
-                    self.errors
-                ),
-                TypeQualifier::Location(l) => qualifier_arm!(
-                    l,
-                    location,
-                    meta,
-                    "Cannot use more than one binding per declaration",
-                    self.errors
-                ),
-                TypeQualifier::Sampling(s) => qualifier_arm!(
-                    s,
-                    sampling,
-                    meta,
-                    "Cannot use more than one sampling qualifier per declaration",
-                    self.errors
-                ),
-                TypeQualifier::Layout(ref l) => qualifier_arm!(
-                    l,
-                    layout,
-                    meta,
-                    "Cannot use more than one layout qualifier per declaration",
-                    self.errors
-                ),
-                TypeQualifier::Precision(ref p) => qualifier_arm!(
-                    p,
-                    precision,
-                    meta,
-                    "Cannot use more than one precision qualifier per declaration",
-                    self.errors
-                ),
-                TypeQualifier::StorageAccess(a) => access &= a,
-                _ => {
-                    self.errors.push(Error {
-                        kind: ErrorKind::SemanticError("Qualifier not supported in globals".into()),
-                        meta,
-                    });
-                }
-            }
-        }
-
-        match storage {
-            StorageQualifier::AddressSpace(AddressSpace::PushConstant) => {
-                if set.is_some() {
-                    self.errors.push(Error {
-                        kind: ErrorKind::SemanticError(
-                            "set cannot be used to decorate push constant".into(),
-                        ),
-                        meta,
+        let storage = qualifiers.storage.0;
+        let (ret, lookup) = match storage {
+            StorageQualifier::Input | StorageQualifier::Output => {
+                let input = storage == StorageQualifier::Input;
+                // TODO: glslang seems to use a counter for variables without
+                // explicit location (even if that causes collisions)
+                let location = qualifiers
+                    .uint_layout_qualifier("location", &mut self.errors)
+                    .unwrap_or(0);
+                let interpolation = qualifiers.interpolation.take().map(|(i, _)| i).or_else(|| {
+                    let kind = self.module.types[ty].inner.scalar_kind()?;
+                    Some(match kind {
+                        ScalarKind::Float => Interpolation::Perspective,
+                        _ => Interpolation::Flat,
                     })
-                }
-            }
-            StorageQualifier::AddressSpace(AddressSpace::Uniform)
-            | StorageQualifier::AddressSpace(AddressSpace::Storage { .. }) => {
-                if binding.is_none() {
-                    self.errors.push(Error {
-                        kind: ErrorKind::SemanticError(
-                            "uniform/buffer blocks require layout(binding=X)".into(),
-                        ),
-                        meta,
-                    })
-                }
-            }
-            _ => {
-                if set.is_some() || binding.is_some() {
-                    self.errors.push(Error {
-                        kind: ErrorKind::SemanticError(
-                            "set/binding can only be applied to uniform/buffer blocks".into(),
-                        ),
-                        meta,
-                    })
-                }
-            }
-        }
+                });
+                let sampling = qualifiers.sampling.take().map(|(s, _)| s);
 
-        if (sampling.is_some() || interpolation.is_some()) && location.is_none() {
-            return Err(Error {
-                kind: ErrorKind::SemanticError(
-                    "Sampling and interpolation qualifiers can only be used in in/out variables"
-                        .into(),
-                ),
-                meta,
-            });
-        }
+                let handle = self.module.global_variables.append(
+                    GlobalVariable {
+                        name: name.clone(),
+                        space: AddressSpace::Private,
+                        binding: None,
+                        ty,
+                        init,
+                    },
+                    meta,
+                );
 
-        if let Some(location) = location {
-            let input = storage == StorageQualifier::Input;
-            let interpolation = interpolation.or_else(|| {
-                let kind = self.module.types[ty].inner.scalar_kind()?;
-                Some(match kind {
-                    ScalarKind::Float => Interpolation::Perspective,
-                    _ => Interpolation::Flat,
-                })
-            });
-
-            let handle = self.module.global_variables.append(
-                GlobalVariable {
+                let idx = self.entry_args.len();
+                self.entry_args.push(EntryArg {
                     name: name.clone(),
-                    space: AddressSpace::Private,
-                    binding: None,
-                    ty,
-                    init,
-                },
-                meta,
-            );
+                    binding: Binding::Location {
+                        location,
+                        interpolation,
+                        sampling,
+                    },
+                    handle,
+                    storage,
+                });
 
-            let idx = self.entry_args.len();
-            self.entry_args.push(EntryArg {
-                name: name.clone(),
-                binding: Binding::Location {
-                    location,
-                    interpolation,
-                    sampling,
-                },
-                handle,
-                storage,
-            });
-
-            if let Some(name) = name {
                 let lookup = GlobalLookup {
                     kind: GlobalLookupKind::Variable(handle),
                     entry_arg: Some(idx),
                     mutable: !input,
                 };
-                ctx.add_global(self, &name, lookup, body);
 
-                self.global_variables.push((name, lookup));
+                (GlobalOrConstant::Global(handle), lookup)
             }
+            StorageQualifier::Const => {
+                let init = init.ok_or_else(|| Error {
+                    kind: ErrorKind::SemanticError("const values must have an initializer".into()),
+                    meta,
+                })?;
 
-            return Ok(GlobalOrConstant::Global(handle));
-        } else if let StorageQualifier::Const = storage {
-            let init = init.ok_or_else(|| Error {
-                kind: ErrorKind::SemanticError("const values must have an initializer".into()),
-                meta,
-            })?;
-            if let Some(name) = name {
                 let lookup = GlobalLookup {
                     kind: GlobalLookupKind::Constant(init, ty),
                     entry_arg: None,
                     mutable: false,
                 };
-                ctx.add_global(self, &name, lookup, body);
 
-                self.global_variables.push((name, lookup));
+                (GlobalOrConstant::Constant(init), lookup)
             }
-            return Ok(GlobalOrConstant::Constant(init));
-        }
-
-        let space = match self.module.types[ty].inner {
-            TypeInner::Image { .. } => AddressSpace::Handle,
-            TypeInner::Sampler { .. } => AddressSpace::Handle,
-            _ => {
-                if let StorageQualifier::AddressSpace(AddressSpace::Storage { .. }) = storage {
-                    AddressSpace::Storage { access }
-                } else {
-                    match storage {
-                        StorageQualifier::AddressSpace(space) => space,
-                        _ => AddressSpace::Private,
+            StorageQualifier::AddressSpace(mut space) => {
+                match space {
+                    AddressSpace::Storage { ref mut access } => {
+                        if let Some((restricted_access, _)) = qualifiers.storage_acess.take() {
+                            access.remove(restricted_access);
+                        }
                     }
-                }
+                    AddressSpace::Uniform => {
+                        if let TypeInner::Image { .. } | TypeInner::Sampler { .. } =
+                            self.module.types[ty].inner
+                        {
+                            space = AddressSpace::Handle
+                        } else if qualifiers
+                            .none_layout_qualifier("push_constant", &mut self.errors)
+                        {
+                            space = AddressSpace::PushConstant
+                        }
+                    }
+                    AddressSpace::Function => space = AddressSpace::Private,
+                    _ => {}
+                };
+
+                let binding = match space {
+                    AddressSpace::Uniform | AddressSpace::Storage { .. } | AddressSpace::Handle => {
+                        let binding = qualifiers.uint_layout_qualifier("binding", &mut self.errors);
+                        if binding.is_none() {
+                            self.errors.push(Error {
+                                kind: ErrorKind::SemanticError(
+                                    "uniform/buffer blocks require layout(binding=X)".into(),
+                                ),
+                                meta,
+                            });
+                        }
+                        let set = qualifiers.uint_layout_qualifier("set", &mut self.errors);
+                        binding.map(|binding| ResourceBinding {
+                            group: set.unwrap_or(0),
+                            binding,
+                        })
+                    }
+                    _ => None,
+                };
+
+                let handle = self.module.global_variables.append(
+                    GlobalVariable {
+                        name: name.clone(),
+                        space,
+                        binding,
+                        ty,
+                        init,
+                    },
+                    meta,
+                );
+
+                let lookup = GlobalLookup {
+                    kind: GlobalLookupKind::Variable(handle),
+                    entry_arg: None,
+                    mutable: true,
+                };
+
+                (GlobalOrConstant::Global(handle), lookup)
             }
         };
 
-        let handle = self.module.global_variables.append(
-            GlobalVariable {
-                name: name.clone(),
-                space,
-                binding: binding.map(|binding| ResourceBinding {
-                    group: set.unwrap_or(0),
-                    binding,
-                }),
-                ty,
-                init,
-            },
-            meta,
-        );
-
         if let Some(name) = name {
-            let lookup = GlobalLookup {
-                kind: GlobalLookupKind::Variable(handle),
-                entry_arg: None,
-                mutable: true,
-            };
             ctx.add_global(self, &name, lookup, body);
 
             self.global_variables.push((name, lookup));
         }
 
-        Ok(GlobalOrConstant::Global(handle))
+        qualifiers.unused_errors(&mut self.errors);
+
+        Ok(ret)
     }
 
     pub(crate) fn add_local_var(
@@ -666,37 +552,18 @@ impl Parser {
             }
         }
 
-        let mut mutable = true;
-        let mut precision = None;
-
-        for &(ref qualifier, meta) in decl.qualifiers {
-            match *qualifier {
-                TypeQualifier::StorageQualifier(StorageQualifier::Const) => {
-                    if !mutable {
-                        self.errors.push(Error {
-                            kind: ErrorKind::SemanticError(
-                                "Cannot use more than one constant qualifier per declaration"
-                                    .into(),
-                            ),
-                            meta,
-                        })
-                    }
-
-                    mutable = false;
-                }
-                TypeQualifier::Precision(ref p) => qualifier_arm!(
-                    p,
-                    precision,
-                    meta,
-                    "Cannot use more than one precision qualifier per declaration",
-                    self.errors
-                ),
-                _ => self.errors.push(Error {
-                    kind: ErrorKind::SemanticError("Qualifier not supported in locals".into()),
-                    meta,
-                }),
+        let storage = decl.qualifiers.storage;
+        let mutable = match storage.0 {
+            StorageQualifier::AddressSpace(AddressSpace::Function) => true,
+            StorageQualifier::Const => false,
+            _ => {
+                self.errors.push(Error {
+                    kind: ErrorKind::SemanticError("Locals cannot have a storage qualifier".into()),
+                    meta: storage.1,
+                });
+                true
             }
-        }
+        };
 
         let handle = ctx.locals.append(
             LocalVariable {
@@ -711,6 +578,8 @@ impl Parser {
         if let Some(name) = decl.name {
             ctx.add_local_var(name, expr, mutable);
         }
+
+        decl.qualifiers.unused_errors(&mut self.errors);
 
         Ok(expr)
     }

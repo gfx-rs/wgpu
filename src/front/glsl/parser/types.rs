@@ -1,6 +1,6 @@
 use crate::{
     front::glsl::{
-        ast::{StorageQualifier, StructLayout, TypeQualifier},
+        ast::{QualifierKey, QualifierValue, StorageQualifier, StructLayout, TypeQualifiers},
         error::ExpectedToken,
         parser::ParsingContext,
         token::{Token, TokenValue},
@@ -128,11 +128,8 @@ impl<'source> ParsingContext<'source> {
         })
     }
 
-    pub fn parse_type_qualifiers(
-        &mut self,
-        parser: &mut Parser,
-    ) -> Result<Vec<(TypeQualifier, Span)>> {
-        let mut qualifiers = Vec::new();
+    pub fn parse_type_qualifiers<'a>(&mut self, parser: &mut Parser) -> Result<TypeQualifiers<'a>> {
+        let mut qualifiers = TypeQualifiers::default();
 
         while self.peek_type_qualifier(parser) {
             let token = self.bump(parser)?;
@@ -143,31 +140,104 @@ impl<'source> ParsingContext<'source> {
                 continue;
             }
 
-            qualifiers.push((
-                match token.value {
-                    TokenValue::Interpolation(i) => TypeQualifier::Interpolation(i),
-                    TokenValue::Const => TypeQualifier::StorageQualifier(StorageQualifier::Const),
-                    TokenValue::In => TypeQualifier::StorageQualifier(StorageQualifier::Input),
-                    TokenValue::Out => TypeQualifier::StorageQualifier(StorageQualifier::Output),
-                    TokenValue::Uniform => TypeQualifier::StorageQualifier(
-                        StorageQualifier::AddressSpace(AddressSpace::Uniform),
-                    ),
-                    TokenValue::Shared => TypeQualifier::StorageQualifier(
-                        StorageQualifier::AddressSpace(AddressSpace::WorkGroup),
-                    ),
-                    TokenValue::Buffer => TypeQualifier::StorageQualifier(
-                        StorageQualifier::AddressSpace(AddressSpace::Storage {
-                            access: crate::StorageAccess::default(),
-                        }),
-                    ),
-                    TokenValue::Sampling(s) => TypeQualifier::Sampling(s),
-                    TokenValue::PrecisionQualifier(p) => TypeQualifier::Precision(p),
-                    TokenValue::StorageAccess(access) => TypeQualifier::StorageAccess(access),
-                    TokenValue::Restrict => continue,
-                    _ => unreachable!(),
-                },
-                token.meta,
-            ))
+            qualifiers.span.subsume(token.meta);
+
+            match token.value {
+                TokenValue::Interpolation(i) => {
+                    if qualifiers.interpolation.is_some() {
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Cannot use more than one interpolation qualifier per declaration"
+                                    .into(),
+                            ),
+                            meta: token.meta,
+                        })
+                    }
+
+                    qualifiers.interpolation = Some((i, token.meta));
+                }
+                TokenValue::Const
+                | TokenValue::In
+                | TokenValue::Out
+                | TokenValue::Uniform
+                | TokenValue::Shared
+                | TokenValue::Buffer => {
+                    let storage = match token.value {
+                        TokenValue::Const => StorageQualifier::Const,
+                        TokenValue::In => StorageQualifier::Input,
+                        TokenValue::Out => StorageQualifier::Output,
+                        TokenValue::Uniform => {
+                            StorageQualifier::AddressSpace(AddressSpace::Uniform)
+                        }
+                        TokenValue::Shared => {
+                            StorageQualifier::AddressSpace(AddressSpace::WorkGroup)
+                        }
+                        TokenValue::Buffer => {
+                            StorageQualifier::AddressSpace(AddressSpace::Storage {
+                                access: crate::StorageAccess::all(),
+                            })
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    if StorageQualifier::AddressSpace(AddressSpace::Function)
+                        != qualifiers.storage.0
+                    {
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Cannot use more than one storage qualifier per declaration".into(),
+                            ),
+                            meta: token.meta,
+                        });
+                    }
+
+                    qualifiers.storage = (storage, token.meta);
+                }
+                TokenValue::Sampling(s) => {
+                    if qualifiers.sampling.is_some() {
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Cannot use more than one sampling qualifier per declaration"
+                                    .into(),
+                            ),
+                            meta: token.meta,
+                        })
+                    }
+
+                    qualifiers.sampling = Some((s, token.meta));
+                }
+                TokenValue::PrecisionQualifier(p) => {
+                    if qualifiers.interpolation.is_some() {
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "Cannot use more than one precision qualifier per declaration"
+                                    .into(),
+                            ),
+                            meta: token.meta,
+                        })
+                    }
+
+                    qualifiers.precision = Some((p, token.meta));
+                }
+                TokenValue::StorageAccess(access) => {
+                    let storage_access = qualifiers
+                        .storage_acess
+                        .get_or_insert((crate::StorageAccess::empty(), Span::default()));
+                    if storage_access.0.contains(access) {
+                        parser.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                "The same memory qualifier can only be used once".into(),
+                            ),
+                            meta: token.meta,
+                        })
+                    }
+
+                    storage_access.0 |= access;
+                    storage_access.1.subsume(token.meta);
+                }
+                TokenValue::Restrict => continue,
+                _ => unreachable!(),
+            };
         }
 
         Ok(qualifiers)
@@ -176,11 +246,11 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_layout_qualifier_id_list(
         &mut self,
         parser: &mut Parser,
-        qualifiers: &mut Vec<(TypeQualifier, Span)>,
+        qualifiers: &mut TypeQualifiers,
     ) -> Result<()> {
         self.expect(parser, TokenValue::LeftParen)?;
         loop {
-            self.parse_layout_qualifier_id(parser, qualifiers)?;
+            self.parse_layout_qualifier_id(parser, &mut qualifiers.layout_qualifiers)?;
 
             if self.bump_if(parser, TokenValue::Comma).is_some() {
                 continue;
@@ -188,7 +258,8 @@ impl<'source> ParsingContext<'source> {
 
             break;
         }
-        self.expect(parser, TokenValue::RightParen)?;
+        let token = self.expect(parser, TokenValue::RightParen)?;
+        qualifiers.span.subsume(token.meta);
 
         Ok(())
     }
@@ -196,7 +267,7 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_layout_qualifier_id(
         &mut self,
         parser: &mut Parser,
-        qualifiers: &mut Vec<(TypeQualifier, Span)>,
+        qualifiers: &mut crate::FastHashMap<QualifierKey, (QualifierValue, Span)>,
     ) -> Result<()> {
         // layout_qualifier_id:
         //     IDENTIFIER
@@ -205,60 +276,38 @@ impl<'source> ParsingContext<'source> {
         let mut token = self.bump(parser)?;
         match token.value {
             TokenValue::Identifier(name) => {
-                if self.bump_if(parser, TokenValue::Assign).is_some() {
-                    let (value, end_meta) = self.parse_uint_constant(parser)?;
-                    token.meta.subsume(end_meta);
+                let (key, value) = match name.as_str() {
+                    "std140" => (
+                        QualifierKey::Layout,
+                        QualifierValue::Layout(StructLayout::Std140),
+                    ),
+                    "std430" => (
+                        QualifierKey::Layout,
+                        QualifierValue::Layout(StructLayout::Std430),
+                    ),
+                    _ => {
+                        let key = QualifierKey::String(name.into());
+                        let value = if self.bump_if(parser, TokenValue::Assign).is_some() {
+                            let (value, end_meta) = match self.parse_uint_constant(parser) {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    parser.errors.push(e);
+                                    (0, Span::default())
+                                }
+                            };
+                            token.meta.subsume(end_meta);
 
-                    qualifiers.push((
-                        match name.as_str() {
-                            "location" => TypeQualifier::Location(value),
-                            "set" => TypeQualifier::Set(value),
-                            "binding" => TypeQualifier::Binding(value),
-                            "local_size_x" => TypeQualifier::WorkGroupSize(0, value),
-                            "local_size_y" => TypeQualifier::WorkGroupSize(1, value),
-                            "local_size_z" => TypeQualifier::WorkGroupSize(2, value),
-                            _ => {
-                                parser.errors.push(Error {
-                                    kind: ErrorKind::UnknownLayoutQualifier(name),
-                                    meta: token.meta,
-                                });
-                                return Ok(());
-                            }
-                        },
-                        token.meta,
-                    ))
-                } else {
-                    qualifiers.push((
-                        match name.as_str() {
-                            "push_constant" => {
-                                qualifiers.push((
-                                    TypeQualifier::Layout(StructLayout::Std430),
-                                    token.meta,
-                                ));
-                                qualifiers.push((
-                                    TypeQualifier::StorageQualifier(
-                                        StorageQualifier::AddressSpace(AddressSpace::PushConstant),
-                                    ),
-                                    token.meta,
-                                ));
-                                return Ok(());
-                            }
-                            "std140" => TypeQualifier::Layout(StructLayout::Std140),
-                            "std430" => TypeQualifier::Layout(StructLayout::Std430),
-                            "early_fragment_tests" => TypeQualifier::EarlyFragmentTests,
-                            _ => {
-                                parser.errors.push(Error {
-                                    kind: ErrorKind::UnknownLayoutQualifier(name),
-                                    meta: token.meta,
-                                });
-                                return Ok(());
-                            }
-                        },
-                        token.meta,
-                    ));
+                            QualifierValue::Uint(value)
+                        } else {
+                            QualifierValue::None
+                        };
+
+                        (key, value)
+                    }
                 };
+
+                qualifiers.insert(key, (value, token.meta));
             }
-            // TODO: handle Shared?
             _ => parser.errors.push(Error {
                 kind: ErrorKind::InvalidToken(token.value, vec![ExpectedToken::Identifier]),
                 meta: token.meta,

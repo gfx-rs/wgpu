@@ -4,6 +4,10 @@ struct Mat4x3_ {
     mz: vec4<f32>;
 };
 
+struct FragmentOutput {
+    @location(0) o_color: vec4<f32>;
+};
+
 var<private> o_color: vec4<f32>;
 
 fn Fma(d: ptr<function, Mat4x3_>, m: Mat4x3_, s: f32) {
@@ -38,7 +42,8 @@ fn main_1() {
 }
 
 @stage(fragment) 
-fn main() {
+fn main() -> FragmentOutput {
     main_1();
-    return;
+    let _e3 = o_color;
+    return FragmentOutput(_e3);
 }

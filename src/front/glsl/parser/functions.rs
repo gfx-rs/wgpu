@@ -396,7 +396,7 @@ impl<'source> ParsingContext<'source> {
                 if self.bump_if(parser, TokenValue::Semicolon).is_none() {
                     let (expr, expr_meta) =
                         if self.peek_type_name(parser) || self.peek_type_qualifier(parser) {
-                            let qualifiers = self.parse_type_qualifiers(parser)?;
+                            let mut qualifiers = self.parse_type_qualifiers(parser)?;
                             let (ty, mut meta) = self.parse_type_non_void(parser)?;
                             let name = self.expect_ident(parser)?.0;
 
@@ -407,7 +407,7 @@ impl<'source> ParsingContext<'source> {
                             meta.subsume(end_meta);
 
                             let decl = VarDeclaration {
-                                qualifiers: &qualifiers,
+                                qualifiers: &mut qualifiers,
                                 ty,
                                 name: Some(name),
                                 init: None,

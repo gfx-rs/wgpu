@@ -1,8 +1,8 @@
 use crate::{
     front::glsl::{
         ast::{
-            GlobalLookup, GlobalLookupKind, Precision, StorageQualifier, StructLayout,
-            TypeQualifier,
+            GlobalLookup, GlobalLookupKind, Precision, QualifierKey, QualifierValue,
+            StorageQualifier, StructLayout, TypeQualifiers,
         },
         context::{Context, ExprPos},
         error::ExpectedToken,
@@ -249,7 +249,7 @@ impl<'source> ParsingContext<'source> {
         //    type_qualifier IDENTIFIER identifier_list SEMICOLON
 
         if self.peek_type_qualifier(parser) || self.peek_type_name(parser) {
-            let qualifiers = self.parse_type_qualifiers(parser)?;
+            let mut qualifiers = self.parse_type_qualifiers(parser)?;
 
             if self.peek_type_name(parser) {
                 // This branch handles variables and function prototypes and if
@@ -361,7 +361,7 @@ impl<'source> ParsingContext<'source> {
                                 parser,
                                 ctx,
                                 body,
-                                &qualifiers,
+                                &mut qualifiers,
                                 ty_name,
                                 token.meta,
                             )
@@ -377,33 +377,28 @@ impl<'source> ParsingContext<'source> {
                         }
                     }
                     TokenValue::Semicolon => {
-                        let mut meta_all = token.meta;
-                        for &(ref qualifier, meta) in qualifiers.iter() {
-                            meta_all.subsume(meta);
-                            match *qualifier {
-                                TypeQualifier::WorkGroupSize(i, value) => {
-                                    parser.meta.workgroup_size[i] = value
-                                }
-                                TypeQualifier::EarlyFragmentTests => {
-                                    parser.meta.early_fragment_tests = true;
-                                }
-                                TypeQualifier::StorageQualifier(_) => {
-                                    // TODO: Maybe add some checks here
-                                    // This is needed because of cases like
-                                    // layout(early_fragment_tests) in;
-                                }
-                                _ => {
-                                    parser.errors.push(Error {
-                                        kind: ErrorKind::SemanticError(
-                                            "Qualifier not supported as standalone".into(),
-                                        ),
-                                        meta,
-                                    });
-                                }
-                            }
+                        if let Some(value) =
+                            qualifiers.uint_layout_qualifier("local_size_x", &mut parser.errors)
+                        {
+                            parser.meta.workgroup_size[0] = value;
+                        }
+                        if let Some(value) =
+                            qualifiers.uint_layout_qualifier("local_size_y", &mut parser.errors)
+                        {
+                            parser.meta.workgroup_size[1] = value;
+                        }
+                        if let Some(value) =
+                            qualifiers.uint_layout_qualifier("local_size_z", &mut parser.errors)
+                        {
+                            parser.meta.workgroup_size[2] = value;
                         }
 
-                        Ok(Some(meta_all))
+                        parser.meta.early_fragment_tests |= qualifiers
+                            .none_layout_qualifier("early_fragment_tests", &mut parser.errors);
+
+                        qualifiers.unused_errors(&mut parser.errors);
+
+                        Ok(Some(qualifiers.span))
                     }
                     _ => Err(Error {
                         kind: ErrorKind::InvalidToken(
@@ -471,27 +466,22 @@ impl<'source> ParsingContext<'source> {
         parser: &mut Parser,
         ctx: &mut Context,
         body: &mut Block,
-        qualifiers: &[(TypeQualifier, Span)],
+        qualifiers: &mut TypeQualifiers,
         ty_name: String,
         meta: Span,
     ) -> Result<Span> {
-        let mut storage = None;
-        let mut layout = None;
-
-        for &(ref qualifier, _) in qualifiers {
-            match *qualifier {
-                TypeQualifier::StorageQualifier(StorageQualifier::AddressSpace(c)) => {
-                    storage = Some(c)
+        let layout = match qualifiers.layout_qualifiers.remove(&QualifierKey::Layout) {
+            Some((QualifierValue::Layout(l), _)) => l,
+            None => {
+                if let StorageQualifier::AddressSpace(AddressSpace::Storage { .. }) =
+                    qualifiers.storage.0
+                {
+                    StructLayout::Std430
+                } else {
+                    StructLayout::Std140
                 }
-                TypeQualifier::Layout(l) => layout = Some(l),
-                _ => continue,
             }
-        }
-
-        let layout = match (layout, storage) {
-            (Some(layout), _) => layout,
-            (None, Some(AddressSpace::Storage { .. })) => StructLayout::Std430,
-            _ => StructLayout::Std140,
+            _ => unreachable!(),
         };
 
         let mut members = Vec::new();

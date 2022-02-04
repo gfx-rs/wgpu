@@ -2,6 +2,10 @@ struct BST {
     data: i32;
 };
 
+struct FragmentOutput {
+    @location(0) o_color: vec4<f32>;
+};
+
 var<private> global: f32;
 var<private> o_color: vec4<f32>;
 
@@ -212,7 +216,8 @@ fn main_1() {
 }
 
 @stage(fragment) 
-fn main() {
+fn main() -> FragmentOutput {
     main_1();
-    return;
+    let _e5 = o_color;
+    return FragmentOutput(_e5);
 }

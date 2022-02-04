@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use super::{builtins::MacroCall, context::ExprPos, Span};
 use crate::{
@@ -134,19 +134,118 @@ pub enum HirExprKind {
     },
 }
 
+#[derive(Debug, Hash, PartialEq, Eq)]
+pub enum QualifierKey<'a> {
+    String(Cow<'a, str>),
+    /// Used for `std140` and `std430` layout qualifiers
+    Layout,
+}
+
 #[derive(Debug)]
-pub enum TypeQualifier {
-    StorageQualifier(StorageQualifier),
-    Interpolation(Interpolation),
-    Set(u32),
-    Binding(u32),
-    Location(u32),
-    WorkGroupSize(usize, u32),
-    Sampling(Sampling),
+pub enum QualifierValue {
+    None,
+    Uint(u32),
     Layout(StructLayout),
-    Precision(Precision),
-    EarlyFragmentTests,
-    StorageAccess(StorageAccess),
+}
+
+#[derive(Debug, Default)]
+pub struct TypeQualifiers<'a> {
+    pub span: Span,
+    pub storage: (StorageQualifier, Span),
+    pub interpolation: Option<(Interpolation, Span)>,
+    pub precision: Option<(Precision, Span)>,
+    pub sampling: Option<(Sampling, Span)>,
+    pub storage_acess: Option<(StorageAccess, Span)>,
+    pub layout_qualifiers: crate::FastHashMap<QualifierKey<'a>, (QualifierValue, Span)>,
+}
+
+impl<'a> TypeQualifiers<'a> {
+    /// Appends `errors` with errors for all unused qualifiers
+    pub fn unused_errors(&self, errors: &mut Vec<super::Error>) {
+        if let Some((_, meta)) = self.interpolation {
+            errors.push(super::Error {
+                kind: super::ErrorKind::SemanticError(
+                    "Interpolation qualifiers can only be used in in/out variables".into(),
+                ),
+                meta,
+            });
+        }
+
+        if let Some((_, meta)) = self.sampling {
+            errors.push(super::Error {
+                kind: super::ErrorKind::SemanticError(
+                    "Sampling qualifiers can only be used in in/out variables".into(),
+                ),
+                meta,
+            });
+        }
+
+        if let Some((_, meta)) = self.storage_acess {
+            errors.push(super::Error {
+                kind: super::ErrorKind::SemanticError(
+                    "Memory qualifiers can only be used in storage variables".into(),
+                ),
+                meta,
+            });
+        }
+
+        for &(_, meta) in self.layout_qualifiers.values() {
+            errors.push(super::Error {
+                kind: super::ErrorKind::SemanticError("Unexpected qualifier".into()),
+                meta,
+            });
+        }
+    }
+
+    /// Removes the layout qualifier with `name`, if it exists and adds an error if it isn't
+    /// a [`QualifierValue::Uint`]
+    pub fn uint_layout_qualifier(
+        &mut self,
+        name: &'a str,
+        errors: &mut Vec<super::Error>,
+    ) -> Option<u32> {
+        match self
+            .layout_qualifiers
+            .remove(&QualifierKey::String(name.into()))
+        {
+            Some((QualifierValue::Uint(v), _)) => Some(v),
+            Some((_, meta)) => {
+                errors.push(super::Error {
+                    kind: super::ErrorKind::SemanticError("Qualifier expects a uint value".into()),
+                    meta,
+                });
+                // Return a dummy value instead of `None` to differentiate from
+                // the qualifier not existing, since some parts might require the
+                // qualifier to exist and throwing another error that it doesn't
+                // exist would be unhelpful
+                Some(0)
+            }
+            _ => None,
+        }
+    }
+
+    /// Removes the layout qualifier with `name`, if it exists and adds an error if it isn't
+    /// a [`QualifierValue::None`]
+    pub fn none_layout_qualifier(&mut self, name: &'a str, errors: &mut Vec<super::Error>) -> bool {
+        match self
+            .layout_qualifiers
+            .remove(&QualifierKey::String(name.into()))
+        {
+            Some((QualifierValue::None, _)) => true,
+            Some((_, meta)) => {
+                errors.push(super::Error {
+                    kind: super::ErrorKind::SemanticError(
+                        "Qualifier doesn't expect a value".into(),
+                    ),
+                    meta,
+                });
+                // Return a `true` to since the qualifier is defined and adding
+                // another error for it not being defined would be unhelpful
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +266,12 @@ pub enum StorageQualifier {
     Input,
     Output,
     Const,
+}
+
+impl Default for StorageQualifier {
+    fn default() -> Self {
+        StorageQualifier::AddressSpace(AddressSpace::Function)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

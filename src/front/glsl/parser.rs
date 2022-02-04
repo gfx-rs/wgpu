@@ -1,5 +1,5 @@
 use super::{
-    ast::{FunctionKind, Profile, TypeQualifier},
+    ast::{FunctionKind, Profile, TypeQualifiers},
     context::{Context, ExprPos},
     error::ExpectedToken,
     error::{Error, ErrorKind},
@@ -366,15 +366,15 @@ impl Parser {
     }
 }
 
-pub struct DeclarationContext<'ctx> {
-    qualifiers: Vec<(TypeQualifier, Span)>,
+pub struct DeclarationContext<'ctx, 'qualifiers> {
+    qualifiers: TypeQualifiers<'qualifiers>,
     external: bool,
 
     ctx: &'ctx mut Context,
     body: &'ctx mut Block,
 }
 
-impl<'ctx> DeclarationContext<'ctx> {
+impl<'ctx, 'qualifiers> DeclarationContext<'ctx, 'qualifiers> {
     fn add_var(
         &mut self,
         parser: &mut Parser,
@@ -384,7 +384,7 @@ impl<'ctx> DeclarationContext<'ctx> {
         meta: Span,
     ) -> Result<Handle<Expression>> {
         let decl = VarDeclaration {
-            qualifiers: &self.qualifiers,
+            qualifiers: &mut self.qualifiers,
             ty,
             name: Some(name),
             init,
