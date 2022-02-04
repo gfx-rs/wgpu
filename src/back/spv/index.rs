@@ -315,7 +315,7 @@ impl<'w> BlockContext<'w> {
     /// Emit code for bounds checks for an array, vector, or matrix access.
     ///
     /// This implements either `index_bounds_check_policy` or
-    /// `buffer_bounds_check_policy`, depending on the storage class of the
+    /// `buffer_bounds_check_policy`, depending on the address space of the
     /// pointer being accessed.
     ///
     /// Return a `BoundsCheckResult` indicating how the index should be

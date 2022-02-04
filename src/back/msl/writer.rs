@@ -392,10 +392,9 @@ fn needs_array_length(ty: Handle<crate::Type>, arena: &crate::UniqueArena<crate:
 }
 
 impl crate::AddressSpace {
-    /// Returns true for storage classes, for which the global
-    /// variables are passed in function arguments.
-    /// These arguments need to be passed through any functions
-    /// called from the entry point.
+    /// Returns true if global variables in this address space are
+    /// passed in function arguments. These arguments need to be
+    /// passed through any functions called from the entry point.
     fn needs_pass_through(&self) -> bool {
         match *self {
             crate::AddressSpace::Uniform
@@ -1695,8 +1694,8 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
         is_scoped: bool,
     ) -> BackendResult {
-        // Since access chains never cross storage classes, we can just check the index
-        // bounds check policy once at the top.
+        // Since access chains never cross between address spaces, we can just
+        // check the index bounds check policy once at the top.
         let policy = context.choose_bounds_check_policy(pointer);
         if policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
             && self.put_bounds_checks(

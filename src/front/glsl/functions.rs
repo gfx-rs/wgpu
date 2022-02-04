@@ -811,9 +811,9 @@ impl Parser {
                         ),
                         handle,
                     ),
-                    // If the argument is a pointer whose address space isn't `Function` an
-                    // indirection trough a local variable is needed to align the storage
-                    // classes of the call argument and the overload parameter
+                    // If the argument is a pointer whose address space isn't `Function`, an
+                    // indirection through a local variable is needed to align the address
+                    // spaces of the call argument and the overload parameter.
                     TypeInner::Pointer { base, space } if space != AddressSpace::Function => (
                         base,
                         ctx.add_expression(

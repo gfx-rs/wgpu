@@ -1298,9 +1298,10 @@ impl Writer {
 
             pointer_type_id
         } else {
-            // This is a global variable in a Storage class. The only way it could
-            // have `global_needs_wrapper() == false` is if it has a runtime-sized array.
-            // In this case, we need to decorate it with Block.
+            // This is a global variable in the Storage address space. The only
+            // way it could have `global_needs_wrapper() == false` is if it has
+            // a runtime-sized array. In this case, we need to decorate it with
+            // Block.
             if let crate::AddressSpace::Storage { .. } = global_variable.space {
                 self.decorate(inner_type_id, Decoration::Block, &[]);
             }

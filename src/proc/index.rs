@@ -72,7 +72,7 @@ pub struct BoundsCheckPolicies {
 
     /// How should the generated code handle array, vector, or matrix indices
     /// that are out of range, when those values live in a [`GlobalVariable`] in
-    /// the [`Storage`] or [`Uniform`] storage classes?
+    /// the [`Storage`] or [`Uniform`] address spaces?
     ///
     /// Some graphics hardware provides "robust buffer access", a feature that
     /// ensures that using a pointer cannot access memory outside the 'buffer'
@@ -143,7 +143,7 @@ impl BoundsCheckPolicies {
         match info[access].ty.inner_with(types).pointer_space() {
             Some(crate::AddressSpace::Storage { access: _ })
             | Some(crate::AddressSpace::Uniform) => self.buffer,
-            // This covers other storage classes, but also accessing vectors and
+            // This covers other address spaces, but also accessing vectors and
             // matrices by value, where no pointer is involved.
             _ => self.index,
         }
