@@ -23,6 +23,8 @@ kernel void main_(
   threadgroup type_2& wg
 , threadgroup metal::atomic_uint& at_1
 , device Foo& alignment [[user(fake0)]]
+, device type_6& dummy [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     float Foo_1 = 1.0;
     bool at = true;
@@ -30,6 +32,7 @@ kernel void main_(
     wg.inner[3] = _e9;
     float _e14 = metal::float3(alignment.v3_).x;
     wg.inner[2] = _e14;
+    wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
     return;
 }

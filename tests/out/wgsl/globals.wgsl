@@ -23,6 +23,7 @@ fn main() {
     wg[3] = _e9;
     let _e14 = alignment.v3_.x;
     wg[2] = _e14;
+    wg[1] = f32(arrayLength((&dummy)));
     atomicStore((&at_1), 2u);
     return;
 }

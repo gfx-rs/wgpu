@@ -11,6 +11,13 @@ ByteAddressBuffer alignment : register(t1);
 ByteAddressBuffer dummy : register(t2);
 cbuffer float_vecs : register(b3) { float4 float_vecs[20]; }
 
+uint NagaBufferLength(ByteAddressBuffer buffer)
+{
+    uint ret;
+    buffer.GetDimensions(ret);
+    return ret;
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
@@ -21,6 +28,7 @@ void main()
     wg[3] = _expr9;
     float _expr14 = asfloat(alignment.Load(0+0));
     wg[2] = _expr14;
+    wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
     at_1 = 2u;
     return;
 }

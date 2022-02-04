@@ -23,6 +23,7 @@ var<uniform> float_vecs: array<vec4<f32>, 20>;
 fn main() {
     wg[3] = alignment.v1;
     wg[2] = alignment.v3.x;
+    wg[1] = f32(arrayLength(&dummy));
     atomicStore(&at, 2u);
 
     // Valid, Foo and at is in function scope

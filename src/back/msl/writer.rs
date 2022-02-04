@@ -1397,6 +1397,7 @@ impl<W: Write> Writer<W> {
                             _ => return Err(Error::Validation),
                         }
                     }
+                    crate::Expression::GlobalVariable(handle) => handle,
                     _ => return Err(Error::Validation),
                 };
 

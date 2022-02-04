@@ -432,6 +432,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
             match func_ctx.expressions[handle] {
                 crate::Expression::ArrayLength(expr) => {
                     let global_expr = match func_ctx.expressions[expr] {
+                        crate::Expression::GlobalVariable(_) => expr,
                         crate::Expression::AccessIndex { base, index: _ } => base,
                         ref other => unreachable!("Array length of {:?}", other),
                     };

@@ -652,7 +652,8 @@ pub enum TypeInner {
     /// An `Array` is [`SIZED`] unless its `size` is [`Dynamic`].
     /// Dynamically-sized arrays may only appear in a few situations:
     ///
-    /// -   They may appear as the last member of a [`Struct`].
+    /// -   They may appear as the type of a [`GlobalVariable`], or as the last
+    ///     member of a [`Struct`].
     ///
     /// -   They may appear as the base type of a [`Pointer`]. An
     ///     [`AccessIndex`] expression referring to a struct's final

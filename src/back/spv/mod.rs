@@ -433,12 +433,25 @@ impl recyclable::Recyclable for CachedExpressions {
 
 #[derive(Clone)]
 struct GlobalVariable {
-    /// ID of the variable. Not really used.
+    /// ID of the OpVariable that declares the global.
+    ///
+    /// If you need the variable's value, use [`access_id`] instead of this
+    /// field. If we wrapped the Naga IR `GlobalVariable`'s type in a struct to
+    /// comply with Vulkan's requirements, then this points to the `OpVariable`
+    /// with the synthesized struct type, whereas `access_id` points to the
+    /// field of said struct that holds the variable's actual value.
+    ///
+    /// This is used to compute the `access_id` pointer in function prologues,
+    /// and used for `ArrayLength` expressions, which do need the struct.
+    ///
+    /// [`access_id`]: GlobalVariable::access_id
     var_id: Word,
+
     /// For `AddressSpace::Handle` variables, this ID is recorded in the function
     /// prelude block (and reset before every function) as `OpLoad` of the variable.
     /// It is then used for all the global ops, such as `OpImageSample`.
     handle_id: Word,
+
     /// Actual ID used to access this variable.
     /// For wrapped buffer variables, this ID is `OpAccessChain` into the
     /// wrapper. Otherwise, the same as `var_id`.
