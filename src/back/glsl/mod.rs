@@ -418,7 +418,7 @@ pub struct Writer<'a, W> {
     /// Set of expressions that have associated temporary variables.
     named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
-    need_bake_expressions: crate::NeedBakeExpressions,
+    need_bake_expressions: back::NeedBakeExpressions,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -469,8 +469,8 @@ impl<'a, W: Write> Writer<'a, W> {
             entry_point_idx: ep_idx as u16,
 
             block_id: IdGenerator::default(),
-            named_expressions: crate::NamedExpressions::default(),
-            need_bake_expressions: crate::NeedBakeExpressions::default(),
+            named_expressions: Default::default(),
+            need_bake_expressions: Default::default(),
         };
 
         // Find all features required to print this module
@@ -1561,7 +1561,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
                     } else if self.need_bake_expressions.contains(&handle) {
-                        Some(format!("{}{}", super::BAKE_PREFIX, handle.index()))
+                        Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
                     } else {
                         None
                     };
@@ -1886,7 +1886,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 write!(self.out, "{}", level)?;
                 if let Some(expr) = result {
-                    let name = format!("{}{}", super::BAKE_PREFIX, expr.index());
+                    let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
                     let result = self.module.functions[function].result.as_ref().unwrap();
                     self.write_type(result.ty)?;
                     write!(self.out, " {} = ", name)?;
@@ -1914,7 +1914,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{}", level)?;
-                let res_name = format!("{}{}", super::BAKE_PREFIX, result.index());
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
                 self.write_value_type(res_ty)?;
                 write!(self.out, " {} = ", res_name)?;
@@ -2478,7 +2478,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, "(")?;
 
                         self.write_expr(left, ctx)?;
-                        write!(self.out, " {} ", super::binary_operation_str(op))?;
+                        write!(self.out, " {} ", back::binary_operation_str(op))?;
                         self.write_expr(right, ctx)?;
 
                         write!(self.out, ")")?;

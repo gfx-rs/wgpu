@@ -233,7 +233,6 @@ pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
 
 /// Map of expressions that have associated variable names
 pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
-pub(crate) type NeedBakeExpressions = FastHashSet<Handle<Expression>>;
 
 /// Early fragment tests.
 ///

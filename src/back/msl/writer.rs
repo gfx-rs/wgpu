@@ -310,7 +310,7 @@ pub struct Writer<W> {
     names: FastHashMap<NameKey, String>,
     named_expressions: crate::NamedExpressions,
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
-    need_bake_expressions: crate::NeedBakeExpressions,
+    need_bake_expressions: back::NeedBakeExpressions,
     namer: proc::Namer,
     #[cfg(test)]
     put_expression_stack_pointers: FastHashSet<*const ()>,
@@ -526,8 +526,8 @@ impl<W: Write> Writer<W> {
         Writer {
             out,
             names: FastHashMap::default(),
-            named_expressions: crate::NamedExpressions::default(),
-            need_bake_expressions: crate::NeedBakeExpressions::default(),
+            named_expressions: Default::default(),
+            need_bake_expressions: Default::default(),
             namer: proc::Namer::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
