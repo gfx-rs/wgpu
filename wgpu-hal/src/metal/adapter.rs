@@ -718,8 +718,12 @@ impl super::PrivateCapabilities {
             format_min_srgb_channels: if os_is_mac { 4 } else { 1 },
             format_b5: !os_is_mac,
             format_bc: os_is_mac,
-            format_eac_etc: !os_is_mac,
-            format_astc: Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES),
+            format_eac_etc: !os_is_mac
+                // M1 in macOS supports EAC/ETC2
+                || (family_check && device.supports_family(MTLGPUFamily::Apple7)),
+            format_astc: Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES)
+                // A13/A14/M1 and later always support ASTC
+                || (family_check && device.supports_family(MTLGPUFamily::Apple6)),
             format_any8_unorm_srgb_all: Self::supports_any(device, ANY8_UNORM_SRGB_ALL),
             format_any8_unorm_srgb_no_write: !Self::supports_any(device, ANY8_UNORM_SRGB_ALL)
                 && !os_is_mac,
@@ -1010,7 +1014,6 @@ impl super::PrivateCapabilities {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::TEXTURE_COMPRESSION_BC
             | F::INDIRECT_FIRST_INSTANCE
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
@@ -1019,6 +1022,10 @@ impl super::PrivateCapabilities {
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM;
+
+        features.set(F::TEXTURE_COMPRESSION_ASTC_LDR, self.format_astc);
+        features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
+        features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
 
