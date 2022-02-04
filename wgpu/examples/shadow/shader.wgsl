@@ -50,7 +50,7 @@ struct Light {
 };
 
 struct Lights {
-    data: @stride(96) array<Light>;
+    data: array<Light>;
 };
 
 // Used when storage types are not supported

@@ -14,7 +14,7 @@ struct SimParams {
 };
 
 struct Particles {
-  particles : @stride(16) array<Particle>;
+  particles : array<Particle>;
 };
 
 @group(0) @binding(0) var<uniform> params : SimParams;
