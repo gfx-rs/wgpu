@@ -292,9 +292,17 @@ impl framework::Example for Example {
 
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let num_entities = 1 + cube_descs.len() as wgpu::BufferAddress;
-        let uniform_alignment =
-            device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
-        assert!(entity_uniform_size <= uniform_alignment);
+        // Make the `uniform_alignment` >= `entity_uniform_size` and aligned to `min_uniform_buffer_offset_alignment`.
+        let uniform_alignment = {
+            let alignment =
+                device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
+            let rem = entity_uniform_size % alignment;
+            if rem != 0 {
+                entity_uniform_size + alignment - rem
+            } else {
+                entity_uniform_size
+            }
+        };
         // Note: dynamic uniform offsets also have to be aligned to `Limits::min_uniform_buffer_offset_alignment`.
         let entity_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,

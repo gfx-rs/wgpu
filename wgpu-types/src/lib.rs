@@ -416,7 +416,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const POLYGON_MODE_LINE= 1 << 28;
+        const POLYGON_MODE_LINE = 1 << 28;
         /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
         ///
         /// This allows only drawing the vertices of polygons/triangles instead of filled
