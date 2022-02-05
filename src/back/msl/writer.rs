@@ -2859,13 +2859,19 @@ impl<W: Write> Writer<W> {
             let fun = &ep.function;
             let fun_info = mod_info.get_entry_point(ep_index);
             let mut ep_error = None;
-            let mut supports_array_length = false;
 
             log::trace!(
                 "entry point {:?}, index {:?}",
                 fun.name.as_deref().unwrap_or("(anonymous)"),
                 ep_index
             );
+
+            // Is any global variable used by this entry point dynamically sized?
+            let supports_array_length = module
+                .global_variables
+                .iter()
+                .filter(|&(handle, _)| !fun_info[handle].is_empty())
+                .any(|(_, var)| needs_array_length(var.ty, &module.types));
 
             // skip this entry point if any global bindings are missing,
             // or their types are incompatible.
@@ -2895,7 +2901,6 @@ impl<W: Write> Writer<W> {
                             break;
                         }
                     }
-                    supports_array_length |= needs_array_length(var.ty, &module.types);
                 }
                 if supports_array_length {
                     if let Err(err) = options.resolve_sizes_buffer(ep.stage) {

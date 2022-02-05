@@ -49,6 +49,7 @@ fragment fs_mainOutput fs_main(
 , device Lights& s_lights [[user(fake0)]]
 , metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
 , metal::sampler sampler_shadow [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;

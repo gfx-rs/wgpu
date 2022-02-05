@@ -42,6 +42,7 @@ struct main_Input {
 kernel void main_(
   metal::uint3 global_id [[thread_position_in_grid]]
 , device PrimeIndices& v_indices [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     metal::uint _e8 = v_indices.data[global_id.x];
     metal::uint _e9 = collatz_iterations(_e8);
