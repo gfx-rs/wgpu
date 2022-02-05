@@ -150,9 +150,60 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                 })
             };
 
+            let image_parse = |word: &str| {
+                let mut iter = word.split("image");
+
+                let texture_kind = |ty| {
+                    Some(match ty {
+                        "" => ScalarKind::Float,
+                        "i" => ScalarKind::Sint,
+                        "u" => ScalarKind::Uint,
+                        _ => return None,
+                    })
+                };
+
+                let kind = iter.next()?;
+                let size = iter.next()?;
+                let kind = texture_kind(kind)?;
+
+                let class = ImageClass::Storage {
+                    format: match kind {
+                        ScalarKind::Sint => crate::StorageFormat::Rgba32Sint,
+                        ScalarKind::Uint => crate::StorageFormat::Rgba32Uint,
+                        ScalarKind::Float => crate::StorageFormat::Rgba32Float,
+                        ScalarKind::Bool => unreachable!(),
+                    },
+                    access: crate::StorageAccess::all(),
+                };
+
+                // TODO: glsl support multisampled storage images, naga doesn't
+                let (dim, arrayed) = match size {
+                    "1D" => (ImageDimension::D1, false),
+                    "1DArray" => (ImageDimension::D1, true),
+                    "2D" => (ImageDimension::D2, false),
+                    "2DArray" => (ImageDimension::D2, true),
+                    "3D" => (ImageDimension::D3, false),
+                    // Naga doesn't support cube images and it's usefulness
+                    // is questionable, so they won't be supported for now
+                    // "Cube" => (ImageDimension::Cube, false),
+                    // "CubeArray" => (ImageDimension::Cube, true),
+                    _ => return None,
+                };
+
+                Some(Type {
+                    name: None,
+                    inner: TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class,
+                    },
+                })
+            };
+
             vec_parse(word)
                 .or_else(|| mat_parse(word))
                 .or_else(|| texture_parse(word))
+                .or_else(|| image_parse(word))
         }
     }
 }

@@ -393,7 +393,7 @@ impl Parser {
         body: &mut Block,
         VarDeclaration {
             qualifiers,
-            ty,
+            mut ty,
             name,
             init,
             meta,
@@ -469,17 +469,58 @@ impl Parser {
                             access.remove(restricted_access);
                         }
                     }
-                    AddressSpace::Uniform => {
-                        if let TypeInner::Image { .. } | TypeInner::Sampler { .. } =
-                            self.module.types[ty].inner
-                        {
+                    AddressSpace::Uniform => match self.module.types[ty].inner {
+                        TypeInner::Image {
+                            class,
+                            dim,
+                            arrayed,
+                        } => {
+                            if let crate::ImageClass::Storage {
+                                mut access,
+                                mut format,
+                            } = class
+                            {
+                                if let Some((restricted_access, _)) =
+                                    qualifiers.storage_acess.take()
+                                {
+                                    access.remove(restricted_access);
+                                }
+
+                                match qualifiers.layout_qualifiers.remove(&QualifierKey::Format) {
+                                    Some((QualifierValue::Format(f), _)) => format = f,
+                                    // TODO: glsl supports images without format qualifier
+                                    // if they are `writeonly`
+                                    None => self.errors.push(Error {
+                                        kind: ErrorKind::SemanticError(
+                                            "image types require a format layout qualifier".into(),
+                                        ),
+                                        meta,
+                                    }),
+                                    _ => unreachable!(),
+                                }
+
+                                ty = self.module.types.insert(
+                                    Type {
+                                        name: None,
+                                        inner: TypeInner::Image {
+                                            dim,
+                                            arrayed,
+                                            class: crate::ImageClass::Storage { format, access },
+                                        },
+                                    },
+                                    meta,
+                                );
+                            }
+
                             space = AddressSpace::Handle
-                        } else if qualifiers
-                            .none_layout_qualifier("push_constant", &mut self.errors)
-                        {
-                            space = AddressSpace::PushConstant
                         }
-                    }
+                        TypeInner::Sampler { .. } => space = AddressSpace::Handle,
+                        _ => {
+                            if qualifiers.none_layout_qualifier("push_constant", &mut self.errors) {
+                                space = AddressSpace::PushConstant
+                            }
+                        }
+                    },
                     AddressSpace::Function => space = AddressSpace::Private,
                     _ => {}
                 };

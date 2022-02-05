@@ -285,24 +285,28 @@ impl<'source> ParsingContext<'source> {
                         QualifierKey::Layout,
                         QualifierValue::Layout(StructLayout::Std430),
                     ),
-                    _ => {
-                        let key = QualifierKey::String(name.into());
-                        let value = if self.bump_if(parser, TokenValue::Assign).is_some() {
-                            let (value, end_meta) = match self.parse_uint_constant(parser) {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    parser.errors.push(e);
-                                    (0, Span::default())
-                                }
-                            };
-                            token.meta.subsume(end_meta);
-
-                            QualifierValue::Uint(value)
+                    word => {
+                        if let Some(format) = map_image_format(word) {
+                            (QualifierKey::Format, QualifierValue::Format(format))
                         } else {
-                            QualifierValue::None
-                        };
+                            let key = QualifierKey::String(name.into());
+                            let value = if self.bump_if(parser, TokenValue::Assign).is_some() {
+                                let (value, end_meta) = match self.parse_uint_constant(parser) {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        parser.errors.push(e);
+                                        (0, Span::default())
+                                    }
+                                };
+                                token.meta.subsume(end_meta);
 
-                        (key, value)
+                                QualifierValue::Uint(value)
+                            } else {
+                                QualifierValue::None
+                            };
+
+                            (key, value)
+                        }
                     }
                 };
 
@@ -325,4 +329,55 @@ impl<'source> ParsingContext<'source> {
             _ => false,
         })
     }
+}
+
+fn map_image_format(word: &str) -> Option<crate::StorageFormat> {
+    let format = match word {
+        // float-image-format-qualifier:
+        "rgba32f" => crate::StorageFormat::Rgba32Float,
+        "rgba16f" => crate::StorageFormat::Rgba16Float,
+        "rg32f" => crate::StorageFormat::Rg32Float,
+        "rg16f" => crate::StorageFormat::Rg16Float,
+        "r11f_g11f_b10f" => crate::StorageFormat::Rg11b10Float,
+        "r32f" => crate::StorageFormat::R32Float,
+        "r16f" => crate::StorageFormat::R16Float,
+        "rgba16" => crate::StorageFormat::Rgba16Float,
+        "rgb10_a2" => crate::StorageFormat::Rgb10a2Unorm,
+        "rgba8" => crate::StorageFormat::Rgba8Unorm,
+        "rg16" => crate::StorageFormat::Rg16Float,
+        "rg8" => crate::StorageFormat::Rg8Unorm,
+        "r16" => crate::StorageFormat::R16Float,
+        "r8" => crate::StorageFormat::R8Unorm,
+        "rgba8_snorm" => crate::StorageFormat::Rgba8Snorm,
+        "rg8_snorm" => crate::StorageFormat::Rg8Snorm,
+        "r8_snorm" => crate::StorageFormat::R8Snorm,
+        // int-image-format-qualifier:
+        "rgba32i" => crate::StorageFormat::Rgba32Sint,
+        "rgba16i" => crate::StorageFormat::Rgba16Sint,
+        "rgba8i" => crate::StorageFormat::Rgba8Sint,
+        "rg32i" => crate::StorageFormat::Rg32Sint,
+        "rg16i" => crate::StorageFormat::Rg16Sint,
+        "rg8i" => crate::StorageFormat::Rg8Sint,
+        "r32i" => crate::StorageFormat::R32Sint,
+        "r16i" => crate::StorageFormat::R16Sint,
+        "r8i" => crate::StorageFormat::R8Sint,
+        // uint-image-format-qualifier:
+        "rgba32ui" => crate::StorageFormat::Rgba32Uint,
+        "rgba16ui" => crate::StorageFormat::Rgba16Uint,
+        "rgba8ui" => crate::StorageFormat::Rgba8Uint,
+        "rg32ui" => crate::StorageFormat::Rg32Uint,
+        "rg16ui" => crate::StorageFormat::Rg16Uint,
+        "rg8ui" => crate::StorageFormat::Rg8Uint,
+        "r32ui" => crate::StorageFormat::R32Uint,
+        "r16ui" => crate::StorageFormat::R16Uint,
+        "r8ui" => crate::StorageFormat::R8Uint,
+        // TODO: These next ones seem incorrect to me
+        // "rgba16_snorm" => crate::StorageFormat::Rgba16Float,
+        // "rg16_snorm" => crate::StorageFormat::Rg16Float,
+        // "r16_snorm" => crate::StorageFormat::R16Float,
+        // "rgb10_a2ui" => crate::StorageFormat::Rgb10a2Unorm,
+        _ => return None,
+    };
+
+    Some(format)
 }

@@ -139,6 +139,8 @@ pub enum QualifierKey<'a> {
     String(Cow<'a, str>),
     /// Used for `std140` and `std430` layout qualifiers
     Layout,
+    /// Used for image formats
+    Format,
 }
 
 #[derive(Debug)]
@@ -146,6 +148,7 @@ pub enum QualifierValue {
     None,
     Uint(u32),
     Layout(StructLayout),
+    Format(crate::StorageFormat),
 }
 
 #[derive(Debug, Default)]
