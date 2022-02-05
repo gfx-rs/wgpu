@@ -116,7 +116,7 @@ impl super::Device {
         let mut sized_bindings = Vec::new();
         let mut immutable_buffer_mask = 0;
         for (var_handle, var) in module.global_variables.iter() {
-            if var.class == naga::StorageClass::WorkGroup {
+            if var.space == naga::AddressSpace::WorkGroup {
                 let size = module.types[var.ty].inner.size(&module.constants);
                 wg_memory_sizes.push(size);
             }
@@ -128,8 +128,8 @@ impl super::Device {
                 };
 
                 if !ep_info[var_handle].is_empty() {
-                    let storage_access_store = match var.class {
-                        naga::StorageClass::Storage { access } => {
+                    let storage_access_store = match var.space {
+                        naga::AddressSpace::Storage { access } => {
                             access.contains(naga::StorageAccess::STORE)
                         }
                         _ => false,

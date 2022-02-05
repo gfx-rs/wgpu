@@ -25,7 +25,7 @@ struct Resource {
     name: Option<String>,
     bind: naga::ResourceBinding,
     ty: ResourceType,
-    class: naga::StorageClass,
+    class: naga::AddressSpace,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -181,9 +181,9 @@ pub enum BindingError {
     #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
     #[error("storage class {binding:?} doesn't match the shader {shader:?}")]
-    WrongStorageClass {
-        binding: naga::StorageClass,
-        shader: naga::StorageClass,
+    WrongAddressSpace {
+        binding: naga::AddressSpace,
+        shader: naga::AddressSpace,
     },
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
     WrongBufferSize(wgt::BufferSize),
@@ -373,7 +373,7 @@ impl Resource {
                     } => {
                         let (class, global_use) = match ty {
                             wgt::BufferBindingType::Uniform => {
-                                (naga::StorageClass::Uniform, GlobalUse::READ)
+                                (naga::AddressSpace::Uniform, GlobalUse::READ)
                             }
                             wgt::BufferBindingType::Storage { read_only } => {
                                 let mut global_use = GlobalUse::READ | GlobalUse::QUERY;
@@ -381,7 +381,7 @@ impl Resource {
                                 let mut naga_access = naga::StorageAccess::LOAD;
                                 naga_access.set(naga::StorageAccess::STORE, !read_only);
                                 (
-                                    naga::StorageClass::Storage {
+                                    naga::AddressSpace::Storage {
                                         access: naga_access,
                                     },
                                     global_use,
@@ -389,7 +389,7 @@ impl Resource {
                             }
                         };
                         if self.class != class {
-                            return Err(BindingError::WrongStorageClass {
+                            return Err(BindingError::WrongAddressSpace {
                                 binding: class,
                                 shader: self.class,
                             });
@@ -540,8 +540,8 @@ impl Resource {
         Ok(match self.ty {
             ResourceType::Buffer { size } => BindingType::Buffer {
                 ty: match self.class {
-                    naga::StorageClass::Uniform => wgt::BufferBindingType::Uniform,
-                    naga::StorageClass::Storage { .. } => wgt::BufferBindingType::Storage {
+                    naga::AddressSpace::Uniform => wgt::BufferBindingType::Uniform,
+                    naga::AddressSpace::Storage { .. } => wgt::BufferBindingType::Storage {
                         read_only: !shader_usage.contains(GlobalUse::WRITE),
                     },
                     _ => return Err(BindingError::WrongType),
@@ -905,6 +905,9 @@ impl Interface {
                     class,
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
+                naga::TypeInner::Array { stride, .. } => ResourceType::Buffer {
+                    size: wgt::BufferSize::new(stride as u64).unwrap(),
+                },
                 ref other => {
                     log::error!("Unexpected resource type: {:?}", other);
                     continue;
@@ -915,7 +918,7 @@ impl Interface {
                     name: var.name.clone(),
                     bind,
                     ty,
-                    class: var.class,
+                    class: var.space,
                 },
                 Default::default(),
             );

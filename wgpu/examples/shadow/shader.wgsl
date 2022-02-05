@@ -49,21 +49,12 @@ struct Light {
     color: vec4<f32>;
 };
 
-struct Lights {
-    data: @stride(96) array<Light>;
-};
-
-// Used when storage types are not supported
-struct LightsWithoutStorage {
-    data: array<Light, 10>;
-};
-
 @group(0)
 @binding(1)
-var<storage, read> s_lights: Lights;
+var<storage, read> s_lights: array<Light>;
 @group(0)
 @binding(1)
-var<uniform> u_lights: LightsWithoutStorage;
+var<uniform> u_lights: array<Light, 10>; // Used when storage types are not supported
 @group(0)
 @binding(2)
 var t_shadow: texture_depth_2d_array;
@@ -93,7 +84,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // accumulate color
     var color: vec3<f32> = c_ambient;
     for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
-        let light = s_lights.data[i];
+        let light = s_lights[i];
         // project into the light space
         let shadow = fetch_shadow(i, light.proj * in.world_position);
         // compute Lambertian diffuse term
@@ -114,7 +105,7 @@ fn fs_main_without_storage(in: VertexOutput) -> @location(0) vec4<f32> {
     for(var i = 0u; i < min(u_globals.num_lights.x, c_max_lights); i += 1u) {
         // This line is the only difference from the entrypoint above. It uses the lights
         // uniform instead of the lights storage buffer
-        let light = u_lights.data[i];
+        let light = u_lights[i];
         let shadow = fetch_shadow(i, light.proj * in.world_position);
         let light_dir = normalize(light.pos.xyz - in.world_position.xyz);
         let diffuse = max(0.0, dot(normal, light_dir));

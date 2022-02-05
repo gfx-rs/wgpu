@@ -13,26 +13,22 @@ struct SimParams {
   rule3Scale : f32;
 };
 
-struct Particles {
-  particles : @stride(16) array<Particle>;
-};
-
 @group(0) @binding(0) var<uniform> params : SimParams;
-@group(0) @binding(1) var<storage, read> particlesSrc : Particles;
-@group(0) @binding(2) var<storage, read_write> particlesDst : Particles;
+@group(0) @binding(1) var<storage, read> particlesSrc : array<Particle>;
+@group(0) @binding(2) var<storage, read_write> particlesDst : array<Particle>;
 
 // https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
 @stage(compute)
 @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
-  let total = arrayLength(&particlesSrc.particles);
+  let total = arrayLength(&particlesSrc);
   let index = global_invocation_id.x;
   if (index >= total) {
     return;
   }
 
-  var vPos : vec2<f32> = particlesSrc.particles[index].pos;
-  var vVel : vec2<f32> = particlesSrc.particles[index].vel;
+  var vPos : vec2<f32> = particlesSrc[index].pos;
+  var vVel : vec2<f32> = particlesSrc[index].vel;
 
   var cMass : vec2<f32> = vec2<f32>(0.0, 0.0);
   var cVel : vec2<f32> = vec2<f32>(0.0, 0.0);
@@ -49,8 +45,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
       continue;
     }
 
-    let pos = particlesSrc.particles[i].pos;
-    let vel = particlesSrc.particles[i].vel;
+    let pos = particlesSrc[i].pos;
+    let vel = particlesSrc[i].vel;
 
     if (distance(pos, vPos) < params.rule1Distance) {
       cMass += pos;
@@ -100,5 +96,5 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
   }
 
   // Write back
-  particlesDst.particles[index] = Particle(vPos, vVel);
+  particlesDst[index] = Particle(vPos, vVel);
 }

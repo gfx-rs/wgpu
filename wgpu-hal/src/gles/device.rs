@@ -33,9 +33,9 @@ impl CompilationContext<'_> {
             if ep_info[handle].is_empty() {
                 continue;
             }
-            let register = match var.class {
-                naga::StorageClass::Uniform => super::BindingRegister::UniformBuffers,
-                naga::StorageClass::Storage { .. } => super::BindingRegister::StorageBuffers,
+            let register = match var.space {
+                naga::AddressSpace::Uniform => super::BindingRegister::UniformBuffers,
+                naga::AddressSpace::Storage { .. } => super::BindingRegister::StorageBuffers,
                 _ => continue,
             };
 
