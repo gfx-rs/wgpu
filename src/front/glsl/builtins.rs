@@ -147,337 +147,219 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
         | "textureProjLod"
         | "textureProjLodOffset"
         | "textureProjOffset" => {
-            // bits layout
-            // bits 0 through 1 - dims
-            // bit 2 - shadow
-            // bit 3 - array
-            // bit 4 - extra variant
-            // bit 5 - bias
+            let f = |kind, dim, arrayed, multi, shadow| {
+                for bits in 0..=0b11 {
+                    let variant = bits & 0b1 != 0;
+                    let bias = bits & 0b10 != 0;
 
-            for bits in 0..(0b1000000) {
-                let dim = bits & 0b11;
-                let shadow = bits & 0b100 == 0b100;
-                let arrayed = bits & 0b1000 == 0b1000;
-                let variant = bits & 0b10000 == 0b10000;
-                let bias = bits & 0b100000 == 0b100000;
+                    let (proj, offset, level_type) = match name {
+                        // texture(gsampler, gvec P, [float bias]);
+                        "texture" => (false, false, TextureLevelType::None),
+                        // textureGrad(gsampler, gvec P, gvec dPdx, gvec dPdy);
+                        "textureGrad" => (false, false, TextureLevelType::Grad),
+                        // textureGradOffset(gsampler, gvec P, gvec dPdx, gvec dPdy, ivec offset);
+                        "textureGradOffset" => (false, true, TextureLevelType::Grad),
+                        // textureLod(gsampler, gvec P, float lod);
+                        "textureLod" => (false, false, TextureLevelType::Lod),
+                        // textureLodOffset(gsampler, gvec P, float lod, ivec offset);
+                        "textureLodOffset" => (false, true, TextureLevelType::Lod),
+                        // textureOffset(gsampler, gvec+1 P, ivec offset, [float bias]);
+                        "textureOffset" => (false, true, TextureLevelType::None),
+                        // textureProj(gsampler, gvec+1 P, [float bias]);
+                        "textureProj" => (true, false, TextureLevelType::None),
+                        // textureProjGrad(gsampler, gvec+1 P, gvec dPdx, gvec dPdy);
+                        "textureProjGrad" => (true, false, TextureLevelType::Grad),
+                        // textureProjGradOffset(gsampler, gvec+1 P, gvec dPdx, gvec dPdy, ivec offset);
+                        "textureProjGradOffset" => (true, true, TextureLevelType::Grad),
+                        // textureProjLod(gsampler, gvec+1 P, float lod);
+                        "textureProjLod" => (true, false, TextureLevelType::Lod),
+                        // textureProjLodOffset(gsampler, gvec+1 P, gvec dPdx, gvec dPdy, ivec offset);
+                        "textureProjLodOffset" => (true, true, TextureLevelType::Lod),
+                        // textureProjOffset(gsampler, gvec+1 P, ivec offset, [float bias]);
+                        "textureProjOffset" => (true, true, TextureLevelType::None),
+                        _ => unreachable!(),
+                    };
 
-                let builtin = match name {
-                    // texture(gsampler, gvec P, [float bias]);
-                    "texture" => MacroCall::Texture {
-                        proj: false,
-                        offset: false,
+                    let builtin = MacroCall::Texture {
+                        proj,
+                        offset,
                         shadow,
-                        level_type: TextureLevelType::None,
-                    },
-                    // textureGrad(gsampler, gvec P, gvec dPdx, gvec dPdy);
-                    "textureGrad" => MacroCall::Texture {
-                        proj: false,
-                        offset: false,
-                        shadow,
-                        level_type: TextureLevelType::Grad,
-                    },
-                    // textureGradOffset(gsampler, gvec P, gvec dPdx, gvec dPdy, ivec offset);
-                    "textureGradOffset" => MacroCall::Texture {
-                        proj: false,
-                        offset: true,
-                        shadow,
-                        level_type: TextureLevelType::Grad,
-                    },
-                    // textureLod(gsampler, gvec P, float lod);
-                    "textureLod" => MacroCall::Texture {
-                        proj: false,
-                        offset: false,
-                        shadow,
-                        level_type: TextureLevelType::Lod,
-                    },
-                    // textureLodOffset(gsampler, gvec P, float lod, ivec offset);
-                    "textureLodOffset" => MacroCall::Texture {
-                        proj: false,
-                        offset: true,
-                        shadow,
-                        level_type: TextureLevelType::Lod,
-                    },
-                    // textureOffset(gsampler, gvec+1 P, ivec offset, [float bias]);
-                    "textureOffset" => MacroCall::Texture {
-                        proj: false,
-                        offset: true,
-                        shadow,
-                        level_type: TextureLevelType::None,
-                    },
-                    // textureProj(gsampler, gvec+1 P, [float bias]);
-                    "textureProj" => MacroCall::Texture {
-                        proj: true,
-                        offset: false,
-                        shadow,
-                        level_type: TextureLevelType::None,
-                    },
-                    // textureProjGrad(gsampler, gvec+1 P, gvec dPdx, gvec dPdy);
-                    "textureProjGrad" => MacroCall::Texture {
-                        proj: true,
-                        offset: false,
-                        shadow,
-                        level_type: TextureLevelType::Grad,
-                    },
-                    // textureProjGradOffset(gsampler, gvec+1 P, gvec dPdx, gvec dPdy, ivec offset);
-                    "textureProjGradOffset" => MacroCall::Texture {
-                        proj: true,
-                        offset: true,
-                        shadow,
-                        level_type: TextureLevelType::Grad,
-                    },
-                    // textureProjLod(gsampler, gvec+1 P, float lod);
-                    "textureProjLod" => MacroCall::Texture {
-                        proj: true,
-                        offset: false,
-                        shadow,
-                        level_type: TextureLevelType::Lod,
-                    },
-                    // textureProjLodOffset(gsampler, gvec+1 P, gvec dPdx, gvec dPdy, ivec offset);
-                    "textureProjLodOffset" => MacroCall::Texture {
-                        proj: true,
-                        offset: true,
-                        shadow,
-                        level_type: TextureLevelType::Lod,
-                    },
-                    // textureProjOffset(gsampler, gvec+1 P, ivec offset, [float bias]);
-                    "textureProjOffset" => MacroCall::Texture {
-                        proj: true,
-                        offset: true,
-                        shadow,
-                        level_type: TextureLevelType::None,
-                    },
-                    _ => unreachable!(),
-                };
+                        level_type,
+                    };
 
-                // Parse out the variant settings.
-                let proj = matches!(builtin, MacroCall::Texture { proj: true, .. });
-                let grad = matches!(
-                    builtin,
-                    MacroCall::Texture {
-                        level_type: TextureLevelType::Grad,
-                        ..
-                    }
-                );
-                let lod = matches!(
-                    builtin,
-                    MacroCall::Texture {
-                        level_type: TextureLevelType::Lod,
-                        ..
-                    }
-                );
-                let offset = matches!(builtin, MacroCall::Texture { offset: true, .. });
+                    // Parse out the variant settings.
+                    let grad = level_type == TextureLevelType::Grad;
+                    let lod = level_type == TextureLevelType::Lod;
 
-                let supports_variant = proj && !shadow;
-                if variant && !supports_variant {
-                    continue;
-                }
-
-                let supports_bias = matches!(
-                    builtin,
-                    MacroCall::Texture {
-                        level_type: TextureLevelType::None,
-                        ..
-                    }
-                ) && !shadow;
-                if bias && !supports_bias {
-                    continue;
-                }
-
-                // Proj doesn't work with arrayed, Cube or 3D samplers
-                if proj && (arrayed || dim == 0b10 || dim == 0b11) {
-                    continue;
-                }
-
-                // 3DArray and 3DShadow are not valid texture types
-                if dim == 0b11 && (arrayed || shadow) {
-                    continue;
-                }
-
-                // It seems that textureGradOffset(samplerCube) is not defined by GLSL for some reason...
-                if dim == 0b10 && grad && offset {
-                    continue;
-                }
-
-                let class = match shadow {
-                    true => ImageClass::Depth { multi: false },
-                    false => ImageClass::Sampled {
-                        kind: Sk::Float,
-                        multi: false,
-                    },
-                };
-
-                let image = TypeInner::Image {
-                    dim: match dim {
-                        0b00 => Dim::D1,
-                        0b01 => Dim::D2,
-                        0b10 => Dim::Cube,
-                        _ => Dim::D3,
-                    },
-                    arrayed,
-                    class,
-                };
-
-                let num_coords_from_dim = (dim + 1).min(3);
-                let mut num_coords = num_coords_from_dim;
-
-                if shadow && proj {
-                    num_coords = 4;
-                } else if shadow {
-                    num_coords += 1;
-                } else if proj {
-                    if variant && num_coords == 4 {
-                        // Normal form already has 4 components, no need to have a variant form.
+                    let supports_variant = proj && !shadow;
+                    if variant && !supports_variant {
                         continue;
-                    } else if variant {
+                    }
+
+                    if bias && !matches!(level_type, TextureLevelType::None) {
+                        continue;
+                    }
+
+                    // Proj doesn't work with arrayed or Cube
+                    if proj && (arrayed || dim == Dim::Cube) {
+                        continue;
+                    }
+
+                    // texture operations with offset are not supported for cube maps
+                    if dim == Dim::Cube && offset {
+                        continue;
+                    }
+
+                    // sampler2DArrayShadow can't be used in textureLod or in texture with bias
+                    if (lod || bias) && arrayed && shadow && dim == Dim::D2 {
+                        continue;
+                    }
+
+                    // TODO: glsl supports using bias with depth samplers but naga doesn't
+                    if bias && shadow {
+                        continue;
+                    }
+
+                    let class = match shadow {
+                        true => ImageClass::Depth { multi },
+                        false => ImageClass::Sampled { kind, multi },
+                    };
+
+                    let image = TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class,
+                    };
+
+                    let dim_value = image_dims_to_coords_size(dim);
+                    let num_coords_from_dim = (dim_value + 1).min(3);
+                    let mut num_coords = num_coords_from_dim;
+
+                    if shadow && proj {
                         num_coords = 4;
-                    } else {
+                    } else if dim == Dim::D1 && shadow {
+                        num_coords = 3;
+                    } else if shadow {
                         num_coords += 1;
+                    } else if proj {
+                        if variant && num_coords == 4 {
+                            // Normal form already has 4 components, no need to have a variant form.
+                            continue;
+                        } else if variant {
+                            num_coords = 4;
+                        } else {
+                            num_coords += 1;
+                        }
                     }
-                }
 
-                num_coords += arrayed as usize;
-
-                // Special case: texture(gsamplerCubeArrayShadow) kicks the shadow compare ref to a separate argument,
-                // since it would otherwise take five arguments. It also can't take a bias, nor can it be proj/grad/lod/offset
-                // (presumably because nobody asked for it, and implementation complexity?)
-                if num_coords >= 5 {
-                    if lod || grad || offset || proj || bias {
-                        continue;
+                    if !(dim == Dim::D1 && shadow) {
+                        num_coords += arrayed as usize;
                     }
-                    debug_assert!(dim == 0b10 && shadow && arrayed);
-                }
-                debug_assert!(num_coords <= 5);
 
-                let vector = make_coords_arg(num_coords, Sk::Float);
-                let mut args = vec![image, vector];
+                    // Special case: texture(gsamplerCubeArrayShadow) kicks the shadow compare ref to a separate argument,
+                    // since it would otherwise take five arguments. It also can't take a bias, nor can it be proj/grad/lod/offset
+                    // (presumably because nobody asked for it, and implementation complexity?)
+                    if num_coords >= 5 {
+                        if lod || grad || offset || proj || bias {
+                            continue;
+                        }
+                        debug_assert!(dim == ImageDimension::Cube && shadow && arrayed);
+                    }
+                    debug_assert!(num_coords <= 5);
 
-                if num_coords == 5 {
-                    args.push(TypeInner::Scalar {
-                        kind: Sk::Float,
-                        width,
-                    });
-                }
+                    let vector = make_coords_arg(num_coords, Sk::Float);
+                    let mut args = vec![image, vector];
 
-                match builtin {
-                    MacroCall::Texture {
-                        level_type: TextureLevelType::Lod,
-                        ..
-                    } => {
+                    if num_coords == 5 {
                         args.push(TypeInner::Scalar {
                             kind: Sk::Float,
                             width,
                         });
                     }
-                    MacroCall::Texture {
-                        level_type: TextureLevelType::Grad,
-                        ..
-                    } => {
-                        args.push(make_coords_arg(num_coords_from_dim, Sk::Float));
-                        args.push(make_coords_arg(num_coords_from_dim, Sk::Float));
+
+                    match level_type {
+                        TextureLevelType::Lod => {
+                            args.push(TypeInner::Scalar {
+                                kind: Sk::Float,
+                                width,
+                            });
+                        }
+                        TextureLevelType::Grad => {
+                            args.push(make_coords_arg(num_coords_from_dim, Sk::Float));
+                            args.push(make_coords_arg(num_coords_from_dim, Sk::Float));
+                        }
+                        _ => {}
+                    };
+
+                    if offset {
+                        args.push(make_coords_arg(num_coords_from_dim, Sk::Sint));
                     }
-                    _ => {}
-                };
 
-                if offset {
-                    args.push(make_coords_arg(num_coords_from_dim, Sk::Sint));
+                    if bias {
+                        args.push(TypeInner::Scalar {
+                            kind: Sk::Float,
+                            width,
+                        });
+                    }
+
+                    declaration
+                        .overloads
+                        .push(module.add_builtin(args, builtin));
                 }
+            };
 
-                if bias {
-                    args.push(TypeInner::Scalar {
-                        kind: Sk::Float,
-                        width,
-                    });
-                }
-
-                declaration
-                    .overloads
-                    .push(module.add_builtin(args, builtin));
-            }
+            texture_args_generator(TextureArgsOptions::SHADOW, f)
         }
         "textureSize" => {
-            // bits layout
-            // bits 0 trough 1 - dims
-            // bit 2 - shadow
-            // bit 3 - array
-            for bits in 0..(0b10000) {
-                let dim = bits & 0b11;
-                let shadow = bits & 0b100 == 0b100;
-                let arrayed = bits & 0b1000 == 0b1000;
-
-                // Shadow, arrayed or both 3D images are not allowed
-                if (shadow || arrayed) && dim == 0b11 {
-                    continue;
-                }
-
+            let f = |kind, dim, arrayed, multi, shadow| {
                 let class = match shadow {
-                    true => ImageClass::Depth { multi: false },
-                    false => ImageClass::Sampled {
-                        kind: Sk::Float,
-                        multi: false,
-                    },
+                    true => ImageClass::Depth { multi },
+                    false => ImageClass::Sampled { kind, multi },
                 };
 
                 let image = TypeInner::Image {
-                    dim: match dim {
-                        0b00 => Dim::D1,
-                        0b01 => Dim::D2,
-                        0b10 => Dim::Cube,
-                        _ => Dim::D3,
-                    },
+                    dim,
                     arrayed,
                     class,
                 };
 
-                let args = vec![
-                    image,
-                    TypeInner::Scalar {
+                let mut args = vec![image];
+
+                if !multi {
+                    args.push(TypeInner::Scalar {
                         kind: Sk::Sint,
                         width,
-                    },
-                ];
+                    })
+                }
 
                 declaration
                     .overloads
-                    .push(module.add_builtin(args, MacroCall::TextureSize))
-            }
+                    .push(module.add_builtin(args, MacroCall::TextureSize { arrayed }))
+            };
+
+            texture_args_generator(TextureArgsOptions::all(), f)
         }
         "texelFetch" => {
-            // bits layout
-            // bit 0 - array
-            // bit 1 - multisample
-            // bits 2 trough 3 - dims
-            //
-            // 0b1000 is the latest since 3D images aren't allowed to be multisampled or arrayed
-            for bits in 0..=(0b1000) {
-                let arrayed = bits & 0b1 != 0;
-                let multi = bits & 0b10 != 0;
-                let dim = bits >> 2;
-
-                // Multisampled 1d images don't exist
-                if dim == 0b00 && multi {
-                    continue;
+            let f = |kind, dim, arrayed, multi, _| {
+                // Cube images aren't supported
+                if let Dim::Cube = dim {
+                    return;
                 }
 
                 let image = TypeInner::Image {
-                    dim: match dim {
-                        0b00 => Dim::D1,
-                        0b01 => Dim::D2,
-                        _ => Dim::D3,
-                    },
+                    dim,
                     arrayed,
-                    class: ImageClass::Sampled {
-                        kind: Sk::Float,
-                        multi,
-                    },
+                    class: ImageClass::Sampled { kind, multi },
                 };
 
-                let vector = match (dim, arrayed) {
-                    (0b00, false) => TypeInner::Scalar {
+                let coordinates = match (dim, arrayed) {
+                    (Dim::D1, false) => TypeInner::Scalar {
                         kind: Sk::Sint,
                         width,
                     },
-                    (_, _) => {
-                        let size = match dim + arrayed as u32 {
+                    _ => {
+                        let dim_value = image_dims_to_coords_size(dim);
+                        let size = match dim_value + arrayed as usize {
                             1 => VectorSize::Bi,
                             2 => VectorSize::Tri,
                             _ => VectorSize::Quad,
@@ -493,7 +375,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
 
                 let args = vec![
                     image,
-                    vector,
+                    coordinates,
                     TypeInner::Scalar {
                         kind: Sk::Sint,
                         width,
@@ -503,7 +385,10 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                 declaration
                     .overloads
                     .push(module.add_builtin(args, MacroCall::TexelFetch))
-            }
+            };
+
+            // Don't generate shadow images since they aren't supported
+            texture_args_generator(TextureArgsOptions::MULTI, f)
         }
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
         | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh"
@@ -1546,7 +1431,9 @@ pub enum MacroCall {
         shadow: bool,
         level_type: TextureLevelType,
     },
-    TextureSize,
+    TextureSize {
+        arrayed: bool,
+    },
     TexelFetch,
     MathFunction(MathFunction),
     BitfieldExtract,
@@ -1706,16 +1593,69 @@ impl MacroCall {
 
                 texture_call(ctx, args[0], level, comps, texture_offset, body, meta)
             }
-            MacroCall::TextureSize => Ok(ctx.add_expression(
-                Expression::ImageQuery {
-                    image: args[0],
-                    query: ImageQuery::Size {
-                        level: args.get(1).copied(),
+
+            MacroCall::TextureSize { arrayed } => {
+                let mut expr = ctx.add_expression(
+                    Expression::ImageQuery {
+                        image: args[0],
+                        query: ImageQuery::Size {
+                            level: args.get(1).copied(),
+                        },
                     },
-                },
-                Span::default(),
-                body,
-            )),
+                    Span::default(),
+                    body,
+                );
+
+                if arrayed {
+                    let mut components = Vec::with_capacity(4);
+
+                    let size = match *parser.resolve_type(ctx, expr, meta)? {
+                        TypeInner::Vector { size: ori_size, .. } => {
+                            for index in 0..(ori_size as u32) {
+                                components.push(ctx.add_expression(
+                                    Expression::AccessIndex { base: expr, index },
+                                    Span::default(),
+                                    body,
+                                ))
+                            }
+
+                            match ori_size {
+                                VectorSize::Bi => VectorSize::Tri,
+                                _ => VectorSize::Quad,
+                            }
+                        }
+                        _ => {
+                            components.push(expr);
+                            VectorSize::Bi
+                        }
+                    };
+
+                    components.push(ctx.add_expression(
+                        Expression::ImageQuery {
+                            image: args[0],
+                            query: ImageQuery::NumLayers,
+                        },
+                        Span::default(),
+                        body,
+                    ));
+
+                    let ty = parser.module.types.insert(
+                        Type {
+                            name: None,
+                            inner: TypeInner::Vector {
+                                size,
+                                kind: crate::ScalarKind::Sint,
+                                width: 4,
+                            },
+                        },
+                        Span::default(),
+                    );
+
+                    expr = ctx.add_expression(Expression::Compose { components, ty }, meta, body)
+                }
+
+                Ok(expr)
+            }
             MacroCall::TexelFetch => {
                 let comps =
                     parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
@@ -2098,4 +2038,65 @@ pub fn sampled_to_depth(
             meta,
         }),
     };
+}
+
+bitflags::bitflags! {
+    /// Influences the operation `texture_args_generator`
+    struct TextureArgsOptions: u32 {
+        /// Generates multisampled variants of images
+        const MULTI = 0;
+        /// Generates shadow variants of images
+        const SHADOW = 1;
+    }
+}
+
+/// Helper function to generate the image components for texture/image builtins
+///
+/// Calls the passed function `f` with:
+/// ```text
+/// f(ScalarKind, ImageDimension, arrayed, multi, shadow)
+/// ```
+///
+/// `options` controls extra image variants generation like multisampling and depth,
+/// see the struct documentation
+fn texture_args_generator(
+    options: TextureArgsOptions,
+    mut f: impl FnMut(crate::ScalarKind, ImageDimension, bool, bool, bool),
+) {
+    use crate::ImageDimension as Dim;
+
+    for kind in [Sk::Float, Sk::Uint, Sk::Sint].iter().copied() {
+        for dim in [Dim::D1, Dim::D2, Dim::D3, Dim::Cube].iter().copied() {
+            for arrayed in [false, true].iter().copied() {
+                f(kind, dim, arrayed, false, false);
+
+                // 3D images can't be neither arrayed nor shadow
+                // so we break out early, this way arrayed will always
+                // be false and we won't hit the shadow branch
+                if let Dim::D3 = dim {
+                    break;
+                }
+
+                if Dim::D2 == dim && options.contains(TextureArgsOptions::MULTI) {
+                    // multisampling
+                    f(kind, dim, arrayed, true, false);
+                }
+
+                if Sk::Float == kind && options.contains(TextureArgsOptions::SHADOW) {
+                    // shadow
+                    f(kind, dim, arrayed, false, true);
+                }
+            }
+        }
+    }
+}
+
+/// Helper functions used to convert from a image dimension into a integer representing the
+/// number of components needed for the coordinates vector (0 means scalar instead of vector)
+fn image_dims_to_coords_size(dim: ImageDimension) -> usize {
+    match dim {
+        ImageDimension::D1 => 0,
+        ImageDimension::D2 => 1,
+        _ => 2,
+    }
 }
