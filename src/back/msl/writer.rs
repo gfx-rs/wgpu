@@ -2884,10 +2884,9 @@ impl<W: Write> Writer<W> {
                     if let Some(ref br) = var.binding {
                         let good = match options.per_stage_map[ep.stage].resources.get(br) {
                             Some(target) => match module.types[var.ty].inner {
-                                crate::TypeInner::Struct { .. } => target.buffer.is_some(),
                                 crate::TypeInner::Image { .. } => target.texture.is_some(),
                                 crate::TypeInner::Sampler { .. } => target.sampler.is_some(),
-                                _ => false,
+                                _ => target.buffer.is_some(),
                             },
                             None => false,
                         };
