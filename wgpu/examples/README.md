@@ -45,7 +45,7 @@ All framework-based examples render to the window and are reftested against the 
 | - queries                    |        |           |        | :star: |           |        |        |                |        |                     |
 | - conservative rasterization |        |           |        |        |           |        |        |                |        | :star:              |
 | *integrations*               |        |           |        |        |           |        |        |                |        |                     |
-| - staging belt               |        |           |        |        |           |        |        |                |        |                     |
+| - staging belt               |        |           |        |        |           |        | :star: |                |        |                     |
 | - typed arena                |        |           |        |        |           |        |        |                |        |                     |
 | - obj loading                |        |           |        |        |           |        | :star: |                |        |                     |
 
