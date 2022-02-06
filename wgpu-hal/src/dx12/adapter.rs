@@ -1,7 +1,7 @@
 use super::{conv, HResult as _, SurfaceTarget};
 use std::{mem, sync::Arc, thread};
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_5, minwindef, windef, winerror},
+    shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
     um::{d3d12, d3d12sdklayers, winuser},
 };
 
@@ -90,7 +90,7 @@ impl super::Adapter {
 
         let mut workarounds = super::Workarounds::default();
 
-        let mut info = wgt::AdapterInfo {
+        let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
             name: device_name,
             vendor: desc.VendorId as usize,
@@ -103,24 +103,7 @@ impl super::Adapter {
             } else {
                 wgt::DeviceType::DiscreteGpu
             },
-            mpo: false,
         };
-
-        unsafe {
-            for i in 0.. {
-                let mut output = native::WeakPtr::<dxgi1_3::IDXGIOutput2>::null();
-                match adapter.EnumOutputs(i, output.mut_void() as _).into_result() {
-                    Ok(_) => {
-                        info.mpo = output.SupportsOverlays() == minwindef::TRUE;
-                        output.destroy();
-                        if info.mpo {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        }
 
         let mut options: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
         assert_eq!(0, unsafe {

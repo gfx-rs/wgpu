@@ -975,8 +975,6 @@ pub struct AdapterInfo {
     pub device_type: DeviceType,
     /// Backend used for device
     pub backend: Backend,
-    /// MPO(Multiple Plane Overlay) supported
-    pub mpo: bool,
 }
 
 /// Describes a [`Device`].

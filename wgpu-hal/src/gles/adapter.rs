@@ -161,7 +161,6 @@ impl super::Adapter {
             device: 0,
             device_type: inferred_device_type,
             backend: wgt::Backend::Gl,
-            mpo: false,
         }
     }
 
