@@ -116,43 +116,46 @@ impl super::Device {
         let mut sized_bindings = Vec::new();
         let mut immutable_buffer_mask = 0;
         for (var_handle, var) in module.global_variables.iter() {
-            if var.space == naga::AddressSpace::WorkGroup {
-                let size = module.types[var.ty].inner.size(&module.constants);
-                wg_memory_sizes.push(size);
-            }
-
-            if let naga::TypeInner::Struct { ref members, .. } = module.types[var.ty].inner {
-                let br = match var.binding {
-                    Some(ref br) => br.clone(),
-                    None => continue,
-                };
-
-                if !ep_info[var_handle].is_empty() {
+            match var.space {
+                naga::AddressSpace::WorkGroup => {
+                    if !ep_info[var_handle].is_empty() {
+                        let size = module.types[var.ty].inner.size(&module.constants);
+                        wg_memory_sizes.push(size);
+                    }
+                }
+                naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
+                    let br = match var.binding {
+                        Some(ref br) => br.clone(),
+                        None => continue,
+                    };
                     let storage_access_store = match var.space {
                         naga::AddressSpace::Storage { access } => {
                             access.contains(naga::StorageAccess::STORE)
                         }
                         _ => false,
                     };
+
                     // check for an immutable buffer
-                    if !storage_access_store {
+                    if !ep_info[var_handle].is_empty() && !storage_access_store {
                         let psm = &layout.naga_options.per_stage_map[naga_stage];
                         let slot = psm.resources[&br].buffer.unwrap();
                         immutable_buffer_mask |= 1 << slot;
                     }
-                }
 
-                // check for the unsized buffer
-                if let Some(member) = members.last() {
+                    let mut dynamic_array_container_ty = var.ty;
+                    if let naga::TypeInner::Struct { ref members, .. } = module.types[var.ty].inner
+                    {
+                        dynamic_array_container_ty = members.last().unwrap().ty;
+                    }
                     if let naga::TypeInner::Array {
                         size: naga::ArraySize::Dynamic,
                         ..
-                    } = module.types[member.ty].inner
+                    } = module.types[dynamic_array_container_ty].inner
                     {
-                        // Note: unwraps are fine, since the MSL is already generated
                         sized_bindings.push(br);
                     }
                 }
+                _ => {}
             }
         }
 
