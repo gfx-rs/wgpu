@@ -1856,8 +1856,12 @@ impl<W: Write> Writer<W> {
             if min_ref_count <= expr_info.ref_count {
                 self.need_bake_expressions.insert(expr.0);
             }
-            // if the expression is a Dot product with integer arguments,
-            // then the args needs baking as well
+
+            // WGSL's `dot` function works on any `vecN` type, but Metal's only
+            // works on floating-point vectors, so we emit inline code for
+            // integer vector `dot` calls. But that code uses each argument `N`
+            // times, once for each component (see `put_dot_product`), so to
+            // avoid duplicated evaluation, we must bake integer operands.
             if let (
                 fun_handle,
                 &Expression::Math {
