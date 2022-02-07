@@ -994,7 +994,19 @@ impl crate::Surface<super::Api> for Surface {
                     #[cfg(feature = "emscripten")]
                     (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut std::ffi::c_void,
                     (WindowKind::Unknown, Rwh::Win32(handle)) => handle.hwnd,
-                    (WindowKind::Unknown, Rwh::AppKit(handle)) => handle.ns_view,
+                    (WindowKind::Unknown, Rwh::AppKit(handle)) => {
+                        #[cfg(not(target_os = "macos"))]
+                        let window_ptr = handle.ns_view;
+                        #[cfg(target_os = "macos")]
+                        let window_ptr = {
+                            use objc::{msg_send, runtime::Object, sel, sel_impl};
+                            // ns_view always have a layer and don't need to verify that it exists.
+                            let layer: *mut Object =
+                                msg_send![handle.ns_view as *mut Object, layer];
+                            layer as *mut ffi::c_void
+                        };
+                        window_ptr
+                    }
                     _ => {
                         log::warn!(
                             "Initialized platform {:?} doesn't work with window {:?}",
@@ -1010,7 +1022,7 @@ impl crate::Surface<super::Api> for Surface {
                     // We don't want any of the buffering done by the driver, because we
                     // manage a swapchain on our side.
                     // Some drivers just fail on surface creation seeing `EGL_SINGLE_BUFFER`.
-                    if cfg!(target_os = "android")
+                    if cfg!(any(target_os = "android", target_os = "macos"))
                         || cfg!(windows)
                         || self.wsi.kind == WindowKind::AngleX11
                     {
