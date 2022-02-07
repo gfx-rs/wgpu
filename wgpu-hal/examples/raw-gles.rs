@@ -4,8 +4,9 @@
 //! Emscripten build:
 //! 1. install emsdk
 //! 2. build this example with cargo:
-//!    EMMAKEN_CFLAGS="-g -s ERROR_ON_UNDEFINED_SYMBOLS=0 --no-entry -s FULL_ES3=1" cargo build --example raw-gles --target wasm32-unknown-emscripten --features emscripten,webgl
-//! 3. copy raw-gles.em.html into target/wasm32-unknown-emscripten/debug/examples/ and open it in browser
+//!    EMCC_CFLAGS="-g -s ERROR_ON_UNDEFINED_SYMBOLS=0 --no-entry -s FULL_ES3=1" cargo build --example raw-gles --target wasm32-unknown-emscripten --features emscripten,webgl
+//! 3. copy raw-gles.em.html into target directory and open it in browser:
+//!    cp wgpu-hal/examples/raw-gles.em.html target/wasm32-unknown-emscripten/debug/examples
 
 extern crate wgpu_hal as hal;
 
