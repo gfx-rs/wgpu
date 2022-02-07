@@ -3,7 +3,7 @@ use std::{cmp::Ordering, fmt, marker::PhantomData, num::NonZeroU64};
 use wgt::Backend;
 
 const BACKEND_BITS: usize = 3;
-const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
+pub const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
 type Dummy = hal::api::Empty;
 
 #[repr(transparent)]
