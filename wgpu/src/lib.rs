@@ -1513,6 +1513,16 @@ impl Instance {
         self.context.create_surface_from_core_animation_layer(layer)
     }
 
+    /// Creates a surface from `IDCompositionVisual`.
+    ///
+    /// # Safety
+    ///
+    /// - visual must be a valid IDCompositionVisual to create a surface upon.
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
+        self.context.create_surface_from_visual(visual)
+    }
+
     /// Creates a surface from a `web_sys::HtmlCanvasElement`.
     ///
     /// # Safety

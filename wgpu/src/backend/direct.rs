@@ -163,6 +163,23 @@ impl Context {
         }
     }
 
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_visual(
+        self: &Arc<Self>,
+        visual: *mut std::ffi::c_void,
+    ) -> crate::Surface {
+        let id = self
+            .0
+            .instance_create_surface_from_visual(visual, PhantomData);
+        crate::Surface {
+            context: Arc::clone(self),
+            id: Surface {
+                id,
+                configured_device: Mutex::default(),
+            },
+        }
+    }
+
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,

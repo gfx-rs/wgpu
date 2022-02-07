@@ -1,4 +1,4 @@
-use super::{conv, HResult as _};
+use super::{conv, HResult as _, SurfaceTarget};
 use std::{mem, sync::Arc, thread};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
@@ -389,16 +389,21 @@ impl crate::Adapter<super::Api> for super::Adapter {
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
         let current_extent = {
-            let mut rect: windef::RECT = mem::zeroed();
-            if winuser::GetClientRect(surface.wnd_handle, &mut rect) != 0 {
-                Some(wgt::Extent3d {
-                    width: (rect.right - rect.left) as u32,
-                    height: (rect.bottom - rect.top) as u32,
-                    depth_or_array_layers: 1,
-                })
-            } else {
-                log::warn!("Unable to get the window client rect");
-                None
+            match surface.target {
+                SurfaceTarget::WndHandle(wnd_handle) => {
+                    let mut rect: windef::RECT = mem::zeroed();
+                    if winuser::GetClientRect(wnd_handle, &mut rect) != 0 {
+                        Some(wgt::Extent3d {
+                            width: (rect.right - rect.left) as u32,
+                            height: (rect.bottom - rect.top) as u32,
+                            depth_or_array_layers: 1,
+                        })
+                    } else {
+                        log::warn!("Unable to get the window client rect");
+                        None
+                    }
+                }
+                SurfaceTarget::Visual(_) => None,
             }
         };
 
