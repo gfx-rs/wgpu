@@ -1,9 +1,25 @@
 use crate::{Epoch, Index};
-use std::{cmp::Ordering, fmt, marker::PhantomData, num::NonZeroU64};
+use std::{cmp::Ordering, fmt, marker::PhantomData};
 use wgt::Backend;
 
+#[cfg(feature = "id32")]
+type IdType = u32;
+#[cfg(not(feature = "id32"))]
+type IdType = u64;
+#[cfg(feature = "id32")]
+type NonZeroId = std::num::NonZeroU32;
+#[cfg(not(feature = "id32"))]
+type NonZeroId = std::num::NonZeroU64;
+#[cfg(feature = "id32")]
+type ZippedIndex = u16;
+#[cfg(not(feature = "id32"))]
+type ZippedIndex = Index;
+
+const INDEX_BITS: usize = std::mem::size_of::<ZippedIndex>() * 8;
+const EPOCH_BITS: usize = INDEX_BITS - BACKEND_BITS;
 const BACKEND_BITS: usize = 3;
-pub const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
+const BACKEND_SHIFT: usize = INDEX_BITS * 2 - BACKEND_BITS;
+pub const EPOCH_MASK: u32 = (1 << (EPOCH_BITS)) - 1;
 type Dummy = hal::api::Empty;
 
 #[repr(transparent)]
@@ -21,7 +37,7 @@ type Dummy = hal::api::Empty;
     all(feature = "serde", not(feature = "replay")),
     derive(serde::Deserialize)
 )]
-pub struct Id<T>(NonZeroU64, PhantomData<T>);
+pub struct Id<T>(NonZeroId, PhantomData<T>);
 
 // This type represents Id in a more readable (and editable) way.
 #[allow(dead_code)]
@@ -50,11 +66,11 @@ impl<T> From<SerialId> for Id<T> {
 impl<T> Id<T> {
     #[cfg(test)]
     pub(crate) fn dummy() -> Valid<Self> {
-        Valid(Id(NonZeroU64::new(1).unwrap(), PhantomData))
+        Valid(Id(NonZeroId::new(1).unwrap(), PhantomData))
     }
 
     pub fn backend(self) -> Backend {
-        match self.0.get() >> (64 - BACKEND_BITS) as u8 {
+        match self.0.get() >> (BACKEND_SHIFT) as u8 {
             0 => Backend::Empty,
             1 => Backend::Vulkan,
             2 => Backend::Metal,
@@ -124,17 +140,21 @@ pub trait TypedId {
     fn unzip(self) -> (Index, Epoch, Backend);
 }
 
+#[allow(trivial_numeric_casts)]
 impl<T> TypedId for Id<T> {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
-        assert_eq!(0, epoch >> (32 - BACKEND_BITS));
-        let v = index as u64 | ((epoch as u64) << 32) | ((backend as u64) << (64 - BACKEND_BITS));
-        Id(NonZeroU64::new(v).unwrap(), PhantomData)
+        assert_eq!(0, epoch >> EPOCH_BITS);
+        assert_eq!(0, (index as IdType) >> INDEX_BITS);
+        let v = index as IdType
+            | ((epoch as IdType) << INDEX_BITS)
+            | ((backend as IdType) << BACKEND_SHIFT);
+        Id(NonZeroId::new(v).unwrap(), PhantomData)
     }
 
     fn unzip(self) -> (Index, Epoch, Backend) {
         (
-            self.0.get() as u32,
-            (self.0.get() >> 32) as u32 & EPOCH_MASK,
+            (self.0.get() as ZippedIndex) as Index,
+            (((self.0.get() >> INDEX_BITS) as ZippedIndex) & (EPOCH_MASK as ZippedIndex)) as Index,
             self.backend(),
         )
     }
@@ -178,6 +198,34 @@ fn test_id_backend() {
         Backend::Gl,
     ] {
         let id: Id<()> = Id::zip(1, 0, b);
+        let (_id, _epoch, backend) = id.unzip();
         assert_eq!(id.backend(), b);
+        assert_eq!(backend, b);
+    }
+}
+
+#[test]
+fn test_id() {
+    let last_index = ((1u64 << INDEX_BITS) - 1) as Index;
+    let indexes = [1, last_index / 2 - 1, last_index / 2 + 1, last_index];
+    let epochs = [1, EPOCH_MASK / 2 - 1, EPOCH_MASK / 2 + 1, EPOCH_MASK];
+    let backends = [
+        Backend::Empty,
+        Backend::Vulkan,
+        Backend::Metal,
+        Backend::Dx12,
+        Backend::Dx11,
+        Backend::Gl,
+    ];
+    for &i in &indexes {
+        for &e in &epochs {
+            for &b in &backends {
+                let id: Id<()> = Id::zip(i, e, b);
+                let (index, epoch, backend) = id.unzip();
+                assert_eq!(index, i);
+                assert_eq!(epoch, e);
+                assert_eq!(backend, b);
+            }
+        }
     }
 }
