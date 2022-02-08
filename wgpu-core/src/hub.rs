@@ -79,8 +79,12 @@ impl IdentityManager {
         let (index, epoch, _backend) = id.unzip();
         let pe = &mut self.epochs[index as usize];
         assert_eq!(*pe, epoch);
-        *pe += 1;
-        self.free.push(index);
+        // If the epoch reaches EOL, the index doesn't go
+        // into the free list, will never be reused again.
+        if epoch < id::EPOCH_MASK {
+            *pe = epoch + 1;
+            self.free.push(index);
+        }
     }
 }
 
@@ -1080,4 +1084,18 @@ impl HalApi for hal::api::Gles {
 fn _test_send_sync(global: &Global<IdentityManagerFactory>) {
     fn test_internal<T: Send + Sync>(_: T) {}
     test_internal(global)
+}
+
+#[test]
+fn test_epoch_end_of_life() {
+    use id::TypedId as _;
+    let mut man = IdentityManager::default();
+    man.epochs.push(id::EPOCH_MASK);
+    man.free.push(0);
+    let id1 = man.alloc::<id::BufferId>(Backend::Empty);
+    assert_eq!(id1.unzip().0, 0);
+    man.free(id1);
+    let id2 = man.alloc::<id::BufferId>(Backend::Empty);
+    // confirm that the index 0 is no longer re-used
+    assert_eq!(id2.unzip().0, 1);
 }
