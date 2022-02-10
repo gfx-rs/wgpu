@@ -9,6 +9,16 @@ use crate::{
     ScalarKind as Sk, Span, Type, TypeInner, VectorSize,
 };
 
+impl crate::ScalarKind {
+    fn dummy_storage_format(&self) -> crate::StorageFormat {
+        match *self {
+            Sk::Sint => crate::StorageFormat::R16Sint,
+            Sk::Uint => crate::StorageFormat::R16Uint,
+            _ => crate::StorageFormat::R16Float,
+        }
+    }
+}
+
 impl Module {
     /// Helper function, to create a function prototype for a builtin
     fn add_builtin(&mut self, args: Vec<TypeInner>, builtin: MacroCall) -> Overload {
@@ -34,6 +44,7 @@ impl Module {
             parameters_info,
             kind: FunctionKind::Macro(builtin),
             defined: false,
+            internal: true,
             void: false,
         }
     }
@@ -231,8 +242,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                         class,
                     };
 
-                    let dim_value = image_dims_to_coords_size(dim);
-                    let num_coords_from_dim = (dim_value + 1).min(3);
+                    let num_coords_from_dim = image_dims_to_coords_size(dim).min(3);
                     let mut num_coords = num_coords_from_dim;
 
                     if shadow && proj {
@@ -352,26 +362,8 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                     class: ImageClass::Sampled { kind, multi },
                 };
 
-                let coordinates = match (dim, arrayed) {
-                    (Dim::D1, false) => TypeInner::Scalar {
-                        kind: Sk::Sint,
-                        width,
-                    },
-                    _ => {
-                        let dim_value = image_dims_to_coords_size(dim);
-                        let size = match dim_value + arrayed as usize {
-                            1 => VectorSize::Bi,
-                            2 => VectorSize::Tri,
-                            _ => VectorSize::Quad,
-                        };
-
-                        TypeInner::Vector {
-                            size,
-                            kind: Sk::Sint,
-                            width,
-                        }
-                    }
-                };
+                let dim_value = image_dims_to_coords_size(dim);
+                let coordinates = make_coords_arg(dim_value + arrayed as usize, Sk::Sint);
 
                 let args = vec![
                     image,
@@ -384,11 +376,121 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
 
                 declaration
                     .overloads
-                    .push(module.add_builtin(args, MacroCall::TexelFetch))
+                    .push(module.add_builtin(args, MacroCall::ImageLoad))
             };
 
             // Don't generate shadow images since they aren't supported
             texture_args_generator(TextureArgsOptions::MULTI, f)
+        }
+        "imageSize" => {
+            let f = |kind: Sk, dim, arrayed, _, _| {
+                // Naga doesn't support cube images and it's usefulness
+                // is questionable, so they won't be supported for now
+                if dim == Dim::Cube {
+                    return;
+                }
+
+                let image = TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class: ImageClass::Storage {
+                        format: kind.dummy_storage_format(),
+                        access: crate::StorageAccess::empty(),
+                    },
+                };
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(vec![image], MacroCall::TextureSize { arrayed }))
+            };
+
+            texture_args_generator(TextureArgsOptions::empty(), f)
+        }
+        "imageLoad" => {
+            let f = |kind: Sk, dim, arrayed, _, _| {
+                // Naga doesn't support cube images and it's usefulness
+                // is questionable, so they won't be supported for now
+                if dim == Dim::Cube {
+                    return;
+                }
+
+                let image = TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class: ImageClass::Storage {
+                        format: kind.dummy_storage_format(),
+                        access: crate::StorageAccess::LOAD,
+                    },
+                };
+
+                let dim_value = image_dims_to_coords_size(dim);
+                let mut coord_size = dim_value + arrayed as usize;
+                // > Every OpenGL API call that operates on cubemap array
+                // > textures takes layer-faces, not array layers
+                //
+                // So this means that imageCubeArray only takes a three component
+                // vector coordinate and the third component is a layer index.
+                if Dim::Cube == dim && arrayed {
+                    coord_size = 3
+                }
+                let coordinates = make_coords_arg(coord_size, Sk::Sint);
+
+                let args = vec![image, coordinates];
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(args, MacroCall::ImageLoad))
+            };
+
+            // Don't generate shadow nor multisampled images since they aren't supported
+            texture_args_generator(TextureArgsOptions::empty(), f)
+        }
+        "imageStore" => {
+            let f = |kind: Sk, dim, arrayed, _, _| {
+                // Naga doesn't support cube images and it's usefulness
+                // is questionable, so they won't be supported for now
+                if dim == Dim::Cube {
+                    return;
+                }
+
+                let image = TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class: ImageClass::Storage {
+                        format: kind.dummy_storage_format(),
+                        access: crate::StorageAccess::STORE,
+                    },
+                };
+
+                let dim_value = image_dims_to_coords_size(dim);
+                let mut coord_size = dim_value + arrayed as usize;
+                // > Every OpenGL API call that operates on cubemap array
+                // > textures takes layer-faces, not array layers
+                //
+                // So this means that imageCubeArray only takes a three component
+                // vector coordinate and the third component is a layer index.
+                if Dim::Cube == dim && arrayed {
+                    coord_size = 3
+                }
+                let coordinates = make_coords_arg(coord_size, Sk::Sint);
+
+                let args = vec![
+                    image,
+                    coordinates,
+                    TypeInner::Vector {
+                        size: VectorSize::Quad,
+                        kind,
+                        width,
+                    },
+                ];
+
+                let mut overload = module.add_builtin(args, MacroCall::ImageStore);
+                overload.void = true;
+                declaration.overloads.push(overload)
+            };
+
+            // Don't generate shadow nor multisampled images since they aren't supported
+            texture_args_generator(TextureArgsOptions::empty(), f)
         }
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
         | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh"
@@ -1244,6 +1346,7 @@ fn inject_common_builtin(
                     ],
                     kind: FunctionKind::Macro(fun),
                     defined: false,
+                    internal: true,
                     void: false,
                 })
             }
@@ -1434,7 +1537,8 @@ pub enum MacroCall {
     TextureSize {
         arrayed: bool,
     },
-    TexelFetch,
+    ImageLoad,
+    ImageStore,
     MathFunction(MathFunction),
     BitfieldExtract,
     BitfieldInsert,
@@ -1458,17 +1562,17 @@ impl MacroCall {
         body: &mut Block,
         args: &mut [Handle<Expression>],
         meta: Span,
-    ) -> Result<Handle<Expression>> {
-        match *self {
+    ) -> Result<Option<Handle<Expression>>> {
+        Ok(Some(match *self {
             MacroCall::Sampler => {
                 ctx.samplers.insert(args[0], args[1]);
-                Ok(args[0])
+                args[0]
             }
             MacroCall::SamplerShadow => {
                 sampled_to_depth(&mut parser.module, ctx, args[0], meta, &mut parser.errors);
                 parser.invalidate_expression(ctx, args[0], meta)?;
                 ctx.samplers.insert(args[0], args[1]);
-                Ok(args[0])
+                args[0]
             }
             MacroCall::Texture {
                 proj,
@@ -1591,7 +1695,7 @@ impl MacroCall {
                         .map_or(SampleLevel::Auto, SampleLevel::Bias);
                 }
 
-                texture_call(ctx, args[0], level, comps, texture_offset, body, meta)
+                texture_call(ctx, args[0], level, comps, texture_offset, body, meta)?
             }
 
             MacroCall::TextureSize { arrayed } => {
@@ -1654,23 +1758,38 @@ impl MacroCall {
                     expr = ctx.add_expression(Expression::Compose { components, ty }, meta, body)
                 }
 
-                Ok(expr)
+                expr
             }
-            MacroCall::TexelFetch => {
+            MacroCall::ImageLoad => {
                 let comps =
                     parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
-                Ok(ctx.add_expression(
+                ctx.add_expression(
                     Expression::ImageLoad {
                         image: args[0],
                         coordinate: comps.coordinate,
                         array_index: comps.array_index,
-                        index: Some(args[2]),
+                        index: args.get(2).copied(),
                     },
                     Span::default(),
                     body,
-                ))
+                )
             }
-            MacroCall::MathFunction(fun) => Ok(ctx.add_expression(
+            MacroCall::ImageStore => {
+                let comps =
+                    parser.coordinate_components(ctx, args[0], args[1], None, meta, body)?;
+                ctx.emit_flush(body);
+                body.push(
+                    crate::Statement::ImageStore {
+                        image: args[0],
+                        coordinate: comps.coordinate,
+                        array_index: comps.array_index,
+                        value: args[2],
+                    },
+                    meta,
+                );
+                return Ok(None);
+            }
+            MacroCall::MathFunction(fun) => ctx.add_expression(
                 Expression::Math {
                     fun,
                     arg: args[0],
@@ -1680,7 +1799,7 @@ impl MacroCall {
                 },
                 Span::default(),
                 body,
-            )),
+            ),
             MacroCall::BitfieldInsert => {
                 let conv_arg_2 = ctx.add_expression(
                     Expression::As {
@@ -1700,7 +1819,7 @@ impl MacroCall {
                     Span::default(),
                     body,
                 );
-                Ok(ctx.add_expression(
+                ctx.add_expression(
                     Expression::Math {
                         fun: MathFunction::InsertBits,
                         arg: args[0],
@@ -1710,7 +1829,7 @@ impl MacroCall {
                     },
                     Span::default(),
                     body,
-                ))
+                )
             }
             MacroCall::BitfieldExtract => {
                 let conv_arg_1 = ctx.add_expression(
@@ -1731,7 +1850,7 @@ impl MacroCall {
                     Span::default(),
                     body,
                 );
-                Ok(ctx.add_expression(
+                ctx.add_expression(
                     Expression::Math {
                         fun: MathFunction::ExtractBits,
                         arg: args[0],
@@ -1741,17 +1860,17 @@ impl MacroCall {
                     },
                     Span::default(),
                     body,
-                ))
+                )
             }
-            MacroCall::Relational(fun) => Ok(ctx.add_expression(
+            MacroCall::Relational(fun) => ctx.add_expression(
                 Expression::Relational {
                     fun,
                     argument: args[0],
                 },
                 Span::default(),
                 body,
-            )),
-            MacroCall::Binary(op) => Ok(ctx.add_expression(
+            ),
+            MacroCall::Binary(op) => ctx.add_expression(
                 Expression::Binary {
                     op,
                     left: args[0],
@@ -1759,11 +1878,11 @@ impl MacroCall {
                 },
                 Span::default(),
                 body,
-            )),
+            ),
             MacroCall::Mod(size) => {
                 ctx.implicit_splat(parser, &mut args[1], meta, size)?;
 
-                Ok(ctx.add_expression(
+                ctx.add_expression(
                     Expression::Binary {
                         op: BinaryOperator::Modulo,
                         left: args[0],
@@ -1771,12 +1890,12 @@ impl MacroCall {
                     },
                     Span::default(),
                     body,
-                ))
+                )
             }
             MacroCall::Splatted(fun, size, i) => {
                 ctx.implicit_splat(parser, &mut args[i], meta, size)?;
 
-                Ok(ctx.add_expression(
+                ctx.add_expression(
                     Expression::Math {
                         fun,
                         arg: args[0],
@@ -1786,9 +1905,9 @@ impl MacroCall {
                     },
                     Span::default(),
                     body,
-                ))
+                )
             }
-            MacroCall::MixBoolean => Ok(ctx.add_expression(
+            MacroCall::MixBoolean => ctx.add_expression(
                 Expression::Select {
                     condition: args[2],
                     accept: args[1],
@@ -1796,12 +1915,12 @@ impl MacroCall {
                 },
                 Span::default(),
                 body,
-            )),
+            ),
             MacroCall::Clamp(size) => {
                 ctx.implicit_splat(parser, &mut args[1], meta, size)?;
                 ctx.implicit_splat(parser, &mut args[2], meta, size)?;
 
-                Ok(ctx.add_expression(
+                ctx.add_expression(
                     Expression::Math {
                         fun: MathFunction::Clamp,
                         arg: args[0],
@@ -1811,9 +1930,9 @@ impl MacroCall {
                     },
                     Span::default(),
                     body,
-                ))
+                )
             }
-            MacroCall::BitCast(kind) => Ok(ctx.add_expression(
+            MacroCall::BitCast(kind) => ctx.add_expression(
                 Expression::As {
                     expr: args[0],
                     kind,
@@ -1821,16 +1940,16 @@ impl MacroCall {
                 },
                 Span::default(),
                 body,
-            )),
-            MacroCall::Derivate(axis) => Ok(ctx.add_expression(
+            ),
+            MacroCall::Derivate(axis) => ctx.add_expression(
                 Expression::Derivative {
                     axis,
                     expr: args[0],
                 },
                 Span::default(),
                 body,
-            )),
-        }
+            ),
+        }))
     }
 }
 
@@ -1910,9 +2029,10 @@ impl Parser {
                 TypeInner::Vector { size, .. } => Some(size),
                 _ => None,
             };
-            let shadow = match class {
-                ImageClass::Depth { .. } => true,
-                _ => false,
+            let (shadow, storage) = match class {
+                ImageClass::Depth { .. } => (true, false),
+                ImageClass::Storage { .. } => (false, true),
+                _ => (false, false),
             };
 
             let coordinate = match (image_size, coord_size) {
@@ -1932,18 +2052,17 @@ impl Parser {
 
             let mut coord_index = image_size.map_or(1, |s| s as u32);
 
-            let array_index = match arrayed {
-                true => {
-                    let index = coord_index;
-                    coord_index += 1;
+            let array_index = if arrayed && !(storage && dim == ImageDimension::Cube) {
+                let index = coord_index;
+                coord_index += 1;
 
-                    Some(ctx.add_expression(
-                        Expression::AccessIndex { base: coord, index },
-                        Span::default(),
-                        body,
-                    ))
-                }
-                _ => None,
+                Some(ctx.add_expression(
+                    Expression::AccessIndex { base: coord, index },
+                    Span::default(),
+                    body,
+                ))
+            } else {
+                None
             };
             let mut used_extra = false;
             let depth_ref = match shadow {
@@ -2044,9 +2163,9 @@ bitflags::bitflags! {
     /// Influences the operation `texture_args_generator`
     struct TextureArgsOptions: u32 {
         /// Generates multisampled variants of images
-        const MULTI = 0;
+        const MULTI = 1 << 0;
         /// Generates shadow variants of images
-        const SHADOW = 1;
+        const SHADOW = 1 << 1;
     }
 }
 
@@ -2092,11 +2211,11 @@ fn texture_args_generator(
 }
 
 /// Helper functions used to convert from a image dimension into a integer representing the
-/// number of components needed for the coordinates vector (0 means scalar instead of vector)
+/// number of components needed for the coordinates vector (1 means scalar instead of vector)
 fn image_dims_to_coords_size(dim: ImageDimension) -> usize {
     match dim {
-        ImageDimension::D1 => 0,
-        ImageDimension::D2 => 1,
-        _ => 2,
+        ImageDimension::D1 => 1,
+        ImageDimension::D2 => 2,
+        _ => 3,
     }
 }

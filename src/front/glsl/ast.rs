@@ -55,6 +55,9 @@ pub struct Overload {
     pub kind: FunctionKind,
     /// Wheter this function was already defined or is just a prototype
     pub defined: bool,
+    /// Wheter this overload is the one provided by the language or has
+    /// been redeclared by the user (builtins only)
+    pub internal: bool,
     /// Wheter or not this function returns void (nothing)
     pub void: bool,
 }

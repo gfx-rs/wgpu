@@ -674,8 +674,63 @@ impl Parser {
                 let overload_param_ty = &self.module.types[*overload_parameter].inner;
                 let call_arg_ty = self.resolve_type(ctx, call_argument.0, call_argument.1)?;
 
-                // If the types match there's no need to check for conversions so continue
-                if overload_param_ty == call_arg_ty {
+                // Storage images cannot be directly compared since while the access is part of the
+                // type in naga's IR, in glsl they are a qualifier and don't enter in the match as
+                // long as the access needed is satisfied.
+                if let (
+                    &TypeInner::Image {
+                        class:
+                            crate::ImageClass::Storage {
+                                format: overload_format,
+                                access: overload_access,
+                            },
+                        dim: overload_dim,
+                        arrayed: overload_arrayed,
+                    },
+                    &TypeInner::Image {
+                        class:
+                            crate::ImageClass::Storage {
+                                format: call_format,
+                                access: call_access,
+                            },
+                        dim: call_dim,
+                        arrayed: call_arrayed,
+                    },
+                ) = (overload_param_ty, call_arg_ty)
+                {
+                    // Images size must match otherwise the overload isn't what we want
+                    let good_size = call_dim == overload_dim && call_arrayed == overload_arrayed;
+                    // Glsl requires the formats to strictly match unless you are builtin
+                    // function overload and have not been replaced, in which case we only
+                    // check that the format scalar kind matches
+                    let good_format = overload_format == call_format
+                        || (overload.internal
+                            && ScalarKind::from(overload_format) == ScalarKind::from(call_format));
+                    if !(good_size && good_format) {
+                        continue 'outer;
+                    }
+
+                    // While storage access mismatch is an error it isn't one that causes
+                    // the overload matching to fail so we defer the error and consider
+                    // that the images match exactly
+                    if !call_access.contains(overload_access) {
+                        self.errors.push(Error {
+                            kind: ErrorKind::SemanticError(
+                                format!(
+                                    "'{}': image needs {:?} access but only {:?} was provided",
+                                    name, overload_access, call_access
+                                )
+                                .into(),
+                            ),
+                            meta,
+                        });
+                    }
+
+                    // The images satisfy the conditions to be considered as an exact match
+                    new_conversions[i] = Conversion::Exact;
+                    continue;
+                } else if overload_param_ty == call_arg_ty {
+                    // If the types match there's no need to check for conversions so continue
                     new_conversions[i] = Conversion::Exact;
                     continue;
                 }
@@ -957,9 +1012,9 @@ impl Parser {
 
                 Ok(result)
             }
-            FunctionKind::Macro(builtin) => builtin
-                .call(self, ctx, body, arguments.as_mut_slice(), meta)
-                .map(Some),
+            FunctionKind::Macro(builtin) => {
+                builtin.call(self, ctx, body, arguments.as_mut_slice(), meta)
+            }
         }
     }
 
@@ -1055,6 +1110,7 @@ impl Parser {
             parameters_info,
             kind: FunctionKind::Call(handle),
             defined: true,
+            internal: false,
             void,
         });
     }
@@ -1130,6 +1186,7 @@ impl Parser {
             parameters_info,
             kind: FunctionKind::Call(handle),
             defined: false,
+            internal: false,
             void,
         });
     }
