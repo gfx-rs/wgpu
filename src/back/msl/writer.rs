@@ -25,6 +25,50 @@ const WRAPPED_ARRAY_FIELD: &str = "inner";
 // Some more general handling of pointers is needed to be implemented here.
 const ATOMIC_REFERENCE: &str = "&";
 
+/// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
+///
+/// The `sizes` slice determines whether this function writes a
+/// scalar, vector, or matrix type:
+///
+/// - An empty slice produces a scalar type.
+/// - A one-element slice produces a vector type.
+/// - A two element slice `[ROWS COLUMNS]` produces a matrix of the given size.
+fn put_numeric_type(
+    out: &mut impl Write,
+    kind: crate::ScalarKind,
+    sizes: &[crate::VectorSize],
+) -> Result<(), FmtError> {
+    match (kind, sizes) {
+        (crate::ScalarKind::Uint, &[]) => {
+            // Work around Metal compiler bug: scalar `uint` requires namespace.
+            write!(out, "{}::uint", NAMESPACE)
+        }
+        (kind, &[]) => {
+            write!(out, "{}", kind.to_msl_name())
+        }
+        (kind, &[rows]) => {
+            write!(
+                out,
+                "{}::{}{}",
+                NAMESPACE,
+                kind.to_msl_name(),
+                back::vector_size_str(rows)
+            )
+        }
+        (kind, &[rows, columns]) => {
+            write!(
+                out,
+                "{}::{}{}x{}",
+                NAMESPACE,
+                kind.to_msl_name(),
+                back::vector_size_str(columns),
+                back::vector_size_str(rows)
+            )
+        }
+        (_, _) => Ok(()), // not meaningful
+    }
+}
+
 struct TypeContext<'a> {
     handle: Handle<crate::Type>,
     arena: &'a crate::UniqueArena<crate::Type>,
@@ -42,34 +86,13 @@ impl<'a> Display for TypeContext<'a> {
         }
 
         match ty.inner {
-            crate::TypeInner::Scalar { kind, .. } => {
-                match kind {
-                    // work around Metal toolchain bug with `uint` typedef
-                    crate::ScalarKind::Uint => write!(out, "{}::uint", NAMESPACE),
-                    _ => write!(out, "{}", kind.to_msl_name()),
-                }
-            }
+            crate::TypeInner::Scalar { kind, .. } => put_numeric_type(out, kind, &[]),
             crate::TypeInner::Atomic { kind, .. } => {
                 write!(out, "{}::atomic_{}", NAMESPACE, kind.to_msl_name())
             }
-            crate::TypeInner::Vector { size, kind, .. } => {
-                write!(
-                    out,
-                    "{}::{}{}",
-                    NAMESPACE,
-                    kind.to_msl_name(),
-                    back::vector_size_str(size),
-                )
-            }
+            crate::TypeInner::Vector { size, kind, .. } => put_numeric_type(out, kind, &[size]),
             crate::TypeInner::Matrix { columns, rows, .. } => {
-                write!(
-                    out,
-                    "{}::{}{}x{}",
-                    NAMESPACE,
-                    crate::ScalarKind::Float.to_msl_name(),
-                    back::vector_size_str(columns),
-                    back::vector_size_str(rows),
-                )
+                put_numeric_type(out, crate::ScalarKind::Float, &[rows, columns])
             }
             crate::TypeInner::Pointer { base, space } => {
                 let sub = Self {
@@ -84,39 +107,21 @@ impl<'a> Display for TypeContext<'a> {
                 write!(out, "{} {}&", space_name, sub)
             }
             crate::TypeInner::ValuePointer {
-                size: None,
+                size,
                 kind,
                 width: _,
                 space,
             } => {
-                let space_name = match space.to_msl_name() {
-                    Some(name) => name,
+                match space.to_msl_name() {
+                    Some(name) => write!(out, "{} ", name)?,
                     None => return Ok(()),
                 };
-                write!(out, "{} ", space_name)?;
-                if kind == crate::ScalarKind::Uint {
-                    write!(out, "{}::", NAMESPACE)?;
-                }
-                write!(out, "{}&", kind.to_msl_name())
-            }
-            crate::TypeInner::ValuePointer {
-                size: Some(size),
-                kind,
-                width: _,
-                space,
-            } => {
-                let space_name = match space.to_msl_name() {
-                    Some(name) => name,
-                    None => return Ok(()),
+                match size {
+                    Some(rows) => put_numeric_type(out, kind, &[rows])?,
+                    None => put_numeric_type(out, kind, &[])?,
                 };
-                write!(
-                    out,
-                    "{} {}::{}{}&",
-                    space_name,
-                    NAMESPACE,
-                    kind.to_msl_name(),
-                    back::vector_size_str(size),
-                )
+
+                write!(out, "&")
             }
             crate::TypeInner::Array { base, .. } => {
                 let sub = Self {
@@ -626,12 +631,17 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
     ) -> BackendResult {
         // coordinates in IR are int, but Metal expects uint
-        let size_str = match *context.resolve_type(expr) {
-            crate::TypeInner::Scalar { .. } => "",
-            crate::TypeInner::Vector { size, .. } => back::vector_size_str(size),
+        match *context.resolve_type(expr) {
+            crate::TypeInner::Scalar { .. } => {
+                put_numeric_type(&mut self.out, crate::ScalarKind::Uint, &[])?
+            }
+            crate::TypeInner::Vector { size, .. } => {
+                put_numeric_type(&mut self.out, crate::ScalarKind::Uint, &[size])?
+            }
             _ => return Err(Error::Validation),
         };
-        write!(self.out, "{}::uint{}(", NAMESPACE, size_str)?;
+
+        write!(self.out, "(")?;
         self.put_expression(expr, context, true)?;
         write!(self.out, ")")?;
         Ok(())
@@ -691,25 +701,11 @@ impl<W: Write> Writer<W> {
                 self.put_call_parameters(components.iter().cloned(), context)?;
             }
             crate::TypeInner::Vector { size, kind, .. } => {
-                write!(
-                    self.out,
-                    "{}::{}{}",
-                    NAMESPACE,
-                    kind.to_msl_name(),
-                    back::vector_size_str(size)
-                )?;
+                put_numeric_type(&mut self.out, kind, &[size])?;
                 self.put_call_parameters(components.iter().cloned(), context)?;
             }
             crate::TypeInner::Matrix { columns, rows, .. } => {
-                let kind = crate::ScalarKind::Float;
-                write!(
-                    self.out,
-                    "{}::{}{}x{}",
-                    NAMESPACE,
-                    kind.to_msl_name(),
-                    back::vector_size_str(columns),
-                    back::vector_size_str(rows)
-                )?;
+                put_numeric_type(&mut self.out, crate::ScalarKind::Float, &[rows, columns])?;
                 self.put_call_parameters(components.iter().cloned(), context)?;
             }
             crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
@@ -927,10 +923,8 @@ impl<W: Write> Writer<W> {
                     crate::TypeInner::Scalar { kind, .. } => kind,
                     _ => return Err(Error::Validation),
                 };
-                let scalar = scalar_kind.to_msl_name();
-                let size = back::vector_size_str(size);
-
-                write!(self.out, "{}::{}{}(", NAMESPACE, scalar, size)?;
+                put_numeric_type(&mut self.out, scalar_kind, &[size])?;
+                write!(self.out, "(")?;
                 self.put_expression(value, context, true)?;
                 write!(self.out, ")")?;
             }
@@ -1349,7 +1343,6 @@ impl<W: Write> Writer<W> {
                 kind,
                 convert,
             } => {
-                let scalar = kind.to_msl_name();
                 let (src_kind, src_width) = match *context.resolve_type(expr) {
                     crate::TypeInner::Scalar { kind, width }
                     | crate::TypeInner::Vector { kind, width, .. } => (kind, width),
@@ -1368,18 +1361,10 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}<", op)?;
                 match *context.resolve_type(expr) {
                     crate::TypeInner::Vector { size, .. } => {
-                        write!(
-                            self.out,
-                            "{}::{}{}",
-                            NAMESPACE,
-                            scalar,
-                            back::vector_size_str(size)
-                        )?;
+                        put_numeric_type(&mut self.out, kind, &[size])?
                     }
-                    _ => {
-                        write!(self.out, "{}", scalar)?;
-                    }
-                }
+                    _ => put_numeric_type(&mut self.out, kind, &[])?,
+                };
                 write!(self.out, ">(")?;
                 self.put_expression(expr, context, true)?;
                 write!(self.out, ")")?;
@@ -1917,34 +1902,14 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{}", ty_name)?;
             }
-            TypeResolution::Value(crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Uint,
-                ..
-            }) => {
-                // work around Metal toolchain bug with `uint` typedef
-                write!(self.out, "{}::uint", NAMESPACE)?;
-            }
             TypeResolution::Value(crate::TypeInner::Scalar { kind, .. }) => {
-                write!(self.out, "{}", kind.to_msl_name())?;
+                put_numeric_type(&mut self.out, kind, &[])?;
             }
             TypeResolution::Value(crate::TypeInner::Vector { size, kind, .. }) => {
-                write!(
-                    self.out,
-                    "{}::{}{}",
-                    NAMESPACE,
-                    kind.to_msl_name(),
-                    back::vector_size_str(size)
-                )?;
+                put_numeric_type(&mut self.out, kind, &[size])?;
             }
             TypeResolution::Value(crate::TypeInner::Matrix { columns, rows, .. }) => {
-                write!(
-                    self.out,
-                    "{}::{}{}x{}",
-                    NAMESPACE,
-                    crate::ScalarKind::Float.to_msl_name(),
-                    back::vector_size_str(columns),
-                    back::vector_size_str(rows),
-                )?;
+                put_numeric_type(&mut self.out, crate::ScalarKind::Float, &[rows, columns])?;
             }
             TypeResolution::Value(ref other) => {
                 log::warn!("Type {:?} isn't a known local", other); //TEMP!

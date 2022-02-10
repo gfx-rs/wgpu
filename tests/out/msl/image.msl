@@ -38,7 +38,7 @@ kernel void depth_load(
     metal::int2 dim_1 = int2(image_storage_src.get_width(), image_storage_src.get_height());
     metal::int2 itc_1 = (dim_1 * static_cast<metal::int2>(local_id_1.xy)) % metal::int2(10, 20);
     float val = image_depth_multisampled_src.read(metal::uint2(itc_1), static_cast<int>(local_id_1.z));
-    image_dst.write(metal::uint4(static_cast<uint>(val)), metal::uint(itc_1.x));
+    image_dst.write(metal::uint4(static_cast<metal::uint>(val)), metal::uint(itc_1.x));
     return;
 }
 
