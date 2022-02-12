@@ -98,7 +98,7 @@ impl Example {
                 targets: &[TEXTURE_FORMAT.into()],
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                topology: wgpu::PrimitiveTopology::TriangleList,
                 ..Default::default()
             },
             depth_stencil: None,
@@ -174,7 +174,7 @@ impl Example {
             }
             rpass.set_pipeline(&pipeline);
             rpass.set_bind_group(0, &bind_group, &[]);
-            rpass.draw(0..4, 0..1);
+            rpass.draw(0..3, 0..1);
             if let Some(ref query_sets) = query_sets {
                 rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base + 1);
                 rpass.end_pipeline_statistics_query();
