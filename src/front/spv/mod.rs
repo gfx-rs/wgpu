@@ -4076,12 +4076,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let decor = self.future_decor.remove(&id).unwrap_or_default();
         let base = self.lookup_type.lookup(type_id)?.handle;
+        self.layouter
+            .update(&module.types, &module.constants)
+            .unwrap();
         let inner = crate::TypeInner::Array {
             base,
             size: crate::ArraySize::Constant(length_const.handle),
             stride: match decor.array_stride {
                 Some(stride) => stride.get(),
-                None => module.types[base].inner.size(&module.constants),
+                None => self.layouter[base].to_stride(),
             },
         };
         self.lookup_type.insert(
@@ -4113,12 +4116,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let decor = self.future_decor.remove(&id).unwrap_or_default();
         let base = self.lookup_type.lookup(type_id)?.handle;
+        self.layouter
+            .update(&module.types, &module.constants)
+            .unwrap();
         let inner = crate::TypeInner::Array {
             base: self.lookup_type.lookup(type_id)?.handle,
             size: crate::ArraySize::Dynamic,
             stride: match decor.array_stride {
                 Some(stride) => stride.get(),
-                None => module.types[base].inner.size(&module.constants),
+                None => self.layouter[base].to_stride(),
             },
         };
         self.lookup_type.insert(
