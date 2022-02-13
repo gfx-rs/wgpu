@@ -102,6 +102,9 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         log::log!(level, "\tobjects: {}", names.join(", "));
     }
 
+    // uncommenting this is useful for tests
+    //assert_ne!(level, log::Level::Error);
+
     vk::FALSE
 }
 
