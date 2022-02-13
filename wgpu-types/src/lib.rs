@@ -1909,6 +1909,18 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
     #[cfg_attr(feature = "serde", serde(rename = "astc-8x6-unorm-srgb"))]
     Astc8x6RgbaUnormSrgb,
+    /// 8x8 block compressed texture. 16 bytes per block (2 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// [0, 255] converted to/from float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "astc-8x8-unorm"))]
+    Astc8x8RgbaUnorm,
+    /// 8x8 block compressed texture. 16 bytes per block (2 bit/px). Complex pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
+    #[cfg_attr(feature = "serde", serde(rename = "astc-8x8-unorm-srgb"))]
+    Astc8x8RgbaUnormSrgb,
     /// 10x5 block compressed texture. 16 bytes per block (2.56 bit/px). Complex pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
@@ -1933,18 +1945,6 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
     #[cfg_attr(feature = "serde", serde(rename = "astc-10x6-unorm-srgb"))]
     Astc10x6RgbaUnormSrgb,
-    /// 8x8 block compressed texture. 16 bytes per block (2 bit/px). Complex pallet. 8 bit integer RGBA.
-    /// [0, 255] converted to/from float [0, 1] in shader.
-    ///
-    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "astc-8x8-unorm"))]
-    Astc8x8RgbaUnorm,
-    /// 8x8 block compressed texture. 16 bytes per block (2 bit/px). Complex pallet. 8 bit integer RGBA.
-    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
-    ///
-    /// [`Features::TEXTURE_COMPRESSION_ASTC_LDR`] must be enabled to use this texture format.
-    #[cfg_attr(feature = "serde", serde(rename = "astc-8x8-unorm-srgb"))]
-    Astc8x8RgbaUnormSrgb,
     /// 10x8 block compressed texture. 16 bytes per block (1.6 bit/px). Complex pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
