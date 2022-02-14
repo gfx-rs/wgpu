@@ -204,7 +204,7 @@ bitflags::bitflags! {
         /// write out a timestamp.
         ///
         /// They must be resolved using [`CommandEncoder::resolve_query_sets`] into a buffer,
-        /// then the result must be multiplied by the timestamp period [`Device::get_timestamp_period`]
+        /// then the result must be multiplied by the timestamp period [`Queue::get_timestamp_period`]
         /// to get the timestamp in nanoseconds. Multiple timestamps can then be diffed to get the
         /// time for operations between them to finish.
         ///
@@ -3794,7 +3794,7 @@ pub enum QueryType {
     /// Query returns a 64-bit number indicating the GPU-timestamp
     /// where all previous commands have finished executing.
     ///
-    /// Must be multiplied by [`Device::get_timestamp_period`] to get
+    /// Must be multiplied by [`Queue::get_timestamp_period`] to get
     /// the value in nanoseconds. Absolute values have no meaning,
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
