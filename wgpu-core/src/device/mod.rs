@@ -639,14 +639,21 @@ impl<A: HalApi> Device<A> {
     ) -> Result<resource::Texture<A>, resource::CreateTextureError> {
         let format_desc = desc.format.describe();
 
-        // Depth textures can only be 2D
-        if format_desc.sample_type == wgt::TextureSampleType::Depth
-            && desc.dimension != wgt::TextureDimension::D2
-        {
-            return Err(resource::CreateTextureError::InvalidDepthKind(
-                desc.dimension,
-                desc.format,
-            ));
+        if desc.dimension != wgt::TextureDimension::D2 {
+            // Depth textures can only be 2D
+            if format_desc.sample_type == wgt::TextureSampleType::Depth {
+                return Err(resource::CreateTextureError::InvalidDepthKind(
+                    desc.dimension,
+                    desc.format,
+                ));
+            }
+            // Renderable textures can only be 2D
+            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(resource::CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
+                    desc.dimension,
+                ));
+            }
         }
 
         let format_features = self
@@ -659,7 +666,7 @@ impl<A: HalApi> Device<A> {
 
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
-            return Err(resource::CreateTextureError::InvalidUsages(
+            return Err(resource::CreateTextureError::InvalidFormatUsages(
                 missing_allowed_usages,
                 desc.format,
             ));
