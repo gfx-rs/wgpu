@@ -6,7 +6,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     var pos: i32;
     // switch without cases
-    switch (1) {
+    switch 1 {
         default: {
             pos = 1;
         }
@@ -14,7 +14,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // non-empty switch *not* in last-statement-in-function position
     // (return statements might be inserted into the switch cases otherwise)
-    switch (pos) {
+    switch pos {
         case 1: {
             pos = 0;
             break;
@@ -41,7 +41,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 	}
 
     // non-empty switch in last-statement-in-function position
-    switch (pos) {
+    switch pos {
         case 1: {
             pos = 0;
             break;
@@ -61,7 +61,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 fn switch_default_break(i: i32) {
-    switch (i) {
+    switch i {
         default: {
             break;
         }
@@ -80,7 +80,7 @@ fn switch_case_break() {
 
 fn loop_switch_continue(x: i32) {
     loop {
-        switch (x) {
+        switch x {
             case 1: {
                 continue;
             }

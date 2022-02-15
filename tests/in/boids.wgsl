@@ -27,7 +27,7 @@ struct Particles {
 @stage(compute) @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_invocation_id : vec3<u32>) {
   let index : u32 = global_invocation_id.x;
-  if (index >= NUM_PARTICLES) {
+  if index >= NUM_PARTICLES {
     return;
   }
 
@@ -44,24 +44,24 @@ fn main(@builtin(global_invocation_id) global_invocation_id : vec3<u32>) {
   var vel : vec2<f32>;
   var i : u32 = 0u;
   loop {
-    if (i >= NUM_PARTICLES) {
+    if i >= NUM_PARTICLES {
       break;
     }
-    if (i == index) {
+    if i == index {
       continue;
     }
 
     pos = particlesSrc.particles[i].pos;
     vel = particlesSrc.particles[i].vel;
 
-    if (distance(pos, vPos) < params.rule1Distance) {
+    if distance(pos, vPos) < params.rule1Distance {
       cMass = cMass + pos;
       cMassCount = cMassCount + 1;
     }
-    if (distance(pos, vPos) < params.rule2Distance) {
+    if distance(pos, vPos) < params.rule2Distance {
       colVel = colVel - (pos - vPos);
     }
-    if (distance(pos, vPos) < params.rule3Distance) {
+    if distance(pos, vPos) < params.rule3Distance {
       cVel = cVel + vel;
       cVelCount = cVelCount + 1;
     }
@@ -70,10 +70,10 @@ fn main(@builtin(global_invocation_id) global_invocation_id : vec3<u32>) {
       i = i + 1u;
     }
   }
-  if (cMassCount > 0) {
+  if cMassCount > 0 {
     cMass = cMass / f32(cMassCount) - vPos;
   }
-  if (cVelCount > 0) {
+  if cVelCount > 0 {
     cVel = cVel / f32(cVelCount);
   }
 
@@ -88,16 +88,16 @@ fn main(@builtin(global_invocation_id) global_invocation_id : vec3<u32>) {
   vPos = vPos + (vVel * params.deltaT);
 
   // Wrap around boundary
-  if (vPos.x < -1.0) {
+  if vPos.x < -1.0 {
     vPos.x = 1.0;
   }
-  if (vPos.x > 1.0) {
+  if vPos.x > 1.0 {
     vPos.x = -1.0;
   }
-  if (vPos.y < -1.0) {
+  if vPos.y < -1.0 {
     vPos.y = 1.0;
   }
-  if (vPos.y > 1.0) {
+  if vPos.y > 1.0 {
     vPos.y = -1.0;
   }
 

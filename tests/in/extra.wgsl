@@ -11,7 +11,7 @@ struct FragmentIn {
 
 @stage(fragment)
 fn main(in: FragmentIn) -> @location(0) vec4<f32> {
-    if (in.primitive_index % 2u == 0u) {
+    if in.primitive_index % 2u == 0u {
         return in.color;
     } else {
         return vec4<f32>(vec3<f32>(1.0) - in.color.rgb, in.color.a);

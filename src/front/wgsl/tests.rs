@@ -209,6 +209,26 @@ fn parse_if() {
     parse_str(
         "
         fn main() {
+            if true {
+                discard;
+            } else {}
+            if 0 != 1 {}
+            if false {
+                return;
+            } else if true {
+                return;
+            } else {}
+        }
+    ",
+    )
+    .unwrap();
+}
+
+#[test]
+fn parse_parentheses_if() {
+    parse_str(
+        "
+        fn main() {
             if (true) {
                 discard;
             } else {}
@@ -231,11 +251,11 @@ fn parse_loop() {
         fn main() {
             var i: i32 = 0;
             loop {
-                if (i == 1) { break; }
+                if i == 1 { break; }
                 continuing { i = 1; }
             }
             loop {
-                if (i == 0) { continue; }
+                if i == 0 { continue; }
                 break;
             }
         }
@@ -275,6 +295,21 @@ fn parse_switch() {
                 case 0, 1: { pos = 0.0; }
                 case 2: { pos = 1.0; fallthrough; }
                 case 3: {}
+                default: { pos = 3.0; }
+            }
+        }
+    ",
+    )
+    .unwrap();
+}
+
+#[test]
+fn parse_parentheses_switch() {
+    parse_str(
+        "
+        fn main() {
+            var pos: f32;
+            switch pos > 1.0 {
                 default: { pos = 3.0; }
             }
         }

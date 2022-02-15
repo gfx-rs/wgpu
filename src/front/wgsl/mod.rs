@@ -3602,14 +3602,12 @@ impl Parser {
                     }
                     "if" => {
                         let _ = lexer.next();
-                        lexer.expect(Token::Paren('('))?;
                         emitter.start(context.expressions);
                         let condition = self.parse_general_expression(
                             lexer,
                             context.as_expression(block, &mut emitter),
                         )?;
                         block.extend(emitter.finish(context.expressions));
-                        lexer.expect(Token::Paren(')'))?;
 
                         let accept = self.parse_block(lexer, context.reborrow(), false)?;
 
@@ -3628,14 +3626,12 @@ impl Parser {
                             // ... else if (...) { ... }
                             let mut sub_emitter = super::Emitter::default();
 
-                            lexer.expect(Token::Paren('('))?;
                             sub_emitter.start(context.expressions);
                             let other_condition = self.parse_general_expression(
                                 lexer,
                                 context.as_expression(block, &mut sub_emitter),
                             )?;
                             let other_emit = sub_emitter.finish(context.expressions);
-                            lexer.expect(Token::Paren(')'))?;
                             let other_block = self.parse_block(lexer, context.reborrow(), false)?;
                             elsif_stack.push((
                                 elseif_span_start,
@@ -3671,7 +3667,6 @@ impl Parser {
                     "switch" => {
                         let _ = lexer.next();
                         emitter.start(context.expressions);
-                        lexer.expect(Token::Paren('('))?;
                         let selector = self.parse_general_expression(
                             lexer,
                             context.as_expression(block, &mut emitter),
@@ -3681,7 +3676,6 @@ impl Parser {
                                 .as_expression(block, &mut emitter)
                                 .resolve_type(selector)?
                                 .scalar_kind();
-                        lexer.expect(Token::Paren(')'))?;
                         block.extend(emitter.finish(context.expressions));
                         lexer.expect(Token::Paren('{'))?;
                         let mut cases = Vec::new();
