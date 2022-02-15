@@ -730,7 +730,7 @@ impl<A: HalApi> Device<A> {
             let dimension = match desc.dimension {
                 wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
                 wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                wgt::TextureDimension::D3 => unreachable!(),
+                wgt::TextureDimension::D3 => wgt::TextureViewDimension::D3,
             };
 
             let mut clear_views = SmallVec::new();
