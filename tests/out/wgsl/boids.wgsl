@@ -40,7 +40,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     var i: u32 = 0u;
 
     let index = global_invocation_id.x;
-    if ((index >= NUM_PARTICLES)) {
+    if (index >= NUM_PARTICLES) {
         return;
     }
     let _e10 = particlesSrc.particles[index].pos;
@@ -52,11 +52,11 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     colVel = vec2<f32>(0.0, 0.0);
     loop {
         let _e37 = i;
-        if ((_e37 >= NUM_PARTICLES)) {
+        if (_e37 >= NUM_PARTICLES) {
             break;
         }
         let _e39 = i;
-        if ((_e39 == index)) {
+        if (_e39 == index) {
             continue;
         }
         let _e42 = i;
@@ -68,7 +68,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let _e51 = pos;
         let _e52 = vPos;
         let _e55 = params.rule1Distance;
-        if ((distance(_e51, _e52) < _e55)) {
+        if (distance(_e51, _e52) < _e55) {
             let _e57 = cMass;
             let _e58 = pos;
             cMass = (_e57 + _e58);
@@ -78,7 +78,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let _e63 = pos;
         let _e64 = vPos;
         let _e67 = params.rule2Distance;
-        if ((distance(_e63, _e64) < _e67)) {
+        if (distance(_e63, _e64) < _e67) {
             let _e69 = colVel;
             let _e70 = pos;
             let _e71 = vPos;
@@ -87,7 +87,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let _e74 = pos;
         let _e75 = vPos;
         let _e78 = params.rule3Distance;
-        if ((distance(_e74, _e75) < _e78)) {
+        if (distance(_e74, _e75) < _e78) {
             let _e80 = cVel;
             let _e81 = vel;
             cVel = (_e80 + _e81);
@@ -100,14 +100,14 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         }
     }
     let _e89 = cMassCount;
-    if ((_e89 > 0)) {
+    if (_e89 > 0) {
         let _e92 = cMass;
         let _e93 = cMassCount;
         let _e97 = vPos;
         cMass = ((_e92 / vec2<f32>(f32(_e93))) - _e97);
     }
     let _e99 = cVelCount;
-    if ((_e99 > 0)) {
+    if (_e99 > 0) {
         let _e102 = cVel;
         let _e103 = cVelCount;
         cVel = (_e102 / vec2<f32>(f32(_e103)));
@@ -128,19 +128,19 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let _e134 = params.deltaT;
     vPos = (_e131 + (_e132 * _e134));
     let _e138 = vPos.x;
-    if ((_e138 < -1.0)) {
+    if (_e138 < -1.0) {
         vPos.x = 1.0;
     }
     let _e144 = vPos.x;
-    if ((_e144 > 1.0)) {
+    if (_e144 > 1.0) {
         vPos.x = -1.0;
     }
     let _e150 = vPos.y;
-    if ((_e150 < -1.0)) {
+    if (_e150 < -1.0) {
         vPos.y = 1.0;
     }
     let _e156 = vPos.y;
-    if ((_e156 > 1.0)) {
+    if (_e156 > 1.0) {
         vPos.y = -1.0;
     }
     let _e164 = vPos;

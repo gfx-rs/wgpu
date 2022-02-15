@@ -13,12 +13,12 @@ fn collatz_iterations(n: u32) -> u32 {
     n_1 = n;
     loop {
         let _e7 = n_1;
-        if (!((_e7 != u32(1)))) {
+        if !((_e7 != u32(1))) {
             break;
         }
         {
             let _e14 = n_1;
-            if (((f32(_e14) % f32(2)) == f32(0))) {
+            if ((f32(_e14) % f32(2)) == f32(0)) {
                 {
                     let _e22 = n_1;
                     n_1 = (_e22 / u32(2));

@@ -1,5 +1,5 @@
 fn switch_default_break(i: i32) {
-    switch(i) {
+    switch i {
         default: {
             break;
         }
@@ -7,7 +7,7 @@ fn switch_default_break(i: i32) {
 }
 
 fn switch_case_break() {
-    switch(0) {
+    switch 0 {
         case 0: {
             break;
         }
@@ -19,7 +19,7 @@ fn switch_case_break() {
 
 fn loop_switch_continue(x: i32) {
     loop {
-        switch(x) {
+        switch x {
             case 1: {
                 continue;
             }
@@ -36,13 +36,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     storageBarrier();
     workgroupBarrier();
-    switch(1) {
+    switch 1 {
         default: {
             pos = 1;
         }
     }
     let _e4 = pos;
-    switch(_e4) {
+    switch _e4 {
         case 1: {
             pos = 0;
             break;
@@ -60,14 +60,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             pos = 3;
         }
     }
-    switch(0u) {
+    switch 0u {
         case 0u: {
         }
         default: {
         }
     }
     let _e10 = pos;
-    switch(_e10) {
+    switch _e10 {
         case 1: {
             pos = 0;
             break;

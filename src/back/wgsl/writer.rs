@@ -691,9 +691,9 @@ impl<W: Write> Writer<W> {
                 ref reject,
             } => {
                 write!(self.out, "{}", level)?;
-                write!(self.out, "if (")?;
+                write!(self.out, "if ")?;
                 self.write_expr(module, condition, func_ctx)?;
-                writeln!(self.out, ") {{")?;
+                writeln!(self.out, " {{")?;
 
                 let l2 = level.next();
                 for sta in accept {
@@ -845,9 +845,9 @@ impl<W: Write> Writer<W> {
             } => {
                 // Start the switch
                 write!(self.out, "{}", level)?;
-                write!(self.out, "switch(")?;
+                write!(self.out, "switch ")?;
                 self.write_expr(module, selector, func_ctx)?;
-                writeln!(self.out, ") {{")?;
+                writeln!(self.out, " {{")?;
 
                 let type_postfix = match *func_ctx.info[selector].ty.inner_with(&module.types) {
                     crate::TypeInner::Scalar {

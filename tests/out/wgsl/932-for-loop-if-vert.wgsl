@@ -3,7 +3,7 @@ fn main_1() {
 
     loop {
         let _e2 = i;
-        if (!((_e2 < 1))) {
+        if !((_e2 < 1)) {
             break;
         }
         {

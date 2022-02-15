@@ -801,7 +801,7 @@ fn main_1() {
         let _e224 = i;
         let _e225 = global_2.NumLights;
         let _e229 = i;
-        if (!(((_e224 < i32(_e225.x)) && (_e229 < 10)))) {
+        if !(((_e224 < i32(_e225.x)) && (_e229 < 10))) {
             break;
         }
         {
@@ -828,7 +828,7 @@ fn main_1() {
         let _e261 = i_1;
         let _e262 = global_2.NumLights;
         let _e266 = i_1;
-        if (!(((_e261 < i32(_e262.y)) && (_e266 < 1)))) {
+        if !(((_e261 < i32(_e262.y)) && (_e266 < 1))) {
             break;
         }
         {

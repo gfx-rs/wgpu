@@ -25,7 +25,7 @@ var t_shadow: texture_depth_2d_array;
 var sampler_shadow: sampler_comparison;
 
 fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
-    if ((homogeneous_coords.w <= 0.0)) {
+    if (homogeneous_coords.w <= 0.0) {
         return 1.0;
     }
     let flip_correction = vec2<f32>(0.5, -0.5);
@@ -43,7 +43,7 @@ fn fs_main(@location(0) raw_normal: vec3<f32>, @location(1) position: vec4<f32>)
     loop {
         let _e12 = i;
         let _e15 = u_globals.num_lights.x;
-        if ((_e12 >= min(_e15, c_max_lights))) {
+        if (_e12 >= min(_e15, c_max_lights)) {
             break;
         }
         let _e19 = i;

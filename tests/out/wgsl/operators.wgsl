@@ -26,7 +26,7 @@ fn splat() -> vec4<f32> {
 }
 
 fn unary() -> i32 {
-    if (!(true)) {
+    if !(true) {
         return 1;
     } else {
         return ~(1);

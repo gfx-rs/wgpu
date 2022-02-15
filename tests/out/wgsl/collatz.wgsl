@@ -12,11 +12,11 @@ fn collatz_iterations(n_base: u32) -> u32 {
     n = n_base;
     loop {
         let _e5 = n;
-        if ((_e5 <= 1u)) {
+        if (_e5 <= 1u) {
             break;
         }
         let _e8 = n;
-        if (((_e8 % 2u) == 0u)) {
+        if ((_e8 % 2u) == 0u) {
             let _e13 = n;
             n = (_e13 / 2u);
         } else {
