@@ -266,7 +266,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
 }
 
 /// Type system for enforcing the lock order on shared HUB structures.
-/// If type A implements `Access<A>`, that means we are allowed to proceed
+/// If type A implements `Access<B>`, that means we are allowed to proceed
 /// with locking resource `B` after we lock `A`.
 ///
 /// The implenentations basically describe the edges in a directed graph
