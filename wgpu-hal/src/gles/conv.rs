@@ -4,6 +4,7 @@ impl super::AdapterShared {
         texture_format: wgt::TextureFormat,
     ) -> super::TextureFormatDesc {
         use wgt::TextureFormat as Tf;
+        use wgt::{AstcBlock, AstcChannel};
 
         let (internal, external, data_type) = match texture_format {
             Tf::R8Unorm => (glow::R8, glow::RED, glow::UNSIGNED_BYTE),
@@ -104,46 +105,53 @@ impl super::AdapterShared {
             Tf::EacR11Snorm => (glow::COMPRESSED_SIGNED_R11_EAC, glow::RED, 0),
             Tf::EacRg11Unorm => (glow::COMPRESSED_RG11_EAC, glow::RG, 0),
             Tf::EacRg11Snorm => (glow::COMPRESSED_SIGNED_RG11_EAC, glow::RG, 0),
-            Tf::Astc4x4RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_4x4_KHR, glow::RGBA, 0),
-            Tf::Astc4x4RgbaUnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR, glow::RGBA, 0),
-            Tf::Astc5x4RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_5x4_KHR, glow::RGBA, 0),
-            Tf::Astc5x4RgbaUnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR, glow::RGBA, 0),
-            Tf::Astc5x5RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_5x5_KHR, glow::RGBA, 0),
-            Tf::Astc5x5RgbaUnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR, glow::RGBA, 0),
-            Tf::Astc6x5RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_6x5_KHR, glow::RGBA, 0),
-            Tf::Astc6x5RgbaUnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR, glow::RGBA, 0),
-            Tf::Astc6x6RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_6x6_KHR, glow::RGBA, 0),
-            Tf::Astc6x6RgbaUnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR, glow::RGBA, 0),
-            Tf::Astc8x5RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_8x5_KHR, glow::RGBA, 0),
-            Tf::Astc8x5RgbaUnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR, glow::RGBA, 0),
-            Tf::Astc8x6RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_8x6_KHR, glow::RGBA, 0),
-            Tf::Astc8x6RgbaUnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR, glow::RGBA, 0),
-            Tf::Astc8x8RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_8x8_KHR, glow::RGBA, 0),
-            Tf::Astc8x8RgbaUnormSrgb => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR, glow::RGBA, 0),
-            Tf::Astc10x5RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_10x5_KHR, glow::RGBA, 0),
-            Tf::Astc10x5RgbaUnormSrgb => {
-                (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR, glow::RGBA, 0)
-            }
-            Tf::Astc10x6RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_10x6_KHR, glow::RGBA, 0),
-            Tf::Astc10x6RgbaUnormSrgb => {
-                (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR, glow::RGBA, 0)
-            }
-            Tf::Astc10x8RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_10x8_KHR, glow::RGBA, 0),
-            Tf::Astc10x8RgbaUnormSrgb => {
-                (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR, glow::RGBA, 0)
-            }
-            Tf::Astc10x10RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_10x10_KHR, glow::RGBA, 0),
-            Tf::Astc10x10RgbaUnormSrgb => {
-                (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR, glow::RGBA, 0)
-            }
-            Tf::Astc12x10RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_12x10_KHR, glow::RGBA, 0),
-            Tf::Astc12x10RgbaUnormSrgb => {
-                (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR, glow::RGBA, 0)
-            }
-            Tf::Astc12x12RgbaUnorm => (glow::COMPRESSED_RGBA_ASTC_12x12_KHR, glow::RGBA, 0),
-            Tf::Astc12x12RgbaUnormSrgb => {
-                (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR, glow::RGBA, 0)
-            }
+            Tf::Astc { block, channel } => match channel {
+                AstcChannel::Unorm => match block {
+                    AstcBlock::B4x4 => (glow::COMPRESSED_RGBA_ASTC_4x4_KHR, glow::RGBA, 0),
+                    AstcBlock::B5x4 => (glow::COMPRESSED_RGBA_ASTC_5x4_KHR, glow::RGBA, 0),
+                    AstcBlock::B5x5 => (glow::COMPRESSED_RGBA_ASTC_5x5_KHR, glow::RGBA, 0),
+                    AstcBlock::B6x5 => (glow::COMPRESSED_RGBA_ASTC_6x5_KHR, glow::RGBA, 0),
+                    AstcBlock::B6x6 => (glow::COMPRESSED_RGBA_ASTC_6x6_KHR, glow::RGBA, 0),
+                    AstcBlock::B8x5 => (glow::COMPRESSED_RGBA_ASTC_8x5_KHR, glow::RGBA, 0),
+                    AstcBlock::B8x6 => (glow::COMPRESSED_RGBA_ASTC_8x6_KHR, glow::RGBA, 0),
+                    AstcBlock::B8x8 => (glow::COMPRESSED_RGBA_ASTC_8x8_KHR, glow::RGBA, 0),
+                    AstcBlock::B10x5 => (glow::COMPRESSED_RGBA_ASTC_10x5_KHR, glow::RGBA, 0),
+                    AstcBlock::B10x6 => (glow::COMPRESSED_RGBA_ASTC_10x6_KHR, glow::RGBA, 0),
+                    AstcBlock::B10x8 => (glow::COMPRESSED_RGBA_ASTC_10x8_KHR, glow::RGBA, 0),
+                    AstcBlock::B10x10 => (glow::COMPRESSED_RGBA_ASTC_10x10_KHR, glow::RGBA, 0),
+                    AstcBlock::B12x10 => (glow::COMPRESSED_RGBA_ASTC_12x10_KHR, glow::RGBA, 0),
+                    AstcBlock::B12x12 => (glow::COMPRESSED_RGBA_ASTC_12x12_KHR, glow::RGBA, 0),
+                },
+                AstcChannel::UnormSrgb => match block {
+                    AstcBlock::B4x4 => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR, glow::RGBA, 0),
+                    AstcBlock::B5x4 => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR, glow::RGBA, 0),
+                    AstcBlock::B5x5 => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR, glow::RGBA, 0),
+                    AstcBlock::B6x5 => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR, glow::RGBA, 0),
+                    AstcBlock::B6x6 => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR, glow::RGBA, 0),
+                    AstcBlock::B8x5 => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR, glow::RGBA, 0),
+                    AstcBlock::B8x6 => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR, glow::RGBA, 0),
+                    AstcBlock::B8x8 => (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR, glow::RGBA, 0),
+                    AstcBlock::B10x5 => {
+                        (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR, glow::RGBA, 0)
+                    }
+                    AstcBlock::B10x6 => {
+                        (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR, glow::RGBA, 0)
+                    }
+                    AstcBlock::B10x8 => {
+                        (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR, glow::RGBA, 0)
+                    }
+                    AstcBlock::B10x10 => {
+                        (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR, glow::RGBA, 0)
+                    }
+                    AstcBlock::B12x10 => {
+                        (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR, glow::RGBA, 0)
+                    }
+                    AstcBlock::B12x12 => {
+                        (glow::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR, glow::RGBA, 0)
+                    }
+                },
+                AstcChannel::Hdr => unimplemented!(),
+            },
         };
 
         super::TextureFormatDesc {

@@ -25,13 +25,13 @@ use std::{
 use parking_lot::Mutex;
 
 pub use wgt::{
-    AdapterInfo, AddressMode, Backend, Backends, BindGroupLayoutEntry, BindingType, BlendComponent,
-    BlendFactor, BlendOperation, BlendState, BufferAddress, BufferBindingType, BufferSize,
-    BufferUsages, Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
-    DepthBiasState, DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags,
-    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, Limits, MultisampleState, Origin3d,
-    PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
+    AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
+    BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
+    BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
+    CommandBufferDescriptor, CompareFunction, DepthBiasState, DepthStencilState, DeviceType,
+    DownlevelCapabilities, DownlevelFlags, DynamicOffset, Extent3d, Face, Features, FilterMode,
+    FrontFace, ImageDataLayout, ImageSubresourceRange, IndexFormat, Limits, MultisampleState,
+    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
     PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType,
     SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages, StencilFaceState,
     StencilOperation, StencilState, StorageTextureAccess, SurfaceConfiguration, SurfaceStatus,

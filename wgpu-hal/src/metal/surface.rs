@@ -208,10 +208,18 @@ impl crate::Surface<super::Api> for super::Surface {
         render_layer.set_pixel_format(self.raw_swapchain_format);
         render_layer.set_framebuffer_only(framebuffer_only);
         render_layer.set_presents_with_transaction(self.present_with_transaction);
+        // opt-in to Metal EDR
+        // EDR potentially more power used in display and more bandwidth, memory footprint.
+        #[cfg(target_os = "macos")]
+        {
+            let wants_edr = self.raw_swapchain_format == mtl::MTLPixelFormat::RGBA16Float;
+            if wants_edr != render_layer.wants_extended_dynamic_range_content() {
+                render_layer.set_wants_extended_dynamic_range_content(wants_edr);
+            }
+        }
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
-        let () = msg_send![*render_layer, setMaximumDrawableCount: config.swap_chain_size as u64];
-
+        render_layer.set_maximum_drawable_count(config.swap_chain_size as _);
         render_layer.set_drawable_size(drawable_size);
         if caps.can_set_next_drawable_timeout {
             let () = msg_send![*render_layer, setAllowsNextDrawableTimeout:false];
