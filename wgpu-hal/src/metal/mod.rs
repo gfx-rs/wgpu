@@ -166,6 +166,7 @@ struct PrivateCapabilities {
     format_bc: bool,
     format_eac_etc: bool,
     format_astc: bool,
+    format_astc_hdr: bool,
     format_any8_unorm_srgb_all: bool,
     format_any8_unorm_srgb_no_write: bool,
     format_any8_snorm_all: bool,

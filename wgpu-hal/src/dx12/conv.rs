@@ -77,35 +77,11 @@ pub(super) fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI
         | Tf::EacR11Unorm
         | Tf::EacR11Snorm
         | Tf::EacRg11Unorm
-        | Tf::EacRg11Snorm
-        | Tf::Astc4x4RgbaUnorm
-        | Tf::Astc4x4RgbaUnormSrgb
-        | Tf::Astc5x4RgbaUnorm
-        | Tf::Astc5x4RgbaUnormSrgb
-        | Tf::Astc5x5RgbaUnorm
-        | Tf::Astc5x5RgbaUnormSrgb
-        | Tf::Astc6x5RgbaUnorm
-        | Tf::Astc6x5RgbaUnormSrgb
-        | Tf::Astc6x6RgbaUnorm
-        | Tf::Astc6x6RgbaUnormSrgb
-        | Tf::Astc8x5RgbaUnorm
-        | Tf::Astc8x5RgbaUnormSrgb
-        | Tf::Astc8x6RgbaUnorm
-        | Tf::Astc8x6RgbaUnormSrgb
-        | Tf::Astc10x5RgbaUnorm
-        | Tf::Astc10x5RgbaUnormSrgb
-        | Tf::Astc10x6RgbaUnorm
-        | Tf::Astc10x6RgbaUnormSrgb
-        | Tf::Astc8x8RgbaUnorm
-        | Tf::Astc8x8RgbaUnormSrgb
-        | Tf::Astc10x8RgbaUnorm
-        | Tf::Astc10x8RgbaUnormSrgb
-        | Tf::Astc10x10RgbaUnorm
-        | Tf::Astc10x10RgbaUnormSrgb
-        | Tf::Astc12x10RgbaUnorm
-        | Tf::Astc12x10RgbaUnormSrgb
-        | Tf::Astc12x12RgbaUnorm
-        | Tf::Astc12x12RgbaUnormSrgb => unreachable!(),
+        | Tf::EacRg11Snorm => unreachable!(),
+        Tf::Astc {
+            block: _,
+            channel: _,
+        } => unreachable!(),
     }
 }
 

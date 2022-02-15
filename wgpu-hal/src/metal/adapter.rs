@@ -1,6 +1,7 @@
 use mtl::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion};
 use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
+use wgt::{AstcBlock, AstcChannel};
 
 use std::{sync::Arc, thread};
 
@@ -321,35 +322,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     Tfc::empty()
                 }
             }
-            Tf::Astc4x4RgbaUnorm
-            | Tf::Astc4x4RgbaUnormSrgb
-            | Tf::Astc5x4RgbaUnorm
-            | Tf::Astc5x4RgbaUnormSrgb
-            | Tf::Astc5x5RgbaUnorm
-            | Tf::Astc5x5RgbaUnormSrgb
-            | Tf::Astc6x5RgbaUnorm
-            | Tf::Astc6x5RgbaUnormSrgb
-            | Tf::Astc6x6RgbaUnorm
-            | Tf::Astc6x6RgbaUnormSrgb
-            | Tf::Astc8x5RgbaUnorm
-            | Tf::Astc8x5RgbaUnormSrgb
-            | Tf::Astc8x6RgbaUnorm
-            | Tf::Astc8x6RgbaUnormSrgb
-            | Tf::Astc10x5RgbaUnorm
-            | Tf::Astc10x5RgbaUnormSrgb
-            | Tf::Astc10x6RgbaUnorm
-            | Tf::Astc10x6RgbaUnormSrgb
-            | Tf::Astc8x8RgbaUnorm
-            | Tf::Astc8x8RgbaUnormSrgb
-            | Tf::Astc10x8RgbaUnorm
-            | Tf::Astc10x8RgbaUnormSrgb
-            | Tf::Astc10x10RgbaUnorm
-            | Tf::Astc10x10RgbaUnormSrgb
-            | Tf::Astc12x10RgbaUnorm
-            | Tf::Astc12x10RgbaUnormSrgb
-            | Tf::Astc12x12RgbaUnorm
-            | Tf::Astc12x12RgbaUnormSrgb => {
-                if pc.format_astc {
+            Tf::Astc {
+                block: _,
+                channel: _,
+            } => {
+                if pc.format_astc || pc.format_astc_hdr {
                     Tfc::SAMPLED_LINEAR
                 } else {
                     Tfc::empty()
@@ -722,8 +699,10 @@ impl super::PrivateCapabilities {
                 // M1 in macOS supports EAC/ETC2
                 || (family_check && device.supports_family(MTLGPUFamily::Apple7)),
             format_astc: Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES)
-                // A13/A14/M1 and later always support ASTC
-                || (family_check && device.supports_family(MTLGPUFamily::Apple6)),
+                // A8(Apple2) and later always support ASTC pixel formats
+                || (family_check && device.supports_family(MTLGPUFamily::Apple2)),
+            // A13(Apple6) M1(Apple7) and later always support HDR ASTC pixel formats
+            format_astc_hdr: family_check && device.supports_family(MTLGPUFamily::Apple6),
             format_any8_unorm_srgb_all: Self::supports_any(device, ANY8_UNORM_SRGB_ALL),
             format_any8_unorm_srgb_no_write: !Self::supports_any(device, ANY8_UNORM_SRGB_ALL)
                 && !os_is_mac,
@@ -1024,6 +1003,7 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_FORMAT_16BIT_NORM;
 
         features.set(F::TEXTURE_COMPRESSION_ASTC_LDR, self.format_astc);
+        features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
@@ -1118,7 +1098,6 @@ impl super::PrivateCapabilities {
     pub fn map_format(&self, format: wgt::TextureFormat) -> mtl::MTLPixelFormat {
         use mtl::MTLPixelFormat::*;
         use wgt::TextureFormat as Tf;
-
         match format {
             Tf::R8Unorm => R8Unorm,
             Tf::R8Snorm => R8Snorm,
@@ -1201,34 +1180,56 @@ impl super::PrivateCapabilities {
             Tf::EacR11Snorm => EAC_R11Snorm,
             Tf::EacRg11Unorm => EAC_RG11Unorm,
             Tf::EacRg11Snorm => EAC_RG11Snorm,
-            Tf::Astc4x4RgbaUnorm => ASTC_4x4_LDR,
-            Tf::Astc4x4RgbaUnormSrgb => ASTC_4x4_sRGB,
-            Tf::Astc5x4RgbaUnorm => ASTC_5x4_LDR,
-            Tf::Astc5x4RgbaUnormSrgb => ASTC_5x4_sRGB,
-            Tf::Astc5x5RgbaUnorm => ASTC_5x5_LDR,
-            Tf::Astc5x5RgbaUnormSrgb => ASTC_5x5_sRGB,
-            Tf::Astc6x5RgbaUnorm => ASTC_6x5_LDR,
-            Tf::Astc6x5RgbaUnormSrgb => ASTC_6x5_sRGB,
-            Tf::Astc6x6RgbaUnorm => ASTC_6x6_LDR,
-            Tf::Astc6x6RgbaUnormSrgb => ASTC_6x6_sRGB,
-            Tf::Astc8x5RgbaUnorm => ASTC_8x5_LDR,
-            Tf::Astc8x5RgbaUnormSrgb => ASTC_8x5_sRGB,
-            Tf::Astc8x6RgbaUnorm => ASTC_8x6_LDR,
-            Tf::Astc8x6RgbaUnormSrgb => ASTC_8x6_sRGB,
-            Tf::Astc10x5RgbaUnorm => ASTC_8x8_LDR,
-            Tf::Astc10x5RgbaUnormSrgb => ASTC_8x8_sRGB,
-            Tf::Astc10x6RgbaUnorm => ASTC_10x5_LDR,
-            Tf::Astc10x6RgbaUnormSrgb => ASTC_10x5_sRGB,
-            Tf::Astc8x8RgbaUnorm => ASTC_10x6_LDR,
-            Tf::Astc8x8RgbaUnormSrgb => ASTC_10x6_sRGB,
-            Tf::Astc10x8RgbaUnorm => ASTC_10x8_LDR,
-            Tf::Astc10x8RgbaUnormSrgb => ASTC_10x8_sRGB,
-            Tf::Astc10x10RgbaUnorm => ASTC_10x10_LDR,
-            Tf::Astc10x10RgbaUnormSrgb => ASTC_10x10_sRGB,
-            Tf::Astc12x10RgbaUnorm => ASTC_12x10_LDR,
-            Tf::Astc12x10RgbaUnormSrgb => ASTC_12x10_sRGB,
-            Tf::Astc12x12RgbaUnorm => ASTC_12x12_LDR,
-            Tf::Astc12x12RgbaUnormSrgb => ASTC_12x12_sRGB,
+            Tf::Astc { block, channel } => match channel {
+                AstcChannel::Unorm => match block {
+                    AstcBlock::B4x4 => ASTC_4x4_LDR,
+                    AstcBlock::B5x4 => ASTC_5x4_LDR,
+                    AstcBlock::B5x5 => ASTC_5x5_LDR,
+                    AstcBlock::B6x5 => ASTC_6x5_LDR,
+                    AstcBlock::B6x6 => ASTC_6x6_LDR,
+                    AstcBlock::B8x5 => ASTC_8x5_LDR,
+                    AstcBlock::B8x6 => ASTC_8x6_LDR,
+                    AstcBlock::B8x8 => ASTC_8x8_LDR,
+                    AstcBlock::B10x5 => ASTC_10x5_LDR,
+                    AstcBlock::B10x6 => ASTC_10x6_LDR,
+                    AstcBlock::B10x8 => ASTC_10x8_LDR,
+                    AstcBlock::B10x10 => ASTC_10x10_LDR,
+                    AstcBlock::B12x10 => ASTC_12x10_LDR,
+                    AstcBlock::B12x12 => ASTC_12x12_LDR,
+                },
+                AstcChannel::UnormSrgb => match block {
+                    AstcBlock::B4x4 => ASTC_4x4_sRGB,
+                    AstcBlock::B5x4 => ASTC_5x4_sRGB,
+                    AstcBlock::B5x5 => ASTC_5x5_sRGB,
+                    AstcBlock::B6x5 => ASTC_6x5_sRGB,
+                    AstcBlock::B6x6 => ASTC_6x6_sRGB,
+                    AstcBlock::B8x5 => ASTC_8x5_sRGB,
+                    AstcBlock::B8x6 => ASTC_8x6_sRGB,
+                    AstcBlock::B8x8 => ASTC_8x8_sRGB,
+                    AstcBlock::B10x5 => ASTC_10x5_sRGB,
+                    AstcBlock::B10x6 => ASTC_10x6_sRGB,
+                    AstcBlock::B10x8 => ASTC_10x8_sRGB,
+                    AstcBlock::B10x10 => ASTC_10x10_sRGB,
+                    AstcBlock::B12x10 => ASTC_12x10_sRGB,
+                    AstcBlock::B12x12 => ASTC_12x12_sRGB,
+                },
+                AstcChannel::Hdr => match block {
+                    AstcBlock::B4x4 => ASTC_4x4_HDR,
+                    AstcBlock::B5x4 => ASTC_5x4_HDR,
+                    AstcBlock::B5x5 => ASTC_5x5_HDR,
+                    AstcBlock::B6x5 => ASTC_6x5_HDR,
+                    AstcBlock::B6x6 => ASTC_6x6_HDR,
+                    AstcBlock::B8x5 => ASTC_8x5_HDR,
+                    AstcBlock::B8x6 => ASTC_8x6_HDR,
+                    AstcBlock::B8x8 => ASTC_8x8_HDR,
+                    AstcBlock::B10x5 => ASTC_10x5_HDR,
+                    AstcBlock::B10x6 => ASTC_10x6_HDR,
+                    AstcBlock::B10x8 => ASTC_10x8_HDR,
+                    AstcBlock::B10x10 => ASTC_10x10_HDR,
+                    AstcBlock::B12x10 => ASTC_12x10_HDR,
+                    AstcBlock::B12x12 => ASTC_12x12_HDR,
+                },
+            },
         }
     }
 }

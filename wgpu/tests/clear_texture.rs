@@ -78,35 +78,120 @@ static TEXTURE_FORMATS_ETC2: &[wgpu::TextureFormat] = &[
 ];
 
 // needs TEXTURE_COMPRESSION_ASTC_LDR
+use wgpu::{AstcBlock, AstcChannel};
 static TEXTURE_FORMATS_ASTC: &[wgpu::TextureFormat] = &[
-    wgpu::TextureFormat::Astc4x4RgbaUnorm,
-    wgpu::TextureFormat::Astc4x4RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc5x4RgbaUnorm,
-    wgpu::TextureFormat::Astc5x4RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc5x5RgbaUnorm,
-    wgpu::TextureFormat::Astc5x5RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc6x5RgbaUnorm,
-    wgpu::TextureFormat::Astc6x5RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc6x6RgbaUnorm,
-    wgpu::TextureFormat::Astc6x6RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc8x5RgbaUnorm,
-    wgpu::TextureFormat::Astc8x5RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc8x6RgbaUnorm,
-    wgpu::TextureFormat::Astc8x6RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc10x5RgbaUnorm,
-    wgpu::TextureFormat::Astc10x5RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc10x6RgbaUnorm,
-    wgpu::TextureFormat::Astc10x6RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc8x8RgbaUnorm,
-    wgpu::TextureFormat::Astc8x8RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc10x8RgbaUnorm,
-    wgpu::TextureFormat::Astc10x8RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc10x10RgbaUnorm,
-    wgpu::TextureFormat::Astc10x10RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc12x10RgbaUnorm,
-    wgpu::TextureFormat::Astc12x10RgbaUnormSrgb,
-    wgpu::TextureFormat::Astc12x12RgbaUnorm,
-    wgpu::TextureFormat::Astc12x12RgbaUnormSrgb,
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B4x4,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B5x4,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B5x5,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B6x5,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B6x6,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B8x5,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B8x6,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B8x8,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B10x5,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B10x6,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B10x8,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B10x10,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B12x10,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B12x12,
+        channel: AstcChannel::Unorm,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B4x4,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B5x4,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B5x5,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B6x5,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B6x6,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B8x5,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B8x6,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B8x8,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B10x5,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B10x6,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B10x8,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B10x10,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B12x10,
+        channel: AstcChannel::UnormSrgb,
+    },
+    wgpu::TextureFormat::Astc {
+        block: AstcBlock::B12x12,
+        channel: AstcChannel::UnormSrgb,
+    },
 ];
 
 fn single_texture_clear_test(
