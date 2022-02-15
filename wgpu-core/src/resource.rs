@@ -306,7 +306,9 @@ pub enum CreateTextureError {
     )]
     InvalidMipLevelCount { requested: u32, maximum: u32 },
     #[error("Texture usages {0:?} are not allowed on a texture of type {1:?}")]
-    InvalidUsages(wgt::TextureUsages, wgt::TextureFormat),
+    InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat),
+    #[error("Texture usages {0:?} are not allowed on a texture of dimensions {1:?}")]
+    InvalidDimensionUsages(wgt::TextureUsages, wgt::TextureDimension),
     #[error("Texture format {0:?} can't be used")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
 }
