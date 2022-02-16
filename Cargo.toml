@@ -63,6 +63,7 @@ pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 
 [dev-dependencies]
+bincode = "1"
 criterion = { version = "0.3", features = ["html_reports"] }
 diff = "0.1"
 ron = "0.7"
