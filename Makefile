@@ -11,6 +11,10 @@ all:
 clean:
 	rm *.metal *.air *.metallib *.vert *.frag *.comp *.spv
 
+bench:
+	#rm -Rf target/criterion
+	cargo bench
+
 %.metal: $(SNAPSHOTS_BASE_IN)/%.wgsl $(wildcard src/*.rs src/**/*.rs examples/*.rs)
 	cargo run --features wgsl-in,msl-out -- $< $@
 
