@@ -14,8 +14,9 @@ name = "naga"
 path = "src/main.rs"
 
 [dependencies]
-naga = { path = "../", features = ["validate", "span", "wgsl-in", "wgsl-out", "glsl-in", "glsl-out", "spv-in", "spv-out", "msl-out", "hlsl-out", "dot-out", "glsl-validate"] }
+naga = { path = "../", features = ["validate", "span", "wgsl-in", "wgsl-out", "glsl-in", "glsl-out", "spv-in", "spv-out", "msl-out", "hlsl-out", "dot-out", "glsl-validate", "serialize", "deserialize"] }
+bincode = "1"
 log = "0.4"
 codespan-reporting = "0.11"
-env_logger = "0.8"
+env_logger = "0.9"
 argh = "0.1.5"

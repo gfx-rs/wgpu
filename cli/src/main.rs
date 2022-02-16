@@ -265,6 +265,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .to_str()
         .ok_or(CliError("Input filename not valid unicode"))?
     {
+        "bin" => (bincode::deserialize(&input)?, None),
         "spv" => {
             let options = naga::front::spv::Options {
                 adjust_coordinate_space: !params.keep_coordinate_space,
@@ -359,6 +360,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     writeln!(file)?;
                     writeln!(file, "{:#?}", info)?;
                 }
+            }
+            "bin" => {
+                let file = fs::File::create(output_path)?;
+                bincode::serialize_into(file, &module)?;
             }
             "metal" => {
                 use naga::back::msl;
