@@ -231,6 +231,17 @@ impl Validator {
         }
     }
 
+    /// Reset the validator internals
+    pub fn reset(&mut self) {
+        self.types.clear();
+        self.layouter.clear();
+        self.location_mask.clear();
+        self.bind_group_masks.clear();
+        self.select_cases.clear();
+        self.valid_expression_list.clear();
+        self.valid_expression_set.clear();
+    }
+
     #[cfg(feature = "validate")]
     fn validate_constant(
         &self,
@@ -276,7 +287,9 @@ impl Validator {
         &mut self,
         module: &crate::Module,
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
+        self.reset();
         self.reset_types(module.types.len());
+
         self.layouter
             .update(&module.types, &module.constants)
             .map_err(|e| {

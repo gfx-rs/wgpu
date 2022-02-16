@@ -87,12 +87,54 @@ fn frontends(c: &mut Criterion) {
         b.iter(move || parse_glsl(naga::ShaderStage::Vertex, &vert));
         let frag = gather_inputs("tests/in/glsl", "frag");
         b.iter(move || parse_glsl(naga::ShaderStage::Vertex, &frag));
+        //TODO: hangs for some reason!
         //let comp = gather_inputs("tests/in/glsl", "comp");
         //b.iter(move || parse_glsl(naga::ShaderStage::Compute, &comp));
     });
 }
 
-fn validation(_c: &mut Criterion) {}
+fn validation(c: &mut Criterion) {
+    #[cfg(feature = "wgsl-in")]
+    let inputs = {
+        let inputs_wgsl = gather_inputs("tests/in", "wgsl");
+        let mut parser = naga::front::wgsl::Parser::new();
+        inputs_wgsl
+            .iter()
+            .map(|input| {
+                let string = std::str::from_utf8(input).unwrap();
+                parser.parse(string).unwrap()
+            })
+            .collect::<Vec<_>>()
+    };
+    #[cfg(not(feature = "wgsl-in"))]
+    let inputs: Vec<Box<[u8]>> = Vec::new();
+
+    let mut group = c.benchmark_group("valid");
+    #[cfg(feature = "validate")]
+    group.bench_function("safe", |b| {
+        let mut validator = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        );
+        b.iter(|| {
+            for input in inputs.iter() {
+                validator.validate(input).unwrap();
+            }
+        });
+    });
+    #[cfg(feature = "validate")]
+    group.bench_function("unsafe", |b| {
+        let mut validator = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::empty(),
+            naga::valid::Capabilities::all(),
+        );
+        b.iter(|| {
+            for input in inputs.iter() {
+                validator.validate(input).unwrap();
+            }
+        });
+    });
+}
 
 fn backends(_c: &mut Criterion) {}
 
