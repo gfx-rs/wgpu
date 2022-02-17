@@ -29,7 +29,7 @@ jobs:
           # we could use `test` but `criterion` is a dev dependency,
           # and it doesn't build with our MSRV
           command: check
-          # `cli` already enables most features, so let's add the rest,
+          # `cli` already enables most features,
           # except for `arbitrary`, which requires Rust-1.51
           args: --workspace
       - name: Check snapshots

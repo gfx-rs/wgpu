@@ -59,12 +59,15 @@ fn frontends(c: &mut Criterion) {
     });
     #[cfg(feature = "wgsl-in")]
     group.bench_function("wgsl", |b| {
-        let inputs = gather_inputs("tests/in", "wgsl");
+        let inputs_wgsl = gather_inputs("tests/in", "wgsl");
+        let inputs = inputs_wgsl
+            .iter()
+            .map(|input| std::str::from_utf8(input).unwrap())
+            .collect::<Vec<_>>();
         let mut parser = naga::front::wgsl::Parser::new();
         b.iter(move || {
-            for input in inputs.iter() {
-                let string = std::str::from_utf8(input).unwrap();
-                parser.parse(string).unwrap();
+            for &input in inputs.iter() {
+                parser.parse(input).unwrap();
             }
         });
     });
