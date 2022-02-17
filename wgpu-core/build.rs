@@ -7,7 +7,7 @@ fn main() {
         unix_wo_apple: {all(unix, not(apple))},
 
         // Backends
-        vulkan: { all(not(wasm), any(windows, unix_wo_apple)) },
+        vulkan: { all(not(wasm), any(windows, unix_wo_apple, feature = "vulkan-portability")) },
         metal: { all(not(wasm), apple) },
         dx12: { all(not(wasm), windows) },
         dx11: { all(false, not(wasm), windows) },
