@@ -1242,6 +1242,13 @@ impl Parser {
         }
     }
 
+    fn reset(&mut self) {
+        self.scopes.clear();
+        self.module_scope_identifiers.clear();
+        self.lookup_type.clear();
+        self.layouter.clear();
+    }
+
     fn push_scope(&mut self, scope: Scope, lexer: &Lexer<'_>) {
         self.scopes.push((scope, lexer.current_byte_offset()));
     }
@@ -4344,9 +4351,7 @@ impl Parser {
     }
 
     pub fn parse(&mut self, source: &str) -> Result<crate::Module, ParseError> {
-        self.scopes.clear();
-        self.lookup_type.clear();
-        self.layouter.clear();
+        self.reset();
 
         let mut module = crate::Module::default();
         let mut lexer = Lexer::new(source);
