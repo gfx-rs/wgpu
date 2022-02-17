@@ -630,6 +630,9 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::ExtDepthClipEnableFn::name());
         }
 
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        extensions.push(vk::KhrPortabilitySubsetFn::name());
+
         extensions
     }
 
@@ -1494,6 +1497,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             wgt::TextureFormat::Rgba8UnormSrgb,
             wgt::TextureFormat::Bgra8Unorm,
             wgt::TextureFormat::Bgra8UnormSrgb,
+            wgt::TextureFormat::Rgba16Float,
         ];
         let formats = supported_formats
             .iter()

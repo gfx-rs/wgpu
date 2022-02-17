@@ -210,12 +210,9 @@ impl crate::Surface<super::Api> for super::Surface {
         render_layer.set_presents_with_transaction(self.present_with_transaction);
         // opt-in to Metal EDR
         // EDR potentially more power used in display and more bandwidth, memory footprint.
-        #[cfg(target_os = "macos")]
-        {
-            let wants_edr = self.raw_swapchain_format == mtl::MTLPixelFormat::RGBA16Float;
-            if wants_edr != render_layer.wants_extended_dynamic_range_content() {
-                render_layer.set_wants_extended_dynamic_range_content(wants_edr);
-            }
+        let wants_edr = self.raw_swapchain_format == mtl::MTLPixelFormat::RGBA16Float;
+        if wants_edr != render_layer.wants_extended_dynamic_range_content() {
+            render_layer.set_wants_extended_dynamic_range_content(wants_edr);
         }
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)

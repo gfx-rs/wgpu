@@ -514,6 +514,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 //acquired_texture: None,
             }),
+            #[cfg(vulkan)]
+            vulkan: None,
             #[cfg(gl)]
             gl: None,
         };
