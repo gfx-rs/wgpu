@@ -384,7 +384,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 height: 4096,
                 depth_or_array_layers: 1,
             },
-            usage: crate::TextureUses::COLOR_TARGET, //TODO: expose more
+            usage: crate::TextureUses::COLOR_TARGET | crate::TextureUses::COPY_DST, //TODO: expose more
         })
     }
 }
