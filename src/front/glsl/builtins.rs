@@ -1,11 +1,14 @@
 use super::{
-    ast::{FunctionDeclaration, FunctionKind, Overload, ParameterInfo, ParameterQualifier},
+    ast::{
+        BuiltinVariations, FunctionDeclaration, FunctionKind, Overload, ParameterInfo,
+        ParameterQualifier,
+    },
     context::Context,
     Error, ErrorKind, Parser, Result,
 };
 use crate::{
     BinaryOperator, Block, Constant, DerivativeAxis, Expression, Handle, ImageClass,
-    ImageDimension, ImageQuery, MathFunction, Module, RelationalFunction, SampleLevel,
+    ImageDimension as Dim, ImageQuery, MathFunction, Module, RelationalFunction, SampleLevel,
     ScalarKind as Sk, Span, Type, TypeInner, VectorSize,
 };
 
@@ -67,85 +70,30 @@ fn make_coords_arg(number_of_components: usize, kind: Sk) -> TypeInner {
     }
 }
 
-/// Inject builtins into
+/// Inject builtins into the declaration
 ///
 /// This is done to not add a large startup cost and not increase memory
 /// usage if it isn't needed.
-///
-/// This version does not add builtins with arguments using the double type
-/// [`inject_double_builtin`](inject_double_builtin) for builtins
-/// using the double type
-pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module, name: &str) {
-    use crate::ImageDimension as Dim;
+pub fn inject_builtin(
+    declaration: &mut FunctionDeclaration,
+    module: &mut Module,
+    name: &str,
+    mut variations: BuiltinVariations,
+) {
+    // Don't regeneate variations
+    variations.remove(declaration.variations);
+    declaration.variations |= variations;
 
-    declaration.builtin = true;
+    if variations.contains(BuiltinVariations::STANDARD) {
+        inject_standard_builtins(declaration, module, name)
+    }
+
+    if variations.contains(BuiltinVariations::DOUBLE) {
+        inject_double_builtin(declaration, module, name)
+    }
+
     let width = 4;
     match name {
-        "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
-        | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
-            declaration.overloads.push(module.add_builtin(
-                vec![
-                    TypeInner::Image {
-                        dim: match name {
-                            "sampler1D" | "sampler1DArray" => Dim::D1,
-                            "sampler2D" | "sampler2DArray" | "sampler2DMS" | "sampler2DMSArray" => {
-                                Dim::D2
-                            }
-                            "sampler3D" => Dim::D3,
-                            _ => Dim::Cube,
-                        },
-                        arrayed: matches!(
-                            name,
-                            "sampler1DArray"
-                                | "sampler2DArray"
-                                | "sampler2DMSArray"
-                                | "samplerCubeArray"
-                        ),
-                        class: ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: matches!(name, "sampler2DMS" | "sampler2DMSArray"),
-                        },
-                    },
-                    TypeInner::Sampler { comparison: false },
-                ],
-                MacroCall::Sampler,
-            ))
-        }
-        "sampler1DShadow"
-        | "sampler1DArrayShadow"
-        | "sampler2DShadow"
-        | "sampler2DArrayShadow"
-        | "samplerCubeShadow"
-        | "samplerCubeArrayShadow" => {
-            let dim = match name {
-                "sampler1DShadow" | "sampler1DArrayShadow" => Dim::D1,
-                "sampler2DShadow" | "sampler2DArrayShadow" => Dim::D2,
-                _ => Dim::Cube,
-            };
-            let arrayed = matches!(
-                name,
-                "sampler1DArrayShadow" | "sampler2DArrayShadow" | "samplerCubeArrayShadow"
-            );
-
-            for i in 0..2 {
-                let ty = TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class: match i {
-                        0 => ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: false,
-                        },
-                        _ => ImageClass::Depth { multi: false },
-                    },
-                };
-
-                declaration.overloads.push(module.add_builtin(
-                    vec![ty, TypeInner::Sampler { comparison: true }],
-                    MacroCall::SamplerShadow,
-                ))
-            }
-        }
         "texture"
         | "textureGrad"
         | "textureGradOffset"
@@ -273,7 +221,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                         if lod || grad || offset || proj || bias {
                             continue;
                         }
-                        debug_assert!(dim == ImageDimension::Cube && shadow && arrayed);
+                        debug_assert!(dim == Dim::Cube && shadow && arrayed);
                     }
                     debug_assert!(num_coords <= 5);
 
@@ -318,7 +266,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                 }
             };
 
-            texture_args_generator(TextureArgsOptions::SHADOW, f)
+            texture_args_generator(TextureArgsOptions::SHADOW | variations.into(), f)
         }
         "textureSize" => {
             let f = |kind, dim, arrayed, multi, shadow| {
@@ -347,7 +295,10 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                     .push(module.add_builtin(args, MacroCall::TextureSize { arrayed }))
             };
 
-            texture_args_generator(TextureArgsOptions::all(), f)
+            texture_args_generator(
+                TextureArgsOptions::SHADOW | TextureArgsOptions::MULTI | variations.into(),
+                f,
+            )
         }
         "texelFetch" => {
             let f = |kind, dim, arrayed, multi, _shadow| {
@@ -380,7 +331,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
             };
 
             // Don't generate shadow images since they aren't supported
-            texture_args_generator(TextureArgsOptions::MULTI, f)
+            texture_args_generator(TextureArgsOptions::MULTI | variations.into(), f)
         }
         "imageSize" => {
             let f = |kind: Sk, dim, arrayed, _, _| {
@@ -404,7 +355,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
                     .push(module.add_builtin(vec![image], MacroCall::TextureSize { arrayed }))
             };
 
-            texture_args_generator(TextureArgsOptions::empty(), f)
+            texture_args_generator(variations.into(), f)
         }
         "imageLoad" => {
             let f = |kind: Sk, dim, arrayed, _, _| {
@@ -443,7 +394,7 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
             };
 
             // Don't generate shadow nor multisampled images since they aren't supported
-            texture_args_generator(TextureArgsOptions::empty(), f)
+            texture_args_generator(variations.into(), f)
         }
         "imageStore" => {
             let f = |kind: Sk, dim, arrayed, _, _| {
@@ -490,7 +441,84 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
             };
 
             // Don't generate shadow nor multisampled images since they aren't supported
-            texture_args_generator(TextureArgsOptions::empty(), f)
+            texture_args_generator(variations.into(), f)
+        }
+        _ => {}
+    }
+}
+
+/// Injects the builtins into declaration that don't need any special variations
+fn inject_standard_builtins(
+    declaration: &mut FunctionDeclaration,
+    module: &mut Module,
+    name: &str,
+) {
+    let width = 4;
+    match name {
+        "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
+        | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
+            declaration.overloads.push(module.add_builtin(
+                vec![
+                    TypeInner::Image {
+                        dim: match name {
+                            "sampler1D" | "sampler1DArray" => Dim::D1,
+                            "sampler2D" | "sampler2DArray" | "sampler2DMS" | "sampler2DMSArray" => {
+                                Dim::D2
+                            }
+                            "sampler3D" => Dim::D3,
+                            _ => Dim::Cube,
+                        },
+                        arrayed: matches!(
+                            name,
+                            "sampler1DArray"
+                                | "sampler2DArray"
+                                | "sampler2DMSArray"
+                                | "samplerCubeArray"
+                        ),
+                        class: ImageClass::Sampled {
+                            kind: Sk::Float,
+                            multi: matches!(name, "sampler2DMS" | "sampler2DMSArray"),
+                        },
+                    },
+                    TypeInner::Sampler { comparison: false },
+                ],
+                MacroCall::Sampler,
+            ))
+        }
+        "sampler1DShadow"
+        | "sampler1DArrayShadow"
+        | "sampler2DShadow"
+        | "sampler2DArrayShadow"
+        | "samplerCubeShadow"
+        | "samplerCubeArrayShadow" => {
+            let dim = match name {
+                "sampler1DShadow" | "sampler1DArrayShadow" => Dim::D1,
+                "sampler2DShadow" | "sampler2DArrayShadow" => Dim::D2,
+                _ => Dim::Cube,
+            };
+            let arrayed = matches!(
+                name,
+                "sampler1DArrayShadow" | "sampler2DArrayShadow" | "samplerCubeArrayShadow"
+            );
+
+            for i in 0..2 {
+                let ty = TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class: match i {
+                        0 => ImageClass::Sampled {
+                            kind: Sk::Float,
+                            multi: false,
+                        },
+                        _ => ImageClass::Depth { multi: false },
+                    },
+                };
+
+                declaration.overloads.push(module.add_builtin(
+                    vec![ty, TypeInner::Sampler { comparison: true }],
+                    MacroCall::SamplerShadow,
+                ))
+            }
         }
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
         | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh"
@@ -961,13 +989,8 @@ pub fn inject_builtin(declaration: &mut FunctionDeclaration, module: &mut Module
     }
 }
 
-/// Double version of [`inject_builtin`](inject_builtin)
-pub fn inject_double_builtin(
-    declaration: &mut FunctionDeclaration,
-    module: &mut Module,
-    name: &str,
-) {
-    declaration.double = true;
+/// Injects the builtins into declaration that need doubles
+fn inject_double_builtin(declaration: &mut FunctionDeclaration, module: &mut Module, name: &str) {
     let width = 8;
     match name {
         "abs" | "sign" => {
@@ -1114,6 +1137,7 @@ pub fn inject_double_builtin(
     }
 }
 
+/// Injects the builtins into declaration that can used either float or doubles
 fn inject_common_builtin(
     declaration: &mut FunctionDeclaration,
     module: &mut Module,
@@ -1512,7 +1536,7 @@ fn inject_common_builtin(
             }
         }
         // The function isn't a builtin or we don't yet support it
-        _ => declaration.builtin = false,
+        _ => {}
     }
 }
 
@@ -2028,10 +2052,10 @@ impl Parser {
         } = *self.resolve_type(ctx, image, meta)?
         {
             let image_size = match dim {
-                ImageDimension::D1 => None,
-                ImageDimension::D2 => Some(VectorSize::Bi),
-                ImageDimension::D3 => Some(VectorSize::Tri),
-                ImageDimension::Cube => Some(VectorSize::Tri),
+                Dim::D1 => None,
+                Dim::D2 => Some(VectorSize::Bi),
+                Dim::D3 => Some(VectorSize::Tri),
+                Dim::Cube => Some(VectorSize::Tri),
             };
             let coord_size = match *self.resolve_type(ctx, coord, meta)? {
                 TypeInner::Vector { size, .. } => Some(size),
@@ -2060,7 +2084,7 @@ impl Parser {
 
             let mut coord_index = image_size.map_or(1, |s| s as u32);
 
-            let array_index = if arrayed && !(storage && dim == ImageDimension::Cube) {
+            let array_index = if arrayed && !(storage && dim == Dim::Cube) {
                 let index = coord_index;
                 coord_index += 1;
 
@@ -2174,6 +2198,23 @@ bitflags::bitflags! {
         const MULTI = 1 << 0;
         /// Generates shadow variants of images
         const SHADOW = 1 << 1;
+        /// Generates standard images
+        const STANDARD = 1 << 2;
+        /// Generates cube arrayed images
+        const CUBE_ARRAY = 1 << 3;
+    }
+}
+
+impl From<BuiltinVariations> for TextureArgsOptions {
+    fn from(variations: BuiltinVariations) -> Self {
+        let mut options = TextureArgsOptions::empty();
+        if variations.contains(BuiltinVariations::STANDARD) {
+            options |= TextureArgsOptions::STANDARD
+        }
+        if variations.contains(BuiltinVariations::CUBE_TEXTURES_ARRAY) {
+            options |= TextureArgsOptions::CUBE_ARRAY
+        }
+        options
     }
 }
 
@@ -2188,13 +2229,19 @@ bitflags::bitflags! {
 /// see the struct documentation
 fn texture_args_generator(
     options: TextureArgsOptions,
-    mut f: impl FnMut(crate::ScalarKind, ImageDimension, bool, bool, bool),
+    mut f: impl FnMut(crate::ScalarKind, Dim, bool, bool, bool),
 ) {
-    use crate::ImageDimension as Dim;
-
     for kind in [Sk::Float, Sk::Uint, Sk::Sint].iter().copied() {
         for dim in [Dim::D1, Dim::D2, Dim::D3, Dim::Cube].iter().copied() {
             for arrayed in [false, true].iter().copied() {
+                if dim == Dim::Cube && arrayed {
+                    if !options.contains(TextureArgsOptions::CUBE_ARRAY) {
+                        continue;
+                    }
+                } else if !options.contains(TextureArgsOptions::STANDARD) {
+                    continue;
+                }
+
                 f(kind, dim, arrayed, false, false);
 
                 // 3D images can't be neither arrayed nor shadow
@@ -2220,10 +2267,10 @@ fn texture_args_generator(
 
 /// Helper functions used to convert from a image dimension into a integer representing the
 /// number of components needed for the coordinates vector (1 means scalar instead of vector)
-fn image_dims_to_coords_size(dim: ImageDimension) -> usize {
+fn image_dims_to_coords_size(dim: Dim) -> usize {
     match dim {
-        ImageDimension::D1 => 1,
-        ImageDimension::D2 => 2,
+        Dim::D1 => 1,
+        Dim::D2 => 2,
         _ => 3,
     }
 }

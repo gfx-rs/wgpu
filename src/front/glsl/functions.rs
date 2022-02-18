@@ -1,6 +1,6 @@
 use super::{
     ast::*,
-    builtins::{inject_builtin, inject_double_builtin, sampled_to_depth},
+    builtins::{inject_builtin, sampled_to_depth},
     context::{Context, ExprPos, StmtContext},
     error::{Error, ErrorKind},
     types::scalar_components,
@@ -602,26 +602,26 @@ impl Parser {
         raw_args: &[Handle<HirExpr>],
         meta: Span,
     ) -> Result<Option<Handle<Expression>>> {
-        // If the name for the function hasn't yet been initialized check if any
-        // builtin can be injected.
-        if self.lookup_function.get(&name).is_none() {
-            let declaration = self.lookup_function.entry(name.clone()).or_default();
-            inject_builtin(declaration, &mut self.module, &name);
+        // Grow the typifier to be able to index it later without needing
+        // to hold the context mutably
+        for &(expr, span) in args.iter() {
+            self.typifier_grow(ctx, expr, span)?;
         }
 
-        // Check if any argument uses a double type
-        let has_double = args
-            .iter()
-            .any(|&(expr, meta)| self.resolve_type(ctx, expr, meta).map_or(false, is_double));
+        // Check if the passed arguments require any special variations
+        let mut variations = builtin_required_variations(
+            args.iter()
+                .map(|&(expr, _)| ctx.typifier.get(expr, &self.module.types)),
+        );
 
-        // At this point a declaration is guaranteed
-        let declaration = self.lookup_function.get_mut(&name).unwrap();
+        // Initiate the declaration if it wasn't previously initialized and inject builtins
+        let declaration = self.lookup_function.entry(name.clone()).or_insert_with(|| {
+            variations |= BuiltinVariations::STANDARD;
+            Default::default()
+        });
+        inject_builtin(declaration, &mut self.module, &name, variations);
 
-        if declaration.builtin && !declaration.double && has_double {
-            inject_double_builtin(declaration, &mut self.module, &name);
-        }
-
-        // Borrow again but without mutability
+        // Borrow again but without mutability, at this point a declaration is guaranteed
         let declaration = self.lookup_function.get(&name).unwrap();
 
         // Possibly contains the overload to be used in the call
@@ -1026,11 +1026,6 @@ impl Parser {
         mut body: Block,
         meta: Span,
     ) {
-        if self.lookup_function.get(&name).is_none() {
-            let declaration = self.lookup_function.entry(name.clone()).or_default();
-            inject_builtin(declaration, &mut self.module, &name);
-        }
-
         ensure_block_returns(&mut body);
 
         let void = result.is_none();
@@ -1041,7 +1036,16 @@ impl Parser {
             ..
         } = self;
 
-        let declaration = lookup_function.entry(name.clone()).or_default();
+        // Check if the passed arguments require any special variations
+        let mut variations =
+            builtin_required_variations(ctx.parameters.iter().map(|&arg| &module.types[arg].inner));
+
+        // Initiate the declaration if it wasn't previously initialized and inject builtins
+        let declaration = lookup_function.entry(name.clone()).or_insert_with(|| {
+            variations |= BuiltinVariations::STANDARD;
+            Default::default()
+        });
+        inject_builtin(declaration, module, &name, variations);
 
         let Context {
             expressions,
@@ -1051,15 +1055,6 @@ impl Parser {
             parameters_info,
             ..
         } = ctx;
-
-        if declaration.builtin
-            && !declaration.double
-            && parameters
-                .iter()
-                .any(|ty| is_double(&module.types[*ty].inner))
-        {
-            inject_double_builtin(declaration, module, &name);
-        }
 
         let function = Function {
             name: Some(name),
@@ -1122,11 +1117,6 @@ impl Parser {
         result: Option<FunctionResult>,
         meta: Span,
     ) {
-        if self.lookup_function.get(&name).is_none() {
-            let declaration = self.lookup_function.entry(name.clone()).or_default();
-            inject_builtin(declaration, &mut self.module, &name);
-        }
-
         let void = result.is_none();
 
         let &mut Parser {
@@ -1135,7 +1125,16 @@ impl Parser {
             ..
         } = self;
 
-        let declaration = lookup_function.entry(name.clone()).or_default();
+        // Check if the passed arguments require any special variations
+        let mut variations =
+            builtin_required_variations(ctx.parameters.iter().map(|&arg| &module.types[arg].inner));
+
+        // Initiate the declaration if it wasn't previously initialized and inject builtins
+        let declaration = lookup_function.entry(name.clone()).or_insert_with(|| {
+            variations |= BuiltinVariations::STANDARD;
+            Default::default()
+        });
+        inject_builtin(declaration, module, &name, variations);
 
         let Context {
             arguments,
@@ -1143,15 +1142,6 @@ impl Parser {
             parameters_info,
             ..
         } = ctx;
-
-        if declaration.builtin
-            && !declaration.double
-            && parameters
-                .iter()
-                .any(|ty| is_double(&module.types[*ty].inner))
-        {
-            inject_double_builtin(declaration, module, &name);
-        }
 
         let function = Function {
             name: Some(name),
@@ -1404,16 +1394,6 @@ impl Parser {
     }
 }
 
-fn is_double(ty: &TypeInner) -> bool {
-    match *ty {
-        TypeInner::ValuePointer { kind, width, .. }
-        | TypeInner::Scalar { kind, width }
-        | TypeInner::Vector { kind, width, .. } => kind == ScalarKind::Float && width == 8,
-        TypeInner::Matrix { width, .. } => width == 8,
-        _ => false,
-    }
-}
-
 /// Helper enum containing the type of conversion need for a call
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum Conversion {
@@ -1497,4 +1477,35 @@ fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
             _ => Conversion::Other,
         },
     )
+}
+
+/// Helper method returning all the non standard builtin variations needed
+/// to process the function call with the passed arguments
+fn builtin_required_variations<'a>(args: impl Iterator<Item = &'a TypeInner>) -> BuiltinVariations {
+    let mut variations = BuiltinVariations::empty();
+
+    for ty in args {
+        match *ty {
+            TypeInner::ValuePointer { kind, width, .. }
+            | TypeInner::Scalar { kind, width }
+            | TypeInner::Vector { kind, width, .. } => {
+                if kind == ScalarKind::Float && width == 8 {
+                    variations |= BuiltinVariations::DOUBLE
+                }
+            }
+            TypeInner::Matrix { width, .. } => {
+                if width == 8 {
+                    variations |= BuiltinVariations::DOUBLE
+                }
+            }
+            TypeInner::Image { dim, arrayed, .. } => {
+                if dim == crate::ImageDimension::Cube && arrayed {
+                    variations |= BuiltinVariations::CUBE_TEXTURES_ARRAY
+                }
+            }
+            _ => {}
+        }
+    }
+
+    variations
 }

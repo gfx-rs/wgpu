@@ -62,14 +62,26 @@ pub struct Overload {
     pub void: bool,
 }
 
+bitflags::bitflags! {
+    /// Tracks the variations of the builtin already generated, this is needed because some
+    /// builtins overloads can't be generated unless explicitly used, since they might cause
+    /// uneeded capabilities to be requested
+    #[derive(Default)]
+    pub struct BuiltinVariations: u32 {
+        /// Request the standard overloads
+        const STANDARD = 1 << 0;
+        /// Request overloads that use the double type
+        const DOUBLE = 1 << 1;
+        /// Request overloads that use samplerCubeArray(Shadow)
+        const CUBE_TEXTURES_ARRAY = 1 << 2;
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct FunctionDeclaration {
     pub overloads: Vec<Overload>,
-    /// Whether or not this function has the name of a builtin.
-    pub builtin: bool,
-    /// If [`builtin`](Self::builtin) is true, this field indicates whether
-    /// this function already has double overloads added or not. Otherwise, it is unused.
-    pub double: bool,
+    /// Tracks the builtin overload variations that were already generated
+    pub variations: BuiltinVariations,
 }
 
 #[derive(Debug)]
