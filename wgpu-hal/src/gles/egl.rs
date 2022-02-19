@@ -677,9 +677,7 @@ impl crate::Instance<super::Api> for Instance {
             (display, Some(Arc::new(library)), WindowKind::AngleX11)
         } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
             log::info!("No windowing system present. Using surfaceless platform");
-            let egl = egl
-                .upcast::<egl::EGL1_5>()
-                .expect("Failed to get EGL 1.5 for surfaceless");
+            let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
             let display = egl
                 .get_platform_display(
                     EGL_PLATFORM_SURFACELESS_MESA,
