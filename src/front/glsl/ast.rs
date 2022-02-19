@@ -74,6 +74,8 @@ bitflags::bitflags! {
         const DOUBLE = 1 << 1;
         /// Request overloads that use samplerCubeArray(Shadow)
         const CUBE_TEXTURES_ARRAY = 1 << 2;
+        /// Request overloads that use sampler2DMSArray
+        const D2_MULTI_TEXTURES_ARRAY = 1 << 3;
     }
 }
 

@@ -80,6 +80,12 @@ pub fn inject_builtin(
     name: &str,
     mut variations: BuiltinVariations,
 ) {
+    log::trace!(
+        "{} variations: {:?} {:?}",
+        name,
+        variations,
+        declaration.variations
+    );
     // Don't regeneate variations
     variations.remove(declaration.variations);
     declaration.variations |= variations;
@@ -2202,6 +2208,8 @@ bitflags::bitflags! {
         const STANDARD = 1 << 2;
         /// Generates cube arrayed images
         const CUBE_ARRAY = 1 << 3;
+        /// Generates cube arrayed images
+        const D2_MULTI_ARRAY = 1 << 4;
     }
 }
 
@@ -2213,6 +2221,9 @@ impl From<BuiltinVariations> for TextureArgsOptions {
         }
         if variations.contains(BuiltinVariations::CUBE_TEXTURES_ARRAY) {
             options |= TextureArgsOptions::CUBE_ARRAY
+        }
+        if variations.contains(BuiltinVariations::D2_MULTI_TEXTURES_ARRAY) {
+            options |= TextureArgsOptions::D2_MULTI_ARRAY
         }
         options
     }
@@ -2238,6 +2249,13 @@ fn texture_args_generator(
                     if !options.contains(TextureArgsOptions::CUBE_ARRAY) {
                         continue;
                     }
+                } else if Dim::D2 == dim
+                    && options.contains(TextureArgsOptions::MULTI)
+                    && arrayed
+                    && options.contains(TextureArgsOptions::D2_MULTI_ARRAY)
+                {
+                    // multisampling for sampler2DMSArray
+                    f(kind, dim, arrayed, true, false);
                 } else if !options.contains(TextureArgsOptions::STANDARD) {
                     continue;
                 }
@@ -2251,7 +2269,7 @@ fn texture_args_generator(
                     break;
                 }
 
-                if Dim::D2 == dim && options.contains(TextureArgsOptions::MULTI) {
+                if Dim::D2 == dim && options.contains(TextureArgsOptions::MULTI) && !arrayed {
                     // multisampling
                     f(kind, dim, arrayed, true, false);
                 }

@@ -1498,9 +1498,17 @@ fn builtin_required_variations<'a>(args: impl Iterator<Item = &'a TypeInner>) ->
                     variations |= BuiltinVariations::DOUBLE
                 }
             }
-            TypeInner::Image { dim, arrayed, .. } => {
+            TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => {
                 if dim == crate::ImageDimension::Cube && arrayed {
                     variations |= BuiltinVariations::CUBE_TEXTURES_ARRAY
+                }
+
+                if dim == crate::ImageDimension::D2 && arrayed && class.is_multisampled() {
+                    variations |= BuiltinVariations::D2_MULTI_TEXTURES_ARRAY
                 }
             }
             _ => {}
