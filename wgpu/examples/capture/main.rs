@@ -28,10 +28,12 @@ async fn create_red_image_with_dimensions(
     width: usize,
     height: usize,
 ) -> (Device, Buffer, BufferDimensions) {
-    let adapter = wgpu::Instance::new(wgpu::Backends::all())
-        .request_adapter(&wgpu::RequestAdapterOptions::default())
-        .await
-        .unwrap();
+    let adapter = wgpu::Instance::new(
+        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
+    )
+    .request_adapter(&wgpu::RequestAdapterOptions::default())
+    .await
+    .unwrap();
 
     let (device, queue) = adapter
         .request_device(

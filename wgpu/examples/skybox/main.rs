@@ -505,7 +505,7 @@ fn skybox_etc2() {
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
         base_test_parameters: framework::test_common::TestParameters::default(),
         tolerance: 5,
-        max_outliers: 100, // Bounded by llvmpipe
+        max_outliers: 105, // Bounded by llvmpipe
     });
 }
 
