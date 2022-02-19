@@ -557,6 +557,25 @@ fn convert_spv_all() {
 }
 
 #[cfg(feature = "glsl-in")]
+#[test]
+fn convert_glsl_variations_check() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let file = fs::read_to_string(format!("{}/{}/variations.glsl", root, BASE_DIR_IN))
+        .expect("Couldn't find glsl file");
+    let mut parser = naga::front::glsl::Parser::default();
+    let module = parser
+        .parse(
+            &naga::front::glsl::Options {
+                stage: naga::ShaderStage::Fragment,
+                defines: Default::default(),
+            },
+            &file,
+        )
+        .unwrap();
+    check_targets(&module, "variations-glsl", Targets::GLSL);
+}
+
+#[cfg(feature = "glsl-in")]
 #[allow(unused_variables)]
 #[test]
 fn convert_glsl_folder() {
