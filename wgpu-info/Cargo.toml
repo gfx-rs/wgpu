@@ -10,5 +10,5 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
 wgpu = { version = "0.12", path = "../wgpu" }

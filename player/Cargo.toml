@@ -15,7 +15,7 @@ publish = false
 [features]
 
 [dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
 log = "0.4"
 raw-window-handle = "0.4"
 ron = "0.7"

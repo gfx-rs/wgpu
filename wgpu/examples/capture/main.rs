@@ -145,11 +145,12 @@ async fn create_png(
             buffer_dimensions.height as u32,
         );
         png_encoder.set_depth(png::BitDepth::Eight);
-        png_encoder.set_color(png::ColorType::RGBA);
+        png_encoder.set_color(png::ColorType::Rgba);
         let mut png_writer = png_encoder
             .write_header()
             .unwrap()
-            .into_stream_writer_with_size(buffer_dimensions.unpadded_bytes_per_row);
+            .into_stream_writer_with_size(buffer_dimensions.unpadded_bytes_per_row)
+            .unwrap();
 
         // from the padded_buffer we write just the unpadded bytes into the image
         for chunk in padded_buffer.chunks(buffer_dimensions.padded_bytes_per_row) {
