@@ -29,6 +29,7 @@ jobs:
             tool: clippy
             kind: local
             backends: dx12 # dx11
+            nextest_url: https://get.nexte.st/latest/windows-tar
 
           - name: Windows Nightly x86_64
             os: windows-2019
@@ -66,6 +67,7 @@ jobs:
             tool: clippy
             kind: local
             backends: vulkan # gl
+            nextest_url: https://get.nexte.st/latest/linux
 
           - name: Linux aarch64
             os: ubuntu-20.04
@@ -139,6 +141,12 @@ jobs:
         with:
           key: ${{ matrix.target }}-a # suffix for cache busting
 
+      - name: download nextest
+        if: matrix.kind == 'local'
+        shell: bash
+        run: |
+          curl -LsSf ${{ matrix.nextest_url }} | tar xzf - -C ${CARGO_HOME:-~/.cargo}/bin
+
       - name: add android apk to path
         if: matrix.os == 'ubuntu-20.04' && matrix.target == 'aarch64-linux-android'
         run: |
@@ -205,11 +213,11 @@ jobs:
           # run wgpu-info
           cargo run --bin wgpu-info
           # run unit and player tests
-          cargo test -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast
+          cargo nextest run -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast
           # run native tests
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo test -p wgpu --no-fail-fast -- --nocapture --test-threads=1
+            WGPU_BACKEND=$backend cargo nextest run -p wgpu --no-fail-fast
           done
 
   fmt:
