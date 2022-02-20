@@ -25,6 +25,7 @@ pub struct PhysicalDeviceFeatures {
     robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
     depth_clip_enable: Option<vk::PhysicalDeviceDepthClipEnableFeaturesEXT>,
     multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR>,
+    astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -57,6 +58,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.depth_clip_enable {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.astc_hdr {
             info = info.push_next(feature);
         }
         info
@@ -320,6 +324,15 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            astc_hdr: if enabled_extensions.contains(&vk::ExtTextureCompressionAstcHdrFn::name()) {
+                Some(
+                    vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::builder()
+                        .texture_compression_astc_hdr(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -523,6 +536,13 @@ impl PhysicalDeviceFeatures {
             is_format_16bit_norm_supported(caps),
         );
 
+        if let Some(ref astc_hdr) = self.astc_hdr {
+            features.set(
+                F::TEXTURE_COMPRESSION_ASTC_HDR,
+                astc_hdr.texture_compression_astc_hdr != 0,
+            );
+        }
+
         (features, dl_flags)
     }
 
@@ -632,6 +652,10 @@ impl PhysicalDeviceCapabilities {
 
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         extensions.push(vk::KhrPortabilitySubsetFn::name());
+
+        if requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
+            extensions.push(vk::ExtTextureCompressionAstcHdrFn::name())
+        }
 
         extensions
     }
@@ -863,6 +887,12 @@ impl super::InstanceShared {
                 let next = features
                     .depth_clip_enable
                     .insert(vk::PhysicalDeviceDepthClipEnableFeaturesEXT::default());
+                builder = builder.push_next(next);
+            }
+            if capabilities.supports_extension(vk::ExtTextureCompressionAstcHdrFn::name()) {
+                let next = features
+                    .astc_hdr
+                    .insert(vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::default());
                 builder = builder.push_next(next);
             }
 
@@ -1401,7 +1431,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
         if !self.private_caps.can_present {
             return None;
         }
-
         let queue_family_index = 0; //TODO
         {
             profiling::scope!("vkGetPhysicalDeviceSurfaceSupportKHR");
@@ -1509,7 +1538,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     .any(|sf| sf.format == vk_format || sf.format == vk::Format::UNDEFINED)
             })
             .collect();
-
         Some(crate::SurfaceCapabilities {
             formats,
             swap_chain_sizes: caps.min_image_count..=max_image_count,

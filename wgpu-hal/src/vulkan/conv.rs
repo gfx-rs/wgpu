@@ -121,7 +121,22 @@ impl super::PrivateCapabilities {
                     AstcBlock::B12x10 => F::ASTC_12X10_SRGB_BLOCK,
                     AstcBlock::B12x12 => F::ASTC_12X12_SRGB_BLOCK,
                 },
-                AstcChannel::Hdr => unimplemented!(),
+                AstcChannel::Hdr => match block {
+                    AstcBlock::B4x4 => F::ASTC_4X4_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B5x4 => F::ASTC_5X4_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B5x5 => F::ASTC_5X5_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B6x5 => F::ASTC_6X5_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B6x6 => F::ASTC_6X6_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B8x5 => F::ASTC_8X5_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B8x6 => F::ASTC_8X6_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B8x8 => F::ASTC_8X8_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B10x5 => F::ASTC_10X5_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B10x6 => F::ASTC_10X6_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B10x8 => F::ASTC_10X8_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B10x10 => F::ASTC_10X10_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B12x10 => F::ASTC_12X10_SFLOAT_BLOCK_EXT,
+                    AstcBlock::B12x12 => F::ASTC_12X12_SFLOAT_BLOCK_EXT,
+                },
             },
         }
     }

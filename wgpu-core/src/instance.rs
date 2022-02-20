@@ -197,6 +197,7 @@ impl Surface {
             wgt::TextureFormat::Rgba8UnormSrgb,
             wgt::TextureFormat::Bgra8Unorm,
             wgt::TextureFormat::Rgba8Unorm,
+            wgt::TextureFormat::Rgba16Float,
         ];
 
         let suf = A::get_surface(self);
