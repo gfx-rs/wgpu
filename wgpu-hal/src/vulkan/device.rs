@@ -517,12 +517,19 @@ impl super::Device {
             None => vk::SwapchainKHR::null(),
         };
 
+        let color_space = if config.format == wgt::TextureFormat::Rgba16Float {
+            // Enable wide color gamut mode
+            // Vulkan swapchain for Android only supports DISPLAY_P3_NONLINEAR_EXT and EXTENDED_SRGB_LINEAR_EXT
+            vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT
+        } else {
+            vk::ColorSpaceKHR::SRGB_NONLINEAR
+        };
         let info = vk::SwapchainCreateInfoKHR::builder()
             .flags(vk::SwapchainCreateFlagsKHR::empty())
             .surface(surface.raw)
             .min_image_count(config.swap_chain_size)
             .image_format(self.shared.private_caps.map_texture_format(config.format))
-            .image_color_space(vk::ColorSpaceKHR::SRGB_NONLINEAR)
+            .image_color_space(color_space)
             .image_extent(vk::Extent2D {
                 width: config.extent.width,
                 height: config.extent.height,

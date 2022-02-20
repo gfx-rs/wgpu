@@ -162,6 +162,9 @@ impl super::Instance {
 
         extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
 
+        // Provid wide color gamut
+        extensions.push(vk::ExtSwapchainColorspaceFn::name());
+
         // Only keep available extensions.
         extensions.retain(|&ext| {
             if instance_extensions
