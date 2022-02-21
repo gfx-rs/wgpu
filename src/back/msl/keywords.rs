@@ -18,6 +18,7 @@ pub const RESERVED: &[&str] = &[
     "bool",
     "char",
     "int",
+    "uint",
     "long",
     "float",
     "double",

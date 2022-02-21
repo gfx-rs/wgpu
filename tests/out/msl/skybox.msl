@@ -2,6 +2,8 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct VertexOutput {
     metal::float4 position;
     metal::float3 uv;
@@ -18,7 +20,7 @@ struct vs_mainOutput {
     metal::float3 uv [[user(loc0), center_perspective]];
 };
 vertex vs_mainOutput vs_main(
-  metal::uint vertex_index [[vertex_id]]
+  uint vertex_index [[vertex_id]]
 , constant Data& r_data [[buffer(0)]]
 ) {
     int tmp1_;

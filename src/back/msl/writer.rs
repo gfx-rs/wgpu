@@ -39,10 +39,6 @@ fn put_numeric_type(
     sizes: &[crate::VectorSize],
 ) -> Result<(), FmtError> {
     match (kind, sizes) {
-        (crate::ScalarKind::Uint, &[]) => {
-            // Work around Metal compiler bug: scalar `uint` requires namespace.
-            write!(out, "{}::uint", NAMESPACE)
-        }
         (kind, &[]) => {
             write!(out, "{}", kind.to_msl_name())
         }
@@ -1434,7 +1430,7 @@ impl<W: Write> Writer<W> {
     /// The text written is of the form:
     ///
     /// ```ignore
-    /// {level}{prefix}metal::uint(i) < 4 && metal::uint(j) < 10
+    /// {level}{prefix}uint(i) < 4 && uint(j) < 10
     /// ```
     ///
     /// where `{level}` and `{prefix}` are the arguments to this function. For [`Store`]
@@ -1494,7 +1490,7 @@ impl<W: Write> Writer<W> {
                     // Check that the index falls within bounds. Do this with a single
                     // comparison, by casting the index to `uint` first, so that negative
                     // indices become large positive values.
-                    write!(self.out, "{}::uint(", NAMESPACE)?;
+                    write!(self.out, "uint(")?;
                     self.put_index(index, context, true)?;
                     self.out.write_str(") < ")?;
                     match length {
@@ -2351,6 +2347,9 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out)?;
+        // Work around Metal bug where `uint` is not available by default
+        writeln!(self.out, "using {}::uint;", NAMESPACE)?;
+        writeln!(self.out)?;
 
         if options
             .bounds_check_policies
@@ -2372,7 +2371,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "struct _mslBufferSizes {{")?;
 
                 for idx in indices {
-                    writeln!(self.out, "{}{}::uint size{};", back::INDENT, NAMESPACE, idx)?;
+                    writeln!(self.out, "{}uint size{};", back::INDENT, idx)?;
                 }
 
                 writeln!(self.out, "}};")?;

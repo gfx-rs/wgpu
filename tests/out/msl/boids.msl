@@ -2,9 +2,11 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct _mslBufferSizes {
-    metal::uint size1;
-    metal::uint size2;
+    uint size1;
+    uint size2;
 };
 
 constexpr constant unsigned NUM_PARTICLES = 1500u;
@@ -44,8 +46,8 @@ kernel void main_(
     int cVelCount = 0;
     metal::float2 pos;
     metal::float2 vel;
-    metal::uint i = 0u;
-    metal::uint index = global_invocation_id.x;
+    uint i = 0u;
+    uint index = global_invocation_id.x;
     if (index >= NUM_PARTICLES) {
         return;
     }
@@ -59,22 +61,22 @@ kernel void main_(
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            metal::uint _e86 = i;
+            uint _e86 = i;
             i = _e86 + 1u;
         }
         loop_init = false;
-        metal::uint _e37 = i;
+        uint _e37 = i;
         if (_e37 >= NUM_PARTICLES) {
             break;
         }
-        metal::uint _e39 = i;
+        uint _e39 = i;
         if (_e39 == index) {
             continue;
         }
-        metal::uint _e42 = i;
+        uint _e42 = i;
         metal::float2 _e45 = particlesSrc.particles[_e42].pos;
         pos = _e45;
-        metal::uint _e47 = i;
+        uint _e47 = i;
         metal::float2 _e50 = particlesSrc.particles[_e47].vel;
         vel = _e50;
         metal::float2 _e51 = pos;

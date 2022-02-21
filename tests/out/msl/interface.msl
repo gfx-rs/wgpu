@@ -2,21 +2,23 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct VertexOutput {
     metal::float4 position;
     float varying;
 };
 struct FragmentOutput {
     float depth;
-    metal::uint sample_mask;
+    uint sample_mask;
     float color;
 };
 struct type_4 {
-    metal::uint inner[1];
+    uint inner[1];
 };
 
 struct vertex_Input {
-    metal::uint color [[attribute(10)]];
+    uint color [[attribute(10)]];
 };
 struct vertex_Output {
     metal::float4 position [[position]];
@@ -25,11 +27,11 @@ struct vertex_Output {
 };
 vertex vertex_Output vertex_(
   vertex_Input varyings [[stage_in]]
-, metal::uint vertex_index [[vertex_id]]
-, metal::uint instance_index [[instance_id]]
+, uint vertex_index [[vertex_id]]
+, uint instance_index [[instance_id]]
 ) {
     const auto color = varyings.color;
-    metal::uint tmp = (vertex_index + instance_index) + color;
+    uint tmp = (vertex_index + instance_index) + color;
     const auto _tmp = VertexOutput {metal::float4(1.0), static_cast<float>(tmp)};
     return vertex_Output { _tmp.position, _tmp.varying, 1.0 };
 }
@@ -40,18 +42,18 @@ struct fragment_Input {
 };
 struct fragment_Output {
     float depth [[depth(any)]];
-    metal::uint sample_mask [[sample_mask]];
+    uint sample_mask [[sample_mask]];
     float color [[color(0)]];
 };
 fragment fragment_Output fragment_(
   fragment_Input varyings_1 [[stage_in]]
 , metal::float4 position [[position]]
 , bool front_facing [[front_facing]]
-, metal::uint sample_index [[sample_id]]
-, metal::uint sample_mask [[sample_mask]]
+, uint sample_index [[sample_id]]
+, uint sample_mask [[sample_mask]]
 ) {
     const VertexOutput in = { position, varyings_1.varying };
-    metal::uint mask = sample_mask & (1u << sample_index);
+    uint mask = sample_mask & (1u << sample_index);
     float color_1 = front_facing ? 1.0 : 0.0;
     const auto _tmp = FragmentOutput {in.varying, mask, color_1};
     return fragment_Output { _tmp.depth, _tmp.sample_mask, _tmp.color };
@@ -63,7 +65,7 @@ struct compute_Input {
 kernel void compute_(
   metal::uint3 global_id [[thread_position_in_grid]]
 , metal::uint3 local_id [[thread_position_in_threadgroup]]
-, metal::uint local_index [[thread_index_in_threadgroup]]
+, uint local_index [[thread_index_in_threadgroup]]
 , metal::uint3 wg_id [[threadgroup_position_in_grid]]
 , metal::uint3 num_wgs [[threadgroups_per_grid]]
 , threadgroup type_4& output

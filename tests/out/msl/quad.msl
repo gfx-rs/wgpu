@@ -2,6 +2,8 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 constexpr constant float c_scale = 1.2000000476837158;
 struct VertexOutput {
     metal::float2 uv;

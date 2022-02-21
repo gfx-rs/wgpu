@@ -2,8 +2,10 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct _mslBufferSizes {
-    metal::uint size0;
+    uint size0;
 };
 
 struct AlignedWrapper {
@@ -41,7 +43,7 @@ struct fooOutput {
     metal::float4 member [[position]];
 };
 vertex fooOutput foo(
-  metal::uint vi [[vertex_id]]
+  uint vi [[vertex_id]]
 , device Bar& bar [[buffer(0)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {

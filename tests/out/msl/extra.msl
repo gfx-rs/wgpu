@@ -2,14 +2,16 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct PushConstants {
-    metal::uint index;
+    uint index;
     char _pad1[12];
     metal::float2 double_;
 };
 struct FragmentIn {
     metal::float4 color;
-    metal::uint primitive_index;
+    uint primitive_index;
 };
 
 struct main_Input {
@@ -20,7 +22,7 @@ struct main_Output {
 };
 fragment main_Output main_(
   main_Input varyings [[stage_in]]
-, metal::uint primitive_index [[primitive_id]]
+, uint primitive_index [[primitive_id]]
 ) {
     const FragmentIn in = { varyings.color, primitive_index };
     if ((in.primitive_index % 2u) == 0u) {

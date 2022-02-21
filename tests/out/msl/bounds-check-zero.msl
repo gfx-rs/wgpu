@@ -2,6 +2,8 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct DefaultConstructible {
     template<typename T>
     operator T() && {
@@ -9,7 +11,7 @@ struct DefaultConstructible {
     }
 };
 struct _mslBufferSizes {
-    metal::uint size0;
+    uint size0;
 };
 
 struct type_1 {
@@ -29,7 +31,7 @@ float index_array(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    float _e4 = metal::uint(i) < 10 ? globals.a.inner[i] : DefaultConstructible();
+    float _e4 = uint(i) < 10 ? globals.a.inner[i] : DefaultConstructible();
     return _e4;
 }
 
@@ -38,7 +40,7 @@ float index_dynamic_array(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    float _e4 = metal::uint(i_1) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4 ? globals.d[i_1] : DefaultConstructible();
+    float _e4 = uint(i_1) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4 ? globals.d[i_1] : DefaultConstructible();
     return _e4;
 }
 
@@ -47,7 +49,7 @@ float index_vector(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    float _e4 = metal::uint(i_2) < 4 ? globals.v[i_2] : DefaultConstructible();
+    float _e4 = uint(i_2) < 4 ? globals.v[i_2] : DefaultConstructible();
     return _e4;
 }
 
@@ -55,7 +57,7 @@ float index_vector_by_value(
     metal::float4 v,
     int i_3
 ) {
-    return metal::uint(i_3) < 4 ? v[i_3] : DefaultConstructible();
+    return uint(i_3) < 4 ? v[i_3] : DefaultConstructible();
 }
 
 metal::float4 index_matrix(
@@ -63,7 +65,7 @@ metal::float4 index_matrix(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    metal::float4 _e4 = metal::uint(i_4) < 3 ? globals.m[i_4] : DefaultConstructible();
+    metal::float4 _e4 = uint(i_4) < 3 ? globals.m[i_4] : DefaultConstructible();
     return _e4;
 }
 
@@ -73,7 +75,7 @@ float index_twice(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    float _e6 = metal::uint(j) < 4 && metal::uint(i_5) < 3 ? globals.m[i_5][j] : DefaultConstructible();
+    float _e6 = uint(j) < 4 && uint(i_5) < 3 ? globals.m[i_5][j] : DefaultConstructible();
     return _e6;
 }
 
@@ -83,7 +85,7 @@ float index_expensive(
     constant _mslBufferSizes& _buffer_sizes
 ) {
     int _e9 = static_cast<int>(metal::sin(static_cast<float>(i_6) / 100.0) * 100.0);
-    float _e11 = metal::uint(_e9) < 10 ? globals.a.inner[_e9] : DefaultConstructible();
+    float _e11 = uint(_e9) < 10 ? globals.a.inner[_e9] : DefaultConstructible();
     return _e11;
 }
 
@@ -103,7 +105,7 @@ void set_array(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    if (metal::uint(i_7) < 10) {
+    if (uint(i_7) < 10) {
         globals.a.inner[i_7] = v_1;
     }
     return;
@@ -115,7 +117,7 @@ void set_dynamic_array(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    if (metal::uint(i_8) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4) {
+    if (uint(i_8) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4) {
         globals.d[i_8] = v_2;
     }
     return;
@@ -127,7 +129,7 @@ void set_vector(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    if (metal::uint(i_9) < 4) {
+    if (uint(i_9) < 4) {
         globals.v[i_9] = v_3;
     }
     return;
@@ -139,7 +141,7 @@ void set_matrix(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    if (metal::uint(i_10) < 3) {
+    if (uint(i_10) < 3) {
         globals.m[i_10] = v_4;
     }
     return;
@@ -152,7 +154,7 @@ void set_index_twice(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    if (metal::uint(j_1) < 4 && metal::uint(i_11) < 3) {
+    if (uint(j_1) < 4 && uint(i_11) < 3) {
         globals.m[i_11][j_1] = v_5;
     }
     return;
@@ -165,7 +167,7 @@ void set_expensive(
     constant _mslBufferSizes& _buffer_sizes
 ) {
     int _e10 = static_cast<int>(metal::sin(static_cast<float>(i_12) / 100.0) * 100.0);
-    if (metal::uint(_e10) < 10) {
+    if (uint(_e10) < 10) {
         globals.a.inner[_e10] = v_6;
     }
     return;

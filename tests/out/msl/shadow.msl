@@ -2,8 +2,10 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct _mslBufferSizes {
-    metal::uint size1;
+    uint size1;
 };
 
 constexpr constant unsigned c_max_lights = 10u;
@@ -22,7 +24,7 @@ struct Lights {
 constant metal::float3 c_ambient = {0.05000000074505806, 0.05000000074505806, 0.05000000074505806};
 
 float fetch_shadow(
-    metal::uint light_id,
+    uint light_id,
     metal::float4 homogeneous_coords,
     metal::depth2d_array<float, metal::access::sample> t_shadow,
     metal::sampler sampler_shadow
@@ -54,23 +56,23 @@ fragment fs_mainOutput fs_main(
     const auto raw_normal = varyings.raw_normal;
     const auto position = varyings.position;
     metal::float3 color = c_ambient;
-    metal::uint i = 0u;
+    uint i = 0u;
     metal::float3 normal = metal::normalize(raw_normal);
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            metal::uint _e40 = i;
+            uint _e40 = i;
             i = _e40 + 1u;
         }
         loop_init = false;
-        metal::uint _e12 = i;
-        metal::uint _e15 = u_globals.num_lights.x;
+        uint _e12 = i;
+        uint _e15 = u_globals.num_lights.x;
         if (_e12 >= metal::min(_e15, c_max_lights)) {
             break;
         }
-        metal::uint _e19 = i;
+        uint _e19 = i;
         Light light = s_lights.data[_e19];
-        metal::uint _e22 = i;
+        uint _e22 = i;
         float _e25 = fetch_shadow(_e22, light.proj * position, t_shadow, sampler_shadow);
         metal::float3 light_dir = metal::normalize(light.pos.xyz - position.xyz);
         float diffuse = metal::max(0.0, metal::dot(normal, light_dir));

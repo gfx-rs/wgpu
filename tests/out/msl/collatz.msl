@@ -2,38 +2,40 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct _mslBufferSizes {
-    metal::uint size0;
+    uint size0;
 };
 
-typedef metal::uint type_1[1];
+typedef uint type_1[1];
 struct PrimeIndices {
     type_1 data;
 };
 
-metal::uint collatz_iterations(
-    metal::uint n_base
+uint collatz_iterations(
+    uint n_base
 ) {
-    metal::uint n;
-    metal::uint i = 0u;
+    uint n;
+    uint i = 0u;
     n = n_base;
     while(true) {
-        metal::uint _e5 = n;
+        uint _e5 = n;
         if (_e5 <= 1u) {
             break;
         }
-        metal::uint _e8 = n;
+        uint _e8 = n;
         if ((_e8 % 2u) == 0u) {
-            metal::uint _e13 = n;
+            uint _e13 = n;
             n = _e13 / 2u;
         } else {
-            metal::uint _e17 = n;
+            uint _e17 = n;
             n = (3u * _e17) + 1u;
         }
-        metal::uint _e21 = i;
+        uint _e21 = i;
         i = _e21 + 1u;
     }
-    metal::uint _e24 = i;
+    uint _e24 = i;
     return _e24;
 }
 
@@ -44,8 +46,8 @@ kernel void main_(
 , device PrimeIndices& v_indices [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    metal::uint _e8 = v_indices.data[global_id.x];
-    metal::uint _e9 = collatz_iterations(_e8);
+    uint _e8 = v_indices.data[global_id.x];
+    uint _e9 = collatz_iterations(_e8);
     v_indices.data[global_id.x] = _e9;
     return;
 }

@@ -2,9 +2,11 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct FragmentInput {
     metal::float4 position;
-    metal::uint flat;
+    uint flat;
     float linear;
     metal::float2 linear_centroid;
     metal::float3 linear_sample;
@@ -15,7 +17,7 @@ struct FragmentInput {
 
 struct vert_mainOutput {
     metal::float4 position [[position]];
-    metal::uint flat [[user(loc0), flat]];
+    uint flat [[user(loc0), flat]];
     float linear [[user(loc1), center_no_perspective]];
     metal::float2 linear_centroid [[user(loc2), centroid_no_perspective]];
     metal::float3 linear_sample [[user(loc3), sample_no_perspective]];
@@ -41,7 +43,7 @@ vertex vert_mainOutput vert_main(
 
 
 struct frag_mainInput {
-    metal::uint flat [[user(loc0), flat]];
+    uint flat [[user(loc0), flat]];
     float linear [[user(loc1), center_no_perspective]];
     metal::float2 linear_centroid [[user(loc2), centroid_no_perspective]];
     metal::float3 linear_sample [[user(loc3), sample_no_perspective]];

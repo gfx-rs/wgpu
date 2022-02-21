@@ -2,6 +2,8 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 
 vertex void main_(
 ) {

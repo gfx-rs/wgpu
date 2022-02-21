@@ -2,8 +2,10 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 struct _mslBufferSizes {
-    metal::uint size0;
+    uint size0;
 };
 
 struct type_1 {

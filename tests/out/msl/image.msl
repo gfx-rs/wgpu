@@ -2,6 +2,8 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 constant metal::int2 const_type_9_ = {3, 1};
 
 struct main_Input {
@@ -21,8 +23,8 @@ kernel void main_(
     metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value4_ = image_storage_src.read(metal::uint2(itc));
     metal::uint4 value5_ = image_array_src.read(metal::uint2(itc), static_cast<int>(local_id.z), static_cast<int>(local_id.z) + 1);
-    metal::uint4 value6_ = image_1d_src.read(metal::uint(static_cast<int>(local_id.x)));
-    image_dst.write((((value1_ + value2_) + value4_) + value5_) + value6_, metal::uint(itc.x));
+    metal::uint4 value6_ = image_1d_src.read(uint(static_cast<int>(local_id.x)));
+    image_dst.write((((value1_ + value2_) + value4_) + value5_) + value6_, uint(itc.x));
     return;
 }
 
@@ -38,7 +40,7 @@ kernel void depth_load(
     metal::int2 dim_1 = int2(image_storage_src.get_width(), image_storage_src.get_height());
     metal::int2 itc_1 = (dim_1 * static_cast<metal::int2>(local_id_1.xy)) % metal::int2(10, 20);
     float val = image_depth_multisampled_src.read(metal::uint2(itc_1), static_cast<int>(local_id_1.z));
-    image_dst.write(metal::uint4(static_cast<metal::uint>(val)), metal::uint(itc_1.x));
+    image_dst.write(metal::uint4(static_cast<uint>(val)), uint(itc_1.x));
     return;
 }
 

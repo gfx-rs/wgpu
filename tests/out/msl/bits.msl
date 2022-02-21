@@ -2,6 +2,8 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 
 kernel void main_(
 ) {
@@ -9,7 +11,7 @@ kernel void main_(
     metal::int2 i2_;
     metal::int3 i3_;
     metal::int4 i4_;
-    metal::uint u = 0u;
+    uint u = 0u;
     metal::uint2 u2_;
     metal::uint3 u3_;
     metal::uint4 u4_;
@@ -33,15 +35,15 @@ kernel void main_(
     u = metal::pack_float_to_unorm2x16(_e34);
     metal::float2 _e36 = f2_;
     u = as_type<uint>(half2(_e36));
-    metal::uint _e38 = u;
+    uint _e38 = u;
     f4_ = metal::unpack_snorm4x8_to_float(_e38);
-    metal::uint _e40 = u;
+    uint _e40 = u;
     f4_ = metal::unpack_unorm4x8_to_float(_e40);
-    metal::uint _e42 = u;
+    uint _e42 = u;
     f2_ = metal::unpack_snorm2x16_to_float(_e42);
-    metal::uint _e44 = u;
+    uint _e44 = u;
     f2_ = metal::unpack_unorm2x16_to_float(_e44);
-    metal::uint _e46 = u;
+    uint _e46 = u;
     f2_ = float2(as_type<half2>(_e46));
     int _e48 = i;
     int _e49 = i;
@@ -55,8 +57,8 @@ kernel void main_(
     metal::int4 _e63 = i4_;
     metal::int4 _e64 = i4_;
     i4_ = metal::insert_bits(_e63, _e64, 5u, 10u);
-    metal::uint _e68 = u;
-    metal::uint _e69 = u;
+    uint _e68 = u;
+    uint _e69 = u;
     u = metal::insert_bits(_e68, _e69, 5u, 10u);
     metal::uint2 _e73 = u2_;
     metal::uint2 _e74 = u2_;
@@ -75,7 +77,7 @@ kernel void main_(
     i3_ = metal::extract_bits(_e96, 5u, 10u);
     metal::int4 _e100 = i4_;
     i4_ = metal::extract_bits(_e100, 5u, 10u);
-    metal::uint _e104 = u;
+    uint _e104 = u;
     u = metal::extract_bits(_e104, 5u, 10u);
     metal::uint2 _e108 = u2_;
     u2_ = metal::extract_bits(_e108, 5u, 10u);
@@ -89,7 +91,7 @@ kernel void main_(
     i2_ = (((1 + int2(metal::ctz(_e122))) % 33) - 1);
     metal::int3 _e124 = i3_;
     i3_ = (((1 + int3(metal::clz(_e124))) % 33) - 1);
-    metal::uint _e126 = u;
+    uint _e126 = u;
     i = (((1 + int(metal::clz(_e126))) % 33) - 1);
     return;
 }

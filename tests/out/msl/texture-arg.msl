@@ -2,6 +2,8 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+using metal::uint;
+
 
 metal::float4 test(
     metal::texture2d<float, metal::access::sample> Passed_Texture,
