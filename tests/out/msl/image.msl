@@ -17,7 +17,7 @@ kernel void main_(
 , metal::texture1d<uint, metal::access::sample> image_1d_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
-    metal::int2 dim = int2(image_storage_src.get_width(), image_storage_src.get_height());
+    metal::int2 dim = metal::int2(image_storage_src.get_width(), image_storage_src.get_height());
     metal::int2 itc = (dim * static_cast<metal::int2>(local_id.xy)) % metal::int2(10, 20);
     metal::uint4 value1_ = image_mipmapped_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
@@ -37,7 +37,7 @@ kernel void depth_load(
 , metal::texture2d<uint, metal::access::read> image_storage_src [[user(fake0)]]
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
-    metal::int2 dim_1 = int2(image_storage_src.get_width(), image_storage_src.get_height());
+    metal::int2 dim_1 = metal::int2(image_storage_src.get_width(), image_storage_src.get_height());
     metal::int2 itc_1 = (dim_1 * static_cast<metal::int2>(local_id_1.xy)) % metal::int2(10, 20);
     float val = image_depth_multisampled_src.read(metal::uint2(itc_1), static_cast<int>(local_id_1.z));
     image_dst.write(metal::uint4(static_cast<uint>(val)), uint(itc_1.x));
@@ -58,16 +58,16 @@ vertex queriesOutput queries(
 ) {
     int dim_1d = int(image_1d.get_width());
     int dim_1d_lod = int(image_1d.get_width());
-    metal::int2 dim_2d = int2(image_2d.get_width(), image_2d.get_height());
-    metal::int2 dim_2d_lod = int2(image_2d.get_width(1), image_2d.get_height(1));
-    metal::int2 dim_2d_array = int2(image_2d_array.get_width(), image_2d_array.get_height());
-    metal::int2 dim_2d_array_lod = int2(image_2d_array.get_width(1), image_2d_array.get_height(1));
-    metal::int2 dim_cube = int2(image_cube.get_width());
-    metal::int2 dim_cube_lod = int2(image_cube.get_width(1));
-    metal::int2 dim_cube_array = int2(image_cube_array.get_width());
-    metal::int2 dim_cube_array_lod = int2(image_cube_array.get_width(1));
-    metal::int3 dim_3d = int3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth());
-    metal::int3 dim_3d_lod = int3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1));
+    metal::int2 dim_2d = metal::int2(image_2d.get_width(), image_2d.get_height());
+    metal::int2 dim_2d_lod = metal::int2(image_2d.get_width(1), image_2d.get_height(1));
+    metal::int2 dim_2d_array = metal::int2(image_2d_array.get_width(), image_2d_array.get_height());
+    metal::int2 dim_2d_array_lod = metal::int2(image_2d_array.get_width(1), image_2d_array.get_height(1));
+    metal::int2 dim_cube = metal::int2(image_cube.get_width());
+    metal::int2 dim_cube_lod = metal::int2(image_cube.get_width(1));
+    metal::int2 dim_cube_array = metal::int2(image_cube_array.get_width());
+    metal::int2 dim_cube_array_lod = metal::int2(image_cube_array.get_width(1));
+    metal::int3 dim_3d = metal::int3(image_3d.get_width(), image_3d.get_height(), image_3d.get_depth());
+    metal::int3 dim_3d_lod = metal::int3(image_3d.get_width(1), image_3d.get_height(1), image_3d.get_depth(1));
     int sum = (((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + dim_3d.z) + dim_3d_lod.z;
     return queriesOutput { metal::float4(static_cast<float>(sum)) };
 }

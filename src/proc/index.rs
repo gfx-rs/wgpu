@@ -178,26 +178,39 @@ pub enum GuardedIndex {
 ///
 /// Such index expressions will be used twice in the generated code: first for the
 /// comparison to see if the index is in bounds, and then for the access itself, should
-/// the comparison succeed. To avoid computing the expressions twice, they should be
-/// cached in temporary variables.
+/// the comparison succeed. To avoid computing the expressions twice, the generated code
+/// should cache them in temporary variables.
 ///
-/// Why do we need to build such a set before processing a function's statements? Whether
-/// an expression needs to be cached depends on whether it appears as the [`index`]
-/// operand of any [`Access`] expression, and on the index bounds check policies that
-/// apply to those accesses. But [`Emit`] statements just identify a range of expressions
-/// by index; there's no good way to tell what an expression is used for. The only way to
-/// do it is to just iterate over all the expressions looking for relevant `Access`
-/// expressions --- which is what this function does.
+/// Why do we need to build such a set in advance, instead of just processing access
+/// expressions as we encounter them? Whether an expression needs to be cached depends on
+/// whether it appears as something like the [`index`] operand of an [`Access`] expression
+/// or the [`level`] operand of an [`ImageLoad`] expression, and on the index bounds check
+/// policies that apply to those accesses. But [`Emit`] statements just identify a range
+/// of expressions by index; there's no good way to tell what an expression is used
+/// for. The only way to do it is to just iterate over all the expressions looking for
+/// relevant `Access` expressions --- which is what this function does.
 ///
 /// Simple expressions like variable loads and constants don't make sense to cache: it's
 /// no better than just re-evaluating them. But constants are not covered by `Emit`
 /// statements, and `Load`s are always cached to ensure they occur at the right time, so
 /// we don't bother filtering them out from this set.
 ///
+/// Fortunately, we don't need to deal with [`ImageStore`] statements here. When we emit
+/// code for a statement, the writer isn't in the middle of an expression, so we can just
+/// emit declarations for temporaries, initialized appropriately.
+///
+/// None of these concerns apply for SPIR-V output, since it's easy to just reuse an
+/// instruction ID in two places; that has the same semantics as a temporary variable, and
+/// it's inherent in the design of SPIR-V. This function is more useful for text-based
+/// back ends.
+///
 /// [`ReadZeroSkipWrite`]: BoundsCheckPolicy::ReadZeroSkipWrite
 /// [`index`]: crate::Expression::Access::index
 /// [`Access`]: crate::Expression::Access
+/// [`level`]: crate::Expression::ImageLoad::level
+/// [`ImageLoad`]: crate::Expression::ImageLoad
 /// [`Emit`]: crate::Statement::Emit
+/// [`ImageStore`]: crate::Statement::ImageStore
 pub fn find_checked_indexes(
     module: &crate::Module,
     function: &crate::Function,
@@ -213,20 +226,43 @@ pub fn find_checked_indexes(
         for (_handle, expr) in function.expressions.iter() {
             // There's no need to handle `AccessIndex` expressions, as their
             // indices never need to be cached.
-            if let Ex::Access { base, index } = *expr {
-                if policies.choose_policy(base, &module.types, info)
-                    == BoundsCheckPolicy::ReadZeroSkipWrite
-                    && access_needs_check(
-                        base,
-                        GuardedIndex::Expression(index),
-                        module,
-                        function,
-                        info,
-                    )
-                    .is_some()
-                {
-                    guarded_indices.insert(index.index());
+            match *expr {
+                Ex::Access { base, index } => {
+                    if policies.choose_policy(base, &module.types, info)
+                        == BoundsCheckPolicy::ReadZeroSkipWrite
+                        && access_needs_check(
+                            base,
+                            GuardedIndex::Expression(index),
+                            module,
+                            function,
+                            info,
+                        )
+                        .is_some()
+                    {
+                        guarded_indices.insert(index.index());
+                    }
                 }
+                Ex::ImageLoad {
+                    coordinate,
+                    array_index,
+                    sample,
+                    level,
+                    ..
+                } => {
+                    if policies.image == BoundsCheckPolicy::ReadZeroSkipWrite {
+                        guarded_indices.insert(coordinate.index());
+                        if let Some(array_index) = array_index {
+                            guarded_indices.insert(array_index.index());
+                        }
+                        if let Some(sample) = sample {
+                            guarded_indices.insert(sample.index());
+                        }
+                        if let Some(level) = level {
+                            guarded_indices.insert(level.index());
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }

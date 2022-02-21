@@ -1,0 +1,131 @@
+// language: metal2.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct DefaultConstructible {
+    template<typename T>
+    operator T() && {
+        return T {};
+    }
+};
+
+metal::float4 test_textureLoad_1d(
+    int coords,
+    int level,
+    metal::texture1d<float, metal::access::sample> image_1d
+) {
+    metal::float4 _e3 = (uint(level) < image_1d.get_num_mip_levels() && uint(coords) < image_1d.get_width() ? image_1d.read(uint(coords)): DefaultConstructible());
+    return _e3;
+}
+
+metal::float4 test_textureLoad_2d(
+    metal::int2 coords_1,
+    int level_1,
+    metal::texture2d<float, metal::access::sample> image_2d
+) {
+    metal::float4 _e4 = (uint(level_1) < image_2d.get_num_mip_levels() && metal::all(metal::uint2(coords_1) < metal::uint2(image_2d.get_width(level_1), image_2d.get_height(level_1))) ? image_2d.read(metal::uint2(coords_1), level_1): DefaultConstructible());
+    return _e4;
+}
+
+metal::float4 test_textureLoad_2d_array(
+    metal::int2 coords_2,
+    int index,
+    int level_2,
+    metal::texture2d_array<float, metal::access::sample> image_2d_array
+) {
+    metal::float4 _e6 = (uint(level_2) < image_2d_array.get_num_mip_levels() && uint(index) < image_2d_array.get_array_size() && metal::all(metal::uint2(coords_2) < metal::uint2(image_2d_array.get_width(level_2), image_2d_array.get_height(level_2))) ? image_2d_array.read(metal::uint2(coords_2), index, level_2): DefaultConstructible());
+    return _e6;
+}
+
+metal::float4 test_textureLoad_3d(
+    metal::int3 coords_3,
+    int level_3,
+    metal::texture3d<float, metal::access::sample> image_3d
+) {
+    metal::float4 _e6 = (uint(level_3) < image_3d.get_num_mip_levels() && metal::all(metal::uint3(coords_3) < metal::uint3(image_3d.get_width(level_3), image_3d.get_height(level_3), image_3d.get_depth(level_3))) ? image_3d.read(metal::uint3(coords_3), level_3): DefaultConstructible());
+    return _e6;
+}
+
+metal::float4 test_textureLoad_multisampled_2d(
+    metal::int2 coords_4,
+    int sample,
+    metal::texture2d_ms<float, metal::access::read> image_multisampled_2d
+) {
+    metal::float4 _e7 = (uint(sample) < image_multisampled_2d.get_num_samples() && metal::all(metal::uint2(coords_4) < metal::uint2(image_multisampled_2d.get_width(), image_multisampled_2d.get_height())) ? image_multisampled_2d.read(metal::uint2(coords_4), sample): DefaultConstructible());
+    return _e7;
+}
+
+float test_textureLoad_depth_2d(
+    metal::int2 coords_5,
+    int level_4,
+    metal::depth2d<float, metal::access::sample> image_depth_2d
+) {
+    float _e8 = (uint(level_4) < image_depth_2d.get_num_mip_levels() && metal::all(metal::uint2(coords_5) < metal::uint2(image_depth_2d.get_width(level_4), image_depth_2d.get_height(level_4))) ? image_depth_2d.read(metal::uint2(coords_5), level_4): DefaultConstructible());
+    return _e8;
+}
+
+float test_textureLoad_depth_2d_array(
+    metal::int2 coords_6,
+    int index_1,
+    int level_5,
+    metal::depth2d_array<float, metal::access::sample> image_depth_2d_array
+) {
+    float _e10 = (uint(level_5) < image_depth_2d_array.get_num_mip_levels() && uint(index_1) < image_depth_2d_array.get_array_size() && metal::all(metal::uint2(coords_6) < metal::uint2(image_depth_2d_array.get_width(level_5), image_depth_2d_array.get_height(level_5))) ? image_depth_2d_array.read(metal::uint2(coords_6), index_1, level_5): DefaultConstructible());
+    return _e10;
+}
+
+float test_textureLoad_depth_multisampled_2d(
+    metal::int2 coords_7,
+    int sample_1,
+    metal::depth2d_ms<float, metal::access::read> image_depth_multisampled_2d
+) {
+    float _e10 = (uint(sample_1) < image_depth_multisampled_2d.get_num_samples() && metal::all(metal::uint2(coords_7) < metal::uint2(image_depth_multisampled_2d.get_width(), image_depth_multisampled_2d.get_height())) ? image_depth_multisampled_2d.read(metal::uint2(coords_7), sample_1): DefaultConstructible());
+    return _e10;
+}
+
+void test_textureStore_1d(
+    int coords_8,
+    metal::float4 value,
+    metal::texture1d<float, metal::access::write> image_storage_1d
+) {
+    if (uint(coords_8) < image_storage_1d.get_width()) {
+        image_storage_1d.write(value, uint(coords_8));
+    }
+    return;
+}
+
+void test_textureStore_2d(
+    metal::int2 coords_9,
+    metal::float4 value_1,
+    metal::texture2d<float, metal::access::write> image_storage_2d
+) {
+    if (metal::all(metal::uint2(coords_9) < metal::uint2(image_storage_2d.get_width(), image_storage_2d.get_height()))) {
+        image_storage_2d.write(value_1, metal::uint2(coords_9));
+    }
+    return;
+}
+
+void test_textureStore_2d_array(
+    metal::int2 coords_10,
+    int array_index,
+    metal::float4 value_2,
+    metal::texture2d_array<float, metal::access::write> image_storage_2d_array
+) {
+    if (uint(array_index) < image_storage_2d_array.get_array_size() && metal::all(metal::uint2(coords_10) < metal::uint2(image_storage_2d_array.get_width(), image_storage_2d_array.get_height()))) {
+        image_storage_2d_array.write(value_2, metal::uint2(coords_10), array_index);
+    }
+    return;
+}
+
+void test_textureStore_3d(
+    metal::int3 coords_11,
+    metal::float4 value_3,
+    metal::texture3d<float, metal::access::write> image_storage_3d
+) {
+    if (metal::all(metal::uint3(coords_11) < metal::uint3(image_storage_3d.get_width(), image_storage_3d.get_height(), image_storage_3d.get_depth()))) {
+        image_storage_3d.write(value_3, metal::uint3(coords_11));
+    }
+    return;
+}

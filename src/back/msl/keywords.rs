@@ -213,4 +213,5 @@ pub const RESERVED: &[&str] = &[
     "M_SQRT1_2",
     // Naga utilities
     "DefaultConstructible",
+    "clamped_lod_e",
 ];

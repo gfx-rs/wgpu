@@ -65,6 +65,9 @@ fn put_numeric_type(
     }
 }
 
+/// Prefix for cached clamped level-of-detail values for `ImageLoad` expressions.
+const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
+
 struct TypeContext<'a> {
     handle: Handle<crate::Type>,
     arena: &'a crate::UniqueArena<crate::Type>,
@@ -455,6 +458,37 @@ enum FunctionOrigin {
     EntryPoint(proc::EntryPointIndex),
 }
 
+/// A level of detail argument.
+///
+/// When [`BoundsCheckPolicy::Restrict`] applies to an [`ImageLoad`] access, we
+/// save the clamped level of detail in a temporary variable whose name is based
+/// on the handle of the `ImageLoad` expression. But for other policies, we just
+/// use the expression directly.
+///
+/// [`BoundsCheckPolicy::Restrict`]: index::BoundsCheckPolicy::Restrict
+/// [`ImageLoad`]: crate::Expression::ImageLoad
+#[derive(Clone, Copy)]
+enum LevelOfDetail {
+    Direct(Handle<crate::Expression>),
+    Restricted(Handle<crate::Expression>),
+}
+
+/// Values needed to select a particular texel for [`ImageLoad`] and [`ImageStore`].
+///
+/// When this is used in code paths unconcerned with the `Restrict` bounds check
+/// policy, the `LevelOfDetail` enum introduces an unneeded match, since `level`
+/// will always be either `None` or `Some(Direct(_))`. But this turns out not to
+/// be too awkward. If that changes, we can revisit.
+///
+/// [`ImageLoad`]: crate::Expression::ImageLoad
+/// [`ImageStore`]: crate::Statement::ImageStore
+struct TexelAddress {
+    coordinate: Handle<crate::Expression>,
+    array_index: Option<Handle<crate::Expression>>,
+    sample: Option<Handle<crate::Expression>>,
+    level: Option<LevelOfDetail>,
+}
+
 struct ExpressionContext<'a> {
     function: &'a crate::Function,
     origin: FunctionOrigin,
@@ -473,6 +507,21 @@ struct ExpressionContext<'a> {
 impl<'a> ExpressionContext<'a> {
     fn resolve_type(&self, handle: Handle<crate::Expression>) -> &'a crate::TypeInner {
         self.info[handle].ty.inner_with(&self.module.types)
+    }
+
+    /// Return true if calls to `image`'s `read` and `write` methods should supply a level of detail.
+    ///
+    /// Only mipmapped images need to specify a level of detail. Since 1D
+    /// textures cannot have mipmaps, MSL requires that the level argument to
+    /// texture1d queries and accesses must be a constexpr 0. It's easiest
+    /// just to omit the level entirely for 1D textures.
+    fn image_needs_lod(&self, image: Handle<crate::Expression>) -> bool {
+        let image_ty = self.resolve_type(image);
+        if let crate::TypeInner::Image { dim, class, .. } = *image_ty {
+            class.is_mipmapped() && dim != crate::ImageDimension::D1
+        } else {
+            false
+        }
     }
 
     fn choose_bounds_check_policy(
@@ -559,17 +608,31 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_level_of_detail(
+        &mut self,
+        level: LevelOfDetail,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        match level {
+            LevelOfDetail::Direct(expr) => self.put_expression(expr, context, true)?,
+            LevelOfDetail::Restricted(load) => {
+                write!(self.out, "{}{}", CLAMPED_LOD_LOAD_PREFIX, load.index())?
+            }
+        }
+        Ok(())
+    }
+
     fn put_image_query(
         &mut self,
         image: Handle<crate::Expression>,
         query: &str,
-        level: Option<Handle<crate::Expression>>,
+        level: Option<LevelOfDetail>,
         context: &ExpressionContext,
     ) -> BackendResult {
         self.put_expression(image, context, false)?;
         write!(self.out, ".get_{}(", query)?;
-        if let Some(expr) = level {
-            self.put_expression(expr, context, true)?;
+        if let Some(level) = level {
+            self.put_level_of_detail(level, context)?;
         }
         write!(self.out, ")")?;
         Ok(())
@@ -578,7 +641,8 @@ impl<W: Write> Writer<W> {
     fn put_image_size_query(
         &mut self,
         image: Handle<crate::Expression>,
-        level: Option<Handle<crate::Expression>>,
+        level: Option<LevelOfDetail>,
+        kind: crate::ScalarKind,
         context: &ExpressionContext,
     ) -> BackendResult {
         //Note: MSL only has separate width/height/depth queries,
@@ -587,24 +651,31 @@ impl<W: Write> Writer<W> {
             crate::TypeInner::Image { dim, .. } => dim,
             ref other => unreachable!("Unexpected type {:?}", other),
         };
+        let coordinate_type = kind.to_msl_name();
         match dim {
             crate::ImageDimension::D1 => {
-                write!(self.out, "int(")?;
                 // Since 1D textures never have mipmaps, MSL requires that the
                 // `level` argument be a constexpr 0. It's simplest for us just
-                // to omit the level entirely.
-                self.put_image_query(image, "width", None, context)?;
-                write!(self.out, ")")?;
+                // to pass `None` and omit the level entirely.
+                if kind == crate::ScalarKind::Uint {
+                    // No need to construct a vector. No cast needed.
+                    self.put_image_query(image, "width", None, context)?;
+                } else {
+                    // There's no definition for `int` in the `metal` namespace.
+                    write!(self.out, "int(")?;
+                    self.put_image_query(image, "width", None, context)?;
+                    write!(self.out, ")")?;
+                }
             }
             crate::ImageDimension::D2 => {
-                write!(self.out, "int2(")?;
+                write!(self.out, "{}::{}2(", NAMESPACE, coordinate_type)?;
                 self.put_image_query(image, "width", level, context)?;
                 write!(self.out, ", ")?;
                 self.put_image_query(image, "height", level, context)?;
                 write!(self.out, ")")?;
             }
             crate::ImageDimension::D3 => {
-                write!(self.out, "int3(")?;
+                write!(self.out, "{}::{}3(", NAMESPACE, coordinate_type)?;
                 self.put_image_query(image, "width", level, context)?;
                 write!(self.out, ", ")?;
                 self.put_image_query(image, "height", level, context)?;
@@ -613,7 +684,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::ImageDimension::Cube => {
-                write!(self.out, "int2(")?;
+                write!(self.out, "{}::{}2(", NAMESPACE, coordinate_type)?;
                 self.put_image_query(image, "width", level, context)?;
                 write!(self.out, ")")?;
             }
@@ -621,7 +692,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_storage_image_coordinate(
+    fn put_cast_to_uint_scalar_or_vector(
         &mut self,
         expr: Handle<crate::Expression>,
         context: &ExpressionContext,
@@ -649,13 +720,7 @@ impl<W: Write> Writer<W> {
         level: crate::SampleLevel,
         context: &ExpressionContext,
     ) -> BackendResult {
-        let has_levels = match *context.resolve_type(image) {
-            crate::TypeInner::Image {
-                dim: crate::ImageDimension::D1,
-                ..
-            } => false,
-            _ => true,
-        };
+        let has_levels = context.image_needs_lod(image);
         match level {
             crate::SampleLevel::Auto => {}
             crate::SampleLevel::Zero => {
@@ -682,6 +747,275 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
         }
+        Ok(())
+    }
+
+    fn put_image_coordinate_limits(
+        &mut self,
+        image: Handle<crate::Expression>,
+        level: Option<LevelOfDetail>,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        self.put_image_size_query(image, level, crate::ScalarKind::Uint, context)?;
+        write!(self.out, " - 1")?;
+        Ok(())
+    }
+
+    /// General function for writing restricted image indexes.
+    ///
+    /// This is used to produce restricted mip levels, array indices, and sample
+    /// indices for [`ImageLoad`] and [`ImageStore`] accesses under the
+    /// [`Restrict`] bounds check policy.
+    ///
+    /// This function writes an expression of the form:
+    ///
+    /// ```ignore
+    ///
+    ///     metal::min(uint(INDEX), IMAGE.LIMIT_METHOD() - 1)
+    ///
+    /// ```
+    ///
+    /// [`ImageLoad`]: crate::Expression::ImageLoad
+    /// [`ImageStore`]: crate::Statement::ImageStore
+    /// [`Restrict`]: index::BoundsCheckPolicy::Restrict
+    fn put_restricted_scalar_image_index(
+        &mut self,
+        image: Handle<crate::Expression>,
+        index: Handle<crate::Expression>,
+        limit_method: &str,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        write!(self.out, "{}::min(uint(", NAMESPACE)?;
+        self.put_expression(index, context, true)?;
+        write!(self.out, "), ")?;
+        self.put_expression(image, context, false)?;
+        write!(self.out, ".{}() - 1)", limit_method)?;
+        Ok(())
+    }
+
+    fn put_restricted_texel_address(
+        &mut self,
+        image: Handle<crate::Expression>,
+        address: &TexelAddress,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        // Write the coordinate.
+        write!(self.out, "{}::min(", NAMESPACE)?;
+        self.put_cast_to_uint_scalar_or_vector(address.coordinate, context)?;
+        write!(self.out, ", ")?;
+        self.put_image_coordinate_limits(image, address.level, context)?;
+        write!(self.out, ")")?;
+
+        // Write the array index, if present.
+        if let Some(array_index) = address.array_index {
+            write!(self.out, ", ")?;
+            self.put_restricted_scalar_image_index(image, array_index, "get_array_size", context)?;
+        }
+
+        // Write the sample index, if present.
+        if let Some(sample) = address.sample {
+            write!(self.out, ", ")?;
+            self.put_restricted_scalar_image_index(image, sample, "get_num_samples", context)?;
+        }
+
+        // The level of detail should be clamped and cached by
+        // `put_cache_restricted_level`, so we don't need to clamp it here.
+        if let Some(level) = address.level {
+            write!(self.out, ", ")?;
+            self.put_level_of_detail(level, context)?;
+        }
+
+        Ok(())
+    }
+
+    /// Write an expression that is true if the given image access is in bounds.
+    fn put_image_access_bounds_check(
+        &mut self,
+        image: Handle<crate::Expression>,
+        address: &TexelAddress,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        let mut conjunction = "";
+
+        // First, check the level of detail. Only if that is in bounds can we
+        // use it to find the appropriate bounds for the coordinates.
+        let level = if let Some(level) = address.level {
+            write!(self.out, "uint(")?;
+            self.put_level_of_detail(level, context)?;
+            write!(self.out, ") < ")?;
+            self.put_expression(image, context, true)?;
+            write!(self.out, ".get_num_mip_levels()")?;
+            conjunction = " && ";
+            Some(level)
+        } else {
+            None
+        };
+
+        // Check sample index, if present.
+        if let Some(sample) = address.sample {
+            write!(self.out, "uint(")?;
+            self.put_expression(sample, context, true)?;
+            write!(self.out, ") < ")?;
+            self.put_expression(image, context, true)?;
+            write!(self.out, ".get_num_samples()")?;
+            conjunction = " && ";
+        }
+
+        // Check array index, if present.
+        if let Some(array_index) = address.array_index {
+            write!(self.out, "{}uint(", conjunction)?;
+            self.put_expression(array_index, context, true)?;
+            write!(self.out, ") < ")?;
+            self.put_expression(image, context, true)?;
+            write!(self.out, ".get_array_size()")?;
+            conjunction = " && ";
+        }
+
+        // Finally, check if the coordinates are within bounds.
+        let coord_is_vector = match *context.resolve_type(address.coordinate) {
+            crate::TypeInner::Vector { .. } => true,
+            _ => false,
+        };
+        write!(self.out, "{}", conjunction)?;
+        if coord_is_vector {
+            write!(self.out, "{}::all(", NAMESPACE)?;
+        }
+        self.put_cast_to_uint_scalar_or_vector(address.coordinate, context)?;
+        write!(self.out, " < ")?;
+        self.put_image_size_query(image, level, crate::ScalarKind::Uint, context)?;
+        if coord_is_vector {
+            write!(self.out, ")")?;
+        }
+
+        Ok(())
+    }
+
+    fn put_image_load(
+        &mut self,
+        load: Handle<crate::Expression>,
+        image: Handle<crate::Expression>,
+        mut address: TexelAddress,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        match context.policies.image {
+            proc::BoundsCheckPolicy::Restrict => {
+                // Use the cached restricted level of detail, if any. Omit the
+                // level altogether for 1D textures.
+                if address.level.is_some() {
+                    address.level = if context.image_needs_lod(image) {
+                        Some(LevelOfDetail::Restricted(load))
+                    } else {
+                        None
+                    }
+                }
+
+                self.put_expression(image, context, false)?;
+                write!(self.out, ".read(")?;
+                self.put_restricted_texel_address(image, &address, context)?;
+                write!(self.out, ")")?;
+            }
+            proc::BoundsCheckPolicy::ReadZeroSkipWrite => {
+                write!(self.out, "(")?;
+                self.put_image_access_bounds_check(image, &address, context)?;
+                write!(self.out, " ? ")?;
+                self.put_unchecked_image_load(image, &address, context)?;
+                write!(self.out, ": DefaultConstructible())")?;
+            }
+            proc::BoundsCheckPolicy::Unchecked => {
+                self.put_unchecked_image_load(image, &address, context)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn put_unchecked_image_load(
+        &mut self,
+        image: Handle<crate::Expression>,
+        address: &TexelAddress,
+        context: &ExpressionContext,
+    ) -> BackendResult {
+        self.put_expression(image, context, false)?;
+        write!(self.out, ".read(")?;
+        // coordinates in IR are int, but Metal expects uint
+        self.put_cast_to_uint_scalar_or_vector(address.coordinate, context)?;
+        if let Some(expr) = address.array_index {
+            write!(self.out, ", ")?;
+            self.put_expression(expr, context, true)?;
+        }
+        if let Some(sample) = address.sample {
+            write!(self.out, ", ")?;
+            self.put_expression(sample, context, true)?;
+        }
+        if let Some(level) = address.level {
+            if context.image_needs_lod(image) {
+                write!(self.out, ", ")?;
+                self.put_level_of_detail(level, context)?;
+            }
+        }
+        write!(self.out, ")")?;
+
+        Ok(())
+    }
+
+    fn put_image_store(
+        &mut self,
+        level: back::Level,
+        image: Handle<crate::Expression>,
+        address: &TexelAddress,
+        value: Handle<crate::Expression>,
+        context: &StatementContext,
+    ) -> BackendResult {
+        match context.expression.policies.image {
+            proc::BoundsCheckPolicy::Restrict => {
+                // We don't have a restricted level value, because we don't
+                // support writes to mipmapped textures.
+                debug_assert!(address.level.is_none());
+
+                write!(self.out, "{}", level)?;
+                self.put_expression(image, &context.expression, false)?;
+                write!(self.out, ".write(")?;
+                self.put_expression(value, &context.expression, true)?;
+                write!(self.out, ", ")?;
+                self.put_restricted_texel_address(image, address, &context.expression)?;
+                writeln!(self.out, ");")?;
+            }
+            proc::BoundsCheckPolicy::ReadZeroSkipWrite => {
+                write!(self.out, "{}if (", level)?;
+                self.put_image_access_bounds_check(image, address, &context.expression)?;
+                writeln!(self.out, ") {{")?;
+                self.put_unchecked_image_store(level.next(), image, address, value, context)?;
+                writeln!(self.out, "{}}}", level)?;
+            }
+            proc::BoundsCheckPolicy::Unchecked => {
+                self.put_unchecked_image_store(level, image, address, value, context)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn put_unchecked_image_store(
+        &mut self,
+        level: back::Level,
+        image: Handle<crate::Expression>,
+        address: &TexelAddress,
+        value: Handle<crate::Expression>,
+        context: &StatementContext,
+    ) -> BackendResult {
+        write!(self.out, "{}", level)?;
+        self.put_expression(image, &context.expression, false)?;
+        write!(self.out, ".write(")?;
+        self.put_expression(value, &context.expression, true)?;
+        write!(self.out, ", ")?;
+        // coordinates in IR are int, but Metal expects uint
+        self.put_cast_to_uint_scalar_or_vector(address.coordinate, &context.expression)?;
+        if let Some(expr) = address.array_index {
+            write!(self.out, ", ")?;
+            self.put_expression(expr, &context.expression, true)?;
+        }
+        writeln!(self.out, ");")?;
+
         Ok(())
     }
 
@@ -1036,38 +1370,24 @@ impl<W: Write> Writer<W> {
                 sample,
                 level,
             } => {
-                self.put_expression(image, context, false)?;
-                write!(self.out, ".read(")?;
-                self.put_storage_image_coordinate(coordinate, context)?;
-                if let Some(expr) = array_index {
-                    write!(self.out, ", ")?;
-                    self.put_expression(expr, context, true)?;
-                }
-                if let Some(sample) = sample {
-                    write!(self.out, ", ")?;
-                    self.put_expression(sample, context, true)?
-                }
-                if let Some(level) = level {
-                    // Metal requires that the `level` argument to
-                    // `texture1d::read` be a constexpr equal to zero.
-                    if let crate::TypeInner::Image {
-                        dim: crate::ImageDimension::D1,
-                        ..
-                    } = *context.resolve_type(image)
-                    {
-                        // The argument defaults to zero.
-                    } else {
-                        write!(self.out, ", ")?;
-                        self.put_expression(level, context, true)?
-                    }
-                }
-                write!(self.out, ")")?;
+                let address = TexelAddress {
+                    coordinate,
+                    array_index,
+                    sample,
+                    level: level.map(LevelOfDetail::Direct),
+                };
+                self.put_image_load(expr_handle, image, address, context)?;
             }
             //Note: for all the queries, the signed integers are expected,
             // so a conversion is needed.
             crate::Expression::ImageQuery { image, query } => match query {
                 crate::ImageQuery::Size { level } => {
-                    self.put_image_size_query(image, level, context)?;
+                    self.put_image_size_query(
+                        image,
+                        level.map(LevelOfDetail::Direct),
+                        crate::ScalarKind::Sint,
+                        context,
+                    )?;
                 }
                 crate::ImageQuery::NumLevels => {
                     write!(self.out, "int(")?;
@@ -1928,6 +2248,57 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Cache a clamped level of detail value, if necessary.
+    ///
+    /// [`ImageLoad`] accesses covered by [`BoundsCheckPolicy::Restrict`] use a
+    /// properly clamped level of detail value both in the access itself, and
+    /// for fetching the size of the requested MIP level, needed to clamp the
+    /// coordinates. To avoid recomputing this clamped level of detail, we cache
+    /// it in a temporary variable, as part of the [`Emit`] statement covering
+    /// the [`ImageLoad`] expression.
+    ///
+    /// [`ImageLoad`]: crate::Expression::ImageLoad
+    /// [`BoundsCheckPolicy::Restrict`]: index::BoundsCheckPolicy::Restrict
+    /// [`Emit`]: crate::Statement::Emit
+    fn put_cache_restricted_level(
+        &mut self,
+        load: Handle<crate::Expression>,
+        image: Handle<crate::Expression>,
+        mip_level: Option<Handle<crate::Expression>>,
+        indent: back::Level,
+        context: &StatementContext,
+    ) -> BackendResult {
+        // Does this image access actually require (or even permit) a
+        // level-of-detail, and does the policy require us to restrict it?
+        let level_of_detail = match mip_level {
+            Some(level) => level,
+            None => return Ok(()),
+        };
+
+        if context.expression.policies.image != index::BoundsCheckPolicy::Restrict
+            || !context.expression.image_needs_lod(image)
+        {
+            return Ok(());
+        }
+
+        write!(
+            self.out,
+            "{}uint {}{} = ",
+            indent,
+            CLAMPED_LOD_LOAD_PREFIX,
+            load.index(),
+        )?;
+        self.put_restricted_scalar_image_index(
+            image,
+            level_of_detail,
+            "get_num_mip_levels",
+            &context.expression,
+        )?;
+        writeln!(self.out, ";")?;
+
+        Ok(())
+    }
+
     fn put_block(
         &mut self,
         level: back::Level,
@@ -1945,6 +2316,19 @@ impl<W: Write> Writer<W> {
             match *statement {
                 crate::Statement::Emit(ref range) => {
                     for handle in range.clone() {
+                        // `ImageLoad` expressions covered by the `Restrict` bounds check policy
+                        // may need to cache a clamped version of their level-of-detail argument.
+                        if let crate::Expression::ImageLoad {
+                            image,
+                            level: mip_level,
+                            ..
+                        } = context.expression.function.expressions[handle]
+                        {
+                            self.put_cache_restricted_level(
+                                handle, image, mip_level, level, context,
+                            )?;
+                        }
+
                         let info = &context.expression.info[handle];
                         let ptr_class = info
                             .ty
@@ -2123,17 +2507,13 @@ impl<W: Write> Writer<W> {
                     array_index,
                     value,
                 } => {
-                    write!(self.out, "{}", level)?;
-                    self.put_expression(image, &context.expression, false)?;
-                    write!(self.out, ".write(")?;
-                    self.put_expression(value, &context.expression, true)?;
-                    write!(self.out, ", ")?;
-                    self.put_storage_image_coordinate(coordinate, &context.expression)?;
-                    if let Some(expr) = array_index {
-                        write!(self.out, ", ")?;
-                        self.put_expression(expr, &context.expression, true)?;
-                    }
-                    writeln!(self.out, ");")?;
+                    let address = TexelAddress {
+                        coordinate,
+                        array_index,
+                        sample: None,
+                        level: None,
+                    };
+                    self.put_image_store(level, image, &address, value, context)?
                 }
                 crate::Statement::Call {
                     function,

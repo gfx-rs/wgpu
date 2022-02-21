@@ -479,8 +479,11 @@ fn convert_wgsl() {
         ("bounds-check-zero", Targets::SPIRV | Targets::METAL),
         ("bounds-check-zero-atomic", Targets::METAL),
         ("bounds-check-restrict", Targets::SPIRV | Targets::METAL),
-        ("bounds-check-image-restrict", Targets::SPIRV),
-        ("bounds-check-image-rzsw", Targets::SPIRV),
+        (
+            "bounds-check-image-restrict",
+            Targets::SPIRV | Targets::METAL,
+        ),
+        ("bounds-check-image-rzsw", Targets::SPIRV | Targets::METAL),
         ("policy-mix", Targets::SPIRV | Targets::METAL),
         (
             "texture-arg",
