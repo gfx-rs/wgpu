@@ -1527,8 +1527,8 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => Function::Regular("reverseBits"),
                     Mf::ExtractBits => Function::Regular("extractBits"),
                     Mf::InsertBits => Function::Regular("insertBits"),
-                    Mf::FindLsb => Function::Regular("findLsb"),
-                    Mf::FindMsb => Function::Regular("findMsb"),
+                    Mf::FindLsb => Function::Regular("firstTrailingBit"),
+                    Mf::FindMsb => Function::Regular("firstLeadingBit"),
                     // data packing
                     Mf::Pack4x8snorm => Function::Regular("pack4x8snorm"),
                     Mf::Pack4x8unorm => Function::Regular("pack4x8unorm"),

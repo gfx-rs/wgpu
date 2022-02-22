@@ -5,6 +5,9 @@
     - attributes are declared with `@attrib` instead of `[[attrib]]`
     - `stride` attribute is removed
     - block comments are supported
+    - renames:
+      - `findLsb` -> `firstTrailingBit`
+      - `findMsb` -> `firstLeadingBit`
 
 ## v0.8 (2021-12-18)
   - development release for wgpu-0.12

@@ -80,12 +80,12 @@ fn main() {
     let _e116 = u4_;
     u4_ = extractBits(_e116, 5u, 10u);
     let _e120 = i;
-    i = findLsb(_e120);
+    i = firstTrailingBit(_e120);
     let _e122 = u2_;
-    i2_ = findLsb(_e122);
+    i2_ = firstTrailingBit(_e122);
     let _e124 = i3_;
-    i3_ = findMsb(_e124);
+    i3_ = firstLeadingBit(_e124);
     let _e126 = u;
-    i = findMsb(_e126);
+    i = firstLeadingBit(_e126);
     return;
 }

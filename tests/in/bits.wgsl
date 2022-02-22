@@ -36,8 +36,8 @@ fn main() {
     u2 = extractBits(u2, 5u, 10u);
     u3 = extractBits(u3, 5u, 10u);
     u4 = extractBits(u4, 5u, 10u);
-    i = findLsb(i);
-    i2 = findLsb(u2);
-    i3 = findMsb(i3);
-    i = findMsb(u);
+    i = firstTrailingBit(i);
+    i2 = firstTrailingBit(u2);
+    i3 = firstLeadingBit(i3);
+    i = firstLeadingBit(u);
 }
