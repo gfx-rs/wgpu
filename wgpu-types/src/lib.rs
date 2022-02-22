@@ -901,11 +901,10 @@ bitflags::bitflags! {
         const CUBE_ARRAY_TEXTURES = 1 << 7;
         /// Supports comparison samplers.
         const COMPARISON_SAMPLERS = 1 << 8;
-        /// Supports different blending modes per color target.
-        const INDEPENDENT_BLENDING = 1 << 9;
+        /// Supports different blend operations per color attachment.
+        const INDEPENDENT_BLEND = 1 << 9;
         /// Supports storage buffers in vertex shaders.
         const VERTEX_STORAGE = 1 << 10;
-
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
