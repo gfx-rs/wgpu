@@ -103,7 +103,7 @@ impl PhysicalDeviceFeatures {
             // Features is a bitfield so we need to map everything manually
             core: vk::PhysicalDeviceFeatures::builder()
                 .robust_buffer_access(private_caps.robust_buffer_access)
-                .independent_blend(true)
+                .independent_blend(downlevel_flags.contains(wgt::DownlevelFlags::INDEPENDENT_BLEND))
                 .sample_rate_shading(
                     downlevel_flags.contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
                 )
@@ -358,6 +358,7 @@ impl PhysicalDeviceFeatures {
             self.core.fragment_stores_and_atomics != 0,
         );
         dl_flags.set(Df::MULTISAMPLED_SHADING, self.core.sample_rate_shading != 0);
+        dl_flags.set(Df::INDEPENDENT_BLEND, self.core.independent_blend != 0);
 
         features.set(
             F::INDIRECT_FIRST_INSTANCE,

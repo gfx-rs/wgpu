@@ -2313,7 +2313,7 @@ impl<A: HalApi> Device<A> {
                 .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
         } {
             log::info!("Color targets: {:?}", color_targets);
-            self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLENDING)?;
+            self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLEND)?;
         }
 
         let mut io = validation::StageIo::default();

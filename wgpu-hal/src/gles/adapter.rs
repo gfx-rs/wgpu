@@ -275,7 +275,7 @@ impl super::Adapter {
         // as we emulate the `start_instance`. But we can't deal with negatives...
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, ver >= (3, 2));
         downlevel_flags.set(
-            wgt::DownlevelFlags::INDEPENDENT_BLENDING,
+            wgt::DownlevelFlags::INDEPENDENT_BLEND,
             ver >= (3, 2) || extensions.contains("GL_EXT_draw_buffers_indexed"),
         );
         downlevel_flags.set(
