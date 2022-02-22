@@ -69,6 +69,7 @@ fn queries() -> @builtin(position) vec4<f32> {
     let dim_cube_array_lod = textureDimensions(image_cube_array, 1);
     let dim_3d = textureDimensions(image_3d);
     let dim_3d_lod = textureDimensions(image_3d, 1);
+    let dim_2s_ms = textureDimensions(image_aa);
 
     let sum = dim_1d + dim_2d.y + dim_2d_lod.y + dim_2d_array.y + dim_2d_array_lod.y +
         dim_cube.y + dim_cube_lod.y + dim_cube_array.y + dim_cube_array_lod.y +
@@ -104,6 +105,7 @@ fn sample() -> @location(0) vec4<f32> {
     let s2d_offset = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
     let s2d_level = textureSampleLevel(image_2d, sampler_reg, tc, level);
     let s2d_level_offset = textureSampleLevel(image_2d, sampler_reg, tc, level, vec2<i32>(3, 1));
+    let s2d_bias_offset = textureSampleBias(image_2d, sampler_reg, tc, 2.0, vec2<i32>(3, 1));
     return s1d + s2d + s2d_offset + s2d_level + s2d_level_offset;
 }
 
@@ -111,6 +113,8 @@ fn sample() -> @location(0) vec4<f32> {
 var sampler_cmp: sampler_comparison;
 @group(1) @binding(2)
 var image_2d_depth: texture_depth_2d;
+@group(1) @binding(3)
+var image_cube_depth: texture_depth_cube;
 
 @stage(fragment)
 fn sample_comparison() -> @location(0) f32 {
@@ -118,6 +122,7 @@ fn sample_comparison() -> @location(0) f32 {
     let dref = 0.5;
     let s2d_depth = textureSampleCompare(image_2d_depth, sampler_cmp, tc, dref);
     let s2d_depth_level = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc, dref);
+    let scube_depth_level = textureSampleCompareLevel(image_cube_depth, sampler_cmp, vec3<f32>(0.5), dref);
     return s2d_depth + s2d_depth_level;
 }
 

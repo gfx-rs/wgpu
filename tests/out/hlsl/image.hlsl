@@ -17,6 +17,7 @@ Texture2DMS<float4> image_aa : register(t6);
 SamplerState sampler_reg : register(s0, space1);
 SamplerComparisonState sampler_cmp : register(s1, space1);
 Texture2D<float> image_2d_depth : register(t2, space1);
+TextureCube<float> image_cube_depth : register(t3, space1);
 
 int2 NagaRWDimensions2D(RWTexture2D<uint4> tex)
 {
@@ -133,6 +134,13 @@ int3 NagaMipDimensions3D(Texture3D<float4> tex, uint mip_level)
     return ret.xyz;
 }
 
+int2 NagaMSDimensions2D(Texture2DMS<float4> tex)
+{
+    uint4 ret;
+    tex.GetDimensions(ret.x, ret.y, ret.z);
+    return ret.xy;
+}
+
 float4 queries() : SV_Position
 {
     int dim_1d = NagaDimensions1D(image_1d);
@@ -147,6 +155,7 @@ float4 queries() : SV_Position
     int2 dim_cube_array_lod = NagaMipDimensionsCubeArray(image_cube_array, 1);
     int3 dim_3d = NagaDimensions3D(image_3d);
     int3 dim_3d_lod = NagaMipDimensions3D(image_3d, 1);
+    int2 dim_2s_ms = NagaMSDimensions2D(image_aa);
     int sum = ((((((((((dim_1d + dim_2d.y) + dim_2d_lod.y) + dim_2d_array.y) + dim_2d_array_lod.y) + dim_cube.y) + dim_cube_lod.y) + dim_cube_array.y) + dim_cube_array_lod.y) + dim_3d.z) + dim_3d_lod.z);
     return float4(float(sum).xxxx);
 }
@@ -229,6 +238,7 @@ float4 sample_() : SV_Target0
     float4 s2d_offset = image_2d.Sample(sampler_reg, tc, int2(3, 1));
     float4 s2d_level = image_2d.SampleLevel(sampler_reg, tc, 2.299999952316284);
     float4 s2d_level_offset = image_2d.SampleLevel(sampler_reg, tc, 2.299999952316284, int2(3, 1));
+    float4 s2d_bias_offset = image_2d.SampleBias(sampler_reg, tc, 2.0, int2(3, 1));
     return ((((s1d + s2d) + s2d_offset) + s2d_level) + s2d_level_offset);
 }
 
@@ -237,6 +247,7 @@ float sample_comparison() : SV_Target0
     float2 tc_1 = float2(0.5.xx);
     float s2d_depth = image_2d_depth.SampleCmp(sampler_cmp, tc_1, 0.5);
     float s2d_depth_level = image_2d_depth.SampleCmpLevelZero(sampler_cmp, tc_1, 0.5);
+    float scube_depth_level = image_cube_depth.SampleCmpLevelZero(sampler_cmp, float3(0.5.xxx), 0.5);
     return (s2d_depth + s2d_depth_level);
 }
 

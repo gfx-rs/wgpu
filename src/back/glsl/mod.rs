@@ -2192,7 +2192,11 @@ impl<'a, W: Write> Writer<'a, W> {
                     // Zero needs level set to 0
                     crate::SampleLevel::Zero => {
                         if workaround_lod_array_shadow_as_grad {
-                            write!(self.out, ", vec2(0,0), vec2(0,0)")?;
+                            let vec_dim = match dim {
+                                crate::ImageDimension::Cube => 3,
+                                _ => 2,
+                            };
+                            write!(self.out, ", vec{}(0.0), vec{}(0.0)", vec_dim, vec_dim)?;
                         } else if gather.is_none() {
                             write!(self.out, ", 0.0")?;
                         }
@@ -2207,15 +2211,25 @@ impl<'a, W: Write> Writer<'a, W> {
                             self.write_expr(expr, ctx)?;
                         }
                     }
-                    crate::SampleLevel::Bias(expr) => {
-                        write!(self.out, ", ")?;
-                        self.write_expr(expr, ctx)?;
+                    crate::SampleLevel::Bias(_) => {
+                        // This needs to be done after the offset writing
                     }
                     crate::SampleLevel::Gradient { x, y } => {
-                        write!(self.out, ", ")?;
-                        self.write_expr(x, ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(y, ctx)?;
+                        // If we are using sampler2D to replace sampler1D, we also
+                        // need to make sure to use vec2 gradients
+                        if tex_1d_hack {
+                            write!(self.out, ", vec2(")?;
+                            self.write_expr(x, ctx)?;
+                            write!(self.out, ", 0.0)")?;
+                            write!(self.out, ", vec2(")?;
+                            self.write_expr(y, ctx)?;
+                            write!(self.out, ", 0.0)")?;
+                        } else {
+                            write!(self.out, ", ")?;
+                            self.write_expr(x, ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(y, ctx)?;
+                        }
                     }
                 }
 
@@ -2228,6 +2242,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     if tex_1d_hack {
                         write!(self.out, ", 0)")?;
                     }
+                }
+
+                // Bias is always the last argument
+                if let crate::SampleLevel::Bias(expr) = level {
+                    write!(self.out, ", ")?;
+                    self.write_expr(expr, ctx)?;
                 }
 
                 if let (Some(component), None) = (gather, depth_ref) {
@@ -2307,14 +2327,16 @@ impl<'a, W: Write> Writer<'a, W> {
                 match query {
                     crate::ImageQuery::Size { level } => {
                         match class {
-                            ImageClass::Sampled { .. } | ImageClass::Depth { .. } => {
+                            ImageClass::Sampled { multi, .. } | ImageClass::Depth { multi } => {
                                 write!(self.out, "textureSize(")?;
                                 self.write_expr(image, ctx)?;
-                                write!(self.out, ", ")?;
                                 if let Some(expr) = level {
+                                    write!(self.out, ", ")?;
                                     self.write_expr(expr, ctx)?;
-                                } else {
-                                    write!(self.out, "0")?;
+                                } else if !multi {
+                                    // All textureSize calls requires an lod argument
+                                    // except for multisampled samplers
+                                    write!(self.out, ", 0")?;
                                 }
                             }
                             ImageClass::Storage { .. } => {
@@ -2339,8 +2361,14 @@ impl<'a, W: Write> Writer<'a, W> {
                         };
                         write!(self.out, "{}(", fun_name)?;
                         self.write_expr(image, ctx)?;
+                        // All textureSize calls requires an lod argument
+                        // except for multisampled samplers
+                        if class.is_multisampled() {
+                            write!(self.out, ", 0")?;
+                        }
+                        write!(self.out, ")")?;
                         if components != 1 || self.options.version.is_es() {
-                            write!(self.out, ", 0).{}", back::COMPONENTS[components])?;
+                            write!(self.out, ".{}", back::COMPONENTS[components])?;
                         }
                     }
                     crate::ImageQuery::NumSamples => {
@@ -2808,22 +2836,27 @@ impl<'a, W: Write> Writer<'a, W> {
     ) -> Result<(), Error> {
         use crate::ImageDimension as IDim;
 
+        let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
         match array_index {
             Some(layer_expr) => {
-                let tex_coord_type = match dim {
-                    IDim::D1 => "ivec2",
-                    IDim::D2 => "ivec3",
-                    IDim::D3 => "ivec4",
-                    IDim::Cube => "ivec4",
+                let tex_coord_size = match dim {
+                    IDim::D1 => 2,
+                    IDim::D2 => 3,
+                    IDim::D3 => 4,
+                    IDim::Cube => 4,
                 };
-                write!(self.out, "{}(", tex_coord_type)?;
+                write!(self.out, "ivec{}(", tex_coord_size + tex_1d_hack as u8)?;
                 self.write_expr(coordinate, ctx)?;
                 write!(self.out, ", ")?;
+                // If we are replacing sampler1D with sampler2D we also need
+                // to add another zero to the coordinates vector for the y component
+                if tex_1d_hack {
+                    write!(self.out, "0, ")?;
+                }
                 self.write_expr(layer_expr, ctx)?;
                 write!(self.out, ")")?;
             }
             None => {
-                let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
                 if tex_1d_hack {
                     write!(self.out, "ivec2(")?;
                 }

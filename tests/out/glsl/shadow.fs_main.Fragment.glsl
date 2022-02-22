@@ -29,7 +29,7 @@ float fetch_shadow(uint light_id, vec4 homogeneous_coords) {
     }
     vec2 flip_correction = vec2(0.5, -0.5);
     vec2 light_local = (((homogeneous_coords.xy * flip_correction) / vec2(homogeneous_coords.w)) + vec2(0.5, 0.5));
-    float _e26 = textureGrad(_group_0_binding_2_fs, vec4(light_local, int(light_id), (homogeneous_coords.z / homogeneous_coords.w)), vec2(0,0), vec2(0,0));
+    float _e26 = textureGrad(_group_0_binding_2_fs, vec4(light_local, int(light_id), (homogeneous_coords.z / homogeneous_coords.w)), vec2(0.0), vec2(0.0));
     return _e26;
 }
 
