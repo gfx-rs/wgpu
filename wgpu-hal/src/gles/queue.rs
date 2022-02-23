@@ -452,9 +452,18 @@ impl super::Queue {
                         _ => unreachable!(),
                     }
                 } else {
-                    let bytes_per_image =
-                        copy.buffer_layout.rows_per_image.map_or(1, |rpi| rpi.get())
-                            * copy.buffer_layout.bytes_per_row.map_or(1, |bpr| bpr.get());
+                    let bytes_per_row = copy
+                        .buffer_layout
+                        .bytes_per_row
+                        .map_or(copy.size.width * format_info.block_size as u32, |bpr| {
+                            bpr.get()
+                        });
+                    let rows_per_image = copy.buffer_layout.rows_per_image.map_or(
+                        copy.size.height / format_info.block_dimensions.1 as u32,
+                        |rpi| rpi.get(),
+                    );
+
+                    let bytes_per_image = bytes_per_row * rows_per_image;
                     let offset = copy.buffer_layout.offset as u32;
 
                     let buffer_data;
