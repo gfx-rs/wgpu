@@ -1,5 +1,9 @@
 use mtl::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion};
-use objc::{class, msg_send, sel, sel_impl};
+use objc::{
+    class, msg_send,
+    runtime::{BOOL, YES},
+    sel, sel_impl,
+};
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
@@ -819,10 +823,18 @@ impl super::PrivateCapabilities {
             max_textures_per_stage: if os_is_mac { 128 } else { 31 },
             max_samplers_per_stage: 16,
             buffer_alignment: if os_is_mac { 256 } else { 64 },
-            max_buffer_size: if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2) {
-                1 << 30 // 1GB on macOS 1.2 and up
-            } else {
-                1 << 28 // 256MB otherwise
+            max_buffer_size: unsafe {
+                let sel = sel!(maxBufferLength);
+                let can_use: BOOL = msg_send![device.as_ref(), respondsToSelector: sel];
+                if can_use == YES {
+                    // maxBufferLength available on macOS 10.14+ and iOS 12.0+
+                    let buffer_size: mtl::NSInteger = msg_send![device.as_ref(), maxBufferLength];
+                    buffer_size as _
+                } else if os_is_mac {
+                    1 << 30 // 1GB on macOS 10.11 and up
+                } else {
+                    1 << 28 // 256MB on iOS 8.0+
+                }
             },
             max_texture_size: if Self::supports_any(
                 device,
