@@ -28,49 +28,16 @@ pub struct FailedLimit {
 }
 
 fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {
-    use std::cmp::Ordering;
     let mut failed = Vec::new();
 
-    macro_rules! compare {
-        ($name:ident, $ordering:ident) => {
-            match requested.$name.cmp(&allowed.$name) {
-                Ordering::$ordering | Ordering::Equal => (),
-                _ => failed.push(FailedLimit {
-                    name: stringify!($name),
-                    requested: requested.$name,
-                    allowed: allowed.$name,
-                }),
-            }
-        };
-    }
+    requested.check_limits_with_fail_fn(allowed, false, |name, requested, allowed| {
+        failed.push(FailedLimit {
+            name,
+            requested,
+            allowed,
+        })
+    });
 
-    compare!(max_texture_dimension_1d, Less);
-    compare!(max_texture_dimension_2d, Less);
-    compare!(max_texture_dimension_3d, Less);
-    compare!(max_texture_array_layers, Less);
-    compare!(max_bind_groups, Less);
-    compare!(max_dynamic_uniform_buffers_per_pipeline_layout, Less);
-    compare!(max_dynamic_storage_buffers_per_pipeline_layout, Less);
-    compare!(max_sampled_textures_per_shader_stage, Less);
-    compare!(max_samplers_per_shader_stage, Less);
-    compare!(max_storage_buffers_per_shader_stage, Less);
-    compare!(max_storage_textures_per_shader_stage, Less);
-    compare!(max_uniform_buffers_per_shader_stage, Less);
-    compare!(max_uniform_buffer_binding_size, Less);
-    compare!(max_storage_buffer_binding_size, Less);
-    compare!(max_vertex_buffers, Less);
-    compare!(max_vertex_attributes, Less);
-    compare!(max_vertex_buffer_array_stride, Less);
-    compare!(max_push_constant_size, Less);
-    compare!(min_uniform_buffer_offset_alignment, Greater);
-    compare!(min_storage_buffer_offset_alignment, Greater);
-    compare!(max_inter_stage_shader_components, Less);
-    compare!(max_compute_workgroup_storage_size, Less);
-    compare!(max_compute_invocations_per_workgroup, Less);
-    compare!(max_compute_workgroup_size_x, Less);
-    compare!(max_compute_workgroup_size_y, Less);
-    compare!(max_compute_workgroup_size_z, Less);
-    compare!(max_compute_workgroups_per_dimension, Less);
     failed
 }
 
