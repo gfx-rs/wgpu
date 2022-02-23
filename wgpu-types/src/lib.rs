@@ -617,7 +617,7 @@ impl Features {
 ///
 /// See also: <https://gpuweb.github.io/gpuweb/#dictdef-gpulimits>
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -819,6 +819,76 @@ impl Limits {
             min_storage_buffer_offset_alignment: other.min_storage_buffer_offset_alignment,
             ..self
         }
+    }
+
+    /// Compares every limits within self is within the limits given in `allowed`.
+    ///
+    /// If you need detailed information on failures, look at [`Limits::check_limits_with_fail_fn`].
+    pub fn check_limits(&self, allowed: &Self) -> bool {
+        let mut within = true;
+        self.check_limits_with_fail_fn(allowed, true, |_, _, _| within = false);
+        within
+    }
+
+    /// Compares every limits within self is within the limits given in `allowed`.
+    /// For an easy to use binary choice, use [`Limits::check_limits`].
+    ///
+    /// If a value is not within the allowed limit, this function calls the `fail_fn`
+    /// with the:
+    ///  - limit name
+    ///  - self's limit
+    ///  - allowed's limit.
+    ///
+    /// If fatal is true, a single failure bails out the comparison after a single failure.
+    pub fn check_limits_with_fail_fn(
+        &self,
+        allowed: &Self,
+        fatal: bool,
+        mut fail_fn: impl FnMut(&'static str, u32, u32),
+    ) {
+        use std::cmp::Ordering;
+
+        macro_rules! compare {
+            ($name:ident, $ordering:ident) => {
+                match self.$name.cmp(&allowed.$name) {
+                    Ordering::$ordering | Ordering::Equal => (),
+                    _ => {
+                        fail_fn(stringify!($name), self.$name, allowed.$name);
+                        if fatal {
+                            return;
+                        }
+                    }
+                }
+            };
+        }
+
+        compare!(max_texture_dimension_1d, Less);
+        compare!(max_texture_dimension_2d, Less);
+        compare!(max_texture_dimension_3d, Less);
+        compare!(max_texture_array_layers, Less);
+        compare!(max_bind_groups, Less);
+        compare!(max_dynamic_uniform_buffers_per_pipeline_layout, Less);
+        compare!(max_dynamic_storage_buffers_per_pipeline_layout, Less);
+        compare!(max_sampled_textures_per_shader_stage, Less);
+        compare!(max_samplers_per_shader_stage, Less);
+        compare!(max_storage_buffers_per_shader_stage, Less);
+        compare!(max_storage_textures_per_shader_stage, Less);
+        compare!(max_uniform_buffers_per_shader_stage, Less);
+        compare!(max_uniform_buffer_binding_size, Less);
+        compare!(max_storage_buffer_binding_size, Less);
+        compare!(max_vertex_buffers, Less);
+        compare!(max_vertex_attributes, Less);
+        compare!(max_vertex_buffer_array_stride, Less);
+        compare!(max_push_constant_size, Less);
+        compare!(min_uniform_buffer_offset_alignment, Greater);
+        compare!(min_storage_buffer_offset_alignment, Greater);
+        compare!(max_inter_stage_shader_components, Less);
+        compare!(max_compute_workgroup_storage_size, Less);
+        compare!(max_compute_invocations_per_workgroup, Less);
+        compare!(max_compute_workgroup_size_x, Less);
+        compare!(max_compute_workgroup_size_y, Less);
+        compare!(max_compute_workgroup_size_z, Less);
+        compare!(max_compute_workgroups_per_dimension, Less);
     }
 }
 
