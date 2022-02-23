@@ -84,7 +84,7 @@ Both [HLSL](https://github.com/Microsoft/DirectXShaderCompiler) and [GLSL](https
 have compilers to target SPIR-V. All of these shader languages can be used with any backend, we
 will handle all of the conversion. Additionally, support for these shader inputs is not going away.
 
-While WebGPU does not support any shader language other than WGSL, we will automatically convert your
+While WebGPU does not support any shading language other than WGSL, we will automatically convert your
 non-WGSL shaders if you're running on WebGPU.
 
 WGSL is always supported by default, but GLSL and SPIR-V need features enabled to compile in support.
