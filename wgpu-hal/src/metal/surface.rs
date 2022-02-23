@@ -134,30 +134,12 @@ impl super::Surface {
     }
 
     pub(super) fn dimensions(&self) -> wgt::Extent3d {
-        let (size, scale): (CGSize, CGFloat) = match self.view {
-            Some(view) if !cfg!(target_os = "macos") => unsafe {
-                let bounds: CGRect = msg_send![view.as_ptr(), bounds];
-                let window: Option<NonNull<Object>> = msg_send![view.as_ptr(), window];
-                let screen = window.and_then(|window| -> Option<NonNull<Object>> {
-                    msg_send![window.as_ptr(), screen]
-                });
-                match screen {
-                    Some(screen) => {
-                        let screen_space: *mut Object = msg_send![screen.as_ptr(), coordinateSpace];
-                        let rect: CGRect = msg_send![view.as_ptr(), convertRect:bounds toCoordinateSpace:screen_space];
-                        let scale_factor: CGFloat = msg_send![screen.as_ptr(), nativeScale];
-                        (rect.size, scale_factor)
-                    }
-                    None => (bounds.size, 1.0),
-                }
-            },
-            _ => unsafe {
-                let render_layer_borrow = self.render_layer.lock();
-                let render_layer = render_layer_borrow.as_ref();
-                let bounds: CGRect = msg_send![render_layer, bounds];
-                let contents_scale: CGFloat = msg_send![render_layer, contentsScale];
-                (bounds.size, contents_scale)
-            },
+        let (size, scale): (CGSize, CGFloat) = unsafe {
+            let render_layer_borrow = self.render_layer.lock();
+            let render_layer = render_layer_borrow.as_ref();
+            let bounds: CGRect = msg_send![render_layer, bounds];
+            let contents_scale: CGFloat = msg_send![render_layer, contentsScale];
+            (bounds.size, contents_scale)
         };
 
         wgt::Extent3d {
