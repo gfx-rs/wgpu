@@ -2,6 +2,7 @@
 //!
 //! To start using the API, create an [`Instance`].
 
+#![cfg_attr(docsrs, feature(doc_cfg))] // Allow doc(cfg(feature = "")) for showing in docs that something is feature gated.
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
 #![warn(missing_docs)]
 
@@ -762,11 +763,13 @@ impl Drop for ShaderModule {
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
     #[cfg(feature = "spirv")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "spirv")))]
     SpirV(Cow<'a, [u32]>),
     /// GLSL module as a string slice.
     ///
     /// Note: GLSL is not yet fully supported and must be a specific ShaderStage.
     #[cfg(feature = "glsl")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "glsl")))]
     Glsl {
         /// The source code of the shader.
         shader: Cow<'a, str>,
