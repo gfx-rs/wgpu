@@ -60,6 +60,7 @@ pub struct FailureCase {
 pub struct TestParameters {
     pub required_features: Features,
     pub required_downlevel_properties: DownlevelCapabilities,
+    pub required_limits: Limits,
     // Backends where test should fail.
     pub failures: Vec<FailureCase>,
 }
@@ -69,6 +70,7 @@ impl Default for TestParameters {
         Self {
             required_features: Features::empty(),
             required_downlevel_properties: lowest_downlevel_properties(),
+            required_limits: Limits::downlevel_webgl2_defaults(),
             failures: Vec::new(),
         }
     }
@@ -85,9 +87,10 @@ bitflags::bitflags! {
 
 // Builder pattern to make it easier
 impl TestParameters {
-    /// Set of common features that most tests require.
-    pub fn test_features(self) -> Self {
+    /// Set of common features that most internal tests require for readback.
+    pub fn test_features_limits(self) -> Self {
         self.features(Features::MAPPABLE_PRIMARY_BUFFERS | Features::VERTEX_WRITABLE_STORAGE)
+            .limits(wgpu::Limits::downlevel_defaults())
     }
 
     /// Set the list of features this test requires.
@@ -98,6 +101,12 @@ impl TestParameters {
 
     pub fn downlevel_flags(mut self, downlevel_flags: DownlevelFlags) -> Self {
         self.required_downlevel_properties.flags |= downlevel_flags;
+        self
+    }
+
+    /// Set the limits needed for the test.
+    pub fn limits(mut self, limits: Limits) -> Self {
+        self.required_limits = limits;
         self
     }
 
@@ -159,7 +168,6 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     ))
     .expect("could not find sutable adapter on the system");
 
-    let required_limits = Limits::downlevel_webgl2_defaults();
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
     let adapter_features = adapter.features();
@@ -172,7 +180,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         return;
     }
 
-    if adapter_limits < required_limits {
+    if !parameters.required_limits.check_limits(&adapter_limits) {
         println!("TEST SKIPPED: LIMIT TOO LOW");
         return;
     }
@@ -200,7 +208,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let (device, queue) = pollster::block_on(initialize_device(
         &adapter,
         parameters.required_features,
-        required_limits.clone(),
+        parameters.required_limits.clone(),
     ));
 
     let context = TestingContext {
@@ -209,7 +217,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         adapter_downlevel_capabilities,
         device,
         device_features: parameters.required_features,
-        device_limits: required_limits,
+        device_limits: parameters.required_limits,
         queue,
     };
 
