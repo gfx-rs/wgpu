@@ -303,13 +303,31 @@ impl super::Adapter {
             downlevel_flags.contains(wgt::DownlevelFlags::VERTEX_STORAGE)
                 && vertex_shader_storage_textures != 0,
         );
+        let gles_bcn_exts = [
+            "GL_EXT_texture_compression_s3tc_srgb",
+            "GL_EXT_texture_compression_rgtc",
+            "GL_EXT_texture_compression_bptc",
+        ];
+        let webgl_bcn_exts = [
+            "WEBGL_compressed_texture_s3tc",
+            "WEBGL_compressed_texture_s3tc_srgb",
+            "EXT_texture_compression_rgtc",
+            "EXT_texture_compression_bptc",
+        ];
+        let bcn_exts = if cfg!(target_arch = "wasm32") {
+            &webgl_bcn_exts[..]
+        } else {
+            &gles_bcn_exts[..]
+        };
+        features.set(
+            wgt::Features::TEXTURE_COMPRESSION_BC,
+            bcn_exts.iter().all(|&ext| extensions.contains(ext)),
+        );
         features.set(
             wgt::Features::TEXTURE_COMPRESSION_ETC2,
             // This is a part of GLES-3 but not WebGL2 core
             !cfg!(target_arch = "wasm32") || extensions.contains("WEBGL_compressed_texture_etc"),
         );
-        //Note: `wgt::Features::TEXTURE_COMPRESSION_BC` can't be fully supported, but there are
-        // "WEBGL_compressed_texture_s3tc" and "WEBGL_compressed_texture_s3tc_srgb" which could partially cover it
         features.set(
             wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
             extensions.contains("GL_KHR_texture_compression_astc_ldr")
