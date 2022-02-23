@@ -34,7 +34,10 @@ async fn initialize_device(
 pub struct TestingContext {
     pub adapter: Adapter,
     pub adapter_info: wgt::AdapterInfo,
+    pub adapter_downlevel_capabilities: wgt::DownlevelCapabilities,
     pub device: Device,
+    pub device_features: wgt::Features,
+    pub device_limits: wgt::Limits,
     pub queue: Queue,
 }
 
@@ -156,7 +159,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     ))
     .expect("could not find sutable adapter on the system");
 
-    let required_limits = Limits::downlevel_defaults();
+    let required_limits = Limits::downlevel_webgl2_defaults();
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
     let adapter_features = adapter.features();
@@ -197,13 +200,16 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let (device, queue) = pollster::block_on(initialize_device(
         &adapter,
         parameters.required_features,
-        required_limits,
+        required_limits.clone(),
     ));
 
     let context = TestingContext {
         adapter,
         adapter_info: adapter_info.clone(),
+        adapter_downlevel_capabilities,
         device,
+        device_features: parameters.required_features,
+        device_limits: required_limits,
         queue,
     };
 
