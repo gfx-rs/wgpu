@@ -74,14 +74,14 @@ impl super::AdapterShared {
             Tf::Bc2RgbaUnormSrgb => (glow::COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT, glow::RGBA, 0),
             Tf::Bc3RgbaUnorm => (glow::COMPRESSED_RGBA_S3TC_DXT5_EXT, glow::RGBA, 0),
             Tf::Bc3RgbaUnormSrgb => (glow::COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT, glow::RGBA, 0),
-            Tf::Bc4RUnorm
-            | Tf::Bc4RSnorm
-            | Tf::Bc5RgUnorm
-            | Tf::Bc5RgSnorm
-            | Tf::Bc6hRgbUfloat
-            | Tf::Bc6hRgbSfloat
-            | Tf::Bc7RgbaUnorm
-            | Tf::Bc7RgbaUnormSrgb => unimplemented!(),
+            Tf::Bc4RUnorm => (glow::COMPRESSED_RED_RGTC1, glow::RED, 0),
+            Tf::Bc4RSnorm => (glow::COMPRESSED_SIGNED_RED_RGTC1, glow::RED, 0),
+            Tf::Bc5RgUnorm => (glow::COMPRESSED_RG_RGTC2, glow::RG, 0),
+            Tf::Bc5RgSnorm => (glow::COMPRESSED_SIGNED_RG_RGTC2, glow::RG, 0),
+            Tf::Bc6hRgbUfloat => (glow::COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT, glow::RGB, 0),
+            Tf::Bc6hRgbSfloat => (glow::COMPRESSED_RGB_BPTC_SIGNED_FLOAT, glow::RGB, 0),
+            Tf::Bc7RgbaUnorm => (glow::COMPRESSED_RGBA_BPTC_UNORM, glow::RGBA, 0),
+            Tf::Bc7RgbaUnormSrgb => (glow::COMPRESSED_SRGB_ALPHA_BPTC_UNORM, glow::RGBA, 0),
             Tf::Etc2Rgb8Unorm => (glow::COMPRESSED_RGB8_ETC2, glow::RGB, 0),
             Tf::Etc2Rgb8UnormSrgb => (glow::COMPRESSED_SRGB8_ETC2, glow::RGB, 0),
             Tf::Etc2Rgb8A1Unorm => (
