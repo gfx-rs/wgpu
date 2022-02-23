@@ -2735,10 +2735,13 @@ impl<A: HalApi> Device<A> {
         let format_desc = format.describe();
         self.require_features(format_desc.required_features)?;
 
-        if self
+        let using_device_features = self
             .features
-            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
-        {
+            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
+        // If we're running downlevel, we need to manually ask the backend what we can use as we can't trust WebGPU.
+        let downlevel = !self.downlevel.is_webgpu_compliant();
+
+        if using_device_features || downlevel {
             Ok(adapter.get_texture_format_features(format))
         } else {
             Ok(format_desc.guaranteed_format_features)
