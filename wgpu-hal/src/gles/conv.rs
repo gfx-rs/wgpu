@@ -8,7 +8,7 @@ impl super::AdapterShared {
 
         let (internal, external, data_type) = match texture_format {
             Tf::R8Unorm => (glow::R8, glow::RED, glow::UNSIGNED_BYTE),
-            Tf::R8Snorm => (glow::R8, glow::RED, glow::BYTE),
+            Tf::R8Snorm => (glow::R8_SNORM, glow::RED, glow::BYTE),
             Tf::R8Uint => (glow::R8UI, glow::RED_INTEGER, glow::UNSIGNED_BYTE),
             Tf::R8Sint => (glow::R8I, glow::RED_INTEGER, glow::BYTE),
             Tf::R16Uint => (glow::R16UI, glow::RED_INTEGER, glow::UNSIGNED_SHORT),
@@ -17,7 +17,7 @@ impl super::AdapterShared {
             Tf::R16Snorm => (glow::R16_SNORM, glow::RED, glow::SHORT),
             Tf::R16Float => (glow::R16F, glow::RED, glow::HALF_FLOAT),
             Tf::Rg8Unorm => (glow::RG8, glow::RG, glow::UNSIGNED_BYTE),
-            Tf::Rg8Snorm => (glow::RG8, glow::RG, glow::BYTE),
+            Tf::Rg8Snorm => (glow::RG8_SNORM, glow::RG, glow::BYTE),
             Tf::Rg8Uint => (glow::RG8UI, glow::RG_INTEGER, glow::UNSIGNED_BYTE),
             Tf::Rg8Sint => (glow::RG8I, glow::RG_INTEGER, glow::BYTE),
             Tf::R32Uint => (glow::R32UI, glow::RED_INTEGER, glow::UNSIGNED_INT),
@@ -31,8 +31,8 @@ impl super::AdapterShared {
             Tf::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
             Tf::Rgba8UnormSrgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
             Tf::Bgra8UnormSrgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE), //TODO?
-            Tf::Rgba8Snorm => (glow::RGBA8, glow::RGBA, glow::BYTE),
-            Tf::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE),
+            Tf::Rgba8Snorm => (glow::RGBA8_SNORM, glow::RGBA, glow::BYTE),
+            Tf::Bgra8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE), //TODO?
             Tf::Rgba8Uint => (glow::RGBA8UI, glow::RGBA_INTEGER, glow::UNSIGNED_BYTE),
             Tf::Rgba8Sint => (glow::RGBA8I, glow::RGBA_INTEGER, glow::BYTE),
             Tf::Rgb10a2Unorm => (
