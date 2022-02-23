@@ -99,7 +99,7 @@ We support running our GLES3 backend over it in order to reach platforms with GL
 In order to run with Angle, "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
 These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts.
 
-On Windows, you generally need to copy them into the working directory, or in the same directory as the executable.
+On Windows, you generally need to copy them into the working directory, in the same directory as the executable, or somewhere in your path.
 On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 ## Environment Variables
