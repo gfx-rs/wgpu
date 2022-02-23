@@ -8,7 +8,7 @@ use std::{
 #[rustfmt::skip]
 fn print_info_from_adapter(adapter: &wgpu::Adapter, idx: usize) {
     let info = adapter.get_info();
-    let downlevel = adapter.get_downlevel_properties();
+    let downlevel = adapter.get_downlevel_capabilities();
     let features = adapter.features();
     let limits = adapter.limits();
 

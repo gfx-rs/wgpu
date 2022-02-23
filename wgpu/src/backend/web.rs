@@ -1157,7 +1157,7 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_downlevel_properties(
+    fn adapter_downlevel_capabilities(
         &self,
         _adapter: &Self::AdapterId,
     ) -> wgt::DownlevelCapabilities {

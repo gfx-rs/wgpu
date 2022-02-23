@@ -151,7 +151,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
     );
 
     let required_downlevel_capabilities = E::required_downlevel_capabilities();
-    let downlevel_capabilities = adapter.get_downlevel_properties();
+    let downlevel_capabilities = adapter.get_downlevel_capabilities();
     assert!(
         downlevel_capabilities.shader_model >= required_downlevel_capabilities.shader_model,
         "Adapter does not support the minimum shader model required to run this example: {:?}",

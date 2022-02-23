@@ -882,9 +882,9 @@ impl crate::Context for Context {
         }
     }
 
-    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities {
+    fn adapter_downlevel_capabilities(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities {
         let global = &self.0;
-        match wgc::gfx_select!(*adapter => global.adapter_downlevel_properties(*adapter)) {
+        match wgc::gfx_select!(*adapter => global.adapter_downlevel_capabilities(*adapter)) {
             Ok(downlevel) => downlevel,
             Err(err) => self.handle_error_fatal(err, "Adapter::downlevel_properties"),
         }

@@ -220,7 +220,7 @@ impl framework::Example for Example {
         _queue: &wgpu::Queue,
     ) -> Self {
         let supports_storage_resources = adapter
-            .get_downlevel_properties()
+            .get_downlevel_capabilities()
             .flags
             .contains(wgpu::DownlevelFlags::VERTEX_STORAGE)
             && device.limits().max_storage_buffers_per_shader_stage > 0;
