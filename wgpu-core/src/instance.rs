@@ -878,7 +878,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_downlevel_properties<A: HalApi>(
+    pub fn adapter_downlevel_capabilities<A: HalApi>(
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::DownlevelCapabilities, InvalidAdapter> {

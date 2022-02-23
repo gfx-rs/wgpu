@@ -218,7 +218,7 @@ trait Context: Debug + Send + Sized + Sync {
     ) -> bool;
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
-    fn adapter_downlevel_properties(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities;
+    fn adapter_downlevel_capabilities(&self, adapter: &Self::AdapterId) -> DownlevelCapabilities;
     fn adapter_get_info(&self, adapter: &Self::AdapterId) -> AdapterInfo;
     fn adapter_get_texture_format_features(
         &self,
@@ -1671,8 +1671,8 @@ impl Adapter {
     }
 
     /// Get info about the adapter itself.
-    pub fn get_downlevel_properties(&self) -> DownlevelCapabilities {
-        Context::adapter_downlevel_properties(&*self.context, &self.id)
+    pub fn get_downlevel_capabilities(&self) -> DownlevelCapabilities {
+        Context::adapter_downlevel_capabilities(&*self.context, &self.id)
     }
 
     /// Returns the features supported for a given texture format by this adapter.

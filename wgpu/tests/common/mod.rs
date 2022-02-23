@@ -161,7 +161,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
     let adapter_features = adapter.features();
     let adapter_limits = adapter.limits();
-    let adapter_downlevel_properties = adapter.get_downlevel_properties();
+    let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
 
     let missing_features = parameters.required_features - adapter_features;
     if !missing_features.is_empty() {
@@ -175,7 +175,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     }
 
     let missing_downlevel_flags =
-        parameters.required_downlevel_properties.flags - adapter_downlevel_properties.flags;
+        parameters.required_downlevel_properties.flags - adapter_downlevel_capabilities.flags;
     if !missing_downlevel_flags.is_empty() {
         println!(
             "TEST SKIPPED: MISSING DOWNLEVEL FLAGS {:?}",
@@ -184,12 +184,12 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         return;
     }
 
-    if adapter_downlevel_properties.shader_model
+    if adapter_downlevel_capabilities.shader_model
         < parameters.required_downlevel_properties.shader_model
     {
         println!(
             "TEST SKIPPED: LOW SHADER MODEL {:?}",
-            adapter_downlevel_properties.shader_model
+            adapter_downlevel_capabilities.shader_model
         );
         return;
     }
