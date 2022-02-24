@@ -61,8 +61,8 @@ unsafe extern "system" fn output_debug_string_handler(
     log::log!(level, "{}", message);
 
     if cfg!(debug_assertions) && level == log::Level::Error {
-        // Panicking behind FFI is UB, so we just exit.
-        std::process::exit(1);
+        // Set canary and continue
+        crate::VALIDATION_CANARY.set();
     }
 
     excpt::EXCEPTION_CONTINUE_EXECUTION

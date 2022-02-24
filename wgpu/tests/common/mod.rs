@@ -221,7 +221,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         queue,
     };
 
-    let failure_reason = parameters.failures.iter().find_map(|failure| {
+    let expected_failure_reason = parameters.failures.iter().find_map(|failure| {
         let always =
             failure.backends.is_none() && failure.vendor.is_none() && failure.adapter.is_none();
 
@@ -261,25 +261,38 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         }
     });
 
-    if let Some((reason, true)) = failure_reason {
+    if let Some((reason, true)) = expected_failure_reason {
         println!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
         return;
     }
 
     let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
+    let canary_set = hal::VALIDATION_CANARY.get_and_reset();
 
-    let expect_failure = failure_reason.is_some();
+    let failed = panicked || canary_set;
 
-    if panicked == expect_failure {
+    let failure_cause = match (panicked, canary_set) {
+        (true, true) => "PANIC AND VALIDATION ERROR",
+        (true, false) => "PANIC",
+        (false, true) => "VALIDATION ERROR",
+        (false, false) => "",
+    };
+
+    let expect_failure = expected_failure_reason.is_some();
+
+    if failed == expect_failure {
         // We got the conditions we expected
-        if let Some((reason, _)) = failure_reason {
+        if let Some((expected_reason, _)) = expected_failure_reason {
             // Print out reason for the failure
-            println!("GOT EXPECTED TEST FAILURE: {:?}", reason);
+            println!(
+                "GOT EXPECTED TEST FAILURE DUE TO {}: {:?}",
+                failure_cause, expected_reason
+            );
         }
-    } else if let Some((reason, _)) = failure_reason {
+    } else if let Some((reason, _)) = expected_failure_reason {
         // We expected to fail, but things passed
         panic!("UNEXPECTED TEST PASS: {:?}", reason);
     } else {
-        panic!("UNEXPECTED TEST FAILURE")
+        panic!("UNEXPECTED TEST FAILURE DUE TO {}", failure_cause)
     }
 }

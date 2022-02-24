@@ -494,7 +494,7 @@ fn skybox_bc1() {
             Some(wgpu::Backends::GL),
             None,
             Some("ANGLE"),
-            true,
+            false,
         ), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
         max_outliers: 10,
@@ -512,7 +512,7 @@ fn skybox_etc2() {
             Some(wgpu::Backends::GL),
             None,
             Some("ANGLE"),
-            true,
+            false,
         ), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
         max_outliers: 105, // Bounded by llvmpipe
@@ -530,7 +530,7 @@ fn skybox_astc() {
             Some(wgpu::Backends::GL),
             None,
             Some("ANGLE"),
-            true,
+            false,
         ), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
         max_outliers: 300, // Bounded by rp4 on vk
