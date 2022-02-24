@@ -270,31 +270,29 @@ fn clear_texture_tests(
             },
             wgpu::TextureDimension::D2,
         );
+        // 2D array texture
+        single_texture_clear_test(
+            ctx,
+            format,
+            wgpu::Extent3d {
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 4,
+            },
+            wgpu::TextureDimension::D2,
+        );
         if supports_3d {
-            // 2D array texture
+            // volume texture
             single_texture_clear_test(
                 ctx,
                 format,
                 wgpu::Extent3d {
-                    width: 64,
-                    height: 64,
-                    depth_or_array_layers: 4,
+                    width: 16,
+                    height: 16,
+                    depth_or_array_layers: 16,
                 },
-                wgpu::TextureDimension::D2,
+                wgpu::TextureDimension::D3,
             );
-            // volume texture
-            if format.describe().sample_type != wgt::TextureSampleType::Depth {
-                single_texture_clear_test(
-                    ctx,
-                    format,
-                    wgpu::Extent3d {
-                        width: 16,
-                        height: 16,
-                        depth_or_array_layers: 16,
-                    },
-                    wgpu::TextureDimension::D3,
-                );
-            }
         }
     }
 }
@@ -305,7 +303,7 @@ fn clear_texture_2d_uncompressed() {
         TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED, true, true);
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH, false, true);
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH, false, false);
         },
     )
 }
@@ -317,7 +315,7 @@ fn clear_texture_2d_bc() {
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
             .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_BC, false, true);
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_BC, false, false);
         },
     )
 }
@@ -329,7 +327,7 @@ fn clear_texture_2d_astc() {
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
             .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC, false, true);
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC, false, false);
         },
     )
 }
@@ -341,7 +339,7 @@ fn clear_texture_2d_etc2() {
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ETC2)
             .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2, false, true);
+            clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2, false, false);
         },
     )
 }
