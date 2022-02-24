@@ -315,7 +315,7 @@ fn clear_texture_2d_bc() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
-            .specific_failure(Some(wgpu::Backends::GL), None, None, true),
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), true), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_BC, false, true);
         },
@@ -327,7 +327,7 @@ fn clear_texture_2d_astc() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
-            .specific_failure(Some(wgpu::Backends::GL), None, None, true),
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), true), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC, false, true);
         },
@@ -339,7 +339,7 @@ fn clear_texture_2d_etc2() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ETC2)
-            .specific_failure(Some(wgpu::Backends::GL), None, None, true),
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), true), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2, false, true);
         },
