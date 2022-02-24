@@ -601,35 +601,59 @@ impl crate::Adapter<super::Api> for super::Adapter {
         use crate::TextureFormatCapabilities as Tfc;
         use wgt::TextureFormat as Tf;
 
-        // The storage types are sprinkled based on section
-        // "TEXTURE IMAGE LOADS AND STORES" of GLES-3.2 spec.
-        let unfiltered_color =
-            Tfc::SAMPLED | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE;
-        let filtered_color = unfiltered_color | Tfc::SAMPLED_LINEAR | Tfc::COLOR_ATTACHMENT_BLEND;
+        // Base types are pulled from the table in the OpenGLES 3.0 spec in section 3.8.
+        //
+        // The storage types are based on table 8.26, in section
+        // "TEXTURE IMAGE LOADS AND STORES" of OpenGLES-3.2 spec.
+        let empty = Tfc::empty();
+        let unfilterable = Tfc::SAMPLED;
+        let depth = Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT;
+        let filterable = unfilterable | Tfc::SAMPLED_LINEAR;
+        let renderable =
+            unfilterable | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE;
+        let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
+        let storage = Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
         match format {
-            Tf::R8Unorm | Tf::R8Snorm => filtered_color,
-            Tf::R8Uint | Tf::R8Sint | Tf::R16Uint | Tf::R16Sint => unfiltered_color,
-            Tf::R16Float | Tf::Rg8Unorm | Tf::Rg8Snorm => filtered_color,
-            Tf::Rg8Uint | Tf::Rg8Sint | Tf::R32Uint | Tf::R32Sint => {
-                unfiltered_color | Tfc::STORAGE
-            }
-            Tf::R16Unorm | Tf::Rg16Unorm | Tf::Rgba16Unorm => filtered_color,
-            Tf::R16Snorm | Tf::Rg16Snorm | Tf::Rgba16Snorm => filtered_color,
-            Tf::R32Float => unfiltered_color,
-            Tf::Rg16Uint | Tf::Rg16Sint => unfiltered_color,
-            Tf::Rg16Float | Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => filtered_color | Tfc::STORAGE,
-            Tf::Bgra8UnormSrgb | Tf::Rgba8Snorm | Tf::Bgra8Unorm => filtered_color,
-            Tf::Rgba8Uint | Tf::Rgba8Sint => unfiltered_color | Tfc::STORAGE,
-            Tf::Rgb10a2Unorm | Tf::Rg11b10Float => filtered_color,
-            Tf::Rg32Uint | Tf::Rg32Sint => unfiltered_color,
-            Tf::Rg32Float => unfiltered_color | Tfc::STORAGE,
-            Tf::Rgba16Uint | Tf::Rgba16Sint => unfiltered_color | Tfc::STORAGE,
-            Tf::Rgba16Float => filtered_color | Tfc::STORAGE,
-            Tf::Rgba32Uint | Tf::Rgba32Sint => unfiltered_color | Tfc::STORAGE,
-            Tf::Rgba32Float => unfiltered_color | Tfc::STORAGE,
-            Tf::Depth32Float => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
-            Tf::Depth24Plus => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
-            Tf::Depth24PlusStencil8 => Tfc::SAMPLED | Tfc::DEPTH_STENCIL_ATTACHMENT,
+            Tf::R8Unorm => filterable_renderable,
+            Tf::R8Snorm => filterable,
+            Tf::R8Uint => renderable,
+            Tf::R8Sint => renderable,
+            Tf::R16Uint => renderable,
+            Tf::R16Sint => renderable,
+            Tf::R16Unorm => empty,
+            Tf::R16Snorm => empty,
+            Tf::R16Float => filterable,
+            Tf::Rg8Unorm => filterable_renderable,
+            Tf::Rg8Snorm => filterable,
+            Tf::Rg8Uint => renderable,
+            Tf::Rg8Sint => renderable,
+            Tf::R32Uint => renderable | storage,
+            Tf::R32Sint => renderable | storage,
+            Tf::R32Float => unfilterable | storage,
+            Tf::Rg16Uint => renderable,
+            Tf::Rg16Sint => renderable,
+            Tf::Rg16Unorm => empty,
+            Tf::Rg16Snorm => empty,
+            Tf::Rg16Float => filterable,
+            Tf::Rgba8Unorm | Tf::Rgba8UnormSrgb => filterable_renderable | storage,
+            Tf::Bgra8Unorm | Tf::Bgra8UnormSrgb => filterable_renderable,
+            Tf::Rgba8Snorm => filterable,
+            Tf::Rgba8Uint => renderable | storage,
+            Tf::Rgba8Sint => renderable | storage,
+            Tf::Rgb10a2Unorm => filterable_renderable,
+            Tf::Rg11b10Float => filterable,
+            Tf::Rg32Uint => renderable,
+            Tf::Rg32Sint => renderable,
+            Tf::Rg32Float => unfilterable,
+            Tf::Rgba16Uint => renderable | storage,
+            Tf::Rgba16Sint => renderable | storage,
+            Tf::Rgba16Unorm => empty,
+            Tf::Rgba16Snorm => empty,
+            Tf::Rgba16Float => filterable | storage,
+            Tf::Rgba32Uint => renderable | storage,
+            Tf::Rgba32Sint => renderable | storage,
+            Tf::Rgba32Float => unfilterable | storage,
+            Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => depth,
             Tf::Rgb9e5Ufloat
             | Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
@@ -657,16 +681,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::EacRg11Snorm
             | Tf::Astc {
                 block: _,
-                channel: AstcChannel::Unorm,
-            }
-            | Tf::Astc {
-                block: _,
-                channel: AstcChannel::UnormSrgb,
-            } => Tfc::SAMPLED | Tfc::SAMPLED_LINEAR,
+                channel: AstcChannel::Unorm | AstcChannel::UnormSrgb,
+            } => filterable,
             Tf::Astc {
                 block: _,
                 channel: AstcChannel::Hdr,
-            } => unimplemented!(),
+            } => empty,
         }
     }
 
