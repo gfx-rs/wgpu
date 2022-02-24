@@ -152,13 +152,20 @@ jobs:
         run: |
           echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      - name: install llvmpipe and lavapipe
+      - name: install llvmpipe, lavapipe, and vulkan sdk
         if: matrix.os == 'ubuntu-20.04' && matrix.target != 'aarch64-linux-android' && matrix.kind == 'local'
         run: |
           sudo apt-get update -y -qq
+          
+          # llvmpipe/lavapipe
           sudo add-apt-repository ppa:oibaf/graphics-drivers -y
+
+          # vulkan sdk
+          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-focal.list https://packages.lunarg.com/vulkan/lunarg-vulkan-focal.list
+
           sudo apt-get update
-          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev mesa-vulkan-drivers
+          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev mesa-vulkan-drivers vulkan-sdk
 
       # We enable line numbers for panics, but that's it
       - name: disable debug
