@@ -951,41 +951,46 @@ bitflags::bitflags! {
     /// [`DownlevelCapabilities::is_webgpu_compliant()`] function.
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
+        ///
+        /// DX11 on FL10 level hardware, WebGL2, and GLES3.0 devices do not support compute.
         const COMPUTE_SHADERS = 1 << 0;
         /// Supports binding storage buffers and textures to fragment shaders.
         const FRAGMENT_WRITABLE_STORAGE = 1 << 1;
         /// Supports indirect drawing and dispatching.
+        ///
+        /// DX11 on FL10 level hardware, WebGL2, and GLES 3.0 devices do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to indexed draw calls.
         const BASE_VERTEX = 1 << 3;
         /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil
         /// attachment.
+        ///
+        /// The WebGL2 and GLES backends do not support RODS.
         const READ_ONLY_DEPTH_STENCIL = 1 << 4;
-        /// Supports:
-        /// - copy_image_to_image
-        /// - copy_buffer_to_image and copy_image_to_buffer with a buffer without a MAP_* usage
-        const DEVICE_LOCAL_IMAGE_COPIES = 1 << 5;
         /// Supports textures with mipmaps which have a non power of two size.
-        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 1 << 6;
+        const NON_POWER_OF_TWO_MIPMAPPED_TEXTURES = 1 << 5;
         /// Supports textures that are cube arrays.
-        const CUBE_ARRAY_TEXTURES = 1 << 7;
+        const CUBE_ARRAY_TEXTURES = 1 << 6;
         /// Supports comparison samplers.
-        const COMPARISON_SAMPLERS = 1 << 8;
+        const COMPARISON_SAMPLERS = 1 << 7;
         /// Supports different blend operations per color attachment.
-        const INDEPENDENT_BLEND = 1 << 9;
+        const INDEPENDENT_BLEND = 1 << 8;
         /// Supports storage buffers in vertex shaders.
-        const VERTEX_STORAGE = 1 << 10;
+        const VERTEX_STORAGE = 1 << 9;
 
         /// Supports samplers with anisotropic filtering. Note this isn't actually required by
         /// WebGPU, the implementation is allowed to completely ignore aniso clamp. This flag is
         /// here for native backends so they can comunicate to the user of aniso is enabled.
-        const ANISOTROPIC_FILTERING = 1 << 11;
+        ///
+        /// All backends and all devices support anisotropic filtering.
+        const ANISOTROPIC_FILTERING = 1 << 10;
 
         /// Supports storage buffers in fragment shaders.
-        const FRAGMENT_STORAGE = 1 << 12;
+        const FRAGMENT_STORAGE = 1 << 11;
 
-        ///  Supports sample shading and multisample interpolation.
-        const MULTISAMPLED_SHADING = 1 << 13;
+        /// Supports sample-rate shading.
+        const MULTISAMPLED_SHADING = 1 << 12;
+
     }
 }
 

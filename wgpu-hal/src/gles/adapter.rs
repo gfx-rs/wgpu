@@ -261,7 +261,6 @@ impl super::Adapter {
         };
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
-            | wgt::DownlevelFlags::DEVICE_LOCAL_IMAGE_COPIES
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
