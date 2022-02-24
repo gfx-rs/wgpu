@@ -135,6 +135,8 @@ bitflags::bitflags! {
         const INDEX_BUFFER_ROLE_CHANGE = 1 << 5;
         /// Indicates that the device supports disabling draw buffers
         const CAN_DISABLE_DRAW_BUFFER = 1 << 6;
+        /// Supports `glGetBufferSubData`
+        const GET_BUFFER_SUB_DATA = 1 << 7;
     }
 }
 

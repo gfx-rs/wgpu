@@ -274,7 +274,12 @@ impl super::Queue {
                             [copy.dst_offset as usize..copy.dst_offset as usize + size];
 
                         gl.bind_buffer(copy_src_target, Some(src));
-                        gl.get_buffer_sub_data(copy_src_target, copy.src_offset as i32, dst_data);
+                        self.shared.get_buffer_sub_data(
+                            gl,
+                            copy_src_target,
+                            copy.src_offset as i32,
+                            dst_data,
+                        );
                     }
                     (None, Some(dst)) => {
                         let data = src.data.as_ref().unwrap().lock().unwrap();

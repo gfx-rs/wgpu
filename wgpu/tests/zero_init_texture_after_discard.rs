@@ -68,38 +68,43 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
 
 #[test]
 fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(TestParameters::default(), |ctx| {
-        for format in [
-            wgpu::TextureFormat::Depth32Float,
-            //wgpu::TextureFormat::Depth24Plus,                 // Can't copy to or from buffer
-            //wgpu::TextureFormat::Depth24PlusStencil8,         // Can only copy stencil aspect to/from buffer
-        ] {
-            let (texture, readback_buffer) = create_white_texture_and_readback_buffer(&ctx, format);
-            {
-                let mut encoder = ctx
-                    .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Depth Discard"),
-                    color_attachments: &[],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: false, // discard!
+    initialize_test(
+        TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES),
+        |ctx| {
+            for format in [
+                wgpu::TextureFormat::Depth32Float,
+                //wgpu::TextureFormat::Depth24Plus,                 // Can't copy to or from buffer
+                //wgpu::TextureFormat::Depth24PlusStencil8,         // Can only copy stencil aspect to/from buffer
+            ] {
+                let (texture, readback_buffer) =
+                    create_white_texture_and_readback_buffer(&ctx, format);
+                {
+                    let mut encoder = ctx
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Depth Discard"),
+                        color_attachments: &[],
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: false, // discard!
+                            }),
+                            stencil_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: false, // discard!
+                            }),
                         }),
-                        stencil_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: false, // discard!
-                        }),
-                    }),
-                });
-                copy_texture_to_buffer(&mut encoder, &texture, &readback_buffer);
-                ctx.queue.submit([encoder.finish()]);
+                    });
+                    copy_texture_to_buffer(&mut encoder, &texture, &readback_buffer);
+                    ctx.queue.submit([encoder.finish()]);
+                }
+                assert_buffer_is_zero(&readback_buffer, &ctx.device);
             }
-            assert_buffer_is_zero(&readback_buffer, &ctx.device);
-        }
-    });
+        },
+    );
 }
 
 #[test]
