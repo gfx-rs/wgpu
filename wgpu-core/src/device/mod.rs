@@ -642,7 +642,7 @@ impl<A: HalApi> Device<A> {
         if desc.dimension != wgt::TextureDimension::D2 {
             // Depth textures can only be 2D
             if format_desc.sample_type == wgt::TextureSampleType::Depth {
-                return Err(resource::CreateTextureError::InvalidDepthKind(
+                return Err(resource::CreateTextureError::InvalidDepthDimension(
                     desc.dimension,
                     desc.format,
                 ));
@@ -652,6 +652,14 @@ impl<A: HalApi> Device<A> {
                 return Err(resource::CreateTextureError::InvalidDimensionUsages(
                     wgt::TextureUsages::RENDER_ATTACHMENT,
                     desc.dimension,
+                ));
+            }
+
+            // Compressed textures can only be 2D
+            if format_desc.is_compressed() {
+                return Err(resource::CreateTextureError::InvalidCompressedDimension(
+                    desc.dimension,
+                    desc.format,
                 ));
             }
         }
