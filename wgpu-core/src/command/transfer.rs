@@ -3,7 +3,7 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
     conv,
-    device::Device,
+    device::{Device, MissingDownlevelFlags},
     error::{ErrorFormatter, PrettyError},
     hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{BufferId, CommandEncoderId, Id, TextureId, Valid},
@@ -108,6 +108,8 @@ pub enum TransferError {
     },
     #[error(transparent)]
     MemoryInitFailure(#[from] super::ClearError),
+    #[error("Cannot encode this copy because of a missing downelevel flag")]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 impl PrettyError for TransferError {
@@ -837,6 +839,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(
                 TransferError::CopyFromForbiddenTextureFormat(src_texture.desc.format).into(),
             );
+        }
+
+        if format_desc.sample_type == wgt::TextureSampleType::Depth
+            && !device
+                .downlevel
+                .flags
+                .contains(wgt::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES)
+        {
+            return Err(TransferError::MissingDownlevelFlags(MissingDownlevelFlags(
+                wgt::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES,
+            ))
+            .into());
         }
 
         cmd_buf

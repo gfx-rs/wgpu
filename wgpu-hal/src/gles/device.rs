@@ -457,7 +457,7 @@ impl crate::Device<super::Api> for super::Device {
                 let ptr = if let Some(ref map_read_allocation) = buffer.data {
                     let mut guard = map_read_allocation.lock().unwrap();
                     let slice = guard.as_mut_slice();
-                    gl.get_buffer_sub_data(buffer.target, 0, slice);
+                    self.shared.get_buffer_sub_data(gl, buffer.target, 0, slice);
                     slice.as_mut_ptr()
                 } else {
                     gl.map_buffer_range(
@@ -478,11 +478,7 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
         if let Some(raw) = buffer.raw {
-            if !self
-                .shared
-                .workarounds
-                .contains(super::Workarounds::EMULATE_BUFFER_MAP)
-            {
+            if buffer.data.is_none() {
                 let gl = &self.shared.context.lock();
                 gl.bind_buffer(buffer.target, Some(raw));
                 gl.unmap_buffer(buffer.target);

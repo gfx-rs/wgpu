@@ -359,6 +359,10 @@ impl super::Adapter {
             super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER,
             !cfg!(target_arch = "wasm32"),
         );
+        private_caps.set(
+            super::PrivateCapabilities::GET_BUFFER_SUB_DATA,
+            cfg!(target_arch = "wasm32"),
+        );
 
         let max_texture_size = gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) as u32;
         let max_texture_3d_size = gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) as u32;
@@ -702,6 +706,32 @@ impl crate::Adapter<super::Api> for super::Adapter {
             })
         } else {
             None
+        }
+    }
+}
+
+impl super::AdapterShared {
+    pub(super) unsafe fn get_buffer_sub_data(
+        &self,
+        gl: &glow::Context,
+        target: u32,
+        offset: i32,
+        dst_data: &mut [u8],
+    ) {
+        if self
+            .private_caps
+            .contains(super::PrivateCapabilities::GET_BUFFER_SUB_DATA)
+        {
+            gl.get_buffer_sub_data(target, offset, dst_data);
+        } else {
+            log::error!("Fake map");
+            let length = dst_data.len();
+            let buffer_mapping =
+                gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT);
+
+            std::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length);
+
+            gl.unmap_buffer(target);
         }
     }
 }

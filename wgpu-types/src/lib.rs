@@ -991,6 +991,10 @@ bitflags::bitflags! {
         /// Supports sample-rate shading.
         const MULTISAMPLED_SHADING = 1 << 12;
 
+        /// Supports copies between depth textures and buffers.
+        ///
+        /// GLES/WebGL don't support this.
+        const DEPTH_TEXTURE_AND_BUFFER_COPIES = 1 << 13;
     }
 }
 
