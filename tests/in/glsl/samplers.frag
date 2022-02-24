@@ -64,7 +64,7 @@ void testTex1D(in float coord) {
     c = textureProjOffset(sampler1D(tex1D, samp), vec2(coord, 6.0), 5, 2.0);
     c = textureProjOffset(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0), 5, 2.0);
     c = texelFetch(sampler1D(tex1D, samp), int(coord), 3);
-    // c = texelFetchOffset(sampler1D(tex1D, samp), int(coord), 3, 5);
+    c = texelFetchOffset(sampler1D(tex1D, samp), int(coord), 3, 5);
 }
 
 #if HAS_1D_DEPTH_TEXTURES
@@ -102,7 +102,7 @@ void testTex1DArray(in vec2 coord) {
     c = textureOffset(sampler1DArray(tex1DArray, samp), coord, 5);
     c = textureOffset(sampler1DArray(tex1DArray, samp), coord, 5, 2.0);
     c = texelFetch(sampler1DArray(tex1DArray, samp), ivec2(coord), 3);
-    // c = texelFetchOffset(sampler1DArray(tex1DArray, samp), ivec2(coord), 3, 5);
+    c = texelFetchOffset(sampler1DArray(tex1DArray, samp), ivec2(coord), 3, 5);
 }
 
 #if HAS_1D_DEPTH_TEXTURES
@@ -147,7 +147,7 @@ void testTex2D(in vec2 coord) {
     c = textureProjOffset(sampler2D(tex2D, samp), vec3(coord, 6.0), ivec2(5), 2.0);
     c = textureProjOffset(sampler2D(tex2D, samp), vec4(coord, 0.0, 6.0), ivec2(5), 2.0);
     c = texelFetch(sampler2D(tex2D, samp), ivec2(coord), 3);
-    // c = texelFetchOffset(sampler2D(tex2D, samp), ivec2(coord), 3, ivec2(5));
+    c = texelFetchOffset(sampler2D(tex2D, samp), ivec2(coord), 3, ivec2(5));
 }
 
 void testTex2DShadow(vec2 coord) {
@@ -183,7 +183,7 @@ void testTex2DArray(in vec3 coord) {
     c = textureOffset(sampler2DArray(tex2DArray, samp), coord, ivec2(5));
     c = textureOffset(sampler2DArray(tex2DArray, samp), coord, ivec2(5), 2.0);
     c = texelFetch(sampler2DArray(tex2DArray, samp), ivec3(coord), 3);
-    // c = texelFetchOffset(sampler2DArray(tex2DArray, samp), ivec3(coord), 3, ivec2(5));
+    c = texelFetchOffset(sampler2DArray(tex2DArray, samp), ivec3(coord), 3, ivec2(5));
 }
 
 void testTex2DArrayShadow(in vec3 coord) {
@@ -247,7 +247,7 @@ void testTex3D(in vec3 coord) {
     c = textureOffset(sampler3D(tex3D, samp), coord, ivec3(5));
     c = textureOffset(sampler3D(tex3D, samp), coord, ivec3(5), 2.0);
     c = texelFetch(sampler3D(tex3D, samp), ivec3(coord), 3);
-    // c = texelFetchOffset(sampler3D(tex3D, samp), ivec3(coord), 3, ivec3(5));
+    c = texelFetchOffset(sampler3D(tex3D, samp), ivec3(coord), 3, ivec3(5));
 }
 
 void testTex2DMS(in vec2 coord) {

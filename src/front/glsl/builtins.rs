@@ -306,7 +306,8 @@ pub fn inject_builtin(
                 f,
             )
         }
-        "texelFetch" => {
+        "texelFetch" | "texelFetchOffset" => {
+            let offset = "texelFetchOffset" == name;
             let f = |kind, dim, arrayed, multi, _shadow| {
                 // Cube images aren't supported
                 if let Dim::Cube = dim {
@@ -322,7 +323,7 @@ pub fn inject_builtin(
                 let dim_value = image_dims_to_coords_size(dim);
                 let coordinates = make_coords_arg(dim_value + arrayed as usize, Sk::Sint);
 
-                let args = vec![
+                let mut args = vec![
                     image,
                     coordinates,
                     TypeInner::Scalar {
@@ -330,6 +331,10 @@ pub fn inject_builtin(
                         width,
                     },
                 ];
+
+                if offset {
+                    args.push(make_coords_arg(dim_value, Sk::Sint));
+                }
 
                 declaration
                     .overloads
