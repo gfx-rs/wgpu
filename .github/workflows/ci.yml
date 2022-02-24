@@ -66,7 +66,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             tool: clippy
             kind: local
-            backends: vulkan # gl
+            backends: vulkan gl
             nextest_url: https://get.nexte.st/latest/linux
 
           - name: Linux aarch64
