@@ -225,6 +225,7 @@ let zFar = 400.0;
 @group(0) @binding(1) var reflection: texture_2d<f32>;
 @group(0) @binding(2) var terrain_depth_tex: texture_2d<f32>;
 @group(0) @binding(3) var colour_sampler: sampler;
+@group(0) @binding(4) var depth_sampler: sampler;
 
 fn to_linear_depth(depth: f32) -> f32 {
     let z_n = 2.0 * depth - 1.0;
@@ -238,7 +239,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let pixel_depth = to_linear_depth(in.position.z);
     let normalized_coords = in.position.xy / vec2<f32>(uniforms.time_size_width.w, uniforms.viewport_height);
-    let terrain_depth = to_linear_depth(textureSample(terrain_depth_tex, colour_sampler, normalized_coords).r);
+    let terrain_depth = to_linear_depth(textureSample(terrain_depth_tex, depth_sampler, normalized_coords).r);
 
     let dist = terrain_depth - pixel_depth;
     let clamped = pow(smoothStep(0.0, 1.5, dist), 4.8);
