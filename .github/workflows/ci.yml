@@ -139,7 +139,7 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v1
         with:
-          key: ${{ matrix.target }}-a # suffix for cache busting
+          key: ${{ matrix.target }}-b # suffix for cache busting
 
       - name: download nextest
         if: matrix.kind == 'local'
