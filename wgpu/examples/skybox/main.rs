@@ -490,12 +490,7 @@ fn skybox_bc1() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
-        base_test_parameters: framework::test_common::TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("ANGLE"),
-            false,
-        ), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
         max_outliers: 105, // Bounded by llvmpipe
     });
@@ -508,12 +503,7 @@ fn skybox_etc2() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
-        base_test_parameters: framework::test_common::TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("ANGLE"),
-            false,
-        ), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
         max_outliers: 105, // Bounded by llvmpipe
     });
@@ -526,12 +516,7 @@ fn skybox_astc() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR,
-        base_test_parameters: framework::test_common::TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("ANGLE"),
-            false,
-        ), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
         max_outliers: 300, // Bounded by rp4 on vk
     });
