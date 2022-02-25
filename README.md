@@ -116,40 +116,43 @@ When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU
 
 We have multiple methods of testing, each of which tests different qualities about wgpu. We automatically run our tests on CI if possible. The current state of CI testing:
 
-| Backend/Platform | Status                                                                 |
-| ---------------- | ---------------------------------------------------------------------- |
-| DX12/Windows 10  | :heavy_check_mark: (over WARP)                                         |
-| DX11/Windows 10  | :construction: (over WARP)                                             |
-| Metal/MacOS      | :x: (no CPU runner)                                                    |
-| Vulkan/Linux     | :ok: ([cts hangs](https://github.com/gfx-rs/wgpu/issues/1974))         |
-| GLES/Linux       | :x: ([egl fails init](https://github.com/gfx-rs/wgpu/issues/1551))     |
+| Backend/Platform | Tests              | CTS                 | Notes                                 |
+| ---------------- | -------------------|---------------------|-------------------------------------- |
+| DX12/Windows 10  | :heavy_check_mark: | :heavy_check_mark:  | using WARP                            |
+| DX11/Windows 10  | :construction:     | —                   | using WARP                            |
+| Metal/MacOS      | —                  | —                   | metal requires GPU                    |
+| Vulkan/Linux     | :heavy_check_mark: | :x:                 | using lavapipe, [cts hangs][cts-hang] |
+| GLES/Linux       | :heavy_check_mark: | —                   | using llvmpipe                        |
+
+[cts-hang]: https://github.com/gfx-rs/wgpu/issues/1974
 
 ### Core Test Infrastructure
 
-All framework based examples have image comparison tested against their screenshot.
+We use a tool called [`cargo nextest`](https://github.com/nextest-rs/nextest) to run our tests.
+To install it, run `cargo install cargo-nextest`.
 
 To run the test suite on the default device:
 
 ```
-cargo test --no-fail-fast
+cargo nextest run --no-fail-fast
 ```
 
-There's logic which can automatically run the tests once for each adapter on your system.
+`wgpu-info` can run the tests once for each adapter on your system.
 
 ```
-cargo run --bin wgpu-info -- cargo test --no-fail-fast
+cargo run --bin wgpu-info -- cargo nextest run --no-fail-fast
 ```
 
 Then to run an example's image comparison tests, run:
 
 ```
-cargo test --example <example-name> --no-fail-fast
+cargo nextest run --example <example-name> --no-fail-fast
 ```
 
 Or run a part of the integration test suite:
 
 ```
-cargo test -p wgpu -- <name-of-test>
+cargo nextest run -p wgpu -- <name-of-test>
 ```
 
 If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases. 
