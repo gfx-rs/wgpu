@@ -968,7 +968,7 @@ impl super::Instance {
         }
         if !phd_capabilities.supports_extension(vk::AmdNegativeViewportHeightFn::name())
             && !phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name())
-            && phd_capabilities.properties.api_version < vk::API_VERSION_1_2
+            && phd_capabilities.properties.api_version < vk::API_VERSION_1_1
         {
             log::warn!(
                 "viewport Y-flip is not supported, hiding adapter: {}",
