@@ -239,6 +239,10 @@ fn single_texture_clear_test(
     // TODO: Read back and check zeroness?
 }
 
+fn round_up(value: u32, alignment: u32) -> u32 {
+    ((value + alignment - 1) / alignment) * alignment
+}
+
 fn clear_texture_tests(
     ctx: &TestingContext,
     formats: &[wgpu::TextureFormat],
@@ -246,13 +250,17 @@ fn clear_texture_tests(
     supports_3d: bool,
 ) {
     for &format in formats {
+        let desc = format.describe();
+        let rounded_width = round_up(64, desc.block_dimensions.0 as u32);
+        let rounded_height = round_up(64, desc.block_dimensions.1 as u32);
+
         // 1D texture
         if supports_1d {
             single_texture_clear_test(
                 ctx,
                 format,
                 wgpu::Extent3d {
-                    width: 64,
+                    width: rounded_width,
                     height: 1,
                     depth_or_array_layers: 1,
                 },
@@ -264,8 +272,8 @@ fn clear_texture_tests(
             ctx,
             format,
             wgpu::Extent3d {
-                width: 64,
-                height: 64,
+                width: rounded_width,
+                height: rounded_height,
                 depth_or_array_layers: 1,
             },
             wgpu::TextureDimension::D2,
@@ -275,8 +283,8 @@ fn clear_texture_tests(
             ctx,
             format,
             wgpu::Extent3d {
-                width: 64,
-                height: 64,
+                width: rounded_width,
+                height: rounded_height,
                 depth_or_array_layers: 4,
             },
             wgpu::TextureDimension::D2,
@@ -287,8 +295,8 @@ fn clear_texture_tests(
                 ctx,
                 format,
                 wgpu::Extent3d {
-                    width: 16,
-                    height: 16,
+                    width: rounded_width,
+                    height: rounded_height,
                     depth_or_array_layers: 16,
                 },
                 wgpu::TextureDimension::D3,
