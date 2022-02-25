@@ -497,7 +497,7 @@ fn skybox_bc1() {
             false,
         ), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
         tolerance: 5,
-        max_outliers: 10,
+        max_outliers: 105, // Bounded by llvmpipe
     });
 }
 
