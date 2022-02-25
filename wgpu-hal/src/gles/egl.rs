@@ -247,14 +247,16 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
         _ => unreachable!(),
     };
 
-    log::log!(
-        log_severity,
-        "GLES: [{}/{}] ID {} : {}",
-        source_str,
-        type_str,
-        id,
-        message
-    );
+    let _ = std::panic::catch_unwind(|| {
+        log::log!(
+            log_severity,
+            "GLES: [{}/{}] ID {} : {}",
+            source_str,
+            type_str,
+            id,
+            message
+        );
+    });
 
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
         std::process::exit(1);

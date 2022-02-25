@@ -44,14 +44,16 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         CStr::from_ptr(cd.p_message).to_string_lossy()
     };
 
-    log::log!(
-        level,
-        "{:?} [{} (0x{:x})]\n\t{}",
-        message_type,
-        message_id_name,
-        cd.message_id_number,
-        message,
-    );
+    let _ = std::panic::catch_unwind(|| {
+        log::log!(
+            level,
+            "{:?} [{} (0x{:x})]\n\t{}",
+            message_type,
+            message_id_name,
+            cd.message_id_number,
+            message,
+        );
+    });
 
     if cd.queue_label_count != 0 {
         let labels = slice::from_raw_parts(cd.p_queue_labels, cd.queue_label_count as usize);
@@ -64,7 +66,10 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                     .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
             })
             .collect::<Vec<_>>();
-        log::log!(level, "\tqueues: {}", names.join(", "));
+
+        let _ = std::panic::catch_unwind(|| {
+            log::log!(level, "\tqueues: {}", names.join(", "));
+        });
     }
 
     if cd.cmd_buf_label_count != 0 {
@@ -78,7 +83,10 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                     .map(|lbl| CStr::from_ptr(lbl).to_string_lossy())
             })
             .collect::<Vec<_>>();
-        log::log!(level, "\tcommand buffers: {}", names.join(", "));
+
+        let _ = std::panic::catch_unwind(|| {
+            log::log!(level, "\tcommand buffers: {}", names.join(", "));
+        });
     }
 
     if cd.object_count != 0 {
@@ -99,7 +107,9 @@ unsafe extern "system" fn debug_utils_messenger_callback(
                 )
             })
             .collect::<Vec<_>>();
-        log::log!(level, "\tobjects: {}", names.join(", "));
+        let _ = std::panic::catch_unwind(|| {
+            log::log!(level, "\tobjects: {}", names.join(", "));
+        });
     }
 
     vk::FALSE
