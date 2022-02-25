@@ -463,12 +463,18 @@ impl super::Queue {
                         .map_or(copy.size.width * format_info.block_size as u32, |bpr| {
                             bpr.get()
                         });
-                    let rows_per_image = copy.buffer_layout.rows_per_image.map_or(
-                        copy.size.height / format_info.block_dimensions.1 as u32,
-                        |rpi| rpi.get(),
-                    );
+                    let block_height = format_info.block_dimensions.1 as u32;
+                    let minimum_rows_per_image = (copy.size.height + block_height - 1)
+                        / format_info.block_dimensions.1 as u32;
+                    let rows_per_image = copy
+                        .buffer_layout
+                        .rows_per_image
+                        .map_or(minimum_rows_per_image, |rpi| rpi.get());
 
                     let bytes_per_image = bytes_per_row * rows_per_image;
+                    let minimum_bytes_per_image = bytes_per_row * minimum_rows_per_image;
+                    let bytes_in_upload =
+                        (bytes_per_image * (copy.size.depth - 1)) + minimum_bytes_per_image;
                     let offset = copy.buffer_layout.offset as u32;
 
                     let buffer_data;
@@ -477,18 +483,35 @@ impl super::Queue {
                             gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer));
                             unbind_unpack_buffer = true;
                             glow::CompressedPixelUnpackData::BufferRange(
-                                offset..offset + bytes_per_image,
+                                offset..offset + bytes_in_upload,
                             )
                         }
                         None => {
                             buffer_data = src.data.as_ref().unwrap().lock().unwrap();
                             let src_data = &buffer_data.as_slice()
-                                [(offset as usize)..(offset + bytes_per_image) as usize];
+                                [(offset as usize)..(offset + bytes_in_upload) as usize];
                             glow::CompressedPixelUnpackData::Slice(src_data)
                         }
                     };
+                    log::error!(
+                        "bytes_per_row: {}, \
+                         minimum_rows_per_image: {}, \
+                         rows_per_image: {}, \
+                         bytes_per_image: {}, \
+                         minimum_bytes_per_image: {}, \
+                         bytes_in_upload: {}\
+                        ",
+                        bytes_per_row,
+                        minimum_rows_per_image,
+                        rows_per_image,
+                        bytes_per_image,
+                        minimum_bytes_per_image,
+                        bytes_in_upload
+                    );
                     match dst_target {
-                        glow::TEXTURE_3D | glow::TEXTURE_2D_ARRAY => {
+                        glow::TEXTURE_3D
+                        | glow::TEXTURE_CUBE_MAP_ARRAY
+                        | glow::TEXTURE_2D_ARRAY => {
                             gl.compressed_tex_sub_image_3d(
                                 dst_target,
                                 copy.texture_base.mip_level as i32,
@@ -522,21 +545,6 @@ impl super::Queue {
                                 copy.texture_base.origin.y as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
-                                format_desc.internal,
-                                unpack_data,
-                            );
-                        }
-                        glow::TEXTURE_CUBE_MAP_ARRAY => {
-                            //Note: not sure if this is correct!
-                            gl.compressed_tex_sub_image_3d(
-                                dst_target,
-                                copy.texture_base.mip_level as i32,
-                                copy.texture_base.origin.x as i32,
-                                copy.texture_base.origin.y as i32,
-                                copy.texture_base.origin.z as i32,
-                                copy.size.width as i32,
-                                copy.size.height as i32,
-                                copy.size.depth as i32,
                                 format_desc.internal,
                                 unpack_data,
                             );
