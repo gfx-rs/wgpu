@@ -58,7 +58,9 @@ unsafe extern "system" fn output_debug_string_handler(
         return excpt::EXCEPTION_CONTINUE_SEARCH;
     }
 
-    log::log!(level, "{}", message);
+    let _ = std::panic::catch_unwind(|| {
+        log::log!(level, "{}", message);
+    });
 
     if cfg!(debug_assertions) && level == log::Level::Error {
         // Panicking behind FFI is UB, so we just exit.
