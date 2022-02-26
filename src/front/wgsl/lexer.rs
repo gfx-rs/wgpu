@@ -9,7 +9,7 @@ fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
 }
 
 fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
-    let pos = input.find(|c| !what(c)).unwrap_or_else(|| input.len());
+    let pos = input.find(|c| !what(c)).unwrap_or(input.len());
     input.split_at(pos)
 }
 
@@ -261,7 +261,7 @@ fn consume_number(input: &str) -> (Token, &str) {
 
     let pos = working_substr
         .find(|c| !what(c))
-        .unwrap_or_else(|| working_substr.len());
+        .unwrap_or(working_substr.len());
     let (value, rest) = input.split_at(pos + minus_offset + hex_offset);
 
     // NOTE: This code can use string slicing,
