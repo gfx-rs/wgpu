@@ -97,9 +97,11 @@ fn consume_number(input: &str) -> (Token, &str) {
     let mut what = |c| {
         match state {
             NumberLexerState {
+                uint_suffix: true, ..
+            } => return false, // Scanning is done once we've reached a type suffix.
+            NumberLexerState {
                 hex,
                 digit_state: NLDigitState::Nothing,
-                uint_suffix: false,
                 ..
             } => match c {
                 '0' => {
@@ -121,7 +123,6 @@ fn consume_number(input: &str) -> (Token, &str) {
             NumberLexerState {
                 hex,
                 digit_state: NLDigitState::LeadingZero,
-                uint_suffix: false,
                 ..
             } => match c {
                 '0' => {
@@ -153,7 +154,6 @@ fn consume_number(input: &str) -> (Token, &str) {
             NumberLexerState {
                 hex,
                 digit_state: NLDigitState::DigitBeforeDot,
-                uint_suffix: false,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -181,7 +181,6 @@ fn consume_number(input: &str) -> (Token, &str) {
             NumberLexerState {
                 hex,
                 digit_state: NLDigitState::OnlyDot,
-                uint_suffix: false,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -196,13 +195,11 @@ fn consume_number(input: &str) -> (Token, &str) {
             NumberLexerState {
                 hex,
                 digit_state: NLDigitState::DigitsThenDot,
-                uint_suffix: false,
                 ..
             }
             | NumberLexerState {
                 hex,
                 digit_state: NLDigitState::DigitAfterDot,
-                uint_suffix: false,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -222,7 +219,6 @@ fn consume_number(input: &str) -> (Token, &str) {
 
             NumberLexerState {
                 digit_state: NLDigitState::Exponent,
-                uint_suffix: false,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -236,12 +232,10 @@ fn consume_number(input: &str) -> (Token, &str) {
 
             NumberLexerState {
                 digit_state: NLDigitState::SignAfterExponent,
-                uint_suffix: false,
                 ..
             }
             | NumberLexerState {
                 digit_state: NLDigitState::DigitAfterExponent,
-                uint_suffix: false,
                 ..
             } => match c {
                 '0'..='9' => {
@@ -249,10 +243,6 @@ fn consume_number(input: &str) -> (Token, &str) {
                 }
                 _ => return false,
             },
-
-            NumberLexerState {
-                uint_suffix: true, ..
-            } => return false, // Scanning is done once we've reached a type suffix.
         }
 
         // No match branch has rejected this yet, so we are still in a number literal
