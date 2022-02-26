@@ -60,11 +60,7 @@ pub enum Token<'a> {
     DoubleColon,
     Paren(char),
     Attribute,
-    Number {
-        value: &'a str,
-        ty: NumberType,
-        width: Option<Bytes>,
-    },
+    Number { value: &'a str, ty: NumberType },
     String(&'a str),
     Word(&'a str),
     Operation(char),
@@ -1266,17 +1262,9 @@ impl Parser {
     fn get_constant_inner<'a>(
         word: &'a str,
         ty: NumberType,
-        width: Option<Bytes>,
         token_span: TokenSpan<'a>,
     ) -> Result<ConstantInner, Error<'a>> {
         let span = token_span.1;
-
-        if let Some(width) = width {
-            if width != 4 {
-                // Only 32-bit literals supported by the spec and naga for now!
-                return Err(Error::BadScalarWidth(span, width));
-            }
-        }
 
         let value = match ty {
             NumberType::Sint => {
@@ -1290,25 +1278,13 @@ impl Parser {
             }
         };
 
-        Ok(crate::ConstantInner::Scalar {
-            value,
-            width: width.unwrap_or(4),
-        })
+        Ok(crate::ConstantInner::Scalar { value, width: 4 })
     }
 
     fn parse_switch_value<'a>(lexer: &mut Lexer<'a>, uint: bool) -> Result<i32, Error<'a>> {
         let token_span = lexer.next();
         let word = match token_span.0 {
-            Token::Number { value, width, .. } => {
-                if let Some(width) = width {
-                    if width != 4 {
-                        // Only 32-bit literals supported by the spec and naga for now!
-                        return Err(Error::BadScalarWidth(token_span.1, width));
-                    }
-                }
-
-                value
-            }
+            Token::Number { value, .. } => value,
             _ => return Err(Error::Unexpected(token_span, ExpectedToken::Integer)),
         };
 
@@ -1856,7 +1832,6 @@ impl Parser {
                         Token::Number {
                             value,
                             ty: NumberType::Sint,
-                            width: None,
                         },
                         span,
                     ) = lexer.peek()
@@ -2223,8 +2198,8 @@ impl Parser {
         let inner = match first_token_span {
             (Token::Word("true"), _) => crate::ConstantInner::boolean(true),
             (Token::Word("false"), _) => crate::ConstantInner::boolean(false),
-            (Token::Number { value, ty, width }, _) => {
-                Self::get_constant_inner(value, ty, width, first_token_span)?
+            (Token::Number { value, ty }, _) => {
+                Self::get_constant_inner(value, ty, first_token_span)?
             }
             (Token::Word(name), name_span) => {
                 // look for an existing constant first

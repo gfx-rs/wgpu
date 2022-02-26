@@ -286,7 +286,6 @@ fn consume_number(input: &str) -> (Token, &str) {
             } else {
                 NumberType::Sint
             },
-            width: None,
         },
         rest,
     )
@@ -664,7 +663,6 @@ fn test_tokens() {
             Token::Number {
                 value: "92",
                 ty: NumberType::Sint,
-                width: None,
             },
             Token::Word("No"),
         ],
@@ -675,12 +673,10 @@ fn test_tokens() {
             Token::Number {
                 value: "2",
                 ty: NumberType::Uint,
-                width: None,
             },
             Token::Number {
                 value: "3",
                 ty: NumberType::Sint,
-                width: None,
             },
             Token::Word("o"),
         ],
@@ -691,7 +687,6 @@ fn test_tokens() {
             Token::Number {
                 value: "2.4",
                 ty: NumberType::Float,
-                width: None,
             },
             Token::Word("f44po"),
         ],
@@ -725,7 +720,6 @@ fn test_variable_decl() {
             Token::Number {
                 value: "0",
                 ty: NumberType::Sint,
-                width: None,
             },
             Token::Paren(')'),
             Token::Word("var"),
