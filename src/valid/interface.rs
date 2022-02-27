@@ -16,7 +16,7 @@ pub enum GlobalVariableError {
     BadHandle(#[from] BadHandle),
     #[error("Usage isn't compatible with address space {0:?}")]
     InvalidUsage(crate::AddressSpace),
-    #[error("Type isn't compatible with with address space {0:?}")]
+    #[error("Type isn't compatible with address space {0:?}")]
     InvalidType(crate::AddressSpace),
     #[error("Type flags {seen:?} do not meet the required {required:?}")]
     MissingTypeFlags {
