@@ -494,6 +494,7 @@ impl super::Adapter {
                     private_caps,
                     workarounds,
                     shading_language_version,
+                    max_texture_size,
                 }),
             },
             info: Self::make_info(vendor, renderer),
@@ -718,8 +719,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     height: 4,
                     depth_or_array_layers: 1,
                 }..=wgt::Extent3d {
-                    width: 4096,
-                    height: 4096,
+                    width: self.shared.max_texture_size,
+                    height: self.shared.max_texture_size,
                     depth_or_array_layers: 1,
                 },
                 usage: crate::TextureUses::COLOR_TARGET,
