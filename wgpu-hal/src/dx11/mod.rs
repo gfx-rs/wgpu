@@ -1,4 +1,7 @@
+#![allow(dead_code)]
 #![allow(unused_variables)]
+
+use crate::auxil;
 
 mod adapter;
 mod command;
@@ -34,7 +37,13 @@ impl crate::Api for Api {
     type ComputePipeline = ComputePipeline;
 }
 
-pub struct Instance {}
+pub struct Instance {
+    lib_dxgi: native::DxgiLib,
+    factory: auxil::dxgi::factory::DxgiFactory,
+}
+
+unsafe impl Send for Instance {}
+unsafe impl Sync for Instance {}
 
 pub struct Surface {}
 

@@ -1,6 +1,6 @@
 use crate::{
-    auxil,
-    dx12::{HResult as _, SurfaceTarget},
+    auxil::{self, dxgi::result::HResult as _},
+    dx12::SurfaceTarget,
 };
 use std::{mem, sync::Arc, thread};
 use winapi::{

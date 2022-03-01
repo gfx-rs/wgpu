@@ -1,4 +1,4 @@
-use winapi::shared::{dxgiformat};
+use winapi::shared::dxgiformat;
 
 pub fn map_texture_format(format: wgt::TextureFormat) -> dxgiformat::DXGI_FORMAT {
     use wgt::TextureFormat as Tf;

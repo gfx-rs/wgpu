@@ -1,6 +1,9 @@
-use crate::{auxil, FormatAspects};
+use crate::{
+    auxil::{self, dxgi::result::HResult as _},
+    FormatAspects,
+};
 
-use super::{conv, descriptor, view, HResult as _};
+use super::{conv, descriptor, view};
 use parking_lot::Mutex;
 use std::{ffi, mem, num::NonZeroU32, ptr, slice, sync::Arc};
 use winapi::{

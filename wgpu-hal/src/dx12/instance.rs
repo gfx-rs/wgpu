@@ -1,80 +1,16 @@
-use super::{HResult as _, SurfaceTarget};
-use std::{borrow::Cow, slice, sync::Arc};
+use super::SurfaceTarget;
+use crate::auxil::{self, dxgi::result::HResult as _};
+use std::sync::Arc;
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_6, winerror},
-    um::{errhandlingapi, winnt},
-    vc::excpt,
     Interface,
 };
-
-const MESSAGE_PREFIXES: &[(&str, log::Level)] = &[
-    ("CORRUPTION", log::Level::Error),
-    ("ERROR", log::Level::Error),
-    ("WARNING", log::Level::Warn),
-    ("INFO", log::Level::Info),
-    ("MESSAGE", log::Level::Debug),
-];
-
-unsafe extern "system" fn output_debug_string_handler(
-    exception_info: *mut winnt::EXCEPTION_POINTERS,
-) -> i32 {
-    // See https://stackoverflow.com/a/41480827
-    let record = &*(*exception_info).ExceptionRecord;
-    if record.NumberParameters != 2 {
-        return excpt::EXCEPTION_CONTINUE_SEARCH;
-    }
-    let message = match record.ExceptionCode {
-        winnt::DBG_PRINTEXCEPTION_C => String::from_utf8_lossy(slice::from_raw_parts(
-            record.ExceptionInformation[1] as *const u8,
-            record.ExceptionInformation[0],
-        )),
-        winnt::DBG_PRINTEXCEPTION_WIDE_C => {
-            Cow::Owned(String::from_utf16_lossy(slice::from_raw_parts(
-                record.ExceptionInformation[1] as *const u16,
-                record.ExceptionInformation[0],
-            )))
-        }
-        _ => return excpt::EXCEPTION_CONTINUE_SEARCH,
-    };
-
-    let message = match message.strip_prefix("D3D12 ") {
-        Some(msg) => msg
-            .trim_end_matches("\n\0")
-            .trim_end_matches("[ STATE_CREATION WARNING #0: UNKNOWN]"),
-        None => return excpt::EXCEPTION_CONTINUE_SEARCH,
-    };
-
-    let (message, level) = match MESSAGE_PREFIXES
-        .iter()
-        .find(|&&(prefix, _)| message.starts_with(prefix))
-    {
-        Some(&(prefix, level)) => (&message[prefix.len() + 2..], level),
-        None => (message, log::Level::Debug),
-    };
-
-    if level == log::Level::Warn && message.contains("#82") {
-        // This is are useless spammy warnings (#820, #821):
-        // "The application did not pass any clear value to resource creation"
-        return excpt::EXCEPTION_CONTINUE_SEARCH;
-    }
-
-    let _ = std::panic::catch_unwind(|| {
-        log::log!(level, "{}", message);
-    });
-
-    if cfg!(debug_assertions) && level == log::Level::Error {
-        // Set canary and continue
-        crate::VALIDATION_CANARY.set();
-    }
-
-    excpt::EXCEPTION_CONTINUE_EXECUTION
-}
 
 impl Drop for super::Instance {
     fn drop(&mut self) {
         unsafe {
             self.factory.destroy();
-            errhandlingapi::RemoveVectoredExceptionHandler(output_debug_string_handler as *mut _);
+            crate::auxil::dxgi::exception::unregister_exception_handler();
         }
     }
 }
@@ -82,9 +18,6 @@ impl Drop for super::Instance {
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         let lib_main = native::D3D12Lib::new().map_err(|_| crate::InstanceError)?;
-
-        let lib_dxgi = native::DxgiLib::new().map_err(|_| crate::InstanceError)?;
-        let mut factory_flags = native::FactoryCreationFlags::empty();
 
         if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
             // Enable debug layer
@@ -102,46 +35,17 @@ impl crate::Instance<super::Api> for super::Instance {
                     log::warn!("Debug interface function for D3D12 not found: {:?}", err);
                 }
             }
-
-            // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
-            // `CreateDXGIFactory2` if the debug interface is actually available. So
-            // we check for whether it exists first.
-            match lib_dxgi.get_debug_interface1() {
-                Ok(pair) => match pair.into_result() {
-                    Ok(debug_controller) => {
-                        debug_controller.destroy();
-                        factory_flags |= native::FactoryCreationFlags::DEBUG;
-                    }
-                    Err(err) => {
-                        log::warn!("Unable to enable DXGI debug interface: {}", err);
-                    }
-                },
-                Err(err) => {
-                    log::warn!("Debug interface function for DXGI not found: {:?}", err);
-                }
-            }
-
-            // Intercept `OutputDebugString` calls
-            errhandlingapi::AddVectoredExceptionHandler(0, Some(output_debug_string_handler));
         }
 
-        // Create DXGI factory
-        let factory = match lib_dxgi.create_factory2(factory_flags) {
-            Ok(pair) => match pair.into_result() {
-                Ok(factory) => factory,
-                Err(err) => {
-                    log::warn!("Failed to create DXGI factory: {}", err);
-                    return Err(crate::InstanceError);
-                }
-            },
-            Err(err) => {
-                log::warn!("Factory creation function for DXGI not found: {:?}", err);
-                return Err(crate::InstanceError);
-            }
-        };
+        // Create DXGIFactory4
+        let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(
+            auxil::dxgi::factory::DxgiFactoryType::Factory4,
+            desc.flags,
+        )?;
 
         Ok(Self {
-            factory,
+            // The call to create_factory will only succeed if we get a factory4, so this is safe.
+            factory: factory.unwrap_factory4(),
             library: Arc::new(lib_main),
             _lib_dxgi: lib_dxgi,
             flags: desc.flags,

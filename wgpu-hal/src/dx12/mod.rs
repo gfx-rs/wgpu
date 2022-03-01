@@ -41,11 +41,11 @@ mod device;
 mod instance;
 mod view;
 
-use crate::auxil;
+use crate::auxil::{self, dxgi::result::HResult as _};
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
-use std::{borrow::Cow, ffi, mem, num::NonZeroU32, sync::Arc};
+use std::{ffi, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgitype, windef, winerror},
     um::{d3d12, dcomp, synchapi, winbase, winnt},
@@ -79,45 +79,6 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
-}
-
-trait HResult<O> {
-    fn into_result(self) -> Result<O, Cow<'static, str>>;
-    fn into_device_result(self, description: &str) -> Result<O, crate::DeviceError>;
-}
-impl HResult<()> for i32 {
-    fn into_result(self) -> Result<(), Cow<'static, str>> {
-        if self >= 0 {
-            return Ok(());
-        }
-        let description = match self {
-            winerror::E_UNEXPECTED => "unexpected",
-            winerror::E_NOTIMPL => "not implemented",
-            winerror::E_OUTOFMEMORY => "out of memory",
-            winerror::E_INVALIDARG => "invalid argument",
-            _ => return Err(Cow::Owned(format!("0x{:X}", self as u32))),
-        };
-        Err(Cow::Borrowed(description))
-    }
-    fn into_device_result(self, description: &str) -> Result<(), crate::DeviceError> {
-        self.into_result().map_err(|err| {
-            log::error!("{} failed: {}", description, err);
-            if self == winerror::E_OUTOFMEMORY {
-                crate::DeviceError::OutOfMemory
-            } else {
-                crate::DeviceError::Lost
-            }
-        })
-    }
-}
-
-impl<T> HResult<T> for (T, i32) {
-    fn into_result(self) -> Result<T, Cow<'static, str>> {
-        self.1.into_result().map(|()| self.0)
-    }
-    fn into_device_result(self, description: &str) -> Result<T, crate::DeviceError> {
-        self.1.into_device_result(description).map(|()| self.0)
-    }
 }
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.

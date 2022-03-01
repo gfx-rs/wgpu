@@ -1,6 +1,6 @@
-use crate::auxil;
+use crate::auxil::{self, dxgi::result::HResult as _};
 
-use super::{conv, HResult as _};
+use super::conv;
 use std::{mem, ops::Range, ptr};
 use winapi::um::d3d12;
 

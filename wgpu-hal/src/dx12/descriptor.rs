@@ -1,4 +1,4 @@
-use super::HResult as _;
+use crate::auxil::dxgi::result::HResult as _;
 use bit_set::BitSet;
 use parking_lot::Mutex;
 use range_alloc::RangeAllocator;

@@ -1,6 +1,13 @@
+use crate::auxil;
+
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        todo!()
+        let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(
+            auxil::dxgi::factory::DxgiFactoryType::Factory1,
+            desc.flags,
+        )?;
+
+        Ok(super::Instance { lib_dxgi, factory })
     }
 
     unsafe fn create_surface(
