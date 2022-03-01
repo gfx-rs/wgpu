@@ -182,6 +182,7 @@ struct AdapterShared {
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
+    max_texture_size: u32,
 }
 
 pub struct Adapter {

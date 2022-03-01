@@ -380,8 +380,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 height: 4,
                 depth_or_array_layers: 1,
             }..=wgt::Extent3d {
-                width: 4096,
-                height: 4096,
+                width: pc.max_texture_size as u32,
+                height: pc.max_texture_size as u32,
                 depth_or_array_layers: 1,
             },
             usage: crate::TextureUses::COLOR_TARGET | crate::TextureUses::COPY_DST, //TODO: expose more
