@@ -1,9 +1,5 @@
-use mtl::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion};
-use objc::{
-    class, msg_send,
-    runtime::{BOOL, YES},
-    sel, sel_impl,
-};
+use mtl::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion, MTLReadWriteTextureTier};
+use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
@@ -395,161 +391,95 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v3,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::macOS_GPUFamily1_v3,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const MUTABLE_COMPARISON_SAMPLER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
-const SAMPLER_CLAMP_TO_BORDER_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
-];
+const SAMPLER_CLAMP_TO_BORDER_SUPPORT: &[MTLFeatureSet] = &[MTLFeatureSet::macOS_GPUFamily1_v2];
 
 const ASTC_PIXEL_FORMAT_FEATURES: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v1,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
 ];
 
 const ANY8_UNORM_SRGB_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
 ];
 
 const ANY8_SNORM_RESOLVE: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v1,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const RGBA8_SRGB: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
 ];
 
 const RGB10A2UNORM_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const RGB10A2UINT_COLOR_WRITE: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const RG11B10FLOAT_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const RGB9E5FLOAT_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
 ];
 
 const BGR10A2_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const BASE_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const BASE_VERTEX_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const TEXTURE_CUBE_ARRAY_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const DUAL_SOURCE_BLEND_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const LAYERED_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
@@ -560,28 +490,19 @@ const LAYERED_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
 
 const FUNCTION_SPECIALIZATION_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
     MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
-impl super::PrivateCapabilities {
-    fn version_at_least(major: u32, minor: u32, needed_major: u32, needed_minor: u32) -> bool {
-        major > needed_major || (major == needed_major && minor >= needed_minor)
-    }
+const OS_NOT_SUPPORT: (usize, usize) = (10000, 0);
 
+impl super::PrivateCapabilities {
     fn supports_any(raw: &mtl::DeviceRef, features_sets: &[MTLFeatureSet]) -> bool {
         features_sets
             .iter()
@@ -597,22 +518,30 @@ impl super::PrivateCapabilities {
             major: usize,
             minor: usize,
             patch: usize,
+            is_mac: bool,
         }
 
-        let version: NSOperatingSystemVersion = unsafe {
+        impl NSOperatingSystemVersion {
+            fn at_least(&self, mac_version: (usize, usize), ios_version: (usize, usize)) -> bool {
+                if self.is_mac {
+                    self.major > mac_version.0
+                        || (self.major == mac_version.0 && self.minor >= mac_version.1)
+                } else {
+                    self.major > ios_version.0
+                        || (self.major == ios_version.0 && self.minor >= ios_version.1)
+                }
+            }
+        }
+
+        let mut version: NSOperatingSystemVersion = unsafe {
             let process_info: *mut objc::runtime::Object =
                 msg_send![class!(NSProcessInfo), processInfo];
             msg_send![process_info, operatingSystemVersion]
         };
 
-        let major = version.major as u32;
-        let minor = version.minor as u32;
         let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
-        let family_check = if os_is_mac {
-            Self::version_at_least(major, minor, 10, 15)
-        } else {
-            Self::version_at_least(major, minor, 13, 0)
-        };
+        version.is_mac = os_is_mac;
+        let family_check = version.at_least((10, 15), (13, 0));
 
         let mut sample_count_mask: u8 = 1 | 4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
@@ -622,60 +551,46 @@ impl super::PrivateCapabilities {
             sample_count_mask |= 8;
         }
 
+        let rw_texture_tier = if version.at_least((10, 13), (11, 0)) {
+            device.read_write_texture_support()
+        } else if version.at_least((10, 12), OS_NOT_SUPPORT) {
+            if Self::supports_any(device, &[MTLFeatureSet::macOS_ReadWriteTextureTier2]) {
+                MTLReadWriteTextureTier::Tier2
+            } else {
+                MTLReadWriteTextureTier::Tier1
+            }
+        } else {
+            MTLReadWriteTextureTier::TierNone
+        };
+
         Self {
             family_check,
-            msl_version: if os_is_mac {
-                if Self::version_at_least(major, minor, 11, 0) {
-                    MTLLanguageVersion::V2_3
-                } else if Self::version_at_least(major, minor, 10, 15) {
-                    MTLLanguageVersion::V2_2
-                } else if Self::version_at_least(major, minor, 10, 14) {
-                    MTLLanguageVersion::V2_1
-                } else if Self::version_at_least(major, minor, 10, 13) {
-                    MTLLanguageVersion::V2_0
-                } else if Self::version_at_least(major, minor, 10, 12) {
-                    MTLLanguageVersion::V1_2
-                } else if Self::version_at_least(major, minor, 10, 11) {
-                    MTLLanguageVersion::V1_1
-                } else {
-                    MTLLanguageVersion::V1_0
-                }
-            } else if Self::version_at_least(major, minor, 14, 0) {
+            msl_version: if version.at_least((12, 0), (15, 0)) {
+                MTLLanguageVersion::V2_4
+            } else if version.at_least((11, 0), (14, 0)) {
                 MTLLanguageVersion::V2_3
-            } else if Self::version_at_least(major, minor, 13, 0) {
+            } else if version.at_least((10, 15), (13, 0)) {
                 MTLLanguageVersion::V2_2
-            } else if Self::version_at_least(major, minor, 12, 0) {
+            } else if version.at_least((10, 14), (12, 0)) {
                 MTLLanguageVersion::V2_1
-            } else if Self::version_at_least(major, minor, 11, 0) {
+            } else if version.at_least((10, 13), (11, 0)) {
                 MTLLanguageVersion::V2_0
-            } else if Self::version_at_least(major, minor, 10, 0) {
+            } else if version.at_least((10, 12), (10, 0)) {
                 MTLLanguageVersion::V1_2
-            } else if Self::version_at_least(major, minor, 9, 0) {
+            } else if version.at_least((10, 11), (9, 0)) {
                 MTLLanguageVersion::V1_1
             } else {
                 MTLLanguageVersion::V1_0
             },
             // macOS 10.11 doesn't support read-write resources
-            fragment_rw_storage: !os_is_mac || Self::version_at_least(major, minor, 10, 12),
-            read_write_texture_tier: if os_is_mac {
-                if Self::version_at_least(major, minor, 10, 13) {
-                    device.read_write_texture_support()
-                } else if Self::version_at_least(major, minor, 10, 12) {
-                    if Self::supports_any(device, &[MTLFeatureSet::macOS_ReadWriteTextureTier2]) {
-                        mtl::MTLReadWriteTextureTier::Tier2
-                    } else {
-                        mtl::MTLReadWriteTextureTier::Tier1
-                    }
-                } else {
-                    mtl::MTLReadWriteTextureTier::TierNone
-                }
-            } else if Self::version_at_least(major, minor, 11, 0) {
-                device.read_write_texture_support()
-            } else {
-                mtl::MTLReadWriteTextureTier::TierNone
-            },
+            fragment_rw_storage: version.at_least((10, 12), (8, 0)),
+            read_write_texture_tier: rw_texture_tier,
             msaa_desktop: os_is_mac,
-            msaa_apple3: family_check && device.supports_family(MTLGPUFamily::Apple3),
+            msaa_apple3: if family_check {
+                device.supports_family(MTLGPUFamily::Apple3)
+            } else {
+                device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily3_v4)
+            },
             msaa_apple7: family_check && device.supports_family(MTLGPUFamily::Apple7),
             resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
             argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT),
@@ -687,8 +602,7 @@ impl super::PrivateCapabilities {
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             sampler_lod_average: {
                 // TODO: Clarify minimum macOS version with Apple (43707452)
-                let need_version = if os_is_mac { (10, 13) } else { (9, 0) };
-                Self::version_at_least(major, minor, need_version.0, need_version.1)
+                version.at_least((10, 13), (9, 0))
             },
             base_instance: Self::supports_any(device, BASE_INSTANCE_SUPPORT),
             base_vertex_instance_drawing: Self::supports_any(device, BASE_VERTEX_INSTANCE_SUPPORT),
@@ -708,9 +622,9 @@ impl super::PrivateCapabilities {
             format_eac_etc: !os_is_mac
                 // M1 in macOS supports EAC/ETC2
                 || (family_check && device.supports_family(MTLGPUFamily::Apple7)),
-            format_astc: Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES)
-                // A8(Apple2) and later always support ASTC pixel formats
-                || (family_check && device.supports_family(MTLGPUFamily::Apple2)),
+            // A8(Apple2) and later always support ASTC pixel formats
+            format_astc: (family_check && device.supports_family(MTLGPUFamily::Apple2))
+                || Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES),
             // A13(Apple6) M1(Apple7) and later always support HDR ASTC pixel formats
             format_astc_hdr: family_check && device.supports_family(MTLGPUFamily::Apple6),
             format_any8_unorm_srgb_all: Self::supports_any(device, ANY8_UNORM_SRGB_ALL),
@@ -718,34 +632,14 @@ impl super::PrivateCapabilities {
                 && !os_is_mac,
             format_any8_snorm_all: Self::supports_any(device, ANY8_SNORM_RESOLVE),
             format_r16_norm_all: os_is_mac,
-            format_r32_all: !Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ),
-            format_r32_no_write: Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ),
-            format_r32float_no_write_no_filter: Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ) && !os_is_mac,
-            format_r32float_no_filter: !Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ) && !os_is_mac,
+            // No devices support r32's all capabilities
+            format_r32_all: false,
+            // All devices support r32's write capability
+            format_r32_no_write: false,
+            // iOS support r32float's write capability, macOS support r32float's all capabilities
+            format_r32float_no_write_no_filter: false,
+            // Only iOS doesn't support r32float's filter  capability
+            format_r32float_no_filter: !os_is_mac,
             format_r32float_all: os_is_mac,
             format_rgba8_srgb_all: Self::supports_any(device, RGBA8_SRGB),
             format_rgba8_srgb_no_write: !Self::supports_any(device, RGBA8_SRGB),
@@ -758,89 +652,59 @@ impl super::PrivateCapabilities {
             format_rgb9e5_all: Self::supports_any(device, RGB9E5FLOAT_ALL),
             format_rgb9e5_no_write: !Self::supports_any(device, RGB9E5FLOAT_ALL) && !os_is_mac,
             format_rgb9e5_filter_only: os_is_mac,
-            format_rg32_color: Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ),
-            format_rg32_color_write: !Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ),
+            format_rg32_color: true,
+            format_rg32_color_write: true,
+            // Only macOS support rg32float's all capabilities
             format_rg32float_all: os_is_mac,
-            format_rg32float_color_blend: Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ),
-            format_rg32float_no_filter: !os_is_mac
-                && !Self::supports_any(
-                    device,
-                    &[
-                        MTLFeatureSet::iOS_GPUFamily1_v1,
-                        MTLFeatureSet::iOS_GPUFamily2_v1,
-                    ],
-                ),
-            format_rgba32int_color: Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ),
-            format_rgba32int_color_write: !Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ),
-            format_rgba32float_color: Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ),
-            format_rgba32float_color_write: !Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v1,
-                    MTLFeatureSet::iOS_GPUFamily2_v1,
-                ],
-            ) && !os_is_mac,
+            // All devices support rg32float's color + blend capabilities
+            format_rg32float_color_blend: true,
+            // Only iOS doesn't support rg32float's filter
+            format_rg32float_no_filter: !os_is_mac,
+            format_rgba32int_color: true,
+            // All devices support rgba32uint and rgba32sint's color + write capabilities
+            format_rgba32int_color_write: true,
+            format_rgba32float_color: true,
+            // All devices support rgba32float's color + write capabilities
+            format_rgba32float_color_write: true,
+            // Only macOS support rgba32float's all capabilities
             format_rgba32float_all: os_is_mac,
-            format_depth16unorm: device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2),
-            format_depth32float_filter: device
-                .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
-            format_depth32float_none: !device
-                .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
+            format_depth16unorm: Self::supports_any(
+                device,
+                &[
+                    MTLFeatureSet::iOS_GPUFamily3_v3,
+                    MTLFeatureSet::macOS_GPUFamily1_v2,
+                ],
+            ),
+            format_depth32float_filter: os_is_mac,
+            format_depth32float_none: !os_is_mac,
             format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),
-            format_bgr10a2_no_write: !device
-                .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3),
+            format_bgr10a2_no_write: !Self::supports_any(device, BGR10A2_ALL),
             max_buffers_per_stage: 31,
-            max_textures_per_stage: if os_is_mac { 128 } else { 31 },
-            max_samplers_per_stage: 16,
+            max_textures_per_stage: if os_is_mac {
+                128 // On macOS, minimun value is 128
+            } else if device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1) {
+                96
+            } else {
+                31
+            },
+            max_samplers_per_stage: if (family_check
+                && device.supports_family(MTLGPUFamily::Apple6))
+                || (os_is_mac && rw_texture_tier == MTLReadWriteTextureTier::Tier2)
+            {
+                1024
+            } else {
+                16
+            },
             buffer_alignment: if os_is_mac { 256 } else { 64 },
-            max_buffer_size: unsafe {
-                let sel = sel!(maxBufferLength);
-                let can_use: BOOL = msg_send![device.as_ref(), respondsToSelector: sel];
-                if can_use == YES {
-                    // maxBufferLength available on macOS 10.14+ and iOS 12.0+
-                    let buffer_size: mtl::NSInteger = msg_send![device.as_ref(), maxBufferLength];
-                    buffer_size as _
-                } else if os_is_mac {
-                    1 << 30 // 1GB on macOS 10.11 and up
-                } else {
-                    1 << 28 // 256MB on iOS 8.0+
-                }
+            max_buffer_size: if version.at_least((10, 14), (12, 0)) {
+                // maxBufferLength available on macOS 10.14+ and iOS 12.0+
+                let buffer_size: mtl::NSInteger =
+                    unsafe { msg_send![device.as_ref(), maxBufferLength] };
+                buffer_size as _
+            } else if os_is_mac {
+                1 << 30 // 1GB on macOS 10.11 and up
+            } else {
+                1 << 28 // 256MB on iOS 8.0+
             },
             max_texture_size: if Self::supports_any(
                 device,
@@ -851,45 +715,33 @@ impl super::PrivateCapabilities {
                 ],
             ) {
                 16384
-            } else if Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily1_v2,
-                    MTLFeatureSet::iOS_GPUFamily2_v2,
-                    MTLFeatureSet::tvOS_GPUFamily1_v1,
-                ],
-            ) {
-                8192
             } else {
-                4096
+                8192
             },
             max_texture_3d_size: 2048,
             max_texture_layers: 2048,
-            max_fragment_input_components: if os_is_mac { 128 } else { 60 },
+            max_fragment_input_components: if os_is_mac
+                || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
+            {
+                124
+            } else {
+                60
+            },
             max_color_render_targets: if Self::supports_any(
                 device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily2_v1,
-                    MTLFeatureSet::iOS_GPUFamily3_v1,
-                    MTLFeatureSet::iOS_GPUFamily4_v1,
-                    MTLFeatureSet::iOS_GPUFamily5_v1,
                     MTLFeatureSet::tvOS_GPUFamily1_v1,
-                    MTLFeatureSet::tvOS_GPUFamily2_v1,
                     MTLFeatureSet::macOS_GPUFamily1_v1,
-                    MTLFeatureSet::macOS_GPUFamily2_v1,
                 ],
             ) {
                 8
             } else {
                 4
             },
-            max_varying_components: if Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::macOS_GPUFamily1_v1,
-                    MTLFeatureSet::macOS_GPUFamily2_v1,
-                ],
-            ) {
+            max_varying_components: if device
+                .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
+            {
                 128
             } else {
                 60
@@ -898,29 +750,22 @@ impl super::PrivateCapabilities {
                 device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily4_v2,
-                    MTLFeatureSet::iOS_GPUFamily5_v1,
                     MTLFeatureSet::macOS_GPUFamily1_v1,
-                    MTLFeatureSet::macOS_GPUFamily2_v1,
                 ],
             ) {
                 1024
             } else {
                 512
             },
-            max_total_threadgroup_memory: if Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily4_v2,
-                    MTLFeatureSet::iOS_GPUFamily5_v1,
-                ],
-            ) {
+            max_total_threadgroup_memory: if device
+                .supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v2)
+            {
                 64 << 10
             } else if Self::supports_any(
                 device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily4_v1,
                     MTLFeatureSet::macOS_GPUFamily1_v2,
-                    MTLFeatureSet::macOS_GPUFamily2_v1,
                 ],
             ) {
                 32 << 10
@@ -932,66 +777,35 @@ impl super::PrivateCapabilities {
                 device,
                 &[
                     MTLFeatureSet::macOS_GPUFamily1_v2,
-                    MTLFeatureSet::macOS_GPUFamily2_v1,
                     MTLFeatureSet::iOS_GPUFamily1_v3,
-                    MTLFeatureSet::iOS_GPUFamily2_v3,
-                    MTLFeatureSet::iOS_GPUFamily3_v2,
-                    MTLFeatureSet::iOS_GPUFamily4_v1,
-                    MTLFeatureSet::iOS_GPUFamily5_v1,
                     MTLFeatureSet::tvOS_GPUFamily1_v2,
-                    MTLFeatureSet::tvOS_GPUFamily2_v1,
                 ],
             ),
             supports_binary_archives: family_check
                 && (device.supports_family(MTLGPUFamily::Apple3)
                     || device.supports_family(MTLGPUFamily::Mac1)),
-            supports_capture_manager: if os_is_mac {
-                Self::version_at_least(major, minor, 10, 13)
-            } else {
-                Self::version_at_least(major, minor, 11, 0)
-            },
-            can_set_maximum_drawables_count: os_is_mac
-                || Self::version_at_least(major, minor, 11, 2),
-            can_set_display_sync: os_is_mac && Self::version_at_least(major, minor, 10, 13),
-            can_set_next_drawable_timeout: if os_is_mac {
-                Self::version_at_least(major, minor, 10, 13)
-            } else {
-                Self::version_at_least(major, minor, 11, 0)
-            },
+            supports_capture_manager: version.at_least((10, 13), (11, 0)),
+            can_set_maximum_drawables_count: version.at_least((10, 14), (11, 2)),
+            can_set_display_sync: version.at_least((10, 13), OS_NOT_SUPPORT),
+            can_set_next_drawable_timeout: version.at_least((10, 13), (11, 0)),
             supports_arrays_of_textures: Self::supports_any(
                 device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily3_v2,
-                    MTLFeatureSet::iOS_GPUFamily4_v1,
-                    MTLFeatureSet::iOS_GPUFamily5_v1,
                     MTLFeatureSet::tvOS_GPUFamily2_v1,
                     MTLFeatureSet::macOS_GPUFamily1_v3,
-                    MTLFeatureSet::macOS_GPUFamily2_v1,
                 ],
             ),
             supports_arrays_of_textures_write: family_check
                 && (device.supports_family(MTLGPUFamily::Apple6)
                     || device.supports_family(MTLGPUFamily::Mac1)
-                    || device.supports_family(MTLGPUFamily::Mac2)
-                    || device.supports_family(MTLGPUFamily::MacCatalyst1)
-                    || device.supports_family(MTLGPUFamily::MacCatalyst2)),
-            supports_mutability: if os_is_mac {
-                Self::version_at_least(major, minor, 10, 13)
-            } else {
-                Self::version_at_least(major, minor, 11, 0)
-            },
+                    || device.supports_family(MTLGPUFamily::MacCatalyst1)),
+            supports_mutability: version.at_least((10, 13), (11, 0)),
             //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
-            supports_depth_clip_control: device
-                .supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
-                || os_is_mac,
-            supports_preserve_invariance: if os_is_mac {
-                Self::version_at_least(major, minor, 11, 0)
-            } else {
-                Self::version_at_least(major, minor, 13, 0)
-            },
-            has_unified_memory: if (os_is_mac && Self::version_at_least(major, minor, 10, 15))
-                || (!os_is_mac && Self::version_at_least(major, minor, 13, 0))
-            {
+            supports_depth_clip_control: os_is_mac
+                || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
+            supports_preserve_invariance: version.at_least((11, 0), (13, 0)),
+            has_unified_memory: if version.at_least((10, 15), (13, 0)) {
                 Some(device.has_unified_memory())
             } else {
                 None
