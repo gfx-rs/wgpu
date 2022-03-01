@@ -412,11 +412,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let mut present_modes = vec![wgt::PresentMode::Fifo];
         #[allow(trivial_casts)]
-        if let Ok(factory5) = surface
-            .factory
-            .cast::<dxgi1_5::IDXGIFactory5>()
-            .into_result()
-        {
+        if let Some(factory5) = surface.factory.as_factory5() {
             let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
             let hr = factory5.CheckFeatureSupport(
                 dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,

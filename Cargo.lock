@@ -436,7 +436,7 @@ checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
 [[package]]
 name = "d3d12"
 version = "0.4.1"
-source = "git+https://github.com/cwfitzgerald/d3d12-rs.git?rev=799c61f85c5fb8b1c6c8578973a384fbfe063af1#799c61f85c5fb8b1c6c8578973a384fbfe063af1"
+source = "git+https://github.com/cwfitzgerald/d3d12-rs.git?rev=0be1b3bc8ba3018a8994f7ebdf1fee8491920b93#0be1b3bc8ba3018a8994f7ebdf1fee8491920b93"
 dependencies = [
  "bitflags",
  "libloading",

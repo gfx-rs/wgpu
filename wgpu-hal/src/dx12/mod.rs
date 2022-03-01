@@ -86,7 +86,7 @@ const MAX_ROOT_ELEMENTS: usize = 64;
 const ZERO_BUFFER_SIZE: wgt::BufferAddress = 256 << 10;
 
 pub struct Instance {
-    factory: native::Factory4,
+    factory: auxil::dxgi::factory::DxgiFactory,
     library: Arc<native::D3D12Lib>,
     _lib_dxgi: native::DxgiLib,
     flags: crate::InstanceFlags,
@@ -126,7 +126,7 @@ enum SurfaceTarget {
 }
 
 pub struct Surface {
-    factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
+    factory: auxil::dxgi::factory::DxgiFactory,
     target: SurfaceTarget,
     swap_chain: Option<SwapChain>,
 }
@@ -601,6 +601,7 @@ impl crate::Surface<Api> for Surface {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForComposition");
                         self.factory
                             .as_factory2()
+                            .unwrap()
                             .create_swapchain_for_composition(
                                 device.present_queue.as_mut_ptr() as *mut _,
                                 &desc,
@@ -611,6 +612,7 @@ impl crate::Surface<Api> for Surface {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
                         self.factory
                             .as_factory2()
+                            .unwrap()
                             .create_swapchain_for_hwnd(
                                 device.present_queue.as_mut_ptr() as *mut _,
                                 hwnd,
@@ -659,7 +661,7 @@ impl crate::Surface<Api> for Surface {
                 // Disable automatic Alt+Enter handling by DXGI.
                 const DXGI_MWA_NO_WINDOW_CHANGES: u32 = 1;
                 const DXGI_MWA_NO_ALT_ENTER: u32 = 2;
-                self.factory.MakeWindowAssociation(
+                self.factory.as_factory1().MakeWindowAssociation(
                     wnd_handle,
                     DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
                 );
