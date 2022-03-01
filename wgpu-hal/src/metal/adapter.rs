@@ -660,6 +660,12 @@ impl super::PrivateCapabilities {
             read_write_texture_tier: if os_is_mac {
                 if Self::version_at_least(major, minor, 10, 13) {
                     device.read_write_texture_support()
+                } else if Self::version_at_least(major, minor, 10, 12) {
+                    if Self::supports_any(device, &[MTLFeatureSet::macOS_ReadWriteTextureTier2]) {
+                        mtl::MTLReadWriteTextureTier::Tier2
+                    } else {
+                        mtl::MTLReadWriteTextureTier::Tier1
+                    }
                 } else {
                     mtl::MTLReadWriteTextureTier::TierNone
                 }
