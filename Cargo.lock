@@ -996,7 +996,7 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.23.1"
-source = "git+https://github.com/gfx-rs/metal-rs?rev=44af5cc#44af5cca340617d42d701264f9bf71d1f3e68096"
+source = "git+https://github.com/gfx-rs/metal-rs?rev=a357159#a35715916fec38bbc08a510ecf7d115edc500c72"
 dependencies = [
  "bitflags",
  "block",

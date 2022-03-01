@@ -644,6 +644,7 @@ impl crate::Device<super::Api> for super::Device {
                     mtl::MTLLanguageVersion::V2_1 => (2, 1),
                     mtl::MTLLanguageVersion::V2_2 => (2, 2),
                     mtl::MTLLanguageVersion::V2_3 => (2, 3),
+                    mtl::MTLLanguageVersion::V2_4 => (2, 4),
                 },
                 inline_samplers: Default::default(),
                 spirv_cross_compatibility: false,
