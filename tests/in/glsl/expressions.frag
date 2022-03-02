@@ -73,6 +73,26 @@ void testBinOpMatMat(mat3 a, mat3 b) {
     c = a != b;
 }
 
+void testBinOpMatFloat(float a, mat3 b) {
+    mat3 v;
+    v = a / b;
+    v = a * b;
+    v = a + b;
+    v = a - b;
+
+    v = b / a;
+    v = b * a;
+    v = b + a;
+    v = b - a;
+}
+
+void testUnaryOpMat(mat3 a) {
+    mat3 v;
+    v = -a;
+    v = --a;
+    v = a--;
+}
+
 void testStructConstructor() {
     struct BST {
         int data;

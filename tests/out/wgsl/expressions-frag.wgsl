@@ -208,6 +208,65 @@ fn testBinOpMatMat(a_12: mat3x3<f32>, b_12: mat3x3<f32>) {
     return;
 }
 
+fn testBinOpMatFloat(a_14: f32, b_14: mat3x3<f32>) {
+    var a_15: f32;
+    var b_15: mat3x3<f32>;
+    var v_7: mat3x3<f32>;
+
+    a_15 = a_14;
+    b_15 = b_14;
+    let _e5 = a_15;
+    let _e6 = b_15;
+    let _e7 = vec3<f32>(_e5);
+    v_7 = mat3x3<f32>((_e7 / _e6[0]), (_e7 / _e6[1]), (_e7 / _e6[2]));
+    let _e15 = a_15;
+    let _e16 = b_15;
+    v_7 = (_e15 * _e16);
+    let _e18 = a_15;
+    let _e19 = b_15;
+    let _e20 = vec3<f32>(_e18);
+    v_7 = mat3x3<f32>((_e20 + _e19[0]), (_e20 + _e19[1]), (_e20 + _e19[2]));
+    let _e28 = a_15;
+    let _e29 = b_15;
+    let _e30 = vec3<f32>(_e28);
+    v_7 = mat3x3<f32>((_e30 - _e29[0]), (_e30 - _e29[1]), (_e30 - _e29[2]));
+    let _e38 = b_15;
+    let _e39 = a_15;
+    let _e40 = vec3<f32>(_e39);
+    v_7 = mat3x3<f32>((_e38[0] / _e40), (_e38[1] / _e40), (_e38[2] / _e40));
+    let _e48 = b_15;
+    let _e49 = a_15;
+    v_7 = (_e48 * _e49);
+    let _e51 = b_15;
+    let _e52 = a_15;
+    let _e53 = vec3<f32>(_e52);
+    v_7 = mat3x3<f32>((_e51[0] + _e53), (_e51[1] + _e53), (_e51[2] + _e53));
+    let _e61 = b_15;
+    let _e62 = a_15;
+    let _e63 = vec3<f32>(_e62);
+    v_7 = mat3x3<f32>((_e61[0] - _e63), (_e61[1] - _e63), (_e61[2] - _e63));
+    return;
+}
+
+fn testUnaryOpMat(a_16: mat3x3<f32>) {
+    var a_17: mat3x3<f32>;
+    var v_8: mat3x3<f32>;
+
+    a_17 = a_16;
+    let _e3 = a_17;
+    v_8 = -(_e3);
+    let _e5 = a_17;
+    let _e7 = vec3<f32>(1.0);
+    let _e9 = (_e5 - mat3x3<f32>(_e7, _e7, _e7));
+    a_17 = _e9;
+    v_8 = _e9;
+    let _e10 = a_17;
+    let _e12 = vec3<f32>(1.0);
+    a_17 = (_e10 - mat3x3<f32>(_e12, _e12, _e12));
+    v_8 = _e10;
+    return;
+}
+
 fn testStructConstructor() {
     var tree: BST = BST(1);
 
@@ -223,7 +282,7 @@ fn testArrayConstructor() {
 
 }
 
-fn privatePointer(a_14: ptr<function, f32>) {
+fn privatePointer(a_18: ptr<function, f32>) {
     return;
 }
 
