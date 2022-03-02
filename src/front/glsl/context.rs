@@ -583,16 +583,19 @@ impl Context {
                         &TypeInner::Matrix {
                             columns: left_columns,
                             rows: left_rows,
-                            ..
+                            width: left_width,
                         },
                         &TypeInner::Matrix {
                             columns: right_columns,
                             rows: right_rows,
-                            ..
+                            width: right_width,
                         },
                     ) => {
                         // Check that the two arguments have the same dimensions
-                        if left_columns != right_columns || left_rows != right_rows {
+                        if left_columns != right_columns
+                            || left_rows != right_rows
+                            || left_width != right_width
+                        {
                             parser.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
@@ -606,6 +609,56 @@ impl Context {
                         }
 
                         match op {
+                            BinaryOperator::Divide => {
+                                // Naga IR doesn't support matrix division so we need to
+                                // divide the columns individually and reassemble the matrix
+                                let mut components = Vec::with_capacity(left_columns as usize);
+
+                                for index in 0..left_columns as u32 {
+                                    // Get the column vectors
+                                    let left_vector = self.add_expression(
+                                        Expression::AccessIndex { base: left, index },
+                                        meta,
+                                        body,
+                                    );
+                                    let right_vector = self.add_expression(
+                                        Expression::AccessIndex { base: right, index },
+                                        meta,
+                                        body,
+                                    );
+
+                                    // Divide the vectors
+                                    let column = self.expressions.append(
+                                        Expression::Binary {
+                                            op,
+                                            left: left_vector,
+                                            right: right_vector,
+                                        },
+                                        meta,
+                                    );
+
+                                    components.push(column)
+                                }
+
+                                // Rebuild the matrix from the divided vectors
+                                self.expressions.append(
+                                    Expression::Compose {
+                                        ty: parser.module.types.insert(
+                                            Type {
+                                                name: None,
+                                                inner: TypeInner::Matrix {
+                                                    columns: left_columns,
+                                                    rows: left_rows,
+                                                    width: left_width,
+                                                },
+                                            },
+                                            Span::default(),
+                                        ),
+                                        components,
+                                    },
+                                    meta,
+                                )
+                            }
                             BinaryOperator::Equal | BinaryOperator::NotEqual => {
                                 // Naga IR doesn't support matrix comparisons so we need to
                                 // compare the columns individually and then fold them together
