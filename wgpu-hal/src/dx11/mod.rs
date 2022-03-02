@@ -1,8 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crate::auxil;
-
 mod adapter;
 mod command;
 mod device;
@@ -39,7 +37,7 @@ impl crate::Api for Api {
 
 pub struct Instance {
     lib_dxgi: native::DxgiLib,
-    factory: auxil::dxgi::factory::DxgiFactory,
+    factory: native::DxgiFactory,
 }
 
 unsafe impl Send for Instance {}

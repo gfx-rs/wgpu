@@ -1,5 +1,5 @@
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_5, dxgi1_6, winerror},
+    shared::{dxgi, dxgi1_2, dxgi1_6, winerror},
     Interface,
 };
 
@@ -13,117 +13,22 @@ pub enum DxgiFactoryType {
     Factory6,
 }
 
-#[derive(Copy, Clone)]
-pub enum DxgiFactory {
-    Factory1(native::Factory1),
-    Factory2(native::Factory2),
-    Factory4(native::Factory4),
-    Factory6(native::Factory6),
-}
+pub fn enumerate_adapters(
+    factory: native::DxgiFactory,
+) -> Vec<native::WeakPtr<dxgi1_2::IDXGIAdapter2>> {
+    let mut adapters = Vec::with_capacity(8);
 
-impl DxgiFactory {
-    pub fn destroy(&self) {
-        match *self {
-            DxgiFactory::Factory1(f) => unsafe { f.destroy() },
-            DxgiFactory::Factory2(f) => unsafe { f.destroy() },
-            DxgiFactory::Factory4(f) => unsafe { f.destroy() },
-            DxgiFactory::Factory6(f) => unsafe { f.destroy() },
-        }
-    }
-
-    #[track_caller]
-    pub fn as_factory6(self) -> Option<native::Factory6> {
-        match self {
-            DxgiFactory::Factory1(_) => None,
-            DxgiFactory::Factory2(_) => None,
-            DxgiFactory::Factory4(_) => None,
-            DxgiFactory::Factory6(f) => Some(f),
-        }
-    }
-
-    #[track_caller]
-    pub fn as_factory1(self) -> native::Factory1 {
-        match self {
-            DxgiFactory::Factory1(f) => f,
-            DxgiFactory::Factory2(f) => unsafe {
-                native::Factory1::from_raw(f.as_mut_ptr() as *mut dxgi::IDXGIFactory1)
-            },
-            DxgiFactory::Factory4(f) => unsafe {
-                native::Factory1::from_raw(f.as_mut_ptr() as *mut dxgi::IDXGIFactory1)
-            },
-            DxgiFactory::Factory6(f) => unsafe {
-                native::Factory1::from_raw(f.as_mut_ptr() as *mut dxgi::IDXGIFactory1)
-            },
-        }
-    }
-
-    #[track_caller]
-    pub fn as_factory2(self) -> Option<native::Factory2> {
-        match self {
-            DxgiFactory::Factory1(_) => None,
-            DxgiFactory::Factory2(f) => Some(f),
-            DxgiFactory::Factory4(f) => unsafe {
-                Some(native::Factory2::from_raw(
-                    f.as_mut_ptr() as *mut dxgi1_2::IDXGIFactory2
-                ))
-            },
-            DxgiFactory::Factory6(f) => unsafe {
-                Some(native::Factory2::from_raw(
-                    f.as_mut_ptr() as *mut dxgi1_2::IDXGIFactory2
-                ))
-            },
-        }
-    }
-
-    #[track_caller]
-    pub fn as_factory5(self) -> Option<native::WeakPtr<dxgi1_5::IDXGIFactory5>> {
-        match self {
-            DxgiFactory::Factory1(_) => None,
-            DxgiFactory::Factory2(_) => None,
-            DxgiFactory::Factory4(_) => None,
-            DxgiFactory::Factory6(f) => unsafe {
-                Some(native::WeakPtr::from_raw(
-                    f.as_mut_ptr() as *mut dxgi1_5::IDXGIFactory5
-                ))
-            },
-        }
-    }
-
-    pub fn enumerate_adapters(&self) -> Vec<native::WeakPtr<dxgi1_2::IDXGIAdapter2>> {
-        let factory6 = self.as_factory6();
-
-        let mut adapters = Vec::with_capacity(8);
-
-        for cur_index in 0.. {
-            if let Some(factory) = factory6 {
-                profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
-                let mut adapter2 = native::WeakPtr::<dxgi1_2::IDXGIAdapter2>::null();
-                let hr = unsafe {
-                    factory.EnumAdapterByGpuPreference(
-                        cur_index,
-                        dxgi1_6::DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-                        &dxgi1_2::IDXGIAdapter2::uuidof(),
-                        adapter2.mut_void(),
-                    )
-                };
-
-                if hr == winerror::DXGI_ERROR_NOT_FOUND {
-                    break;
-                }
-                if let Err(err) = hr.into_result() {
-                    log::error!("Failed enumerating adapters: {}", err);
-                    break;
-                }
-
-                adapters.push(adapter2);
-                continue;
-            }
-
-            profiling::scope!("IDXGIFactory1::EnumAdapters1");
-            let mut adapter1 = native::WeakPtr::<dxgi::IDXGIAdapter1>::null();
+    for cur_index in 0.. {
+        if let Some(factory6) = factory.as_factory6() {
+            profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
+            let mut adapter2 = native::WeakPtr::<dxgi1_2::IDXGIAdapter2>::null();
             let hr = unsafe {
-                self.as_factory1()
-                    .EnumAdapters1(cur_index, adapter1.mut_void() as *mut *mut _)
+                factory6.EnumAdapterByGpuPreference(
+                    cur_index,
+                    dxgi1_6::DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+                    &dxgi1_2::IDXGIAdapter2::uuidof(),
+                    adapter2.mut_void(),
+                )
             };
 
             if hr == winerror::DXGI_ERROR_NOT_FOUND {
@@ -134,20 +39,39 @@ impl DxgiFactory {
                 break;
             }
 
-            match unsafe { adapter1.cast::<dxgi1_2::IDXGIAdapter2>() }.into_result() {
-                Ok(adapter2) => {
-                    unsafe { adapter1.destroy() };
-                    adapters.push(adapter2);
-                }
-                Err(err) => {
-                    log::error!("Failed casting Adapter1 to Adapter2: {}", err);
-                    break;
-                }
-            }
+            adapters.push(adapter2);
+            continue;
         }
 
-        adapters
+        profiling::scope!("IDXGIFactory1::EnumAdapters1");
+        let mut adapter1 = native::WeakPtr::<dxgi::IDXGIAdapter1>::null();
+        let hr = unsafe {
+            factory
+                .unwrap_factory1()
+                .EnumAdapters1(cur_index, adapter1.mut_void() as *mut *mut _)
+        };
+
+        if hr == winerror::DXGI_ERROR_NOT_FOUND {
+            break;
+        }
+        if let Err(err) = hr.into_result() {
+            log::error!("Failed enumerating adapters: {}", err);
+            break;
+        }
+
+        match unsafe { adapter1.cast::<dxgi1_2::IDXGIAdapter2>() }.into_result() {
+            Ok(adapter2) => {
+                unsafe { adapter1.destroy() };
+                adapters.push(adapter2);
+            }
+            Err(err) => {
+                log::error!("Failed casting Adapter1 to Adapter2: {}", err);
+                break;
+            }
+        }
     }
+
+    adapters
 }
 
 /// Tries to create a IDXGIFactory6, then a IDXGIFactory4, then a IDXGIFactory2, then a IDXGIFactory1,
@@ -156,7 +80,7 @@ impl DxgiFactory {
 pub fn create_factory(
     required_factory_type: DxgiFactoryType,
     instance_flags: crate::InstanceFlags,
-) -> Result<(native::DxgiLib, DxgiFactory), crate::InstanceError> {
+) -> Result<(native::DxgiLib, native::DxgiFactory), crate::InstanceError> {
     let lib_dxgi = native::DxgiLib::new().map_err(|_| crate::InstanceError)?;
 
     let mut factory_flags = native::FactoryCreationFlags::empty();
@@ -214,7 +138,7 @@ pub fn create_factory(
                 unsafe {
                     factory4.destroy();
                 }
-                return Ok((lib_dxgi, DxgiFactory::Factory6(factory6)));
+                return Ok((lib_dxgi, native::DxgiFactory::Factory6(factory6)));
             }
             // If we require factory6, hard error.
             Err(err) if required_factory_type == DxgiFactoryType::Factory6 => {
@@ -224,7 +148,7 @@ pub fn create_factory(
             // If we don't print it to info.
             Err(err) => {
                 log::info!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
-                return Ok((lib_dxgi, DxgiFactory::Factory4(factory4)));
+                return Ok((lib_dxgi, native::DxgiFactory::Factory4(factory4)));
             }
         }
     }
@@ -252,7 +176,7 @@ pub fn create_factory(
             unsafe {
                 factory1.destroy();
             }
-            return Ok((lib_dxgi, DxgiFactory::Factory2(factory2)));
+            return Ok((lib_dxgi, native::DxgiFactory::Factory2(factory2)));
         }
         // If we require factory2, hard error.
         Err(err) if required_factory_type == DxgiFactoryType::Factory2 => {
@@ -266,5 +190,5 @@ pub fn create_factory(
     }
 
     // We tried to create 4 and 2, but only succeeded with 1.
-    Ok((lib_dxgi, DxgiFactory::Factory1(factory1)))
+    Ok((lib_dxgi, native::DxgiFactory::Factory1(factory1)))
 }

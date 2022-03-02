@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 impl Drop for super::Instance {
     fn drop(&mut self) {
-        self.factory.destroy();
+        unsafe { self.factory.destroy() };
         crate::auxil::dxgi::exception::unregister_exception_handler();
     }
 }
@@ -64,7 +64,7 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
-        let adapters = self.factory.enumerate_adapters();
+        let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory);
 
         adapters
             .into_iter()
