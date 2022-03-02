@@ -179,6 +179,32 @@ fn testBinOpUintUVec(a_10: u32, b_10: vec4<u32>) {
     return;
 }
 
+fn testBinOpMatMat(a_12: mat3x3<f32>, b_12: mat3x3<f32>) {
+    var a_13: mat3x3<f32>;
+    var b_13: mat3x3<f32>;
+    var v_6: mat3x3<f32>;
+    var c: bool;
+
+    a_13 = a_12;
+    b_13 = b_12;
+    let _e6 = a_13;
+    let _e7 = b_13;
+    v_6 = (_e6 * _e7);
+    let _e9 = a_13;
+    let _e10 = b_13;
+    v_6 = (_e9 + _e10);
+    let _e12 = a_13;
+    let _e13 = b_13;
+    v_6 = (_e12 - _e13);
+    let _e15 = a_13;
+    let _e16 = b_13;
+    c = (all((_e15[2] == _e16[2])) && (all((_e15[1] == _e16[1])) && all((_e15[0] == _e16[0]))));
+    let _e31 = a_13;
+    let _e32 = b_13;
+    c = (any((_e31[2] != _e32[2])) || (any((_e31[1] != _e32[1])) || any((_e31[0] != _e32[0]))));
+    return;
+}
+
 fn testStructConstructor() {
     var tree: BST = BST(1);
 
@@ -194,7 +220,7 @@ fn testArrayConstructor() {
 
 }
 
-fn privatePointer(a_12: ptr<function, f32>) {
+fn privatePointer(a_14: ptr<function, f32>) {
     return;
 }
 

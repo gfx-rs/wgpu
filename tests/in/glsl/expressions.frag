@@ -62,6 +62,16 @@ void testBinOpUintUVec(uint a, uvec4 b) {
     v = a ^ b;
 }
 
+void testBinOpMatMat(mat3 a, mat3 b) {
+    mat3 v;
+    bool c;
+    v = a * b;
+    v = a + b;
+    v = a - b;
+    c = a == b;
+    c = a != b;
+}
+
 void testStructConstructor() {
     struct BST {
         int data;

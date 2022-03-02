@@ -579,8 +579,112 @@ impl Context {
                 let right_inner = self.typifier.get(right, &parser.module.types);
 
                 match (left_inner, right_inner) {
-                    (&TypeInner::Vector { .. }, &TypeInner::Vector { .. })
-                    | (&TypeInner::Matrix { .. }, &TypeInner::Matrix { .. }) => match op {
+                    (
+                        &TypeInner::Matrix {
+                            columns: left_columns,
+                            rows: left_rows,
+                            ..
+                        },
+                        &TypeInner::Matrix {
+                            columns: right_columns,
+                            rows: right_rows,
+                            ..
+                        },
+                    ) => {
+                        // Check that the two arguments have the same dimensions
+                        if left_columns != right_columns || left_rows != right_rows {
+                            parser.errors.push(Error {
+                                kind: ErrorKind::SemanticError(
+                                    format!(
+                                        "Cannot apply operation to {:?} and {:?}",
+                                        left_inner, right_inner
+                                    )
+                                    .into(),
+                                ),
+                                meta,
+                            })
+                        }
+
+                        match op {
+                            BinaryOperator::Equal | BinaryOperator::NotEqual => {
+                                // Naga IR doesn't support matrix comparisons so we need to
+                                // compare the columns individually and then fold them together
+                                //
+                                // The folding is done using a logical and for equality and
+                                // a logical or for inequality
+                                let equals = op == BinaryOperator::Equal;
+
+                                let (op, combine, fun) = match equals {
+                                    true => (
+                                        BinaryOperator::Equal,
+                                        BinaryOperator::LogicalAnd,
+                                        RelationalFunction::All,
+                                    ),
+                                    false => (
+                                        BinaryOperator::NotEqual,
+                                        BinaryOperator::LogicalOr,
+                                        RelationalFunction::Any,
+                                    ),
+                                };
+
+                                let mut root = None;
+
+                                for index in 0..left_columns as u32 {
+                                    // Get the column vectors
+                                    let left_vector = self.add_expression(
+                                        Expression::AccessIndex { base: left, index },
+                                        meta,
+                                        body,
+                                    );
+                                    let right_vector = self.add_expression(
+                                        Expression::AccessIndex { base: right, index },
+                                        meta,
+                                        body,
+                                    );
+
+                                    let argument = self.expressions.append(
+                                        Expression::Binary {
+                                            op,
+                                            left: left_vector,
+                                            right: right_vector,
+                                        },
+                                        meta,
+                                    );
+
+                                    // The result of comparing two vectors is a boolean vector
+                                    // so use a relational function like all to get a single
+                                    // boolean value
+                                    let compare = self.add_expression(
+                                        Expression::Relational { fun, argument },
+                                        meta,
+                                        body,
+                                    );
+
+                                    // Fold the result
+                                    root = Some(match root {
+                                        Some(right) => self.add_expression(
+                                            Expression::Binary {
+                                                op: combine,
+                                                left: compare,
+                                                right,
+                                            },
+                                            meta,
+                                            body,
+                                        ),
+                                        None => compare,
+                                    });
+                                }
+
+                                root.unwrap()
+                            }
+                            _ => self.add_expression(
+                                Expression::Binary { left, op, right },
+                                meta,
+                                body,
+                            ),
+                        }
+                    }
+                    (&TypeInner::Vector { .. }, &TypeInner::Vector { .. }) => match op {
                         BinaryOperator::Equal | BinaryOperator::NotEqual => {
                             let equals = op == BinaryOperator::Equal;
 
