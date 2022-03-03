@@ -76,37 +76,48 @@ impl crate::Adapter<super::Api> for super::Adapter {
         } else {
             Tfc::empty()
         };
+        let is_not_apple1x = super::PrivateCapabilities::supports_any(
+            self.shared.device.lock().as_ref(),
+            &[
+                MTLFeatureSet::iOS_GPUFamily2_v1,
+                MTLFeatureSet::macOS_GPUFamily1_v1,
+                MTLFeatureSet::tvOS_GPUFamily1_v1,
+            ],
+        );
+
+        // Metal defined pixel format capabilities
+        let all_caps = Tfc::SAMPLED_LINEAR
+            | Tfc::STORAGE
+            | Tfc::COLOR_ATTACHMENT
+            | Tfc::COLOR_ATTACHMENT_BLEND
+            | Tfc::MULTISAMPLE
+            | Tfc::MULTISAMPLE_RESOLVE;
 
         let extra = match format {
-            Tf::R8Unorm => {
-                read_write_tier2_if
-                    | Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
+            Tf::R8Unorm | Tf::R16Float | Tf::Rgba8Unorm | Tf::Rgba16Float => {
+                read_write_tier2_if | all_caps
             }
-            Tf::R8Snorm => {
-                Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
+            Tf::R8Snorm | Tf::Rg8Snorm | Tf::Rgba8Snorm => {
+                let mut flags = all_caps;
+                flags.set(Tfc::MULTISAMPLE_RESOLVE, is_not_apple1x);
+                flags
             }
-            Tf::R8Uint | Tf::R8Sint | Tf::R16Uint | Tf::R16Sint => {
+            Tf::R8Uint
+            | Tf::R8Sint
+            | Tf::R16Uint
+            | Tf::R16Sint
+            | Tf::Rgba8Uint
+            | Tf::Rgba8Sint
+            | Tf::Rgba16Uint
+            | Tf::Rgba16Sint => {
                 read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE
             }
-            Tf::R16Float => {
-                read_write_tier2_if
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
-            }
-            Tf::R16Unorm | Tf::R16Snorm => {
+            Tf::R16Unorm
+            | Tf::R16Snorm
+            | Tf::Rg16Unorm
+            | Tf::Rg16Snorm
+            | Tf::Rgba16Unorm
+            | Tf::Rgba16Snorm => {
                 Tfc::SAMPLED_LINEAR
                     | Tfc::STORAGE
                     | Tfc::COLOR_ATTACHMENT
@@ -114,177 +125,89 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     | Tfc::MULTISAMPLE
                     | msaa_resolve_desktop_if
             }
-            Tf::Rg8Unorm | Tf::Rg8Snorm => {
-                Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
-            }
-            Tf::Rg8Uint | Tf::Rg8Sint => Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE,
+            Tf::Rg8Unorm | Tf::Rg16Float | Tf::Bgra8Unorm => all_caps,
+            Tf::Rg8Uint | Tf::Rg8Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE,
             Tf::R32Uint | Tf::R32Sint => {
-                let storage = if pc.format_r32_all {
-                    read_write_tier1_if | Tfc::STORAGE
-                } else {
-                    Tfc::empty()
-                };
-                Tfc::COLOR_ATTACHMENT | storage | msaa_desktop_if
+                read_write_tier1_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_desktop_if
             }
             Tf::R32Float => {
-                let flags = Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | msaa_resolve_desktop_if;
-                let extra = if pc.format_r32float_all {
-                    read_write_tier1_if | Tfc::STORAGE | Tfc::SAMPLED_LINEAR
-                } else if pc.format_r32float_no_filter {
-                    Tfc::SAMPLED_LINEAR
+                let flags = if pc.format_r32float_all {
+                    all_caps
                 } else {
-                    Tfc::empty()
+                    Tfc::STORAGE
+                        | Tfc::COLOR_ATTACHMENT
+                        | Tfc::COLOR_ATTACHMENT_BLEND
+                        | Tfc::MULTISAMPLE
                 };
-                flags | extra
+                read_write_tier1_if | flags
             }
-            Tf::Rg16Uint | Tf::Rg16Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE
-            }
-            Tf::Rg16Unorm | Tf::Rg16Snorm => {
-                Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | msaa_resolve_desktop_if
-            }
-            Tf::Rg16Float => {
-                read_write_tier2_if
-                    | Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
-            }
-            Tf::Rgba8Unorm => {
-                read_write_tier2_if
-                    | Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
-            }
+            Tf::Rg16Uint | Tf::Rg16Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE,
             Tf::Rgba8UnormSrgb | Tf::Bgra8UnormSrgb => {
-                let mut flags = Tfc::SAMPLED_LINEAR
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE;
+                let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rgba8_srgb_all);
                 flags
             }
-            Tf::Rgba8Snorm | Tf::Bgra8Unorm => {
-                Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
-            }
-            Tf::Rgba8Uint | Tf::Rgba8Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE
-            }
             Tf::Rgb10a2Unorm => {
-                let mut flags = Tfc::SAMPLED_LINEAR
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE;
+                let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rgb10a2_unorm_all);
                 flags
             }
             Tf::Rg11b10Float => {
-                let mut flags = Tfc::SAMPLED_LINEAR
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE;
+                let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rg11b10_all);
                 flags
             }
             Tf::Rg32Uint | Tf::Rg32Sint => Tfc::COLOR_ATTACHMENT | Tfc::STORAGE | msaa_apple7x_if,
             Tf::Rg32Float => {
-                let mut flags =
-                    Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND | msaa_apple7x_if;
                 if pc.format_rg32float_all {
-                    flags |= Tfc::STORAGE | Tfc::SAMPLED_LINEAR;
-                } else if pc.format_rg32float_color_blend {
-                    flags |= Tfc::SAMPLED_LINEAR;
+                    all_caps
+                } else {
+                    Tfc::STORAGE
+                        | Tfc::COLOR_ATTACHMENT
+                        | Tfc::COLOR_ATTACHMENT_BLEND
+                        | msaa_apple7x_if
                 }
-                flags
-            }
-            Tf::Rgba16Uint | Tf::Rgba16Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::MULTISAMPLE
-            }
-            Tf::Rgba16Unorm | Tf::Rgba16Snorm => {
-                Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | msaa_resolve_desktop_if
-            }
-            Tf::Rgba16Float => {
-                read_write_tier2_if
-                    | Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
-                    | Tfc::COLOR_ATTACHMENT
-                    | Tfc::COLOR_ATTACHMENT_BLEND
-                    | Tfc::MULTISAMPLE
-                    | Tfc::MULTISAMPLE_RESOLVE
             }
             Tf::Rgba32Uint | Tf::Rgba32Sint => {
-                let storage = if pc.format_rgba32int_color_write {
-                    read_write_tier2_if | Tfc::STORAGE
-                } else {
-                    Tfc::empty()
-                };
-                storage | Tfc::COLOR_ATTACHMENT | msaa_desktop_if
+                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_desktop_if
             }
             Tf::Rgba32Float => {
-                let extra = if pc.format_rgba32float_all {
-                    read_write_tier2_if
-                        | Tfc::SAMPLED_LINEAR
-                        | Tfc::STORAGE
-                        | Tfc::COLOR_ATTACHMENT_BLEND
-                } else if pc.format_rgba32float_color_write {
-                    read_write_tier2_if | Tfc::STORAGE
-                } else {
-                    Tfc::empty()
+                let mut flags = read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT;
+                if pc.format_rgba32float_all {
+                    flags |= all_caps
+                } else if pc.msaa_apple7 {
+                    flags |= Tfc::MULTISAMPLE
                 };
-                extra | Tfc::COLOR_ATTACHMENT | msaa_apple7x_if | msaa_resolve_desktop_if
+                flags
             }
             Tf::Depth32Float => {
-                let linear = if pc.format_depth32float_filter {
-                    Tfc::SAMPLED_LINEAR
+                let mut flats =
+                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if;
+                if pc.format_depth32float_filter {
+                    flats |= Tfc::SAMPLED_LINEAR
+                }
+                flats
+            }
+            Tf::Depth24Plus => Tfc::empty(),
+            Tf::Depth24PlusStencil8 => {
+                if pc.msaa_desktop {
+                    Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::SAMPLED_LINEAR | Tfc::MULTISAMPLE
                 } else {
                     Tfc::empty()
-                };
-                linear | Tfc::DEPTH_STENCIL_ATTACHMENT | Tfc::MULTISAMPLE | msaa_resolve_apple3x_if
-            }
-            Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
-                Tfc::DEPTH_STENCIL_ATTACHMENT
-                    | Tfc::SAMPLED_LINEAR
-                    | Tfc::MULTISAMPLE
-                    | msaa_resolve_apple3x_if
+                }
             }
             Tf::Rgb9e5Ufloat => {
-                let msaa = if msaa_desktop_if.is_empty() {
-                    Tfc::MULTISAMPLE | Tfc::MULTISAMPLE_RESOLVE
+                if pc.msaa_apple3 {
+                    all_caps
+                } else if pc.msaa_desktop {
+                    Tfc::SAMPLED_LINEAR
                 } else {
-                    Tfc::empty()
-                };
-                Tfc::SAMPLED_LINEAR | msaa
+                    Tfc::STORAGE
+                        | Tfc::COLOR_ATTACHMENT
+                        | Tfc::COLOR_ATTACHMENT_BLEND
+                        | Tfc::MULTISAMPLE
+                        | Tfc::MULTISAMPLE_RESOLVE
+                }
             }
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
