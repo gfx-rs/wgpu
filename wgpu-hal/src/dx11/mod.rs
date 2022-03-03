@@ -49,11 +49,16 @@ unsafe impl Sync for Instance {}
 
 pub struct Surface {}
 
-pub struct Adapter {}
+pub struct Adapter {
+    device: D3D11Device,
+}
+
+unsafe impl Send for Adapter {}
+unsafe impl Sync for Adapter {}
 
 native::weak_com_inheritance_chain! {
     #[derive(Debug, Copy, Clone, PartialEq)]
-    pub enum D3D11Device {
+    enum D3D11Device {
         Device(d3d11::ID3D11Device), from_device, as_device, device;
         Device1(d3d11_1::ID3D11Device1), from_device1, as_device1, unwrap_device1;
         Device2(d3d11_2::ID3D11Device2), from_device2, as_device2, unwrap_device2;
@@ -61,6 +66,9 @@ native::weak_com_inheritance_chain! {
 }
 
 pub struct Device {}
+
+unsafe impl Send for Device {}
+unsafe impl Sync for Device {}
 
 pub struct Queue {}
 

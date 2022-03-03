@@ -1,3 +1,9 @@
+use std::{ffi::c_void, mem};
+
+use winapi::um::d3d11;
+
+use crate::auxil::dxgi::result::HResult;
+
 impl crate::Device<super::Api> for super::Device {
     unsafe fn exit(self, queue: super::Queue) {
         todo!()
@@ -215,5 +221,20 @@ impl crate::Queue<super::Api> for super::Queue {
 
     unsafe fn get_timestamp_period(&self) -> f32 {
         todo!()
+    }
+}
+
+impl super::D3D11Device {
+    #[allow(trivial_casts)] // come on
+    pub unsafe fn check_feature_support<T>(&self, feature: d3d11::D3D11_FEATURE) -> T {
+        let mut value = mem::zeroed::<T>();
+        let ret = self.CheckFeatureSupport(
+            feature,
+            &mut value as *mut T as *mut c_void,
+            mem::size_of::<T>() as u32,
+        );
+        assert_eq!(ret.into_result(), Ok(()));
+
+        value
     }
 }

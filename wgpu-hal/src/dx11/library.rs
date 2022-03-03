@@ -24,7 +24,7 @@ type D3D11CreateDeviceFun = unsafe extern "system" fn(
     *mut *mut d3d11::ID3D11DeviceContext,
 ) -> native::HRESULT;
 
-pub struct D3D11Lib {
+pub(super) struct D3D11Lib {
     // We use the os specific symbol to drop the lifetime parameter.
     //
     // SAFETY: we must ensure this outlives the Library.

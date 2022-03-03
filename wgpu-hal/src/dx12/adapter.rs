@@ -420,7 +420,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 mem::size_of::<minwindef::BOOL>() as _,
             );
 
-            factory5.destroy();
             match hr.into_result() {
                 Err(err) => log::warn!("Unable to check for tearing support: {}", err),
                 Ok(()) => present_modes.push(wgt::PresentMode::Immediate),

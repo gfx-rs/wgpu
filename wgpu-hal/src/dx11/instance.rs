@@ -2,6 +2,15 @@ use crate::auxil;
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        let enable_dx11 = match std::env::var("WGPU_UNSTABLE_DX11_BACKEND") {
+            Ok(string) => string == "1" || string == "true",
+            Err(_) => false,
+        };
+
+        if !enable_dx11 {
+            return Err(crate::InstanceError);
+        }
+
         let lib_d3d11 = super::library::D3D11Lib::new().ok_or(crate::InstanceError)?;
 
         let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(
