@@ -104,6 +104,11 @@ pub enum ErrorKind {
     /// An error was returned by the preprocessor.
     #[error("{0:?}")]
     PreprocessorError(PreprocessorError),
+    /// The parser entered an illegal state and exited
+    ///
+    /// This obviously is a bug and as such should be reported in the github issue tracker
+    #[error("Internal error: {0}")]
+    InternalError(&'static str),
 }
 
 impl From<ConstantSolvingError> for ErrorKind {

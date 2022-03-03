@@ -21,6 +21,8 @@ mod types;
 
 pub struct ParsingContext<'source> {
     lexer: Peekable<Lexer<'source>>,
+    /// Used to store tokens already consumed by the parser but that need to be backtracked
+    backtracked_token: Option<Token>,
     last_meta: Span,
 }
 
@@ -28,8 +30,30 @@ impl<'source> ParsingContext<'source> {
     pub fn new(lexer: Lexer<'source>) -> Self {
         ParsingContext {
             lexer: lexer.peekable(),
+            backtracked_token: None,
             last_meta: Span::default(),
         }
+    }
+
+    /// Helper method for backtracking from a consumed token
+    ///
+    /// This method should always be used instead of assigning to `backtracked_token` since
+    /// it validates that backtracking hasn't ocurred more than one time in a row
+    ///
+    /// # Panics
+    /// - If the parser already backtracked without bumping in between
+    pub fn backtrack(&mut self, token: Token) -> Result<()> {
+        // This should never happen
+        if let Some(ref prev_token) = self.backtracked_token {
+            return Err(Error {
+                kind: ErrorKind::InternalError("The parser tried to backtrack twice in a row"),
+                meta: prev_token.meta,
+            });
+        }
+
+        self.backtracked_token = Some(token);
+
+        Ok(())
     }
 
     pub fn expect_ident(&mut self, parser: &mut Parser) -> Result<(String, Span)> {
@@ -59,6 +83,11 @@ impl<'source> ParsingContext<'source> {
 
     pub fn next(&mut self, parser: &mut Parser) -> Option<Token> {
         loop {
+            if let Some(token) = self.backtracked_token.take() {
+                self.last_meta = token.meta;
+                break Some(token);
+            }
+
             let res = self.lexer.next()?;
 
             match res.kind {
@@ -94,30 +123,34 @@ impl<'source> ParsingContext<'source> {
     }
 
     pub fn peek(&mut self, parser: &mut Parser) -> Option<&Token> {
-        match self.lexer.peek()?.kind {
-            LexerResultKind::Token(_) => {
-                let res = self.lexer.peek()?;
-
-                match res.kind {
-                    LexerResultKind::Token(ref token) => Some(token),
-                    _ => unreachable!(),
-                }
+        loop {
+            if let Some(ref token) = self.backtracked_token {
+                break Some(token);
             }
-            LexerResultKind::Error(_) | LexerResultKind::Directive(_) => {
-                let res = self.lexer.next()?;
 
-                match res.kind {
-                    LexerResultKind::Directive(directive) => {
-                        parser.handle_directive(directive, res.meta)
+            match self.lexer.peek()?.kind {
+                LexerResultKind::Token(_) => {
+                    let res = self.lexer.peek()?;
+
+                    match res.kind {
+                        LexerResultKind::Token(ref token) => break Some(token),
+                        _ => unreachable!(),
                     }
-                    LexerResultKind::Error(error) => parser.errors.push(Error {
-                        kind: ErrorKind::PreprocessorError(error),
-                        meta: res.meta,
-                    }),
-                    _ => unreachable!(),
                 }
+                LexerResultKind::Error(_) | LexerResultKind::Directive(_) => {
+                    let res = self.lexer.next()?;
 
-                self.peek(parser)
+                    match res.kind {
+                        LexerResultKind::Directive(directive) => {
+                            parser.handle_directive(directive, res.meta)
+                        }
+                        LexerResultKind::Error(error) => parser.errors.push(Error {
+                            kind: ErrorKind::PreprocessorError(error),
+                            meta: res.meta,
+                        }),
+                        _ => unreachable!(),
+                    }
+                }
             }
         }
     }

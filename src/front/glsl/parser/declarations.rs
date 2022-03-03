@@ -121,7 +121,6 @@ impl<'source> ParsingContext<'source> {
         &mut self,
         parser: &mut Parser,
         ty: Handle<Type>,
-        mut fallthrough: Option<Token>,
         ctx: &mut DeclarationContext,
     ) -> Result<()> {
         // init_declarator_list:
@@ -139,20 +138,15 @@ impl<'source> ParsingContext<'source> {
         //     fully_specified_type IDENTIFIER EQUAL initializer
 
         // Consume any leading comma, e.g. this is valid: `float, a=1;`
-        if fallthrough
-            .as_ref()
-            .or_else(|| self.peek(parser))
-            .filter(|t| t.value == TokenValue::Comma)
-            .is_some()
+        if self
+            .peek(parser)
+            .map_or(false, |t| t.value == TokenValue::Comma)
         {
-            fallthrough.take().or_else(|| self.next(parser));
+            self.next(parser);
         }
 
         loop {
-            let token = fallthrough
-                .take()
-                .ok_or(ErrorKind::EndOfFile)
-                .or_else(|_| self.bump(parser))?;
+            let token = self.bump(parser)?;
             let name = match token.value {
                 TokenValue::Semicolon => break,
                 TokenValue::Identifier(name) => name,
@@ -339,7 +333,8 @@ impl<'source> ParsingContext<'source> {
                         body,
                     };
 
-                    self.parse_init_declarator_list(parser, ty, Some(token_fallthrough), &mut ctx)?;
+                    self.backtrack(token_fallthrough)?;
+                    self.parse_init_declarator_list(parser, ty, &mut ctx)?;
                 } else {
                     parser.errors.push(Error {
                         kind: ErrorKind::SemanticError("Declaration cannot have void type".into()),
