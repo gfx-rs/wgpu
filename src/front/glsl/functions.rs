@@ -1208,6 +1208,59 @@ impl Parser {
         ),
     ) {
         match self.module.types[ty].inner {
+            TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(constant),
+                ..
+            } => {
+                let mut location = match binding {
+                    crate::Binding::Location { location, .. } => location,
+                    _ => return,
+                };
+
+                // TODO: Better error reporting
+                // right now we just don't walk the array if the size isn't known at
+                // compile time and let validation catch it
+                let size = match self.module.constants[constant].to_array_length() {
+                    Some(val) => val,
+                    None => return f(name, pointer, ty, binding, expressions),
+                };
+
+                let interpolation =
+                    self.module.types[base]
+                        .inner
+                        .scalar_kind()
+                        .map(|kind| match kind {
+                            ScalarKind::Float => crate::Interpolation::Perspective,
+                            _ => crate::Interpolation::Flat,
+                        });
+
+                for index in 0..size {
+                    let member_pointer = expressions.append(
+                        Expression::AccessIndex {
+                            base: pointer,
+                            index,
+                        },
+                        crate::Span::default(),
+                    );
+
+                    let binding = crate::Binding::Location {
+                        location,
+                        interpolation,
+                        sampling: None,
+                    };
+                    location += 1;
+
+                    self.arg_type_walker(
+                        name.clone(),
+                        binding,
+                        member_pointer,
+                        base,
+                        expressions,
+                        f,
+                    )
+                }
+            }
             TypeInner::Struct { ref members, .. } => {
                 let mut location = match binding {
                     crate::Binding::Location { location, .. } => location,
