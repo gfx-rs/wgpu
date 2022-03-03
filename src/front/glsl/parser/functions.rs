@@ -42,15 +42,26 @@ impl<'source> ParsingContext<'source> {
         body: &mut Block,
         terminator: &mut Option<usize>,
     ) -> Result<Option<Span>> {
-        // TODO: This prevents snippets like the following from working
-        // ```glsl
-        // vec4(1.0);
-        // ```
-        // But this would require us to add lookahead to also support
-        // declarations and since this statement is very unlikely and most
-        // likely an error, for now we don't support it
-        if self.peek_type_name(parser) || self.peek_type_qualifier(parser) {
+        // Type qualifiers always identify a declaration statement
+        if self.peek_type_qualifier(parser) {
             return self.parse_declaration(parser, ctx, body, false);
+        }
+
+        // Type names can identify either declaration statements or type constructors
+        // depending on wether the token following the type name is a `(` (LeftParen)
+        if self.peek_type_name(parser) {
+            // Start by consuming the type name so that we can peek the token after it
+            let token = self.bump(parser)?;
+            // Peek the next token and check if it's a `(` (LeftParen) if so the statement
+            // is a constructor, otherwise it's a declaration. We need to do the check
+            // beforehand and not in the if since we will backtrack before the if
+            let declaration = TokenValue::LeftParen != self.expect_peek(parser)?.value;
+
+            self.backtrack(token)?;
+
+            if declaration {
+                return self.parse_declaration(parser, ctx, body, false);
+            }
         }
 
         let new_break = || {

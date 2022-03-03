@@ -109,6 +109,10 @@ void testArrayConstructor() {
     float tree[1] = float[1](0.0);
 }
 
+void testFreestandingConstructor() {
+    vec4(1.0);
+}
+
 float global;
 void privatePointer(inout float a) {}
 

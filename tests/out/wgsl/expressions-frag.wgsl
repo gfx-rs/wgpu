@@ -282,6 +282,10 @@ fn testArrayConstructor() {
 
 }
 
+fn testFreestandingConstructor() {
+    return;
+}
+
 fn privatePointer(a_18: ptr<function, f32>) {
     return;
 }
