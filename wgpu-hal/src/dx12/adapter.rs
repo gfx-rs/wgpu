@@ -43,14 +43,14 @@ impl super::Adapter {
 
     #[allow(trivial_casts)]
     pub(super) fn expose(
-        adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
+        adapter: native::DxgiAdapter,
         library: &Arc<native::D3D12Lib>,
         instance_flags: crate::InstanceFlags,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
             profiling::scope!("ID3D12Device::create_device");
-            match library.create_device(adapter, native::FeatureLevel::L11_0) {
+            match library.create_device(*adapter, native::FeatureLevel::L11_0) {
                 Ok(pair) => match pair.into_result() {
                     Ok(device) => device,
                     Err(err) => {
@@ -71,7 +71,7 @@ impl super::Adapter {
         // Acquire the device information.
         let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
         unsafe {
-            adapter.GetDesc2(&mut desc);
+            adapter.unwrap_adapter2().GetDesc2(&mut desc);
         }
 
         let device_name = {

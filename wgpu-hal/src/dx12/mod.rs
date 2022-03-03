@@ -47,7 +47,7 @@ use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use std::{ffi, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_4, dxgitype, windef, winerror},
+    shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
     um::{d3d12, dcomp, synchapi, winbase, winnt},
     Interface as _,
 };
@@ -160,7 +160,7 @@ struct Workarounds {
 }
 
 pub struct Adapter {
-    raw: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
+    raw: native::DxgiAdapter,
     device: native::Device,
     library: Arc<native::D3D12Lib>,
     private_caps: PrivateCapabilities,

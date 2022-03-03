@@ -1,5 +1,5 @@
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_6, winerror},
+    shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, winerror},
     Interface,
 };
 
@@ -13,21 +13,20 @@ pub enum DxgiFactoryType {
     Factory6,
 }
 
-pub fn enumerate_adapters(
-    factory: native::DxgiFactory,
-) -> Vec<native::WeakPtr<dxgi1_2::IDXGIAdapter2>> {
+pub fn enumerate_adapters(factory: native::DxgiFactory) -> Vec<native::DxgiAdapter> {
     let mut adapters = Vec::with_capacity(8);
 
     for cur_index in 0.. {
         if let Some(factory6) = factory.as_factory6() {
             profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
-            let mut adapter2 = native::WeakPtr::<dxgi1_2::IDXGIAdapter2>::null();
+            // We're already at dxgi1.6, we can grab IDXGIAdapater4 directly
+            let mut adapter4 = native::WeakPtr::<dxgi1_6::IDXGIAdapter4>::null();
             let hr = unsafe {
                 factory6.EnumAdapterByGpuPreference(
                     cur_index,
                     dxgi1_6::DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-                    &dxgi1_2::IDXGIAdapter2::uuidof(),
-                    adapter2.mut_void(),
+                    &dxgi1_6::IDXGIAdapter4::uuidof(),
+                    adapter4.mut_void(),
                 )
             };
 
@@ -39,17 +38,13 @@ pub fn enumerate_adapters(
                 break;
             }
 
-            adapters.push(adapter2);
+            adapters.push(native::DxgiAdapter::Adapter4(adapter4));
             continue;
         }
 
         profiling::scope!("IDXGIFactory1::EnumAdapters1");
         let mut adapter1 = native::WeakPtr::<dxgi::IDXGIAdapter1>::null();
-        let hr = unsafe {
-            factory
-                .unwrap_factory1()
-                .EnumAdapters1(cur_index, adapter1.mut_void() as *mut *mut _)
-        };
+        let hr = unsafe { factory.EnumAdapters1(cur_index, adapter1.mut_void() as *mut *mut _) };
 
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
             break;
@@ -59,16 +54,37 @@ pub fn enumerate_adapters(
             break;
         }
 
-        match unsafe { adapter1.cast::<dxgi1_2::IDXGIAdapter2>() }.into_result() {
-            Ok(adapter2) => {
-                unsafe { adapter1.destroy() };
-                adapters.push(adapter2);
-            }
-            Err(err) => {
-                log::error!("Failed casting Adapter1 to Adapter2: {}", err);
-                break;
+        // Do the most aggressive casts first, skipping Adpater4 as we definitely don't have dxgi1_6.
+
+        // Adapter1 -> Adapter3
+        unsafe {
+            match adapter1.cast::<dxgi1_4::IDXGIAdapter3>().into_result() {
+                Ok(adapter3) => {
+                    adapter1.destroy();
+                    adapters.push(native::DxgiAdapter::Adapter3(adapter3));
+                    continue;
+                }
+                Err(err) => {
+                    log::info!("Failed casting Adapter1 to Adapter3: {}", err);
+                }
             }
         }
+
+        // Adapter1 -> Adapter2
+        unsafe {
+            match adapter1.cast::<dxgi1_2::IDXGIAdapter2>().into_result() {
+                Ok(adapter2) => {
+                    adapter1.destroy();
+                    adapters.push(native::DxgiAdapter::Adapter2(adapter2));
+                    continue;
+                }
+                Err(err) => {
+                    log::info!("Failed casting Adapter1 to Adapter2: {}", err);
+                }
+            }
+        }
+
+        adapters.push(native::DxgiAdapter::Adapter1(adapter1));
     }
 
     adapters

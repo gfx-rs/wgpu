@@ -21,3 +21,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
         todo!()
     }
 }
+
+impl super::Adapter {
+    pub(super) fn expose(
+        instance: &super::library::D3D11Lib,
+        adapter: native::DxgiAdapter,
+    ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let (device, feature_level) = instance.create_device(adapter)?;
+
+        todo!()
+    }
+}

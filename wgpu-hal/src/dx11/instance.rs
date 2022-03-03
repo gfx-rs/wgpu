@@ -2,12 +2,18 @@ use crate::auxil;
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        let lib_d3d11 = super::library::D3D11Lib::new().ok_or(crate::InstanceError)?;
+
         let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(
             auxil::dxgi::factory::DxgiFactoryType::Factory1,
             desc.flags,
         )?;
 
-        Ok(super::Instance { lib_dxgi, factory })
+        Ok(super::Instance {
+            lib_d3d11,
+            lib_dxgi,
+            factory,
+        })
     }
 
     unsafe fn create_surface(
@@ -22,6 +28,11 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
-        todo!()
+        let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory);
+
+        adapters
+            .into_iter()
+            .filter_map(|adapter| super::Adapter::expose(&self.lib_d3d11, adapter))
+            .collect()
     }
 }
