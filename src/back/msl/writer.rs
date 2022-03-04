@@ -1406,9 +1406,15 @@ impl<W: Write> Writer<W> {
                 }
             },
             crate::Expression::Unary { op, expr } => {
+                use crate::{ScalarKind as Sk, UnaryOperator as Uo};
                 let op_str = match op {
-                    crate::UnaryOperator::Negate => "-",
-                    crate::UnaryOperator::Not => "!",
+                    Uo::Negate => "-",
+                    Uo::Not => match *context.resolve_type(expr) {
+                        crate::TypeInner::Scalar { kind: Sk::Sint, .. } => "~",
+                        crate::TypeInner::Scalar { kind: Sk::Uint, .. } => "~",
+                        crate::TypeInner::Scalar { kind: Sk::Bool, .. } => "!",
+                        _ => return Err(Error::Validation),
+                    },
                 };
                 write!(self.out, "{}", op_str)?;
                 self.put_expression(expr, context, false)?;
