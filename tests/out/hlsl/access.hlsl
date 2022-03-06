@@ -5,9 +5,9 @@ struct AlignedWrapper {
 
 RWByteAddressBuffer bar : register(u0);
 
-float read_from_private(inout float foo_2)
+float read_from_private(inout float foo_1)
 {
-    float _expr2 = foo_2;
+    float _expr2 = foo_1;
     return _expr2;
 }
 
@@ -18,18 +18,29 @@ uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
     return ret;
 }
 
-float4 foo(uint vi : SV_VertexID) : SV_Position
+float4 foo_vert(uint vi : SV_VertexID) : SV_Position
 {
-    float foo_1 = 0.0;
+    float foo = 0.0;
     int c[5] = {(int)0,(int)0,(int)0,(int)0,(int)0};
 
-    float baz = foo_1;
-    foo_1 = 1.0;
+    float baz = foo;
+    foo = 1.0;
     float4x4 matrix_ = float4x4(asfloat(bar.Load4(0+0)), asfloat(bar.Load4(0+16)), asfloat(bar.Load4(0+32)), asfloat(bar.Load4(0+48)));
     uint2 arr[2] = {asuint(bar.Load2(104+0)), asuint(bar.Load2(104+8))};
     float b = asfloat(bar.Load(0+48+0));
     int a = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 120) / 8) - 2u)*8+120));
-    const float _e27 = read_from_private(foo_1);
+    const float _e27 = read_from_private(foo);
+    {
+        int _result[5]={ a, int(b), 3, 4, 5 };
+        for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];
+    }
+    c[(vi + 1u)] = 42;
+    int value = c[vi];
+    return mul(float4(int4(value.xxxx)), matrix_);
+}
+
+float4 foo_frag() : SV_Target0
+{
     bar.Store(8+16+0, asuint(1.0));
     {
         float4x4 _value2 = float4x4(float4(0.0.xxxx), float4(1.0.xxxx), float4(2.0.xxxx), float4(3.0.xxxx));
@@ -44,13 +55,7 @@ float4 foo(uint vi : SV_VertexID) : SV_Position
         bar.Store2(104+8, asuint(_value2[1]));
     }
     bar.Store(0+8+120, asuint(1));
-    {
-        int _result[5]={ a, int(b), 3, 4, 5 };
-        for(int _i=0; _i<5; ++_i) c[_i] = _result[_i];
-    }
-    c[(vi + 1u)] = 42;
-    int value = c[vi];
-    return mul(float4(int4(value.xxxx)), matrix_);
+    return float4(0.0.xxxx);
 }
 
 [numthreads(1, 1, 1)]

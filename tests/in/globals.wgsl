@@ -11,7 +11,7 @@ struct Foo {
     v1: f32;
 };
 @group(0) @binding(1)
-var<storage> alignment: Foo;
+var<storage, read_write> alignment: Foo;
 
 @group(0) @binding(2)
 var<storage> dummy: array<vec2<f32>>;
@@ -23,6 +23,7 @@ var<uniform> float_vecs: array<vec4<f32>, 20>;
 fn main() {
     wg[3] = alignment.v1;
     wg[2] = alignment.v3.x;
+    alignment.v1 = 4.0;
     wg[1] = f32(arrayLength(&dummy));
     atomicStore(&at, 2u);
 

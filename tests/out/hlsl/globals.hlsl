@@ -7,7 +7,7 @@ struct Foo {
 
 groupshared float wg[10];
 groupshared uint at_1;
-ByteAddressBuffer alignment : register(t1);
+RWByteAddressBuffer alignment : register(u1);
 ByteAddressBuffer dummy : register(t2);
 cbuffer float_vecs : register(b3) { float4 float_vecs[20]; }
 
@@ -28,6 +28,7 @@ void main()
     wg[3] = _expr9;
     float _expr14 = asfloat(alignment.Load(0+0));
     wg[2] = _expr14;
+    alignment.Store(12, asuint(4.0));
     wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
     at_1 = 2u;
     return;

@@ -20,7 +20,7 @@ fn read_from_private(foo: ptr<function, f32>) -> f32 {
 }
 
 @stage(vertex)
-fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0.0;
     // We should check that backed doesn't skip this expression
     let baz: f32 = foo;
@@ -37,18 +37,23 @@ fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	let data_pointer: ptr<storage, i32, read_write> = &bar.data[0].value;
 	let foo_value = read_from_private(&foo);
 
-	// test storage stores
-	bar.matrix[1].z = 1.0;
-	bar.matrix = mat4x4<f32>(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(2.0), vec4<f32>(3.0));
-	bar.arr = array<vec2<u32>, 2>(vec2<u32>(0u), vec2<u32>(1u));
-	bar.data[1].value = 1;
-
 	// test array indexing
 	var c = array<i32, 5>(a, i32(b), 3, 4, 5);
 	c[vi + 1u] = 42;
 	let value = c[vi];
 
 	return matrix * vec4<f32>(vec4<i32>(value));
+}
+
+@stage(fragment)
+fn foo_frag() -> @location(0) vec4<f32> {
+	// test storage stores
+	bar.matrix[1].z = 1.0;
+	bar.matrix = mat4x4<f32>(vec4<f32>(0.0), vec4<f32>(1.0), vec4<f32>(2.0), vec4<f32>(3.0));
+	bar.arr = array<vec2<u32>, 2>(vec2<u32>(0u), vec2<u32>(1u));
+	bar.data[1].value = 1;
+
+	return vec4<f32>(0.0);
 }
 
 @stage(compute) @workgroup_size(1)

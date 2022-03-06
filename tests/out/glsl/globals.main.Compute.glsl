@@ -13,7 +13,7 @@ shared float wg[10];
 
 shared uint at_1;
 
-layout(std430) readonly buffer Foo_block_0Compute { Foo _group_0_binding_1_cs; };
+layout(std430) buffer Foo_block_0Compute { Foo _group_0_binding_1_cs; };
 
 layout(std430) readonly buffer type_6_block_1Compute { vec2 _group_0_binding_2_cs[]; };
 
@@ -25,6 +25,7 @@ void main() {
     wg[3] = _e9;
     float _e14 = _group_0_binding_1_cs.v3_.x;
     wg[2] = _e14;
+    _group_0_binding_1_cs.v1_ = 4.0;
     wg[1] = float(uint(_group_0_binding_2_cs.length()));
     at_1 = 2u;
     return;

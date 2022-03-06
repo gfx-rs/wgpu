@@ -238,13 +238,12 @@ impl<'a> TypedGlobalVariable<'a> {
 
         let (space, access, reference) = match var.space.to_msl_name() {
             Some(space) if self.reference => {
-                let access = match var.space {
-                    crate::AddressSpace::Private | crate::AddressSpace::WorkGroup
-                        if !self.usage.contains(valid::GlobalUse::WRITE) =>
-                    {
-                        "const"
-                    }
-                    _ => "",
+                let access = if var.space.needs_access_qualifier()
+                    && !self.usage.contains(valid::GlobalUse::WRITE)
+                {
+                    "const"
+                } else {
+                    ""
                 };
                 (space, access, "&")
             }
@@ -401,13 +400,25 @@ impl crate::AddressSpace {
     /// passed through any functions called from the entry point.
     fn needs_pass_through(&self) -> bool {
         match *self {
-            crate::AddressSpace::Uniform
-            | crate::AddressSpace::Storage { .. }
-            | crate::AddressSpace::Private
-            | crate::AddressSpace::WorkGroup
-            | crate::AddressSpace::PushConstant
-            | crate::AddressSpace::Handle => true,
-            crate::AddressSpace::Function => false,
+            Self::Uniform
+            | Self::Storage { .. }
+            | Self::Private
+            | Self::WorkGroup
+            | Self::PushConstant
+            | Self::Handle => true,
+            Self::Function => false,
+        }
+    }
+
+    /// Returns true if the address space may need a "const" qualifier.
+    fn needs_access_qualifier(&self) -> bool {
+        match *self {
+            //Note: we are ignoring the storage access here, and instead
+            // rely on the actual use of a global by functions. This means we
+            // may end up with "const" even if the binding is read-write,
+            // and that should be OK.
+            Self::Storage { .. } | Self::Private | Self::WorkGroup => true,
+            Self::Uniform | Self::PushConstant | Self::Handle | Self::Function => false,
         }
     }
 

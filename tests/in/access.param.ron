@@ -9,6 +9,12 @@
 		per_stage_map: (
 			vs: (
 				resources: {
+					(group: 0, binding: 0): (buffer: Some(0), mutable: false),
+				},
+				sizes_buffer: Some(24),
+			),
+			fs: (
+				resources: {
 					(group: 0, binding: 0): (buffer: Some(0), mutable: true),
 				},
 				sizes_buffer: Some(24),

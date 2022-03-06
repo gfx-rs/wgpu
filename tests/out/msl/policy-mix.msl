@@ -36,7 +36,7 @@ metal::float4 mock_function(
     metal::int2 c,
     int i,
     int l,
-    device InStorage& in_storage,
+    device InStorage const& in_storage,
     constant InUniform& in_uniform,
     metal::texture2d_array<float, metal::access::sample> image_2d_array,
     threadgroup type_5 const& in_workgroup,

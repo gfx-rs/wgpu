@@ -17,8 +17,8 @@ layout(std430) buffer Bar_block_0Compute {
 } _group_0_binding_0_cs;
 
 
-float read_from_private(inout float foo_2) {
-    float _e2 = foo_2;
+float read_from_private(inout float foo_1) {
+    float _e2 = foo_1;
     return _e2;
 }
 
