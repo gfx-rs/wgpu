@@ -738,16 +738,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);
-        #[cfg(vulkan)]
-        if let Some(id) = self.select(&mut selected, id_vulkan, adapters_vk) {
-            return Ok(id);
-        }
         #[cfg(metal)]
         if let Some(id) = self.select(&mut selected, id_metal, adapters_metal) {
             return Ok(id);
         }
         #[cfg(dx12)]
         if let Some(id) = self.select(&mut selected, id_dx12, adapters_dx12) {
+            return Ok(id);
+        }
+        #[cfg(vulkan)]
+        if let Some(id) = self.select(&mut selected, id_vulkan, adapters_vk) {
             return Ok(id);
         }
         #[cfg(dx11)]
