@@ -3288,9 +3288,6 @@ impl<W: Write> Writer<W> {
 
             writeln!(self.out)?;
 
-            let stage_out_name = format!("{}Output", fun_name);
-            let stage_in_name = format!("{}Input", fun_name);
-
             let (em_str, in_mode, out_mode) = match ep.stage {
                 crate::ShaderStage::Vertex => (
                     "vertex",
@@ -3307,35 +3304,44 @@ impl<W: Write> Writer<W> {
                 }
             };
 
-            let mut argument_members = Vec::new();
+            // List all the Naga `EntryPoint`'s `Function`'s arguments,
+            // flattening structs into their members. In Metal, we will pass
+            // each of these values to the entry point as a separate argument—
+            // except for the varyings, handled next.
+            let mut flattened_arguments = Vec::new();
             for (arg_index, arg) in fun.arguments.iter().enumerate() {
                 match module.types[arg.ty].inner {
                     crate::TypeInner::Struct { ref members, .. } => {
                         for (member_index, member) in members.iter().enumerate() {
-                            argument_members.push((
-                                NameKey::StructMember(arg.ty, member_index as u32),
+                            let member_index = member_index as u32;
+                            flattened_arguments.push((
+                                NameKey::StructMember(arg.ty, member_index),
                                 member.ty,
                                 member.binding.as_ref(),
-                            ))
+                            ));
                         }
                     }
-                    _ => argument_members.push((
+                    _ => flattened_arguments.push((
                         NameKey::EntryPointArgument(ep_index as _, arg_index as u32),
                         arg.ty,
                         arg.binding.as_ref(),
                     )),
                 }
             }
+
+            // Identify the varyings among the argument values, and emit a
+            // struct type named `<fun>Input` to hold them.
+            let stage_in_name = format!("{}Input", fun_name);
             let varyings_member_name = self.namer.call("varyings");
-            let mut varying_count = 0;
-            if !argument_members.is_empty() {
+            let mut has_varyings = false;
+            if !flattened_arguments.is_empty() {
                 writeln!(self.out, "struct {} {{", stage_in_name)?;
-                for &(ref name_key, ty, binding) in argument_members.iter() {
+                for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                     let binding = match binding {
                         Some(ref binding @ &crate::Binding::Location { .. }) => binding,
                         _ => continue,
                     };
-                    varying_count += 1;
+                    has_varyings = true;
                     let name = &self.names[name_key];
                     let ty_name = TypeContext {
                         handle: ty,
@@ -3352,6 +3358,9 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "}};")?;
             }
 
+            // Define a struct type named for the return value, if any, named
+            // `<fun>Output`.
+            let stage_out_name = format!("{}Output", fun_name);
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
                 Some(ref result) => {
@@ -3444,10 +3453,14 @@ impl<W: Write> Writer<W> {
                 }
                 None => "void",
             };
-            writeln!(self.out, "{} {} {}(", em_str, result_type_name, fun_name)?;
 
+            // Write the entry point function's name, and begin its argument list.
+            writeln!(self.out, "{} {} {}(", em_str, result_type_name, fun_name)?;
             let mut is_first_argument = true;
-            if varying_count != 0 {
+
+            // If we have produced a struct holding the `EntryPoint`'s
+            // `Function`'s arguments' varyings, pass that struct first.
+            if has_varyings {
                 writeln!(
                     self.out,
                     "  {} {} [[stage_in]]",
@@ -3455,12 +3468,31 @@ impl<W: Write> Writer<W> {
                 )?;
                 is_first_argument = false;
             }
-            for &(ref name_key, ty, binding) in argument_members.iter() {
+
+            // Then pass the remaining arguments not included in the varyings
+            // struct.
+            //
+            // Since `Namer.reset` wasn't expecting struct members to be
+            // suddenly injected into the normal namespace like this,
+            // `self.names` doesn't keep them distinct from other variables.
+            // Generate fresh names for these arguments, and remember the
+            // mapping.
+            let mut flattened_member_names = FastHashMap::default();
+            for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                 let binding = match binding {
                     Some(ref binding @ &crate::Binding::BuiltIn(..)) => binding,
                     _ => continue,
                 };
-                let name = &self.names[name_key];
+                let name = if let NameKey::StructMember(ty, index) = *name_key {
+                    // We should always insert a fresh entry here, but use
+                    // `or_insert` to get a reference to the `String` we just
+                    // inserted.
+                    flattened_member_names
+                        .entry(NameKey::StructMember(ty, index))
+                        .or_insert_with(|| self.namer.call(&self.names[name_key]))
+                } else {
+                    &self.names[name_key]
+                };
                 let ty_name = TypeContext {
                     handle: ty,
                     arena: &module.types,
@@ -3479,6 +3511,11 @@ impl<W: Write> Writer<W> {
                 resolved.try_fmt_decorated(&mut self.out)?;
                 writeln!(self.out)?;
             }
+
+            // Those global variables used by this entry point and its callees
+            // get passed as arguments. `Private` globals are an exception, they
+            // don't outlive this invocation, so we declare them below as locals
+            // within the entry point.
             for (handle, var) in module.global_variables.iter() {
                 let usage = fun_info[handle];
                 if usage.is_empty() || var.space == crate::AddressSpace::Private {
@@ -3534,6 +3571,8 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
+            // If this entry uses any variable-length arrays, their sizes are
+            // passed as a final struct-typed argument.
             if supports_array_length {
                 // this is checked earlier
                 let resolved = options.resolve_sizes_buffer(ep.stage).unwrap();
@@ -3603,7 +3642,16 @@ impl<W: Write> Writer<W> {
                 }
             }
 
-            // Now refactor the inputs in a way that the rest of the code expects
+            // Now take the arguments that we gathered into structs, and the
+            // structs that we flattened into arguments, and emit local
+            // variables with initializers that put everything back the way the
+            // body code expects.
+            //
+            // If we had to generate fresh names for struct members passed as
+            // arguments, be sure to use those names when rebuilding the struct.
+            //
+            // "Each day, I change some zeros to ones, and some ones to zeros.
+            // The rest, I leave alone."
             for (arg_index, arg) in fun.arguments.iter().enumerate() {
                 let arg_name =
                     &self.names[&NameKey::EntryPointArgument(ep_index as _, arg_index as u32)];
@@ -3618,8 +3666,14 @@ impl<W: Write> Writer<W> {
                             arg_name
                         )?;
                         for (member_index, member) in members.iter().enumerate() {
-                            let name =
-                                &self.names[&NameKey::StructMember(arg.ty, member_index as u32)];
+                            let key = NameKey::StructMember(arg.ty, member_index as u32);
+                            // If it's not in the varying struct, then we should
+                            // have passed it as its own argument and assigned
+                            // it a new name.
+                            let name = match member.binding {
+                                Some(crate::Binding::BuiltIn(_)) => &flattened_member_names[&key],
+                                _ => &self.names[&key],
+                            };
                             if member_index != 0 {
                                 write!(self.out, ", ")?;
                             }

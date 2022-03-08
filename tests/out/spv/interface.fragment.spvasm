@@ -1,28 +1,30 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 51
+; Bound: 54
 OpCapability Shader
 OpCapability SampleRateShading
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %38 "fragment" %19 %22 %25 %28 %31 %33 %35 %37
-OpExecutionMode %38 OriginUpperLeft
-OpExecutionMode %38 DepthReplacing
-OpMemberDecorate %12 0 Offset 0
-OpMemberDecorate %12 1 Offset 16
+OpEntryPoint Fragment %41 "fragment" %22 %25 %28 %31 %34 %36 %38 %40
+OpExecutionMode %41 OriginUpperLeft
+OpExecutionMode %41 DepthReplacing
 OpMemberDecorate %13 0 Offset 0
-OpMemberDecorate %13 1 Offset 4
-OpMemberDecorate %13 2 Offset 8
-OpDecorate %15 ArrayStride 4
-OpDecorate %19 BuiltIn FragCoord
-OpDecorate %22 Location 1
-OpDecorate %25 BuiltIn FrontFacing
-OpDecorate %28 BuiltIn SampleId
-OpDecorate %31 BuiltIn SampleMask
-OpDecorate %33 BuiltIn FragDepth
-OpDecorate %35 BuiltIn SampleMask
-OpDecorate %37 Location 0
+OpMemberDecorate %13 1 Offset 16
+OpMemberDecorate %14 0 Offset 0
+OpMemberDecorate %14 1 Offset 4
+OpMemberDecorate %14 2 Offset 8
+OpDecorate %16 ArrayStride 4
+OpMemberDecorate %18 0 Offset 0
+OpMemberDecorate %19 0 Offset 0
+OpDecorate %22 BuiltIn FragCoord
+OpDecorate %25 Location 1
+OpDecorate %28 BuiltIn FrontFacing
+OpDecorate %31 BuiltIn SampleId
+OpDecorate %34 BuiltIn SampleMask
+OpDecorate %36 BuiltIn FragDepth
+OpDecorate %38 BuiltIn SampleMask
+OpDecorate %40 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpConstant  %4  1.0
@@ -32,50 +34,53 @@ OpDecorate %37 Location 0
 %9 = OpTypeInt 32 1
 %8 = OpConstant  %9  1
 %10 = OpConstant  %9  0
-%11 = OpTypeVector %4 4
-%12 = OpTypeStruct %11 %4
-%13 = OpTypeStruct %4 %6 %4
-%14 = OpTypeBool
-%15 = OpTypeArray %6 %8
-%16 = OpTypeVector %6 3
-%20 = OpTypePointer Input %11
-%19 = OpVariable  %20  Input
-%23 = OpTypePointer Input %4
+%11 = OpConstant  %6  2
+%12 = OpTypeVector %4 4
+%13 = OpTypeStruct %12 %4
+%14 = OpTypeStruct %4 %6 %4
+%15 = OpTypeBool
+%16 = OpTypeArray %6 %8
+%17 = OpTypeVector %6 3
+%18 = OpTypeStruct %6
+%19 = OpTypeStruct %6
+%23 = OpTypePointer Input %12
 %22 = OpVariable  %23  Input
-%26 = OpTypePointer Input %14
+%26 = OpTypePointer Input %4
 %25 = OpVariable  %26  Input
-%29 = OpTypePointer Input %6
+%29 = OpTypePointer Input %15
 %28 = OpVariable  %29  Input
-%31 = OpVariable  %29  Input
-%34 = OpTypePointer Output %4
-%33 = OpVariable  %34  Output
-%36 = OpTypePointer Output %6
-%35 = OpVariable  %36  Output
-%37 = OpVariable  %34  Output
-%39 = OpTypeFunction %2
-%38 = OpFunction  %2  None %39
-%17 = OpLabel
-%21 = OpLoad  %11  %19
-%24 = OpLoad  %4  %22
-%18 = OpCompositeConstruct  %12  %21 %24
-%27 = OpLoad  %14  %25
-%30 = OpLoad  %6  %28
-%32 = OpLoad  %6  %31
-OpBranch %40
-%40 = OpLabel
-%41 = OpShiftLeftLogical  %6  %5 %30
-%42 = OpBitwiseAnd  %6  %32 %41
-%43 = OpSelect  %4  %27 %3 %7
-%44 = OpCompositeExtract  %4  %18 1
-%45 = OpCompositeConstruct  %13  %44 %42 %43
-%46 = OpCompositeExtract  %4  %45 0
-OpStore %33 %46
-%47 = OpLoad  %4  %33
-%48 = OpExtInst  %4  %1 FClamp %47 %7 %3
-OpStore %33 %48
-%49 = OpCompositeExtract  %6  %45 1
-OpStore %35 %49
-%50 = OpCompositeExtract  %4  %45 2
-OpStore %37 %50
+%32 = OpTypePointer Input %6
+%31 = OpVariable  %32  Input
+%34 = OpVariable  %32  Input
+%37 = OpTypePointer Output %4
+%36 = OpVariable  %37  Output
+%39 = OpTypePointer Output %6
+%38 = OpVariable  %39  Output
+%40 = OpVariable  %37  Output
+%42 = OpTypeFunction %2
+%41 = OpFunction  %2  None %42
+%20 = OpLabel
+%24 = OpLoad  %12  %22
+%27 = OpLoad  %4  %25
+%21 = OpCompositeConstruct  %13  %24 %27
+%30 = OpLoad  %15  %28
+%33 = OpLoad  %6  %31
+%35 = OpLoad  %6  %34
+OpBranch %43
+%43 = OpLabel
+%44 = OpShiftLeftLogical  %6  %5 %33
+%45 = OpBitwiseAnd  %6  %35 %44
+%46 = OpSelect  %4  %30 %3 %7
+%47 = OpCompositeExtract  %4  %21 1
+%48 = OpCompositeConstruct  %14  %47 %45 %46
+%49 = OpCompositeExtract  %4  %48 0
+OpStore %36 %49
+%50 = OpLoad  %4  %36
+%51 = OpExtInst  %4  %1 FClamp %50 %7 %3
+OpStore %36 %51
+%52 = OpCompositeExtract  %6  %48 1
+OpStore %38 %52
+%53 = OpCompositeExtract  %4  %48 2
+OpStore %40 %53
 OpReturn
 OpFunctionEnd

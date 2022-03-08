@@ -45,3 +45,17 @@ fn compute(
 ) {
     output[0] = global_id.x + local_id.x + local_index + wg_id.x + num_wgs.x;
 }
+
+struct Input1 {
+    @builtin(vertex_index) index: u32;
+};
+
+struct Input2 {
+    @builtin(instance_index) index: u32;
+};
+
+@stage(vertex)
+fn vertex_two_structs(in1: Input1, in2: Input2) -> @builtin(position) vec4<f32> {
+    var index = 2u;
+    return vec4<f32>(f32(in1.index), f32(in2.index), f32(index), 0.0);
+}

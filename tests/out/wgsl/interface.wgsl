@@ -9,6 +9,14 @@ struct FragmentOutput {
     @location(0) color: f32;
 };
 
+struct Input1_ {
+    @builtin(vertex_index) index: u32;
+};
+
+struct Input2_ {
+    @builtin(instance_index) index: u32;
+};
+
 var<workgroup> output: array<u32,1>;
 
 @stage(vertex) 
@@ -28,4 +36,12 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front_facing: bool, @builti
 fn compute(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>, @builtin(local_invocation_index) local_index: u32, @builtin(workgroup_id) wg_id: vec3<u32>, @builtin(num_workgroups) num_wgs: vec3<u32>) {
     output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + num_wgs.x);
     return;
+}
+
+@stage(vertex) 
+fn vertex_two_structs(in1_: Input1_, in2_: Input2_) -> @builtin(position) vec4<f32> {
+    var index: u32 = 2u;
+
+    let _e9: u32 = index;
+    return vec4<f32>(f32(in1_.index), f32(in2_.index), f32(_e9), 0.0);
 }

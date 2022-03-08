@@ -16,6 +16,14 @@ struct FragmentOutput {
     linear float color : SV_Target0;
 };
 
+struct Input1_ {
+    uint index : SV_VertexID;
+};
+
+struct Input2_ {
+    uint index : SV_InstanceID;
+};
+
 groupshared uint output[1];
 
 struct VertexOutput_vertex {
@@ -71,4 +79,12 @@ void compute(uint3 global_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThr
 {
     output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + uint3(_NagaConstants.base_vertex, _NagaConstants.base_instance, _NagaConstants.other).x);
     return;
+}
+
+float4 vertex_two_structs(Input1_ in1_, Input2_ in2_) : SV_Position
+{
+    uint index = 2u;
+
+    uint _expr9 = index;
+    return float4(float((_NagaConstants.base_vertex + in1_.index)), float((_NagaConstants.base_instance + in2_.index)), float(_expr9), 0.0);
 }

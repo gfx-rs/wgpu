@@ -16,6 +16,12 @@ struct FragmentOutput {
 struct type_4 {
     uint inner[1];
 };
+struct Input1_ {
+    uint index;
+};
+struct Input2_ {
+    uint index;
+};
 
 struct vertex_Input {
     uint color [[attribute(10)]];
@@ -72,4 +78,22 @@ kernel void compute_(
 ) {
     output.inner[0] = (((global_id.x + local_id.x) + local_index) + wg_id.x) + num_wgs.x;
     return;
+}
+
+
+struct vertex_two_structsInput {
+};
+struct vertex_two_structsOutput {
+    metal::float4 member_3 [[position]];
+    float _point_size [[point_size]];
+};
+vertex vertex_two_structsOutput vertex_two_structs(
+  uint index_1 [[vertex_id]]
+, uint index_2 [[instance_id]]
+) {
+    const Input1_ in1_ = { index_1 };
+    const Input2_ in2_ = { index_2 };
+    uint index = 2u;
+    uint _e9 = index;
+    return vertex_two_structsOutput { metal::float4(static_cast<float>(in1_.index), static_cast<float>(in2_.index), static_cast<float>(_e9), 0.0), 1.0 };
 }
