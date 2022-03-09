@@ -156,6 +156,7 @@ impl RootParameter {
 impl fmt::Debug for RootParameter {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         #[derive(Debug)]
+        #[allow(dead_code)] // False-positive
         enum Inner<'a> {
             Table(&'a [DescriptorRange]),
             Constants { binding: Binding, num: u32 },
