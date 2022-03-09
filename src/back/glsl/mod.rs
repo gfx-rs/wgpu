@@ -135,6 +135,12 @@ impl<'a> GlobalTypeKind<'a> {
                 size: crate::ArraySize::Dynamic,
                 ..
             } => Self::WrappedStruct,
+            // Naga IR permits globals to be constant sized arrays. Render
+            // these in GLSL as uniforms.
+            crate::TypeInner::Array {
+                size: crate::ArraySize::Constant(..),
+                ..
+            } => Self::WrappedStruct,
             _ => Self::Other,
         }
     }
