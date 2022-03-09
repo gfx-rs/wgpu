@@ -228,6 +228,7 @@ struct PrivateCapabilities {
     supports_depth_clip_control: bool,
     supports_preserve_invariance: bool,
     has_unified_memory: Option<bool>,
+    supports_timestamp_period: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -274,6 +275,7 @@ pub struct Adapter {
 
 pub struct Queue {
     raw: Arc<Mutex<mtl::CommandQueue>>,
+    shared: Arc<AdapterShared>,
 }
 
 unsafe impl Send for Queue {}
@@ -388,8 +390,26 @@ impl crate::Queue<Api> for Queue {
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
-        // TODO: This is hard, see https://github.com/gpuweb/gpuweb/issues/1325
-        1.0
+        if !self.shared.private_caps.supports_timestamp_period {
+            return 1.0;
+        }
+
+        use objc::{msg_send, sel, sel_impl};
+        let (mut cpu_timestamp0, mut gpu_timestamp0) = (0_u64, 0_u64);
+        let device = self.shared.device.lock().as_ptr();
+        let () = msg_send![device, sampleTimestamps:&mut cpu_timestamp0 gpuTimestamp:&mut gpu_timestamp0];
+        if cpu_timestamp0 == 0 || gpu_timestamp0 == 0 {
+            return 1.0;
+        }
+
+        let queue = &self.raw.lock();
+        let command_buffer = queue.new_command_buffer();
+        command_buffer.commit();
+        command_buffer.wait_until_scheduled();
+        let (mut cpu_timestamp1, mut gpu_timestamp1) = (0_u64, 0_u64);
+        let () = msg_send![device, sampleTimestamps:&mut cpu_timestamp1 gpuTimestamp:&mut gpu_timestamp1];
+
+        (cpu_timestamp1 - cpu_timestamp0) as f32 / (gpu_timestamp1 - gpu_timestamp0) as f32
     }
 }
 

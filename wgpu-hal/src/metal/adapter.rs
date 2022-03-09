@@ -34,6 +34,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             },
             queue: super::Queue {
                 raw: Arc::new(Mutex::new(queue)),
+                shared: Arc::clone(&self.shared),
             },
         })
     }
@@ -733,6 +734,7 @@ impl super::PrivateCapabilities {
             } else {
                 None
             },
+            supports_timestamp_period: version.at_least((10, 15), (14, 0)),
         }
     }
 
