@@ -418,7 +418,10 @@ impl crate::AddressSpace {
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
             Self::Storage { .. } | Self::Private | Self::WorkGroup => true,
-            Self::Uniform | Self::PushConstant | Self::Handle | Self::Function => false,
+            // These translate to `constant` address space, no need for qualifiers.
+            Self::Uniform | Self::PushConstant => false,
+            // Not applicable.
+            Self::Handle | Self::Function => false,
         }
     }
 

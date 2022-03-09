@@ -23,9 +23,11 @@ struct main_Output {
 fragment main_Output main_(
   main_Input varyings [[stage_in]]
 , uint primitive_index [[primitive_id]]
+, constant PushConstants& pc [[buffer(1)]]
 ) {
     const FragmentIn in = { varyings.color, primitive_index };
-    if ((in.primitive_index % 2u) == 0u) {
+    uint _e4 = pc.index;
+    if (in.primitive_index == _e4) {
         return main_Output { in.color };
     } else {
         return main_Output { metal::float4(metal::float3(1.0) - in.color.xyz, in.color.w) };
