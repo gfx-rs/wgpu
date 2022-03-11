@@ -16,10 +16,12 @@ struct Entity {
 @binding(0)
 var<uniform> u_entity: Entity;
 
+/* Not useful for testing
 @stage(vertex)
 fn vs_bake(@location(0) position: vec4<i32>) -> @builtin(position) vec4<f32> {
     return u_globals.view_proj * u_entity.world * vec4<f32>(position);
 }
+*/
 
 struct VertexOutput {
     @builtin(position) proj_position: vec4<f32>;

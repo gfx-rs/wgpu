@@ -60,20 +60,13 @@ float fetch_shadow(uint light_id, float4 homogeneous_coords)
     return _expr28;
 }
 
-float4 vs_bake(int4 position : LOC0) : SV_Position
-{
-    float4x4 _expr4 = u_globals.view_proj;
-    float4x4 _expr6 = u_entity.world;
-    return mul(float4(position), mul(_expr6, _expr4));
-}
-
-VertexOutput_vs_main vs_main(int4 position_1 : LOC0, int4 normal : LOC1)
+VertexOutput_vs_main vs_main(int4 position : LOC0, int4 normal : LOC1)
 {
     VertexOutput out_ = (VertexOutput)0;
 
     float4x4 w = u_entity.world;
     float4x4 _expr7 = u_entity.world;
-    float4 world_pos = mul(float4(position_1), _expr7);
+    float4 world_pos = mul(float4(position), _expr7);
     out_.world_normal = mul(float3(normal.xyz), float3x3(w[0].xyz, w[1].xyz, w[2].xyz));
     out_.world_position = world_pos;
     float4x4 _expr25 = u_globals.view_proj;

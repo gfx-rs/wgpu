@@ -49,26 +49,8 @@ float fetch_shadow(
     return _e28;
 }
 
-struct vs_bakeInput {
-    metal::int4 position [[attribute(0)]];
-};
-struct vs_bakeOutput {
-    metal::float4 member [[position]];
-};
-vertex vs_bakeOutput vs_bake(
-  vs_bakeInput varyings [[stage_in]]
-, constant Globals& u_globals [[user(fake0)]]
-, constant Entity& u_entity [[user(fake0)]]
-) {
-    const auto position = varyings.position;
-    metal::float4x4 _e4 = u_globals.view_proj;
-    metal::float4x4 _e6 = u_entity.world;
-    return vs_bakeOutput { (_e4 * _e6) * static_cast<metal::float4>(position) };
-}
-
-
 struct vs_mainInput {
-    metal::int4 position_1 [[attribute(0)]];
+    metal::int4 position [[attribute(0)]];
     metal::int4 normal [[attribute(1)]];
 };
 struct vs_mainOutput {
@@ -77,16 +59,16 @@ struct vs_mainOutput {
     metal::float4 world_position [[user(loc1), center_perspective]];
 };
 vertex vs_mainOutput vs_main(
-  vs_mainInput varyings_1 [[stage_in]]
+  vs_mainInput varyings [[stage_in]]
 , constant Globals& u_globals [[user(fake0)]]
 , constant Entity& u_entity [[user(fake0)]]
 ) {
-    const auto position_1 = varyings_1.position_1;
-    const auto normal = varyings_1.normal;
+    const auto position = varyings.position;
+    const auto normal = varyings.normal;
     VertexOutput out;
     metal::float4x4 w = u_entity.world;
     metal::float4x4 _e7 = u_entity.world;
-    metal::float4 world_pos = _e7 * static_cast<metal::float4>(position_1);
+    metal::float4 world_pos = _e7 * static_cast<metal::float4>(position);
     out.world_normal = metal::float3x3(w[0].xyz, w[1].xyz, w[2].xyz) * static_cast<metal::float3>(normal.xyz);
     out.world_position = world_pos;
     metal::float4x4 _e25 = u_globals.view_proj;
@@ -102,10 +84,10 @@ struct fs_mainInput {
     metal::float4 world_position [[user(loc1), center_perspective]];
 };
 struct fs_mainOutput {
-    metal::float4 member_2 [[color(0)]];
+    metal::float4 member_1 [[color(0)]];
 };
 fragment fs_mainOutput fs_main(
-  fs_mainInput varyings_2 [[stage_in]]
+  fs_mainInput varyings_1 [[stage_in]]
 , metal::float4 proj_position [[position]]
 , constant Globals& u_globals [[user(fake0)]]
 , constant Entity& u_entity [[user(fake0)]]
@@ -114,7 +96,7 @@ fragment fs_mainOutput fs_main(
 , metal::sampler sampler_shadow [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
-    const VertexOutput in = { proj_position, varyings_2.world_normal, varyings_2.world_position };
+    const VertexOutput in = { proj_position, varyings_1.world_normal, varyings_1.world_position };
     metal::float3 color = c_ambient;
     uint i = 0u;
     metal::float3 normal_1 = metal::normalize(in.world_normal);
@@ -151,10 +133,10 @@ struct fs_main_without_storageInput {
     metal::float4 world_position [[user(loc1), center_perspective]];
 };
 struct fs_main_without_storageOutput {
-    metal::float4 member_3 [[color(0)]];
+    metal::float4 member_2 [[color(0)]];
 };
 fragment fs_main_without_storageOutput fs_main_without_storage(
-  fs_main_without_storageInput varyings_3 [[stage_in]]
+  fs_main_without_storageInput varyings_2 [[stage_in]]
 , metal::float4 proj_position_1 [[position]]
 , constant Globals& u_globals [[user(fake0)]]
 , constant Entity& u_entity [[user(fake0)]]
@@ -162,7 +144,7 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
 , metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
 , metal::sampler sampler_shadow [[user(fake0)]]
 ) {
-    const VertexOutput in_1 = { proj_position_1, varyings_3.world_normal, varyings_3.world_position };
+    const VertexOutput in_1 = { proj_position_1, varyings_2.world_normal, varyings_2.world_position };
     metal::float3 color_1 = c_ambient;
     uint i_1 = 0u;
     metal::float3 normal_2 = metal::normalize(in_1.world_normal);

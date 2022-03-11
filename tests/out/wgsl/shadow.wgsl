@@ -48,19 +48,12 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
 }
 
 @stage(vertex) 
-fn vs_bake(@location(0) position: vec4<i32>) -> @builtin(position) vec4<f32> {
-    let _e4 = u_globals.view_proj;
-    let _e6 = u_entity.world;
-    return ((_e4 * _e6) * vec4<f32>(position));
-}
-
-@stage(vertex) 
-fn vs_main(@location(0) position_1: vec4<i32>, @location(1) normal: vec4<i32>) -> VertexOutput {
+fn vs_main(@location(0) position: vec4<i32>, @location(1) normal: vec4<i32>) -> VertexOutput {
     var out: VertexOutput;
 
     let w = u_entity.world;
     let _e7 = u_entity.world;
-    let world_pos = (_e7 * vec4<f32>(position_1));
+    let world_pos = (_e7 * vec4<f32>(position));
     out.world_normal = (mat3x3<f32>(w[0].xyz, w[1].xyz, w[2].xyz) * vec3<f32>(normal.xyz));
     out.world_position = world_pos;
     let _e25 = u_globals.view_proj;
