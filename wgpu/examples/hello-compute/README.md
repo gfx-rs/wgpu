@@ -18,5 +18,5 @@ RUST_LOG=hello_compute cargo run --example hello-compute 1 4 3 295
 ## Example Output
 
 ```
-[2020-04-25T11:15:33Z INFO  hello_compute] Times: [0, 2, 7, 55]
+[2020-04-25T11:15:33Z INFO  hello_compute] Steps: [0, 2, 7, 55]
 ```
