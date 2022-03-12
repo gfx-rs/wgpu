@@ -1,23 +1,23 @@
 struct VertexData {
-    position: vec2<f32>;
-    a: vec2<f32>;
+    position: vec2<f32>,
+    a: vec2<f32>,
 };
 
 struct FragmentData {
-    position: vec2<f32>;
-    a: vec2<f32>;
+    position: vec2<f32>,
+    a: vec2<f32>,
 };
 
 struct TestStruct {
-    a: f32;
-    b: f32;
+    a: f32,
+    b: f32,
 };
 
 struct VertexOutput {
-    @location(0) position: vec2<f32>;
-    @location(1) a: vec2<f32>;
-    @location(2) out_array: vec4<f32>;
-    @location(3) out_array_1: vec4<f32>;
+    @location(0) position: vec2<f32>,
+    @location(1) a: vec2<f32>,
+    @location(2) out_array: vec4<f32>,
+    @location(3) out_array_1: vec4<f32>,
 };
 
 var<private> vert: VertexData;

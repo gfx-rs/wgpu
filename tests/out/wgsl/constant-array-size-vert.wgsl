@@ -1,5 +1,5 @@
 struct Data {
-    vecs: array<vec4<f32>,42u>;
+    vecs: array<vec4<f32>,42u>,
 };
 
 @group(1) @binding(0) 

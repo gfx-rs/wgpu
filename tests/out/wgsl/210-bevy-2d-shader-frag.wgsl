@@ -1,9 +1,9 @@
 struct ColorMaterial_color {
-    Color: vec4<f32>;
+    Color: vec4<f32>,
 };
 
 struct FragmentOutput {
-    @location(0) o_Target: vec4<f32>;
+    @location(0) o_Target: vec4<f32>,
 };
 
 var<private> v_Uv_1: vec2<f32>;

@@ -1,11 +1,11 @@
 struct PushConstants {
-    index: u32;
-    double: vec2<f32>;
+    index: u32,
+    double: vec2<f32>,
 };
 
 struct FragmentIn {
-    @location(0) color: vec4<f32>;
-    @builtin(primitive_index) primitive_index: u32;
+    @location(0) color: vec4<f32>,
+    @builtin(primitive_index) primitive_index: u32,
 };
 
 var<push_constant> pc: PushConstants;

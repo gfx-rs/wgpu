@@ -1,5 +1,5 @@
 struct type_1 {
-    member: i32;
+    member: i32,
 };
 
 @group(0) @binding(0) 

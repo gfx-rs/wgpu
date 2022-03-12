@@ -419,7 +419,7 @@ impl<W: Write> Writer<W> {
             let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
             write!(self.out, "{}: ", member_name)?;
             self.write_type(module, member.ty)?;
-            write!(self.out, ";")?;
+            write!(self.out, ",")?;
             writeln!(self.out)?;
         }
 
