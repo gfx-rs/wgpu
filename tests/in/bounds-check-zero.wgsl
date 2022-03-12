@@ -1,10 +1,10 @@
 // Tests for `naga::back::BoundsCheckPolicy::ReadZeroSkipWrite`.
 
 struct Globals {
-    a: array<f32, 10>;
-    v: vec4<f32>;
-    m: mat3x4<f32>;
-    d: array<f32>;
+    a: array<f32, 10>,
+    v: vec4<f32>,
+    m: mat3x4<f32>,
+    d: array<f32>,
 };
 
 @group(0) @binding(0) var<storage, read_write> globals: Globals;

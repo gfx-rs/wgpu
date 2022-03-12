@@ -1,15 +1,15 @@
 // This snapshot tests accessing various containers, dereferencing pointers.
 
 struct AlignedWrapper {
-	@align(8) value: i32;
+	@align(8) value: i32
 };
 
 struct Bar {
-	matrix: mat4x4<f32>;
-	matrix_array: array<mat2x2<f32>, 2>;
-	atom: atomic<i32>;
-	arr: array<vec2<u32>, 2>;
-	data: array<AlignedWrapper>;
+	matrix: mat4x4<f32>,
+	matrix_array: array<mat2x2<f32>, 2>,
+	atom: atomic<i32>,
+	arr: array<vec2<u32>, 2>,
+	data: array<AlignedWrapper>,
 };
 
 @group(0) @binding(0)

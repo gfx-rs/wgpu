@@ -2811,7 +2811,14 @@ impl Parser {
         let mut members = Vec::new();
 
         lexer.expect(Token::Paren('{'))?;
-        loop {
+        let mut ready = true;
+        while !lexer.skip(Token::Paren('}')) {
+            if !ready {
+                return Err(Error::Unexpected(
+                    lexer.next(),
+                    ExpectedToken::Token(Token::Separator(',')),
+                ));
+            }
             let (mut size, mut align) = (None, None);
             self.push_scope(Scope::Attribute, lexer);
             let mut bind_parser = BindingParser::default();
@@ -2838,10 +2845,6 @@ impl Parser {
             let bind_span = self.pop_scope(lexer);
             let (name, span) = match lexer.next() {
                 (Token::Word(word), span) => (word, span),
-                (Token::Paren('}'), _) => {
-                    let span = Layouter::round_up(alignment, offset);
-                    return Ok((members, span));
-                }
                 other => return Err(Error::Unexpected(other, ExpectedToken::FieldName)),
             };
             if crate::keywords::wgsl::RESERVED.contains(&name) {
@@ -2849,7 +2852,7 @@ impl Parser {
             }
             lexer.expect(Token::Separator(':'))?;
             let (ty, _access) = self.parse_type_decl(lexer, None, type_arena, const_arena)?;
-            lexer.expect(Token::Separator(';'))?;
+            ready = lexer.skip(Token::Separator(','));
 
             self.layouter.update(type_arena, const_arena).unwrap();
 
@@ -2868,6 +2871,9 @@ impl Parser {
                 offset: range.start,
             });
         }
+
+        let span = Layouter::round_up(alignment, offset);
+        Ok((members, span))
     }
 
     fn parse_type_decl_impl<'a>(

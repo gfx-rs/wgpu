@@ -157,11 +157,11 @@ fn parse_type_cast() {
 fn parse_struct() {
     parse_str(
         "
-        struct Foo { x: i32; };
+        struct Foo { x: i32 };
         struct Bar {
-            @size(16) x: vec2<i32>;
-            @align(16) y: f32;
-            @size(32) @align(8) z: vec3<f32>;
+            @size(16) x: vec2<i32>,
+            @align(16) y: f32,
+            @size(32) @align(8) z: vec3<f32>,
         };
         struct Empty {};
         var<storage,read_write> s: Foo;
@@ -415,8 +415,8 @@ fn parse_struct_instantiation() {
     parse_str(
         "
     struct Foo {
-        a: f32;
-        b: vec3<f32>;
+        a: f32,
+        b: vec3<f32>,
     };
     
     @stage(fragment)
@@ -433,7 +433,7 @@ fn parse_array_length() {
     parse_str(
         "
         struct Foo {
-            data: array<u32>;
+            data: array<u32>
         }; // this is used as both input and output for convenience
 
         @group(0) @binding(0)

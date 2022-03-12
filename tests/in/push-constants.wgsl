@@ -1,10 +1,10 @@
 struct PushConstants {
-    multiplier: f32;
+    multiplier: f32
 };
 var<push_constant> pc: PushConstants;
 
 struct FragmentIn {
-    @location(0) color: vec4<f32>;
+    @location(0) color: vec4<f32>
 };
 
 @stage(fragment)

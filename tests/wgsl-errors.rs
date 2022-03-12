@@ -376,13 +376,13 @@ fn struct_member_zero_size() {
     check(
         r#"
             struct Bar {
-                @size(0) data: array<f32>;
+                @size(0) data: array<f32>
             };
         "#,
         r#"error: struct member size or alignment must not be 0
   ┌─ wgsl:3:23
   │
-3 │                 @size(0) data: array<f32>;
+3 │                 @size(0) data: array<f32>
   │                       ^ struct member size or alignment must not be 0
 
 "#,
@@ -394,13 +394,13 @@ fn struct_member_zero_align() {
     check(
         r#"
             struct Bar {
-                @align(0) data: array<f32>;
+                @align(0) data: array<f32>
             };
         "#,
         r#"error: struct member size or alignment must not be 0
   ┌─ wgsl:3:24
   │
-3 │                 @align(0) data: array<f32>;
+3 │                 @align(0) data: array<f32>
   │                        ^ struct member size or alignment must not be 0
 
 "#,
@@ -542,7 +542,7 @@ fn postfix_pointers() {
 
     check(
         r#"
-            struct S { m: i32; };
+            struct S { m: i32 };
             fn main() {
                 var s: S = S(42);
                 let ps = &s;
@@ -655,12 +655,12 @@ fn reserved_keyword() {
     // struct member
     check(
         r#"
-            struct Foo { sampler: f32; };
+            struct Foo { sampler: f32 };
         "#,
         r###"error: name `sampler` is a reserved keyword
   ┌─ wgsl:2:26
   │
-2 │             struct Foo { sampler: f32; };
+2 │             struct Foo { sampler: f32 };
   │                          ^^^^^^^ definition of `sampler`
 
 "###,
@@ -843,8 +843,8 @@ fn invalid_arrays() {
 #[test]
 fn invalid_structs() {
     check_validation_error! {
-        "struct Bad { data: sampler; };",
-        "struct Bad { data: texture_2d<f32>; };":
+        "struct Bad { data: sampler };",
+        "struct Bad { data: texture_2d<f32> };":
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::InvalidData(_),
             ..
@@ -852,7 +852,7 @@ fn invalid_structs() {
     }
 
     check_validation_error! {
-        "struct Bad { data: array<f32>; other: f32; };":
+        "struct Bad { data: array<f32>, other: f32, };":
         Err(naga::valid::ValidationError::Type {
             error: naga::valid::TypeError::InvalidDynamicArray(_, _),
             ..
@@ -865,7 +865,7 @@ fn invalid_functions() {
     check_validation_error! {
         "fn unacceptable_unsized(arg: array<f32>) { }",
         "
-        struct Unsized { data: array<f32>; };
+        struct Unsized { data: array<f32> };
         fn unacceptable_unsized(arg: Unsized) { }
         ":
         Err(naga::valid::ValidationError::Function {
@@ -883,7 +883,7 @@ fn invalid_functions() {
     check_validation_error! {
         "fn unacceptable_unsized(arg: ptr<workgroup, array<f32>>) { }",
         "
-        struct Unsized { data: array<f32>; };
+        struct Unsized { data: array<f32> };
         fn unacceptable_unsized(arg: ptr<workgroup, Unsized>) { }
         ":
         Err(naga::valid::ValidationError::Type {
@@ -998,8 +998,8 @@ fn missing_bindings() {
     check_validation_error! {
         "
         struct VertexIn {
-          @location(0) pos: vec4<f32>;
-          uv: vec2<f32>;
+          @location(0) pos: vec4<f32>,
+          uv: vec2<f32>
         };
 
         @stage(vertex)
@@ -1088,7 +1088,7 @@ fn valid_access() {
 fn invalid_local_vars() {
     check_validation_error! {
         "
-        struct Unsized { data: array<f32>; };
+        struct Unsized { data: array<f32> };
         fn local_ptr_dynamic_array(okay: ptr<storage, Unsized>) {
             var not_okay: ptr<storage, array<f32>> = &(*okay).data;
         }
@@ -1144,12 +1144,12 @@ fn invalid_runtime_sized_arrays() {
     check_validation_error! {
         "
         struct Unsized {
-            arr: array<f32>;
+            arr: array<f32>
         };
 
         struct Outer {
-            legit: i32;
-            unsized: Unsized;
+            legit: i32,
+            unsized: Unsized
         };
 
         @group(0) @binding(0) var<storage> outer: Outer;
@@ -1187,7 +1187,7 @@ fn select() {
         }
         ",
         "
-        struct S { member: i32; };
+        struct S { member: i32 };
         fn select_structs(which: bool) -> S {
             var x: S = S(1);
             var y: S = S(2);
@@ -1257,7 +1257,7 @@ fn wrong_access_mode() {
     check_validation_error! {
         "
             struct Globals {
-                i: i32;
+                i: i32
             };
 
             @group(0) @binding(0)
@@ -1269,7 +1269,7 @@ fn wrong_access_mode() {
         ",
         "
             struct Globals {
-                i: i32;
+                i: i32
             };
 
             @group(0) @binding(0)

@@ -39,8 +39,8 @@ fn bool_cast(x: vec3<f32>) -> vec3<f32> {
 }
 
 struct Foo {
-    a: vec4<f32>;
-    b: i32;
+    a: vec4<f32>,
+    b: i32,
 };
 
 fn constructors() -> f32 {

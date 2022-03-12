@@ -5,7 +5,7 @@ fn f() {
 }
 
 struct DynamicArray {
-    arr: array<u32>;
+    arr: array<u32>
 };
 
 @group(0) @binding(0)

@@ -5,9 +5,9 @@
 // be combined.
 
 struct Globals {
-    a: atomic<u32>;
-    b: array<atomic<u32>, 10>;
-    c: array<atomic<u32>>;
+    a: atomic<u32>,
+    b: array<atomic<u32>, 10>,
+    c: array<atomic<u32>>,
 };
 
 @group(0) @binding(0) var<storage, read_write> globals: Globals;

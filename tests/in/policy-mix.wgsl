@@ -3,12 +3,12 @@
 
 // Storage and Uniform storage classes
 struct InStorage {
-  a: array<vec4<f32>, 10>;
+  a: array<vec4<f32>, 10>
 };
 @group(0) @binding(0) var<storage> in_storage: InStorage;
 
 struct InUniform {
-  a: array<vec4<f32>, 20>;
+  a: array<vec4<f32>, 20>
 };
 @group(0) @binding(1) var<uniform> in_uniform: InUniform;
 

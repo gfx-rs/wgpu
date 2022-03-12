@@ -6,9 +6,9 @@ var<workgroup> wg : array<f32, 10u>;
 var<workgroup> at: atomic<u32>;
 
 struct Foo {
-    v3: vec3<f32>;
+    v3: vec3<f32>,
     // test packed vec3
-    v1: f32;
+    v1: f32,
 };
 @group(0) @binding(1)
 var<storage, read_write> alignment: Foo;

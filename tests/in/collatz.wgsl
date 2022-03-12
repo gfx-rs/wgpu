@@ -1,5 +1,5 @@
 struct PrimeIndices {
-    data: array<u32>;
+    data: array<u32>
 }; // this is used as both input and output for convenience
 
 @group(0) @binding(0)
