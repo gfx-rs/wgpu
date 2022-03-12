@@ -65,7 +65,7 @@ hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features =
 hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["vulkan", "gles", "renderdoc"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["vulkan", "dx12", "renderdoc"] }
+hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["vulkan", "dx12", "dx11", "renderdoc"] }
 
 [target.'cfg(target_os = "emscripten")'.dependencies]
 hal = { path = "../wgpu-hal", package = "wgpu-hal", version = "0.12", features = ["emscripten"] }

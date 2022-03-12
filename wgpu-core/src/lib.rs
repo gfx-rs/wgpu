@@ -211,8 +211,8 @@ macro_rules! gfx_select {
             wgt::Backend::Metal => $global.$method::<$crate::api::Metal>( $($param),* ),
             #[cfg(all(not(target_arch = "wasm32"), windows))]
             wgt::Backend::Dx12 => $global.$method::<$crate::api::Dx12>( $($param),* ),
-            //#[cfg(all(not(target_arch = "wasm32"), windows))]
-            //wgt::Backend::Dx11 => $global.$method::<$crate::api::Dx11>( $($param),* ),
+            #[cfg(all(not(target_arch = "wasm32"), windows))]
+            wgt::Backend::Dx11 => $global.$method::<$crate::api::Dx11>( $($param),* ),
             #[cfg(any(
                 all(unix, not(target_os = "macos"), not(target_os = "ios")),
                 feature = "angle",

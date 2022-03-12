@@ -1,4 +1,7 @@
-use super::{conv, HResult as _, SurfaceTarget};
+use crate::{
+    auxil::{self, dxgi::result::HResult as _},
+    dx12::SurfaceTarget,
+};
 use std::{mem, sync::Arc, thread};
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_5, minwindef, windef, winerror},
@@ -40,14 +43,14 @@ impl super::Adapter {
 
     #[allow(trivial_casts)]
     pub(super) fn expose(
-        adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
+        adapter: native::DxgiAdapter,
         library: &Arc<native::D3D12Lib>,
         instance_flags: crate::InstanceFlags,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
             profiling::scope!("ID3D12Device::create_device");
-            match library.create_device(adapter, native::FeatureLevel::L11_0) {
+            match library.create_device(*adapter, native::FeatureLevel::L11_0) {
                 Ok(pair) => match pair.into_result() {
                     Ok(device) => device,
                     Err(err) => {
@@ -68,7 +71,7 @@ impl super::Adapter {
         // Acquire the device information.
         let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
         unsafe {
-            adapter.GetDesc2(&mut desc);
+            adapter.unwrap_adapter2().GetDesc2(&mut desc);
         }
 
         let device_name = {
@@ -317,7 +320,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     ) -> crate::TextureFormatCapabilities {
         use crate::TextureFormatCapabilities as Tfc;
 
-        let raw_format = conv::map_texture_format(format);
+        let raw_format = auxil::dxgi::conv::map_texture_format(format);
         let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
             Format: raw_format,
             Support1: mem::zeroed(),
@@ -409,11 +412,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let mut present_modes = vec![wgt::PresentMode::Fifo];
         #[allow(trivial_casts)]
-        if let Ok(factory5) = surface
-            .factory
-            .cast::<dxgi1_5::IDXGIFactory5>()
-            .into_result()
-        {
+        if let Some(factory5) = surface.factory.as_factory5() {
             let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
             let hr = factory5.CheckFeatureSupport(
                 dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
@@ -421,7 +420,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 mem::size_of::<minwindef::BOOL>() as _,
             );
 
-            factory5.destroy();
             match hr.into_result() {
                 Err(err) => log::warn!("Unable to check for tearing support: {}", err),
                 Ok(()) => present_modes.push(wgt::PresentMode::Immediate),

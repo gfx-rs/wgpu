@@ -52,6 +52,8 @@ compile_error!("Metal API enabled on non-Apple OS. If your project is not using 
 #[cfg(all(feature = "dx12", not(windows)))]
 compile_error!("DX12 API enabled on non-Windows OS. If your project is not using resolver=\"2\" in Cargo.toml, it should.");
 
+#[cfg(all(feature = "dx11", windows))]
+mod dx11;
 #[cfg(all(feature = "dx12", windows))]
 mod dx12;
 mod empty;
@@ -64,6 +66,8 @@ mod vulkan;
 
 pub mod auxil;
 pub mod api {
+    #[cfg(feature = "dx11")]
+    pub use super::dx11::Api as Dx11;
     #[cfg(feature = "dx12")]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;

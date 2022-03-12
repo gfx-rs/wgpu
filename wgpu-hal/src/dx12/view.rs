@@ -1,4 +1,4 @@
-use super::conv;
+use crate::auxil;
 use std::mem;
 use winapi::um::d3d12;
 
@@ -19,8 +19,8 @@ impl crate::TextureViewDescriptor<'_> {
     pub(super) fn to_internal(&self, texture: &super::Texture) -> ViewDescriptor {
         ViewDescriptor {
             dimension: self.dimension,
-            format: conv::map_texture_format(self.format),
-            format_nodepth: conv::map_texture_format_nodepth(self.format),
+            format: auxil::dxgi::conv::map_texture_format(self.format),
+            format_nodepth: auxil::dxgi::conv::map_texture_format_nodepth(self.format),
             multisampled: texture.sample_count > 1,
             mip_level_base: self.range.base_mip_level,
             mip_level_count: match self.range.mip_level_count {

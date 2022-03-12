@@ -1,4 +1,6 @@
-use super::{conv, HResult as _};
+use crate::auxil::{self, dxgi::result::HResult as _};
+
+use super::conv;
 use std::{mem, ops::Range, ptr};
 use winapi::um::d3d12;
 
@@ -22,7 +24,7 @@ impl crate::BufferTextureCopy {
         d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
             Offset: self.buffer_layout.offset,
             Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
-                Format: conv::map_texture_format(format),
+                Format: auxil::dxgi::conv::map_texture_format(format),
                 Width: self.size.width,
                 Height: self
                     .buffer_layout
@@ -834,7 +836,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.list.unwrap().set_index_buffer(
             binding.resolve_address(),
             binding.resolve_size() as u32,
-            conv::map_index_format(format),
+            auxil::dxgi::conv::map_index_format(format),
         );
     }
     unsafe fn set_vertex_buffer<'a>(
