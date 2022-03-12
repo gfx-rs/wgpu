@@ -75,7 +75,8 @@ libloading = { version = "0.7", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser", "dcomp"] }
-native = { package = "d3d12", version = "0.4.1", features = ["libloading"], optional = true }
+# native = { package = "d3d12", version = "0.4.1", features = ["libloading"], optional = true }
+native = { package = "d3d12", git = "https://github.com/gfx-rs/d3d12-rs.git", rev = "ffe5e261da0a6cb85332b82ab310abd2a7e849f6", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 mtl = { package = "metal", git = "https://github.com/gfx-rs/metal-rs", rev = "44af5cc" }
