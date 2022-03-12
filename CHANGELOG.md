@@ -2,6 +2,7 @@
 
 ## v0.9 (TBD)
   - WGSL:
+    - commas are used to separate struct members intead of semicolons
     - attributes are declared with `@attrib` instead of `[[attrib]]`
     - `stride` attribute is removed
     - block comments are supported
