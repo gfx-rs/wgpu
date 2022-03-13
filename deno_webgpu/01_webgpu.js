@@ -32,6 +32,7 @@
     PromisePrototypeThen,
     PromiseReject,
     PromiseResolve,
+    SafeArrayIterator,
     Set,
     SetPrototypeEntries,
     SetPrototypeForEach,
@@ -224,10 +225,10 @@
    */
 
   /**
-    * @param {string} name
-    * @param {InnerGPUAdapter} inner
-    * @returns {GPUAdapter}
-    */
+   * @param {string} name
+   * @param {InnerGPUAdapter} inner
+   * @returns {GPUAdapter}
+   */
   function createGPUAdapter(name, inner) {
     /** @type {GPUAdapter} */
     const adapter = webidl.createBranded(GPUAdapter);
@@ -543,7 +544,9 @@
     }
 
     [SymbolFor("Deno.privateCustomInspect")](inspect) {
-      return `${this.constructor.name} ${inspect([...this.values()])}`;
+      return `${this.constructor.name} ${
+        inspect([...new SafeArrayIterator(this.values())])
+      }`;
     }
   }
 
@@ -553,7 +556,6 @@
   const _message = Symbol("[[message]]");
 
   /**
-   *
    * @param {string | undefined} reason
    * @param {string} message
    * @returns {GPUDeviceLostInfo}
@@ -865,7 +867,7 @@
         descriptor.usage,
         options,
       );
-      device.trackResource((buffer));
+      device.trackResource(buffer);
       return buffer;
     }
 
@@ -894,7 +896,7 @@
         device,
         rid,
       );
-      device.trackResource((texture));
+      device.trackResource(texture);
       return texture;
     }
 
@@ -921,7 +923,7 @@
         device,
         rid,
       );
-      device.trackResource((sampler));
+      device.trackResource(sampler);
       return sampler;
     }
 
@@ -964,7 +966,7 @@
         device,
         rid,
       );
-      device.trackResource((bindGroupLayout));
+      device.trackResource(bindGroupLayout);
       return bindGroupLayout;
     }
 
@@ -1006,7 +1008,7 @@
         device,
         rid,
       );
-      device.trackResource((pipelineLayout));
+      device.trackResource(pipelineLayout);
       return pipelineLayout;
     }
 
@@ -1101,7 +1103,7 @@
         device,
         rid,
       );
-      device.trackResource((bindGroup));
+      device.trackResource(bindGroup);
       return bindGroup;
     }
 
@@ -1133,7 +1135,7 @@
         device,
         rid,
       );
-      device.trackResource((shaderModule));
+      device.trackResource(shaderModule);
       return shaderModule;
     }
 
@@ -1190,7 +1192,7 @@
         device,
         rid,
       );
-      device.trackResource((computePipeline));
+      device.trackResource(computePipeline);
       return computePipeline;
     }
 
@@ -1265,7 +1267,7 @@
         device,
         rid,
       );
-      device.trackResource((renderPipeline));
+      device.trackResource(renderPipeline);
       return renderPipeline;
     }
 
@@ -1302,7 +1304,7 @@
         device,
         rid,
       );
-      device.trackResource((commandEncoder));
+      device.trackResource(commandEncoder);
       return commandEncoder;
     }
 
@@ -1337,7 +1339,7 @@
         device,
         rid,
       );
-      device.trackResource((renderBundleEncoder));
+      device.trackResource(renderBundleEncoder);
       return renderBundleEncoder;
     }
 
@@ -1369,7 +1371,7 @@
         rid,
         descriptor,
       );
-      device.trackResource((querySet));
+      device.trackResource(querySet);
       return querySet;
     }
 
@@ -1927,7 +1929,7 @@
           const { err } = core.opSync("op_webgpu_buffer_unmap", {
             bufferRid,
             mappedRid,
-          }, ...(write ? [new Uint8Array(buffer)] : []));
+          }, ...new SafeArrayIterator(write ? [new Uint8Array(buffer)] : []));
           device.pushError(err);
           if (err) return;
         }
@@ -2290,8 +2292,8 @@
 
   /**
    * @param {string | null} label
-    * @param {InnerGPUDevice} device
-  * @param {number} rid
+   * @param {InnerGPUDevice} device
+   * @param {number} rid
    * @returns {GPUBindGroup}
    */
   function createGPUBindGroup(label, device, rid) {
@@ -2333,8 +2335,8 @@
 
   /**
    * @param {string | null} label
-    * @param {InnerGPUDevice} device
-  * @param {number} rid
+   * @param {InnerGPUDevice} device
+   * @param {number} rid
    * @returns {GPUShaderModule}
    */
   function createGPUShaderModule(label, device, rid) {
@@ -2458,7 +2460,7 @@
         device,
         rid,
       );
-      device.trackResource((bindGroupLayout));
+      device.trackResource(bindGroupLayout);
       return bindGroupLayout;
     }
 
@@ -2534,7 +2536,7 @@
         device,
         rid,
       );
-      device.trackResource((bindGroupLayout));
+      device.trackResource(bindGroupLayout);
       return bindGroupLayout;
     }
 
@@ -3091,8 +3093,7 @@
      */
     clearBuffer(destination, destinationOffset, size) {
       webidl.assertBranded(this, GPUCommandEncoderPrototype);
-      const prefix =
-        "Failed to execute 'clearBuffer' on 'GPUCommandEncoder'";
+      const prefix = "Failed to execute 'clearBuffer' on 'GPUCommandEncoder'";
       webidl.requiredArguments(arguments.length, 3, { prefix });
       destination = webidl.converters.GPUBuffer(destination, {
         prefix,
@@ -3344,7 +3345,7 @@
         device,
         rid,
       );
-      device.trackResource((commandBuffer));
+      device.trackResource(commandBuffer);
       return commandBuffer;
     }
 
@@ -3444,7 +3445,6 @@
     }
 
     /**
-     *
      * @param {number} x
      * @param {number} y
      * @param {number} width
@@ -4682,7 +4682,7 @@
         device,
         rid,
       );
-      device.trackResource((renderBundle));
+      device.trackResource(renderBundle);
       return renderBundle;
     }
 
