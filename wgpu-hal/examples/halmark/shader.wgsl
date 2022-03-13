@@ -1,12 +1,12 @@
 struct Globals {
-    mvp: mat4x4<f32>;
-    size: vec2<f32>;
+    mvp: mat4x4<f32>,
+    size: vec2<f32>,
 };
 
 struct Locals {
-    position: vec2<f32>;
-    velocity: vec2<f32>;
-    color: u32;
+    position: vec2<f32>,
+    velocity: vec2<f32>,
+    color: u32,
 };
 
 @group(0)
@@ -18,9 +18,9 @@ var<uniform> globals: Globals;
 var<uniform> locals: Locals;
 
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>;
-    @location(0) tex_coords: vec2<f32>;
-    @location(1) color: vec4<f32>;
+    @builtin(position) position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
+    @location(1) color: vec4<f32>,
 };
 
 @stage(vertex)

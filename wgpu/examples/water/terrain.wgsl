@@ -1,6 +1,6 @@
 struct Uniforms {
-    projection_view: mat4x4<f32>;
-    clipping_plane: vec4<f32>;
+    projection_view: mat4x4<f32>,
+    clipping_plane: vec4<f32>,
 };
 
 @group(0)
@@ -12,10 +12,10 @@ let light_colour = vec3<f32>(1.0, 0.98, 0.82);
 let ambient = 0.2;
 
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>;
-    @location(0) colour: vec4<f32>;
+    @builtin(position) position: vec4<f32>,
+    @location(0) colour: vec4<f32>,
     // Comment this out if using user-clipping planes:
-    @location(1) clip_dist: f32;
+    @location(1) clip_dist: f32,
 };
 
 @stage(vertex)

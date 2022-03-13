@@ -1,17 +1,17 @@
 struct SkyOutput {
-    @builtin(position) position: vec4<f32>;
-    @location(0) uv: vec3<f32>;
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec3<f32>,
 };
 
 struct Data {
     // from camera to screen
-    proj: mat4x4<f32>;
+    proj: mat4x4<f32>,
     // from screen to camera
-    proj_inv: mat4x4<f32>;
+    proj_inv: mat4x4<f32>,
     // from world to camera
-    view: mat4x4<f32>;
+    view: mat4x4<f32>,
     // camera position
-    cam_pos: vec4<f32>;
+    cam_pos: vec4<f32>,
 };
 @group(0)
 @binding(0)
@@ -40,9 +40,9 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> SkyOutput {
 }
 
 struct EntityOutput {
-    @builtin(position) position: vec4<f32>;
-    @location(1) normal: vec3<f32>;
-    @location(3) view: vec3<f32>;
+    @builtin(position) position: vec4<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(3) view: vec3<f32>,
 };
 
 @stage(vertex)

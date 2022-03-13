@@ -1,6 +1,6 @@
 struct Globals {
-    view_proj: mat4x4<f32>;
-    num_lights: vec4<u32>;
+    view_proj: mat4x4<f32>,
+    num_lights: vec4<u32>,
 };
 
 @group(0)
@@ -8,8 +8,8 @@ struct Globals {
 var<uniform> u_globals: Globals;
 
 struct Entity {
-    world: mat4x4<f32>;
-    color: vec4<f32>;
+    world: mat4x4<f32>,
+    color: vec4<f32>,
 };
 
 @group(1)
@@ -22,9 +22,9 @@ fn vs_bake(@location(0) position: vec4<i32>) -> @builtin(position) vec4<f32> {
 }
 
 struct VertexOutput {
-    @builtin(position) proj_position: vec4<f32>;
-    @location(0) world_normal: vec3<f32>;
-    @location(1) world_position: vec4<f32>;
+    @builtin(position) proj_position: vec4<f32>,
+    @location(0) world_normal: vec3<f32>,
+    @location(1) world_position: vec4<f32>
 };
 
 @stage(vertex)
@@ -44,9 +44,9 @@ fn vs_main(
 // fragment shader
 
 struct Light {
-    proj: mat4x4<f32>;
-    pos: vec4<f32>;
-    color: vec4<f32>;
+    proj: mat4x4<f32>,
+    pos: vec4<f32>,
+    color: vec4<f32>,
 };
 
 @group(0)
