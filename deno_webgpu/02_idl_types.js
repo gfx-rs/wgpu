@@ -1726,11 +1726,11 @@
     { key: "resolveTarget", converter: webidl.converters["GPUTextureView"] },
     {
       key: "clearValue",
-      converter: webidl.converters["GPUColor"], /** put union here! **/
+      converter: webidl.converters["GPUColor"],
     },
     {
       key: "loadOp",
-      converter: webidl.converters["GPULoadOp"], /** put union here! **/
+      converter: webidl.converters["GPULoadOp"],
       required: true,
     },
     {
