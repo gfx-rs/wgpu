@@ -47,12 +47,6 @@ pub fn op_webgpu_create_render_bundle_encoder(
         .get::<super::WebGpuDevice>(args.device_rid)?;
     let device = device_resource.0;
 
-    let mut color_formats = vec![];
-
-    for format in args.color_formats {
-        color_formats.push(format);
-    }
-
     let depth_stencil = if let Some(format) = args.depth_stencil_format {
         Some(wgpu_types::RenderBundleDepthStencil {
             format,
@@ -65,7 +59,7 @@ pub fn op_webgpu_create_render_bundle_encoder(
 
     let descriptor = wgpu_core::command::RenderBundleEncoderDescriptor {
         label: args.label.map(Cow::from),
-        color_formats: Cow::from(color_formats),
+        color_formats: Cow::from(args.color_formats),
         sample_count: args.sample_count,
         depth_stencil,
         multiview: None,

@@ -603,24 +603,26 @@
    * @param {any} type
    */
   function GPUObjectBaseMixin(name, type) {
-    type.prototype[_label] = null;
+    type.prototype[_label] = undefined;
     ObjectDefineProperty(type.prototype, "label", {
       /**
-       * @return {string | null}
+       * @return {string | undefined}
        */
       get() {
         webidl.assertBranded(this, type.prototype);
         return this[_label];
       },
       /**
-       * @param {string | null} label
+       * @param {string | undefined} label
        */
       set(label) {
         webidl.assertBranded(this, type.prototype);
-        label = webidl.converters["UVString?"](label, {
-          prefix: `Failed to set 'label' on '${name}'`,
-          context: "Argument 1",
-        });
+        if (label !== undefined) {
+          label = webidl.converters["UVString"](label, {
+            prefix: `Failed to set 'label' on '${name}'`,
+            context: "Argument 1",
+          });
+        }
         this[_label] = label;
       },
     });
@@ -776,7 +778,6 @@
     return device;
   }
 
-  // TODO(@crowlKats): https://gpuweb.github.io/gpuweb/#errors-and-debugging
   class GPUDevice extends eventTarget.EventTarget {
     /** @type {InnerGPUDevice} */
     [_device];
@@ -2664,28 +2665,6 @@
           ...descriptor.depthStencilAttachment,
           view,
         };
-
-        if (
-          typeof descriptor.depthStencilAttachment.depthLoadValue === "string"
-        ) {
-          depthStencilAttachment.depthLoadOp =
-            descriptor.depthStencilAttachment.depthLoadValue;
-        } else {
-          depthStencilAttachment.depthLoadOp = {
-            clear: descriptor.depthStencilAttachment.depthLoadValue,
-          };
-        }
-
-        if (
-          typeof descriptor.depthStencilAttachment.stencilLoadValue === "string"
-        ) {
-          depthStencilAttachment.stencilLoadOp =
-            descriptor.depthStencilAttachment.stencilLoadValue;
-        } else {
-          depthStencilAttachment.stencilLoadOp = {
-            clear: descriptor.depthStencilAttachment.stencilLoadValue,
-          };
-        }
       }
       const colorAttachments = ArrayPrototypeMap(
         descriptor.colorAttachments,
@@ -2732,21 +2711,13 @@
               },
             );
           }
-          const attachment = {
+          return {
             view: view,
             resolveTarget,
             storeOp: colorAttachment.storeOp,
+            loadOp: colorAttachment.loadOp,
+            clearValue: normalizeGPUColor(colorAttachment.clearValue),
           };
-
-          if (typeof colorAttachment.loadValue === "string") {
-            attachment.loadOp = colorAttachment.loadValue;
-          } else {
-            attachment.loadOp = {
-              clear: normalizeGPUColor(colorAttachment.loadValue),
-            };
-          }
-
-          return attachment;
         },
       );
 
@@ -3087,19 +3058,19 @@
     }
 
     /**
-     * @param {GPUBuffer} destination
-     * @param {GPUSize64} destinationOffset
+     * @param {GPUBuffer} buffer
+     * @param {GPUSize64} offset
      * @param {GPUSize64} size
      */
-    clearBuffer(destination, destinationOffset, size) {
+    clearBuffer(buffer, offset = 0, size = undefined) {
       webidl.assertBranded(this, GPUCommandEncoderPrototype);
       const prefix = "Failed to execute 'clearBuffer' on 'GPUCommandEncoder'";
       webidl.requiredArguments(arguments.length, 3, { prefix });
-      destination = webidl.converters.GPUBuffer(destination, {
+      buffer = webidl.converters.GPUBuffer(buffer, {
         prefix,
         context: "Argument 1",
       });
-      destinationOffset = webidl.converters.GPUSize64(destinationOffset, {
+      offset = webidl.converters.GPUSize64(offset, {
         prefix,
         context: "Argument 2",
       });
@@ -3112,7 +3083,7 @@
         prefix,
         context: "this",
       });
-      const destinationRid = assertResource(destination, {
+      const bufferRid = assertResource(buffer, {
         prefix,
         context: "Argument 1",
       });
@@ -3120,8 +3091,8 @@
         "op_webgpu_command_encoder_clear_buffer",
         {
           commandEncoderRid,
-          destinationRid,
-          destinationOffset,
+          bufferRid,
+          offset,
           size,
         },
       );
@@ -3690,9 +3661,9 @@
       });
     }
 
-    endPass() {
+    end() {
       webidl.assertBranded(this, GPURenderPassEncoderPrototype);
-      const prefix = "Failed to execute 'endPass' on 'GPURenderPassEncoder'";
+      const prefix = "Failed to execute 'end' on 'GPURenderPassEncoder'";
       const device = assertDevice(this[_encoder], {
         prefix,
         context: "encoder referenced by this",
@@ -3702,7 +3673,7 @@
         context: "encoder referenced by this",
       });
       const renderPassRid = assertResource(this, { prefix, context: "this" });
-      const { err } = core.opSync("op_webgpu_render_pass_end_pass", {
+      const { err } = core.opSync("op_webgpu_render_pass_end", {
         commandEncoderRid,
         renderPassRid,
       });
@@ -4247,17 +4218,26 @@
     }
 
     /**
-     * @param {number} x
-     * @param {number} y
-     * @param {number} z
+     * @param {number} workgroupCountX
+     * @param {number} workgroupCountY
+     * @param {number} workgroupCountZ
      */
-    dispatch(x, y = 1, z = 1) {
+    dispatch(workgroupCountX, workgroupCountY = 1, workgroupCountZ = 1) {
       webidl.assertBranded(this, GPUComputePassEncoderPrototype);
       const prefix = "Failed to execute 'dispatch' on 'GPUComputePassEncoder'";
       webidl.requiredArguments(arguments.length, 1, { prefix });
-      x = webidl.converters.GPUSize32(x, { prefix, context: "Argument 1" });
-      y = webidl.converters.GPUSize32(y, { prefix, context: "Argument 2" });
-      z = webidl.converters.GPUSize32(z, { prefix, context: "Argument 3" });
+      workgroupCountX = webidl.converters.GPUSize32(workgroupCountX, {
+        prefix,
+        context: "Argument 1",
+      });
+      workgroupCountY = webidl.converters.GPUSize32(workgroupCountY, {
+        prefix,
+        context: "Argument 2",
+      });
+      workgroupCountZ = webidl.converters.GPUSize32(workgroupCountZ, {
+        prefix,
+        context: "Argument 3",
+      });
       assertDevice(this[_encoder], {
         prefix,
         context: "encoder referenced by this",
@@ -4269,9 +4249,9 @@
       const computePassRid = assertResource(this, { prefix, context: "this" });
       core.opSync("op_webgpu_compute_pass_dispatch", {
         computePassRid,
-        x,
-        y,
-        z,
+        x: workgroupCountX,
+        y: workgroupCountY,
+        z: workgroupCountZ,
       });
     }
 
@@ -4422,9 +4402,9 @@
       });
     }
 
-    endPass() {
+    end() {
       webidl.assertBranded(this, GPUComputePassEncoderPrototype);
-      const prefix = "Failed to execute 'endPass' on 'GPUComputePassEncoder'";
+      const prefix = "Failed to execute 'end' on 'GPUComputePassEncoder'";
       const device = assertDevice(this[_encoder], {
         prefix,
         context: "encoder referenced by this",
@@ -4434,7 +4414,7 @@
         context: "encoder referenced by this",
       });
       const computePassRid = assertResource(this, { prefix, context: "this" });
-      const { err } = core.opSync("op_webgpu_compute_pass_end_pass", {
+      const { err } = core.opSync("op_webgpu_compute_pass_end", {
         commandEncoderRid,
         computePassRid,
       });

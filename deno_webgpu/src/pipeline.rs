@@ -319,18 +319,12 @@ pub fn op_webgpu_create_render_pipeline(
                 .resource_table
                 .get::<super::shader::WebGpuShaderModule>(fragment.module)?;
 
-        let mut targets = Vec::with_capacity(fragment.targets.len());
-
-        for target in fragment.targets {
-            targets.push(target);
-        }
-
         Some(wgpu_core::pipeline::FragmentState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
                 module: fragment_shader_module_resource.0,
                 entry_point: Cow::from(fragment.entry_point),
             },
-            targets: Cow::from(targets),
+            targets: Cow::from(fragment.targets),
         })
     } else {
         None

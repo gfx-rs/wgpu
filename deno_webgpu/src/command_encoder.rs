@@ -59,25 +59,21 @@ pub fn op_webgpu_create_command_encoder(
 pub struct GpuRenderPassColorAttachment {
     view: ResourceId,
     resolve_target: Option<ResourceId>,
-    load_op: GpuLoadOp<wgpu_types::Color>,
+    clear_value: Option<wgpu_types::Color>,
+    load_op: wgpu_core::command::LoadOp,
     store_op: wgpu_core::command::StoreOp,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum GpuLoadOp<T> {
-    Load,
-    Clear(T),
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GpuRenderPassDepthStencilAttachment {
     view: ResourceId,
-    depth_load_op: GpuLoadOp<f32>,
+    depth_clear_value: f32,
+    depth_load_op: wgpu_core::command::LoadOp,
     depth_store_op: wgpu_core::command::StoreOp,
     depth_read_only: bool,
-    stencil_load_op: GpuLoadOp<u32>,
+    stencil_clear_value: u32,
+    stencil_load_op: wgpu_core::command::LoadOp,
     stencil_store_op: wgpu_core::command::StoreOp,
     stencil_read_only: bool,
 }
@@ -121,19 +117,11 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
         let attachment = wgpu_core::command::RenderPassColorAttachment {
             view: texture_view_resource.0,
             resolve_target,
-            channel: match color_attachment.load_op {
-                GpuLoadOp::Load => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Load,
-                    store_op: color_attachment.store_op,
-                    clear_value: Default::default(),
-                    read_only: false,
-                },
-                GpuLoadOp::Clear(color) => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Clear,
-                    store_op: color_attachment.store_op,
-                    clear_value: color,
-                    read_only: false,
-                },
+            channel: wgpu_core::command::PassChannel {
+                load_op: color_attachment.load_op,
+                store_op: color_attachment.store_op,
+                clear_value: color_attachment.clear_value.unwrap_or_default(),
+                read_only: false,
             },
         };
 
@@ -149,33 +137,17 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
 
         depth_stencil_attachment = Some(wgpu_core::command::RenderPassDepthStencilAttachment {
             view: texture_view_resource.0,
-            depth: match attachment.depth_load_op {
-                GpuLoadOp::Load => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Load,
-                    store_op: attachment.depth_store_op,
-                    clear_value: 0.0,
-                    read_only: attachment.depth_read_only,
-                },
-                GpuLoadOp::Clear(value) => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Clear,
-                    store_op: attachment.depth_store_op,
-                    clear_value: value,
-                    read_only: attachment.depth_read_only,
-                },
+            depth: wgpu_core::command::PassChannel {
+                load_op: attachment.depth_load_op,
+                store_op: attachment.depth_store_op,
+                clear_value: attachment.depth_clear_value,
+                read_only: attachment.depth_read_only,
             },
-            stencil: match attachment.stencil_load_op {
-                GpuLoadOp::Load => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Load,
-                    store_op: attachment.stencil_store_op,
-                    clear_value: 0,
-                    read_only: attachment.stencil_read_only,
-                },
-                GpuLoadOp::Clear(value) => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Clear,
-                    store_op: attachment.stencil_store_op,
-                    clear_value: value,
-                    read_only: attachment.stencil_read_only,
-                },
+            stencil: wgpu_core::command::PassChannel {
+                load_op: attachment.stencil_load_op,
+                store_op: attachment.stencil_store_op,
+                clear_value: attachment.stencil_clear_value,
+                read_only: attachment.stencil_read_only,
             },
         });
     }
@@ -433,8 +405,8 @@ pub fn op_webgpu_command_encoder_copy_texture_to_texture(
 #[serde(rename_all = "camelCase")]
 pub struct CommandEncoderClearBufferArgs {
     command_encoder_rid: u32,
-    destination_rid: u32,
-    destination_offset: u64,
+    buffer_rid: u32,
+    offset: u64,
     size: u64,
 }
 
@@ -450,12 +422,12 @@ pub fn op_webgpu_command_encoder_clear_buffer(
     let command_encoder = command_encoder_resource.0;
     let destination_resource = state
         .resource_table
-        .get::<super::buffer::WebGpuBuffer>(args.destination_rid)?;
+        .get::<super::buffer::WebGpuBuffer>(args.buffer_rid)?;
 
     gfx_ok!(command_encoder => instance.command_encoder_clear_buffer(
       command_encoder,
       destination_resource.0,
-      args.destination_offset,
+      args.offset,
       std::num::NonZeroU64::new(args.size)
     ))
 }

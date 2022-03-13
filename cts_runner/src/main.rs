@@ -53,10 +53,7 @@ async fn run() -> Result<(), AnyError> {
     let bootstrap_script = format!("globalThis.bootstrap({})", serde_json::to_string(&cfg)?);
     isolate.execute_script(&located_script_name!(), &bootstrap_script)?;
 
-    isolate
-        .op_state()
-        .borrow_mut()
-        .put(Permissions{});
+    isolate.op_state().borrow_mut().put(Permissions {});
 
     let mod_id = isolate.load_main_module(&specifier, None).await?;
     let mod_rx = isolate.mod_evaluate(mod_id);

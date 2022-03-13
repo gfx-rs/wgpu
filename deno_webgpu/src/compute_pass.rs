@@ -183,14 +183,14 @@ pub fn op_webgpu_compute_pass_write_timestamp(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ComputePassEndPassArgs {
+pub struct ComputePassEndArgs {
     command_encoder_rid: ResourceId,
     compute_pass_rid: ResourceId,
 }
 
-pub fn op_webgpu_compute_pass_end_pass(
+pub fn op_webgpu_compute_pass_end(
     state: &mut OpState,
-    args: ComputePassEndPassArgs,
+    args: ComputePassEndArgs,
     _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource =

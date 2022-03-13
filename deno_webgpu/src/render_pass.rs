@@ -250,14 +250,14 @@ pub fn op_webgpu_render_pass_execute_bundles(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RenderPassEndPassArgs {
+pub struct RenderPassEndArgs {
     command_encoder_rid: ResourceId,
     render_pass_rid: ResourceId,
 }
 
-pub fn op_webgpu_render_pass_end_pass(
+pub fn op_webgpu_render_pass_end(
     state: &mut OpState,
-    args: RenderPassEndPassArgs,
+    args: RenderPassEndArgs,
     _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource =

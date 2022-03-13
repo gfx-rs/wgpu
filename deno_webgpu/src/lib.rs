@@ -699,8 +699,8 @@ fn declare_webgpu_ops() -> Vec<(&'static str, Box<OpFn>)> {
             op_sync(render_pass::op_webgpu_render_pass_execute_bundles),
         ),
         (
-            "op_webgpu_render_pass_end_pass",
-            op_sync(render_pass::op_webgpu_render_pass_end_pass),
+            "op_webgpu_render_pass_end",
+            op_sync(render_pass::op_webgpu_render_pass_end),
         ),
         (
             "op_webgpu_render_pass_set_bind_group",
@@ -772,8 +772,8 @@ fn declare_webgpu_ops() -> Vec<(&'static str, Box<OpFn>)> {
             op_sync(compute_pass::op_webgpu_compute_pass_write_timestamp),
         ),
         (
-            "op_webgpu_compute_pass_end_pass",
-            op_sync(compute_pass::op_webgpu_compute_pass_end_pass),
+            "op_webgpu_compute_pass_end",
+            op_sync(compute_pass::op_webgpu_compute_pass_end),
         ),
         (
             "op_webgpu_compute_pass_set_bind_group",
