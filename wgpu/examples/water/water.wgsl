@@ -1,8 +1,8 @@
 struct Uniforms {
-    view: mat4x4<f32>;
-    projection: mat4x4<f32>;
-    time_size_width: vec4<f32>;
-    viewport_height: f32;
+    view: mat4x4<f32>,
+    projection: mat4x4<f32>,
+    time_size_width: vec4<f32>,
+    viewport_height: f32,
 };
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
@@ -181,10 +181,10 @@ fn calc_specular(eye: vec3<f32>, normal: vec3<f32>, light: vec3<f32>) -> f32 {
 }
 
 struct VertexOutput {
-    @builtin(position) position: vec4<f32>;
-    @location(0) f_WaterScreenPos: vec2<f32>;
-    @location(1) f_Fresnel: f32;
-    @location(2) f_Light: vec3<f32>;
+    @builtin(position) position: vec4<f32>,
+    @location(0) f_WaterScreenPos: vec2<f32>,
+    @location(1) f_Fresnel: f32,
+    @location(2) f_Light: vec3<f32>,
 };
 
 @stage(vertex)
