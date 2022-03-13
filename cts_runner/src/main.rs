@@ -40,8 +40,7 @@ async fn run() -> Result<(), AnyError> {
             deno_webidl::init(),
             deno_console::init(),
             deno_url::init(),
-            deno_web::init(BlobStore::default(), None),
-            deno_timers::init::<Permissions>(),
+            deno_web::init::<Permissions>(BlobStore::default(), None),
             deno_webgpu::init(true),
             extension(),
         ],
@@ -150,7 +149,7 @@ fn red_bold<S: AsRef<str>>(s: S) -> impl fmt::Display {
 // NOP permissions
 struct Permissions;
 
-impl deno_timers::TimersPermission for Permissions {
+impl deno_web::TimersPermission for Permissions {
     fn allow_hrtime(&mut self) -> bool {
         false
     }
