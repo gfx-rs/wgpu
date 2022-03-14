@@ -13,7 +13,7 @@ resolver = "2"
 [dependencies]
 deno_console = "0.40.0"
 deno_core = "0.122.0"
-deno_url = "0.38.0"
+deno_url = "0.40.0"
 deno_web = "0.71.0"
 deno_webidl = "0.40.0"
 deno_webgpu = { path = "../deno_webgpu" }
