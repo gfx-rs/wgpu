@@ -1,8 +1,10 @@
 // Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
+use deno_core::op;
+use deno_core::OpState;
+use deno_core::Resource;
 use deno_core::ResourceId;
-use deno_core::{OpState, Resource};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -32,10 +34,10 @@ pub struct CreateCommandEncoderArgs {
     _measure_execution_time: Option<bool>, // not yet implemented
 }
 
+#[op]
 pub fn op_webgpu_create_command_encoder(
     state: &mut OpState,
     args: CreateCommandEncoderArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -88,10 +90,10 @@ pub struct CommandEncoderBeginRenderPassArgs {
     _occlusion_query_set: Option<u32>, // not yet implemented
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_begin_render_pass(
     state: &mut OpState,
     args: CommandEncoderBeginRenderPassArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table
@@ -176,10 +178,10 @@ pub struct CommandEncoderBeginComputePassArgs {
     label: Option<String>,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_begin_compute_pass(
     state: &mut OpState,
     args: CommandEncoderBeginComputePassArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table
@@ -212,10 +214,10 @@ pub struct CommandEncoderCopyBufferToBufferArgs {
     size: u64,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_copy_buffer_to_buffer(
     state: &mut OpState,
     args: CommandEncoderCopyBufferToBufferArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -268,10 +270,10 @@ pub struct CommandEncoderCopyBufferToTextureArgs {
     copy_size: wgpu_types::Extent3d,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
     state: &mut OpState,
     args: CommandEncoderCopyBufferToTextureArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -316,10 +318,10 @@ pub struct CommandEncoderCopyTextureToBufferArgs {
     copy_size: wgpu_types::Extent3d,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
     state: &mut OpState,
     args: CommandEncoderCopyTextureToBufferArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -364,10 +366,10 @@ pub struct CommandEncoderCopyTextureToTextureArgs {
     copy_size: wgpu_types::Extent3d,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_copy_texture_to_texture(
     state: &mut OpState,
     args: CommandEncoderCopyTextureToTextureArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -410,10 +412,10 @@ pub struct CommandEncoderClearBufferArgs {
     size: u64,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_clear_buffer(
     state: &mut OpState,
     args: CommandEncoderClearBufferArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -439,10 +441,10 @@ pub struct CommandEncoderPushDebugGroupArgs {
     group_label: String,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_push_debug_group(
     state: &mut OpState,
     args: CommandEncoderPushDebugGroupArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -460,10 +462,10 @@ pub struct CommandEncoderPopDebugGroupArgs {
     command_encoder_rid: ResourceId,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_pop_debug_group(
     state: &mut OpState,
     args: CommandEncoderPopDebugGroupArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -481,10 +483,10 @@ pub struct CommandEncoderInsertDebugMarkerArgs {
     marker_label: String,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_insert_debug_marker(
     state: &mut OpState,
     args: CommandEncoderInsertDebugMarkerArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -506,10 +508,10 @@ pub struct CommandEncoderWriteTimestampArgs {
     query_index: u32,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_write_timestamp(
     state: &mut OpState,
     args: CommandEncoderWriteTimestampArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -538,10 +540,10 @@ pub struct CommandEncoderResolveQuerySetArgs {
     destination_offset: u64,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_resolve_query_set(
     state: &mut OpState,
     args: CommandEncoderResolveQuerySetArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -572,10 +574,10 @@ pub struct CommandEncoderFinishArgs {
     label: Option<String>,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_finish(
     state: &mut OpState,
     args: CommandEncoderFinishArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table

@@ -7,11 +7,11 @@ use std::{
 use deno_core::anyhow::anyhow;
 use deno_core::error::AnyError;
 use deno_core::located_script_name;
+use deno_core::op;
 use deno_core::resolve_url_or_path;
 use deno_core::serde_json;
 use deno_core::serde_json::json;
 use deno_core::JsRuntime;
-use deno_core::OpState;
 use deno_core::RuntimeOptions;
 use deno_core::ZeroCopyBuf;
 use deno_web::BlobStore;
@@ -73,9 +73,9 @@ async fn run() -> Result<(), AnyError> {
 fn extension() -> deno_core::Extension {
     deno_core::Extension::builder()
         .ops(vec![
-            ("op_exit", deno_core::op_sync(op_exit)),
-            ("op_read_file_sync", deno_core::op_sync(op_read_file_sync)),
-            ("op_write_file_sync", deno_core::op_sync(op_write_file_sync)),
+            op_exit::decl(),
+            op_read_file_sync::decl(),
+            op_write_file_sync::decl(),
         ])
         .js(deno_core::include_js_files!(
           prefix "deno:cts_runner",
@@ -84,11 +84,13 @@ fn extension() -> deno_core::Extension {
         .build()
 }
 
-fn op_exit(_state: &mut OpState, code: i32, _: ()) -> Result<(), AnyError> {
+#[op]
+fn op_exit(code: i32) -> Result<(), AnyError> {
     std::process::exit(code)
 }
 
-fn op_read_file_sync(_state: &mut OpState, path: String, _: ()) -> Result<ZeroCopyBuf, AnyError> {
+#[op]
+fn op_read_file_sync(path: String) -> Result<ZeroCopyBuf, AnyError> {
     let path = std::path::Path::new(&path);
     let mut file = std::fs::File::open(path)?;
     let mut buf = Vec::new();
@@ -96,11 +98,8 @@ fn op_read_file_sync(_state: &mut OpState, path: String, _: ()) -> Result<ZeroCo
     Ok(ZeroCopyBuf::from(buf))
 }
 
-fn op_write_file_sync(
-    _state: &mut OpState,
-    path: String,
-    buf: ZeroCopyBuf,
-) -> Result<(), AnyError> {
+#[op]
+fn op_write_file_sync(path: String, buf: ZeroCopyBuf) -> Result<(), AnyError> {
     let path = std::path::Path::new(&path);
     let mut file = std::fs::File::create(path)?;
     file.write_all(&buf)?;
