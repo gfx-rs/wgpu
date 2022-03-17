@@ -8,6 +8,10 @@ layout(rgba8, binding = 4) uniform image1DArray img1DArray;
 layout(rgba8, binding = 5) uniform image2DArray img2DArray;
 // layout(rgba8, binding = 6) uniform imageCubeArray imgCubeArray;
 
+layout(rgba8, binding = 7) readonly uniform image2D imgReadOnly;
+layout(rgba8, binding = 8) writeonly uniform image2D imgWriteOnly;
+layout(rgba8, binding = 9) writeonly readonly uniform image2D imgWriteReadOnly;
+
 void testImg1D(in int coord) {
     int size = imageSize(img1D);
     vec4 c = imageLoad(img1D, coord);
@@ -51,5 +55,19 @@ void testImg3D(in ivec3 coord) {
 //     vec4 c = imageLoad(imgCubeArray, coord);
 //     imageStore(imgCubeArray, coord, vec4(2));
 // }
+
+void testImgReadOnly(in ivec2 coord) {
+    vec2 size = imageSize(img2D);
+    vec4 c = imageLoad(imgReadOnly, coord);
+}
+
+void testImgWriteOnly(in ivec2 coord) {
+    vec2 size = imageSize(img2D);
+    imageStore(imgWriteOnly, coord, vec4(2));
+}
+
+void testImgWriteReadOnly(in ivec2 coord) {
+    vec2 size = imageSize(imgWriteReadOnly);
+}
 
 void main() {}

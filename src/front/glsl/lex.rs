@@ -84,8 +84,8 @@ impl<'a> Iterator for Lexer<'a> {
                     "mediump" => TokenValue::PrecisionQualifier(Precision::Medium),
                     "lowp" => TokenValue::PrecisionQualifier(Precision::Low),
                     "restrict" => TokenValue::Restrict,
-                    "readonly" => TokenValue::StorageAccess(StorageAccess::LOAD),
-                    "writeonly" => TokenValue::StorageAccess(StorageAccess::STORE),
+                    "readonly" => TokenValue::MemoryQualifier(StorageAccess::LOAD),
+                    "writeonly" => TokenValue::MemoryQualifier(StorageAccess::STORE),
                     // values
                     "true" => TokenValue::BoolConstant(true),
                     "false" => TokenValue::BoolConstant(false),

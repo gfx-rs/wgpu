@@ -175,6 +175,8 @@ pub struct TypeQualifiers<'a> {
     pub interpolation: Option<(Interpolation, Span)>,
     pub precision: Option<(Precision, Span)>,
     pub sampling: Option<(Sampling, Span)>,
+    /// Memory qualifiers used in the declaration to set the storage access to be used
+    /// in declarations that support it (storage images and buffers)
     pub storage_acess: Option<(StorageAccess, Span)>,
     pub layout_qualifiers: crate::FastHashMap<QualifierKey<'a>, (QualifierValue, Span)>,
 }

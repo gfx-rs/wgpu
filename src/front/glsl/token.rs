@@ -38,7 +38,11 @@ pub enum TokenValue {
     Shared,
 
     Restrict,
-    StorageAccess(crate::StorageAccess),
+    /// A `glsl` memory qualifier such as `writeonly`
+    ///
+    /// The associated [`crate::StorageAccess`] is the access being allowed
+    /// (for example `writeonly` has an associated value of [`crate::StorageAccess::STORE`])
+    MemoryQualifier(crate::StorageAccess),
 
     Interpolation(Interpolation),
     Sampling(Sampling),

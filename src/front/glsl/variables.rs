@@ -465,8 +465,8 @@ impl Parser {
             StorageQualifier::AddressSpace(mut space) => {
                 match space {
                     AddressSpace::Storage { ref mut access } => {
-                        if let Some((restricted_access, _)) = qualifiers.storage_acess.take() {
-                            access.remove(restricted_access);
+                        if let Some((allowed_access, _)) = qualifiers.storage_acess.take() {
+                            *access = allowed_access;
                         }
                     }
                     AddressSpace::Uniform => match self.module.types[ty].inner {
@@ -480,10 +480,8 @@ impl Parser {
                                 mut format,
                             } = class
                             {
-                                if let Some((restricted_access, _)) =
-                                    qualifiers.storage_acess.take()
-                                {
-                                    access.remove(restricted_access);
+                                if let Some((allowed_access, _)) = qualifiers.storage_acess.take() {
+                                    access = allowed_access;
                                 }
 
                                 match qualifiers.layout_qualifiers.remove(&QualifierKey::Format) {

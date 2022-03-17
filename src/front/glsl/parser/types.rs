@@ -122,7 +122,7 @@ impl<'source> ParsingContext<'source> {
             | TokenValue::Shared
             | TokenValue::Buffer
             | TokenValue::Restrict
-            | TokenValue::StorageAccess(_)
+            | TokenValue::MemoryQualifier(_)
             | TokenValue::Layout => true,
             _ => false,
         })
@@ -219,11 +219,11 @@ impl<'source> ParsingContext<'source> {
 
                     qualifiers.precision = Some((p, token.meta));
                 }
-                TokenValue::StorageAccess(access) => {
+                TokenValue::MemoryQualifier(access) => {
                     let storage_access = qualifiers
                         .storage_acess
-                        .get_or_insert((crate::StorageAccess::empty(), Span::default()));
-                    if storage_access.0.contains(access) {
+                        .get_or_insert((crate::StorageAccess::all(), Span::default()));
+                    if !storage_access.0.contains(!access) {
                         parser.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "The same memory qualifier can only be used once".into(),
@@ -232,7 +232,7 @@ impl<'source> ParsingContext<'source> {
                         })
                     }
 
-                    storage_access.0 |= access;
+                    storage_access.0 &= access;
                     storage_access.1.subsume(token.meta);
                 }
                 TokenValue::Restrict => continue,
