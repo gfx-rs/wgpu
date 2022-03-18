@@ -1,7 +1,7 @@
 use super::{constants::ConstantSolver, context::Context, Error, ErrorKind, Parser, Result, Span};
 use crate::{
-    proc::ResolveContext, ArraySize, Bytes, Constant, Expression, Handle, ImageClass,
-    ImageDimension, ScalarKind, Type, TypeInner, VectorSize,
+    proc::ResolveContext, Bytes, Constant, Expression, Handle, ImageClass, ImageDimension,
+    ScalarKind, Type, TypeInner, VectorSize,
 };
 
 pub fn parse_type(type_name: &str) -> Option<Type> {
@@ -298,30 +298,5 @@ impl Parser {
             kind: e.into(),
             meta,
         })
-    }
-
-    pub(crate) fn maybe_array(
-        &mut self,
-        base: Handle<Type>,
-        mut meta: Span,
-        array_specifier: Option<(ArraySize, Span)>,
-    ) -> Handle<Type> {
-        match array_specifier {
-            Some((size, size_meta)) => {
-                meta.subsume(size_meta);
-                self.layouter
-                    .update(&self.module.types, &self.module.constants)
-                    .unwrap();
-                let stride = self.layouter[base].to_stride();
-                self.module.types.insert(
-                    Type {
-                        name: None,
-                        inner: TypeInner::Array { base, size, stride },
-                    },
-                    meta,
-                )
-            }
-            None => base,
-        }
     }
 }

@@ -10,45 +10,76 @@ use crate::{
 };
 
 impl<'source> ParsingContext<'source> {
-    /// Parses an optional array_specifier returning `Ok(None)` if there is no
-    /// LeftBracket
+    /// Parses an optional array_specifier returning wether or not it's present
+    /// and modifying the type handle if it exists
     pub fn parse_array_specifier(
         &mut self,
         parser: &mut Parser,
-    ) -> Result<Option<(ArraySize, Span)>> {
-        if let Some(Token { mut meta, .. }) = self.bump_if(parser, TokenValue::LeftBracket) {
-            if let Some(Token { meta: end_meta, .. }) =
-                self.bump_if(parser, TokenValue::RightBracket)
-            {
-                meta.subsume(end_meta);
-                return Ok(Some((ArraySize::Dynamic, meta)));
-            }
+        span: &mut Span,
+        ty: &mut Handle<Type>,
+    ) -> Result<()> {
+        while self.parse_array_specifier_single(parser, span, ty)? {}
+        Ok(())
+    }
 
-            let (value, span) = self.parse_uint_constant(parser)?;
-            let constant = parser.module.constants.fetch_or_append(
-                crate::Constant {
+    /// Implementation of [`Self::parse_array_specifier`] for a single array_specifier
+    fn parse_array_specifier_single(
+        &mut self,
+        parser: &mut Parser,
+        span: &mut Span,
+        ty: &mut Handle<Type>,
+    ) -> Result<bool> {
+        if self.bump_if(parser, TokenValue::LeftBracket).is_some() {
+            let size =
+                if let Some(Token { meta, .. }) = self.bump_if(parser, TokenValue::RightBracket) {
+                    span.subsume(meta);
+                    ArraySize::Dynamic
+                } else {
+                    let (value, constant_span) = self.parse_uint_constant(parser)?;
+                    let constant = parser.module.constants.fetch_or_append(
+                        crate::Constant {
+                            name: None,
+                            specialization: None,
+                            inner: crate::ConstantInner::Scalar {
+                                width: 4,
+                                value: crate::ScalarValue::Uint(value as u64),
+                            },
+                        },
+                        constant_span,
+                    );
+                    let end_span = self.expect(parser, TokenValue::RightBracket)?.meta;
+                    span.subsume(end_span);
+                    ArraySize::Constant(constant)
+                };
+
+            parser
+                .layouter
+                .update(&parser.module.types, &parser.module.constants)
+                .unwrap();
+            let stride = parser.layouter[*ty].to_stride();
+            *ty = parser.module.types.insert(
+                Type {
                     name: None,
-                    specialization: None,
-                    inner: crate::ConstantInner::Scalar {
-                        width: 4,
-                        value: crate::ScalarValue::Uint(value as u64),
+                    inner: TypeInner::Array {
+                        base: *ty,
+                        size,
+                        stride,
                     },
                 },
-                span,
+                *span,
             );
-            let end_meta = self.expect(parser, TokenValue::RightBracket)?.meta;
-            meta.subsume(end_meta);
-            Ok(Some((ArraySize::Constant(constant), meta)))
+
+            Ok(true)
         } else {
-            Ok(None)
+            Ok(false)
         }
     }
 
     pub fn parse_type(&mut self, parser: &mut Parser) -> Result<(Option<Handle<Type>>, Span)> {
         let token = self.bump(parser)?;
-        let handle = match token.value {
-            TokenValue::Void => None,
-            TokenValue::TypeName(ty) => Some(parser.module.types.insert(ty, token.meta)),
+        let mut handle = match token.value {
+            TokenValue::Void => return Ok((None, token.meta)),
+            TokenValue::TypeName(ty) => parser.module.types.insert(ty, token.meta),
             TokenValue::Struct => {
                 let mut meta = token.meta;
                 let ty_name = self.expect_ident(parser)?.0;
@@ -66,10 +97,10 @@ impl<'source> ParsingContext<'source> {
                     meta,
                 );
                 parser.lookup_type.insert(ty_name, ty);
-                Some(ty)
+                ty
             }
             TokenValue::Identifier(ident) => match parser.lookup_type.get(&ident) {
-                Some(ty) => Some(*ty),
+                Some(ty) => *ty,
                 None => {
                     return Err(Error {
                         kind: ErrorKind::UnknownType(ident),
@@ -92,12 +123,9 @@ impl<'source> ParsingContext<'source> {
             }
         };
 
-        let token_meta = token.meta;
-        let array_specifier = self.parse_array_specifier(parser)?;
-        let handle = handle.map(|ty| parser.maybe_array(ty, token_meta, array_specifier));
-        let mut meta = array_specifier.map_or(token_meta, |(_, meta)| meta);
-        meta.subsume(token_meta);
-        Ok((handle, meta))
+        let mut span = token.meta;
+        self.parse_array_specifier(parser, &mut span, &mut handle)?;
+        Ok((Some(handle), span))
     }
 
     pub fn parse_type_non_void(&mut self, parser: &mut Parser) -> Result<(Handle<Type>, Span)> {

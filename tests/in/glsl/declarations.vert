@@ -18,6 +18,8 @@ struct TestStruct {
     float b;
 };
 
+float array_2d[2][2];
+float array_toomanyd[2][2][2][2][2][2][2];
 
 void main() {
     const vec3 positions[2] = vec3[2](
@@ -26,5 +28,7 @@ void main() {
     );
     const TestStruct strct = TestStruct( 1, 2 );
     const vec4 from_input_array = in_array[1];
+    const float a = array_2d[0][0];
+    const float b = array_toomanyd[0][0][0][0][0][0][0];
     out_array[0] = vec4(2.0);
 }

@@ -120,7 +120,7 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_init_declarator_list(
         &mut self,
         parser: &mut Parser,
-        ty: Handle<Type>,
+        mut ty: Handle<Type>,
         ctx: &mut DeclarationContext,
     ) -> Result<()> {
         // init_declarator_list:
@@ -169,8 +169,7 @@ impl<'source> ParsingContext<'source> {
             // parse an array specifier if it exists
             // NOTE: unlike other parse methods this one doesn't expect an array specifier and
             // returns Ok(None) rather than an error if there is not one
-            let array_specifier = self.parse_array_specifier(parser)?;
-            let ty = parser.maybe_array(ty, meta, array_specifier);
+            self.parse_array_specifier(parser, &mut meta, &mut ty)?;
 
             let init = self
                 .bump_if(parser, TokenValue::Assign)
@@ -463,7 +462,7 @@ impl<'source> ParsingContext<'source> {
         body: &mut Block,
         qualifiers: &mut TypeQualifiers,
         ty_name: String,
-        meta: Span,
+        mut meta: Span,
     ) -> Result<Span> {
         let layout = match qualifiers.layout_qualifiers.remove(&QualifierKey::Layout) {
             Some((QualifierValue::Layout(l), _)) => l,
@@ -498,8 +497,7 @@ impl<'source> ParsingContext<'source> {
         let name = match token.value {
             TokenValue::Semicolon => None,
             TokenValue::Identifier(name) => {
-                let array_specifier = self.parse_array_specifier(parser)?;
-                ty = parser.maybe_array(ty, token.meta, array_specifier);
+                self.parse_array_specifier(parser, &mut meta, &mut ty)?;
 
                 self.expect(parser, TokenValue::Semicolon)?;
 
@@ -561,13 +559,12 @@ impl<'source> ParsingContext<'source> {
         loop {
             // TODO: type_qualifier
 
-            let (ty, mut meta) = self.parse_type_non_void(parser)?;
+            let (mut ty, mut meta) = self.parse_type_non_void(parser)?;
             let (name, end_meta) = self.expect_ident(parser)?;
 
             meta.subsume(end_meta);
 
-            let array_specifier = self.parse_array_specifier(parser)?;
-            let ty = parser.maybe_array(ty, meta, array_specifier);
+            self.parse_array_specifier(parser, &mut meta, &mut ty)?;
 
             self.expect(parser, TokenValue::Semicolon)?;
 
