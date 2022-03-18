@@ -34,12 +34,12 @@ fn main_1() {
     var a_1: f32;
     var b: f32;
 
-    let _e34 = in_array_2;
-    from_input_array = _e34[1];
-    let _e39 = array_2d;
-    a_1 = _e39[0][0];
-    let _e50 = array_toomanyd;
-    b = _e50[0][0][0][0][0][0][0];
+    let _e35 = in_array_2[1];
+    from_input_array = _e35;
+    let _e41 = array_2d[0][0];
+    a_1 = _e41;
+    let _e57 = array_toomanyd[0][0][0][0][0][0][0];
+    b = _e57;
     out_array[0] = vec4<f32>(2.0);
     return;
 }

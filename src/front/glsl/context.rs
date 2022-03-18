@@ -16,7 +16,7 @@ use crate::{
 use std::{convert::TryFrom, ops::Index};
 
 /// The position at which an expression is, used while lowering
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ExprPos {
     /// The expression is in the left hand side of an assignment
     Lhs,
@@ -24,18 +24,18 @@ pub enum ExprPos {
     Rhs,
     /// The expression is an array being indexed, needed to allow constant
     /// arrays to be dinamically indexed
-    ArrayBase {
+    AccessBase {
         /// The index is a constant
         constant_index: bool,
     },
 }
 
 impl ExprPos {
-    /// Returns an lhs position if the current position is lhs otherwise ArrayBase
-    fn maybe_array_base(&self, constant_index: bool) -> Self {
+    /// Returns an lhs position if the current position is lhs otherwise AccessBase
+    fn maybe_access_base(&self, constant_index: bool) -> Self {
         match *self {
             ExprPos::Lhs => *self,
-            _ => ExprPos::ArrayBase { constant_index },
+            _ => ExprPos::AccessBase { constant_index },
         }
     }
 }
@@ -492,6 +492,8 @@ impl Context {
     ) -> Result<(Option<Handle<Expression>>, Span)> {
         let HirExpr { ref kind, meta } = stmt.hir_exprs[expr];
 
+        log::debug!("Lowering {:?}", expr);
+
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
                 let (index, index_meta) =
@@ -508,7 +510,7 @@ impl Context {
                         stmt,
                         parser,
                         base,
-                        pos.maybe_array_base(maybe_constant_index.is_some()),
+                        pos.maybe_access_base(maybe_constant_index.is_some()),
                         body,
                     )?
                     .0;
@@ -551,18 +553,20 @@ impl Context {
                 pointer
             }
             HirExprKind::Select { base, ref field } => {
-                let base = self.lower_expect_inner(stmt, parser, base, pos, body)?.0;
+                let base = self
+                    .lower_expect_inner(stmt, parser, base, pos.maybe_access_base(true), body)?
+                    .0;
 
-                parser.field_selection(self, ExprPos::Lhs == pos, body, base, field, meta)?
+                parser.field_selection(self, pos, body, base, field, meta)?
             }
             HirExprKind::Constant(constant) if pos != ExprPos::Lhs => {
                 self.add_expression(Expression::Constant(constant), meta, body)
             }
             HirExprKind::Binary { left, op, right } if pos != ExprPos::Lhs => {
                 let (mut left, left_meta) =
-                    self.lower_expect_inner(stmt, parser, left, pos, body)?;
+                    self.lower_expect_inner(stmt, parser, left, ExprPos::Rhs, body)?;
                 let (mut right, right_meta) =
-                    self.lower_expect_inner(stmt, parser, right, pos, body)?;
+                    self.lower_expect_inner(stmt, parser, right, ExprPos::Rhs, body)?;
 
                 match op {
                     BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => self
@@ -1003,7 +1007,9 @@ impl Context {
                 }
             }
             HirExprKind::Unary { op, expr } if pos != ExprPos::Lhs => {
-                let expr = self.lower_expect_inner(stmt, parser, expr, pos, body)?.0;
+                let expr = self
+                    .lower_expect_inner(stmt, parser, expr, ExprPos::Rhs, body)?
+                    .0;
 
                 self.add_expression(Expression::Unary { op, expr }, meta, body)
             }
@@ -1020,20 +1026,29 @@ impl Context {
 
                     var.expr
                 }
-                ExprPos::ArrayBase {
-                    constant_index: false,
-                } => {
-                    if let Some((constant, ty)) = var.constant {
-                        let local = self.locals.append(
-                            LocalVariable {
-                                name: None,
-                                ty,
-                                init: Some(constant),
-                            },
-                            Span::default(),
-                        );
+                ExprPos::AccessBase { constant_index } => {
+                    // If the index isn't constant all accesses backed by a constant base need
+                    // to be done trough a proxy local variable, since constants have a non
+                    // pointer type which is required for dynamic indexing
+                    if !constant_index {
+                        if let Some((constant, ty)) = var.constant {
+                            let local = self.locals.append(
+                                LocalVariable {
+                                    name: None,
+                                    ty,
+                                    init: Some(constant),
+                                },
+                                Span::default(),
+                            );
 
-                        self.add_expression(Expression::LocalVariable(local), Span::default(), body)
+                            self.add_expression(
+                                Expression::LocalVariable(local),
+                                Span::default(),
+                                body,
+                            )
+                        } else {
+                            var.expr
+                        }
                     } else {
                         var.expr
                     }
@@ -1091,9 +1106,12 @@ impl Context {
                 let (mut value, value_meta) =
                     self.lower_expect_inner(stmt, parser, value, ExprPos::Rhs, body)?;
 
-                let scalar_components = self.expr_scalar_components(parser, pointer, ptr_meta)?;
+                let ty = match *parser.resolve_type(self, pointer, ptr_meta)? {
+                    TypeInner::Pointer { base, .. } => &parser.module.types[base].inner,
+                    ref ty => ty,
+                };
 
-                if let Some((kind, width)) = scalar_components {
+                if let Some((kind, width)) = scalar_components(ty) {
                     self.implicit_conversion(parser, &mut value, value_meta, kind, width)?;
                 }
 
@@ -1215,6 +1233,14 @@ impl Context {
                 })
             }
         };
+
+        log::trace!(
+            "Lowered {:?}\n\tKind = {:?}\n\tPos = {:?}\n\tResult = {:?}",
+            expr,
+            kind,
+            pos,
+            handle
+        );
 
         Ok((Some(handle), meta))
     }

@@ -16,18 +16,18 @@ fn Fma(d: ptr<function, Mat4x3_>, m: Mat4x3_, s: f32) {
 
     m_1 = m;
     s_1 = s;
-    let _e6 = (*d);
-    let _e8 = m_1;
+    let _e7 = (*d).mx;
+    let _e9 = m_1.mx;
     let _e10 = s_1;
-    (*d).mx = (_e6.mx + (_e8.mx * _e10));
-    let _e14 = (*d);
-    let _e16 = m_1;
+    (*d).mx = (_e7 + (_e9 * _e10));
+    let _e15 = (*d).my;
+    let _e17 = m_1.my;
     let _e18 = s_1;
-    (*d).my = (_e14.my + (_e16.my * _e18));
-    let _e22 = (*d);
-    let _e24 = m_1;
+    (*d).my = (_e15 + (_e17 * _e18));
+    let _e23 = (*d).mz;
+    let _e25 = m_1.mz;
     let _e26 = s_1;
-    (*d).mz = (_e22.mz + (_e24.mz * _e26));
+    (*d).mz = (_e23 + (_e25 * _e26));
     return;
 }
 
