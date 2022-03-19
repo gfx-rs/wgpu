@@ -31,7 +31,7 @@ use wgpu_core::resource::CreateTextureError;
 use wgpu_core::resource::CreateTextureViewError;
 
 fn fmt_err(err: &(dyn Error + 'static)) -> String {
-    let mut output = String::from(err.to_string());
+    let mut output = err.to_string();
 
     let mut e = err.source();
     while let Some(source) = e {

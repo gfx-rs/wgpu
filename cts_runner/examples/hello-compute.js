@@ -92,7 +92,7 @@ computePass.setPipeline(computePipeline);
 computePass.setBindGroup(0, bindGroup);
 computePass.insertDebugMarker("compute collatz iterations");
 computePass.dispatch(numbers.length);
-computePass.endPass();
+computePass.end();
 
 encoder.copyBufferToBuffer(storageBuffer, 0, stagingBuffer, 0, size);
 

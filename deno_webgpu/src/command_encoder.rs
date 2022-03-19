@@ -1,8 +1,10 @@
 // Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
+use deno_core::op;
+use deno_core::OpState;
+use deno_core::Resource;
 use deno_core::ResourceId;
-use deno_core::{OpState, Resource};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -32,10 +34,10 @@ pub struct CreateCommandEncoderArgs {
     _measure_execution_time: Option<bool>, // not yet implemented
 }
 
+#[op]
 pub fn op_webgpu_create_command_encoder(
     state: &mut OpState,
     args: CreateCommandEncoderArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -59,25 +61,21 @@ pub fn op_webgpu_create_command_encoder(
 pub struct GpuRenderPassColorAttachment {
     view: ResourceId,
     resolve_target: Option<ResourceId>,
-    load_op: GpuLoadOp<wgpu_types::Color>,
+    clear_value: Option<wgpu_types::Color>,
+    load_op: wgpu_core::command::LoadOp,
     store_op: wgpu_core::command::StoreOp,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum GpuLoadOp<T> {
-    Load,
-    Clear(T),
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GpuRenderPassDepthStencilAttachment {
     view: ResourceId,
-    depth_load_op: GpuLoadOp<f32>,
+    depth_clear_value: f32,
+    depth_load_op: wgpu_core::command::LoadOp,
     depth_store_op: wgpu_core::command::StoreOp,
     depth_read_only: bool,
-    stencil_load_op: GpuLoadOp<u32>,
+    stencil_clear_value: u32,
+    stencil_load_op: wgpu_core::command::LoadOp,
     stencil_store_op: wgpu_core::command::StoreOp,
     stencil_read_only: bool,
 }
@@ -92,10 +90,10 @@ pub struct CommandEncoderBeginRenderPassArgs {
     _occlusion_query_set: Option<u32>, // not yet implemented
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_begin_render_pass(
     state: &mut OpState,
     args: CommandEncoderBeginRenderPassArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table
@@ -121,19 +119,11 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
         let attachment = wgpu_core::command::RenderPassColorAttachment {
             view: texture_view_resource.0,
             resolve_target,
-            channel: match color_attachment.load_op {
-                GpuLoadOp::Load => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Load,
-                    store_op: color_attachment.store_op,
-                    clear_value: Default::default(),
-                    read_only: false,
-                },
-                GpuLoadOp::Clear(color) => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Clear,
-                    store_op: color_attachment.store_op,
-                    clear_value: color,
-                    read_only: false,
-                },
+            channel: wgpu_core::command::PassChannel {
+                load_op: color_attachment.load_op,
+                store_op: color_attachment.store_op,
+                clear_value: color_attachment.clear_value.unwrap_or_default(),
+                read_only: false,
             },
         };
 
@@ -149,33 +139,17 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
 
         depth_stencil_attachment = Some(wgpu_core::command::RenderPassDepthStencilAttachment {
             view: texture_view_resource.0,
-            depth: match attachment.depth_load_op {
-                GpuLoadOp::Load => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Load,
-                    store_op: attachment.depth_store_op,
-                    clear_value: 0.0,
-                    read_only: attachment.depth_read_only,
-                },
-                GpuLoadOp::Clear(value) => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Clear,
-                    store_op: attachment.depth_store_op,
-                    clear_value: value,
-                    read_only: attachment.depth_read_only,
-                },
+            depth: wgpu_core::command::PassChannel {
+                load_op: attachment.depth_load_op,
+                store_op: attachment.depth_store_op,
+                clear_value: attachment.depth_clear_value,
+                read_only: attachment.depth_read_only,
             },
-            stencil: match attachment.stencil_load_op {
-                GpuLoadOp::Load => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Load,
-                    store_op: attachment.stencil_store_op,
-                    clear_value: 0,
-                    read_only: attachment.stencil_read_only,
-                },
-                GpuLoadOp::Clear(value) => wgpu_core::command::PassChannel {
-                    load_op: wgpu_core::command::LoadOp::Clear,
-                    store_op: attachment.stencil_store_op,
-                    clear_value: value,
-                    read_only: attachment.stencil_read_only,
-                },
+            stencil: wgpu_core::command::PassChannel {
+                load_op: attachment.stencil_load_op,
+                store_op: attachment.stencil_store_op,
+                clear_value: attachment.stencil_clear_value,
+                read_only: attachment.stencil_read_only,
             },
         });
     }
@@ -204,10 +178,10 @@ pub struct CommandEncoderBeginComputePassArgs {
     label: Option<String>,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_begin_compute_pass(
     state: &mut OpState,
     args: CommandEncoderBeginComputePassArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table
@@ -240,10 +214,10 @@ pub struct CommandEncoderCopyBufferToBufferArgs {
     size: u64,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_copy_buffer_to_buffer(
     state: &mut OpState,
     args: CommandEncoderCopyBufferToBufferArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -296,10 +270,10 @@ pub struct CommandEncoderCopyBufferToTextureArgs {
     copy_size: wgpu_types::Extent3d,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
     state: &mut OpState,
     args: CommandEncoderCopyBufferToTextureArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -344,10 +318,10 @@ pub struct CommandEncoderCopyTextureToBufferArgs {
     copy_size: wgpu_types::Extent3d,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
     state: &mut OpState,
     args: CommandEncoderCopyTextureToBufferArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -392,10 +366,10 @@ pub struct CommandEncoderCopyTextureToTextureArgs {
     copy_size: wgpu_types::Extent3d,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_copy_texture_to_texture(
     state: &mut OpState,
     args: CommandEncoderCopyTextureToTextureArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -433,15 +407,15 @@ pub fn op_webgpu_command_encoder_copy_texture_to_texture(
 #[serde(rename_all = "camelCase")]
 pub struct CommandEncoderClearBufferArgs {
     command_encoder_rid: u32,
-    destination_rid: u32,
-    destination_offset: u64,
+    buffer_rid: u32,
+    offset: u64,
     size: u64,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_clear_buffer(
     state: &mut OpState,
     args: CommandEncoderClearBufferArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -450,12 +424,12 @@ pub fn op_webgpu_command_encoder_clear_buffer(
     let command_encoder = command_encoder_resource.0;
     let destination_resource = state
         .resource_table
-        .get::<super::buffer::WebGpuBuffer>(args.destination_rid)?;
+        .get::<super::buffer::WebGpuBuffer>(args.buffer_rid)?;
 
     gfx_ok!(command_encoder => instance.command_encoder_clear_buffer(
       command_encoder,
       destination_resource.0,
-      args.destination_offset,
+      args.offset,
       std::num::NonZeroU64::new(args.size)
     ))
 }
@@ -467,10 +441,10 @@ pub struct CommandEncoderPushDebugGroupArgs {
     group_label: String,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_push_debug_group(
     state: &mut OpState,
     args: CommandEncoderPushDebugGroupArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -488,10 +462,10 @@ pub struct CommandEncoderPopDebugGroupArgs {
     command_encoder_rid: ResourceId,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_pop_debug_group(
     state: &mut OpState,
     args: CommandEncoderPopDebugGroupArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -509,10 +483,10 @@ pub struct CommandEncoderInsertDebugMarkerArgs {
     marker_label: String,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_insert_debug_marker(
     state: &mut OpState,
     args: CommandEncoderInsertDebugMarkerArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -534,10 +508,10 @@ pub struct CommandEncoderWriteTimestampArgs {
     query_index: u32,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_write_timestamp(
     state: &mut OpState,
     args: CommandEncoderWriteTimestampArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -566,10 +540,10 @@ pub struct CommandEncoderResolveQuerySetArgs {
     destination_offset: u64,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_resolve_query_set(
     state: &mut OpState,
     args: CommandEncoderResolveQuerySetArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -600,10 +574,10 @@ pub struct CommandEncoderFinishArgs {
     label: Option<String>,
 }
 
+#[op]
 pub fn op_webgpu_command_encoder_finish(
     state: &mut OpState,
     args: CommandEncoderFinishArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table

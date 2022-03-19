@@ -1,12 +1,15 @@
 // Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
+use deno_core::op;
+use deno_core::OpState;
+use deno_core::Resource;
 use deno_core::ResourceId;
-use deno_core::{OpState, Resource};
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
+use std::convert::TryInto;
 
 use super::error::WebGpuError;
 use super::error::WebGpuResult;
@@ -51,10 +54,10 @@ pub struct CreateComputePipelineArgs {
     compute: GpuProgrammableStage,
 }
 
+#[op]
 pub fn op_webgpu_create_compute_pipeline(
     state: &mut OpState,
     args: CreateComputePipelineArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -119,10 +122,10 @@ pub struct PipelineLayout {
     err: Option<WebGpuError>,
 }
 
+#[op]
 pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
     state: &mut OpState,
     args: ComputePipelineGetBindGroupLayoutArgs,
-    _: (),
 ) -> Result<PipelineLayout, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let compute_pipeline_resource = state
@@ -291,10 +294,10 @@ pub struct CreateRenderPipelineArgs {
     fragment: Option<GpuFragmentState>,
 }
 
+#[op]
 pub fn op_webgpu_create_render_pipeline(
     state: &mut OpState,
     args: CreateRenderPipelineArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -319,18 +322,12 @@ pub fn op_webgpu_create_render_pipeline(
                 .resource_table
                 .get::<super::shader::WebGpuShaderModule>(fragment.module)?;
 
-        let mut targets = Vec::with_capacity(fragment.targets.len());
-
-        for target in fragment.targets {
-            targets.push(target);
-        }
-
         Some(wgpu_core::pipeline::FragmentState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
                 module: fragment_shader_module_resource.0,
                 entry_point: Cow::from(fragment.entry_point),
             },
-            targets: Cow::from(targets),
+            targets: Cow::from(fragment.targets),
         })
     } else {
         None
@@ -390,10 +387,10 @@ pub struct RenderPipelineGetBindGroupLayoutArgs {
     index: u32,
 }
 
+#[op]
 pub fn op_webgpu_render_pipeline_get_bind_group_layout(
     state: &mut OpState,
     args: RenderPipelineGetBindGroupLayoutArgs,
-    _: (),
 ) -> Result<PipelineLayout, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let render_pipeline_resource = state

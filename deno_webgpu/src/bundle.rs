@@ -1,9 +1,11 @@
 // Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
+use deno_core::op;
+use deno_core::OpState;
+use deno_core::Resource;
 use deno_core::ResourceId;
 use deno_core::ZeroCopyBuf;
-use deno_core::{OpState, Resource};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -37,21 +39,15 @@ pub struct CreateRenderBundleEncoderArgs {
     stencil_read_only: bool,
 }
 
+#[op]
 pub fn op_webgpu_create_render_bundle_encoder(
     state: &mut OpState,
     args: CreateRenderBundleEncoderArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let device_resource = state
         .resource_table
         .get::<super::WebGpuDevice>(args.device_rid)?;
     let device = device_resource.0;
-
-    let mut color_formats = vec![];
-
-    for format in args.color_formats {
-        color_formats.push(format);
-    }
 
     let depth_stencil = if let Some(format) = args.depth_stencil_format {
         Some(wgpu_types::RenderBundleDepthStencil {
@@ -65,7 +61,7 @@ pub fn op_webgpu_create_render_bundle_encoder(
 
     let descriptor = wgpu_core::command::RenderBundleEncoderDescriptor {
         label: args.label.map(Cow::from),
-        color_formats: Cow::from(color_formats),
+        color_formats: Cow::from(args.color_formats),
         sample_count: args.sample_count,
         depth_stencil,
         multiview: None,
@@ -96,10 +92,10 @@ pub struct RenderBundleEncoderFinishArgs {
     label: Option<String>,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_finish(
     state: &mut OpState,
     args: RenderBundleEncoderFinishArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -131,10 +127,10 @@ pub struct RenderBundleEncoderSetBindGroupArgs {
     dynamic_offsets_data_length: usize,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_set_bind_group(
     state: &mut OpState,
     args: RenderBundleEncoderSetBindGroupArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let bind_group_resource = state
         .resource_table
@@ -183,10 +179,10 @@ pub struct RenderBundleEncoderPushDebugGroupArgs {
     group_label: String,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_push_debug_group(
     state: &mut OpState,
     args: RenderBundleEncoderPushDebugGroupArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -211,10 +207,10 @@ pub struct RenderBundleEncoderPopDebugGroupArgs {
     render_bundle_encoder_rid: ResourceId,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_pop_debug_group(
     state: &mut OpState,
     args: RenderBundleEncoderPopDebugGroupArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -234,10 +230,10 @@ pub struct RenderBundleEncoderInsertDebugMarkerArgs {
     marker_label: String,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_insert_debug_marker(
     state: &mut OpState,
     args: RenderBundleEncoderInsertDebugMarkerArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -263,10 +259,10 @@ pub struct RenderBundleEncoderSetPipelineArgs {
     pipeline: ResourceId,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_set_pipeline(
     state: &mut OpState,
     args: RenderBundleEncoderSetPipelineArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let render_pipeline_resource = state
         .resource_table
@@ -293,10 +289,10 @@ pub struct RenderBundleEncoderSetIndexBufferArgs {
     size: u64,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_set_index_buffer(
     state: &mut OpState,
     args: RenderBundleEncoderSetIndexBufferArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -328,10 +324,10 @@ pub struct RenderBundleEncoderSetVertexBufferArgs {
     size: u64,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_set_vertex_buffer(
     state: &mut OpState,
     args: RenderBundleEncoderSetVertexBufferArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -361,10 +357,10 @@ pub struct RenderBundleEncoderDrawArgs {
     first_instance: u32,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_draw(
     state: &mut OpState,
     args: RenderBundleEncoderDrawArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -392,10 +388,10 @@ pub struct RenderBundleEncoderDrawIndexedArgs {
     first_instance: u32,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_draw_indexed(
     state: &mut OpState,
     args: RenderBundleEncoderDrawIndexedArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -421,10 +417,10 @@ pub struct RenderBundleEncoderDrawIndirectArgs {
     indirect_offset: u64,
 }
 
+#[op]
 pub fn op_webgpu_render_bundle_encoder_draw_indirect(
     state: &mut OpState,
     args: RenderBundleEncoderDrawIndirectArgs,
-    _: (),
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
